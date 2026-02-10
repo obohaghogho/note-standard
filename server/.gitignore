@@ -1,0 +1,14 @@
+# Logs and temporary files
+*.log
+*error*
+*plan*
+*task*
+*walkthrough*
+*debug*
+result.txt
+
+# Environment variables
+.env
+
+# Dependencies
+node_modules/
