@@ -4,3 +4,13 @@ docs/
 node_modules/
 TEAM_CHAT_README.md
 WALLET_README.md
+
+# Logs and temporary files
+*.log
+*error*
+*plan*
+*task*
+*walkthrough*
+*debug*
+result.txt
+*.txt
