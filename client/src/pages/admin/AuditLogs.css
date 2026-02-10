@@ -1,0 +1,241 @@
+.audit-logs {
+    padding: 2rem;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.audit-logs .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.audit-logs .header-title {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.audit-logs .header-icon {
+    width: 40px;
+    height: 40px;
+    padding: 8px;
+    background: rgba(var(--accent-rgb), 0.1);
+    color: var(--accent-color);
+    border-radius: 12px;
+}
+
+.audit-logs h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: #fff;
+}
+
+.audit-logs .header-title p {
+    margin: 0.2rem 0 0 0;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.9rem;
+}
+
+.audit-logs .stats-mini {
+    background: rgba(255, 255, 255, 0.03);
+    padding: 0.75rem 1.5rem;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.audit-logs .stat-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.audit-logs .stat-item .label {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.audit-logs .stat-item .value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--accent-color);
+}
+
+.audit-logs .filters-bar {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    background: rgba(255, 255, 255, 0.02);
+    padding: 1rem;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.audit-logs .filter-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.audit-logs select {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 0.9rem;
+    outline: none;
+    cursor: pointer;
+}
+
+.audit-logs select option {
+    background: #1a1a1a;
+}
+
+.audit-logs .logs-table-container {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    overflow: hidden;
+}
+
+.audit-logs .logs-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.audit-logs .logs-table th {
+    text-align: left;
+    padding: 1rem;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.audit-logs .logs-table td {
+    padding: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.9rem;
+}
+
+.audit-logs .time-cell .date {
+    font-weight: 600;
+}
+
+.audit-logs .time-cell .time {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.audit-logs .admin-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.audit-logs .admin-info img {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.audit-logs .action-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.audit-logs .action-badge.danger {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.audit-logs .action-badge.warning {
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+}
+
+.audit-logs .action-badge.info {
+    background: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+}
+
+.audit-logs .action-badge.success {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+}
+
+.audit-logs .action-badge.default {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.audit-logs .target-cell .target-type {
+    display: block;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.audit-logs .details-cell pre {
+    margin: 0;
+    font-size: 0.8rem;
+    color: rgba(var(--accent-rgb), 0.7);
+    background: rgba(0, 0, 0, 0.2);
+    padding: 0.5rem;
+    border-radius: 6px;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.audit-logs .pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+
+.audit-logs .pagination button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.audit-logs .pagination button:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.audit-logs .pagination button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

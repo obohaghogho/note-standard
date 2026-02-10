@@ -1,0 +1,29 @@
+{
+    "common": {
+        "search": "Global search...",
+        "language": "Language",
+        "settings": "Settings",
+        "profile": "Profile",
+        "logout": "Logout",
+        "notifications": "Notifications",
+        "new_note": "New Note"
+    },
+    "nav": {
+        "home": "Home",
+        "notes": "Notes",
+        "chat": "Chat",
+        "shared": "Shared",
+        "feed": "Feed",
+        "favorites": "Favorites",
+        "billing": "Billing",
+        "trends": "Trends",
+        "search_item": "Search",
+        "teams": "Teams",
+        "wallet": "Wallet"
+    },
+    "auth": {
+        "login": "Sign In",
+        "signup": "Sign Up",
+        "welcome": "Welcome back"
+    }
+}

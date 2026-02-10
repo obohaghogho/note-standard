@@ -1,0 +1,27 @@
+{
+    "common": {
+        "search": "Recherche globale...",
+        "language": "Langue",
+        "settings": "Paramètres",
+        "profile": "Profil",
+        "logout": "Se déconnecter",
+        "notifications": "Notifications",
+        "new_note": "Nouvelle note"
+    },
+    "nav": {
+        "home": "Accueil",
+        "notes": "Notes",
+        "chat": "Discussion",
+        "shared": "Partagé",
+        "feed": "Flux",
+        "favorites": "Favoris",
+        "billing": "Facturation",
+        "trends": "Tendances",
+        "search_item": "Recherche"
+    },
+    "auth": {
+        "login": "Se connecter",
+        "signup": "S'inscrire",
+        "welcome": "Bon retour"
+    }
+}

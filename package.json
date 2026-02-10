@@ -1,0 +1,14 @@
+{
+  "name": "note-standard",
+  "version": "1.0.0",
+  "description": "Root package for note-standard monorepo",
+  "scripts": {
+    "install:all": "npm install && cd client && npm install && cd ../server && npm install",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "client": "cd client && npm run dev",
+    "server": "cd server && npm run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
