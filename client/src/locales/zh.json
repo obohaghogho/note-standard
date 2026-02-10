@@ -1,0 +1,27 @@
+{
+    "common": {
+        "search": "全域搜尋...",
+        "language": "語言",
+        "settings": "設定",
+        "profile": "個人資料",
+        "logout": "登出",
+        "notifications": "通知",
+        "new_note": "新筆記"
+    },
+    "nav": {
+        "home": "首頁",
+        "notes": "筆記",
+        "chat": "聊天",
+        "shared": "已分享",
+        "feed": "動態",
+        "favorites": "收藏",
+        "billing": "帳單",
+        "trends": "趨勢",
+        "search_item": "搜尋"
+    },
+    "auth": {
+        "login": "登入",
+        "signup": "註冊",
+        "welcome": "歡迎回來"
+    }
+}

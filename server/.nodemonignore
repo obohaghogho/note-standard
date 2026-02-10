@@ -1,0 +1,6 @@
+*.log
+*.json
+vapid.json
+node_modules/
+dist/
+.git/
