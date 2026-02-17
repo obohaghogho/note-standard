@@ -26,12 +26,13 @@ const corsOptions = {
     // Allow requests with no origin (server-to-server, health checks, etc)
     if (!origin) return callback(null, true);
 
-    // Check if origin is whitelisted or a local variant
-    const isWhitelisted = whitelist.includes(origin);
+    // Allow any subdomain of notestandard.com or localhost
+    const isNoteStandard = origin.endsWith(".notestandard.com") ||
+      origin === "https://notestandard.com";
     const isLocal = origin.includes("localhost") ||
       origin.includes("127.0.0.1");
 
-    if (isWhitelisted || isLocal) {
+    if (isNoteStandard || isLocal) {
       return callback(null, true);
     }
 
