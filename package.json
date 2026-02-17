@@ -8,6 +8,11 @@
     "client": "cd client && npm run dev",
     "server": "cd server && npm run dev"
   },
+  "dependencies": {
+    "express": "^5.2.1",
+    "serverless-http": "^4.0.0",
+    "cors": "^2.8.5"
+  },
   "devDependencies": {
     "concurrently": "^8.2.2"
   }
