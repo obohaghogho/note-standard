@@ -1,5 +1,5 @@
 import React from 'react';
-import { Send, Download, ArrowRightLeft, ArrowUpRight, Plus, CreditCard } from 'lucide-react';
+import { Send, Download, ArrowRightLeft, ArrowUpRight, CreditCard } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface ActionsGridProps {
