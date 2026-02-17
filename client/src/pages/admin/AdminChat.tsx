@@ -10,6 +10,7 @@ import {
     CheckCheck,
     Search
 } from 'lucide-react';
+import SecureImage from '../../components/common/SecureImage';
 import './AdminChat.css';
 
 interface Message {
@@ -345,7 +346,7 @@ export const AdminChat = () => {
                                 >
                                     <div className="avatar">
                                         {userProfile?.avatar_url ? (
-                                            <img src={userProfile.avatar_url} alt="" />
+                                            <SecureImage src={userProfile.avatar_url} alt="" fallbackType="profile" />
                                         ) : (
                                             <div className="placeholder">
                                                 {userProfile?.username?.[0]?.toUpperCase() || '?'}
@@ -383,7 +384,7 @@ export const AdminChat = () => {
                                         <>
                                             <div className="avatar">
                                                 {userProfile?.avatar_url ? (
-                                                    <img src={userProfile.avatar_url} alt="" />
+                                                    <SecureImage src={userProfile.avatar_url} alt="" fallbackType="profile" />
                                                 ) : (
                                                     <div className="placeholder">
                                                         {userProfile?.username?.[0]?.toUpperCase() || '?'}

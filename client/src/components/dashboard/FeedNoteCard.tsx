@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Card } from '../../components/common/Card';
+import SecureImage from '../../components/common/SecureImage';
 import { Heart, MessageCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
@@ -73,7 +74,7 @@ export const FeedNoteCard = ({ note, onCommentClick }: FeedNoteCardProps) => {
                     <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center text-primary font-bold text-xs overflow-hidden">
                             {note.owner?.avatar_url ? (
-                                <img src={note.owner.avatar_url} alt={note.owner.username} className="w-full h-full object-cover" />
+                                <SecureImage src={note.owner.avatar_url} alt={note.owner.username} className="w-full h-full object-cover" fallbackType="profile" />
                             ) : (
                                 (note.owner?.username?.[0] || note.owner?.email?.[0] || '?').toUpperCase()
                             )}

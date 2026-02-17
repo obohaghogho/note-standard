@@ -35,7 +35,13 @@ export const Hero = () => {
                             Start for free
                             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                         </Link>
-                        <button className="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl font-medium transition-all backdrop-blur-md">
+                        <button 
+                            onClick={() => {
+                                console.log('[Hero] View Demo clicked');
+                                document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
+                            }}
+                            className="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl font-medium transition-all backdrop-blur-md"
+                        >
                             View Demo
                         </button>
                     </div>

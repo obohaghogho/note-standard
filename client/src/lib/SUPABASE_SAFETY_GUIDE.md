@@ -154,7 +154,7 @@ const data = await supabaseSafe("update-profile", async () => {
 
 ```typescript
 const ws = createSafeWebSocket(
-  "ws://localhost:5000/socket",
+  "wss://notestandard.com/socket",
   () => console.log("Connected"), // onOpen
   (data) => handleMessage(data), // onMessage
   3, // maxRetries (default: 3)

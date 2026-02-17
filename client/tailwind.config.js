@@ -4,29 +4,38 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
-  darkMode: 'class',
+  darkMode: "class",
   theme: {
     extend: {
       colors: {
-        background: '#0a0a0a', // Deep dark bg
-        foreground: '#ededed',
+        background: "#0a0a0a", // Deep dark bg
+        foreground: "#ededed",
         primary: {
-          DEFAULT: '#3b82f6', // Fintech Blue
-          foreground: '#ffffff',
+          DEFAULT: "#3b82f6", // Fintech Blue
+          foreground: "#ffffff",
         },
         card: {
-          DEFAULT: 'rgba(255, 255, 255, 0.05)',
-          foreground: '#ededed',
+          DEFAULT: "rgba(255, 255, 255, 0.05)",
+          foreground: "#ededed",
         },
-        border: 'rgba(255, 255, 255, 0.1)',
+        border: "rgba(255, 255, 255, 0.1)",
       },
       fontFamily: {
-        sans: ['Poppins', 'sans-serif'],
+        sans: ["Poppins", "sans-serif"],
       },
       backdropBlur: {
-        xs: '2px',
+        xs: "2px",
+      },
+      keyframes: {
+        wiggle: {
+          "0%, 100%": { transform: "rotate(-3deg)" },
+          "50%": { transform: "rotate(3deg)" },
+        },
+      },
+      animation: {
+        wiggle: "wiggle 1s ease-in-out infinite",
       },
     },
   },
   plugins: [],
-}
+};

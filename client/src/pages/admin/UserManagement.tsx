@@ -11,6 +11,7 @@ import {
     Filter
 } from 'lucide-react';
 import { API_URL } from '../../lib/api';
+import SecureImage from '../../components/common/SecureImage';
 import './UserManagement.css';
 
 interface User {
@@ -201,7 +202,7 @@ export const UserManagement = () => {
                                     <td className="user-cell">
                                         <div className="user-info">
                                             {user.avatar_url ? (
-                                                <img src={user.avatar_url} alt={user.username} />
+                                                <SecureImage src={user.avatar_url} alt={user.username} fallbackType="profile" />
                                             ) : (
                                                 <div className="avatar-placeholder">
                                                     {user.username?.[0]?.toUpperCase() || '?'}

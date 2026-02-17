@@ -30,7 +30,8 @@ export interface Wallet {
 export interface Transaction {
     id: string;
     wallet_id: string;
-    type: 'DEPOSIT' | 'WITHDRAWAL' | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'BUY' | 'SELL' | 'SWAP';
+    type: 'DEPOSIT' | 'WITHDRAWAL' | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'BUY' | 'SELL' | 'SWAP' | 'Digital Assets Purchase' | string;
+    display_label?: string;
     amount: number;
     currency: Currency;
     status: 'PENDING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
@@ -48,6 +49,7 @@ export interface Transaction {
 export interface InternalTransferRequest {
     recipientEmail?: string;
     recipientId?: string;
+    recipientAddress?: string;
     amount: number;
     currency: Currency;
     idempotencyKey?: string;
@@ -58,6 +60,11 @@ export interface WithdrawalRequest {
     currency: Currency;
     bankId?: string; // For fiat
     address?: string; // For crypto
+    bank_code?: string;
+    account_number?: string;
+    account_name?: string;
+    bank_name?: string;
+    country?: string;
     idempotencyKey?: string;
 }
 

@@ -1,11 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ChatWindow from '../../components/chat/ChatWindow';
 import ConversationList from '../../components/chat/ConversationList';
 import NewChatModal from '../../components/chat/NewChatModal';
 import { Plus, MessageSquare } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { useChat } from '../../context/ChatContext';
 
 export const Chat: React.FC = () => {
     const [isNewChatOpen, setIsNewChatOpen] = useState(false);
+    const [searchParams] = useSearchParams();
+    const { setActiveConversationId } = useChat();
+
+    useEffect(() => {
+        const id = searchParams.get('id');
+        if (id) {
+            setActiveConversationId(id);
+        }
+    }, [searchParams, setActiveConversationId]);
 
     return (
         <div className="flex h-full bg-gray-900 border border-gray-800 rounded-xl overflow-hidden shadow-xl">

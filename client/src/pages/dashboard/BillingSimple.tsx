@@ -10,7 +10,7 @@ interface SubscriptionData {
   plan_tier: string;
   status: string;
   created_at: string;
-  stripe_customer_id?: string;
+
 }
 
 export const BillingSimple: React.FC = () => {

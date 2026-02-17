@@ -8,6 +8,7 @@ import {
     ChevronRight
 } from 'lucide-react';
 import { API_URL } from '../../lib/api';
+import SecureImage from '../../components/common/SecureImage';
 import './AuditLogs.css';
 
 interface AuditLog {
@@ -190,7 +191,7 @@ export const AuditLogs = () => {
                                         <td className="admin-cell">
                                             <div className="admin-info">
                                                 {log.admin.avatar_url ? (
-                                                    <img src={log.admin.avatar_url} alt="" />
+                                                    <SecureImage src={log.admin.avatar_url} alt="" fallbackType="profile" />
                                                 ) : (
                                                     <div className="avatar-placeholder">
                                                         {log.admin.username[0].toUpperCase()}

@@ -1,90 +1,173 @@
-const supabase = require('../config/supabase');
+const supabase = require("../config/supabase");
 
 const commissionService = {
-    /**
-     * Calculate commission for a given transaction amount and type.
-     * @param {string} transactionType - 'TRANSFER_OUT', 'WITHDRAWAL', 'SWAP'
-     * @param {number} amount - Amount to calculate fee on
-     * @param {string} currency - Currency code (e.g., 'BTC', 'USD')
-     * @returns {Promise<Object>} - { fee, rate, netAmount }
-     */
-    async calculateCommission(transactionType, amount, currency) {
-        try {
-            // Fetch applicable setting
-            // Priority: Specific currency > Global (currency is null)
-            const { data: settings, error } = await supabase
-                .from('commission_settings')
-                .select('*')
-                .eq('transaction_type', transactionType)
-                .eq('is_active', true)
-                .or(`currency.eq.${currency},currency.is.null`)
-                .order('currency', { ascending: false }) // Specific currency first (if exists)
-                .limit(1);
+  /**
+   * Get admin setting value
+   */
+  async getSetting(key) {
+    const { data, error } = await supabase
+      .from("admin_settings")
+      .select("value")
+      .eq("key", key)
+      .single();
+    if (error) return null;
+    return data.value;
+  },
 
-            if (error) throw error;
+  /**
+   * Calculate commission for a given transaction amount and type.
+   * @param {string} transactionType - 'TRANSFER_OUT', 'WITHDRAWAL', 'SWAP', 'FUNDING'
+   * @param {number} amount - Amount to calculate fee on
+   * @param {string} currency - Currency code
+   * @param {string} userPlan - 'FREE', 'PRO', 'BUSINESS'
+   * @returns {Promise<Object>} - { fee, rate, netAmount }
+   */
+  async calculateCommission(
+    transactionType,
+    amount,
+    currency,
+    userPlan = "FREE",
+  ) {
+    try {
+      // Fetch applicable setting
+      const { data: settings, error } = await supabase
+        .from("commission_settings")
+        .select("*")
+        .eq("transaction_type", transactionType)
+        .eq("is_active", true)
+        .or(`currency.eq.${currency},currency.is.null`)
+        .order("currency", { ascending: false })
+        .limit(1);
 
-            let fee = 0;
-            let rate = 0;
+      if (error) throw error;
 
-            if (settings && settings.length > 0) {
-                const setting = settings[0];
-                
-                if (setting.commission_type === 'PERCENTAGE') {
-                    rate = setting.value;
-                    fee = amount * rate;
-                } else if (setting.commission_type === 'FIXED') {
-                    rate = 0; // Fixed fee doesn't have a rate multiplier
-                    fee = setting.value;
-                }
+      let fee = 0;
+      let rate = 0;
 
-                // Apply Min/Max limits
-                if (setting.min_fee && fee < setting.min_fee) fee = setting.min_fee;
-                if (setting.max_fee && fee > setting.max_fee) fee = setting.max_fee;
-            }
+      if (settings && settings.length > 0) {
+        const setting = settings[0];
+        rate = setting.value;
 
-            return {
-                fee: parseFloat(fee.toFixed(8)), // Simplify decimals
-                rate: rate,
-                netAmount: parseFloat((amount - fee).toFixed(8)) // For user receiver perspective? 
-                // Actually, for TRANSFER_OUT: User pays Amount + Fee? Or Amount includes Fee?
-                // Usually: User enters "Send 1 BTC". Fee is extra? Or Fee is deducted?
-                // Requirement: "Commission should be deducted before the final transaction... Clearly separate User amount, Platform commission".
-                // If I send 1 BTC, and have enough balance, I usually pay 1 BTC + Fee. 
-                // If I withdraw 1 BTC, I usually receive 1 BTC - Fee.
-                // Let's stick to: Input Amount is what is "Sent" or "Withdrawn". Fee is *subtracted* from that if it's inclusive, or *added* if exclusive.
-                // The implementation plan says "User amount, Platform commission, Net amount received".
-                // So for Transfer: User sends X. Receiver gets X. Sender pays X + Fee.
-                // For Withdrawal: User withdraws X. User receives X - Fee? Or User requests X to bank, and pays X + Fee?
-                // Usually withdrawals are "I want to withdraw 100 USD". I get 98 USD (2 USD fee).
-                // Let's standardise: 
-                // Transfer: Exclusive (Sender pays Amount + Fee).
-                // Withdrawal: Inclusive (User requests X, gets X - Fee).
-            };
-        } catch (err) {
-            console.error('Error calculating commission:', err);
-            return { fee: 0, rate: 0, netAmount: amount }; // Fail safe to 0 fee? Or error?
-        }
-    },
+        // Requirement 3: PRO/BUSINESS features - reduced fees/spread
+        // If the setting doesn't have plan-specific overrides, apply discounts
+        if (userPlan === "PRO") rate = rate * 0.8; // 20% discount on fees
+        if (userPlan === "BUSINESS") rate = rate * 0.5; // 50% discount on fees
 
-    /**
-     * Get the platform wallet ID for a specific currency.
-     * @param {string} currency 
-     * @returns {Promise<string|null>}
-     */
-    async getPlatformWalletId(currency) {
-        const { data, error } = await supabase
-            .from('platform_wallets')
-            .select('wallet_id')
-            .eq('currency', currency)
-            .maybeSingle();
-        
-        if (error) {
-            console.error('Error fetching platform wallet:', error);
-            return null;
+        if (setting.commission_type === "PERCENTAGE") {
+          fee = amount * rate;
+        } else if (setting.commission_type === "FIXED") {
+          fee = rate;
         }
 
-        return data ? data.wallet_id : null;
+        if (setting.min_fee && fee < setting.min_fee) fee = setting.min_fee;
+        if (setting.max_fee && fee > setting.max_fee) fee = setting.max_fee;
+      } else {
+        // Fallback to admin_settings if commission_settings table is empty for this type
+        if (transactionType === "FUNDING") {
+          const fundingRate = await this.getSetting("funding_fee_percentage") ||
+            1.0;
+          rate = fundingRate / 100;
+          if (userPlan === "PRO") rate = 0.005; // 0.5% for PRO
+          fee = amount * rate;
+        } else if (transactionType === "WITHDRAWAL") {
+          const withdrawFlat = await this.getSetting("withdrawal_fee_flat") ||
+            0;
+          const withdrawPerc =
+            await this.getSetting("withdrawal_fee_percentage") || 1.0;
+          rate = withdrawPerc / 100;
+          if (userPlan === "PRO") rate = 0.005; // 0.5% for PRO
+          fee = withdrawFlat + (amount * rate);
+        }
+      }
+
+      return {
+        fee: parseFloat(fee.toFixed(8)),
+        rate: rate,
+        netAmount: parseFloat((amount - fee).toFixed(8)),
+      };
+    } catch (err) {
+      console.error("Error calculating commission:", err);
+      return { fee: 0, rate: 0, netAmount: amount };
     }
+  },
+
+  /**
+   * Calculate spread for buy/sell operations
+   * @param {string} type - 'BUY' or 'SELL'
+   * @param {number} marketPrice - Current market price
+   * @param {string} userPlan - 'FREE', 'PRO', 'BUSINESS'
+   */
+  async calculateSpread(type, marketPrice, userPlan = "FREE") {
+    const defaultSpread = await this.getSetting("spread_percentage") || 1.0;
+    let spreadPercentage = parseFloat(defaultSpread) / 100;
+
+    // Requirement 3: PRO Features - Reduced spread (0.5%)
+    if (userPlan === "PRO" || userPlan === "BUSINESS") {
+      spreadPercentage = 0.005;
+    }
+
+    const spreadAmount = marketPrice * spreadPercentage;
+    const finalPrice = type === "BUY"
+      ? marketPrice + spreadAmount
+      : marketPrice - spreadAmount;
+
+    return {
+      marketPrice,
+      spreadPercentage,
+      spreadAmount,
+      finalPrice,
+    };
+  },
+
+  /**
+   * Log revenue to the revenue_logs table
+   */
+  async logRevenue(
+    userId,
+    amount,
+    currency,
+    type,
+    sourceTxId = null,
+    metadata = {},
+  ) {
+    const { error } = await supabase
+      .from("revenue_logs")
+      .insert({
+        user_id: userId,
+        amount,
+        currency,
+        revenue_type: type,
+        source_transaction_id: sourceTxId,
+        metadata,
+      });
+
+    if (error) console.error("Error logging revenue:", error);
+
+    // If it's a spread revenue, trigger affiliate commission
+    if (type === "spread") {
+      await supabase.rpc("add_affiliate_commission", {
+        p_referred_user_id: userId,
+        p_revenue_amount: amount,
+        p_currency: currency,
+        p_source_tx_id: sourceTxId,
+      });
+    }
+  },
+
+  async getPlatformWalletId(currency) {
+    const { data, error } = await supabase
+      .from("platform_wallets")
+      .select("wallet_id")
+      .eq("currency", currency)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Error fetching platform wallet:", error);
+      return null;
+    }
+
+    return data ? data.wallet_id : null;
+  },
 };
 
 module.exports = commissionService;

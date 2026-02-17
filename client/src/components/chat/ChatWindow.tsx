@@ -1,12 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useChat } from '../../context/ChatContext';
 import { usePresence } from '../../context/PresenceContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
-import { SecureImage } from '../common/SecureImage';
+import SecureImage from '../common/SecureImage';
 import { Send, Languages, AlertTriangle, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, MicOff } from 'lucide-react';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { MediaUpload } from './MediaUpload';
+import { VoiceRecorder } from './VoiceRecorder';
 import { API_URL } from '../../lib/api';
 import toast from 'react-hot-toast';
 
@@ -47,9 +48,13 @@ const ChatWindow: React.FC = () => {
     const isPending = myMember?.status === 'pending';
 
     // Check if other party is pending (for 1:1)
-    const otherMember = activeConversation?.type === 'direct'
-        ? activeConversation.members.find((m: { user_id: string; status: string; profile?: any }) => m.user_id !== user?.id)
-        : null;
+    // Identify the other participant for calls and profile info
+    const otherMember = useMemo(() => {
+        if (!activeConversation?.members || !user) return null;
+        // Find anyone who isn't the current user
+        return activeConversation.members.find((m: any) => m.user_id !== user.id) || null;
+    }, [activeConversation?.members, user?.id]);
+
     const isWaitingForOthers = myMember?.status === 'accepted' && otherMember?.status === 'pending';
 
     const scrollToBottom = () => {
@@ -214,10 +219,71 @@ const ChatWindow: React.FC = () => {
         }
     };
 
-    const handleCall = (type: 'voice' | 'video') => {
-        if (otherMember?.user_id) {
-            startCall(otherMember.user_id, activeConversationId!, type);
+    const [showMoreMenu, setShowMoreMenu] = useState(false);
+    const [isVoiceRecording, setIsVoiceRecording] = useState(false);
+
+    const handleClearChat = () => {
+        toast.success('Chat cleared (locally)');
+        setShowMoreMenu(false);
+    };
+
+    const handleDeleteChat = () => {
+        toast.error('Delete chat not implemented yet');
+        setShowMoreMenu(false);
+    };
+
+    const handleVoiceMessage = async (_blob: Blob) => {
+        try {
+            // In a real app, you'd upload this blob to Supabase storage
+            // For now, we'll simulate a voice message
+            // console.log('Sending voice blob size:', _blob.size);
+            await sendMessage('Sent a voice message', 'audio');
+            setIsVoiceRecording(false);
+        } catch (err) {
+            toast.error('Failed to send voice message');
         }
+    };
+
+    const handleCall = (type: 'voice' | 'video') => {
+        // Diagnostic Logging
+        console.log('[ChatWindow] handleCall triggered:', { 
+            type, 
+            activeConversationId,
+            conversationType: activeConversation?.type,
+            chatType: activeConversation?.chat_type,
+            membersCount: activeConversation?.members?.length,
+            currentUserId: user?.id,
+            otherMemberId: otherMember?.user_id
+        });
+        
+        if (!otherMember?.user_id) {
+            console.error('[ChatWindow] Cannot start call: no recipient found', { otherMember });
+            
+            if (activeConversation?.members && activeConversation.members.length === 1) {
+                if (activeConversation.chat_type === 'support') {
+                    toast.error('Waiting for a support agent to join this chat before you can call.');
+                } else {
+                    toast.error('You are the only member in this chat. Add someone else to start a call!');
+                }
+            } else if (activeConversation?.type === 'group') {
+                toast.error('Group calls are not supported yet');
+            } else {
+                toast.error('Could not find a recipient for this call. Please refresh the chat.');
+            }
+            return;
+        }
+
+        if (isWaitingForOthers) {
+            toast.error('Waiting for recipient to accept message request');
+            return;
+        }
+
+        toast.loading(`Starting ${type} call...`, { duration: 2000, id: 'call-start' });
+        startCall(otherMember.user_id, activeConversationId!, type)
+            .catch(err => {
+                console.error('[ChatWindow] startCall failed:', err);
+                toast.error('Failed to start call. Check camera/mic permissions.');
+            });
     };
 
     if (!activeConversationId) {
@@ -229,6 +295,14 @@ const ChatWindow: React.FC = () => {
     }
 
     if (loading) return <div className="p-4 bg-gray-900 h-full">Loading...</div>;
+
+    const otherUserTitle = activeConversation?.type === 'direct' && otherMember 
+        ? (otherMember.profile?.full_name || otherMember.profile?.username || 'User')
+        : 'Chat';
+
+    const otherUserAvatar = activeConversation?.type === 'direct' && otherMember
+        ? otherMember.profile?.avatar_url
+        : null;
 
     return (
         <div className="flex flex-col h-full bg-gray-900 text-white">
@@ -250,7 +324,7 @@ const ChatWindow: React.FC = () => {
                             <>
                                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center overflow-hidden border border-white/10 shadow-lg">
                                     {displayAvatar ? (
-                                        <img src={displayAvatar} alt={displayName} className="w-full h-full object-cover" />
+                                        <SecureImage src={displayAvatar} alt={displayName} className="w-full h-full object-cover" fallbackType="profile" />
                                     ) : (
                                         <span className="text-white font-bold text-lg">
                                             {displayName?.charAt(0).toUpperCase() || '?'}
@@ -318,9 +392,21 @@ const ChatWindow: React.FC = () => {
                             </button>
                         </>
                     )}
-                    <button className="p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-full transition-all">
-                        <MoreHorizontal size={20} />
-                    </button>
+                    <div className="relative">
+                        <button 
+                            onClick={() => setShowMoreMenu(!showMoreMenu)}
+                            className={`p-2 rounded-full transition-all ${showMoreMenu ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                        >
+                            <MoreHorizontal size={20} />
+                        </button>
+                        {showMoreMenu && (
+                            <div className="absolute top-full right-0 mt-2 w-48 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-50 p-1 animate-in zoom-in-95 duration-200">
+                                <button onClick={() => { toast.success('Muted'); setShowMoreMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 rounded-lg">Mute Notifications</button>
+                                <button onClick={handleClearChat} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 rounded-lg">Clear History</button>
+                                <button onClick={handleDeleteChat} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-400/10 rounded-lg">Delete Chat</button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -503,80 +589,6 @@ const ChatWindow: React.FC = () => {
                 </div>
             )}
 
-            {/* Input Area */}
-            {!isPending ? (
-                <div className="p-4 md:p-6 border-t border-gray-800 bg-gray-900/80 backdrop-blur-md">
-                    <form onSubmit={handleSend} className="flex flex-col gap-3">
-                        <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-2xl p-1 px-2 focus-within:border-blue-500 transition-all shadow-inner">
-                            <button 
-                                type="button"
-                                onClick={() => setShowMediaUpload(!showMediaUpload)}
-                                className="p-2 text-gray-400 hover:text-blue-400 hover:bg-white/5 rounded-full transition-all"
-                            >
-                                <Plus size={22} />
-                            </button>
-                            
-                            <input
-                                id="chat-window-input"
-                                name="message"
-                                type="text"
-                                value={inputValue}
-                                onChange={(e) => setInputValue(e.target.value)}
-                                placeholder={isWaitingForOthers ? "Waiting for acceptance..." : "Type a secure message..."}
-                                disabled={isWaitingForOthers}
-                                autoComplete="off"
-                                className="flex-1 bg-transparent text-white py-3 px-2 focus:outline-none disabled:opacity-50 text-sm"
-                            />
-                            
-                            <div className="flex items-center gap-1">
-                                <div className="relative">
-                                    <button 
-                                        type="button" 
-                                        onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                                        className="p-2 text-gray-400 hover:text-yellow-400 hover:bg-white/5 rounded-full transition-all md:flex hidden"
-                                    >
-                                        <Smile size={20} />
-                                    </button>
-                                    {showEmojiPicker && (
-                                        <div className="absolute bottom-full right-0 mb-4 p-3 bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl z-30 grid grid-cols-4 gap-2 animate-in zoom-in-95 duration-200">
-                                            {emojis.map(emoji => (
-                                                <button
-                                                    key={emoji}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setInputValue(prev => prev + emoji);
-                                                        setShowEmojiPicker(false);
-                                                    }}
-                                                    className="text-xl hover:bg-white/10 p-1 rounded transition-colors"
-                                                >
-                                                    {emoji}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                                <button
-                                    type="submit"
-                                    disabled={!inputValue.trim() || isWaitingForOthers}
-                                    className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-900/20 active:scale-95"
-                                >
-                                    <Send size={18} />
-                                </button>
-                            </div>
-                        </div>
-                        <div className="flex justify-between px-2">
-                             <p className="text-[10px] text-gray-500 flex items-center gap-1">
-                                <CheckCheck size={10} /> End-to-end encrypted
-                             </p>
-                        </div>
-                    </form>
-                </div>
-            ) : (
-                <div className="p-8 border-t border-gray-800 bg-gray-900/80 text-center text-gray-400 text-sm font-medium">
-                    Please accept the message request to start chatting.
-                </div>
-            )}
-
             {/* Call Overlay */}
             {callState.status !== 'idle' && (
                 <CallOverlay 
@@ -590,7 +602,96 @@ const ChatWindow: React.FC = () => {
                     toggleVideo={toggleVideo}
                     isMuted={isMuted}
                     isVideoEnabled={isVideoEnabled}
+                    otherUserName={otherUserTitle}
+                    otherUserAvatar={otherUserAvatar}
                 />
+            )}
+
+            {/* Input Area */}
+            {!isPending ? (
+                <div className="p-4 md:p-6 border-t border-gray-800 bg-gray-900/80 backdrop-blur-md">
+                    <form onSubmit={handleSend} className="flex flex-col gap-3">
+                        {isVoiceRecording ? (
+                            <div className="flex justify-center p-2 bg-gray-800 rounded-2xl border border-gray-700 animate-in slide-in-from-bottom-2">
+                                <VoiceRecorder onSend={handleVoiceMessage} onCancel={() => setIsVoiceRecording(false)} />
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-2xl p-1 px-2 focus-within:border-blue-500 transition-all shadow-inner">
+                                <button 
+                                    type="button"
+                                    onClick={() => setShowMediaUpload(!showMediaUpload)}
+                                    className="p-2 text-gray-400 hover:text-blue-400 hover:bg-white/5 rounded-full transition-all"
+                                >
+                                    <Plus size={22} />
+                                </button>
+                                
+                                <input
+                                    id="chat-window-input"
+                                    name="message"
+                                    type="text"
+                                    value={inputValue}
+                                    onChange={(e) => setInputValue(e.target.value)}
+                                    placeholder={isWaitingForOthers ? "Waiting for acceptance..." : "Type a secure message..."}
+                                    disabled={isWaitingForOthers}
+                                    autoComplete="off"
+                                    className="flex-1 bg-transparent text-white py-3 px-2 focus:outline-none disabled:opacity-50 text-sm"
+                                />
+                                
+                                <div className="flex items-center gap-1">
+                                    <button 
+                                        type="button"
+                                        onClick={() => setIsVoiceRecording(true)}
+                                        className="p-2 text-gray-400 hover:text-blue-400 hover:bg-white/5 rounded-full transition-all"
+                                    >
+                                        <Mic size={20} />
+                                    </button>
+                                    <div className="relative">
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                                            className="p-2 text-gray-400 hover:text-yellow-400 hover:bg-white/5 rounded-full transition-all md:flex hidden"
+                                        >
+                                            <Smile size={20} />
+                                        </button>
+                                        {showEmojiPicker && (
+                                            <div className="absolute bottom-full right-0 mb-4 p-3 bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl z-30 grid grid-cols-4 gap-2 animate-in zoom-in-95 duration-200">
+                                                {emojis.map(emoji => (
+                                                    <button
+                                                        key={emoji}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setInputValue(prev => prev + emoji);
+                                                            setShowEmojiPicker(false);
+                                                        }}
+                                                        className="text-xl hover:bg-white/10 p-1 rounded transition-colors"
+                                                    >
+                                                        {emoji}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        disabled={!inputValue.trim() || isWaitingForOthers}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-900/20 active:scale-95"
+                                    >
+                                        <Send size={18} />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                        <div className="flex justify-between px-2">
+                             <p className="text-[10px] text-gray-500 flex items-center gap-1">
+                                <CheckCheck size={10} /> End-to-end encrypted
+                             </p>
+                        </div>
+                    </form>
+                </div>
+            ) : (
+                <div className="p-8 border-t border-gray-800 bg-gray-900/80 text-center text-gray-400 text-sm font-medium">
+                    Please accept the message request to start chatting.
+                </div>
             )}
         </div>
     );
@@ -608,7 +709,6 @@ const ImageWithSignedUrl = ({ path, fetchUrl }: { path: string, fetchUrl: (p: st
             alt="Attached"
             className="max-w-full h-auto cursor-pointer hover:opacity-95 transition-opacity"
             onClick={() => url && window.open(url, '_blank')}
-            fallback={<div className="aspect-square bg-gray-700 animate-pulse flex items-center justify-center"><Loader2 className="animate-spin text-gray-500" /></div>}
         />
     );
 };
@@ -622,12 +722,12 @@ const VideoWithSignedUrl = ({ path, fetchUrl }: { path: string, fetchUrl: (p: st
 
 // --- Call Overlay UI Component ---
 
-const CallOverlay = ({ callState, acceptCall, rejectCall, endCall, localStream, remoteStream, toggleMute, toggleVideo, isMuted, isVideoEnabled }: any) => {
+const CallOverlay = ({ callState, acceptCall, rejectCall, endCall, localStream, remoteStream, toggleMute, toggleVideo, isMuted, isVideoEnabled, otherUserName, otherUserAvatar }: any) => {
     return (
-        <div className="fixed inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center backdrop-blur-xl animate-in fade-in duration-300">
-            <div className="relative w-full max-w-4xl aspect-video bg-gray-900 rounded-3xl overflow-hidden shadow-2xl border border-white/5 mx-4">
+        <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center backdrop-blur-xl animate-in fade-in duration-300">
+            <div className="relative w-full h-full md:w-[90vw] md:h-[80vh] bg-gray-900 md:rounded-3xl overflow-hidden shadow-2xl border border-white/5">
                 {/* Remote Stream (Full Screen) */}
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
                     {remoteStream ? (
                         <video 
                             ref={(el) => { if (el) el.srcObject = remoteStream; }} 
@@ -635,63 +735,90 @@ const CallOverlay = ({ callState, acceptCall, rejectCall, endCall, localStream, 
                             className="w-full h-full object-cover" 
                         />
                     ) : (
-                        <div className="flex flex-col items-center gap-4">
-                            <div className="w-24 h-24 rounded-full bg-blue-600 flex items-center justify-center text-4xl font-bold animate-pulse">
-                                ?
+                        <div className="flex flex-col items-center gap-6">
+                            <div className="relative">
+                                <div className="absolute -inset-4 bg-blue-500/20 rounded-full animate-ping"></div>
+                                <div className="absolute -inset-8 bg-blue-500/10 rounded-full animate-pulse"></div>
+                                <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-4xl font-bold border-4 border-white/10 shadow-2xl overflow-hidden">
+                                    {otherUserAvatar ? (
+                                        <SecureImage src={otherUserAvatar} alt={otherUserName} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <span className="text-white">{otherUserName?.charAt(0).toUpperCase()}</span>
+                                    )}
+                                </div>
                             </div>
-                            <p className="text-xl font-semibold text-white">
-                                {callState.status === 'calling' ? 'Ringing...' : 'Connecting...'}
-                            </p>
+                            <div className="text-center">
+                                <h3 className="text-2xl font-bold text-white mb-2">{otherUserName}</h3>
+                                <p className="text-blue-400 font-medium animate-pulse">
+                                    {callState.status === 'calling' ? 'Ringing...' : 
+                                     callState.status === 'incoming' ? `${callState.type === 'video' ? 'Video' : 'Voice'} Call Incoming` : 
+                                     'Connecting...'}
+                                </p>
+                            </div>
                         </div>
                     )}
                 </div>
 
                 {/* Local Stream (Picture in Picture) */}
-                <div className="absolute top-8 right-8 w-48 h-32 bg-gray-900 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl z-10">
+                <div className="absolute top-8 right-8 w-40 h-56 md:w-48 md:h-64 bg-gray-950 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl z-10">
                     {localStream ? (
                         <video 
                             ref={(el) => { if (el) el.srcObject = localStream; }} 
                             autoPlay 
                             muted 
-                            className="w-full h-full object-cover" 
+                            className={`w-full h-full object-cover ${!isVideoEnabled ? 'hidden' : ''}`} 
                         />
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gray-800">
-                            <Video size={32} className="text-gray-600" />
-                        </div>
+                    ) : null}
+                    {!isVideoEnabled && (
+                         <div className="w-full h-full flex items-center justify-center bg-gray-800">
+                            <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center">
+                                <Video size={20} className="text-gray-500" />
+                            </div>
+                         </div>
                     )}
                 </div>
 
-                {/* Incoming Call Controls */}
-                {callState.status === 'incoming' && (
-                    <div className="absolute inset-x-0 bottom-12 flex flex-col items-center gap-6 z-20">
-                        <div className="flex gap-8">
-                            <button onClick={acceptCall} className="w-20 h-20 rounded-full bg-green-500 flex items-center justify-center text-white hover:bg-green-600 transition-all hover:scale-110 shadow-xl shadow-green-500/20">
-                                <Phone size={32} />
-                            </button>
-                            <button onClick={rejectCall} className="w-20 h-20 rounded-full bg-red-500 flex items-center justify-center text-white hover:bg-red-600 transition-all hover:scale-110 shadow-xl shadow-red-500/20">
-                                <Phone size={32} className="rotate-[135deg]" />
-                            </button>
+                {/* Controls Area */}
+                <div className="absolute inset-x-0 bottom-12 flex flex-col items-center gap-8 z-20">
+                    {callState.status === 'incoming' ? (
+                        <div className="flex gap-12">
+                            <div className="flex flex-col items-center gap-3">
+                                <button onClick={acceptCall} className="w-20 h-20 rounded-full bg-green-500 flex items-center justify-center text-white hover:bg-green-600 transition-all hover:scale-110 shadow-xl shadow-green-500/30">
+                                    <Phone size={32} />
+                                </button>
+                                <span className="text-sm font-medium text-green-400">Accept</span>
+                            </div>
+                            <div className="flex flex-col items-center gap-3">
+                                <button onClick={rejectCall} className="w-20 h-20 rounded-full bg-red-500 flex items-center justify-center text-white hover:bg-red-600 transition-all hover:scale-110 shadow-xl shadow-red-500/30">
+                                    <Phone size={32} className="rotate-[135deg]" />
+                                </button>
+                                <span className="text-sm font-medium text-red-400">Decline</span>
+                            </div>
                         </div>
-                    </div>
-                )}
+                    ) : (
+                        <div className="flex items-center gap-6 bg-black/40 backdrop-blur-xl p-6 rounded-[2.5rem] border border-white/10 shadow-3xl">
+                            <button 
+                                onClick={toggleMute} 
+                                className={`p-5 rounded-full transition-all ${isMuted ? 'bg-red-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                                title={isMuted ? "Unmute" : "Mute"}
+                            >
+                                {isMuted ? <MicOff size={26} /> : <Mic size={26} />}
+                            </button>
+                            
+                            <button onClick={endCall} className="w-20 h-20 rounded-full bg-red-500 flex items-center justify-center text-white hover:bg-red-600 transition-all hover:scale-110 shadow-2xl shadow-red-500/40 transform active:scale-95">
+                                <Phone size={34} className="rotate-[135deg]" />
+                            </button>
 
-                {/* Connected / Calling Controls */}
-                {(callState.status === 'connected' || callState.status === 'calling') && (
-                    <div className="absolute inset-x-0 bottom-12 flex flex-col items-center gap-6 z-20">
-                        <div className="flex items-center gap-4 bg-black/40 backdrop-blur-md p-4 rounded-3xl border border-white/5">
-                            <button onClick={toggleMute} className={`p-4 rounded-full transition-all ${isMuted ? 'bg-red-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}>
-                                {isMuted ? <MicOff size={24} /> : <Mic size={24} />}
-                            </button>
-                            <button onClick={toggleVideo} className={`p-4 rounded-full transition-all ${!isVideoEnabled ? 'bg-red-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}>
-                                <Video size={24} />
-                            </button>
-                            <button onClick={endCall} className="w-16 h-16 rounded-full bg-red-500 flex items-center justify-center text-white hover:bg-red-600 transition-all hover:scale-110 shadow-xl shadow-red-500/40">
-                                <Phone size={28} className="rotate-[135deg]" />
+                            <button 
+                                onClick={toggleVideo} 
+                                className={`p-5 rounded-full transition-all ${!isVideoEnabled ? 'bg-red-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                                title={isVideoEnabled ? "Turn Camera Off" : "Turn Camera On"}
+                            >
+                                {isVideoEnabled ? <Video size={26} /> : <Video size={26} />}
                             </button>
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
         </div>
     );

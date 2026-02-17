@@ -36,15 +36,20 @@ create table shared_notes (
   unique(note_id, shared_with_user_id)
 );
 
--- SUBSCRIPTIONS (Stripe sync)
+-- SUBSCRIPTIONS (Paystack sync)
 create table subscriptions (
   id uuid default uuid_generate_v4() primary key,
   user_id uuid references auth.users on delete cascade not null,
-  stripe_customer_id text,
-  stripe_subscription_id text,
+  paystack_customer_code text,
+  paystack_subscription_code text,
+  paystack_transaction_reference text,
+  paystack_email_token text,
   plan_tier text default 'free',
-  status text check (status in ('active', 'past_due', 'canceled', 'incomplete')) default 'active',
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+  charged_amount_ngn numeric, -- The actual amount charged in NGN
+  exchange_rate numeric, -- The rate used (USD -> NGN)
+  status text check (status in ('active', 'past_due', 'canceled', 'incomplete', 'non_renewing')) default 'active',
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique(user_id)
 );
 
 -- INDEXES for performance

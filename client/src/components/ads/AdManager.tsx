@@ -5,7 +5,7 @@ import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { EmptyState } from '../common/EmptyState';
 import { Input } from '../common/Input';
-import { SecureImage } from '../common/SecureImage';
+import SecureImage from '../common/SecureImage';
 import { Loader2, Plus, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 

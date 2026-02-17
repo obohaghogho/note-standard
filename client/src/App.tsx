@@ -1,10 +1,11 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useEffect } from 'react';
 import { LandingPage } from './pages/LandingPage';
 import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
 import { TermsPage } from './pages/TermsPage';
+import { PrivacyPage } from './pages/PrivacyPage';
 import { ResetPassword } from './pages/ResetPassword';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { DashboardHome } from './pages/dashboard/DashboardHome';
@@ -15,6 +16,12 @@ import { Feed } from './pages/dashboard/Feed';
 import { Search } from './pages/dashboard/Search';
 import { Settings } from './pages/dashboard/Settings';
 import { Billing } from './pages/dashboard/Billing';
+import { Affiliates } from './pages/dashboard/Affiliates';
+
+const ChatRedirect = () => {
+  const { id } = useParams();
+  return <Navigate to={`/dashboard/chat?id=${id}`} replace />;
+};
 
 import { Notifications } from './pages/dashboard/Notifications';
 import { Trends } from './pages/dashboard/Trends';
@@ -39,7 +46,7 @@ import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { ChatProvider } from './context/ChatContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { WalletProvider } from './context/WalletContext';
-import { WalletDashboard } from './pages/dashboard/WalletDashboard';
+import { WalletPage } from './pages/dashboard/WalletPage';
 import { WebRTCProvider } from './context/WebRTCContext';
 import { PresenceProvider } from './context/PresenceContext';
 
@@ -94,13 +101,17 @@ function App() {
                     <Route path="/login" element={<Login />} />
                     <Route path="/signup" element={<Signup />} />
                     <Route path="/terms" element={<TermsPage />} />
+                    <Route path="/privacy" element={<PrivacyPage />} />
                     <Route path="/reset-password" element={<ResetPassword />} />
+                    
+                    {/* Legacy Chat Redirect */}
+                    <Route path="/chat/:id" element={<ChatRedirect />} />
 
                     {/* Payment result pages - outside protected route as user returns from Stripe */}
                     <Route path="/payment/success" element={<PaymentSuccess />} />
                     <Route path="/payment/cancel" element={<PaymentCancel />} />
                     {/* Alias for wallet path */}
-                    <Route path="/wallet" element={<WalletDashboard />} />
+                    <Route path="/wallet" element={<WalletPage />} />
 
                     {/* Protected Routes */}
                     <Route element={<ProtectedRoute />}>
@@ -114,7 +125,8 @@ function App() {
                         <Route path="favorites" element={<Notes />} />
                         <Route path="search" element={<Search />} />
                         <Route path="billing" element={<Billing />} />
-                        <Route path="wallet" element={<WalletDashboard />} /> {/* New Route */}
+                        <Route path="wallet" element={<WalletPage />} />
+                        <Route path="affiliates" element={<Affiliates />} />
                         <Route path="settings" element={<Settings />} />
 
                         <Route path="notifications" element={<Notifications />} />

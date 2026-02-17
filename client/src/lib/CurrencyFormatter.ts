@@ -8,6 +8,7 @@ export const formatCurrency = (
   currencyCode: string = 'USD',
   locale: string = navigator.language || 'en-US'
 ): string => {
+  if (amount === undefined || amount === null) return '0.00';
   const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
   
   if (isNaN(numericAmount)) return '0.00';

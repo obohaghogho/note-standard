@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 export const Footer = () => {
     return (
         <footer className="border-t border-white/10 bg-black/50 backdrop-blur-xl">
@@ -16,20 +18,20 @@ export const Footer = () => {
                     <div>
                         <h4 className="font-bold mb-4">Product</h4>
                         <ul className="space-y-2 text-sm text-gray-400">
-                            <li><a href="#" className="hover:text-white transition-colors">Features</a></li>
-                            <li><a href="#" className="hover:text-white transition-colors">Pricing</a></li>
+                            <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
+                            <li><a href="#pricing" className="hover:text-white transition-colors">Pricing</a></li>
                             <li><a href="#" className="hover:text-white transition-colors">Security</a></li>
-                            <li><a href="#" className="hover:text-white transition-colors">Roadmap</a></li>
+                            <li><Link to="/signup" className="hover:text-white transition-colors">Roadmap</Link></li>
                         </ul>
                     </div>
 
                     <div>
                         <h4 className="font-bold mb-4">Company</h4>
                         <ul className="space-y-2 text-sm text-gray-400">
-                            <li><a href="#" className="hover:text-white transition-colors">About</a></li>
-                            <li><a href="#" className="hover:text-white transition-colors">Blog</a></li>
-                            <li><a href="#" className="hover:text-white transition-colors">Careers</a></li>
-                            <li><a href="#" className="hover:text-white transition-colors">Contact</a></li>
+                            <li><Link to="/" className="hover:text-white transition-colors">About</Link></li>
+                            <li><Link to="/" className="hover:text-white transition-colors">Blog</Link></li>
+                            <li><Link to="/" className="hover:text-white transition-colors">Careers</Link></li>
+                            <li><Link to="/" className="hover:text-white transition-colors">Contact</Link></li>
                         </ul>
                     </div>
                 </div>
@@ -37,8 +39,8 @@ export const Footer = () => {
                 <div className="pt-8 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-500">
                     <p>© 2024 Note Standard. All rights reserved.</p>
                     <div className="flex gap-4">
-                        <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
-                        <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
+                        <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
+                        <Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
                     </div>
                 </div>
             </div>
