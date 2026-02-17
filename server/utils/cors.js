@@ -5,6 +5,7 @@
 const whitelist = [
   "https://www.notestandard.com",
   "https://notestandard.com",
+  "https://api.notestandard.com",
 ];
 
 // Allow localhost only in development
