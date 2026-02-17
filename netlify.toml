@@ -17,7 +17,14 @@
   included_files = ["server/**"]
 
 # ─── Route Rewrites ──────────────────────────────────────────
-# /api/* → serverless Express function
+# /api/chat/* → dedicated chat function
+[[redirects]]
+  from = "/api/chat/*"
+  to = "/.netlify/functions/chat/api/chat/:splat"
+  status = 200
+  force = true
+
+# /api/* → general serverless Express function
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api/api/:splat"
