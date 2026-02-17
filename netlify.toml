@@ -2,10 +2,9 @@
 # Handles: build, functions, routing, and headers for notestandard.com
 
 [build]
-  # IMPORTANT: Set base to empty or '/' if you want to run from the repo root
-  # This prevents the "cd server" error if Netlify is already inside the server folder.
+  # Ensure build runs from the repo root
   base = ""
-  command = "npm install && cd server && npm install && cd ../client && npm install && npm run build"
+  command = "npm run install:all && npm run build --prefix client"
   publish = "client/dist"
   functions = "netlify/functions"
 
@@ -49,15 +48,39 @@
   status = 200
   force = true
 
-# SPA fallback — all other routes serve the React app
+# ─── SPA Failsafe Redirects ──────────────────────────────────
+# Explicitly handle common routes to ensure refresh works
+[[redirects]]
+  from = "/dashboard/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/login"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/signup"
+  to = "/index.html"
+  status = 200
+
+# Catch-all fallback for any other SPA routes
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
 
-# ─── Security Headers ────────────────────────────────────────
-# These apply to static assets served by Netlify CDN (not functions).
-# Function responses get their headers from Express middleware.
+# ─── Security & Routing Headers ──────────────────────────────
+# Prevent index.html from being cached too aggressively to ensure routing changes stick
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+
+# Regular assets can be cached
 [[headers]]
   for = "/*"
   [headers.values]
