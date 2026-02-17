@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useChat } from '../../context/ChatContext';
 import { X } from 'lucide-react';
+import SecureImage from '../common/SecureImage';
 
 interface NewChatModalProps {
     isOpen: boolean;
@@ -108,7 +109,7 @@ const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose }) => {
                                         >
                                             <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center overflow-hidden flex-shrink-0">
                                                 {user.avatar_url ? (
-                                                    <img src={user.avatar_url} alt={user.username} className="w-full h-full object-cover" />
+                                                    <SecureImage src={user.avatar_url} alt={user.username} className="w-full h-full object-cover" fallbackType="profile" />
                                                 ) : (
                                                     <span className="text-xs font-bold text-white">
                                                         {(user.full_name?.[0] || user.username?.[0] || '?').toUpperCase()}

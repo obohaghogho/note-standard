@@ -49,16 +49,21 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             auth: { token: session.access_token },
             reconnection: true,
             reconnectionAttempts: MAX_RETRIES,
-            reconnectionDelay: 1000,
-            timeout: 10000,
-            transports: ['websocket', 'polling']
+            reconnectionDelay: 2000,
+            timeout: 20000,
+            transports: ['polling', 'websocket']
         });
 
         socket.on('connect', () => {
-            console.log('[Socket] Connected to server');
+            const transport = socket.io.engine.transport.name;
+            console.log(`[Socket] Connected to server via ${transport}`);
             setConnected(true);
             setError(null);
             retryCount.current = 0;
+            
+            socket.io.engine.on('upgrade', (upTrans) => {
+                console.log(`[Socket] Transport upgraded to ${upTrans.name}`);
+            });
         });
 
         socket.on('disconnect', (reason) => {

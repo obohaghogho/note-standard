@@ -18,6 +18,7 @@ import {
     Bot,
     Monitor
 } from 'lucide-react';
+import SecureImage from '../common/SecureImage';
 import './AdminLayout.css';
 
 interface AdminProfile {
@@ -143,7 +144,7 @@ export const AdminLayout = () => {
                         </button>
                         <div className="admin-profile">
                             {adminProfile?.avatar_url ? (
-                                <img src={adminProfile.avatar_url} alt="Admin" />
+                                <SecureImage src={adminProfile.avatar_url} alt="Admin" fallbackType="profile" />
                             ) : (
                                 <div className="avatar-placeholder">
                                     {adminProfile?.username?.[0]?.toUpperCase() || 'A'}

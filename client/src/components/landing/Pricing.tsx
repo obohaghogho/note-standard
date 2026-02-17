@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { Check } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const plans = [
     {
@@ -29,6 +30,7 @@ const plans = [
 ];
 
 export const Pricing = () => {
+    const navigate = useNavigate();
     return (
         <section id="pricing" className="py-24 relative overflow-hidden">
             {/* Background blobs */}
@@ -79,7 +81,12 @@ export const Pricing = () => {
                                 ))}
                             </div>
 
-                            <button className={`w-full py-3 rounded-xl font-medium transition-all ${plan.highlight
+                            <button 
+                                onClick={() => {
+                                    console.log(`[Pricing] Plan chosen: ${plan.name}`);
+                                    navigate('/signup');
+                                }}
+                                className={`w-full py-3 rounded-xl font-medium transition-all ${plan.highlight
                                     ? 'bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/25'
                                     : 'bg-white/5 hover:bg-white/10 border border-white/10 text-white'
                                 }`}>

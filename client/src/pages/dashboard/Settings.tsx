@@ -4,7 +4,7 @@ import { API_URL } from '../../lib/api';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
-import { SecureImage } from '../../components/common/SecureImage';
+import SecureImage from '../../components/common/SecureImage';
 import { supabase, safeCall } from '../../lib/supabaseSafe';
 import type { Profile } from '../../types/auth';
 import { useAuth } from '../../context/AuthContext';
@@ -387,7 +387,6 @@ export const Settings = () => {
                                             src={avatarUrl}
                                             alt="Profile"
                                             className="w-24 h-24 rounded-full object-cover border-2 border-primary/30"
-                                            containerClassName="w-24 h-24 rounded-full"
                                         />
                                     ) : (
                                         <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-2xl font-bold text-white">

@@ -72,18 +72,27 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         pendingOffer.current = null;
     }, [localStream]);
 
+    const iceQueue = useRef<RTCIceCandidateInit[]>([]);
+
     const createPeerConnection = useCallback((otherUserId: string) => {
         const pc = new RTCPeerConnection(ICE_SERVERS);
 
         pc.onicecandidate = (event) => {
             if (event.candidate && socket) {
+                console.log('[WebRTC] Sending ICE candidate to:', otherUserId);
                 socket.emit('call:ice', { to: otherUserId, candidate: event.candidate });
             }
         };
 
         pc.ontrack = (event) => {
             console.log('[WebRTC] Received remote track');
-            setRemoteStream(event.streams[0]);
+            if (event.streams && event.streams[0]) {
+                setRemoteStream(event.streams[0]);
+            } else {
+                // If no stream provided, create one from the track
+                const newStream = new MediaStream([event.track]);
+                setRemoteStream(newStream);
+            }
         };
 
         pc.onconnectionstatechange = () => {
@@ -91,31 +100,62 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
                 cleanup();
             }
+            if (pc.connectionState === 'connected') {
+                setCallState(prev => ({ ...prev, status: 'connected' }));
+            }
         };
 
         peerConnection.current = pc;
         return pc;
     }, [socket, cleanup]);
 
+    const callTimeoutRef = useRef<any>(null);
+    const currentCallStatus = useRef<'idle' | 'calling' | 'incoming' | 'connected'>('idle');
+    useEffect(() => { currentCallStatus.current = callState.status; }, [callState.status]);
+
     const startCall = async (otherUserId: string, conversationId: string, type: 'voice' | 'video') => {
         try {
+            console.log('[WebRTC] Initiating call sequence:', { to: otherUserId, type });
+            
+            // 1. Set state immediately for UI responsiveness
+            setCallState({ type, status: 'calling', otherUser: otherUserId, conversationId });
+
+            // 2. Clear previous timeouts
+            if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
+            
+            // 3. Request media permissions (this might take time/interaction)
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: true,
                 video: type === 'video'
             });
             setLocalStream(stream);
-            setCallState({ type, status: 'calling', otherUser: otherUserId, conversationId });
+            
+            // 4. Send signaling event
             if (socket && user) {
+                console.log('[WebRTC] Emitting call:init');
                 socket.emit('call:init', { to: otherUserId, from: user.id, type, conversationId });
+            } else {
+                console.warn('[WebRTC] Socket or user missing during call init', { hasSocket: !!socket, hasUser: !!user });
             }
+
+            // 5. Start timeout for answer
+            callTimeoutRef.current = setTimeout(() => {
+                if (currentCallStatus.current === 'calling') {
+                    console.log('[WebRTC] Call timed out (no answer)');
+                    toast.error('Recipient did not answer');
+                    endCall();
+                }
+            }, 45000); // 45 seconds
+
         } catch (err) {
-            console.error('Failed to start call:', err);
-            toast.error('Could not access camera/microphone');
+            console.error('[WebRTC] startCall failed:', err);
+            toast.error('Could not access camera/microphone. Ensure permissions are granted.');
             cleanup();
         }
     };
 
     const rejectCall = () => {
+        console.log('[WebRTC] Rejecting call');
         if (socket && callState.otherUser && user) {
             socket.emit('call:end', { to: callState.otherUser, from: user.id, conversationId: callState.conversationId });
         }
@@ -123,6 +163,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     const endCall = () => {
+        console.log('[WebRTC] Ending call');
         if (socket && callState.otherUser && user) {
             socket.emit('call:end', { to: callState.otherUser, from: user.id, conversationId: callState.conversationId });
         }
@@ -161,7 +202,6 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
             console.log('[WebRTC] Incoming call from:', from);
             setCallState({ type, status: 'incoming', otherUser: from, conversationId });
-            toast(`Incoming ${type} call from ${from}`);
         };
 
         const onCallOffer = async ({ from, offer }: { from: string, offer: RTCSessionDescriptionInit }) => {
@@ -175,9 +215,13 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         const onRecipientReady = async ({ from }: { from: string }) => {
             console.log('[WebRTC] Recipient ready:', from);
+            if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
+            
             if (callState.status === 'calling' && callState.otherUser === from) {
                 const pc = createPeerConnection(from);
-                localStream?.getTracks().forEach(track => pc.addTrack(track, localStream));
+                if (localStream) {
+                    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+                }
                 
                 try {
                     const offer = await pc.createOffer();
@@ -185,6 +229,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     socket.emit('call:offer', { to: from, offer });
                 } catch (err) {
                     console.error('[WebRTC] Failed to create offer:', err);
+                    cleanup();
                 }
             }
         };
@@ -192,14 +237,31 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const onCallAnswer = async ({ from, answer }: { from: string, answer: RTCSessionDescriptionInit }) => {
             console.log('[WebRTC] Received answer from:', from);
             if (peerConnection.current && callState.otherUser === from) {
-                await peerConnection.current.setRemoteDescription(new RTCSessionDescription(answer));
-                setCallState(prev => ({ ...prev, status: 'connected' }));
+                try {
+                    await peerConnection.current.setRemoteDescription(new RTCSessionDescription(answer));
+                    setCallState(prev => ({ ...prev, status: 'connected' }));
+                    
+                    // Process queued ICE candidates
+                    while (iceQueue.current.length > 0) {
+                        const candidate = iceQueue.current.shift();
+                        if (candidate) await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+                    }
+                } catch (err) {
+                    console.error('[WebRTC] Error setting remote description:', err);
+                }
             }
         };
 
         const onCallIce = async ({ from, candidate }: { from: string, candidate: RTCIceCandidateInit }) => {
-            if (peerConnection.current && callState.otherUser === from) {
-                await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+            if (peerConnection.current && callState.otherUser === from && peerConnection.current.remoteDescription) {
+                try {
+                    await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+                } catch (err) {
+                    console.error('[WebRTC] Error adding ICE candidate:', err);
+                }
+            } else if (callState.otherUser === from) {
+                console.log('[WebRTC] Queuing ICE candidate');
+                iceQueue.current.push(candidate);
             }
         };
 

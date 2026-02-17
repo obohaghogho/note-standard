@@ -1,6 +1,6 @@
 import { ExternalLink } from 'lucide-react';
 import { Card } from '../common/Card';
-import { SecureImage } from '../common/SecureImage';
+import SecureImage from '../common/SecureImage';
 import { Link } from 'react-router-dom';
 
 interface AdCardProps {

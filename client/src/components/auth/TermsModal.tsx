@@ -43,35 +43,58 @@ export const TermsModal: React.FC<TermsModalProps> = ({
                 <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)] space-y-6">
                     <div className="prose prose-invert max-w-none">
                         <p className="text-gray-300 leading-relaxed">
-                            By signing up, you agree to the following:
+                            Welcome to <strong>Note Standard</strong>. We believe in a new internet model where user privacy and 
+                            sustainable monetization coexist. By using our services, you agree to these Terms & Conditions.
                         </p>
 
-                        <h3 className="text-xl font-semibold text-white mt-6 mb-3">Community Guidelines</h3>
+                        <h3 className="text-xl font-semibold text-white mt-6 mb-2">1. Our Core Principles</h3>
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                            <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                                <div className="text-primary font-bold mb-1">Transparency</div>
+                                <div className="text-xs text-gray-400">Know exactly how your data is used.</div>
+                            </div>
+                            <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                                <div className="text-primary font-bold mb-1">Control</div>
+                                <div className="text-xs text-gray-400">Decide which features you opt into.</div>
+                            </div>
+                        </div>
+
+                        <h3 className="text-xl font-semibold text-white mt-6 mb-2">2. Community & Usage</h3>
                         <ul className="list-disc list-inside space-y-2 text-gray-300">
-                            <li>No abusive, offensive, or harmful language/behavior is allowed.</li>
-                            <li>Violations may result in suspension or banning.</li>
+                            <li>Keep it professional: No abusive, offensive, or illegal content.</li>
+                            <li>Respect others: Do not use our sharing features to harass users.</li>
+                            <li>Note Standard reserves the right to terminate accounts that violate these guidelines.</li>
                         </ul>
 
-                        <h3 className="text-xl font-semibold text-white mt-6 mb-3">Data Usage Consent</h3>
+                        <h3 className="text-xl font-semibold text-white mt-6 mb-2">3. Data Monetization & Privacy</h3>
+                        <p className="text-gray-400 text-sm mb-3">Our model prioritizes user agency and anonymous value exchange.</p>
                         <ul className="list-disc list-inside space-y-2 text-gray-300">
-                            <li>Your anonymized, aggregated data may be used to improve services and generate revenue (e.g., ads, analytics).</li>
-                            <li>Personal data (email, name) will NOT be sold but may be used for targeted features.</li>
+                            <li><strong>Contextual Ads</strong>: We serve ads based on the <em>content</em> of your session (e.g., current tags), not your <em>profile</em>. No tracking cookies are used.</li>
+                            <li><strong>Anonymized Insights</strong>: We may aggregate high-level usage patterns for productivity research. This data is count-based and anonymized.</li>
+                            <li><strong>Affiliate Partnerships</strong>: We may recommend tools that integrate with our app. Interactions are user-initiated.</li>
                         </ul>
 
-                        <h3 className="text-xl font-semibold text-white mt-6 mb-3">Account Responsibilities</h3>
+                        <h3 className="text-xl font-semibold text-white mt-6 mb-2">4. Financial Services & Wallet</h3>
                         <ul className="list-disc list-inside space-y-2 text-gray-300">
-                            <li>Secure your login credentials; you're accountable for account activity.</li>
+                            <li><strong>Custody</strong>: Note Standard provides managed wallets. While secure, we are not a traditional bank.</li>
+                            <li><strong>Fees</strong>: Transfers and withdrawals may incur a service fee (flat fee + percentage spread).</li>
+                            <li><strong>Pro/Business Discounts</strong>: Upgraded plans enjoy reduced fees and tighter spreads.</li>
+                            <li><strong>Finality</strong>: Once a crypto or internal transfer is confirmed, it cannot be reversed.</li>
                         </ul>
 
-                        <h3 className="text-xl font-semibold text-white mt-6 mb-3">Termination Rights</h3>
+                        <h3 className="text-xl font-semibold text-white mt-6 mb-2">5. Affiliate Program</h3>
                         <ul className="list-disc list-inside space-y-2 text-gray-300">
-                            <li>We reserve the right to remove accounts violating these terms.</li>
+                            <li><strong>Commissions</strong>: You earn a percentage of the revenue generated by users you refer.</li>
+                            <li><strong>Payouts</strong>: Earnings are credited to your system wallet in the currency the revenue was generated in.</li>
                         </ul>
 
                         <div className="mt-8 p-4 bg-primary/10 border border-primary/20 rounded-lg">
-                            <p className="text-sm text-gray-300">
+                            <p className="text-sm text-gray-300 italic">
+                                "Our mission is to provide premium productivity tools while putting you in control of your data and finances."
+                            </p>
+                            <p className="text-xs text-gray-500 mt-2">
                                 By checking the agreement box and creating an account, you acknowledge that you have read,
-                                understood, and agree to be bound by these Terms & Conditions and our Privacy Policy.
+                                understood, and agree to be bound by these Terms & Conditions.
                             </p>
                         </div>
                     </div>

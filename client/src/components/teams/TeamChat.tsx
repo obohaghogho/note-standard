@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { TeamMessage } from '../../types/teams';
+import SecureImage from '../common/SecureImage';
 import './TeamChat.css';
 
 interface TeamChatProps {
@@ -159,7 +160,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
           {!isOwn && showAvatar && (
             <div className="team-chat__message-avatar">
               {senderAvatar ? (
-                <img src={senderAvatar} alt={senderName} />
+                <SecureImage src={senderAvatar} alt={senderName} fallbackType="profile" />
               ) : (
                 <div className="team-chat__message-avatar-placeholder">
                   {senderName.charAt(0).toUpperCase()}
@@ -202,7 +203,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
         {!isOwn && showAvatar && (
           <div className="team-chat__message-avatar">
             {senderAvatar ? (
-              <img src={senderAvatar} alt={senderName} />
+              <SecureImage src={senderAvatar} alt={senderName} fallbackType="profile" />
             ) : (
               <div className="team-chat__message-avatar-placeholder">
                 {senderName.charAt(0).toUpperCase()}

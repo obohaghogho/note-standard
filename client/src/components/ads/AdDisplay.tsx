@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { adService, type Ad } from '../../services/ads';
 import { supabase } from '../../lib/supabaseSafe';
 import { Card } from '../common/Card';
-import { SecureImage } from '../common/SecureImage';
+import SecureImage from '../common/SecureImage';
 import { ExternalLink, X } from 'lucide-react';
 
 interface AdDisplayProps {

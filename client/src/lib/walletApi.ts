@@ -146,7 +146,7 @@ export const walletApi = {
         return result;
     },
 
-    // Get crypto deposit address
+    // Get crypto deposit address (Legacy/Static)
     async getCryptoDepositAddress(currency: string): Promise<{
         currency: string;
         address: string;
@@ -161,6 +161,49 @@ export const walletApi = {
             throw new Error(result.error || 'Failed to get deposit address');
         }
         return result;
+    },
+
+    // Unified Payment Initialization (New)
+    async initializePayment(data: {
+        amount: number;
+        currency: string;
+        metadata?: any;
+        options?: { isCrypto?: boolean; [key: string]: any };
+    }): Promise<{
+        url: string;
+        paymentUrl: string;
+        payAddress?: string;
+        reference: string;
+        provider: string;
+    }> {
+        const headers = await getAuthHeader();
+        const response = await fetch(`${API_base}/payment/initialize`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error || 'Payment initialization failed');
+        }
+        return result;
+    },
+
+    // Check payment status
+    async checkPaymentStatus(reference: string): Promise<{
+        status: string;
+        amount: number;
+        currency: string;
+        provider: string;
+    }> {
+        const headers = await getAuthHeader();
+        const response = await fetch(`${API_base}/payment/status/${reference}`, { headers });
+
+        if (!response.ok) {
+            throw new Error('Failed to check payment status');
+        }
+        return response.json();
     },
 
     // ========================================
@@ -227,6 +270,29 @@ export const walletApi = {
             throw new Error(result.error || 'Swap failed');
         }
         return result;
+    },
+
+    // Download Invoice
+    async downloadInvoice(transactionId: string): Promise<void> {
+        try {
+            const headers = await getAuthHeader();
+            const response = await fetch(`${API_base}/wallet/transactions/${transactionId}/invoice`, { headers });
+            
+            if (!response.ok) throw new Error('Failed to download invoice');
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `invoice_${transactionId.substring(0, 8)}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (error) {
+            console.error('Invoice download error:', error);
+            throw error;
+        }
     }
 };
 

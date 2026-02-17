@@ -80,6 +80,21 @@ export const DashboardHome = () => {
         };
     }, [user, authReady]);
 
+    const [greeting, setGreeting] = useState('');
+
+    useEffect(() => {
+        const updateGreeting = () => {
+            const hour = new Date().getHours();
+            if (hour < 12) setGreeting('Good morning');
+            else if (hour < 18) setGreeting('Good afternoon');
+            else setGreeting('Good evening');
+        };
+
+        updateGreeting();
+        const interval = setInterval(updateGreeting, 60000); // Update every minute
+        return () => clearInterval(interval);
+    }, []);
+
     const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
 
     // Calculate Recent Activity
@@ -101,7 +116,7 @@ export const DashboardHome = () => {
         <div className="space-y-8">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold mb-1">Good afternoon, {userName}</h1>
+                    <h1 className="text-3xl font-bold mb-1">{greeting}, {userName}</h1>
                     <p className="text-gray-400">Here's what's happening in your workspace today.</p>
                 </div>
                 <Button onClick={openCreateNoteModal}>

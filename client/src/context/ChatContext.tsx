@@ -27,6 +27,7 @@ interface Message {
 interface Conversation {
     id: string;
     type: 'direct' | 'group';
+    chat_type?: 'support' | 'general' | 'admin';
     name: string;
     updated_at: string;
     lastMessage?: {

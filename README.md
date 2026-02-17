@@ -28,10 +28,11 @@ A secure, fintech-style SaaS note-taking application.
    ```bash
    npm run dev
    ```
-   - Client: http://localhost:5173
-   - Server: http://localhost:5000
+   - Client: https://notestandard.com
+   - Server: https://notestandard.com
 
 ## Features
+
 - Secure Authentication (Supabase)
 - Real-time DB (PostgreSQL)
 - Glassmorphism UI

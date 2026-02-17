@@ -45,7 +45,8 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
     // Auto-preview when amount changes
     useEffect(() => {
         const timeoutId = setTimeout(() => {
-            if (amount && parseFloat(amount) > 0 && fromCurrency !== toCurrency) {
+            const numericAmount = Number(amount || 0);
+            if (numericAmount > 0 && fromCurrency !== toCurrency) {
                 fetchPreview();
             } else {
                 setPreview(null);
@@ -60,10 +61,10 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
         try {
             const result = await walletApi.previewSwap(fromCurrency, toCurrency, parseFloat(amount));
             setPreview({
-                rate: result.rate,
-                fee: result.fee,
-                feePercentage: result.feePercentage,
-                amountOut: result.amountOut
+                rate: Number(result.rate ?? 0),
+                fee: Number(result.fee ?? 0),
+                feePercentage: Number(result.feePercentage ?? 0),
+                amountOut: Number(result.amountOut ?? 0)
             });
         } catch (err) {
             console.error('Preview error:', err);
@@ -82,16 +83,17 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
     };
 
     const handleMaxAmount = () => {
-        setAmount(availableBalance.toString());
+        setAmount(Number(availableBalance || 0).toString());
     };
 
     const handleExecuteSwap = async () => {
-        if (!amount || parseFloat(amount) <= 0) {
+        const numericAmount = Number(amount || 0);
+        if (numericAmount <= 0) {
             toast.error('Please enter a valid amount');
             return;
         }
 
-        if (parseFloat(amount) > availableBalance) {
+        if (numericAmount > Number(availableBalance || 0)) {
             toast.error('Insufficient balance');
             return;
         }
@@ -104,10 +106,10 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
         setLoading(true);
         try {
             const idempotencyKey = `swap_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            const result = await walletApi.executeSwap(fromCurrency, toCurrency, parseFloat(amount), idempotencyKey);
+            const result = await walletApi.executeSwap(fromCurrency, toCurrency, numericAmount, idempotencyKey);
             
             toast.success(
-                `Swapped ${formatCurrency(result.amountIn, result.fromCurrency)} → ${formatCurrency(result.amountOut, result.toCurrency)}`,
+                `Swapped ${formatCurrency(Number(result.amountIn ?? 0), result.fromCurrency)} → ${formatCurrency(Number(result.amountOut ?? 0), result.toCurrency)}`,
                 { duration: 5000 }
             );
             onSuccess();
@@ -120,6 +122,9 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
     };
 
     if (!isOpen) return null;
+
+    const numericAmount = Number(amount || 0);
+    const isInsufficient = numericAmount > Number(availableBalance || 0) && numericAmount > 0;
 
     return (
         <div className="modal-overlay">
@@ -136,7 +141,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
                         <div className="flex justify-between items-center mb-2">
                             <label htmlFor="swap-from-currency" className="text-sm text-gray-400 cursor-pointer">From</label>
                             <span className="text-sm text-gray-400">
-                                Balance: {formatCurrency(availableBalance, fromCurrency)}
+                                Balance: {formatCurrency(Number(availableBalance || 0), fromCurrency)}
                             </span>
                         </div>
                         <div className="flex gap-3">
@@ -147,9 +152,17 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
                                 onChange={(e) => setFromCurrency(e.target.value as Currency)}
                                 className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-purple-500 outline-none"
                             >
-                                {CURRENCIES.map(c => (
-                                    <option key={c} value={c}>{c}</option>
-                                ))}
+                                {CURRENCIES.map(c => {
+                                    const wallet = wallets.find(w => w.currency === c);
+                                    const balance = wallet ? (wallet.available_balance ?? wallet.balance) : 0;
+                                    const isInsufficient = numericAmount > Number(balance || 0) && numericAmount > 0;
+                                    return (
+                                        <option key={c} value={c}>
+                                            {c} - {formatCurrency(Number(balance || 0), c)}
+                                            {isInsufficient ? ' - Insufficient' : ''}
+                                        </option>
+                                    );
+                                })}
                             </select>
                             <div className="flex-1 relative">
                                 <label htmlFor="swap-amount-in" className="sr-only">Amount to swap</label>
@@ -199,9 +212,15 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
                                 onChange={(e) => setToCurrency(e.target.value as Currency)}
                                 className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-purple-500 outline-none"
                             >
-                                {CURRENCIES.filter(c => c !== fromCurrency).map(c => (
-                                    <option key={c} value={c}>{c}</option>
-                                ))}
+                                {CURRENCIES.filter(c => c !== fromCurrency).map(c => {
+                                    const wallet = wallets.find(w => w.currency === c);
+                                    const balance = wallet ? (wallet.available_balance ?? wallet.balance) : 0;
+                                    return (
+                                        <option key={c} value={c}>
+                                            {c} - {formatCurrency(Number(balance || 0), c)}
+                                        </option>
+                                    );
+                                })}
                             </select>
                             <div className="flex-1">
                                 <label htmlFor="swap-amount-out" className="sr-only">Estimated amount out</label>
@@ -209,7 +228,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
                                     id="swap-amount-out"
                                     name="amountOut"
                                     type="text"
-                                    value={preview ? preview.amountOut.toFixed(8) : ''}
+                                    value={preview ? Number(preview.amountOut || 0).toFixed(8) : ''}
                                     readOnly
                                     placeholder="0.00"
                                     className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-right outline-none"
@@ -224,15 +243,15 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
                         <div className="bg-gray-800 rounded-lg p-3 space-y-2 text-sm">
                             <div className="flex justify-between text-gray-400">
                                 <span>Exchange Rate</span>
-                                <span>1 {fromCurrency} = {formatCurrency(preview.rate, toCurrency)}</span>
+                                <span>1 {fromCurrency} = {formatCurrency(Number(preview.rate || 0), toCurrency)}</span>
                             </div>
                             <div className="flex justify-between text-gray-400">
-                                <span>Fee ({preview.feePercentage}%)</span>
-                                <span>{formatCurrency(preview.fee, fromCurrency)}</span>
+                                <span>Fee ({Number(preview.feePercentage || 0).toFixed(2)}%)</span>
+                                <span>{formatCurrency(Number(preview.fee || 0), fromCurrency)}</span>
                             </div>
                             <div className="flex justify-between font-medium pt-2 border-t border-gray-700">
                                 <span>You'll receive</span>
-                                <span className="text-green-400">{formatCurrency(preview.amountOut, toCurrency)}</span>
+                                <span className="text-green-400">{formatCurrency(Number(preview.amountOut || 0), toCurrency)}</span>
                             </div>
                         </div>
                     )}
@@ -240,7 +259,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
                     {/* Execute Button */}
                     <Button
                         onClick={handleExecuteSwap}
-                        disabled={loading || !preview || parseFloat(amount) > availableBalance}
+                        disabled={loading || !preview || isInsufficient}
                         className="w-full"
                     >
                         {loading ? (
@@ -256,7 +275,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
                         )}
                     </Button>
 
-                    {parseFloat(amount) > availableBalance && amount && (
+                    {isInsufficient && (
                         <p className="text-red-400 text-sm text-center">Insufficient {fromCurrency} balance</p>
                     )}
                 </div>

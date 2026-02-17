@@ -5,6 +5,7 @@ import { Search as SearchIcon, User, FileText, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import SecureImage from '../../components/common/SecureImage';
 
 interface UserResult {
     id: string;
@@ -202,10 +203,11 @@ export const Search = () => {
                                         className="p-4 flex items-center gap-3 cursor-pointer"
                                     >
                                         {u.avatar_url ? (
-                                            <img
+                                            <SecureImage
                                                 src={u.avatar_url}
                                                 alt={u.username}
                                                 className="w-12 h-12 rounded-full object-cover"
+                                                fallbackType="profile"
                                             />
                                         ) : (
                                             <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-sm font-bold text-white">
@@ -243,10 +245,11 @@ export const Search = () => {
                                     >
                                         <div className="flex items-start gap-3">
                                             {note.owner?.avatar_url ? (
-                                                <img
+                                                <SecureImage
                                                     src={note.owner.avatar_url}
                                                     alt={note.owner.username}
                                                     className="w-10 h-10 rounded-full object-cover"
+                                                    fallbackType="profile"
                                                 />
                                             ) : (
                                                 <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-xs font-bold text-white">

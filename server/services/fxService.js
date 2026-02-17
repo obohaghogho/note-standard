@@ -22,40 +22,51 @@ const FALLBACK_RATES = {
 
 /**
  * Get exchange rate for a currency pair
+ * @param {string} from - Source currency
+ * @param {string} to - Target currency
+ * @param {boolean} [applyBuffer=false] - Whether to apply safety buffer for volatility
  */
-async function getRate(from, to) {
+async function getRate(from, to, applyBuffer = false) {
     if (from === to) return 1.0;
+
+    const BUFFER = 0.02; // 2% safety buffer
 
     try {
         // Try to get from centralized cache (or DB)
         const cacheKey = `${from}_${to}`;
         const cached = rateCache.get(cacheKey);
         
+        let rate;
         if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
-            return cached.rate;
+            rate = cached.rate;
+        } else {
+            // Fetch from API if not in cache or expired
+            const rates = await fetchRatesFromAPI(from);
+            rate = rates[to]; // Direct lookup
+
+            if (!rate) {
+                console.warn(`[FXService] Rate not found for ${from}->${to}, using fallback`);
+                rate = (FALLBACK_RATES[to] || 1) / (FALLBACK_RATES[from] || 1);
+            }
+
+            // Cache the result
+            rateCache.set(cacheKey, { rate, timestamp: Date.now() });
+            // Also cache the inverse (approximate)
+            rateCache.set(`${to}_${from}`, { rate: 1 / rate, timestamp: Date.now() });
         }
 
-        // Fetch from API if not in cache or expired
-        // Base currency is always USD for simplicity in this implementation
-        const rates = await fetchRatesFromAPI(from);
-        const rate = rates[to];
-
-        if (!rate) {
-            console.warn(`[FXService] Rate not found for ${from}->${to}, using fallback`);
-            return FALLBACK_RATES[to] / FALLBACK_RATES[from];
+        // Apply buffer if requested (e.g. for creating charges)
+        // We only buffer when selling base currency (USD) for quote currency (NGN)
+        // effectively increasing the amount of NGN required
+        if (applyBuffer) {
+            rate = rate * (1 + BUFFER);
         }
-
-        // Cache the result
-        rateCache.set(cacheKey, { rate, timestamp: Date.now() });
-        
-        // Also cache the inverse
-        rateCache.set(`${to}_${from}`, { rate: 1 / rate, timestamp: Date.now() });
 
         return rate;
     } catch (error) {
         console.error(`[FXService] Error fetching rate ${from}->${to}:`, error.message);
-        // Absolute fallback to mock data
-        return (FALLBACK_RATES[to] || 1) / (FALLBACK_RATES[from] || 1);
+        const fallbackRate = (FALLBACK_RATES[to] || 1) / (FALLBACK_RATES[from] || 1);
+        return applyBuffer ? fallbackRate * (1 + BUFFER) : fallbackRate;
     }
 }
 
@@ -88,9 +99,12 @@ async function fetchRatesFromAPI(base) {
 /**
  * Convert an amount from one currency to another
  */
-async function convert(amount, from, to) {
-    const rate = await getRate(from, to);
-    return amount * rate;
+async function convert(amount, from, to, applyBuffer = false) {
+    const rate = await getRate(from, to, applyBuffer);
+    return {
+        amount: amount * rate,
+        rate
+    };
 }
 
 /**

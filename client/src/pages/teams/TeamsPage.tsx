@@ -31,6 +31,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import SecureImage from '../../components/common/SecureImage';
 import './TeamsPage.css';
 
 export const TeamsPage: React.FC = () => {
@@ -220,7 +221,7 @@ export const TeamsPage: React.FC = () => {
                 <div className="teams-page__team-header">
                   <div className="teams-page__team-avatar">
                     {team.avatar_url ? (
-                      <img src={team.avatar_url} alt={team.name} />
+                      <SecureImage src={team.avatar_url} alt={team.name} fallbackType="default" />
                     ) : (
                       team.name.charAt(0).toUpperCase()
                     )}
@@ -355,7 +356,7 @@ export const TeamsPage: React.FC = () => {
                 <div key={member.id} className="teams-page__member-item">
                   <div className="teams-page__member-avatar">
                     {member.profile?.avatar_url ? (
-                      <img src={member.profile.avatar_url} alt="" />
+                      <SecureImage src={member.profile.avatar_url} alt="" fallbackType="profile" />
                     ) : (
                       member.profile?.full_name?.charAt(0) || 'U'
                     )}
@@ -483,7 +484,7 @@ export const TeamsPage: React.FC = () => {
                 <div key={member.id} className="teams-page__member-card">
                   <div className="teams-page__member-avatar-large">
                     {member.profile?.avatar_url ? (
-                      <img src={member.profile.avatar_url} alt="" />
+                      <SecureImage src={member.profile.avatar_url} alt="" fallbackType="profile" />
                     ) : (
                       member.profile?.full_name?.charAt(0) || 'U'
                     )}

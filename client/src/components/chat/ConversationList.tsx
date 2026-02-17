@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Check, CheckCheck } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { usePresence } from '../../context/PresenceContext';
+import SecureImage from '../common/SecureImage';
 
 const ConversationList: React.FC = () => {
     const { conversations, activeConversationId, setActiveConversationId, loading } = useChat();
@@ -53,7 +54,7 @@ const ConversationList: React.FC = () => {
                         <div className="relative flex-shrink-0">
                             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center overflow-hidden shadow-lg group-hover:scale-105 transition-transform">
                                 {displayAvatar ? (
-                                    <img src={displayAvatar} alt={displayName} className="w-full h-full object-cover" />
+                                    <SecureImage src={displayAvatar} alt={displayName} className="w-full h-full object-cover" fallbackType="profile" />
                                 ) : (
                                     <span className="text-white font-bold text-lg">
                                         {displayName?.charAt(0).toUpperCase() || '?'}

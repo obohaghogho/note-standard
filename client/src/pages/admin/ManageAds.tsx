@@ -4,6 +4,7 @@ import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Check, X, ExternalLink, Loader2, Megaphone } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import SecureImage from '../../components/common/SecureImage';
 
 export const ManageAds = () => {
     const [ads, setAds] = useState<Ad[]>([]);
@@ -101,7 +102,7 @@ export const ManageAds = () => {
                                     {/* Image Preview */}
                                     <div className="w-full md:w-48 h-32 bg-black/40 rounded-lg flex items-center justify-center overflow-hidden border border-white/10 shrink-0">
                                         {ad.image_url ? (
-                                            <img src={ad.image_url} alt="Ad Preview" className="w-full h-full object-cover" />
+                                            <SecureImage src={ad.image_url} alt="Ad Preview" className="w-full h-full object-cover" fallbackType="card" />
                                         ) : (
                                             <span className="text-xs text-gray-500">No Image</span>
                                         )}

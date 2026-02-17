@@ -4,6 +4,7 @@ import { API_URL } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { X, Image as ImageIcon, Film, Send, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import SecureImage from '../common/SecureImage';
 
 interface MediaUploadProps {
     conversationId: string;
@@ -109,7 +110,7 @@ export const MediaUpload: React.FC<MediaUploadProps> = ({ conversationId, onUplo
             <div className="relative aspect-video bg-black/50 rounded-lg overflow-hidden border border-gray-700 mb-4 flex items-center justify-center">
                 {previewUrl ? (
                     file?.type.startsWith('image/') ? (
-                        <img src={previewUrl} alt="Preview" className="max-w-full max-h-full object-contain" />
+                        <SecureImage src={previewUrl} alt="Preview" className="max-w-full max-h-full object-contain" />
                     ) : (
                         <video src={previewUrl} controls className="max-w-full max-h-full" />
                     )
