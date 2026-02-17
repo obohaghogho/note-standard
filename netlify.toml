@@ -17,6 +17,13 @@
   included_files = ["server/**"]
 
 # ─── Route Rewrites ──────────────────────────────────────────
+# /socket.io/* → return 410 (Gone) to stop client polling and CORS errors
+[[redirects]]
+  from = "/socket.io/*"
+  to = "/.netlify/functions/api/socket-io-disabled"
+  status = 410
+  force = true
+
 # /api/chat/* → dedicated chat function
 [[redirects]]
   from = "/api/chat/*"

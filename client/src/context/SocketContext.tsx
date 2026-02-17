@@ -38,8 +38,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             return;
         }
 
-        if (socketRef.current?.connected) {
-            console.log('[Socket] Already connected');
+        const isProduction = window.location.hostname !== 'localhost' && !window.location.hostname.includes('127.0.0.1');
+
+        if (isProduction) {
+            console.log('[Socket] Socket.IO is disabled in production (Serverless environment). Live updates are handled via Supabase Realtime.');
             return;
         }
 
