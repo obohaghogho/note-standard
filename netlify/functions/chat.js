@@ -30,9 +30,9 @@ app.options("*", cors(corsOptions));
 app.use(express.json());
 
 // Mount the Existing Chat Routes
-// Note: We mount it at /api/chat because netlify.toml redirects /api/chat/* here
+// We mount at / because netlify.toml maps /api/chat/* directly to this function
 const chatRoutes = require("../../server/routes/chat");
-app.use("/api/chat", chatRoutes);
+app.use("/", chatRoutes);
 
 // Export the Serverless Handler
 module.exports.handler = serverless(app);

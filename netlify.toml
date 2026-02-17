@@ -2,8 +2,7 @@
 # Handles: build, functions, routing, and headers for notestandard.com
 
 [build]
-  # IMPORTANT: Force Netlify to use the repo root as the base, 
-  # overriding any conflicting 'server' or 'client' dashboard settings.
+  # FORCE root as base. User MUST clear 'Base directory' in Netlify UI.
   base = ""
   command = "npm run install:all && npm run build:client --prefix server && cp client/public/_redirects client/dist/_redirects"
   publish = "client/dist"
@@ -12,37 +11,31 @@
 [build.environment]
   NODE_VERSION = "20"
 
-# ─── Install server dependencies for the function ─────────────
 [functions]
   node_bundler = "esbuild"
-  # List dependencies that should be readily available for functions
   external_node_modules = ["express", "serverless-http", "cors"]
-  # Include server directory so the function can import app.js
   included_files = ["server/**"]
 
 # ─── Route Rewrites ──────────────────────────────────────────
-# /socket.io/* → return 410 (Gone) to stop client polling and CORS errors
-[[redirects]]
-  from = "/socket.io/*"
-  to = "/.netlify/functions/api/socket-io-disabled"
-  status = 410
-  force = true
 
-# /api/chat/* → dedicated chat function
+# 1. Chat API (dedicated function)
+# Map /api/chat/foo -> /.netlify/functions/chat/foo
 [[redirects]]
   from = "/api/chat/*"
-  to = "/.netlify/functions/chat/api/chat/:splat"
+  to = "/.netlify/functions/chat/:splat"
   status = 200
   force = true
 
-# /api/* → general serverless Express function
+# 2. Main API (consolidated function)
+# Map /api/foo -> /.netlify/functions/api/api/foo
+# (keeping /api in target because app.js expects it)
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api/api/:splat"
   status = 200
   force = true
 
-# /webhook/* → same function (payment provider webhooks)
+# 3. Webhooks
 [[redirects]]
   from = "/webhook/*"
   to = "/.netlify/functions/api/webhook/:splat"
@@ -50,7 +43,6 @@
   force = true
 
 # ─── SPA Failsafe Redirects ──────────────────────────────────
-# Explicitly handle common routes (with and without trailing slashes)
 [[redirects]]
   from = "/dashboard"
   to = "/index.html"
@@ -58,11 +50,6 @@
 
 [[redirects]]
   from = "/dashboard/*"
-  to = "/index.html"
-  status = 200
-
-[[redirects]]
-  from = "/dashboard/chat"
   to = "/index.html"
   status = 200
 
@@ -76,14 +63,12 @@
   to = "/index.html"
   status = 200
 
-# Catch-all fallback for any other SPA routes
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
 
 # ─── Security & Routing Headers ──────────────────────────────
-# Prevent index.html from being cached too aggressively to ensure routing changes stick
 [[headers]]
   for = "/index.html"
   [headers.values]
@@ -91,11 +76,10 @@
     X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
 
-# Regular assets can be cached
 [[headers]]
   for = "/*"
   [headers.values]
     X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+
