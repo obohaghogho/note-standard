@@ -2,9 +2,9 @@
 # Handles: build, functions, routing, and headers for notestandard.com
 
 [build]
-  # Ensure build runs from the repo root
-  base = ""
-  command = "npm run install:all && npm run build --prefix client"
+  # Removed base property to 'clear' any dashboard conflicts. 
+  # Netlify will default to root if Dashboard Base is blank.
+  command = "npm run install:all && npm run build --prefix client && cp client/public/_redirects client/dist/_redirects"
   publish = "client/dist"
   functions = "netlify/functions"
 
@@ -49,9 +49,19 @@
   force = true
 
 # ─── SPA Failsafe Redirects ──────────────────────────────────
-# Explicitly handle common routes to ensure refresh works
+# Explicitly handle common routes (with and without trailing slashes)
+[[redirects]]
+  from = "/dashboard"
+  to = "/index.html"
+  status = 200
+
 [[redirects]]
   from = "/dashboard/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/dashboard/chat"
   to = "/index.html"
   status = 200
 
