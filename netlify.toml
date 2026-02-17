@@ -1,0 +1,49 @@
+# ─── Netlify Configuration ────────────────────────────────────
+# Handles: build, functions, routing, and headers for notestandard.com
+
+[build]
+  # Install dependencies in server (for functions) and build the Vite React frontend
+  command = "npm install && cd server && npm install && cd ../client && npm install && npm run build"
+  publish = "client/dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# ─── Install server dependencies for the function ─────────────
+[functions]
+  node_bundler = "esbuild"
+  # Include server directory so the function can import app.js
+  included_files = ["server/**"]
+
+# ─── Route Rewrites ──────────────────────────────────────────
+# /api/* → serverless Express function
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/api/:splat"
+  status = 200
+  force = true
+
+# /webhook/* → same function (payment provider webhooks)
+[[redirects]]
+  from = "/webhook/*"
+  to = "/.netlify/functions/api/webhook/:splat"
+  status = 200
+  force = true
+
+# SPA fallback — all other routes serve the React app
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# ─── Security Headers ────────────────────────────────────────
+# These apply to static assets served by Netlify CDN (not functions).
+# Function responses get their headers from Express middleware.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
