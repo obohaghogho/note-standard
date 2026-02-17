@@ -24,14 +24,36 @@ const app = express();
 const http = require("http");
 const { Server } = require("socket.io");
 
+const whitelist = [
+  "https://www.notestandard.com",
+  "https://notestandard.com",
+  "http://localhost:5173",
+];
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (whitelist.indexOf(origin) !== -1 || !origin) {
+      callback(null, true);
+    } else {
+      console.warn(`Blocked by CORS: ${origin}`);
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "Accept",
+  ],
+  optionsSuccessStatus: 200,
+};
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: [
-      "https://notestandard.com",
-      "https://www.notestandard.com",
-      "http://localhost:5173",
-    ],
+    origin: whitelist,
     methods: ["GET", "POST"],
     credentials: true,
   },
@@ -43,14 +65,12 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(helmet());
-app.use(cors({
-  origin: [
-    "https://notestandard.com",
-    "https://www.notestandard.com",
-    "http://localhost:5173",
-  ],
-  credentials: true,
-}));
+
+// Apply CORS globally before other middleware
+app.use(cors(corsOptions));
+
+// Enable pre-flight requests for all routes
+app.options("*", cors(corsOptions));
 
 app.use(express.json({
   verify: (req, res, buf) => {
