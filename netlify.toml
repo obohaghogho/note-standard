@@ -2,9 +2,10 @@
 # Handles: build, functions, routing, and headers for notestandard.com
 
 [build]
-  # Removed base property to 'clear' any dashboard conflicts. 
-  # Netlify will default to root if Dashboard Base is blank.
-  command = "npm run install:all && npm run build --prefix client && cp client/public/_redirects client/dist/_redirects"
+  # IMPORTANT: Force Netlify to use the repo root as the base, 
+  # overriding any conflicting 'server' or 'client' dashboard settings.
+  base = ""
+  command = "npm run install:all && npm run build:client --prefix server && cp client/public/_redirects client/dist/_redirects"
   publish = "client/dist"
   functions = "netlify/functions"
 
