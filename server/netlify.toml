@@ -1,0 +1,42 @@
+# ─── Netlify Configuration (Server Base) ────────────────────────
+# This file is used if Netlify's "Base directory" is set to "server".
+# It provides redundant routing and build instructions for monorepo safety.
+
+[build]
+  command = "npm run install:all && npm run build:client && cp ../client/public/_redirects ../client/dist/_redirects"
+  publish = "../client/dist"
+  functions = "../netlify/functions"
+
+# ─── Route Rewrites ──────────────────────────────────────────
+[[redirects]]
+  from = "/api/chat/*"
+  to = "/.netlify/functions/chat/api/chat/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/api/:splat"
+  status = 200
+  force = true
+
+# SPA Failsafe Redirects
+[[redirects]]
+  from = "/dashboard"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/dashboard/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/login"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
