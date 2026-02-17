@@ -5,7 +5,7 @@ const isProduction = typeof window !== 'undefined' &&
                      !window.location.hostname.includes('127.0.0.1');
 
 export const API_URL = isProduction 
-    ? '/api' 
+    ? '' 
     : (import.meta.env.VITE_API_URL || 'http://localhost:3000').replace(/\/$/, '');
 
 export const getAuthHeader = async () => {
