@@ -41,11 +41,13 @@ app.set("trust proxy", 1);
 // Failsafe middleware to ensure headers are ALWAYS set
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (
-    origin &&
-    (whitelist.includes(origin) || origin.includes("localhost") ||
-      origin.includes("127.0.0.1"))
-  ) {
+  const isNoteStandard = origin &&
+    (origin.endsWith(".notestandard.com") ||
+      origin === "https://notestandard.com");
+  const isLocal = origin &&
+    (origin.includes("localhost") || origin.includes("127.0.0.1"));
+
+  if (origin && (isNoteStandard || isLocal)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Credentials", "true");
     res.setHeader(
@@ -129,11 +131,13 @@ app.use("/api/media", require(path.join(__dirname, "routes", "media")));
 // so the browser doesn't hide the real error message from the frontend.
 app.use((err, req, res, next) => {
   const origin = req.headers.origin;
-  if (
-    origin &&
-    (whitelist.includes(origin) || origin.includes("localhost") ||
-      origin.includes("127.0.0.1"))
-  ) {
+  const isNoteStandard = origin &&
+    (origin.endsWith(".notestandard.com") ||
+      origin === "https://notestandard.com");
+  const isLocal = origin &&
+    (origin.includes("localhost") || origin.includes("127.0.0.1"));
+
+  if (origin && (isNoteStandard || isLocal)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Credentials", "true");
   }

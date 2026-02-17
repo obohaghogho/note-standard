@@ -1,6 +1,12 @@
 // Ensure API_URL is the server root (remove /api suffix if present)
 // This fixes double prefix issues (api/api) and socket namespace errors
-export const API_URL = (import.meta.env.VITE_API_URL || 'https://api.notestandard.com').replace(/\/$/, '');
+const isProduction = typeof window !== 'undefined' && 
+                     window.location.hostname !== 'localhost' && 
+                     !window.location.hostname.includes('127.0.0.1');
+
+export const API_URL = isProduction 
+    ? '/api' 
+    : (import.meta.env.VITE_API_URL || 'http://localhost:3000').replace(/\/$/, '');
 
 export const getAuthHeader = async () => {
     const { supabase } = await import('./supabase');
