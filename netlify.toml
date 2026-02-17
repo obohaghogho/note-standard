@@ -2,7 +2,9 @@
 # Handles: build, functions, routing, and headers for notestandard.com
 
 [build]
-  # Install dependencies in server (for functions) and build the Vite React frontend
+  # IMPORTANT: Set base to empty or '/' if you want to run from the repo root
+  # This prevents the "cd server" error if Netlify is already inside the server folder.
+  base = ""
   command = "npm install && cd server && npm install && cd ../client && npm install && npm run build"
   publish = "client/dist"
   functions = "netlify/functions"
