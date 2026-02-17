@@ -23,12 +23,19 @@ if (process.env.NODE_ENV !== "production") {
  */
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (server-to-server, health checks, mobile apps)
+    // Allow requests with no origin (server-to-server, health checks, etc)
     if (!origin) return callback(null, true);
-    if (whitelist.includes(origin)) {
+
+    // Check if origin is whitelisted or a local variant
+    const isWhitelisted = whitelist.includes(origin);
+    const isLocal = origin.includes("localhost") ||
+      origin.includes("127.0.0.1");
+
+    if (isWhitelisted || isLocal) {
       return callback(null, true);
     }
-    console.warn(`CORS blocked: ${origin}`);
+
+    console.warn(`CORS blocked for origin: ${origin}`);
     return callback(new Error("Not allowed by CORS"));
   },
   credentials: true,

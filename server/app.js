@@ -37,10 +37,36 @@ const app = express();
 // Trust proxy (works for both NGINX and Netlify CDN)
 app.set("trust proxy", 1);
 
-// ─── Middleware (order matters!) ──────────────────────────────
 // 1. CORS must run first — before helmet, before body parsers
+// Failsafe middleware to ensure headers are ALWAYS set
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (
+    origin &&
+    (whitelist.includes(origin) || origin.includes("localhost") ||
+      origin.includes("127.0.0.1"))
+  ) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+    );
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Requested-With, Accept, Cache-Control",
+    );
+  }
+  res.setHeader("Vary", "Origin");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+// Also use standard cors middleware for complex cases
 app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions));
 
 // 2. Security headers (after CORS to avoid conflicts)
 app.use(helmet({
@@ -103,7 +129,11 @@ app.use("/api/media", require(path.join(__dirname, "routes", "media")));
 // so the browser doesn't hide the real error message from the frontend.
 app.use((err, req, res, next) => {
   const origin = req.headers.origin;
-  if (origin && whitelist.includes(origin)) {
+  if (
+    origin &&
+    (whitelist.includes(origin) || origin.includes("localhost") ||
+      origin.includes("127.0.0.1"))
+  ) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Credentials", "true");
   }
