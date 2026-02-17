@@ -32,6 +32,21 @@ const logger = {
       }),
     );
   },
+  debug: (message, context = {}) => {
+    // Only log debug to console if DEBUG=true or in development
+    if (
+      process.env.DEBUG === "true" || process.env.NODE_ENV === "development"
+    ) {
+      console.log(
+        JSON.stringify({
+          level: "DEBUG",
+          timestamp: new Date().toISOString(),
+          message,
+          ...context,
+        }),
+      );
+    }
+  },
 };
 
 module.exports = logger;
