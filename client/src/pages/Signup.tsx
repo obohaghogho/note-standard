@@ -12,11 +12,13 @@ import { toast } from 'react-hot-toast';
 export const Signup = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = React.useState(false);
+    const [loadingStatus, setLoadingStatus] = React.useState('');
     const [fullName, setFullName] = React.useState(''); // Not currently used by backend/schema but good to have
     const [email, setEmail] = React.useState('');
     const [password, setPassword] = React.useState('');
     const [phone, setPhone] = React.useState('');
     const [otp, setOtp] = React.useState('');
+    const [emailOtp, setEmailOtp] = React.useState('');
     const [step, setStep] = React.useState<'details' | 'verify'>('details');
     const [error, setError] = React.useState('');
     const [termsAccepted, setTermsAccepted] = React.useState(false);
@@ -49,6 +51,9 @@ export const Signup = () => {
                 const referrerId = urlParams.get('ref') || localStorage.getItem('referrer_id');
 
                 // 1. Create Account with safeAuth
+                setLoading(true);
+                setLoadingStatus('Creating account...');
+                setError('');
                 const signUpData = await supabaseSafe<any>(
                     'signup-create',
                     async () => supabase.auth.signUp({
@@ -62,38 +67,67 @@ export const Signup = () => {
                                 referrer_id: referrerId
                             },
                         },
-                    })
+                    }),
+                    { minDelay: 100 } // Fast track auth
                 );
 
-                if (!(signUpData as any)?.user) return; // safeAuth toasted
+                if (!(signUpData as any)?.user) {
+                    setLoading(false);
+                    return; // safeAuth toasted
+                }
 
                 // 2. Add Phone Number (triggers OTP)
+                setLoadingStatus('Sending verification code...');
                 const updateData = await supabaseSafe<any>(
                     'signup-phone',
                     async () => supabase.auth.updateUser({
                         phone: phone
-                    })
+                    }),
+                    { minDelay: 100 } // Fast track auth
                 );
 
                 if (!updateData) return; // safeAuth toasted
 
                 setStep('verify');
-                toast.success('Verification code sent to your phone!');
+                toast.success('Verification codes sent to your phone and email!');
 
             } else {
-                // 3. Verify OTP
-                const verifyData = await supabaseSafe<any>(
-                    'signup-verify',
+                // 3. Verify Email OTP
+                setLoading(true);
+                setLoadingStatus('Verifying email code...');
+                const verifyEmailData = await supabaseSafe<any>(
+                    'signup-verify-email',
+                    async () => supabase.auth.verifyOtp({
+                        email,
+                        token: emailOtp,
+                        type: 'signup'
+                    }),
+                    { minDelay: 100 }
+                );
+
+                if (!(verifyEmailData as any)?.user) {
+                    setLoading(false);
+                    return;
+                }
+
+                // 4. Verify Phone OTP
+                setLoadingStatus('Verifying phone code...');
+                const verifyPhoneData = await supabaseSafe<any>(
+                    'signup-verify-phone',
                     async () => supabase.auth.verifyOtp({
                         phone,
                         token: otp,
                         type: 'phone_change'
-                    })
+                    }),
+                    { minDelay: 100 }
                 );
 
-                if (!(verifyData as any)?.user) return; // safeAuth toasted
+                if (!(verifyPhoneData as any)?.user) {
+                    setLoading(false);
+                    return;
+                }
 
-                toast.success('Phone verified successfully!');
+                toast.success('Account verified successfully!');
                 navigate('/dashboard');
             }
         } catch (err: any) {
@@ -139,10 +173,23 @@ export const Signup = () => {
                             )}
 
                             <Input
+                                id="emailOtp"
+                                name="emailOtp"
+                                type="text"
+                                label="Email Verification Code"
+                                placeholder="123456"
+                                required
+                                value={emailOtp}
+                                onChange={(e) => setEmailOtp(e.target.value)}
+                                className="text-center letter-spacing-2 text-xl"
+                                autoComplete="one-time-code"
+                            />
+
+                            <Input
                                 id="otp"
                                 name="otp"
                                 type="text"
-                                label="Verification Code"
+                                label="Phone Verification Code"
                                 placeholder="123456"
                                 required
                                 value={otp}
@@ -151,7 +198,12 @@ export const Signup = () => {
                                 autoComplete="one-time-code"
                             />
 
-                            <Button type="submit" fullWidth loading={loading}>
+                            <Button 
+                                type="submit" 
+                                fullWidth 
+                                loading={loading}
+                                loadingText={loadingStatus}
+                            >
                                 Verify & Access App
                             </Button>
 
@@ -252,7 +304,12 @@ export const Signup = () => {
                                 </label>
                             </div>
 
-                            <Button type="submit" fullWidth loading={loading}>
+                            <Button 
+                                type="submit" 
+                                fullWidth 
+                                loading={loading}
+                                loadingText={loadingStatus}
+                            >
                                 Send Verification Code
                             </Button>
 
