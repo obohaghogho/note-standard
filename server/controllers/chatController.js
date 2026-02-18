@@ -146,6 +146,23 @@ exports.acceptConversation = async (req, res) => {
     const { conversationId } = req.params;
     const userId = req.user.id;
 
+    // Check if already accepted to prevent duplicate notifications
+    const { data: existingMember, error: fetchError } = await supabase
+      .from("conversation_members")
+      .select("status")
+      .eq("conversation_id", conversationId)
+      .eq("user_id", userId)
+      .single();
+
+    if (fetchError) throw fetchError;
+    if (existingMember?.status === "accepted") {
+      return res.json({
+        success: true,
+        message: "Already accepted",
+        member: [existingMember],
+      });
+    }
+
     // Update status to accepted for this user in this conversation
     const { data, error } = await supabase
       .from("conversation_members")
