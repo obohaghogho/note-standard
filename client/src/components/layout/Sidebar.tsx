@@ -77,7 +77,7 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
                 isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
             )}>
             {/* Header */}
-            <div className="h-20 flex items-center px-6 border-b border-white/10">
+            <div className="h-16 md:h-20 flex items-center px-6 border-b border-white/10">
                 <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center font-bold text-white">N</div>
                     <span className="font-bold text-xl tracking-tight">Note Standard</span>

@@ -29,6 +29,7 @@ import {
   FileText,
   Calendar,
   Loader2,
+  ArrowLeft,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import SecureImage from '../../components/common/SecureImage';
@@ -44,6 +45,7 @@ export const TeamsPage: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
+  const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
 
   // Form state
   const [newTeamName, setNewTeamName] = useState('');
@@ -187,7 +189,7 @@ export const TeamsPage: React.FC = () => {
   }
 
   return (
-    <div className="teams-page">
+    <div className={`teams-page ${mobileView === 'chat' ? 'teams-page--mobile-chat' : 'teams-page--mobile-list'}`}>
       {/* Sidebar - Teams List */}
       <div className="teams-page__sidebar">
         <div className="teams-page__sidebar-header">
@@ -216,7 +218,7 @@ export const TeamsPage: React.FC = () => {
                 className={`teams-page__team-card ${
                   selectedTeamId === team.id ? 'teams-page__team-card--active' : ''
                 }`}
-                onClick={() => setSelectedTeamId(team.id)}
+                onClick={() => { setSelectedTeamId(team.id); setMobileView('chat'); }}
               >
                 <div className="teams-page__team-header">
                   <div className="teams-page__team-avatar">
@@ -255,8 +257,17 @@ export const TeamsPage: React.FC = () => {
             {/* Team Header */}
             <div className="teams-page__header">
               <div className="teams-page__header-left">
-                <h1>{selectedTeam.name}</h1>
-                <p>{selectedTeam.description || 'No description'}</p>
+                <button
+                  className="teams-page__back-button"
+                  onClick={() => setMobileView('list')}
+                  aria-label="Back to teams list"
+                >
+                  <ArrowLeft size={20} />
+                </button>
+                <div>
+                  <h1>{selectedTeam.name}</h1>
+                  <p>{selectedTeam.description || 'No description'}</p>
+                </div>
               </div>
               <div className="teams-page__header-actions">
                 <Button

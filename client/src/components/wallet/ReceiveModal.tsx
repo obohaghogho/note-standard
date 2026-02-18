@@ -69,26 +69,23 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <div className="modal-overlay">
             <motion.div 
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-gray-900 border border-gray-800 rounded-2xl w-[95%] md:w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
-
+                className="modal-content"
             >
-                {/* Header */}
-                <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/50">
-                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                        <QrCode className="text-purple-500" size={24} />
-                        Receive Assets
-                    </h2>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-800 rounded-full transition-colors text-gray-400 hover:text-white">
-                        <X size={20} />
-                    </button>
-                </div>
+                <button onClick={onClose} className="modal-close">
+                    <X size={20} />
+                </button>
 
-                <div className="p-6 overflow-y-auto custom-scrollbar">
+                <h2 className="modal-header">
+                    <QrCode className="text-purple-500" size={24} />
+                    Receive Assets
+                </h2>
+
+                <div className="modal-body">
                     {/* Currency Selector */}
                     <div className="flex gap-2 overflow-x-auto pb-4 mb-2 scrollbar-hide">
                         {['BTC', 'ETH', 'USDT', 'USDC'].map(curr => (
@@ -122,14 +119,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
                                         size={200}
                                         level="H"
                                         includeMargin={false}
-                                        imageSettings={{
-                                            src: `/icons/${selectedCurrency.toLowerCase()}.png`, // Optional logo
-                                            x: undefined,
-                                            y: undefined,
-                                            height: 40,
-                                            width: 40,
-                                            excavate: true,
-                                        }}
+
                                     />
                                 </div>
 

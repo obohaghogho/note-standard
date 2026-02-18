@@ -96,21 +96,18 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, s
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
-                className="modal-content w-[95%] md:w-full max-w-[480px]"
-
-
+                className="modal-content max-w-[480px]"
             >
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-bold flex items-center gap-2">
-                        <Send size={20} className="text-blue-500" />
-                        Send {selectedCurrency}
-                    </h2>
-                    <button onClick={onClose} className="p-1 hover:bg-gray-800 rounded-full transition-colors">
-                        <X size={20} className="text-gray-400" />
-                    </button>
-                </div>
+                <button onClick={onClose} className="modal-close">
+                    <X size={20} />
+                </button>
+
+                <h2 className="modal-header">
+                    <Send size={20} className="text-blue-500" />
+                    Send {selectedCurrency}
+                </h2>
                 
-                <form onSubmit={handleSend} className="flex flex-col gap-5">
+                <form onSubmit={handleSend} className="modal-body flex flex-col gap-5">
                     <div className="space-y-1">
                         <label className="text-sm text-gray-400 font-medium ml-1">Recipient</label>
                         <div className="relative">

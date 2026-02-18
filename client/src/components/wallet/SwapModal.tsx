@@ -128,14 +128,14 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
 
     return (
         <div className="modal-overlay">
-            <div className="modal-content" style={{ maxWidth: '420px' }}>
+            <div className="modal-content max-w-[420px]">
                 <button className="modal-close" onClick={onClose}>
                     <X size={20} />
                 </button>
                 
-                <h2 className="text-xl font-bold mb-6">Swap Currencies</h2>
+                <h2 className="modal-header">Swap Currencies</h2>
 
-                <div className="space-y-4">
+                <div className="modal-body space-y-4">
                     {/* From Currency */}
                     <div className="bg-gray-800 rounded-lg p-4">
                         <div className="flex justify-between items-center mb-2">
