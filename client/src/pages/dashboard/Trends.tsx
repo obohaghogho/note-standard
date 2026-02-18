@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Card } from '../../components/common/Card';
-import { Loader2, TrendingUp, Users, FileText, Lock } from 'lucide-react';
+import { Loader2, TrendingUp, Users, FileText, Lock, Radio } from 'lucide-react';
 import { API_URL } from '../../lib/api';
+import { useSocket } from '../../context/SocketContext';
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -36,10 +37,32 @@ interface DailyStats {
 export const Trends = () => {
     const [stats, setStats] = useState<DailyStats[]>([]);
     const [loading, setLoading] = useState(true);
+    const { socket, connected } = useSocket();
 
     useEffect(() => {
         fetchStats();
     }, []);
+
+    useEffect(() => {
+        if (!socket) return;
+
+        socket.on('stats_updated', (realtimeStats: DailyStats) => {
+            console.log('[Trends] Real-time stats received:', realtimeStats);
+            setStats(prev => {
+                const today = realtimeStats.date;
+                const existingToday = prev.find(s => s.date === today);
+                if (existingToday) {
+                    return prev.map(s => s.date === today ? realtimeStats : s);
+                } else {
+                    return [...prev, realtimeStats].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                }
+            });
+        });
+
+        return () => {
+            socket.off('stats_updated');
+        };
+    }, [socket]);
 
     const fetchStats = async () => {
         try {
@@ -133,9 +156,17 @@ export const Trends = () => {
                         Anonymous insights from the Note Standard community.
                     </p>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-green-400 bg-green-900/20 px-3 py-1.5 rounded-full border border-green-900/50">
-                    <Lock size={12} />
-                    Verified Privacy-Safe Data
+                <div className="flex items-center gap-4">
+                    {connected && (
+                        <div className="flex items-center gap-1.5 text-[10px] text-red-500 font-bold bg-red-500/10 px-2 py-0.5 rounded-md animate-pulse border border-red-500/20">
+                            <Radio size={12} />
+                            LIVE
+                        </div>
+                    )}
+                    <div className="flex items-center gap-2 text-xs text-green-400 bg-green-900/20 px-3 py-1.5 rounded-full border border-green-900/50">
+                        <Lock size={12} />
+                        Verified Privacy-Safe Data
+                    </div>
                 </div>
             </div>
 
