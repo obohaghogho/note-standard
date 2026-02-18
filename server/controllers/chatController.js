@@ -684,3 +684,73 @@ exports.createSupportChat = async (req, res) => {
     res.status(500).json({ error: "Server Error" });
   }
 };
+
+// Delete conversation
+exports.deleteConversation = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user.id;
+
+    // Verify user is a member of the conversation
+    const { data: member, error: memberError } = await supabase
+      .from("conversation_members")
+      .select("role")
+      .eq("conversation_id", conversationId)
+      .eq("user_id", userId)
+      .single();
+
+    if (memberError || !member) {
+      return res.status(403).json({
+        error: "Access denied or conversation not found",
+      });
+    }
+
+    // Delete messages first (if cascade delete isn't fully set up in Supabase)
+    const { error: msgDeleteError } = await supabase
+      .from("messages")
+      .delete()
+      .eq("conversation_id", conversationId);
+
+    if (msgDeleteError) throw msgDeleteError;
+
+    // Delete members
+    const { error: membersDeleteError } = await supabase
+      .from("conversation_members")
+      .delete()
+      .eq("conversation_id", conversationId);
+
+    if (membersDeleteError) throw membersDeleteError;
+
+    // Delete attachments metadata (if any)
+    const { error: attachmentsDeleteError } = await supabase
+      .from("attachments")
+      .delete()
+      .eq("conversation_id", conversationId);
+
+    if (attachmentsDeleteError) {
+      console.warn(
+        "Could not delete attachments metadata:",
+        attachmentsDeleteError.message,
+      );
+    }
+
+    // Delete conversation
+    const { error: convDeleteError } = await supabase
+      .from("conversations")
+      .delete()
+      .eq("id", conversationId);
+
+    if (convDeleteError) throw convDeleteError;
+
+    // Notify participants via Socket.IO
+    const io = req.app.get("io");
+    if (io) {
+      io.to(conversationId).emit("conversation_deleted", { conversationId });
+    }
+
+    res.json({ success: true, message: "Conversation deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting conversation:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
