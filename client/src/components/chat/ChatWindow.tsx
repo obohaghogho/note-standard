@@ -14,7 +14,8 @@ import toast from 'react-hot-toast';
 const ChatWindow: React.FC = () => {
     const { 
         activeConversationId, messages, sendMessage, loading, 
-        conversations, acceptConversation, deleteConversation, loadMoreMessages, hasMore 
+        conversations, acceptConversation, deleteConversation, 
+        muteConversation, clearChatHistory, loadMoreMessages, hasMore 
     } = useChat();
     const { isUserOnline, getUserLastSeen } = usePresence();
     const { user, profile, session } = useAuth();
@@ -223,8 +224,54 @@ const ChatWindow: React.FC = () => {
     const [isVoiceRecording, setIsVoiceRecording] = useState(false);
 
     const handleClearChat = () => {
-        toast.success('Chat cleared (locally)');
+        if (!activeConversationId) return;
         setShowMoreMenu(false);
+
+        toast((t) => (
+            <div className="flex flex-col gap-3">
+                <p className="text-sm font-medium text-gray-800">
+                    Clear all messages in this chat? (This only affects you)
+                </p>
+                <div className="flex gap-2 justify-end">
+                    <button 
+                        onClick={() => toast.dismiss(t.id)}
+                        className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={async () => {
+                            toast.dismiss(t.id);
+                            const loadingToast = toast.loading('Clearing history...');
+                            try {
+                                await clearChatHistory(activeConversationId);
+                                toast.success('Chat cleared', { id: loadingToast });
+                            } catch (err) {
+                                toast.error('Failed to clear chat', { id: loadingToast });
+                            }
+                        }}
+                        className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                    >
+                        Clear
+                    </button>
+                </div>
+            </div>
+        ), { duration: 5000 });
+    };
+
+    const handleMuteChat = async () => {
+        if (!activeConversationId) return;
+        setShowMoreMenu(false);
+
+        const isCurrentlyMuted = activeConversation?.is_muted;
+        const nextMuteStatus = !isCurrentlyMuted;
+
+        try {
+            await muteConversation(activeConversationId, nextMuteStatus);
+            toast.success(nextMuteStatus ? 'Chat muted' : 'Chat unmuted');
+        } catch (err) {
+            toast.error('Failed to update mute status');
+        }
     };
 
     const handleDeleteChat = () => {
@@ -433,7 +480,9 @@ const ChatWindow: React.FC = () => {
                         </button>
                         {showMoreMenu && (
                             <div className="absolute top-full right-0 mt-2 w-48 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-50 p-1 animate-in zoom-in-95 duration-200">
-                                <button onClick={() => { toast.success('Muted'); setShowMoreMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 rounded-lg">Mute Notifications</button>
+                                <button onClick={handleMuteChat} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 rounded-lg">
+                                    {activeConversation?.is_muted ? 'Unmute Notifications' : 'Mute Notifications'}
+                                </button>
                                 <button onClick={handleClearChat} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 rounded-lg">Clear History</button>
                                 <button onClick={handleDeleteChat} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-400/10 rounded-lg">Delete Chat</button>
                             </div>

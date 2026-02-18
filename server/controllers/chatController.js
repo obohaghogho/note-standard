@@ -217,6 +217,17 @@ exports.getMessages = async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { limit = 50, before } = req.query;
+    const userId = req.user.id;
+
+    // Fetch cleared_at for the user
+    const { data: member } = await supabase
+      .from("conversation_members")
+      .select("cleared_at")
+      .eq("conversation_id", conversationId)
+      .eq("user_id", userId)
+      .single();
+
+    const clearedAt = member?.cleared_at;
 
     // Try full query with attachments first
     try {
@@ -232,6 +243,10 @@ exports.getMessages = async (req, res) => {
 
       if (before) {
         query = query.lt("created_at", before);
+      }
+
+      if (clearedAt) {
+        query = query.gt("created_at", clearedAt);
       }
 
       const { data, error } = await query;
@@ -491,7 +506,7 @@ exports.sendMessage = async (req, res) => {
       // Get conversation members to notify them
       const { data: members, error: memberError } = await supabase
         .from("conversation_members")
-        .select("user_id")
+        .select("user_id, is_muted")
         .eq("conversation_id", conversationId)
         .neq("user_id", userId); // Don't notify the sender
 
@@ -504,6 +519,11 @@ exports.sendMessage = async (req, res) => {
           .single();
 
         for (const member of members) {
+          if (member.is_muted) {
+            console.log(`[Chat Notify] Skipping muted user: ${member.user_id}`);
+            continue;
+          }
+
           await createNotification({
             receiverId: member.user_id,
             senderId: userId,
@@ -700,6 +720,12 @@ exports.deleteConversation = async (req, res) => {
       .single();
 
     if (memberError || !member) {
+      console.error("[Chat Delete] Membership verification failed:", {
+        conversationId,
+        userId,
+        error: memberError?.message,
+        memberFound: !!member,
+      });
       return res.status(403).json({
         error: "Access denied or conversation not found",
       });
@@ -751,6 +777,49 @@ exports.deleteConversation = async (req, res) => {
     res.json({ success: true, message: "Conversation deleted successfully" });
   } catch (err) {
     console.error("Error deleting conversation:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+// Mute/Unmute conversation
+exports.muteConversation = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { isMuted } = req.body;
+    const userId = req.user.id;
+
+    const { error } = await supabase
+      .from("conversation_members")
+      .update({ is_muted: isMuted })
+      .eq("conversation_id", conversationId)
+      .eq("user_id", userId);
+
+    if (error) throw error;
+
+    res.json({ success: true, is_muted: isMuted });
+  } catch (err) {
+    console.error("Error muting conversation:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+// Clear chat history for user
+exports.clearChatHistory = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user.id;
+
+    const { error } = await supabase
+      .from("conversation_members")
+      .update({ cleared_at: new Date() })
+      .eq("conversation_id", conversationId)
+      .eq("user_id", userId);
+
+    if (error) throw error;
+
+    res.json({ success: true, message: "Chat history cleared" });
+  } catch (err) {
+    console.error("Error clearing chat history:", err.message);
     res.status(500).json({ error: "Server Error" });
   }
 };

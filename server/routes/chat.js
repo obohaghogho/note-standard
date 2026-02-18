@@ -41,6 +41,14 @@ router.post(
   "/conversations/:conversationId/messages",
   chatController.sendMessage,
 );
+router.put(
+  "/conversations/:conversationId/mute",
+  chatController.muteConversation,
+);
+router.delete(
+  "/conversations/:conversationId/messages",
+  chatController.clearChatHistory,
+);
 router.put("/messages/:messageId/read", chatController.markMessageRead);
 
 module.exports = router;
