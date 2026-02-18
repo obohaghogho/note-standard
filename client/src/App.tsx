@@ -74,14 +74,41 @@ function App() {
       console.error('[Unhandled Promise]', e.reason);
     };
 
+    // Global handler for online/offline status
+    const handleOnline = () => {
+      toast.success('Back online', { id: 'online-status' });
+    };
+
+    const handleOffline = () => {
+      toast.error(
+        (t) => (
+          <span>
+            <b>⚠️ No internet connection.</b>
+            <br />
+            Please check your network and try again.
+          </span>
+        ),
+        { id: 'online-status', duration: Infinity }
+      );
+    };
+
     // Attach global error handlers
     window.addEventListener('error', handleError);
     window.addEventListener('unhandledrejection', handler);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Initial check for offline state
+    if (!navigator.onLine) {
+      handleOffline();
+    }
 
     // Cleanup on unmount
     return () => {
       window.removeEventListener('error', handleError);
       window.removeEventListener('unhandledrejection', handler);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
