@@ -208,16 +208,18 @@ export const UserManagement = () => {
                                                     {user.username?.[0]?.toUpperCase() || '?'}
                                                 </div>
                                             )}
-                                            <div className="user-details">
-                                                <span className="username">
+                                            <div className="user-details min-w-0">
+                                                <span className="username truncate">
                                                     {user.username}
-                                                    {user.is_online && <span className="online-dot" />}
+                                                    {user.is_online && <span className="online-dot flex-shrink-0" />}
                                                 </span>
-                                                <span className="fullname">{user.full_name}</span>
+                                                <span className="fullname truncate text-xs text-gray-500">{user.full_name}</span>
                                             </div>
                                         </div>
                                     </td>
-                                    <td>{user.email}</td>
+                                    <td className="max-w-[150px] md:max-w-[200px]">
+                                        <div className="truncate" title={user.email}>{user.email}</div>
+                                    </td>
                                     <td>
                                         <span className={`role-badge ${user.role}`}>
                                             {user.role}

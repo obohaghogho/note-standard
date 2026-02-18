@@ -240,8 +240,9 @@ export const WalletPage: React.FC = () => {
 
             {/* Create Wallet Modal (keep simple inline for now or extract) */}
              {showCreateModal && (
-                <div className="modal-overlay">
-                  <div className="modal-content" style={{ maxWidth: '500px' }}>
+                <div className="modal-overlay p-4">
+                  <div className="modal-content w-full max-w-lg">
+
                     <button className="modal-close" onClick={() => setShowCreateModal(false)}>
                       <X size={20} />
                     </button>

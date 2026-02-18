@@ -14,7 +14,8 @@ export const DeleteNoteModal = ({ isOpen, onClose, onConfirm, loading }: DeleteN
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <Card className="w-full max-w-md p-6" variant="glass">
+            <Card className="w-[90%] md:w-full max-w-md p-6" variant="glass">
+
                 <div className="flex flex-col items-center text-center space-y-4">
                     <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center text-red-500">
                         <AlertTriangle size={24} />

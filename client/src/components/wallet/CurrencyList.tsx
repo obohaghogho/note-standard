@@ -68,7 +68,7 @@ export const CurrencyList: React.FC<CurrencyListProps> = ({ wallets, rates, onSe
                         </div>
                         
                         <div className="mt-4">
-                            <p className="text-xl font-bold text-white tracking-tight">
+                            <p className="text-lg sm:text-xl font-bold text-white tracking-tight truncate">
                                 {formatCurrency(wallet.balance, wallet.currency)}
                             </p>
                             {wallet.currency !== 'USD' && (

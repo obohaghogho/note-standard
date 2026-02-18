@@ -36,8 +36,10 @@
 
 /* Chat Window */
 .chat-widget-window {
-    width: 380px;
-    height: 520px;
+    width: min(380px, calc(100% - 48px));
+
+    height: min(520px, 80vh);
+
     background: #1a1a2e;
     border: 1px solid rgba(99, 102, 241, 0.2);
     border-radius: 20px;

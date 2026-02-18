@@ -165,9 +165,9 @@ export const FundModal: React.FC<FundModalProps> = ({ isOpen, onClose, selectedC
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="modal-content relative overflow-hidden" 
-                style={{ maxWidth: '520px' }}
+                className="modal-content w-[95%] md:w-full max-w-[480px] relative overflow-hidden"
             >
+
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500" />
                 
                 <button className="modal-close absolute right-4 top-6" onClick={onClose}>

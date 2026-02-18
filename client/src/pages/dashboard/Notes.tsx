@@ -97,7 +97,7 @@ export const Notes = () => {
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <h1 className="text-3xl font-bold">My Notes</h1>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                     <div className="w-full md:w-64">
                         <Input
                             id="notes-search"
@@ -166,7 +166,7 @@ export const Notes = () => {
                                     ]}
                                 />
                             </div>
-                            <h3 className="font-semibold text-lg mb-2 group-hover:text-primary transition-colors">
+                            <h3 className="font-semibold text-lg mb-2 group-hover:text-primary transition-colors truncate">
                                 {note.title || 'Untitled'}
                             </h3>
                             <p className="text-gray-400 text-sm line-clamp-3 mb-4 flex-1">
