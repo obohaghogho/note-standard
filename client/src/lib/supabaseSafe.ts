@@ -144,11 +144,15 @@ export async function safeCall<T>(
 
         if (!canRetry || attempt > retries) {
           const tag = canRetry ? 'MAX_RETRIES' : 'TERMINAL';
-          console.error(`[Supabase ${tag}] '${key}' (Code: ${err.code || 'None'}):`, {
-            message: err.message,
-            attempt,
-            status: err.status
-          });
+          if (!navigator.onLine) {
+            toast.error("You're offline. Please reconnect to continue.", { id: 'supabase-offline' });
+          } else {
+            console.error(`[Supabase ${tag}] '${key}' (Code: ${err.code || 'None'}):`, {
+              message: err.message,
+              attempt,
+              status: err.status
+            });
+          }
 
           return fallback !== undefined ? fallback : null;
         }
