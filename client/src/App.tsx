@@ -81,7 +81,7 @@ function App() {
 
     const handleOffline = () => {
       toast.error(
-        (t) => (
+        (_t) => (
           <span>
             <b>⚠️ No internet connection.</b>
             <br />
