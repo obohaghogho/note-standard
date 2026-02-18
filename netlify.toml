@@ -18,15 +18,7 @@
 
 # ─── Route Rewrites ──────────────────────────────────────────
 
-# 1. Chat API (dedicated function)
-# Map /api/chat/foo -> /.netlify/functions/chat/foo
-[[redirects]]
-  from = "/api/chat/*"
-  to = "/.netlify/functions/chat/:splat"
-  status = 200
-  force = true
-
-# 2. Main API (consolidated function)
+# 1. Main API (consolidated function)
 # Map /api/foo -> /.netlify/functions/api/api/foo
 # (keeping /api in target because app.js expects it)
 [[redirects]]
