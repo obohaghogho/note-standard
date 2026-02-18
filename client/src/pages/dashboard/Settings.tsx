@@ -236,7 +236,7 @@ export const Settings = () => {
                 <p className="text-gray-400">Manage your account settings and preferences</p>
             </div>
 
-            <div className="flex items-center gap-4 border-b border-white/5 overflow-x-auto no-scrollbar pb-px -mx-4 px-4 sm:mx-0 sm:px-0">
+            <div className="flex items-center gap-4 border-b border-white/5 overflow-x-auto no-scrollbar pb-px -mx-4 px-4 sm:mx-0 sm:px-0 scroll-smooth">
                 <button
                     onClick={() => setActiveTab('profile')}
                     className={`pb-3 px-1 relative flex-shrink-0 ${activeTab === 'profile' ? 'text-primary font-medium' : 'text-gray-400 hover:text-white'}`}
@@ -300,7 +300,7 @@ export const Settings = () => {
                                 />
                             </div>
                             <div className="mt-6 pt-4 border-t border-white/10 flex justify-end">
-                                <Button onClick={handleSavePrivacy} loading={saving} disabled={!user}>
+                                <Button onClick={handleSavePrivacy} loading={saving} disabled={!user} className="w-full sm:w-auto">
                                     <Save size={16} className="mr-2" />
                                     Save Preferences
                                 </Button>
@@ -348,22 +348,22 @@ export const Settings = () => {
                                 <Shield className="text-red-400" size={20} />
                                 Your Data Rights
                             </h2>
-                            <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
+                            <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
                                 <div className="flex-1">
                                     <h4 className="font-medium text-white">Export Your Data</h4>
                                     <p className="text-sm text-gray-400">Download a complete copy of your notes and profile information in JSON format.</p>
                                 </div>
-                                <Button variant="secondary" className="gap-2 border-white/10 hover:bg-white/10">
+                                <Button variant="secondary" className="w-full sm:w-auto gap-2 border-white/10 hover:bg-white/10">
                                     <Download size={16} /> Download JSON
                                 </Button>
                             </div>
                             <div className="my-6 h-px bg-red-500/10" />
-                            <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
+                            <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
                                 <div className="flex-1">
                                     <h4 className="font-medium text-red-400">Delete Account</h4>
                                     <p className="text-sm text-gray-400">Permanently remove your account and all associated data. This action cannot be undone.</p>
                                 </div>
-                                <Button className="gap-2 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border-red-500/50">
+                                <Button className="w-full sm:w-auto gap-2 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border-red-500/50">
                                     <Trash2 size={16} /> Delete Account
                                 </Button>
                             </div>
@@ -382,7 +382,7 @@ export const Settings = () => {
 
                         <div className="space-y-6">
                             {/* Avatar Section */}
-                            <div className="flex items-center gap-6">
+                            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 text-center sm:text-left">
                                 <div className="relative">
                                     {avatarUrl ? (
                                         <SecureImage
@@ -477,7 +477,7 @@ export const Settings = () => {
 
                             {/* Save Button */}
                             <div className="pt-4 border-t border-white/10">
-                                <Button onClick={handleSave} loading={saving} className="gap-2">
+                                <Button onClick={handleSave} loading={saving} className="w-full sm:w-auto gap-2">
                                     <Save size={16} />
                                     Save Changes
                                 </Button>
@@ -528,7 +528,7 @@ export const Settings = () => {
                             </select>
 
                             <div className="pt-4">
-                                <Button onClick={handleSaveChatSettings} loading={saving}>
+                                <Button onClick={handleSaveChatSettings} loading={saving} className="w-full sm:w-auto">
                                     <Save size={16} className="mr-2" />
                                     Save Language
                                 </Button>

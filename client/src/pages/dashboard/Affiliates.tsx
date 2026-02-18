@@ -99,22 +99,22 @@ export const Affiliates = () => {
 
   return (
     <div className="space-y-8 pb-12">
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-8 md:p-12 shadow-2xl">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-6 md:p-12 shadow-2xl">
         <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
           <div className="max-w-xl text-center md:text-left">
-            <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4 tracking-tight">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white mb-4 tracking-tight">
               Grow with <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 to-yellow-500">Note Standard</span>
             </h1>
-            <p className="text-lg text-indigo-100 mb-8 leading-relaxed">
+            <p className="text-base sm:text-lg text-indigo-100 mb-8 leading-relaxed">
               Join our affiliate program and earn <span className="font-bold text-white">{stats.commissionRate}% commission</span> on every transaction's spread fee from users you refer.
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1 flex items-center bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-2 pl-4">
-                <span className="text-sm text-indigo-100 truncate mr-4">{referralLink}</span>
+              <div className="flex-1 flex items-center bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-2 pl-4 min-w-0">
+                <span className="text-sm text-indigo-100 truncate mr-4 flex-1">{referralLink}</span>
                 <button 
                   onClick={copyToClipboard}
-                  className="bg-white text-indigo-600 p-3 rounded-xl hover:bg-indigo-50 transition-colors shadow-lg"
+                  className="bg-white text-indigo-600 p-3 rounded-xl hover:bg-indigo-50 transition-colors shadow-lg flex-shrink-0"
                 >
                   <Copy size={18} />
                 </button>
@@ -131,7 +131,7 @@ export const Affiliates = () => {
                     copyToClipboard();
                   }
                 }}
-                className="bg-white/20 hover:bg-white/30 border-none backdrop-blur-md text-white px-8 py-4 rounded-2xl h-auto"
+                className="bg-white/20 hover:bg-white/30 border-none backdrop-blur-md text-white px-8 py-4 rounded-2xl h-auto w-full sm:w-auto"
               >
                 <Share2 size={20} className="mr-2" /> Share
               </Button>
@@ -220,42 +220,66 @@ export const Affiliates = () => {
                 <Button onClick={copyToClipboard} variant="secondary">Copy Referral Link</Button>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="border-b border-white/5 bg-white/5">
-                      <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-widest">User</th>
-                      <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-widest">Joined Date</th>
-                      <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-widest text-right">Earnings</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {referrals.map((referral) => (
-                      <tr key={referral.id} className="hover:bg-white/[0.02] transition-colors group">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center">
-                            <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center font-bold text-white mr-3">
-                              {referral.referred?.username?.charAt(0).toUpperCase() || 'U'}
-                            </div>
-                            <div>
-                                <div className="text-sm font-medium text-white group-hover:text-indigo-400 transition-colors">
-                                    {referral.referred?.username}
-                                </div>
-                                <div className="text-xs text-gray-500">{referral.referred?.email}</div>
-                            </div>
+            <>
+              <div className="block sm:hidden divide-y divide-white/5">
+                  {referrals.map((referral) => (
+                      <div key={referral.id} className="p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                              <div className="flex items-center">
+                                  <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center font-bold text-white mr-3 text-xs">
+                                      {referral.referred?.username?.charAt(0).toUpperCase() || 'U'}
+                                  </div>
+                                  <div className="text-sm font-medium text-white">{referral.referred?.username}</div>
+                              </div>
+                              <div className="text-sm font-semibold text-white">
+                                  ${referral.total_commission_earned.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </div>
                           </div>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-400">
-                          {new Date(referral.created_at).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4 text-sm font-semibold text-white text-right">
-                          ${referral.total_commission_earned.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                          <div className="flex justify-between text-xs text-gray-500">
+                              <span>{referral.referred?.email}</span>
+                              <span>{new Date(referral.created_at).toLocaleDateString()}</span>
+                          </div>
+                      </div>
+                  ))}
               </div>
+              
+              <div className="hidden sm:block overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b border-white/5 bg-white/5">
+                        <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-widest">User</th>
+                        <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-widest">Joined Date</th>
+                        <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-widest text-right">Earnings</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {referrals.map((referral) => (
+                        <tr key={referral.id} className="hover:bg-white/[0.02] transition-colors group">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center">
+                              <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center font-bold text-white mr-3">
+                                {referral.referred?.username?.charAt(0).toUpperCase() || 'U'}
+                              </div>
+                              <div>
+                                  <div className="text-sm font-medium text-white group-hover:text-indigo-400 transition-colors">
+                                      {referral.referred?.username}
+                                  </div>
+                                  <div className="text-xs text-gray-500">{referral.referred?.email}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-400">
+                            {new Date(referral.created_at).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 text-sm font-semibold text-white text-right">
+                            ${referral.total_commission_earned.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+            </>
             )}
           </Card>
         </div>
