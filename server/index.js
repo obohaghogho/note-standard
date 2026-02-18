@@ -125,6 +125,19 @@ setInterval(async () => {
   }
 }, 60000);
 
+// Background job for real-time Trends
+const analyticsService = require("./services/analyticsService");
+setInterval(async () => {
+  try {
+    const stats = await analyticsService.getRealtimeStats();
+    if (stats) {
+      io.emit("stats_updated", stats);
+    }
+  } catch (err) {
+    console.error("[Trends] Interval broadcast failed:", err.message);
+  }
+}, 60000); // Every 60 seconds
+
 io.on("connection", async (socket) => {
   const userId = socket.user.id;
   logger.info(`[Socket] Connected: ${userId} ${socket.id}`);
