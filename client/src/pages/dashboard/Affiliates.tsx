@@ -32,7 +32,7 @@ export const Affiliates = () => {
   const [stats, setStats] = useState({
     totalEarned: 0,
     totalReferrals: 0,
-    commissionRate: 10
+    commissionRate: 5
   });
   const [user, setUser] = useState<any>(null);
 
@@ -80,7 +80,7 @@ export const Affiliates = () => {
         setStats({
           totalEarned: total,
           totalReferrals: data.referrals?.length || 0,
-          commissionRate: data.commissionRate || 10
+          commissionRate: data.commissionRate || 5
         });
       }
     } catch (err) {
