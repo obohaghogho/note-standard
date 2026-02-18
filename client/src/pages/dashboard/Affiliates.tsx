@@ -99,7 +99,7 @@ export const Affiliates = () => {
 
   return (
     <div className="space-y-8 pb-12 w-full min-w-0">
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-4 sm:p-8 md:p-12 shadow-2xl">
+      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-5 sm:p-8 md:p-12 shadow-2xl">
         <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
           <div className="max-w-xl text-center md:text-left">
             <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold text-white mb-4 tracking-tight break-words">
@@ -138,20 +138,20 @@ export const Affiliates = () => {
             </div>
           </div>
           
-          <div className="hidden lg:block">
-            <div className="relative h-64 w-64">
+          <div className="lg:block">
+            <div className="relative h-32 w-32 sm:h-64 sm:w-64 opacity-20 lg:opacity-100">
               <div className="absolute inset-0 bg-white/10 rounded-full animate-ping"></div>
               <div className="absolute inset-4 bg-white/20 rounded-full animate-pulse"></div>
               <div className="absolute inset-8 bg-white/30 rounded-full flex items-center justify-center">
-                <Award size={80} className="text-white" />
+                <Award className="text-white w-12 h-12 sm:w-20 sm:h-20" />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Decorative elements */}
-        <div className="absolute top-0 right-0 -mr-20 -mt-20 h-64 w-64 rounded-full bg-white/10 blur-3xl"></div>
-        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 h-64 w-64 rounded-full bg-indigo-500/20 blur-3xl"></div>
+        {/* Decorative elements - restrained for mobile */}
+        <div className="absolute top-0 right-0 -mr-12 -mt-12 sm:-mr-20 sm:-mt-20 h-48 w-48 sm:h-64 sm:w-64 rounded-full bg-white/10 blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 -ml-12 -mb-12 sm:-ml-20 sm:-mb-20 h-48 w-48 sm:h-64 sm:w-64 rounded-full bg-indigo-500/20 blur-3xl"></div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
