@@ -623,6 +623,30 @@ export async function getTeamStats(teamId: string): Promise<TeamStats | null> {
   }, { minDelay: 2000 });
 }
 
+/**
+ * Upload an image for a team
+ */
+export async function uploadTeamImage(teamId: string, file: File): Promise<string | null> {
+  return safeCall<string | null>(`upload-team-image-${teamId}`, async () => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${teamId}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+    const filePath = `images/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('team-assets')
+      .upload(filePath, file);
+
+    if (uploadError) throw uploadError;
+
+    // Get public URL
+    const { data } = supabase.storage
+      .from('team-assets')
+      .getPublicUrl(filePath);
+
+    return data.publicUrl;
+  }, { minDelay: 500 });
+}
+
 // ====================================
 // EXPORTS
 // ====================================
@@ -645,6 +669,7 @@ export default {
   // Messages
   getTeamMessages,
   sendMessage,
+  uploadTeamImage,
   markMessagesRead,
 
   // Shared Notes

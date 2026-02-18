@@ -48,6 +48,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ====================================
   // AUTO-SCROLL TO BOTTOM
@@ -108,6 +109,49 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+  };
+
+  // ====================================
+  // IMAGE UPLOAD HANDLER
+  // ====================================
+
+  const handleImageClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be less than 5MB');
+      return;
+    }
+
+    setIsSending(true);
+    const loadingToast = toast.loading('Uploading image...');
+
+    try {
+      const { uploadTeamImage } = await import('../../lib/teamsApi');
+      const imageUrl = await uploadTeamImage(teamId, file);
+
+      if (!imageUrl) throw new Error('Upload failed');
+
+      await sendMessage('', { image_url: imageUrl });
+      toast.success('Image sent', { id: loadingToast });
+    } catch (err: any) {
+      console.error('[TeamChat] Image upload error:', err);
+      toast.error('Failed to upload image', { id: loadingToast });
+    } finally {
+      setIsSending(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -192,7 +236,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
       );
     }
 
-    // Regular text message
+    // Regular text or image message
     return (
       <div
         key={msg.id}
@@ -214,7 +258,16 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
         <div className="team-chat__message-content">
           {showName && !isOwn && <div className="team-chat__message-name">{senderName}</div>}
           <div className="team-chat__message-bubble">
-            <div className="team-chat__message-text">{msg.content}</div>
+            {msg.message_type === 'image' && msg.metadata?.image_url && (
+              <div className="team-chat__message-image-container">
+                <SecureImage 
+                  src={msg.metadata.image_url} 
+                  alt="Shared image" 
+                  className="team-chat__message-image"
+                />
+              </div>
+            )}
+            {msg.content && <div className="team-chat__message-text">{msg.content}</div>}
             <div className="team-chat__message-time">
               {msg.isOptimistic && <Loader2 size={12} className="animate-spin mr-1" />}
               {msg.failed && <AlertCircle size={12} className="text-red-400 mr-1" />}
@@ -245,6 +298,14 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
 
   return (
     <div className={`team-chat ${className}`}>
+      {/* Hidden File Input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleImageChange}
+        accept="image/*"
+        style={{ display: 'none' }}
+      />
       {/* Header */}
       <div className="team-chat__header">
         <div className="team-chat__header-title">
@@ -326,10 +387,10 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => toast('Image sharing is in private beta. Contact support to enable.', { icon: 'ℹ️' })}
-            disabled={isSending}
+            onClick={handleImageClick}
+            disabled={isSending || !connected}
           >
-            <ImageIcon size={18} />
+            {isSending ? <Loader2 size={18} className="animate-spin" /> : <ImageIcon size={18} />}
           </Button>
           <Button
             size="sm"
