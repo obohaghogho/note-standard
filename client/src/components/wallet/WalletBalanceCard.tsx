@@ -26,7 +26,7 @@ export const WalletBalanceCard: React.FC<WalletBalanceCardProps> = ({ totalBalan
                     <div>
                         <span className="text-purple-200 text-sm font-medium tracking-wide">TOTAL BALANCE</span>
                         <div className="flex items-center gap-2 mt-1">
-                            <h2 className="text-4xl font-bold">
+                            <h2 className="text-3xl sm:text-4xl font-bold truncate">
                                 {loading ? (
                                     <div className="h-10 w-48 bg-white/10 animate-pulse rounded" />
                                 ) : (

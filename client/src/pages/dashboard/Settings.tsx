@@ -236,34 +236,36 @@ export const Settings = () => {
                 <p className="text-gray-400">Manage your account settings and preferences</p>
             </div>
 
-            <button
-                onClick={() => setActiveTab('profile')}
-                className={`pb-3 px-1 relative ${activeTab === 'profile' ? 'text-primary font-medium' : 'text-gray-400 hover:text-white'}`}
-            >
-                <span className="flex items-center gap-2"><User size={18} /> Profile</span>
-                {activeTab === 'profile' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
-            </button>
-            <button
-                onClick={() => setActiveTab('ads')}
-                className={`pb-3 px-1 relative ${activeTab === 'ads' ? 'text-primary font-medium' : 'text-gray-400 hover:text-white'}`}
-            >
-                <span className="flex items-center gap-2"><Megaphone size={18} /> Advertisements</span>
-                {activeTab === 'ads' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
-            </button>
-            <button
-                onClick={() => setActiveTab('privacy')}
-                className={`pb-3 px-1 relative ${activeTab === 'privacy' ? 'text-primary font-medium' : 'text-gray-400 hover:text-white'}`}
-            >
-                <span className="flex items-center gap-2"><Shield size={18} /> Privacy & Data</span>
-                {activeTab === 'privacy' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
-            </button>
-            <button
-                onClick={() => setActiveTab('chat')}
-                className={`pb-3 px-1 relative ${activeTab === 'chat' ? 'text-primary font-medium' : 'text-gray-400 hover:text-white'}`}
-            >
-                <span className="flex items-center gap-2"><MessageSquare size={18} /> Chat & Language</span>
-                {activeTab === 'chat' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
-            </button>
+            <div className="flex items-center gap-4 border-b border-white/5 overflow-x-auto no-scrollbar pb-px -mx-4 px-4 sm:mx-0 sm:px-0">
+                <button
+                    onClick={() => setActiveTab('profile')}
+                    className={`pb-3 px-1 relative flex-shrink-0 ${activeTab === 'profile' ? 'text-primary font-medium' : 'text-gray-400 hover:text-white'}`}
+                >
+                    <span className="flex items-center gap-2 whitespace-nowrap"><User size={18} /> Profile</span>
+                    {activeTab === 'profile' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
+                </button>
+                <button
+                    onClick={() => setActiveTab('ads')}
+                    className={`pb-3 px-1 relative flex-shrink-0 ${activeTab === 'ads' ? 'text-primary font-medium' : 'text-gray-400 hover:text-white'}`}
+                >
+                    <span className="flex items-center gap-2 whitespace-nowrap"><Megaphone size={18} /> Advertisements</span>
+                    {activeTab === 'ads' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
+                </button>
+                <button
+                    onClick={() => setActiveTab('privacy')}
+                    className={`pb-3 px-1 relative flex-shrink-0 ${activeTab === 'privacy' ? 'text-primary font-medium' : 'text-gray-400 hover:text-white'}`}
+                >
+                    <span className="flex items-center gap-2 whitespace-nowrap"><Shield size={18} /> Privacy & Data</span>
+                    {activeTab === 'privacy' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
+                </button>
+                <button
+                    onClick={() => setActiveTab('chat')}
+                    className={`pb-3 px-1 relative flex-shrink-0 ${activeTab === 'chat' ? 'text-primary font-medium' : 'text-gray-400 hover:text-white'}`}
+                >
+                    <span className="flex items-center gap-2 whitespace-nowrap"><MessageSquare size={18} /> Chat & Language</span>
+                    {activeTab === 'chat' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
+                </button>
+            </div>
 
 
             {

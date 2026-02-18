@@ -96,8 +96,9 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, s
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
-                className="modal-content"
-                style={{ maxWidth: '480px' }}
+                className="modal-content w-[95%] md:w-full max-w-[480px]"
+
+
             >
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-xl font-bold flex items-center gap-2">

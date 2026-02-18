@@ -94,6 +94,7 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
                 {isAdmin && (
                     <NavLink
                         to="/admin"
+                        onClick={onClose}
                         className={() => cn(
                             "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 mb-4 bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20"
                         )}
@@ -108,6 +109,7 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
                         key={item.to}
                         to={item.to}
                         end={item.to === '/dashboard'}
+                        onClick={onClose}
                         className={({ isActive }) => cn(
                             "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
                             isActive
@@ -134,6 +136,7 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
                     <NavLink
                         key={item.to}
                         to={item.to}
+                        onClick={onClose}
                         className={({ isActive }) => cn(
                             "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
                             isActive

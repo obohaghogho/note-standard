@@ -20,7 +20,9 @@ export const ActionsGrid: React.FC<ActionsGridProps> = ({ onSend, onReceive, onS
     ];
 
     return (
-        <div className="grid grid-cols-5 gap-3 sm:gap-4 w-full">
+        <div className="flex flex-wrap justify-center gap-3 sm:gap-6 w-full">
+
+
             {actions.map((action) => (
                 <motion.button
                     key={action.label}

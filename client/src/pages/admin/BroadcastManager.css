@@ -1,12 +1,28 @@
+/* Broadcast Manager Styles - Mobile First */
+
 .broadcast-manager {
-    padding: 2rem;
+    padding: 1rem;
+}
+
+@media (min-width: 768px) {
+    .broadcast-manager {
+        padding: 2rem;
+    }
 }
 
 .broadcast-manager .page-header {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    gap: 1.5rem;
     margin-bottom: 2rem;
+}
+
+@media (min-width: 768px) {
+    .broadcast-manager .page-header {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
 }
 
 .broadcast-manager .header-title {
@@ -16,17 +32,28 @@
 }
 
 .broadcast-manager .header-icon {
-    width: 40px;
-    height: 40px;
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
     padding: 8px;
     background: rgba(var(--accent-rgb), 0.1);
     color: var(--accent-color);
-    border-radius: 12px;
+    border-radius: 10px;
+}
+
+@media (min-width: 768px) {
+    .broadcast-manager .header-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+    }
 }
 
 .broadcast-manager .create-btn {
+    width: 100%;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 0.5rem;
     background: var(--accent-color);
     color: #fff;
@@ -38,182 +65,132 @@
     transition: transform 0.2s;
 }
 
-.broadcast-manager .create-btn:hover {
-    transform: translateY(-2px);
+@media (min-width: 768px) {
+    .broadcast-manager .create-btn {
+        width: auto;
+    }
 }
 
 .broadcast-manager .broadcast-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+}
+
+@media (min-width: 640px) {
+    .broadcast-manager .broadcast-grid {
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.5rem;
+    }
 }
 
 .broadcast-card {
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 16px;
-    padding: 1.5rem;
+    padding: 1.25rem;
     display: flex;
     flex-direction: column;
     gap: 1rem;
 }
 
-.broadcast-card .card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+@media (min-width: 768px) {
+    .broadcast-card {
+        padding: 1.5rem;
+    }
 }
 
-.broadcast-card .audience-tag {
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    background: rgba(var(--accent-rgb), 0.1);
-    color: var(--accent-color);
-    padding: 0.2rem 0.6rem;
-    border-radius: 4px;
-    letter-spacing: 0.05em;
-}
-
-.broadcast-card .delete-btn {
-    background: transparent;
-    border: none;
-    color: rgba(255, 255, 255, 0.3);
-    cursor: pointer;
-    transition: color 0.2s;
-}
-
-.broadcast-card .delete-btn:hover {
-    color: #ef4444;
-}
-
-.broadcast-card h3 {
-    margin: 0;
-    font-size: 1.2rem;
-    color: #fff;
-}
-
-.broadcast-card .content {
-    margin: 0;
-    font-size: 0.95rem;
-    color: rgba(255, 255, 255, 0.6);
-    line-height: 1.5;
-    flex-grow: 1;
-    overflow-wrap: break-word;
-    word-wrap: break-word;
-    word-break: break-word;
-    overflow-x: hidden;
-}
-
-.broadcast-card .content img {
-    max-width: 100%;
-    height: auto;
-    border-radius: 8px;
-    margin-top: 0.5rem;
-}
-
-.broadcast-card .card-footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding-top: 1rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
-    font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.4);
-}
-
-.broadcast-card .date {
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-}
-
-/* Modal Styles */
+/* Modal Styles - Mobile First */
 .modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(4px);
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: flex-end; /* Mobile: slide from bottom */
     z-index: 1000;
+}
+
+@media (min-width: 768px) {
+    .modal-overlay {
+        align-items: center; /* Desktop: center */
+    }
 }
 
 .modal-content {
     background: #1a1a1a;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
-    padding: 2rem;
+    border-radius: 20px 20px 0 0; /* Mobile: top rounding only */
+    padding: 1.5rem;
     width: 100%;
-    max-width: 800px;
-    /* Increased for editor */
     max-height: 90vh;
     overflow-y: auto;
-    animation: modalSlide 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    animation: modalSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.quill-group {
-    background: rgba(255, 255, 255, 0.02);
-    border-radius: 12px;
-    padding: 1rem;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+@media (min-width: 768px) {
+    .modal-content {
+        border-radius: 20px;
+        width: min(90%, 800px);
+        max-height: 85vh;
+        margin: 2rem;
+        animation: modalFadeIn 0.3s ease-out;
+    }
 }
 
-.quill-group .ql-toolbar {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.1) !important;
-    border-radius: 8px 8px 0 0;
+.modal-content .form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
 }
 
-.quill-group .ql-container {
-    border-color: rgba(255, 255, 255, 0.1) !important;
-    border-radius: 0 0 8px 8px;
-    background: rgba(0, 0, 0, 0.2);
-    min-height: 200px;
-    font-family: inherit;
-    font-size: 1rem;
+@media (min-width: 640px) {
+    .modal-content .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
 }
 
-.quill-group .ql-editor {
-    color: #fff;
+.modal-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 2rem;
 }
 
-.quill-group .ql-editor.ql-blank::before {
-    color: rgba(255, 255, 255, 0.3);
+@media (min-width: 640px) {
+    .modal-actions {
+        flex-direction: row;
+        justify-content: flex-end;
+        gap: 1rem;
+    }
 }
 
-/* Rich text content in cards */
-.broadcast-card .content {
-    margin: 0;
-    font-size: 0.95rem;
-    color: rgba(255, 255, 255, 0.6);
-    line-height: 1.5;
-    flex-grow: 1;
+.modal-actions button {
+    width: 100%;
 }
 
-.broadcast-card .content p {
-    margin-bottom: 0.5rem;
+@media (min-width: 640px) {
+    .modal-actions button {
+        width: auto;
+    }
 }
 
-.broadcast-card .content ul,
-.broadcast-card .content ol {
-    padding-left: 1.5rem;
-    margin-bottom: 0.5rem;
+@keyframes modalSlideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
 }
 
-.modal-content h3 {
-    margin: 0 0 1.5rem 0;
-    font-size: 1.4rem;
-    color: #fff;
+@keyframes modalFadeIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
 }
 
-.modal-content .form-group {
-    margin-bottom: 1.25rem;
-}
-
+/* Form Styles */
 .modal-content label {
     display: block;
     font-size: 0.85rem;
@@ -222,7 +199,6 @@
 }
 
 .modal-content input,
-.modal-content textarea,
 .modal-content select {
     width: 100%;
     background: rgba(255, 255, 255, 0.05);
@@ -231,61 +207,5 @@
     padding: 0.75rem 1rem;
     color: #fff;
     outline: none;
-    transition: all 0.2s;
-}
-
-.modal-content input:focus,
-.modal-content textarea:focus,
-.modal-content select:focus {
-    border-color: var(--accent-color);
-    background: rgba(255, 255, 255, 0.08);
-}
-
-.modal-content .form-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-}
-
-.modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 1rem;
-    margin-top: 2rem;
-}
-
-.modal-actions .cancel-btn {
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #fff;
-    padding: 0.75rem 1.5rem;
-    border-radius: 10px;
-    cursor: pointer;
-}
-
-.modal-actions .submit-btn {
-    background: var(--accent-color);
-    color: #fff;
-    border: none;
-    padding: 0.75rem 1.5rem;
-    border-radius: 10px;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.modal-actions .submit-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-@keyframes modalSlide {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    font-size: 1rem; /* Prevent zoom on iOS */
 }
