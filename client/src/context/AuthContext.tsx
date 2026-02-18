@@ -175,10 +175,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(currentUser);
 
       // Background sync on relevant events
+      // Optimization: SIGNED_IN event often fires during signup flow; 
+      // if it's the very first session, we might want to skip or delay 
+      // to avoid competing with registration logic.
       if (currentUser && (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION')) {
-        syncUserData(currentUser.id, currentUser).catch(err => {
-          console.error('[Auth] Background sync on event failed:', err);
-        });
+        // Only sync if we don't already have profile data to avoid double-fetching during signup
+        if (!profile || event === 'USER_UPDATED') {
+          syncUserData(currentUser.id, currentUser).catch(err => {
+            console.error('[Auth] Background sync on event failed:', err);
+          });
+        }
       }
     });
 

@@ -55,7 +55,7 @@ export async function safeCall<T>(
     fallback?: T;
   } = {}
 ): Promise<T | null> {
-  const { minDelay = 1000, retries = 3, timeout = 15000, fallback } = options;
+  const { minDelay = 500, retries = 3, timeout = 15000, fallback } = options;
 
   // 1. Check if identical request is already in flight (Promise Sharing)
   if (inFlightPromises.has(key)) {
@@ -240,7 +240,7 @@ export async function safeAuth(): Promise<Session | null> {
     const { data, error } = await supabase.auth.getSession();
     if (error) throw error;
     return data.session;
-  }, { minDelay: 200, retries: 1, timeout: 3000 }); // Very fast checkout for auth
+  }, { minDelay: 100, retries: 1, timeout: 3000 }); // Very fast checkout for auth
 }
 
 // --------------------------
