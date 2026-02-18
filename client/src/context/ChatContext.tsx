@@ -37,6 +37,7 @@ interface Conversation {
         read_at?: string;
     };
     unreadCount?: number;
+    is_muted?: boolean;
     members: {
         user_id: string;
         role: string;
@@ -62,6 +63,8 @@ export interface ChatContextValue {
     startConversation: (username: string) => Promise<void>; 
     acceptConversation: (id: string) => Promise<void>;
     deleteConversation: (id: string) => Promise<void>;
+    muteConversation: (id: string, isMuted: boolean) => Promise<void>;
+    clearChatHistory: (id: string) => Promise<void>;
     hasMore: Record<string, boolean>;
 }
 
@@ -371,6 +374,54 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         } catch (err) {
             console.error('[Chat] Failed to delete conversation:', err);
             throw err;
+    const muteConversation = async (conversationId: string, isMuted: boolean) => {
+        if (!session) throw new Error('No session');
+
+        try {
+            const res = await fetch(`${API_URL}/api/chat/conversations/${conversationId}/mute`, {
+                method: 'PUT',
+                headers: { 
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ isMuted })
+            });
+
+            if (res.ok) {
+                setConversations(prev => prev.map(c => 
+                    c.id === conversationId ? { ...c, is_muted: isMuted } : c
+                ));
+            } else {
+                throw new Error('Failed to mute conversation');
+            }
+        } catch (err) {
+            console.error('[Chat] Failed to mute conversation:', err);
+            throw err;
+        }
+    };
+
+    const clearChatHistory = async (conversationId: string) => {
+        if (!session) throw new Error('No session');
+
+        try {
+            const res = await fetch(`${API_URL}/api/chat/conversations/${conversationId}/messages`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${session.access_token}` }
+            });
+
+            if (res.ok) {
+                setMessages(prev => ({
+                    ...prev,
+                    [conversationId]: []
+                }));
+                // Reset pagination
+                setHasMore(prev => ({ ...prev, [conversationId]: false }));
+            } else {
+                throw new Error('Failed to clear chat history');
+            }
+        } catch (err) {
+            console.error('[Chat] Failed to clear chat history:', err);
+            throw err;
         }
     };
 
@@ -425,6 +476,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             startConversation, 
             acceptConversation, 
             deleteConversation,
+            muteConversation,
+            clearChatHistory,
             loading, 
             activeConversationId, 
             setActiveConversationId,
