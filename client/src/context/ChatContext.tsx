@@ -61,6 +61,7 @@ export interface ChatContextValue {
     markMessageRead: (messageId: string) => Promise<void>;
     startConversation: (username: string) => Promise<void>; 
     acceptConversation: (id: string) => Promise<void>;
+    deleteConversation: (id: string) => Promise<void>;
     hasMore: Record<string, boolean>;
 }
 
@@ -212,9 +213,23 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             loadConversations();
         };
 
+        const onConversationDeleted = ({ conversationId }: { conversationId: string }) => {
+            setConversations(prev => prev.filter(c => c.id !== conversationId));
+            if (activeConversationId === conversationId) {
+                setActiveConversationId(null);
+            }
+            // Cleanup messages
+            setMessages(prev => {
+                const next = { ...prev };
+                delete next[conversationId];
+                return next;
+            });
+        };
+
         socket.on('receive_message', processIncomingMessage);
         socket.on('new_conversation', onNewConversation);
         socket.on('message_read', onMessageRead);
+        socket.on('conversation_deleted', onConversationDeleted);
 
         conversations.forEach(conv => {
             socket.emit('join_room', conv.id);
@@ -224,6 +239,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             socket.off('receive_message', processIncomingMessage);
             socket.off('new_conversation', onNewConversation);
             socket.off('message_read', onMessageRead);
+            socket.off('conversation_deleted', onConversationDeleted);
         };
     }, [socket, connected, conversations, user?.id, loadConversations, activeConversationId]);
 
@@ -332,6 +348,32 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     };
 
+    const deleteConversation = async (conversationId: string) => {
+        if (!session) throw new Error('No session');
+
+        try {
+            const res = await fetch(`${API_URL}/api/chat/conversations/${conversationId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${session.access_token}` }
+            });
+
+            if (res.ok) {
+                // The socket listener 'conversation_deleted' will handle state update for everyone
+                // but we can proactively clear it for the deleting user too.
+                setConversations(prev => prev.filter(c => c.id !== conversationId));
+                if (activeConversationId === conversationId) {
+                    setActiveConversationId(null);
+                }
+            } else {
+                const data = await res.json();
+                throw new Error(data.error || 'Failed to delete conversation');
+            }
+        } catch (err) {
+            console.error('[Chat] Failed to delete conversation:', err);
+            throw err;
+        }
+    };
+
     // Load messages for active conversation
     useEffect(() => {
         if (!activeConversationId || !session) return;
@@ -382,6 +424,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             sendMessage, 
             startConversation, 
             acceptConversation, 
+            deleteConversation,
             loading, 
             activeConversationId, 
             setActiveConversationId,

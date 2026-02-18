@@ -14,7 +14,7 @@ import toast from 'react-hot-toast';
 const ChatWindow: React.FC = () => {
     const { 
         activeConversationId, messages, sendMessage, loading, 
-        conversations, acceptConversation, loadMoreMessages, hasMore 
+        conversations, acceptConversation, deleteConversation, loadMoreMessages, hasMore 
     } = useChat();
     const { isUserOnline, getUserLastSeen } = usePresence();
     const { user, profile, session } = useAuth();
@@ -228,8 +228,40 @@ const ChatWindow: React.FC = () => {
     };
 
     const handleDeleteChat = () => {
-        toast.error('Delete chat not implemented yet');
+        if (!activeConversationId) return;
+        
         setShowMoreMenu(false);
+        
+        toast((t) => (
+            <div className="flex flex-col gap-3">
+                <p className="text-sm font-medium text-gray-800">
+                    Are you sure you want to delete this chat forever?
+                </p>
+                <div className="flex gap-2 justify-end">
+                    <button 
+                        onClick={() => toast.dismiss(t.id)}
+                        className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={async () => {
+                            toast.dismiss(t.id);
+                            const loadingToast = toast.loading('Deleting chat...');
+                            try {
+                                await deleteConversation(activeConversationId);
+                                toast.success('Chat deleted', { id: loadingToast });
+                            } catch (err) {
+                                toast.error('Failed to delete chat', { id: loadingToast });
+                            }
+                        }}
+                        className="px-3 py-1.5 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600"
+                    >
+                        Delete
+                    </button>
+                </div>
+            </div>
+        ), { duration: 5000 });
     };
 
     const handleVoiceMessage = async (_blob: Blob) => {
