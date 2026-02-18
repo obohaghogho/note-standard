@@ -29,34 +29,17 @@ import type {
  */
 export async function createTeam(req: CreateTeamRequest): Promise<Team | null> {
   return safeCall<Team | null>('create-team', async () => {
-    const { data: session } = await supabase.auth.getSession();
-    if (!session.session) throw new Error('Not authenticated');
-
-    const { data, error } = await supabase
-      .from('teams')
-      .insert({
-        name: req.name,
-        description: req.description,
-        avatar_url: req.avatar_url,
-        owner_id: session.session.user.id,
-      })
-      .select()
-      .single();
+    const { data, error } = await supabase.rpc('create_team_v2', {
+      p_name: req.name,
+      p_description: req.description,
+      p_avatar_url: req.avatar_url
+    });
 
     if (error) throw error;
 
-    // Auto-add creator as owner member
-    if (data) {
-      await supabase
-        .from('team_members')
-        .insert({
-          team_id: data.id,
-          user_id: session.session.user.id,
-          role: 'owner',
-        });
-    }
-
-    return data;
+    // The RPC returns SETOF teams, so we expect an array or a single object
+    const team = Array.isArray(data) ? data[0] : data;
+    return team;
   }, { minDelay: 1000 });
 }
 
