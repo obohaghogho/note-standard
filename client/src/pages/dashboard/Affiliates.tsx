@@ -98,20 +98,20 @@ export const Affiliates = () => {
   };
 
   return (
-    <div className="space-y-8 pb-12">
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-6 md:p-12 shadow-2xl">
+    <div className="space-y-8 pb-12 w-full min-w-0">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-4 sm:p-8 md:p-12 shadow-2xl">
         <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
           <div className="max-w-xl text-center md:text-left">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white mb-4 tracking-tight">
+            <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold text-white mb-4 tracking-tight break-words">
               Grow with <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 to-yellow-500">Note Standard</span>
             </h1>
-            <p className="text-base sm:text-lg text-indigo-100 mb-8 leading-relaxed">
+            <p className="text-sm sm:text-lg text-indigo-100 mb-8 leading-relaxed break-words">
               Join our affiliate program and earn <span className="font-bold text-white">{stats.commissionRate}% commission</span> on every transaction's spread fee from users you refer.
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex-1 flex items-center bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-2 pl-4 min-w-0">
-                <span className="text-sm text-indigo-100 truncate mr-4 flex-1">{referralLink}</span>
+                <span className="text-sm text-indigo-100 truncate mr-4 flex-1 break-all">{referralLink}</span>
                 <button 
                   onClick={copyToClipboard}
                   className="bg-white text-indigo-600 p-3 rounded-xl hover:bg-indigo-50 transition-colors shadow-lg flex-shrink-0"
@@ -155,7 +155,7 @@ export const Affiliates = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="p-6 border-white/5 bg-white/5 backdrop-blur-sm relative group overflow-hidden">
+        <Card className="p-4 sm:p-6 border-white/5 bg-white/5 backdrop-blur-sm relative group overflow-hidden min-w-0">
           <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
             <DollarSign size={48} className="text-green-400" />
           </div>
@@ -168,7 +168,7 @@ export const Affiliates = () => {
           </div>
         </Card>
 
-        <Card className="p-6 border-white/5 bg-white/5 backdrop-blur-sm relative group overflow-hidden">
+        <Card className="p-4 sm:p-6 border-white/5 bg-white/5 backdrop-blur-sm relative group overflow-hidden min-w-0">
           <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
             <Users size={48} className="text-blue-400" />
           </div>
@@ -179,7 +179,7 @@ export const Affiliates = () => {
           </div>
         </Card>
 
-        <Card className="p-6 border-white/5 bg-white/5 backdrop-blur-sm relative group overflow-hidden">
+        <Card className="p-4 sm:p-6 border-white/5 bg-white/5 backdrop-blur-sm relative group overflow-hidden min-w-0">
           <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
             <TrendingUp size={48} className="text-purple-400" />
           </div>
@@ -286,7 +286,7 @@ export const Affiliates = () => {
 
         <div className="space-y-6">
           <h2 className="text-2xl font-bold text-white">How it works</h2>
-          <Card className="p-6 border-white/5 bg-white/5 backdrop-blur-sm space-y-6">
+          <Card className="p-4 sm:p-6 border-white/5 bg-white/5 backdrop-blur-sm space-y-6 min-w-0">
             <div className="flex gap-4">
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold border border-indigo-500/20">
                 1
@@ -327,7 +327,7 @@ export const Affiliates = () => {
             </div>
           </Card>
 
-          <Card className="p-6 bg-gradient-to-br from-indigo-900/40 to-black border-indigo-500/20">
+          <Card className="p-4 sm:p-6 bg-gradient-to-br from-indigo-900/40 to-black border-indigo-500/20 min-w-0">
             <h4 className="font-bold text-white mb-3 flex items-center gap-2">
               <ExternalLink size={18} className="text-indigo-400" />
               Affiliate Assets

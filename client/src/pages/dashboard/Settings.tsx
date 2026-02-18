@@ -230,7 +230,7 @@ export const Settings = () => {
         .toUpperCase();
 
     return (
-        <div className="space-y-6 max-w-4xl">
+        <div className="space-y-6 max-w-4xl w-full min-w-0">
             <div className="space-y-1">
                 <h1 className="text-3xl font-bold">Settings</h1>
                 <p className="text-gray-400">Manage your account settings and preferences</p>
@@ -272,7 +272,7 @@ export const Settings = () => {
                 activeTab === 'privacy' && (
                     <div className="space-y-6">
                         {/* Privacy Controls */}
-                        <Card variant="glass" className="p-6">
+                        <Card variant="glass" className="p-4 sm:p-6 min-w-0">
                             <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
                                 <Lock className="text-primary" size={20} />
                                 Data Controls
@@ -308,7 +308,7 @@ export const Settings = () => {
                         </Card>
 
                         {/* Transparency Report */}
-                        <Card variant="glass" className="p-6 border border-white/5 bg-white/5">
+                        <Card variant="glass" className="p-4 sm:p-6 border border-white/5 bg-white/5 min-w-0">
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-xl font-semibold flex items-center gap-2">
                                     <Activity className="text-blue-400" size={20} />
@@ -343,7 +343,7 @@ export const Settings = () => {
                         </Card>
 
                         {/* Dangerous Actions */}
-                        <Card className="p-6 border border-red-500/20 bg-red-500/5">
+                        <Card className="p-4 sm:p-6 border border-red-500/20 bg-red-500/5 min-w-0">
                             <h2 className="text-xl font-semibold mb-6 flex items-center gap-2 text-red-400">
                                 <Shield className="text-red-400" size={20} />
                                 Your Data Rights
@@ -353,7 +353,7 @@ export const Settings = () => {
                                     <h4 className="font-medium text-white">Export Your Data</h4>
                                     <p className="text-sm text-gray-400">Download a complete copy of your notes and profile information in JSON format.</p>
                                 </div>
-                                <Button variant="secondary" className="w-full sm:w-auto gap-2 border-white/10 hover:bg-white/10">
+                                <Button variant="secondary" className="w-full sm:w-auto gap-2 border-white/10 hover:bg-white/10 flex-shrink-0">
                                     <Download size={16} /> Download JSON
                                 </Button>
                             </div>
@@ -363,7 +363,7 @@ export const Settings = () => {
                                     <h4 className="font-medium text-red-400">Delete Account</h4>
                                     <p className="text-sm text-gray-400">Permanently remove your account and all associated data. This action cannot be undone.</p>
                                 </div>
-                                <Button className="w-full sm:w-auto gap-2 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border-red-500/50">
+                                <Button className="w-full sm:w-auto gap-2 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border-red-500/50 flex-shrink-0">
                                     <Trash2 size={16} /> Delete Account
                                 </Button>
                             </div>
@@ -374,7 +374,7 @@ export const Settings = () => {
 
             {
                 activeTab === 'profile' && (
-                    <Card variant="glass" className="p-6">
+                    <Card variant="glass" className="p-4 sm:p-6 min-w-0">
                         <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
                             <User className="text-primary" size={20} />
                             Profile Information
@@ -414,7 +414,7 @@ export const Settings = () => {
                                         className="hidden"
                                     />
                                 </div>
-                                <div className="flex-1">
+                                <div className="flex-1 min-w-0 break-words">
                                     <h3 className="font-medium text-white flex items-center gap-2">
                                         Profile Picture
                                         {isPro && <BadgeCheck size={16} className="text-blue-400 fill-blue-400/10" />}
@@ -495,7 +495,7 @@ export const Settings = () => {
 
             {
                 activeTab === 'chat' && (
-                    <Card variant="glass" className="p-6">
+                    <Card variant="glass" className="p-4 sm:p-6 min-w-0">
                         <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
                             <Globe className="text-primary" size={20} />
                             Chat Translation
