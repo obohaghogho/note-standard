@@ -20,12 +20,12 @@ export const Hero = () => {
                         <span className="text-gray-400">v2.0 is now live</span>
                     </div>
 
-                    <h1 className="text-5xl lg:text-7xl font-bold leading-tight mb-6">
+                    <h1 className="text-3xl sm:text-5xl lg:text-7xl font-bold leading-tight mb-6">
                         Notes for the <br />
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">Modern Team</span>
                     </h1>
 
-                    <p className="text-xl text-gray-400 mb-8 max-w-lg leading-relaxed">
+                    <p className="text-base sm:text-xl text-gray-400 mb-8 max-w-lg leading-relaxed">
                         Secure, fast, and beautiful note-taking designed for high-performance teams.
                         Experience the next evolution of productivity.
                     </p>
@@ -46,7 +46,7 @@ export const Hero = () => {
                         </button>
                     </div>
 
-                    <div className="mt-12 flex items-center gap-8 text-gray-500">
+                    <div className="mt-8 sm:mt-12 flex flex-wrap items-center gap-4 sm:gap-8 text-gray-500">
                         <div className="flex items-center gap-2">
                             <Shield className="w-5 h-5" />
                             <span className="text-sm">E2E Encrypted</span>

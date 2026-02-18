@@ -165,17 +165,16 @@ export const FundModal: React.FC<FundModalProps> = ({ isOpen, onClose, selectedC
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="modal-content w-[95%] md:w-full max-w-[480px] relative overflow-hidden"
+                className="modal-content max-w-[480px]"
             >
-
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500" />
                 
-                <button className="modal-close absolute right-4 top-6" onClick={onClose}>
+                <button className="modal-close" onClick={onClose}>
                     <X size={20} />
                 </button>
                 
-                <h2 className="text-2xl font-bold mb-2">Fund Digital Assets</h2>
-                <p className="text-gray-400 text-sm mb-6 flex items-center gap-2">
+                <h2 className="modal-header text-2xl">Fund Digital Assets</h2>
+                <p className="text-gray-400 text-sm mb-4 flex items-center gap-2">
                     <ShieldCheck size={16} className="text-green-500" />
                     Secure Payment Protocol
                 </p>

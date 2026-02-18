@@ -113,30 +113,24 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({ isOpen, onClose, s
 
     if (!isOpen) return null;
 
-
-    // We already defined isFiat inside body, so remove or keep if scope allows. 
-    // Usually cleaner to define top level. Done above.
-
     return (
         <div className="modal-overlay">
             <motion.div 
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
-                className="modal-content w-[95%] md:w-full max-w-[480px]"
-
+                className="modal-content max-w-[480px]"
             >
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-bold flex items-center gap-2">
-                        <ArrowUpRight size={20} className="text-orange-500" />
-                        Withdraw {selectedCurrency}
-                    </h2>
-                    <button onClick={onClose} className="p-1 hover:bg-gray-800 rounded-full transition-colors">
-                        <X size={20} className="text-gray-400" />
-                    </button>
-                </div>
+                <button onClick={onClose} className="modal-close">
+                    <X size={20} />
+                </button>
+
+                <h2 className="modal-header">
+                    <ArrowUpRight size={20} className="text-orange-500" />
+                    Withdraw {selectedCurrency}
+                </h2>
                 
-                <form onSubmit={handleWithdraw} className="flex flex-col gap-5">
+                <form onSubmit={handleWithdraw} className="modal-body flex flex-col gap-5">
                     {isFiat ? (
                         <div className="space-y-4">
                             {/* Country Selector */}

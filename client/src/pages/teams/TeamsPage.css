@@ -539,6 +539,45 @@
 }
 
 /* ====================================
+   HEADER-LEFT FLEX LAYOUT
+   ==================================== */
+
+.teams-page__header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.teams-page__header-left h1 {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Back button - hidden on desktop, visible on mobile */
+.teams-page__back-button {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.teams-page__back-button:hover {
+  background: rgba(168, 85, 247, 0.2);
+  border-color: rgba(168, 85, 247, 0.4);
+  color: white;
+}
+
+/* ====================================
    RESPONSIVE
    ==================================== */
 
@@ -555,18 +594,172 @@
 @media (max-width: 768px) {
   .teams-page {
     grid-template-columns: 1fr;
-    padding: 16px;
+    padding: 0;
+    gap: 0;
+    height: 100vh;
+    height: 100dvh;
   }
 
-  .teams-page__sidebar {
+  /* ---- Mobile view toggle: list vs chat ---- */
+
+  /* When viewing the list */
+  .teams-page--mobile-list .teams-page__sidebar {
+    display: flex;
+    height: 100%;
+  }
+
+  .teams-page--mobile-list .teams-page__main {
     display: none;
   }
 
+  .teams-page--mobile-list .teams-page__info {
+    display: none;
+  }
+
+  /* When viewing the chat */
+  .teams-page--mobile-chat .teams-page__sidebar {
+    display: none;
+  }
+
+  .teams-page--mobile-chat .teams-page__main {
+    display: flex;
+    height: 100%;
+  }
+
+  .teams-page--mobile-chat .teams-page__info {
+    display: none;
+  }
+
+  /* ---- Back button visible on mobile ---- */
+  .teams-page__back-button {
+    display: flex;
+  }
+
+  /* ---- Sidebar adjustments ---- */
+  .teams-page__sidebar {
+    padding: 16px;
+  }
+
+  .teams-page__sidebar-header h2 {
+    font-size: 1.25rem;
+  }
+
+  .teams-page__teams-list {
+    padding: 2px;
+  }
+
+  .teams-page__team-card {
+    padding: 12px;
+  }
+
+  .teams-page__team-avatar {
+    width: 40px;
+    height: 40px;
+    font-size: 1rem;
+  }
+
+  .teams-page__team-info h3 {
+    font-size: 0.9375rem;
+  }
+
+  /* ---- Header adjustments ---- */
+  .teams-page__header {
+    padding: 12px 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .teams-page__header-left {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .teams-page__header-left h1 {
+    font-size: 1.125rem;
+  }
+
+  .teams-page__header-left p {
+    font-size: 0.75rem;
+  }
+
+  .teams-page__header-actions {
+    flex-wrap: wrap;
+    gap: 4px;
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .teams-page__header-actions button {
+    font-size: 0.75rem;
+    padding: 6px 10px;
+  }
+
+  /* ---- Chat area ---- */
+  .teams-page__chat {
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* ---- Modals ---- */
+  .teams-page__modal-overlay {
+    padding: 16px;
+  }
+
   .teams-page__modal {
-    padding: 24px;
+    padding: 20px;
+    max-width: 100%;
+  }
+
+  .teams-page__modal--large {
+    max-width: 100%;
+  }
+
+  .teams-page__modal h2 {
+    font-size: 1.25rem;
+    margin-bottom: 16px;
   }
 
   .teams-page__members-grid {
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+    max-height: 60vh;
+  }
+
+  .teams-page__member-avatar-large {
+    width: 48px;
+    height: 48px;
+    font-size: 1.125rem;
+  }
+
+  .teams-page__form-group input,
+  .teams-page__form-group textarea,
+  .teams-page__form-group select {
+    padding: 10px 12px;
+    font-size: 0.875rem;
+  }
+}
+
+/* Extra small screens (iPhone SE etc.) */
+@media (max-width: 375px) {
+  .teams-page__header-left h1 {
+    font-size: 1rem;
+  }
+
+  .teams-page__header-actions {
+    gap: 2px;
+  }
+
+  .teams-page__header-actions button {
+    padding: 4px 8px;
+    font-size: 0.6875rem;
+  }
+
+  .teams-page__team-avatar {
+    width: 36px;
+    height: 36px;
+  }
+
+  .teams-page__members-grid {
+    grid-template-columns: 1fr 1fr;
   }
 }
