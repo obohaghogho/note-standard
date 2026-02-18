@@ -374,6 +374,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         } catch (err) {
             console.error('[Chat] Failed to delete conversation:', err);
             throw err;
+        }
+    };
+
     const muteConversation = async (conversationId: string, isMuted: boolean) => {
         if (!session) throw new Error('No session');
 
