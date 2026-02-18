@@ -503,3 +503,30 @@
 .team-chat__header-status svg {
   animation: pulse 2s ease-in-out infinite;
 }
+
+/* ====================================
+   IMAGE MESSAGES
+   ==================================== */
+
+.team-chat__message-image-container {
+  margin: 4px 0 8px 0;
+  border-radius: 12px;
+  overflow: hidden;
+  max-width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.team-chat__message-image-container:hover {
+  transform: scale(1.02);
+}
+
+.team-chat__message-image {
+  width: 100%;
+  height: auto;
+  max-height: 300px;
+  object-fit: cover;
+  display: block;
+}
