@@ -44,9 +44,9 @@ app.use(
       if (!origin) return callback(null, true);
 
       if (allowedOrigins.includes(origin)) {
-        callback(null, true);
+        return callback(null, true);
       } else {
-        callback(new Error("Not allowed by CORS"));
+        return callback(new Error("Not allowed by CORS"));
       }
     },
     credentials: true,
@@ -55,6 +55,7 @@ app.use(
   }),
 );
 
+// VERY IMPORTANT (Using regex for Express 5 compatibility)
 app.options(/.*/, cors());
 
 // Trust proxy (works for both NGINX and Netlify CDN)
