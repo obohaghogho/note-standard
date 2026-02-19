@@ -30,18 +30,8 @@ if (process.env.CLOUDINARY_URL) {
 
 const app = express();
 
-// Configure CORS
-app.use(
-  cors({
-    origin: [
-      "http://localhost:4173",
-      "https://www.notestandard.com",
-      "https://notestandard.com",
-    ],
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    credentials: true,
-  }),
-);
+// Configure CORS (Temporarily allowing all origins for debugging)
+app.use(cors());
 
 app.options(/.*/, cors());
 
