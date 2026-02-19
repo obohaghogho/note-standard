@@ -1,11 +1,10 @@
-// ─── Local Development Server ────────────────────────────────
-// This file is used for LOCAL DEVELOPMENT ONLY.
+// ─── Backend Server ──────────────────────────────────────────
+// This file is the main entry point for the backend.
 // It imports the Express app from app.js and adds:
-//   - Socket.IO (WebSockets — not available in serverless)
+//   - Socket.IO (WebSockets)
 //   - server.listen()
 //
-// In production on Netlify, app.js is imported directly by
-// netlify/functions/api.js via serverless-http instead.
+// Render starts this file using: node server/index.js
 
 const path = require("path");
 const logger = require("./utils/logger");
@@ -335,5 +334,5 @@ io.on("connection", async (socket) => {
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  logger.info(`Server running on 0.0.0.0:${PORT}`);
+  logger.info(`Server running on port ${PORT}`);
 });

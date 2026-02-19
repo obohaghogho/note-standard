@@ -38,17 +38,13 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             return;
         }
 
-        const isProduction = window.location.hostname !== 'localhost' && !window.location.hostname.includes('127.0.0.1');
-
-        if (isProduction) {
-            console.log('[Socket] Socket.IO is disabled in production (Serverless environment). Live updates are handled via Supabase Realtime.');
-            return;
-        }
+        // Enabled for Render (Supports WebSockets)
 
         console.log('[Socket] Initializing centralized connection...');
         
         const socket = io(API_URL, {
             auth: { token: session.access_token },
+            withCredentials: true,
             reconnection: true,
             reconnectionAttempts: MAX_RETRIES,
             reconnectionDelay: 2000,
