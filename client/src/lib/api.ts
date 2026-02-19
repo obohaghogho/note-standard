@@ -4,9 +4,10 @@ const isProduction = typeof window !== 'undefined' &&
                      window.location.hostname !== 'localhost' && 
                      !window.location.hostname.includes('127.0.0.1');
 
-export const API_URL = isProduction 
-    ? (window.location.hostname.includes('notestandard.com') ? 'https://api.notestandard.com' : '') 
-    : (import.meta.env.VITE_API_URL || 'http://localhost:3000').replace(/\/$/, '');
+export const API_URL = import.meta.env.VITE_API_URL || 
+    (isProduction 
+        ? (window.location.hostname.includes('notestandard.com') ? 'https://api.notestandard.com' : '') 
+        : 'http://localhost:5000').replace(/\/$/, '');
 
 export const getAuthHeader = async () => {
     const { supabase } = await import('./supabase');

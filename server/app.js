@@ -1,11 +1,9 @@
-// ─── Express Application (serverless-compatible) ─────────────
+// ─── Express Application ─────────────────────────────────────
 // This file contains the Express app with all middleware, routes,
-// and error handling. It does NOT call server.listen() or set up
-// Socket.IO — those are in index.js for local development only.
+// and error handling.
 //
-// This module is imported by:
-//   - index.js      → local dev (adds Socket.IO + listen)
-//   - netlify/functions/api.js → serverless (wraps with serverless-http)
+// This module is imported by index.js which adds Socket.IO and
+// starts the server.
 
 const express = require("express");
 const logger = require("./utils/logger");

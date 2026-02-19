@@ -1,11 +1,9 @@
-// ─── Reusable CORS Configuration ─────────────────────────────
-// Shared by app.js (Express middleware) and standalone Netlify Functions.
+// ─── CORS Configuration ─────────────────────────────────────────
 // Single source of truth for all CORS settings.
 
 const whitelist = [
-  "https://www.notestandard.com",
   "https://notestandard.com",
-  "https://api.notestandard.com",
+  "https://www.notestandard.com",
 ];
 
 // Allow localhost/local network origins regardless of environment
@@ -61,37 +59,4 @@ const corsOptions = {
   optionsSuccessStatus: 200,
 };
 
-/**
- * Generate CORS headers object for manual use in raw Netlify Functions.
- * Usage: return { statusCode: 200, headers: corsHeaders(origin), body: '...' };
- */
-function corsHeaders(origin) {
-  const headers = {
-    "Vary": "Origin",
-  };
-  if (origin && whitelist.includes(origin)) {
-    headers["Access-Control-Allow-Origin"] = origin;
-    headers["Access-Control-Allow-Credentials"] = "true";
-    headers["Access-Control-Allow-Methods"] =
-      "GET, POST, PUT, DELETE, PATCH, OPTIONS";
-    headers["Access-Control-Allow-Headers"] =
-      "Content-Type, Authorization, X-Requested-With, Accept, Cache-Control";
-    headers["Access-Control-Max-Age"] = "86400";
-  }
-  return headers;
-}
-
-/**
- * Handle OPTIONS preflight for raw Netlify Functions (non-Express).
- * Usage: if (event.httpMethod === 'OPTIONS') return handlePreflight(event);
- */
-function handlePreflight(event) {
-  const origin = event.headers.origin || event.headers.Origin || "";
-  return {
-    statusCode: 204,
-    headers: corsHeaders(origin),
-    body: "",
-  };
-}
-
-module.exports = { whitelist, corsOptions, corsHeaders, handlePreflight };
+module.exports = { whitelist, corsOptions };
