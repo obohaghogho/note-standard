@@ -8,15 +8,15 @@ const whitelist = [
   "https://api.notestandard.com",
 ];
 
-// Allow localhost only in development - expand for common Vite/React ports
-if (process.env.NODE_ENV !== "production") {
-  whitelist.push(
-    "http://localhost:5173",
-    "http://localhost:4173", // Vite preview
-    "http://localhost:3000",
-    "http://localhost:8888", // Netlify Dev
-  );
-}
+// Allow localhost/local network origins regardless of environment
+whitelist.push(
+  "http://localhost:5173",
+  "http://localhost:4173",
+  "http://localhost:3000",
+  "http://localhost:8888",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:4173",
+);
 
 /**
  * Express cors() middleware options.
@@ -31,10 +31,12 @@ const corsOptions = {
     const isNoteStandard = origin.endsWith(".notestandard.com") ||
       origin === "https://notestandard.com";
 
-    // Robust local check: localhost or 127.0.0.1 or IPv6 loopback [::1] with ANY port
-    const isLocal = origin.match(
-      /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/,
-    );
+    // Simplified robust local check
+    const isLocal = origin.startsWith("http://localhost:") ||
+      origin.startsWith("http://127.0.0.1:") ||
+      origin === "http://localhost" ||
+      origin === "http://127.0.0.1" ||
+      origin.includes("[::1]");
 
     if (isNoteStandard || isLocal) {
       return callback(null, true);
