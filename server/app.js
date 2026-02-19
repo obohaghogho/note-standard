@@ -30,48 +30,14 @@ if (process.env.CLOUDINARY_URL) {
   logger.info("Cloudinary configured successfully");
 }
 
-const { whitelist, corsOptions } = require("./utils/cors");
-
 const app = express();
+
+// 1. Authoritative CORS - MUST run first to handle all requests/errors
+const { whitelist, corsOptions } = require("./utils/cors");
+app.use(cors(corsOptions));
 
 // Trust proxy (works for both NGINX and Netlify CDN)
 app.set("trust proxy", 1);
-
-// 1. CORS must run first — before helmet, before body parsers
-// Failsafe middleware to ensure headers are ALWAYS set
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-
-  // Robust local check: localhost or 127.0.0.1 or IPv6 loopback [::1] with ANY port
-  const isLocal = origin &&
-    origin.match(/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/);
-
-  const isNoteStandard = origin &&
-    (origin.endsWith(".notestandard.com") ||
-      origin === "https://notestandard.com");
-
-  if (origin && (isNoteStandard || isLocal)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-    res.setHeader(
-      "Access-Control-Allow-Methods",
-      "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-    );
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, X-Requested-With, Accept, Cache-Control, X-Client-Info",
-    );
-  }
-  res.setHeader("Vary", "Origin");
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-  next();
-});
-
-// Also use standard cors middleware for complex cases
-app.use(cors(corsOptions));
 
 // 2. Security headers (after CORS to avoid conflicts)
 app.use(helmet({
@@ -129,17 +95,12 @@ app.use("/webhook", require(path.join(__dirname, "routes", "webhooks"))); // Ali
 app.use("/api/payment", require(path.join(__dirname, "routes", "payment")));
 app.use("/api/media", require(path.join(__dirname, "routes", "media")));
 
-// ─── CORS-safe error handler ──────────────────────────────────
-// Guarantees CORS headers are present even on 4xx/5xx error responses,
-// so the browser doesn't hide the real error message from the frontend.
 app.use((err, req, res, next) => {
   const origin = req.headers.origin;
 
   const isLocal = origin && (
-    origin.startsWith("http://localhost:") ||
-    origin.startsWith("http://127.0.0.1:") ||
-    origin === "http://localhost" ||
-    origin === "http://127.0.0.1" ||
+    origin.startsWith("http://localhost") ||
+    origin.startsWith("http://127.0.0.1") ||
     origin.includes("[::1]")
   );
 
@@ -148,10 +109,12 @@ app.use((err, req, res, next) => {
       origin === "https://notestandard.com");
 
   if (origin && (isNoteStandard || isLocal)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.set({
+      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Credentials": "true",
+      "Vary": "Origin",
+    });
   }
-  res.setHeader("Vary", "Origin");
 
   // CORS rejection
   if (err.message === "Not allowed by CORS") {
