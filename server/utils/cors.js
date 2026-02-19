@@ -28,11 +28,12 @@ const corsOptions = {
     // Allow requests with no origin (server-to-server, health checks, etc)
     if (!origin) return callback(null, true);
 
-    // Dynamic checks for allowed domains
+    // Dynamic checks for allowed domains (User requested)
     const isNoteStandard = origin.endsWith(".notestandard.com") ||
-      origin === "https://notestandard.com";
+      origin === "https://notestandard.com" ||
+      origin === "https://www.notestandard.com";
 
-    // Robust local check: allow any localhost port or loopback variation
+    // Robust local check: allow any localhost port or common dev variations
     const isLocal = origin.startsWith("http://localhost") ||
       origin.startsWith("http://127.0.0.1") ||
       origin.includes("[::1]");
@@ -53,10 +54,10 @@ const corsOptions = {
     "Accept",
     "Cache-Control",
     "X-Client-Info",
-    "apikey", // Necessary for direct Supabase/PostgREST proxied requests
+    "apikey",
   ],
   exposedHeaders: ["X-Total-Count", "Content-Disposition"],
-  maxAge: 86400, // Cache preflight for 24 hours
+  maxAge: 86400,
   optionsSuccessStatus: 200,
 };
 
