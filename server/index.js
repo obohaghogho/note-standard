@@ -23,7 +23,11 @@ const { whitelist } = require("./utils/cors");
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: whitelist,
+    origin: [
+      "http://localhost:4173",
+      "https://www.notestandard.com",
+      "https://notestandard.com",
+    ],
     methods: ["GET", "POST"],
     credentials: true,
   },

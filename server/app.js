@@ -30,9 +30,20 @@ if (process.env.CLOUDINARY_URL) {
 
 const app = express();
 
-// 1. Standard CORS Middleware — MUST run first
-const { corsOptions } = require("./utils/cors");
-app.use(cors(corsOptions));
+// Configure CORS
+app.use(
+  cors({
+    origin: [
+      "http://localhost:4173",
+      "https://www.notestandard.com",
+      "https://notestandard.com",
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
+  }),
+);
+
+app.options(/.*/, cors());
 
 // Trust proxy (works for both NGINX and Netlify CDN)
 app.set("trust proxy", 1);
@@ -94,26 +105,6 @@ app.use("/api/payment", require(path.join(__dirname, "routes", "payment")));
 app.use("/api/media", require(path.join(__dirname, "routes", "media")));
 
 app.use((err, req, res, next) => {
-  const origin = req.headers.origin;
-
-  const isLocal = origin && (
-    origin.startsWith("http://localhost") ||
-    origin.startsWith("http://127.0.0.1") ||
-    origin.includes("[::1]")
-  );
-
-  const isNoteStandard = origin &&
-    (origin.endsWith(".notestandard.com") ||
-      origin === "https://notestandard.com");
-
-  if (origin && (isNoteStandard || isLocal)) {
-    res.set({
-      "Access-Control-Allow-Origin": origin,
-      "Access-Control-Allow-Credentials": "true",
-      "Vary": "Origin",
-    });
-  }
-
   // CORS rejection
   if (err.message === "Not allowed by CORS") {
     return res.status(403).json({ error: "CORS policy: origin not allowed" });
