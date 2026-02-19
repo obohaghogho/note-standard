@@ -32,9 +32,40 @@ if (process.env.CLOUDINARY_URL) {
 
 const app = express();
 
-// 1. Authoritative CORS - MUST run first to handle all requests/errors
-const { whitelist, corsOptions } = require("./utils/cors");
-app.use(cors(corsOptions));
+// 1. Authoritative Failsafe CORS — MUST run before anything else
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  const isLocal = origin && (
+    origin.startsWith("http://localhost") ||
+    origin.startsWith("http://127.0.0.1") ||
+    origin.includes("[::1]")
+  );
+
+  const isNoteStandard = origin &&
+    (origin.endsWith(".notestandard.com") ||
+      origin === "https://notestandard.com");
+
+  if (origin && (isNoteStandard || isLocal)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+    );
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Requested-With, Accept, Cache-Control, X-Client-Info, apikey",
+    );
+    res.setHeader("Vary", "Origin");
+  }
+
+  // Handle preflight (OPTIONS)
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+  next();
+});
 
 // Trust proxy (works for both NGINX and Netlify CDN)
 app.set("trust proxy", 1);
@@ -112,6 +143,9 @@ app.use((err, req, res, next) => {
     res.set({
       "Access-Control-Allow-Origin": origin,
       "Access-Control-Allow-Credentials": "true",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+      "Access-Control-Allow-Headers":
+        "Content-Type, Authorization, X-Requested-With, Accept, Cache-Control, X-Client-Info, apikey",
       "Vary": "Origin",
     });
   }
