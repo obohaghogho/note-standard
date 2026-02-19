@@ -10,9 +10,13 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    host: true,
+    strictPort: true,
+  },
   preview: {
     host: '0.0.0.0',
     port: parseInt(process.env.PORT || '4173'),
-    allowedHosts: ['notestandard.com', '.onrender.com'],
+    allowedHosts: ['notestandard.com', 'api.notestandard.com', '.onrender.com'],
   },
 })
