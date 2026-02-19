@@ -16,6 +16,7 @@ whitelist.push(
   "http://localhost:8888",
   "http://127.0.0.1:5173",
   "http://127.0.0.1:4173",
+  "http://127.0.0.1:3000",
 );
 
 /**
@@ -31,11 +32,9 @@ const corsOptions = {
     const isNoteStandard = origin.endsWith(".notestandard.com") ||
       origin === "https://notestandard.com";
 
-    // Simplified robust local check
-    const isLocal = origin.startsWith("http://localhost:") ||
-      origin.startsWith("http://127.0.0.1:") ||
-      origin === "http://localhost" ||
-      origin === "http://127.0.0.1" ||
+    // Robust local check: allow any localhost port or loopback variation
+    const isLocal = origin.startsWith("http://localhost") ||
+      origin.startsWith("http://127.0.0.1") ||
       origin.includes("[::1]");
 
     if (isNoteStandard || isLocal) {
@@ -53,7 +52,8 @@ const corsOptions = {
     "X-Requested-With",
     "Accept",
     "Cache-Control",
-    "X-Client-Info", // Common for Supabase/Auth clients
+    "X-Client-Info",
+    "apikey", // Necessary for direct Supabase/PostgREST proxied requests
   ],
   exposedHeaders: ["X-Total-Count", "Content-Disposition"],
   maxAge: 86400, // Cache preflight for 24 hours
