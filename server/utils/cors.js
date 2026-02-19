@@ -8,12 +8,13 @@ const whitelist = [
   "https://api.notestandard.com",
 ];
 
-// Allow localhost only in development
+// Allow localhost only in development - expand for common Vite/React ports
 if (process.env.NODE_ENV !== "production") {
   whitelist.push(
     "http://localhost:5173",
+    "http://localhost:4173", // Vite preview
     "http://localhost:3000",
-    "http://localhost:8888",
+    "http://localhost:8888", // Netlify Dev
   );
 }
 
@@ -26,11 +27,14 @@ const corsOptions = {
     // Allow requests with no origin (server-to-server, health checks, etc)
     if (!origin) return callback(null, true);
 
-    // Allow any subdomain of notestandard.com or localhost
+    // Dynamic checks for allowed domains
     const isNoteStandard = origin.endsWith(".notestandard.com") ||
       origin === "https://notestandard.com";
-    const isLocal = origin.includes("localhost") ||
-      origin.includes("127.0.0.1");
+
+    // Robust local check: localhost or 127.0.0.1 or IPv6 loopback [::1] with ANY port
+    const isLocal = origin.match(
+      /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/,
+    );
 
     if (isNoteStandard || isLocal) {
       return callback(null, true);
@@ -47,6 +51,7 @@ const corsOptions = {
     "X-Requested-With",
     "Accept",
     "Cache-Control",
+    "X-Client-Info", // Common for Supabase/Auth clients
   ],
   exposedHeaders: ["X-Total-Count", "Content-Disposition"],
   maxAge: 86400, // Cache preflight for 24 hours

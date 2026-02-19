@@ -41,11 +41,14 @@ app.set("trust proxy", 1);
 // Failsafe middleware to ensure headers are ALWAYS set
 app.use((req, res, next) => {
   const origin = req.headers.origin;
+
+  // Robust local check: localhost or 127.0.0.1 or IPv6 loopback [::1] with ANY port
+  const isLocal = origin &&
+    origin.match(/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/);
+
   const isNoteStandard = origin &&
     (origin.endsWith(".notestandard.com") ||
       origin === "https://notestandard.com");
-  const isLocal = origin &&
-    (origin.includes("localhost") || origin.includes("127.0.0.1"));
 
   if (origin && (isNoteStandard || isLocal)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
@@ -56,7 +59,7 @@ app.use((req, res, next) => {
     );
     res.setHeader(
       "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, X-Requested-With, Accept, Cache-Control",
+      "Content-Type, Authorization, X-Requested-With, Accept, Cache-Control, X-Client-Info",
     );
   }
   res.setHeader("Vary", "Origin");
