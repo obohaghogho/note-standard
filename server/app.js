@@ -30,7 +30,7 @@ if (process.env.CLOUDINARY_URL) {
 
 const app = express();
 
-// Configure CORS
+// Configure CORS (Strict)
 const allowedOrigins = [
   "http://localhost:4173",
   "http://localhost:5173",
