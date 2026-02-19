@@ -4,7 +4,7 @@ const isProduction = typeof window !== 'undefined' &&
                      window.location.hostname !== 'localhost' && 
                      !window.location.hostname.includes('127.0.0.1');
 
-export const API_URL = import.meta.env.VITE_API_URL || 
+export const API_URL = import.meta.env.VITE_BACKEND_URL || 
     (isProduction 
         ? (window.location.hostname.includes('notestandard.com') ? 'https://api.notestandard.com' : '') 
         : 'http://localhost:5000').replace(/\/$/, '');

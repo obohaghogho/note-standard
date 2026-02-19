@@ -90,7 +90,7 @@ export const Affiliates = () => {
     }
   };
 
-  const referralLink = `${import.meta.env.VITE_FRONTEND_URL || window.origin}/signup?ref=${user?.id}`;
+  const referralLink = `${import.meta.env.VITE_CLIENT_URL || window.origin}/signup?ref=${user?.id}`;
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(referralLink);
