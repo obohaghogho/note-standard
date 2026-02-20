@@ -47,7 +47,7 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ transact
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-800/50">
-                                {transactions.map((tx) => (
+                                {transactions?.map((tx) => (
                                     <tr key={tx.id} className="group hover:bg-white/5 transition-colors">
                                         <td className="py-4 pl-2">
                                             <div className="flex items-center gap-3">

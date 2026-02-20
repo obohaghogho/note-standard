@@ -222,7 +222,7 @@ export const Affiliates = () => {
             ) : (
             <>
               <div className="block sm:hidden divide-y divide-white/5">
-                  {referrals.map((referral) => (
+                  {referrals?.map((referral) => (
                       <div key={referral.id} className="p-4 space-y-3">
                           <div className="flex items-center justify-between">
                               <div className="flex items-center">
@@ -253,7 +253,7 @@ export const Affiliates = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {referrals.map((referral) => (
+                      {referrals?.map((referral) => (
                         <tr key={referral.id} className="hover:bg-white/[0.02] transition-colors group">
                           <td className="px-6 py-4">
                             <div className="flex items-center">

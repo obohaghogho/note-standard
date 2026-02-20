@@ -180,7 +180,7 @@ export const AuditLogs = () => {
                                 <td colSpan={6} className="empty-row">No audit logs found</td>
                             </tr>
                         ) : (
-                            logs.map(log => {
+                            logs?.map(log => {
                                 const { date, time } = formatDate(log.created_at);
                                 return (
                                     <tr key={log.id}>

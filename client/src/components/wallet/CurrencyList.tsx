@@ -36,7 +36,7 @@ const getCurrencyColor = (curr: string) => {
 export const CurrencyList: React.FC<CurrencyListProps> = ({ wallets, rates, onSelect }) => {
     return (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {wallets.map((wallet, index) => {
+            {wallets?.map((wallet, index) => {
                 const colorClass = getCurrencyColor(wallet.currency);
                 const rate = rates[wallet.currency] || 0;
                 // If wallet.currency is USD, rate is 1. Else calculate USD value.

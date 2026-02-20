@@ -185,7 +185,7 @@ export const Analytics = () => {
                         <h4>Top Creators</h4>
                         <div className="mini-list">
                             {stats?.topCreators?.length ? (
-                                stats.topCreators.map((creator, i) => (
+                                stats?.topCreators?.map((creator, i) => (
                                     <div key={creator.id} className="mini-item">
                                         <span>#{i + 1} {creator.name}</span>
                                         <strong>{creator.count} notes</strong>

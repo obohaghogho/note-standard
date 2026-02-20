@@ -104,7 +104,7 @@ export const Shared = () => {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {notes.map((note) => (
+                    {notes?.map((note) => (
                         <Card key={note.id} hoverEffect className="p-5 cursor-pointer flex flex-col h-[200px] group">
                             <div className="flex items-start justify-between mb-3">
                                 <div className="flex items-center gap-2 text-xs text-primary bg-primary/10 px-2 py-1 rounded-full">

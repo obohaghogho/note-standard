@@ -180,7 +180,7 @@ export const DashboardHome = () => {
                     <div className="text-gray-400">No notes yet. Create one to get started!</div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {recentNotes.map((note) => (
+                        {recentNotes?.map((note) => (
                             <Card key={note.id} hoverEffect className="p-6 cursor-pointer group">
                                 <div className="flex items-start justify-between mb-4">
                                     <div className="p-2 bg-white/5 rounded-lg group-hover:bg-primary/20 transition-colors">
@@ -197,7 +197,7 @@ export const DashboardHome = () => {
                                     {note.content || 'No content...'}
                                 </p>
                                 <div className="mt-4 flex gap-2">
-                                    {note.tags && note.tags.map(tag => (
+                                    {note.tags?.map(tag => (
                                         <span key={tag} className="text-xs px-2 py-1 bg-white/5 rounded-md text-gray-400">{tag}</span>
                                     ))}
                                 </div>

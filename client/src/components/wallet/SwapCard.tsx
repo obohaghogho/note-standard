@@ -136,7 +136,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
                             onChange={(e) => setFromCurrency(e.target.value as Currency)}
                             className="bg-transparent text-xl font-bold text-white focus:outline-none cursor-pointer hover:text-purple-400 transition-colors"
                         >
-                            {CURRENCIES.map(c => (
+                            {CURRENCIES?.map(c => (
                                 <option key={c} value={c} className="bg-gray-800 text-base">{c}</option>
                             ))}
                         </select>
@@ -180,7 +180,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
                             onChange={(e) => setToCurrency(e.target.value as Currency)}
                             className="bg-transparent text-xl font-bold text-white focus:outline-none cursor-pointer hover:text-purple-400 transition-colors"
                         >
-                            {CURRENCIES.filter(c => c !== fromCurrency).map(c => (
+                            {CURRENCIES?.filter(c => c !== fromCurrency).map(c => (
                                 <option key={c} value={c} className="bg-gray-800 text-base">{c}</option>
                             ))}
                         </select>
