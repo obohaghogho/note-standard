@@ -5,9 +5,18 @@ import './index.css'
 import './i18n'
 import App from './App.tsx'
 
-console.log('🚀 NoteStandard Client Version 1.0.1 - Activity Fix Applied');
+console.log('🚀 NoteStandard Client Version 1.0.2 - Activity & Init Fix');
 console.log("ENV CHECK:", import.meta.env);
-console.log("SUPABASE URL:", import.meta.env.VITE_SUPABASE_URL);
+
+window.onerror = function(msg, url, line, col, error) {
+  const errorMsg = "GLOBAL ERROR: " + msg + "\nAt: " + url + ":" + line + ":" + col;
+  console.error(errorMsg);
+  // Alert as a last resort to see errors on mobile/production if console is messy
+  if (!window.location.hostname.includes('localhost')) {
+     alert(errorMsg);
+  }
+  return false;
+};
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
