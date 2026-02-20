@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import {
     History as HistoryIcon,
     Filter,
-    Activity,
+    Activity as ActivityIcon,
     ChevronLeft,
     ChevronRight
 } from 'lucide-react';
@@ -119,7 +119,7 @@ export const AuditLogs = () => {
 
             <div className="filters-bar">
                 <div className="filter-group">
-                    <Activity size={18} />
+                    <ActivityIcon size={18} />
                     <select
                         id="audit-action-filter"
                         name="actionFilter"

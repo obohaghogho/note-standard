@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import {
     Users,
-    Activity,
+    Activity as ActivityIcon,
     FileText,
     MessageSquare,
     Calendar,
@@ -107,7 +107,7 @@ export const Analytics = () => {
 
                 <div className="analytics-card kpi">
                     <div className="kpi-icon activity">
-                        <Activity size={24} />
+                        <ActivityIcon size={24} />
                     </div>
                     <div className="kpi-data">
                         <span className="kpi-label">Active Engagement</span>

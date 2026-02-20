@@ -100,9 +100,11 @@ export const DashboardHome = () => {
     // Calculate Recent Activity
     const getLastActivity = () => {
         if (loading) return '-';
-        if (recentNotes.length === 0) return 'No activity';
+        if (recentNotes.length === 0 || !recentNotes[0]) return 'No activity';
         
-        const lastDate = new Date(recentNotes[0].updated_at || recentNotes[0].created_at);
+        const lastDate = new Date(recentNotes[0].updated_at || recentNotes[0].created_at || new Date());
+        if (isNaN(lastDate.getTime())) return 'No activity';
+
         const now = new Date();
         const diffInSeconds = Math.floor((now.getTime() - lastDate.getTime()) / 1000);
 

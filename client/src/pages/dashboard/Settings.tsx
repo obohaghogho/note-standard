@@ -12,7 +12,7 @@ import { toast } from 'react-hot-toast';
 import { AdManager } from '../../components/ads/AdManager';
 import { adService } from '../../services/ads';
 import { Toggle } from '../../components/common/Toggle';
-import { User, Camera, Save, Loader2, Megaphone, BadgeCheck, Shield, Lock, Download, Trash2, Activity, MessageSquare, Globe } from 'lucide-react';
+import { User, Camera, Save, Loader2, Megaphone, BadgeCheck, Shield, Lock, Download, Trash2, Activity as ActivityIcon, MessageSquare, Globe } from 'lucide-react';
 
 export const Settings = () => {
     const { user, profile: authProfile, isPro } = useAuth();
@@ -311,7 +311,7 @@ export const Settings = () => {
                         <Card variant="glass" className="p-4 sm:p-6 border border-white/5 bg-white/5 min-w-0">
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-xl font-semibold flex items-center gap-2">
-                                    <Activity className="text-blue-400" size={20} />
+                                    <ActivityIcon className="text-blue-400" size={20} />
                                     Data Transparency Report
                                 </h2>
                                 <span className="text-xs bg-blue-500/10 text-blue-400 px-2 py-1 rounded border border-blue-500/20">Live</span>

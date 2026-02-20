@@ -6,7 +6,7 @@ import {
     FileText,
     MessageSquare,
     TrendingUp,
-    Activity,
+    Activity as ActivityIcon,
     Server,
     Clock,
     AlertCircle,
@@ -113,7 +113,7 @@ export const AdminDashboard = () => {
         {
             label: 'Active Users (24h)',
             value: stats?.activeUsers || 0,
-            icon: Activity,
+            icon: ActivityIcon,
             color: 'green',
             trend: '+5%'
         },
@@ -266,7 +266,7 @@ export const AdminDashboard = () => {
                     {/* System Load */}
                     <Card variant="glass" className="p-6">
                         <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
-                            <Activity size={18} className="text-green-400" />
+                            <ActivityIcon size={18} className="text-green-400" />
                             System Load
                         </h3>
                         <div className="space-y-4">
