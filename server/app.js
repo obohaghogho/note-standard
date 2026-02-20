@@ -103,7 +103,7 @@ app.use(express.static(path.join(__dirname, "../client/dist")));
 
 // The "catchall" handler: for any request that doesn't
 // match one above, send back React's index.html file.
-app.get("*", (req, res, next) => {
+app.get(/.*/, (req, res, next) => {
   // Pass API requests through to the error handler so they return JSON 404 instead of HTML
   if (req.path.startsWith("/api")) {
     return next();
