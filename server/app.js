@@ -97,6 +97,20 @@ app.use("/webhook", require(path.join(__dirname, "routes", "webhooks"))); // Ali
 app.use("/api/payment", require(path.join(__dirname, "routes", "payment")));
 app.use("/api/media", require(path.join(__dirname, "routes", "media")));
 
+// ─── Serve Frontend (Production) ──────────────────────────────
+// Serve static files from the React app
+app.use(express.static(path.join(__dirname, "../client/dist")));
+
+// The "catchall" handler: for any request that doesn't
+// match one above, send back React's index.html file.
+app.get("*", (req, res, next) => {
+  // Pass API requests through to the error handler so they return JSON 404 instead of HTML
+  if (req.path.startsWith("/api")) {
+    return next();
+  }
+  res.sendFile(path.join(__dirname, "../client/dist/index.html"));
+});
+
 app.use((err, req, res, next) => {
   // CORS rejection
   if (err.message === "Not allowed by CORS") {
