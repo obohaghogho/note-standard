@@ -132,7 +132,7 @@ export const Notes = () => {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {notes.map((note) => (
+                    {notes?.map((note) => (
                         <Card key={note.id} hoverEffect className="p-5 cursor-pointer flex flex-col h-[200px] group">
                             <div className="flex items-start justify-between mb-3">
                                 <div className="flex items-center gap-2">
@@ -173,7 +173,7 @@ export const Notes = () => {
                                 {note.content || 'No content...'}
                             </p>
                             <div className="flex gap-2 text-wrap overflow-hidden">
-                                {note.tags && note.tags.slice(0, 3).map(tag => (
+                                {note.tags?.slice(0, 3).map(tag => (
                                     <span key={tag} className="text-xs px-2 py-0.5 border border-white/10 text-gray-400 rounded-full">
                                         {tag}
                                     </span>

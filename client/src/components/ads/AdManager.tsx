@@ -172,7 +172,7 @@ export const AdManager = () => {
             )}
 
             <div className="grid gap-4">
-                {ads.map((ad) => (
+                {ads?.map((ad) => (
                     <Card key={ad.id} variant="glass" className="p-4 flex gap-4 items-start relative">
                         {ad.image_url && (
 							<SecureImage

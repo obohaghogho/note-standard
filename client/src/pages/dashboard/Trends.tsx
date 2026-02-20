@@ -84,14 +84,14 @@ export const Trends = () => {
     }
 
     // Prepare Chart Data
-    const labels = stats.map(s => new Date(s.date).toLocaleDateString());
+    const labels = stats?.map(s => new Date(s.date).toLocaleDateString());
 
     const noteData = {
         labels,
         datasets: [
             {
                 label: 'Global Notes Created (Anonymized)',
-                data: stats.map(s => s.total_notes_created),
+                data: stats?.map(s => s.total_notes_created),
                 borderColor: 'rgb(59, 130, 246)',
                 backgroundColor: 'rgba(59, 130, 246, 0.5)',
                 tension: 0.4
@@ -104,7 +104,7 @@ export const Trends = () => {
         datasets: [
             {
                 label: 'Active Contributor Count',
-                data: stats.map(s => s.total_active_users),
+                data: stats?.map(s => s.total_active_users),
                 borderColor: 'rgb(168, 85, 247)',
                 backgroundColor: 'rgba(168, 85, 247, 0.5)',
                 tension: 0.4
@@ -127,11 +127,11 @@ export const Trends = () => {
         .slice(0, 10);
 
     const tagData = {
-        labels: sortedTags.map(([tag]) => tag),
+        labels: sortedTags?.map(([tag]) => tag),
         datasets: [
             {
                 label: 'Trending Topics',
-                data: sortedTags.map(([, count]) => count),
+                data: sortedTags?.map(([, count]) => count),
                 backgroundColor: [
                     'rgba(255, 99, 132, 0.7)',
                     'rgba(54, 162, 235, 0.7)',

@@ -196,7 +196,7 @@ export const Search = () => {
                                 Users
                             </h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {filteredUsers.map((u) => (
+                                {filteredUsers?.map((u) => (
                                     <Card
                                         key={u.id}
                                         hoverEffect
@@ -236,7 +236,7 @@ export const Search = () => {
                                 Public Notes
                             </h2>
                             <div className="space-y-3">
-                                {filteredNotes.map((note) => (
+                                {filteredNotes?.map((note) => (
                                     <Card
                                         key={note.id}
                                         hoverEffect

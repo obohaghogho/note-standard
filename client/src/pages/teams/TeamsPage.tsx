@@ -363,7 +363,7 @@ export const TeamsPage: React.FC = () => {
           <div className="teams-page__members-preview">
             <h4>Members ({teamMembers.length})</h4>
             <div className="teams-page__members-list">
-              {teamMembers.slice(0, 5).map((member) => (
+              {teamMembers?.slice(0, 5).map((member) => (
                 <div key={member.id} className="teams-page__member-item">
                   <div className="teams-page__member-avatar">
                     {member.profile?.avatar_url ? (
@@ -491,7 +491,7 @@ export const TeamsPage: React.FC = () => {
           >
             <h2>Team Members</h2>
             <div className="teams-page__members-grid">
-              {teamMembers.map((member) => (
+              {teamMembers?.map((member) => (
                 <div key={member.id} className="teams-page__member-card">
                   <div className="teams-page__member-avatar-large">
                     {member.profile?.avatar_url ? (

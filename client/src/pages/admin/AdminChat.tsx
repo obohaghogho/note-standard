@@ -336,7 +336,7 @@ export const AdminChat = () => {
                             <p>No chats found</p>
                         </div>
                     ) : (
-                        filteredChats.map(chat => {
+                        filteredChats?.map(chat => {
                             const userProfile = getUserFromChat(chat);
                             return (
                                 <div
@@ -424,7 +424,7 @@ export const AdminChat = () => {
                         )}
 
                         <div className="messages-area">
-                            {messages.map(msg => (
+                            {messages?.map(msg => (
                                 <div
                                     key={msg.id}
                                     className={`message-row ${msg.sender_id === user?.id ? 'own' : 'other'}`}

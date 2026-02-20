@@ -197,7 +197,7 @@ export const UserManagement = () => {
                                 </td>
                             </tr>
                         ) : (
-                            users.map(user => (
+                            users?.map(user => (
                                 <tr key={user.id}>
                                     <td className="user-cell">
                                         <div className="user-info">
