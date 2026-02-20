@@ -6,6 +6,8 @@ import './i18n'
 import App from './App.tsx'
 
 console.log('🚀 NoteStandard Client Version 1.0.1 - Activity Fix Applied');
+console.log("ENV CHECK:", import.meta.env);
+console.log("SUPABASE URL:", import.meta.env.VITE_SUPABASE_URL);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
