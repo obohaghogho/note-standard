@@ -17,6 +17,27 @@ export default defineConfig({
   build: {
     sourcemap: false,
     chunkSizeWarningLimit: 1600,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
+              return 'react-vendor';
+            }
+            if (id.includes('chart.js') || id.includes('react-chartjs-2')) {
+              return 'chart-vendor';
+            }
+            if (id.includes('framer-motion')) {
+              return 'framer-motion';
+            }
+            if (id.includes('@supabase')) {
+              return 'supabase-vendor';
+            }
+            return 'vendor';
+          }
+        },
+      },
+    },
   },
   preview: {
     host: '0.0.0.0',
