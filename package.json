@@ -9,7 +9,7 @@
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "client": "cd client && npm run dev",
     "server": "cd server && npm run dev",
-    "build:client": "npm run build --prefix client"
+    "build:client": "cd client && npm install && npm run build"
   },
   "dependencies": {
     "express": "^5.2.1",
