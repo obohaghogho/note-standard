@@ -14,6 +14,10 @@ export default defineConfig({
     host: true,
     strictPort: true,
   },
+  build: {
+    sourcemap: false,
+    chunkSizeWarningLimit: 1600,
+  },
   preview: {
     host: '0.0.0.0',
     port: parseInt(process.env.PORT || '4173'),
