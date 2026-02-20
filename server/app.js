@@ -9,6 +9,7 @@ const express = require("express");
 const logger = require("./utils/logger");
 const path = require("path");
 const cors = require("cors");
+const { corsOptions } = require("./utils/cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const cloudinary = require("cloudinary").v2;
@@ -31,32 +32,11 @@ if (process.env.CLOUDINARY_URL) {
 const app = express();
 
 // Configure CORS (Strict)
-const allowedOrigins = [
-  "http://localhost:4173",
-  "http://localhost:5173",
-  "https://www.notestandard.com",
-  "https://notestandard.com",
-];
-
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (!origin) return callback(null, true);
-
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      } else {
-        return callback(new Error("Not allowed by CORS"));
-      }
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  }),
-);
+// Configure CORS (Strict) - using centralized config
+app.use(cors(corsOptions));
 
 // VERY IMPORTANT (Using regex for Express 5 compatibility)
-app.options(/.*/, cors());
+app.options(/.*/, cors(corsOptions));
 
 // Trust proxy (works for both NGINX and Netlify CDN)
 app.set("trust proxy", 1);
