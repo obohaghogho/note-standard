@@ -21,16 +21,10 @@ const supabase = require(path.join(__dirname, "config", "supabase"));
 const { whitelist } = require("./utils/cors");
 
 const server = http.createServer(app);
-const allowedOrigins = [
-  "http://localhost:4173",
-  "http://localhost:5173",
-  "https://www.notestandard.com",
-  "https://notestandard.com",
-];
 
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: whitelist,
     methods: ["GET", "POST"],
     credentials: true,
   },
