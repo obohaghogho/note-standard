@@ -2,7 +2,7 @@
 // Single source of truth for all CORS settings.
 
 const whitelist = [
-  "https://notestandard.com",
+  process.env.CLIENT_URL || "https://notestandard.com",
   "https://www.notestandard.com",
 ];
 
@@ -28,7 +28,7 @@ const corsOptions = {
 
     // Dynamic checks for allowed domains (User requested)
     const isNoteStandard = origin.endsWith(".notestandard.com") ||
-      origin === "https://notestandard.com" ||
+      origin === (process.env.CLIENT_URL || "https://notestandard.com") ||
       origin === "https://www.notestandard.com";
 
     // Robust local check: allow any localhost port or common dev variations

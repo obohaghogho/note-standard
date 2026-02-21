@@ -36,7 +36,9 @@ class FlutterwaveProvider extends BaseProvider {
         customizations: {
           title: "Digital Assets Purchase",
           description: "Digital Assets Purchase",
-          logo: "https://notestandard.com/logo.png",
+          logo: `${
+            process.env.CLIENT_URL || "https://notestandard.com"
+          }/logo.png`,
         },
       });
 
