@@ -190,14 +190,14 @@ export const AuditLogs = () => {
                                         </td>
                                         <td className="admin-cell">
                                             <div className="admin-info">
-                                                {log.admin.avatar_url ? (
+                                                {log.admin?.avatar_url ? (
                                                     <SecureImage src={log.admin.avatar_url} alt="" fallbackType="profile" />
                                                 ) : (
                                                     <div className="avatar-placeholder">
-                                                        {log.admin.username[0].toUpperCase()}
+                                                        {log.admin?.username?.[0]?.toUpperCase() || 'A'}
                                                     </div>
                                                 )}
-                                                <span>{log.admin.username}</span>
+                                                <span>{log.admin?.username || 'Unknown Admin'}</span>
                                             </div>
                                         </td>
                                         <td>
