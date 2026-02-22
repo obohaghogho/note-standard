@@ -853,7 +853,9 @@ const CallOverlay = ({ callState, acceptCall, rejectCall, endCall, localStream, 
                             <div className="text-center">
                                 <h3 className="text-2xl font-bold text-white mb-2">{otherUserName}</h3>
                                 <p className="text-blue-400 font-medium animate-pulse">
-                                    {callState.status === 'calling' ? 'Ringing...' : 
+                                    {callState.status === 'connected' && !remoteStream ? 'Handshaking...' :
+                                     callState.status === 'connecting' ? 'Joining Chat...' :
+                                     callState.status === 'calling' ? (localStream ? 'Connecting...' : 'Ringing...') : 
                                      callState.status === 'incoming' ? `${callState.type === 'video' ? 'Video' : 'Voice'} Call Incoming` : 
                                      'Connecting...'}
                                 </p>
