@@ -125,7 +125,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
                 {/* From Section */}
                 <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 transition-colors focus-within:border-purple-500/50">
                     <div className="flex justify-between items-center mb-2">
-                        <label className="text-xs text-gray-400 font-medium uppercase tracking-wider">From</label>
+                        <label htmlFor="swap-card-from-currency" className="text-xs text-gray-400 font-medium uppercase tracking-wider">From</label>
                         <span className="text-xs text-gray-400">
                             Balance: {formatCurrency(Number(availableBalance || 0), fromCurrency)}
                         </span>
@@ -175,7 +175,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
                 {/* To Section */}
                 <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 transition-colors focus-within:border-purple-500/50">
                     <div className="flex justify-between items-center mb-2">
-                        <label className="text-xs text-gray-400 font-medium uppercase tracking-wider">To</label>
+                        <label htmlFor="swap-card-to-currency" className="text-xs text-gray-400 font-medium uppercase tracking-wider">To</label>
                         {previewLoading && <Loader2 className="animate-spin text-purple-400" size={14} />}
                     </div>
                     <div className="flex gap-3 items-center">

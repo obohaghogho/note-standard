@@ -109,7 +109,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, s
                 
                 <form onSubmit={handleSend} className="modal-body flex flex-col gap-5">
                     <div className="space-y-1">
-                        <label className="text-sm text-gray-400 font-medium ml-1">Recipient</label>
+                        <label htmlFor="transfer-recipient" className="text-sm text-gray-400 font-medium ml-1">Recipient</label>
                         <div className="relative">
                             <input 
                                 id="transfer-recipient"
