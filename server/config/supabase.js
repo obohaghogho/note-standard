@@ -7,7 +7,8 @@ if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
 }
 
 const supabase = createClient(
-  process.env.SUPABASE_URL || "https://placeholder.supabase.co",
+  process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL ||
+    "https://placeholder.supabase.co",
   process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY || "placeholder",
 );
 
