@@ -437,6 +437,8 @@ const ChatWindow: React.FC = () => {
                         <div className="flex-1 max-w-md relative animate-in slide-in-from-right-4 duration-300">
                             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                             <input 
+                                id="chat-search-messages"
+                                name="searchMessages"
                                 autoFocus
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}

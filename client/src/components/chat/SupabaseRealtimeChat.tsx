@@ -164,6 +164,8 @@ export const SupabaseRealtimeChat: React.FC<SupabaseRealtimeChatProps> = ({ conv
             {/* Input Area */}
             <form onSubmit={handleSend} className="p-4 bg-gray-900/50 border-t border-gray-800 flex gap-2">
                 <input
+                    id="realtime-chat-input"
+                    name="message"
                     type="text"
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
