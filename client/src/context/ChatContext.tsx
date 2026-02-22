@@ -4,7 +4,7 @@ import { useSocket } from './SocketContext';
 import { NotificationService } from '../services/NotificationService';
 import { API_URL } from '../lib/api';
 
-interface Message {
+export interface Message {
     id: string;
     conversation_id: string;
     sender_id: string;
@@ -14,6 +14,10 @@ interface Message {
     isOwn?: boolean;
     original_language?: string;
     read_at?: string;
+    sentiment?: {
+        label: 'positive' | 'negative' | 'neutral';
+        score: number;
+    };
     attachment?: {
         id: string;
         file_name: string;
@@ -24,10 +28,11 @@ interface Message {
     };
 }
 
-interface Conversation {
+export interface Conversation {
     id: string;
     type: 'direct' | 'group';
     chat_type?: 'support' | 'general' | 'admin';
+    support_status?: 'open' | 'pending' | 'resolved';
     name: string;
     updated_at: string;
     lastMessage?: {
@@ -46,6 +51,7 @@ interface Conversation {
             username: string;
             full_name: string;
             avatar_url: string;
+            is_online?: boolean;
         };
     }[];
 }
@@ -149,7 +155,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 type: msg.type,
                 isOwn: msg.sender_id === user?.id,
                 original_language: msg.original_language,
-                attachment: msg.attachment
+                attachment: msg.attachment,
+                read_at: msg.read_at
             };
 
             if (msg.sender_id !== user?.id) {
@@ -195,9 +202,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         const onMessageRead = ({ messageId, conversationId }: any) => {
             setMessages(prev => {
                 const convMessages = prev[conversationId] || [];
+                // If message already marked read later, don't overwrite with older timestamp
                 return {
                     ...prev,
-                    [conversationId]: convMessages.map(m => m.id === messageId ? { ...m, read_at: new Date().toISOString() } : m)
+                    [conversationId]: convMessages.map(m => 
+                        m.id === messageId ? { ...m, read_at: m.read_at || new Date().toISOString() } : m
+                    )
                 };
             });
 
@@ -289,7 +299,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             type: data.type,
             isOwn: true,
             original_language: data.original_language,
-            attachment: data.attachment
+            attachment: data.attachment,
+            read_at: data.read_at
         };
 
         setMessages(prev => {
@@ -490,7 +501,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     type: msg.type,
                     isOwn: msg.sender_id === user?.id,
                     original_language: msg.original_language,
-                    attachment: msg.attachment
+                    attachment: msg.attachment,
+                    read_at: msg.read_at
                 }));
 
                 setMessages(prev => ({ ...prev, [activeConversationId]: messageList }));
