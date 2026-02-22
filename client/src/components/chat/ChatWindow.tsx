@@ -426,10 +426,10 @@ const ChatWindow: React.FC = () => {
                                     )}
                                 </div>
                                 <div className="min-w-0">
-                                    <h2 className="font-semibold truncate max-w-[80px] sm:max-w-[150px] md:max-w-[300px] text-xs md:text-base">{displayName || 'Chat'}</h2>
+                                    <h2 className="font-semibold truncate max-w-[60px] xs:max-w-[100px] sm:max-w-[150px] md:max-w-[300px] text-[10px] xs:text-xs md:text-base">{displayName || 'Chat'}</h2>
                                     {activeConversation?.type === 'direct' && otherMember ? (
                                         isUserOnline(otherMember.user_id) ? (
-                                            <p className="text-[10px] text-green-400 hidden sm:flex items-center gap-1">
+                                            <p className="text-[8px] xs:text-[10px] text-green-400 hidden sm:flex items-center gap-1">
                                                 <span className="w-1.5 h-1.5 rounded-full bg-green-400"></span> Online
                                             </p>
                                         ) : (
@@ -473,20 +473,20 @@ const ChatWindow: React.FC = () => {
                         </button>
                     )}
                     {!isPending && !isWaitingForOthers && (
-                        <>
+                        <div className="hidden xs:flex items-center gap-0.5 md:gap-2">
                             <button 
                                 onClick={() => handleCall('voice')}
                                 className="p-1.5 md:p-2 text-gray-400 hover:text-green-400 hover:bg-green-400/10 rounded-full transition-all flex-shrink-0"
                             >
-                                <Phone size={16} className="md:w-5 md:h-5" />
+                                <Phone size={14} className="md:w-5 md:h-5" />
                             </button>
                             <button 
                                 onClick={() => handleCall('video')}
                                 className="p-1.5 md:p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-full transition-all flex-shrink-0"
                             >
-                                <Video size={16} className="md:w-5 md:h-5" />
+                                <Video size={14} className="md:w-5 md:h-5" />
                             </button>
-                        </>
+                        </div>
                     )}
                     <div className="relative">
                         <button 

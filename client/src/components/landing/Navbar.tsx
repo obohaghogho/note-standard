@@ -18,7 +18,7 @@ export const Navbar = () => {
 
     return (
         <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled ? 'bg-white/5 backdrop-blur-lg border-b border-white/10' : 'bg-transparent'}`}>
-            <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+            <div className="max-w-7xl mx-auto px-3 sm:px-6 h-20 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center font-bold text-white">N</div>
                     <span className="font-bold text-xl tracking-tight">Note Standard</span>
