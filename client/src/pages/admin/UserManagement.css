@@ -140,7 +140,7 @@
 .users-table {
     width: 100%;
     border-collapse: collapse;
-    min-width: 600px; /* Ensure table doesn't squish too much */
+    min-width: 800px; /* Force overflow-x on container to protect layout */
 }
 
 .users-table th {

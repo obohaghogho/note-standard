@@ -2,9 +2,10 @@
 
 .admin-layout {
     display: flex;
-    min-height: 100vh;
+    min-height: 100dvh;
     background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
     color: #e4e4e7;
+    overflow-x: clip;
 }
 
 /* Sidebar */
@@ -13,11 +14,11 @@
     flex-direction: column;
     background: rgba(15, 15, 26, 0.95);
     border-right: 1px solid rgba(99, 102, 241, 0.1);
-    transition: width 0.3s ease;
+    transition: width 0.3s ease, transform 0.3s ease;
     position: fixed;
     left: 0;
     top: 0;
-    height: 100vh;
+    height: 100dvh;
     z-index: 100;
     backdrop-filter: blur(10px);
 }
@@ -159,11 +160,16 @@
     transition: margin-left 0.3s ease;
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
+    min-height: 100dvh;
+    width: calc(100% - 260px);
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
 }
 
 .admin-sidebar.collapsed ~ .admin-main {
     margin-left: 72px;
+    width: calc(100% - 72px);
 }
 
 /* Header */
@@ -171,13 +177,19 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1rem 2rem;
+    padding: 1rem;
     background: rgba(15, 15, 26, 0.8);
     border-bottom: 1px solid rgba(99, 102, 241, 0.1);
     backdrop-filter: blur(10px);
     position: sticky;
     top: 0;
     z-index: 50;
+}
+
+@media (min-width: 768px) {
+    .admin-header {
+        padding: 1rem 2rem;
+    }
 }
 
 .header-left h1 {
@@ -275,8 +287,18 @@
 /* Main Content */
 .admin-content {
     flex: 1;
-    padding: 2rem;
+    padding: 1rem;
     overflow-y: auto;
+    overflow-x: hidden;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+}
+
+@media (min-width: 768px) {
+    .admin-content {
+        padding: 2rem;
+    }
 }
 
 /* Responsive */
@@ -287,6 +309,7 @@
     
     .admin-main {
         margin-left: 72px;
+        width: calc(100% - 72px);
     }
     
     .sidebar-nav .nav-item span,
@@ -307,6 +330,23 @@
     }
     
     .admin-main {
-        margin-left: 0;
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+
+    .admin-header h1 {
+        font-size: 1.1rem;
+    }
+
+    .notification-btn {
+        padding: 0.5rem;
+    }
+
+    .admin-profile {
+        padding: 0.25rem 0.5rem;
+    }
+
+    .profile-info {
+        display: none;
     }
 }
