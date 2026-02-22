@@ -243,9 +243,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         socket.on('message_read', onMessageRead);
         socket.on('conversation_deleted', onConversationDeleted);
 
-        conversations.forEach(conv => {
-            socket.emit('join_room', conv.id);
-        });
+        // Aggressively join rooms on connect/reconnect
+        const joinAllRooms = () => {
+            console.log('[Chat] Joining rooms for', conversations.length, 'conversations');
+            conversations.forEach(conv => {
+                socket.emit('join_room', conv.id);
+            });
+        };
+
+        joinAllRooms();
 
         return () => {
         socket.off('receive_message', processIncomingMessage);
