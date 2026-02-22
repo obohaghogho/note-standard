@@ -18,12 +18,7 @@ const ConversationList: React.FC = () => {
 
     return (
         <div className="flex flex-col h-full overflow-y-auto bg-gray-900 border-r border-gray-800 scrollbar-thin scrollbar-thumb-gray-800">
-            <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/50 backdrop-blur-md sticky top-0 z-10">
-                <h2 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">Messages</h2>
-                <div className="flex items-center gap-2">
-                    {/* Add Filter/Search icons here if needed */}
-                </div>
-            </div>
+
 
             {conversations.map((conv) => {
                 let displayName = conv.name;
@@ -46,7 +41,7 @@ const ConversationList: React.FC = () => {
                     <div
                         key={conv.id}
                         onClick={() => setActiveConversationId(conv.id)}
-                        className={`p-4 cursor-pointer hover:bg-white/5 transition-all flex items-center gap-4 relative group ${
+                        className={`p-3 md:p-4 cursor-pointer hover:bg-white/5 transition-all flex items-center gap-2 md:gap-4 relative group ${
                             activeConversationId === conv.id ? 'bg-white/5 border-r-4 border-blue-500' : ''
                         }`}
                     >
