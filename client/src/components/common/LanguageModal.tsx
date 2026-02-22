@@ -11,6 +11,7 @@ const languages = [
     { code: 'de', name: 'German', flag: '🇩🇪', native: 'Deutsch' },
     { code: 'it', name: 'Italian', flag: '🇮🇹', native: 'Italiano' },
     { code: 'pt', name: 'Portuguese', flag: '🇵🇹', native: 'Português' },
+    { code: 'ro', name: 'Romanian', flag: '🇷🇴', native: 'Română' },
     { code: 'ja', name: 'Japanese', flag: '🇯🇵', native: '日本語' },
     { code: 'ko', name: 'Korean', flag: '🇰🇷', native: '한국어' },
     { code: 'ru', name: 'Russian', flag: '🇷🇺', native: 'Русский' },
