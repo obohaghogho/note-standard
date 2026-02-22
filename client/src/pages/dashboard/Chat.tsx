@@ -19,7 +19,7 @@ export const Chat: React.FC = () => {
     }, [searchParams, setActiveConversationId]);
 
     return (
-        <div className="flex h-[calc(100vh-80px)] md:h-full bg-gray-900 md:border md:border-gray-800 md:rounded-xl overflow-hidden shadow-xl">
+        <div className="flex h-full bg-gray-900 md:border md:border-gray-800 md:rounded-xl overflow-hidden shadow-xl">
             {/* Sidebar - Visible on large screens, or on mobile when no conversation is active */}
             <div className={`${activeConversationId ? 'hidden md:flex' : 'flex'} w-full md:w-80 border-r border-gray-800 flex-col bg-gray-900`}>
                 <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900">
