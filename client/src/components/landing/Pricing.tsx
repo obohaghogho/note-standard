@@ -32,12 +32,12 @@ const plans = [
 export const Pricing = () => {
     const navigate = useNavigate();
     return (
-        <section id="pricing" className="py-24 relative overflow-hidden">
+        <section id="pricing" className="py-20 relative overflow-hidden">
             {/* Background blobs */}
-            <div className="absolute top-1/2 left-0 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[100px] -z-10 allow-overflow" />
-            <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-[100px] -z-10 allow-overflow" />
+            <div className="absolute top-1/2 left-0 w-full max-w-[400px] h-[400px] bg-blue-500/10 rounded-full blur-[100px] -z-10 allow-overflow" />
+            <div className="absolute bottom-0 right-0 w-full max-w-[400px] h-[400px] bg-purple-500/10 rounded-full blur-[100px] -z-10 allow-overflow" />
 
-            <div className="max-w-7xl mx-auto px-6">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6">
                 <div className="text-center mb-16">
                     <h2 className="text-3xl md:text-5xl font-bold mb-6">Simple, Transparent <span className="text-primary">Pricing</span></h2>
                     <p className="text-xl text-gray-400">Choose the plan that fits your needs.</p>

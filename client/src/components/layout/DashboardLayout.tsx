@@ -40,7 +40,7 @@ export const DashboardLayout = () => {
                 isOpen={isMobileMenuOpen}
                 onClose={() => setIsMobileMenuOpen(false)}
             />
-            <main className={`flex-1 ml-0 md:ml-64 transition-all duration-300 min-w-0 flex flex-col ${isChatActiveOnMobile ? 'fixed inset-0 z-[60] bg-[#0a0a0a] w-full overscroll-none' : 'relative min-h-screen'}`}>
+            <main className={`flex-1 ml-0 md:ml-64 transition-all duration-300 min-w-0 flex flex-col max-w-full overflow-hidden ${isChatActiveOnMobile ? 'fixed inset-0 z-[60] bg-[#0a0a0a] w-screen h-[100dvh] overscroll-none' : 'relative min-h-screen'}`}>
                 {/* Header/Top bar - hide on mobile if chat is active */}
                 <header className={`pt-safe min-h-[4rem] md:min-h-[5rem] border-b border-white/10 flex items-center justify-between px-4 md:px-8 bg-black/20 backdrop-blur-md sticky top-0 z-40 ${isChatActiveOnMobile ? 'hidden md:flex' : 'flex'}`}>
                     <div className="flex items-center gap-4 w-full max-w-xl">
