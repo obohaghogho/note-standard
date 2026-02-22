@@ -8,8 +8,8 @@ export const TermsPage = () => {
     return (
         <div className="min-h-screen bg-[#0a0a0a] p-4 md:p-8">
             {/* Background gradients */}
-            <div className="absolute top-0 right-1/4 w-[1000px] h-[600px] bg-primary/10 rounded-full blur-[120px] -z-10" />
-            <div className="absolute bottom-0 left-1/4 w-[800px] h-[600px] bg-purple-500/5 rounded-full blur-[100px] -z-10" />
+            <div className="absolute top-0 right-1/4 w-full max-w-[1000px] h-[600px] bg-primary/10 rounded-full blur-[120px] -z-10 allow-overflow" />
+            <div className="absolute bottom-0 left-1/4 w-full max-w-[800px] h-[600px] bg-purple-500/5 rounded-full blur-[100px] -z-10 allow-overflow" />
 
             <div className="max-w-4xl mx-auto">
                 <button

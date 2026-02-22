@@ -119,7 +119,7 @@ export const DashboardHome = () => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
 
                 <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold mb-1 truncate max-w-[90vw] sm:max-w-none" title={`${greeting}, ${userName}`}>
+                    <h1 className="text-2xl sm:text-3xl font-bold mb-1 truncate max-w-full" title={`${greeting}, ${userName}`}>
                         {greeting}, {userName}
                     </h1>
                     <p className="text-gray-400">Here's what's happening in your workspace today.</p>

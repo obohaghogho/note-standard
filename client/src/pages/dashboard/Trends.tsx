@@ -146,9 +146,9 @@ export const Trends = () => {
 
     return (
         <div className="space-y-6 max-w-6xl mx-auto">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold flex items-center gap-3">
+                    <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-3">
                         <TrendingUp className="text-primary" />
                         Community Trends
                     </h1>
@@ -156,7 +156,7 @@ export const Trends = () => {
                         Anonymous insights from the Note Standard community.
                     </p>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
                     {connected && (
                         <div className="flex items-center gap-1.5 text-[10px] text-red-500 font-bold bg-red-500/10 px-2 py-0.5 rounded-md animate-pulse border border-red-500/20">
                             <Radio size={12} />
