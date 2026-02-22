@@ -1,3 +1,4 @@
+import React from 'react';
 import { Bell, Check, ExternalLink, MessageSquare, StickyNote, UserPlus, Globe, Edit3 } from 'lucide-react';
 import { useNotifications } from '../../hooks/useNotifications';
 import { cn } from '../../utils/cn';
@@ -9,14 +10,14 @@ import { Card } from '../../components/common/Card';
 export const Notifications = () => {
     const { notifications, unreadCount, markAsRead, markAllAsRead, loading } = useNotifications();
 
-    const getIcon = (type: string) => {
+    const getIcon = (type: string, size = 20) => {
         switch (type) {
-            case 'chat_message': return <MessageSquare size={20} className="text-blue-400" />;
-            case 'note_share': return <UserPlus size={20} className="text-green-400" />;
-            case 'note_edit': return <Edit3 size={20} className="text-yellow-400" />;
-            case 'mention': return <UserPlus size={20} className="text-purple-400" />;
-            case 'community_post': return <Globe size={20} className="text-primary" />;
-            default: return <StickyNote size={20} className="text-gray-400" />;
+            case 'chat_message': return <MessageSquare size={size} className="text-blue-400" />;
+            case 'note_share': return <UserPlus size={size} className="text-green-400" />;
+            case 'note_edit': return <Edit3 size={size} className="text-yellow-400" />;
+            case 'mention': return <UserPlus size={size} className="text-purple-400" />;
+            case 'community_post': return <Globe size={size} className="text-primary" />;
+            default: return <StickyNote size={size} className="text-gray-400" />;
         }
     };
 
@@ -24,11 +25,11 @@ export const Notifications = () => {
         <div className="max-w-4xl mx-auto space-y-6 pb-20">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="space-y-1">
-                    <h1 className="text-3xl font-bold flex items-center gap-3">
-                        <Bell className="text-primary" size={32} />
+                    <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2 md:gap-3">
+                        <Bell className="text-primary w-6 h-6 md:w-8 md:h-8" />
                         Notifications
                     </h1>
-                    <p className="text-gray-400">Manage your alerts and activities</p>
+                    <p className="text-sm md:text-base text-gray-400">Manage your alerts and activities</p>
                 </div>
                 {unreadCount > 0 && (
                     <Button onClick={markAllAsRead} variant="outline" className="gap-2">
@@ -64,26 +65,27 @@ export const Notifications = () => {
                             onClick={() => !notif.is_read && markAsRead(notif.id)}
                             variant="glass"
                         >
-                            <div className="flex gap-4">
+                            <div className="flex gap-3 md:gap-4">
                                 <div className="flex-shrink-0">
-                                    <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 shadow-sm">
-                                        {getIcon(notif.type)}
+                                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 shadow-sm">
+                                        <div className="md:hidden">{getIcon(notif.type, 16)}</div>
+                                        <div className="hidden md:block">{getIcon(notif.type, 20)}</div>
                                     </div>
                                 </div>
 
                                 <div className="flex-1 space-y-1 min-w-0">
-                                    <div className="flex items-center justify-between gap-2">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
                                         <h3 className={cn(
-                                            "text-lg font-bold truncate",
+                                            "text-base md:text-lg font-bold break-words",
                                             !notif.is_read ? "text-white" : "text-gray-400"
                                         )}>
                                             {notif.title}
                                         </h3>
-                                        <span className="text-xs text-gray-500 whitespace-nowrap">
+                                        <span className="text-[10px] md:text-xs text-gray-500 whitespace-nowrap">
                                             {formatDistanceToNow(new Date(notif.created_at), { addSuffix: true })}
                                         </span>
                                     </div>
-                                    <p className="text-gray-400 text-sm leading-relaxed">
+                                    <p className="text-gray-400 text-sm leading-relaxed break-words">
                                         {notif.message}
                                     </p>
 
@@ -113,7 +115,7 @@ export const Notifications = () => {
                                 </div>
 
                                 {!notif.is_read && (
-                                    <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-primary animate-pulse" />
+                                    <div className="absolute top-2 right-2 md:top-4 md:right-4 w-2 h-2 rounded-full bg-primary animate-pulse" />
                                 )}
                             </div>
                         </Card>
