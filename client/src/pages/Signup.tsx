@@ -71,9 +71,13 @@ export const Signup = () => {
                     { minDelay: 100 } // Fast track auth
                 );
 
-                if (!(signUpData as any)?.user) {
+                if (!signUpData?.user) {
+                    if (!error) {
+                        setError('Failed to create account. Email may already be registered.');
+                        toast.error('Signup failed. Please try a different email.');
+                    }
                     setLoading(false);
-                    return; // safeAuth toasted
+                    return;
                 }
 
                 // 2. Add Phone Number (triggers OTP)
@@ -86,7 +90,12 @@ export const Signup = () => {
                     { minDelay: 100 } // Fast track auth
                 );
 
-                if (!updateData) return; // safeAuth toasted
+                if (!updateData) {
+                    setError('Failed to send verification code. Please check your phone number.');
+                    toast.error('Could not send OTP.');
+                    setLoading(false);
+                    return;
+                }
 
                 setStep('verify');
                 toast.success('Verification codes sent to your phone and email!');
@@ -105,7 +114,9 @@ export const Signup = () => {
                     { minDelay: 100 }
                 );
 
-                if (!(verifyEmailData as any)?.user) {
+                if (!verifyEmailData?.user) {
+                    setError('Invalid email verification code.');
+                    toast.error('Email verification failed.');
                     setLoading(false);
                     return;
                 }
@@ -122,7 +133,9 @@ export const Signup = () => {
                     { minDelay: 100 }
                 );
 
-                if (!(verifyPhoneData as any)?.user) {
+                if (!verifyPhoneData?.user) {
+                    setError('Invalid phone verification code.');
+                    toast.error('Phone verification failed.');
                     setLoading(false);
                     return;
                 }
@@ -302,6 +315,12 @@ export const Signup = () => {
                                         Privacy Policy
                                     </Link>
                                 </label>
+                            </div>
+
+                            <div className="bg-primary/5 rounded-lg p-3 border border-primary/10">
+                                <p className="text-[10px] text-gray-400 leading-relaxed italic">
+                                    💡 <span className="text-primary/80 font-medium">Notice:</span> You can save your password in your browser or keychain during sign in for faster access next time.
+                                </p>
                             </div>
 
                             <Button 

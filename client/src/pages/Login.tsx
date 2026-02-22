@@ -14,6 +14,7 @@ export const Login = () => {
     const [email, setEmail] = React.useState('');
     const [password, setPassword] = React.useState('');
     const [error, setError] = React.useState('');
+    const [rememberMe, setRememberMe] = React.useState(true);
     const [resetLoading, setResetLoading] = React.useState(false);
     const [resetSent, setResetSent] = React.useState(false);
 
@@ -42,31 +43,42 @@ export const Login = () => {
             // Use safeAuth wrapper which handles 429s and toasts
             const data = await supabaseSafe<any>(
                 'auth-login',
-                async () => supabase.auth.signInWithPassword({
-                    email,
-                    password,
-                })
+                async () => {
+                    const response = await supabase.auth.signInWithPassword({
+                        email,
+                        password,
+                    });
+                    
+                    if (response.error) {
+                        // Throw to let safeAuth handle it or catch it here
+                        throw response.error;
+                    }
+                    return response.data;
+                }
             );
 
-            if (!(data as any)?.user) {
+            if (!data?.user) {
+                // If data is null it means safeAuth caught an error but it didn't return data.
+                // We should check why. If we're here and no error was set, provide a default.
+                if (!error) {
+                    setError('Invalid email or password. Please check your credentials and try again.');
+                    toast.error('Login failed. Please check your credentials.');
+                }
                 setLoading(false);
                 return;
             }
 
             const { user } = data as any;
             console.log('Login successful', user.id);
+            toast.success('Successfully logged in!');
 
-            // Fetch profile is now handled centrally by AuthContext.
-            // We just wait for the navigation and let AuthContext sync.
-            // Note: We don't wait for profile sync here because AuthContext handles 
-            // the protected route protection and data loading.
             navigate('/dashboard');
 
         } catch (err: any) {
             console.error('Login process failed:', err);
-            // safeAuth catches most, but if something else throws:
-            toast.error('Login failed unexpectedly');
-            setError(err.message);
+            const errMsg = err.message || 'Login failed unexpectedly';
+            setError(errMsg);
+            toast.error(errMsg);
         } finally {
             setLoading(false);
         }
@@ -170,7 +182,25 @@ export const Login = () => {
                                 showPasswordToggle
                                 autoComplete="current-password"
                             />
-                            <div className="flex justify-end">
+                            <div className="flex items-center justify-between py-1">
+                                <label className="flex items-center gap-2 cursor-pointer group">
+                                    <div className="relative flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            checked={rememberMe}
+                                            onChange={(e) => setRememberMe(e.target.checked)}
+                                            className="sr-only"
+                                        />
+                                        <div className={`w-4 h-4 rounded border transition-all ${rememberMe ? 'bg-primary border-primary' : 'border-white/20 bg-white/5'}`}>
+                                            {rememberMe && (
+                                                <svg className="w-3 h-3 text-white mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                </svg>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <span className="text-xs text-gray-400 group-hover:text-gray-300 transition-colors">Remember me</span>
+                                </label>
                                 <button
                                     type="button"
                                     onClick={handleResetPassword}
@@ -180,6 +210,12 @@ export const Login = () => {
                                     {resetLoading ? 'Sending...' : resetSent ? '✓ Email sent' : 'Forgot password?'}
                                 </button>
                             </div>
+                        </div>
+
+                        <div className="bg-primary/5 rounded-lg p-3 border border-primary/10">
+                            <p className="text-[10px] text-gray-400 leading-relaxed italic">
+                                💡 <span className="text-primary/80 font-medium">Notice:</span> You can save your password in your browser or keychain during sign in for faster access next time.
+                            </p>
                         </div>
 
                         <Button type="submit" fullWidth loading={loading}>
