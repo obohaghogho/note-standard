@@ -36,8 +36,8 @@ const features = [
 
 export const Features = () => {
     return (
-        <section id="features" className="py-24 relative overflow-hidden">
-            <div className="max-w-7xl mx-auto px-6">
+        <section id="features" className="py-20 relative overflow-hidden">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6">
                 <div className="text-center mb-16">
                     <h2 className="text-3xl md:text-5xl font-bold mb-6">Designed for <span className="text-primary">Power Users</span></h2>
                     <p className="text-xl text-gray-400 max-w-2xl mx-auto">

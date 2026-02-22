@@ -391,7 +391,7 @@ const ChatWindow: React.FC = () => {
         : null;
 
     return (
-        <div className="flex flex-col absolute inset-0 bg-gray-900 text-white overflow-x-hidden">
+        <div className="flex flex-col absolute inset-0 bg-gray-900 text-white overflow-x-hidden max-w-full">
             <div className="pt-safe flex-shrink-0 border-b border-gray-800 bg-gray-900/50 backdrop-blur-md sticky top-0 z-10">
                 <div className="p-2 md:p-4 flex justify-between items-center w-full">
                     <div className="flex items-center gap-2 md:gap-3 min-w-0">
