@@ -163,7 +163,7 @@ export const Search = () => {
 
             {/* Tabs */}
             {hasSearched && (
-                <div className="flex gap-2 border-b border-white/10 pb-2">
+                <div className="flex gap-2 border-b border-white/10 pb-2 flex-wrap">
                     {(['all', 'users', 'notes'] as TabType[]).map((tab) => (
                         <button
                             key={tab}

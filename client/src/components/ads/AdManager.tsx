@@ -108,7 +108,7 @@ export const AdManager = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div>
                     <h3 className="text-lg font-semibold">Your Advertisements</h3>
                     <p className="text-xs text-gray-400">Manage your promoted content</p>
@@ -163,7 +163,7 @@ export const AdManager = () => {
                             placeholder="e.g. coding, productivity, design"
                         />
 
-                        <div className="flex gap-3 pt-2">
+                        <div className="flex gap-3 pt-2 flex-wrap">
                             <Button type="submit" loading={submitting}>Submit & Pay $5.00</Button>
                             <Button type="button" variant="secondary" onClick={() => setCreateMode(false)}>Cancel</Button>
                         </div>
@@ -188,7 +188,7 @@ export const AdManager = () => {
                             </div>
                             <p className="text-sm text-gray-400 mt-1 line-clamp-2">{ad.content}</p>
 
-                            <div className="mt-3 flex items-center justify-between">
+                            <div className="mt-3 flex items-center justify-between gap-4 flex-wrap">
                                 <span className="text-xs text-gray-500">
                                     {new Date(ad.created_at).toLocaleDateString()}
                                 </span>

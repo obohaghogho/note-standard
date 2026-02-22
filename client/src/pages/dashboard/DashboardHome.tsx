@@ -169,7 +169,7 @@ export const DashboardHome = () => {
 
             {/* Recent Notes */}
             <div>
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
                     <h2 className="text-xl font-bold">Recent Notes</h2>
                     <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/notes')}>View All</Button>
                 </div>
@@ -196,7 +196,7 @@ export const DashboardHome = () => {
                                 <p className="text-gray-400 text-sm line-clamp-3">
                                     {note.content || 'No content...'}
                                 </p>
-                                <div className="mt-4 flex gap-2">
+                                <div className="mt-4 flex flex-wrap gap-2">
                                     {note.tags?.map(tag => (
                                         <span key={tag} className="text-xs px-2 py-1 bg-white/5 rounded-md text-gray-400">{tag}</span>
                                     ))}

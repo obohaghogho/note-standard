@@ -358,7 +358,7 @@ export const Billing = () => {
             {/* Subscription Details Panel */}
             {showDetails && subscription && (
                 <Card variant="glass" className="p-6 border border-primary/20">
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 flex-wrap">
                         <h3 className="text-lg font-semibold flex items-center gap-2">
                             <BadgeCheck className="text-blue-400" size={20} />
                             Your {subscription.plan_tier} Subscription

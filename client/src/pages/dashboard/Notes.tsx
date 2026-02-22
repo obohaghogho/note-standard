@@ -172,7 +172,7 @@ export const Notes = () => {
                             <p className="text-gray-400 text-sm line-clamp-3 mb-4 flex-1">
                                 {note.content || 'No content...'}
                             </p>
-                            <div className="flex gap-2 text-wrap overflow-hidden">
+                            <div className="flex flex-wrap gap-2 overflow-hidden mt-auto">
                                 {note.tags?.slice(0, 3).map(tag => (
                                     <span key={tag} className="text-xs px-2 py-0.5 border border-white/10 text-gray-400 rounded-full">
                                         {tag}
