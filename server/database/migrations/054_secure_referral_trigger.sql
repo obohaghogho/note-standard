@@ -32,9 +32,20 @@ BEGIN
     IF v_referrer_id IS NOT NULL AND v_referrer_id <> NEW.id THEN
       -- Check if referrer exists to avoid FK error
       IF EXISTS (SELECT 1 FROM auth.users WHERE id = v_referrer_id) THEN
+        -- 1. Insert Referral Record
         INSERT INTO public.affiliate_referrals (referrer_user_id, referred_user_id)
         VALUES (v_referrer_id, NEW.id)
         ON CONFLICT (referred_user_id) DO NOTHING;
+
+        -- 2. Insert Notification for Referrer
+        INSERT INTO public.notifications (receiver_id, type, title, message, link)
+        VALUES (
+          v_referrer_id, 
+          'referral_signup', 
+          'New Referral Signup', 
+          'Someone just signed up using your referral link!', 
+          '/dashboard/affiliates'
+        );
       END IF;
     END IF;
   EXCEPTION WHEN OTHERS THEN

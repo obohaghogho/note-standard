@@ -1,4 +1,4 @@
-import { Bell, Check, ExternalLink, MessageSquare, StickyNote, UserPlus, Globe, Edit3 } from 'lucide-react';
+import { Bell, Check, ExternalLink, MessageSquare, StickyNote, UserPlus, Globe, Edit3, Trash2, Heart } from 'lucide-react';
 import { useNotifications } from '../../hooks/useNotifications';
 import { cn } from '../../utils/cn';
 import { formatDistanceToNow } from 'date-fns';
@@ -7,7 +7,15 @@ import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 
 export const Notifications = () => {
-    const { notifications, unreadCount, markAsRead, markAllAsRead, loading } = useNotifications();
+    const { 
+        notifications, 
+        unreadCount, 
+        markAsRead, 
+        markAllAsRead, 
+        deleteNotification, 
+        clearAllNotifications, 
+        loading 
+    } = useNotifications();
 
     const getIcon = (type: string, size = 20) => {
         switch (type) {
@@ -16,6 +24,14 @@ export const Notifications = () => {
             case 'note_edit': return <Edit3 size={size} className="text-yellow-400" />;
             case 'mention': return <UserPlus size={size} className="text-purple-400" />;
             case 'community_post': return <Globe size={size} className="text-primary" />;
+            case 'comment': return <MessageSquare size={size} className="text-primary" />;
+            case 'like': return <Heart size={size} className="text-red-400" />;
+            case 'transfer_receive': 
+            case 'payment_success': return <StickyNote size={size} className="text-green-400" />; // Or a dollar/wallet icon
+            case 'referral_signup': return <UserPlus size={size} className="text-primary" />;
+            case 'support_resolved': 
+            case 'support_joined': return <MessageSquare size={size} className="text-blue-400" />;
+            case 'account_status': return <Bell size={size} className="text-yellow-400" />;
             default: return <StickyNote size={size} className="text-gray-400" />;
         }
     };
@@ -30,12 +46,24 @@ export const Notifications = () => {
                     </h1>
                     <p className="text-sm md:text-base text-gray-400">Manage your alerts and activities</p>
                 </div>
-                {unreadCount > 0 && (
-                    <Button onClick={markAllAsRead} variant="outline" className="gap-2">
-                        <Check size={18} />
-                        Mark all as read
-                    </Button>
-                )}
+                <div className="flex items-center gap-2">
+                    {notifications.length > 0 && (
+                        <Button 
+                            onClick={clearAllNotifications} 
+                            variant="secondary" 
+                            className="gap-2 text-red-400 hover:text-red-300"
+                        >
+                            <Trash2 size={18} />
+                            Clear all
+                        </Button>
+                    )}
+                    {unreadCount > 0 && (
+                        <Button onClick={markAllAsRead} variant="outline" className="gap-2">
+                            <Check size={18} />
+                            Mark all as read
+                        </Button>
+                    )}
+                </div>
             </div>
 
             {loading ? (
@@ -88,28 +116,41 @@ export const Notifications = () => {
                                         {notif.message}
                                     </p>
 
-                                    <div className="flex items-center gap-4 pt-3 mt-2 border-t border-white/5 flex-wrap">
-                                        {notif.link && (
-                                            <Link
-                                                to={notif.link}
-                                                className="text-xs text-primary font-semibold hover:underline flex items-center gap-1.5"
-                                            >
-                                                <ExternalLink size={14} />
-                                                View Activity
-                                            </Link>
-                                        )}
-                                        {!notif.is_read && (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    markAsRead(notif.id);
-                                                }}
-                                                className="text-xs text-gray-500 hover:text-white flex items-center gap-1.5 transition-colors"
-                                            >
-                                                <Check size={14} />
-                                                Mark as read
-                                            </button>
-                                        )}
+                                    <div className="flex items-center justify-between pt-3 mt-2 border-t border-white/5 flex-wrap gap-2">
+                                        <div className="flex items-center gap-4">
+                                            {notif.link && (
+                                                <Link
+                                                    to={notif.link}
+                                                    className="text-xs text-primary font-semibold hover:underline flex items-center gap-1.5"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    <ExternalLink size={14} />
+                                                    View Activity
+                                                </Link>
+                                            )}
+                                            {!notif.is_read && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        markAsRead(notif.id);
+                                                    }}
+                                                    className="text-xs text-gray-500 hover:text-white flex items-center gap-1.5 transition-colors"
+                                                >
+                                                    <Check size={14} />
+                                                    Mark as read
+                                                </button>
+                                            )}
+                                        </div>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                deleteNotification(notif.id);
+                                            }}
+                                            className="text-xs text-red-500/50 hover:text-red-500 flex items-center gap-1.5 transition-colors ml-auto"
+                                        >
+                                            <Trash2 size={14} />
+                                            Delete
+                                        </button>
                                     </div>
                                 </div>
 

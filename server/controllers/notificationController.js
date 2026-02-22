@@ -87,9 +87,45 @@ const subscribeToNotifications = async (req, res, next) => {
   }
 };
 
+const deleteNotification = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+
+    const { error } = await supabase
+      .from("notifications")
+      .delete()
+      .eq("id", id)
+      .eq("receiver_id", userId);
+
+    if (error) throw error;
+    res.json({ message: "Notification deleted" });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const deleteAllNotifications = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    const { error } = await supabase
+      .from("notifications")
+      .delete()
+      .eq("receiver_id", userId);
+
+    if (error) throw error;
+    res.json({ message: "All notifications deleted" });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getNotifications,
   markAsRead,
   markAllAsRead,
   subscribeToNotifications,
+  deleteNotification,
+  deleteAllNotifications,
 };

@@ -27,6 +27,8 @@ export interface NotificationContextValue {
     unreadCount: number;
     markAsRead: (id: string) => Promise<void>;
     markAllAsRead: () => Promise<void>;
+    deleteNotification: (id: string) => Promise<void>;
+    clearAllNotifications: () => Promise<void>;
 }
 
 export const NotificationContext = createContext<NotificationContextValue | null>(null);
@@ -176,8 +178,52 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         }
     };
 
+    const deleteNotification = async (id: string) => {
+        if (!session) return;
+        try {
+            const res = await fetch(`${API_URL}/api/notifications/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${session.access_token}` }
+            });
+            if (res.ok && isMounted.current) {
+                setNotifications(prev => prev.filter(n => n.id !== id));
+                toast.success('Notification deleted');
+            }
+        } catch (err) {
+            console.error('[Notifications] Failed to delete:', err);
+            toast.error('Failed to delete notification');
+        }
+    };
+
+    const clearAllNotifications = async () => {
+        if (!session) return;
+        if (!window.confirm('Are you sure you want to clear all notifications?')) return;
+        
+        try {
+            const res = await fetch(`${API_URL}/api/notifications`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${session.access_token}` }
+            });
+            if (res.ok && isMounted.current) {
+                setNotifications([]);
+                toast.success('All notifications cleared');
+            }
+        } catch (err) {
+            console.error('[Notifications] Failed to clear all:', err);
+            toast.error('Failed to clear notifications');
+        }
+    };
+
     return (
-        <NotificationContext.Provider value={{ notifications, unreadCount, markAsRead, markAllAsRead, loading }}>
+        <NotificationContext.Provider value={{ 
+            notifications, 
+            unreadCount, 
+            markAsRead, 
+            markAllAsRead, 
+            deleteNotification,
+            clearAllNotifications,
+            loading 
+        }}>
             {children}
         </NotificationContext.Provider>
     );
