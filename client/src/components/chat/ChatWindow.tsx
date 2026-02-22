@@ -37,6 +37,7 @@ const ChatWindow: React.FC = () => {
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [isAccepting, setIsAccepting] = useState(false);
     
     const emojis = ['😀', '😂', '😍', '🙌', '🔥', '👍', '🙏', '💯', '✨', '❤️', '🎉', '😊', '✅', '🚀', '👀', '💡'];
 
@@ -215,8 +216,14 @@ const ChatWindow: React.FC = () => {
     };
 
     const handleAccept = async () => {
-        if (activeConversationId) {
+        if (isAccepting || !activeConversationId) return;
+        setIsAccepting(true);
+        try {
             await acceptConversation(activeConversationId);
+        } catch (err) {
+            console.error('Accept failed', err);
+        } finally {
+            setIsAccepting(false);
         }
     };
 
@@ -628,9 +635,10 @@ const ChatWindow: React.FC = () => {
                         <div className="flex gap-4">
                             <button
                                 onClick={handleAccept}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-xl font-semibold transition-all shadow-lg shadow-blue-900/40"
+                                disabled={isAccepting}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-xl font-semibold transition-all shadow-lg shadow-blue-900/40 disabled:opacity-50"
                             >
-                                Accept Request
+                                {isAccepting ? 'Accepting...' : 'Accept Request'}
                             </button>
                             <button className="px-6 py-2.5 text-gray-400 hover:text-white transition-colors">
                                 Decline
