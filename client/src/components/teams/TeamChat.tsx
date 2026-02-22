@@ -23,6 +23,7 @@ import {
   Edit3,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { uploadTeamImage } from '../../lib/teamsApi';
 import type { TeamMessage } from '../../types/teams';
 import SecureImage from '../common/SecureImage';
 import './TeamChat.css';
@@ -139,7 +140,6 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
     const loadingToast = toast.loading('Uploading image...');
 
     try {
-      const { uploadTeamImage } = await import('../../lib/teamsApi');
       const imageUrl = await uploadTeamImage(teamId, file);
 
       if (!imageUrl) throw new Error('Upload failed');

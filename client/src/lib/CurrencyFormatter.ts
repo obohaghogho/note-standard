@@ -3,28 +3,18 @@
  * Uses Intl.NumberFormat for production-grade localization
  */
 
-export const formatCurrency = (
-  amount: number | string,
-  currencyCode: string = 'USD',
-  locale: string = navigator.language || 'en-US'
-): string => {
-  if (amount === undefined || amount === null) return '0.00';
-  const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
-  
-  if (isNaN(numericAmount)) return '0.00';
+export const formatCurrency = (amount: number, currency: string) => {
+  const supportedFiatCurrencies = ["USD", "EUR", "GBP", "NGN"];
 
-  try {
-    return new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency: currencyCode.toUpperCase(),
-      minimumFractionDigits: getDecimalPlaces(currencyCode),
-      maximumFractionDigits: getDecimalPlaces(currencyCode),
-    }).format(numericAmount);
-  } catch (error) {
-    // Fallback if currency code is invalid or unsupported
-    console.error(`[CurrencyFormatter] Formatting failed for ${currencyCode}:`, error);
-    return `${currencyCode.toUpperCase()} ${numericAmount.toFixed(2)}`;
+  if (supportedFiatCurrencies.includes(currency)) {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency
+    }).format(amount);
   }
+
+  // For crypto like USDT, BTC, etc.
+  return `${amount.toFixed(2)} ${currency}`;
 };
 
 /**
