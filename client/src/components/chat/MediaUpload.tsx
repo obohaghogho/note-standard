@@ -134,6 +134,8 @@ export const MediaUpload: React.FC<MediaUploadProps> = ({ conversationId, onUplo
 
             <div className="flex items-center justify-between gap-3">
                 <input
+                    id="media-upload-file"
+                    name="mediaFile"
                     type="file"
                     ref={fileInputRef}
                     onChange={handleFileSelect}

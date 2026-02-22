@@ -300,6 +300,8 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
     <div className={`team-chat ${className}`}>
       {/* Hidden File Input */}
       <input
+        id="team-chat-file-upload"
+        name="teamImageFile"
         type="file"
         ref={fileInputRef}
         onChange={handleImageChange}

@@ -160,6 +160,8 @@ export const CommentModal = ({ isOpen, onClose, noteId }: CommentModalProps) => 
 
                 <form onSubmit={handleSubmit} className="p-4 border-t border-white/10 flex gap-2">
                     <input
+                        id="comment-input"
+                        name="comment"
                         type="text"
                         value={newComment}
                         onChange={(e) => setNewComment(e.target.value)}
