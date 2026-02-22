@@ -714,7 +714,7 @@ const ChatWindow: React.FC = () => {
                                 <VoiceRecorder onSend={handleVoiceMessage} onCancel={() => setIsVoiceRecording(false)} />
                             </div>
                         ) : (
-                            <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-2xl p-1 px-2 focus-within:border-blue-500 transition-all shadow-inner">
+                            <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-2xl p-1.5 px-3 focus-within:border-blue-500 transition-all shadow-inner">
                                 <button 
                                     type="button"
                                     onClick={() => setShowMediaUpload(!showMediaUpload)}
@@ -772,7 +772,7 @@ const ChatWindow: React.FC = () => {
                                     <button
                                         type="submit"
                                         disabled={!inputValue.trim() || isWaitingForOthers}
-                                        className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-900/20 active:scale-95"
+                                        className="bg-blue-600 hover:bg-blue-500 text-white w-10 h-10 flex items-center justify-center rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-500/20 active:scale-95 flex-shrink-0"
                                     >
                                         <Send size={18} />
                                     </button>

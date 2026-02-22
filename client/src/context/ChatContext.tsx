@@ -157,10 +157,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 NotificationService.notifyNewMessage(sender, msg.content, msg.conversation_id);
             }
 
-            setMessages(prev => ({
-                ...prev,
-                [msg.conversation_id]: [...(prev[msg.conversation_id] || []), newMessage]
-            }));
+            setMessages(prev => {
+                const current = prev[msg.conversation_id] || [];
+                // Deduplicate to avoid issues between optimistic update and socket
+                if (current.some(m => m.id === msg.id)) return prev;
+                return {
+                    ...prev,
+                    [msg.conversation_id]: [...current, newMessage]
+                };
+            });
 
             // Update conversation unread count and last message
             setConversations(prev => prev.map(conv => {
@@ -212,8 +217,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }));
         };
 
-        const onNewConversation = () => {
+        const onNewConversation = (newConv?: any) => {
             loadConversations();
+            if (newConv && newConv.id && socket && connected) {
+                socket.emit('join_room', newConv.id);
+            }
         };
 
         const onConversationDeleted = ({ conversationId }: { conversationId: string }) => {
@@ -231,6 +239,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         socket.on('receive_message', processIncomingMessage);
         socket.on('new_conversation', onNewConversation);
+        socket.on('conversation_updated', onNewConversation);
         socket.on('message_read', onMessageRead);
         socket.on('conversation_deleted', onConversationDeleted);
 
@@ -239,10 +248,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         });
 
         return () => {
-            socket.off('receive_message', processIncomingMessage);
-            socket.off('new_conversation', onNewConversation);
-            socket.off('message_read', onMessageRead);
-            socket.off('conversation_deleted', onConversationDeleted);
+        socket.off('receive_message', processIncomingMessage);
+        socket.off('new_conversation', onNewConversation);
+        socket.off('conversation_updated', onNewConversation);
+        socket.off('message_read', onMessageRead);
+        socket.off('conversation_deleted', onConversationDeleted);
         };
     }, [socket, connected, conversations, user?.id, loadConversations, activeConversationId]);
 
@@ -262,6 +272,28 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             const error = await res.json().catch(() => ({ error: 'Failed to send message' }));
             throw new Error(error.error || 'Failed to send message');
         }
+
+        const data = await res.json();
+        const newMessage: Message = {
+            id: data.id,
+            conversation_id: data.conversation_id,
+            sender_id: data.sender_id,
+            content: data.content,
+            created_at: data.created_at,
+            type: data.type,
+            isOwn: true,
+            original_language: data.original_language,
+            attachment: data.attachment
+        };
+
+        setMessages(prev => {
+            const current = prev[activeConversationId] || [];
+            if (current.some(m => m.id === data.id)) return prev;
+            return {
+                ...prev,
+                [activeConversationId]: [...current, newMessage]
+            };
+        });
     };
 
     const loadMoreMessages = async (conversationId: string) => {
