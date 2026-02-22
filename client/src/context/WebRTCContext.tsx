@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 
 interface CallState {
     type: 'voice' | 'video' | null;
-    status: 'idle' | 'calling' | 'incoming' | 'connected';
+    status: 'idle' | 'calling' | 'incoming' | 'connecting' | 'connected';
     otherUser: string | null; // userId
     conversationId: string | null;
 }
@@ -56,10 +56,13 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [isVideoEnabled, setIsVideoEnabled] = useState(true);
     
     const peerConnection = useRef<RTCPeerConnection | null>(null);
-    const pendingOffer = useRef<RTCSessionDescriptionInit | null>(null);
+    const [pendingOffer, setPendingOffer] = useState<RTCSessionDescriptionInit | null>(null);
 
     const cleanup = useCallback(() => {
         if (peerConnection.current) {
+            peerConnection.current.onicecandidate = null;
+            peerConnection.current.ontrack = null;
+            peerConnection.current.onconnectionstatechange = null;
             peerConnection.current.close();
             peerConnection.current = null;
         }
@@ -69,7 +72,8 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
         setRemoteStream(null);
         setCallState({ type: null, status: 'idle', otherUser: null, conversationId: null });
-        pendingOffer.current = null;
+        setPendingOffer(null);
+        iceQueue.current = [];
     }, [localStream]);
 
     const iceQueue = useRef<RTCIceCandidateInit[]>([]);
@@ -110,7 +114,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }, [socket, cleanup]);
 
     const callTimeoutRef = useRef<any>(null);
-    const currentCallStatus = useRef<'idle' | 'calling' | 'incoming' | 'connected'>('idle');
+    const currentCallStatus = useRef<'idle' | 'calling' | 'incoming' | 'connecting' | 'connected'>('idle');
     useEffect(() => { currentCallStatus.current = callState.status; }, [callState.status]);
 
     const startCall = async (otherUserId: string, conversationId: string, type: 'voice' | 'video') => {
@@ -140,7 +144,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             // 5. Start timeout for answer
             callTimeoutRef.current = setTimeout(() => {
-                if (currentCallStatus.current === 'calling') {
+                if (currentCallStatus.current === 'calling' || currentCallStatus.current === 'connecting') {
                     console.log('[WebRTC] Call timed out (no answer)');
                     toast.error('Recipient did not answer');
                     endCall();
@@ -210,7 +214,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 console.warn('[WebRTC] Offer from unexpected user:', from);
                 return;
             }
-            pendingOffer.current = offer;
+            setPendingOffer(offer);
         };
 
         const onRecipientReady = async ({ from }: { from: string }) => {
@@ -300,8 +304,8 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             });
             setLocalStream(stream);
 
-            // 1. Mark as calling (waiting for link)
-            setCallState(prev => ({ ...prev, status: 'calling' }));
+            // 1. Mark as connecting
+            setCallState(prev => ({ ...prev, status: 'connecting' }));
 
             // 2. Signal to sender that we are ready to receive the offer
             socket.emit('call:ready', { to: callState.otherUser });
@@ -316,19 +320,31 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     useEffect(() => {
         const handleOffer = async () => {
             // Only process if we have an offer AND we have local stream (after accept)
-            if (callState.status === 'calling' && callState.otherUser && pendingOffer.current && socket && localStream) {
-                console.log('[WebRTC] Processing pending offer for caller:', callState.otherUser);
+            if (callState.status === 'connecting' && callState.otherUser && pendingOffer && socket && localStream) {
+                console.log('[WebRTC] Processing pending offer for:', callState.otherUser);
                 const pc = createPeerConnection(callState.otherUser);
                 localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
                 
                 try {
-                    await pc.setRemoteDescription(new RTCSessionDescription(pendingOffer.current));
+                    await pc.setRemoteDescription(new RTCSessionDescription(pendingOffer));
                     const answer = await pc.createAnswer();
                     await pc.setLocalDescription(answer);
                     
                     socket.emit('call:answer', { to: callState.otherUser, answer });
-                    pendingOffer.current = null;
+                    setPendingOffer(null);
                     setCallState(prev => ({ ...prev, status: 'connected' }));
+
+                    // Process queued ICE candidates for recipient
+                    while (iceQueue.current.length > 0) {
+                        const candidate = iceQueue.current.shift();
+                        if (candidate) {
+                            try {
+                                await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                            } catch (e) {
+                                console.warn('[WebRTC] Failed to add queued ICE:', e);
+                            }
+                        }
+                    }
                 } catch (err) {
                     console.error('[WebRTC] Error processing offer:', err);
                     cleanup();
