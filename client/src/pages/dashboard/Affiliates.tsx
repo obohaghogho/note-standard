@@ -99,22 +99,28 @@ export const Affiliates = () => {
 
   return (
     <div className="space-y-8 pb-12 w-full min-w-0">
-      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-5 sm:p-8 md:p-12 shadow-2xl">
-        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
-          <div className="max-w-xl text-center md:text-left">
-            <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold text-white mb-4 tracking-tight break-words">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-700 via-purple-700 to-pink-600 p-6 sm:p-10 md:p-16 shadow-2xl">
+        {/* Floating Background Graphics for Mobile */}
+        <div className="absolute inset-0 opacity-10 md:hidden pointer-events-none overflow-hidden">
+          <Award className="absolute -top-10 -right-10 w-48 h-48 rotate-12" />
+          <TrendingUp className="absolute -bottom-10 -left-10 w-48 h-48 -rotate-12" />
+        </div>
+
+        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-10">
+          <div className="max-w-2xl text-center md:text-left">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white mb-6 tracking-tight leading-tight break-words">
               Grow with <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 to-yellow-500">Note Standard</span>
             </h1>
-            <p className="text-sm sm:text-lg text-indigo-100 mb-8 leading-relaxed break-words">
-              Join our affiliate program and earn <span className="font-bold text-white">{stats.commissionRate}% commission</span> on every transaction's spread fee from users you refer.
+            <p className="text-base sm:text-lg md:text-xl text-indigo-50 mb-10 leading-relaxed max-w-lg mx-auto md:mx-0 break-words">
+              Join our partner program and earn <span className="font-bold text-white border-b-2 border-yellow-400/50">{stats.commissionRate}% commission</span> on every transaction from users you refer.
             </p>
             
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1 flex items-center bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-2 pl-4 min-w-0">
-                <span className="text-sm text-indigo-100 truncate mr-4 flex-1 break-all">{referralLink}</span>
+            <div className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto md:mx-0">
+              <div className="flex-1 flex items-center bg-white/10 backdrop-blur-lg border border-white/20 rounded-[20px] p-2 pl-5 min-w-0 shadow-inner group">
+                <span className="text-sm font-medium text-white break-all flex-1 py-2">{referralLink}</span>
                 <button 
                   onClick={copyToClipboard}
-                  className="bg-white text-indigo-600 p-3 rounded-xl hover:bg-indigo-50 transition-colors shadow-lg flex-shrink-0"
+                  className="bg-white text-indigo-600 p-3.5 rounded-2xl hover:bg-indigo-50 transition-all shadow-xl flex-shrink-0 active:scale-95 group-hover:shadow-indigo-500/20"
                 >
                   <Copy size={18} />
                 </button>
@@ -131,19 +137,19 @@ export const Affiliates = () => {
                     copyToClipboard();
                   }
                 }}
-                className="bg-white/20 hover:bg-white/30 border-none backdrop-blur-md text-white px-8 py-4 rounded-2xl h-auto w-full sm:w-auto"
+                className="bg-white/20 hover:bg-white/30 border-none backdrop-blur-md text-white px-8 py-6 rounded-[20px] h-auto w-full sm:w-auto font-bold text-lg"
               >
-                <Share2 size={20} className="mr-2" /> Share
+                <Share2 size={20} className="mr-2" /> Share Link
               </Button>
             </div>
           </div>
           
-          <div className="lg:block">
-            <div className="relative h-32 w-32 sm:h-64 sm:w-64 opacity-20 lg:opacity-100">
+          <div className="hidden md:block">
+            <div className="relative h-64 w-64 xl:h-72 xl:w-72">
               <div className="absolute inset-0 bg-white/10 rounded-full animate-ping"></div>
               <div className="absolute inset-4 bg-white/20 rounded-full animate-pulse"></div>
-              <div className="absolute inset-8 bg-white/30 rounded-full flex items-center justify-center">
-                <Award className="text-white w-12 h-12 sm:w-20 sm:h-20" />
+              <div className="absolute inset-8 bg-white/30 rounded-full flex items-center justify-center shadow-2xl">
+                <Award className="text-white w-20 h-20 xl:w-24 xl:h-24" />
               </div>
             </div>
           </div>
