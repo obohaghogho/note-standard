@@ -42,7 +42,7 @@ export const DashboardLayout = () => {
             />
             <main className={`flex-1 ml-0 md:ml-64 transition-all duration-300 min-w-0 flex flex-col ${isChatActiveOnMobile ? 'fixed inset-0 z-[60] bg-[#0a0a0a] w-full overscroll-none' : 'relative min-h-screen'}`}>
                 {/* Header/Top bar - hide on mobile if chat is active */}
-                <header className={`h-16 md:h-20 border-b border-white/10 flex items-center justify-between px-4 md:px-8 bg-black/20 backdrop-blur-md sticky top-0 z-40 ${isChatActiveOnMobile ? 'hidden md:flex' : 'flex'}`}>
+                <header className={`pt-safe min-h-[4rem] md:min-h-[5rem] border-b border-white/10 flex items-center justify-between px-4 md:px-8 bg-black/20 backdrop-blur-md sticky top-0 z-40 ${isChatActiveOnMobile ? 'hidden md:flex' : 'flex'}`}>
                     <div className="flex items-center gap-4 w-full max-w-xl">
                         <button 
                             onClick={() => setIsMobileMenuOpen(true)}
@@ -72,11 +72,11 @@ export const DashboardLayout = () => {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 md:gap-4">
                         <NotificationBell />
-                        <div className="h-6 w-[1px] bg-white/10 mx-2" />
+                        <div className="h-6 w-[1px] bg-white/10 mx-1 md:mx-2" />
                         <LanguageSelector />
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 md:gap-3">
                             <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs">
                                 {user?.email?.[0].toUpperCase()}
                             </div>
