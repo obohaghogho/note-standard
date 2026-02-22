@@ -710,14 +710,14 @@ const ChatWindow: React.FC = () => {
 
             {/* Input Area */}
             {!isPending ? (
-                <div className="p-1 px-1.5 md:p-6 border-t border-gray-800 bg-gray-900/80 backdrop-blur-md pb-[env(safe-area-inset-bottom,6px)] w-full flex-shrink-0">
-                    <form onSubmit={handleSend} className="flex flex-col gap-1.5 md:gap-3 w-full box-border">
+                <div className="p-2 md:p-6 border-t border-gray-800 bg-gray-900/80 backdrop-blur-md pb-[max(env(safe-area-inset-bottom,12px),12px)] flex-shrink-0 relative z-10">
+                    <form onSubmit={handleSend} className="flex flex-col gap-2 md:gap-3 max-w-full">
                         {isVoiceRecording ? (
                             <div className="flex justify-center p-2 bg-gray-800 rounded-2xl border border-gray-700 animate-in slide-in-from-bottom-2">
                                 <VoiceRecorder onSend={handleVoiceMessage} onCancel={() => setIsVoiceRecording(false)} />
                             </div>
                         ) : (
-                            <div className="flex items-center gap-1.5 w-full">
+                            <div className="flex items-center gap-2">
                                 <div className="flex-1 min-w-0 flex items-center gap-1 md:gap-2 bg-gray-800 border border-gray-700 rounded-2xl p-1 md:p-1.5 px-2 md:px-3 focus-within:border-blue-500 transition-all shadow-inner">
                                     <button 
                                         type="button"
@@ -736,7 +736,7 @@ const ChatWindow: React.FC = () => {
                                         placeholder={isWaitingForOthers ? "Waiting..." : "Message"}
                                         disabled={isWaitingForOthers}
                                         autoComplete="off"
-                                        className="w-0 flex-1 bg-transparent text-white py-2 md:py-3 px-1 md:px-2 focus:outline-none disabled:opacity-50 text-sm"
+                                        className="w-0 flex-1 bg-transparent text-white py-2 md:py-3 px-1 md:px-2 focus:outline-none disabled:opacity-50 text-[16px] md:text-sm"
                                     />
                                     
                                     <div className="flex items-center flex-shrink-0">

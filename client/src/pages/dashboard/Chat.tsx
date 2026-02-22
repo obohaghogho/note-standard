@@ -42,7 +42,7 @@ export const Chat: React.FC = () => {
             </div>
 
             {/* Main Area - Visible on large screens, or on mobile when a conversation is active */}
-            <div className={`${activeConversationId ? 'flex' : 'hidden md:flex'} flex-1 flex flex-col min-w-0`}>
+            <div className={`${activeConversationId ? 'flex' : 'hidden md:flex'} flex-1 flex flex-col min-w-0 relative`}>
                 <ChatWindow />
             </div>
 
