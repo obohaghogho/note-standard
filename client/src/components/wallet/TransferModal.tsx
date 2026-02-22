@@ -112,6 +112,8 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, s
                         <label className="text-sm text-gray-400 font-medium ml-1">Recipient</label>
                         <div className="relative">
                             <input 
+                                id="transfer-recipient"
+                                name="recipient"
                                 type="text" 
                                 value={recipient}
                                 onChange={(e) => setRecipient(e.target.value)}
@@ -127,11 +129,13 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, s
                     
                     <div className="space-y-1">
                         <div className="flex justify-between ml-1">
-                            <label className="text-sm text-gray-400 font-medium">Amount</label>
+                            <label htmlFor="transfer-amount" className="text-sm text-gray-400 font-medium">Amount</label>
                             <span className="text-xs text-gray-400">Available: {formatCurrency(availableBalance, selectedCurrency)}</span>
                         </div>
                         <div className="relative">
                             <input 
+                                id="transfer-amount"
+                                name="amount"
                                 type="number" 
                                 step="any"
                                 value={amount}

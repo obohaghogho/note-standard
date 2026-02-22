@@ -163,6 +163,8 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({ isOpen, onClose, s
                                 <label className="text-xs text-gray-400 font-medium ml-1">Bank Name</label>
                                 <div className="relative">
                                     <input 
+                                        id="bank-search-input"
+                                        name="bankSearch"
                                         type="text" 
                                         value={searchTerm}
                                         onChange={(e) => {
@@ -226,6 +228,8 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({ isOpen, onClose, s
                                 <div className="space-y-1">
                                     <label className="text-xs text-gray-400 font-medium ml-1">Account Number</label>
                                     <input 
+                                        id="withdraw-account-number"
+                                        name="accountNumber"
                                         type="text" 
                                         value={accountNumber}
                                         onChange={(e) => setAccountNumber(e.target.value)}
@@ -236,6 +240,8 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({ isOpen, onClose, s
                                 <div className="space-y-1">
                                     <label className="text-xs text-gray-400 font-medium ml-1">Account Holder Name</label>
                                     <input 
+                                        id="withdraw-account-name"
+                                        name="accountName"
                                         type="text" 
                                         value={accountName}
                                         onChange={(e) => setAccountName(e.target.value)}
@@ -252,6 +258,8 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({ isOpen, onClose, s
                             </label>
                             <div className="relative">
                                 <input 
+                                    id="withdraw-destination-address"
+                                    name="address"
                                     type="text" 
                                     value={address}
                                     onChange={(e) => setAddress(e.target.value)}
@@ -272,6 +280,8 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({ isOpen, onClose, s
                         </div>
                         <div className="relative">
                             <input 
+                                id="withdraw-amount"
+                                name="amount"
                                 type="number" 
                                 step="any"
                                 value={amount}
