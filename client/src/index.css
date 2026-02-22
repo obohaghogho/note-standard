@@ -8,14 +8,50 @@
     --foreground: 0 0% 93%;
   }
 
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    position: relative;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+
+  #root {
+    width: 100%;
+    max-width: 100%;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
   body {
     @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary;
     font-feature-settings: "rlig" 1, "calt" 1;
-    overflow-x: hidden;
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
     padding-left: env(safe-area-inset-left, 0px);
     padding-right: env(safe-area-inset-right, 0px);
+    min-height: 100vh;
+    /* Prevent rubber-banding on top/bottom while still allowing vertical scroll */
+    overscroll-behavior-x: none;
+    touch-action: pan-y;
+  }
+
+  /* Reset all elements to prevent overflow */
+  *, *::before, *::after {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+    max-width: 100%; /* Safety measure */
+  }
+
+  /* Exception for elements that need to be wide (like absolute backgrounds) */
+  .allow-overflow {
+    max-width: none !important;
   }
 
 }
