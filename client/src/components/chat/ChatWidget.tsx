@@ -8,23 +8,12 @@ import {
     Send,
     Minimize2,
     CheckCheck,
+    Check,
     Headphones
 } from 'lucide-react';
+import type { Message, Conversation } from '../../context/ChatContext';
 
-interface Message {
-    id: string;
-    conversation_id: string;
-    sender_id: string;
-    content: string;
-    created_at: string;
-    type: string;
-}
-
-interface Conversation {
-    id: string;
-    name: string;
-    support_status: 'open' | 'pending' | 'resolved';
-}
+// Local interfaces removed in favor of exports from ChatContext
 
 export const ChatWidget = () => {
     const { session, user } = useAuth();
@@ -33,7 +22,7 @@ export const ChatWidget = () => {
     const [isMinimized, setIsMinimized] = useState(false);
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
-    const [supportChat, setSupportChat] = useState<Conversation | null>(null);
+    const [supportChat, setSupportChat] = useState<Partial<Conversation> | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [adminTyping, setAdminTyping] = useState(false);
@@ -98,8 +87,13 @@ export const ChatWidget = () => {
             }
         };
 
+        const onMessageRead = ({ messageId }: any) => {
+            setMessages(prev => prev.map(m => m.id === messageId ? { ...m, read_at: new Date().toISOString() } : m));
+        };
+
         socket.on('receive_message', onReceiveMessage);
         socket.on('user_typing', onTyping);
+        socket.on('message_read', onMessageRead);
 
         if (supportChat) {
             socket.emit('join_room', supportChat.id);
@@ -108,6 +102,7 @@ export const ChatWidget = () => {
         return () => {
             socket.off('receive_message', onReceiveMessage);
             socket.off('user_typing', onTyping);
+            socket.off('message_read', onMessageRead);
         };
     }, [socket, connected, isOpen, supportChat?.id, user?.id]);
 
@@ -172,7 +167,7 @@ export const ChatWidget = () => {
         const tempId = `temp-${Date.now()}`;
         const optimisticMessage: Message = {
             id: tempId,
-            conversation_id: supportChat.id,
+            conversation_id: supportChat.id || '',
             sender_id: user?.id || '',
             content,
             created_at: new Date().toISOString(),
@@ -296,7 +291,15 @@ export const ChatWidget = () => {
                                                         <p>{msg.content}</p>
                                                         <span className="msg-time">
                                                             {formatTime(msg.created_at)}
-                                                            {msg.sender_id === user?.id && <CheckCheck size={12} />}
+                                                            {msg.sender_id === user?.id && (
+                                                                <span className="ml-1 inline-block scale-75">
+                                                                    {msg.read_at ? (
+                                                                        <CheckCheck size={12} className="text-blue-300" />
+                                                                    ) : (
+                                                                        <Check size={12} />
+                                                                    )}
+                                                                </span>
+                                                            )}
                                                         </span>
                                                     </div>
                                                 </div>

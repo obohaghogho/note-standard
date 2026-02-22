@@ -8,44 +8,14 @@ import {
     MessageSquare,
     Send,
     CheckCheck,
+    Check,
     Search
 } from 'lucide-react';
+import type { Message, Conversation } from '../../context/ChatContext';
 import SecureImage from '../../components/common/SecureImage';
 import './AdminChat.css';
 
-interface Message {
-    id: string;
-    conversation_id: string;
-    sender_id: string;
-    content: string;
-    created_at: string;
-    type: string;
-    sentiment?: {
-        label: 'positive' | 'negative' | 'neutral';
-        score: number;
-    };
-}
-
-interface Conversation {
-    id: string;
-    name: string;
-    support_status: 'open' | 'pending' | 'resolved';
-    lastMessage?: {
-        content: string;
-        created_at: string;
-        sender_id: string;
-    };
-    members: {
-        user_id: string;
-        role: string;
-        profile: {
-            username: string;
-            email: string;
-            avatar_url: string;
-            is_online: boolean;
-        };
-    }[];
-}
+// Local interfaces removed in favor of exports from ChatContext
 
 export const AdminChat = () => {
     const { session, user, isAdmin } = useAuth();
@@ -108,14 +78,20 @@ export const AdminChat = () => {
             });
         };
 
+        const onMessageRead = ({ messageId }: any) => {
+            setMessages(prev => prev.map(m => m.id === messageId ? { ...m, read_at: new Date().toISOString() } : m));
+        };
+
         socket.on('receive_message', onReceiveMessage);
         socket.on('new_support_chat', onNewSupportChat);
         socket.on('admin_presence_update', onPresenceUpdate);
+        socket.on('message_read', onMessageRead);
 
         return () => {
             socket.off('receive_message', onReceiveMessage);
             socket.off('new_support_chat', onNewSupportChat);
             socket.off('admin_presence_update', onPresenceUpdate);
+            socket.off('message_read', onMessageRead);
         };
     }, [socket, connected, isAdmin, user?.id, activeChat?.id]);
 
@@ -438,7 +414,15 @@ export const AdminChat = () => {
                                                 </span>
                                             )}
                                             <span className="time">{formatTime(msg.created_at)}</span>
-                                            {msg.sender_id === user?.id && <CheckCheck size={14} className="status" />}
+                                            {msg.sender_id === user?.id && (
+                                                <span className="status ml-1 scale-90 inline-block">
+                                                    {msg.read_at ? (
+                                                        <CheckCheck size={14} className="text-blue-300" />
+                                                    ) : (
+                                                        <Check size={14} className="opacity-50" />
+                                                    )}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
