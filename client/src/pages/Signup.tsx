@@ -155,10 +155,10 @@ export const Signup = () => {
 
 
     return (
-        <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+        <div className="min-h-[100dvh] flex items-center justify-center p-4 relative overflow-hidden">
             {/* Background gradients */}
-            <div className="absolute top-0 right-1/4 w-[1000px] h-[600px] bg-primary/10 rounded-full blur-[120px] -z-10" />
-            <div className="absolute bottom-0 left-1/4 w-[800px] h-[600px] bg-purple-500/5 rounded-full blur-[100px] -z-10" />
+            <div className="absolute top-0 right-1/4 w-full max-w-[800px] h-[500px] bg-primary/10 rounded-full blur-[120px] -z-10 allow-overflow" />
+            <div className="absolute bottom-0 left-1/4 w-full max-w-[600px] h-[500px] bg-purple-500/5 rounded-full blur-[100px] -z-10 allow-overflow" />
 
             <div className="w-full max-w-md">
                 <Link to="/" className="inline-flex items-center text-gray-400 hover:text-white mb-8 transition-colors">

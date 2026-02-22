@@ -72,7 +72,7 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
             )}
             
             <div className={cn(
-                "w-64 h-screen border-r border-white/10 flex flex-col fixed left-0 top-0 z-50 transition-transform duration-300",
+                "w-64 h-[100dvh] border-r border-white/10 flex flex-col fixed left-0 top-0 z-50 transition-transform duration-300",
                 isPro ? "bg-black/40 backdrop-blur-xl" : "bg-[#0a0a0a]",
                 isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
             )}>
