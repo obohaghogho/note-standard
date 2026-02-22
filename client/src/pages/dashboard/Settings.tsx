@@ -299,7 +299,7 @@ export const Settings = () => {
                                     onChange={(c) => setPrivacySettings(prev => ({ ...prev, partners: c }))}
                                 />
                             </div>
-                            <div className="mt-6 pt-4 border-t border-white/10 flex justify-end">
+                            <div className="mt-6 pt-4 border-t border-white/10 flex justify-end flex-wrap">
                                 <Button onClick={handleSavePrivacy} loading={saving} disabled={!user} className="w-full sm:w-auto">
                                     <Save size={16} className="mr-2" />
                                     Save Preferences
@@ -309,7 +309,7 @@ export const Settings = () => {
 
                         {/* Transparency Report */}
                         <Card variant="glass" className="p-4 sm:p-6 border border-white/5 bg-white/5 min-w-0">
-                            <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
                                 <h2 className="text-xl font-semibold flex items-center gap-2">
                                     <ActivityIcon className="text-blue-400" size={20} />
                                     Data Transparency Report
@@ -348,7 +348,7 @@ export const Settings = () => {
                                 <Shield className="text-red-400" size={20} />
                                 Your Data Rights
                             </h2>
-                            <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                            <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center flex-wrap">
                                 <div className="flex-1">
                                     <h4 className="font-medium text-white">Export Your Data</h4>
                                     <p className="text-sm text-gray-400">Download a complete copy of your notes and profile information in JSON format.</p>
@@ -358,7 +358,7 @@ export const Settings = () => {
                                 </Button>
                             </div>
                             <div className="my-6 h-px bg-red-500/10" />
-                            <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                            <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center flex-wrap">
                                 <div className="flex-1">
                                     <h4 className="font-medium text-red-400">Delete Account</h4>
                                     <p className="text-sm text-gray-400">Permanently remove your account and all associated data. This action cannot be undone.</p>
@@ -382,7 +382,7 @@ export const Settings = () => {
 
                         <div className="space-y-6">
                             {/* Avatar Section */}
-                            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 text-center sm:text-left">
+                            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 text-center sm:text-left flex-wrap">
                                 <div className="relative">
                                     {avatarUrl ? (
                                         <SecureImage

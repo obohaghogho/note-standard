@@ -1,4 +1,3 @@
-import React from 'react';
 import { Bell, Check, ExternalLink, MessageSquare, StickyNote, UserPlus, Globe, Edit3 } from 'lucide-react';
 import { useNotifications } from '../../hooks/useNotifications';
 import { cn } from '../../utils/cn';
@@ -23,7 +22,7 @@ export const Notifications = () => {
 
     return (
         <div className="max-w-4xl mx-auto space-y-6 pb-20">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 flex-wrap">
                 <div className="space-y-1">
                     <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2 md:gap-3">
                         <Bell className="text-primary w-6 h-6 md:w-8 md:h-8" />
@@ -74,7 +73,7 @@ export const Notifications = () => {
                                 </div>
 
                                 <div className="flex-1 space-y-1 min-w-0">
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2 flex-wrap">
                                         <h3 className={cn(
                                             "text-base md:text-lg font-bold break-words",
                                             !notif.is_read ? "text-white" : "text-gray-400"
@@ -89,7 +88,7 @@ export const Notifications = () => {
                                         {notif.message}
                                     </p>
 
-                                    <div className="flex items-center gap-4 pt-3 mt-2 border-t border-white/5">
+                                    <div className="flex items-center gap-4 pt-3 mt-2 border-t border-white/5 flex-wrap">
                                         {notif.link && (
                                             <Link
                                                 to={notif.link}

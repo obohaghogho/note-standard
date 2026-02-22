@@ -158,7 +158,7 @@ export const WalletPage: React.FC = () => {
                          
                          {/* Wallet List (Breakdown) */}
                          <div>
-                            <div className="flex justify-between items-center mb-4">
+                            <div className="flex justify-between items-center gap-4 mb-4 flex-wrap">
                                 <h3 className="text-lg font-bold">Your Wallets</h3>
                                 <button onClick={() => setShowCreateModal(true)} className="text-purple-400 text-sm hover:text-purple-300 sm:hidden">
                                     + Add New

@@ -83,7 +83,7 @@ export const Shared = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 flex-wrap">
                 <h1 className="text-3xl font-bold">Shared Notes</h1>
                 <div className="w-full md:w-64">
                     <Input

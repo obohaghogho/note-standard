@@ -23,6 +23,7 @@
         flex-direction: row;
         justify-content: space-between;
         align-items: center;
+        flex-wrap: wrap;
     }
 }
 
@@ -92,6 +93,7 @@
 @media (min-width: 768px) {
     .audit-logs .filters-bar {
         flex-direction: row;
+        flex-wrap: wrap;
     }
 }
 
