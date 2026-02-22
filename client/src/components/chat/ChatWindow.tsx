@@ -391,7 +391,7 @@ const ChatWindow: React.FC = () => {
         : null;
 
     return (
-        <div className="flex flex-col h-full bg-gray-900 text-white">
+        <div className="flex flex-col h-full bg-gray-900 text-white w-full max-w-full overflow-hidden">
             <div className="p-2 md:p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/50 backdrop-blur-md sticky top-0 z-10 w-full overflow-hidden">
                 <div className="flex items-center gap-2 md:gap-3 min-w-0">
                     <button 
@@ -707,19 +707,19 @@ const ChatWindow: React.FC = () => {
 
             {/* Input Area */}
             {!isPending ? (
-                <div className="p-2 md:p-6 border-t border-gray-800 bg-gray-900/80 backdrop-blur-md pb-safe">
-                    <form onSubmit={handleSend} className="flex flex-col gap-2 md:gap-3 w-full max-w-full overflow-hidden">
+                <div className="p-1.5 md:p-6 border-t border-gray-800 bg-gray-900/80 backdrop-blur-md pb-safe w-full">
+                    <form onSubmit={handleSend} className="flex flex-col gap-2 md:gap-3 w-full">
                         {isVoiceRecording ? (
                             <div className="flex justify-center p-2 bg-gray-800 rounded-2xl border border-gray-700 animate-in slide-in-from-bottom-2">
                                 <VoiceRecorder onSend={handleVoiceMessage} onCancel={() => setIsVoiceRecording(false)} />
                             </div>
                         ) : (
-                            <div className="flex items-center gap-2">
-                                <div className="flex-1 flex items-center gap-1 md:gap-2 bg-gray-800 border border-gray-700 rounded-2xl p-1 md:p-1.5 px-2 md:px-3 focus-within:border-blue-500 transition-all shadow-inner">
+                            <div className="flex items-center gap-1.5 w-full">
+                                <div className="flex-1 min-w-0 flex items-center gap-1 md:gap-2 bg-gray-800 border border-gray-700 rounded-2xl p-1 md:p-1.5 px-2 md:px-3 focus-within:border-blue-500 transition-all shadow-inner">
                                     <button 
                                         type="button"
                                         onClick={() => setShowMediaUpload(!showMediaUpload)}
-                                        className="p-1.5 md:p-2 text-gray-400 hover:text-blue-400 hover:bg-white/5 rounded-full transition-all flex-shrink-0"
+                                        className="p-2 text-gray-400 hover:text-blue-400 hover:bg-white/5 rounded-full transition-all flex-shrink-0"
                                     >
                                         <Plus size={20} className="md:w-[22px] md:h-[22px]" />
                                     </button>
@@ -730,17 +730,17 @@ const ChatWindow: React.FC = () => {
                                         type="text"
                                         value={inputValue}
                                         onChange={(e) => setInputValue(e.target.value)}
-                                        placeholder={isWaitingForOthers ? "Waiting..." : "Message..."}
+                                        placeholder={isWaitingForOthers ? "Waiting..." : "Message"}
                                         disabled={isWaitingForOthers}
                                         autoComplete="off"
-                                        className="flex-1 bg-transparent text-white py-2 md:py-3 px-1 md:px-2 focus:outline-none disabled:opacity-50 text-sm min-w-0"
+                                        className="w-0 flex-1 bg-transparent text-white py-2 md:py-3 px-1 md:px-2 focus:outline-none disabled:opacity-50 text-sm"
                                     />
                                     
-                                    <div className="flex items-center">
+                                    <div className="flex items-center flex-shrink-0">
                                         <button 
                                             type="button"
                                             onClick={() => setIsVoiceRecording(true)}
-                                            className="p-1.5 md:p-2 text-gray-400 hover:text-blue-400 hover:bg-white/5 rounded-full transition-all flex-shrink-0"
+                                            className="p-2 text-gray-400 hover:text-blue-400 hover:bg-white/5 rounded-full transition-all"
                                         >
                                             <Mic size={18} className="md:w-5 md:h-5" />
                                         </button>
@@ -775,9 +775,9 @@ const ChatWindow: React.FC = () => {
                                 <button
                                     type="submit"
                                     disabled={!inputValue.trim() || isWaitingForOthers}
-                                    className="bg-blue-600 hover:bg-blue-500 text-white w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-500/20 active:scale-95 flex-shrink-0"
+                                    className="bg-blue-600 hover:bg-blue-500 text-white w-10 h-10 flex items-center justify-center rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-500/20 active:scale-95 flex-shrink-0"
                                 >
-                                    <Send size={18} className="md:w-5 md:h-5" />
+                                    <Send size={18} />
                                 </button>
                             </div>
                         )}
