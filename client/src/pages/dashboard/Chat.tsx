@@ -9,7 +9,7 @@ import { useChat } from '../../context/ChatContext';
 export const Chat: React.FC = () => {
     const [isNewChatOpen, setIsNewChatOpen] = useState(false);
     const [searchParams] = useSearchParams();
-    const { setActiveConversationId } = useChat();
+    const { activeConversationId, setActiveConversationId } = useChat();
 
     useEffect(() => {
         const id = searchParams.get('id');
@@ -19,9 +19,9 @@ export const Chat: React.FC = () => {
     }, [searchParams, setActiveConversationId]);
 
     return (
-        <div className="flex h-full bg-gray-900 border border-gray-800 rounded-xl overflow-hidden shadow-xl">
-            {/* Sidebar */}
-            <div className="w-80 border-r border-gray-800 flex flex-col bg-gray-900">
+        <div className="flex h-[calc(100vh-80px)] md:h-full bg-gray-900 md:border md:border-gray-800 md:rounded-xl overflow-hidden shadow-xl">
+            {/* Sidebar - Visible on large screens, or on mobile when no conversation is active */}
+            <div className={`${activeConversationId ? 'hidden md:flex' : 'flex'} w-full md:w-80 border-r border-gray-800 flex-col bg-gray-900`}>
                 <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900">
                     <h2 className="text-xl font-bold text-white flex items-center gap-2">
                         <MessageSquare size={24} className="text-blue-500" />
@@ -36,11 +36,13 @@ export const Chat: React.FC = () => {
                     </button>
                 </div>
 
-                <ConversationList />
+                <div className="flex-1 overflow-hidden">
+                    <ConversationList />
+                </div>
             </div>
 
-            {/* Main Area */}
-            <div className="flex-1 flex flex-col min-w-0">
+            {/* Main Area - Visible on large screens, or on mobile when a conversation is active */}
+            <div className={`${activeConversationId ? 'flex' : 'hidden md:flex'} flex-1 flex flex-col min-w-0`}>
                 <ChatWindow />
             </div>
 

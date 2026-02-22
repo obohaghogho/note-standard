@@ -4,7 +4,7 @@ import { usePresence } from '../../context/PresenceContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../common/SecureImage';
-import { Send, Languages, AlertTriangle, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, MicOff } from 'lucide-react';
+import { Send, Languages, AlertTriangle, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, MicOff, ArrowLeft } from 'lucide-react';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { MediaUpload } from './MediaUpload';
 import { VoiceRecorder } from './VoiceRecorder';
@@ -13,7 +13,7 @@ import toast from 'react-hot-toast';
 
 const ChatWindow: React.FC = () => {
     const { 
-        activeConversationId, messages, sendMessage, loading, 
+        activeConversationId, setActiveConversationId, messages, sendMessage, loading, 
         conversations, acceptConversation, deleteConversation, 
         muteConversation, clearChatHistory, loadMoreMessages, hasMore 
     } = useChat();
@@ -394,6 +394,13 @@ const ChatWindow: React.FC = () => {
         <div className="flex flex-col h-full bg-gray-900 text-white">
             <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/50 backdrop-blur-md sticky top-0 z-10">
                 <div className="flex items-center gap-3">
+                    <button 
+                        onClick={() => setActiveConversationId(null)}
+                        className="p-2 -ml-2 text-gray-400 hover:text-white md:hidden"
+                        aria-label="Back to conversations"
+                    >
+                        <ArrowLeft size={24} />
+                    </button>
                     {(() => {
                         let displayName = activeConversation?.name;
                         let displayAvatar = null;
@@ -418,20 +425,20 @@ const ChatWindow: React.FC = () => {
                                     )}
                                 </div>
                                 <div className="min-w-0">
-                                    <h2 className="font-semibold truncate max-w-[150px] md:max-w-[300px]">{displayName || 'Chat'}</h2>
+                                    <h2 className="font-semibold truncate max-w-[100px] sm:max-w-[200px] md:max-w-[300px] text-sm md:text-base">{displayName || 'Chat'}</h2>
                                     {activeConversation?.type === 'direct' && otherMember ? (
                                         isUserOnline(otherMember.user_id) ? (
-                                            <p className="text-[10px] text-green-400 flex items-center gap-1">
+                                            <p className="text-[10px] text-green-400 hidden sm:flex items-center gap-1">
                                                 <span className="w-1.5 h-1.5 rounded-full bg-green-400"></span> Online
                                             </p>
                                         ) : (
-                                            <p className="text-[10px] text-gray-400 flex items-center gap-1">
+                                            <p className="text-[10px] text-gray-400 hidden sm:flex items-center gap-1">
                                                 <span className="w-1.5 h-1.5 rounded-full bg-gray-500"></span> 
                                                 Last seen {getUserLastSeen(otherMember.user_id) ? formatDistanceToNow(new Date(getUserLastSeen(otherMember.user_id)!), { addSuffix: true }) : 'offline'}
                                             </p>
                                         )
                                     ) : (
-                                        <p className="text-[10px] text-gray-400">Group Chat</p>
+                                        <p className="text-[10px] text-gray-400 hidden sm:block">Group Chat</p>
                                     )}
                                 </div>
                             </>
@@ -468,15 +475,15 @@ const ChatWindow: React.FC = () => {
                         <>
                             <button 
                                 onClick={() => handleCall('voice')}
-                                className="p-2 text-gray-400 hover:text-green-400 hover:bg-green-400/10 rounded-full transition-all"
+                                className="p-1.5 md:p-2 text-gray-400 hover:text-green-400 hover:bg-green-400/10 rounded-full transition-all"
                             >
-                                <Phone size={20} />
+                                <Phone size={18} className="md:w-5 md:h-5" />
                             </button>
                             <button 
                                 onClick={() => handleCall('video')}
-                                className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-full transition-all"
+                                className="p-1.5 md:p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-full transition-all"
                             >
-                                <Video size={20} />
+                                <Video size={18} className="md:w-5 md:h-5" />
                             </button>
                         </>
                     )}
@@ -536,7 +543,7 @@ const ChatWindow: React.FC = () => {
                             className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}
                         >
                         <div
-                            className={`max-w-[75%] rounded-2xl p-3 shadow-md border ${msg.isOwn
+                            className={`max-w-[85%] md:max-w-[70%] rounded-2xl p-3 shadow-md border ${msg.isOwn
                                 ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-br-sm border-blue-500/50'
                                 : 'bg-gray-800 text-gray-200 rounded-bl-sm border-gray-700'
                                 } relative group`}
