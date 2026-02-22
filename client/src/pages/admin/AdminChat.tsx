@@ -129,7 +129,7 @@ export const AdminChat = () => {
                     headers: { 'Authorization': `Bearer ${session.access_token}` }
                 });
                 if (res.ok) {
-                    const data = await res.json();
+                    const data = await res.json() || [];
                     setMessages(data);
                 }
             } catch (err) {
@@ -167,7 +167,7 @@ export const AdminChat = () => {
                 });
 
                 if (res.ok) {
-                    const data = await res.json();
+                    const data = await res.json() || [];
                     setChats(data);
                 }
             } catch (err) {

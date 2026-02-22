@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useChat } from '../../context/ChatContext';
 import { X } from 'lucide-react';
 import SecureImage from '../common/SecureImage';
+import { supabase } from '../../lib/supabase';
 
 interface NewChatModalProps {
     isOpen: boolean;
@@ -26,15 +27,11 @@ const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose }) => {
 
             setIsSearching(true);
             try {
-                // Import supabase here or pass it? It's globally available in the project likely, 
-                // but better to use the imported instance from lib
-                const { data } = await import('../../lib/supabase').then(m =>
-                    m.supabase
+                const { data } = await supabase
                         .from('profiles')
                         .select('id, username, full_name, avatar_url')
                         .or(`username.ilike.%${recipientId}%,full_name.ilike.%${recipientId}%`)
-                        .limit(5)
-                );
+                        .limit(5);
 
                 if (data) setSearchResults(data);
             } catch (err) {

@@ -94,8 +94,8 @@ export const Billing = () => {
     const syncSubscription = async (reference: string) => {
         setProcessing(true);
         try {
-            const token = (await import('../../lib/supabase')).supabase.auth.getSession().then(({ data }) => data.session?.access_token);
-            const resolvedToken = await token;
+            const { data } = await supabase.auth.getSession();
+            const resolvedToken = data.session?.access_token;
 
             const response = await fetch(`${API_URL}/api/subscription/sync`, {
                 method: 'POST',
@@ -106,8 +106,8 @@ export const Billing = () => {
                 body: JSON.stringify({ reference })
             });
 
-            const data = await response.json();
-            if (data.success) {
+            const dataRes = await response.json();
+            if (dataRes.success) {
                 setIsPro(true);
                 toast.success('Successfully upgraded to Pro!');
                 // Remove query params to clean URL
@@ -127,8 +127,8 @@ export const Billing = () => {
     const handleUpgrade = async (planType: string = 'PRO') => {
         setProcessing(true);
         try {
-            const token = (await import('../../lib/supabase')).supabase.auth.getSession().then(({ data }) => data.session?.access_token);
-            const resolvedToken = await token;
+            const { data } = await supabase.auth.getSession();
+            const resolvedToken = data.session?.access_token;
 
             const response = await fetch(`${API_URL}/api/subscription/create-checkout-session`, {
                 method: 'POST',
@@ -139,10 +139,10 @@ export const Billing = () => {
                 body: JSON.stringify({ planType })
             });
 
-            const data = await response.json();
-            if (data.url) {
-                console.log('Redirecting to Paystack:', data.url);
-                window.location.href = data.url;
+            const dataRes = await response.json();
+            if (dataRes.url) {
+                console.log('Redirecting to Paystack:', dataRes.url);
+                window.location.href = dataRes.url;
             } else {
                 throw new Error('No checkout URL received');
             }
@@ -158,8 +158,8 @@ export const Billing = () => {
         
         setProcessing(true);
         try {
-            const token = (await import('../../lib/supabase')).supabase.auth.getSession().then(({ data }) => data.session?.access_token);
-            const resolvedToken = await token;
+            const { data } = await supabase.auth.getSession();
+            const resolvedToken = data.session?.access_token;
 
             const response = await fetch(`${API_URL}/api/subscription/cancel`, {
                 method: 'POST',
@@ -168,8 +168,8 @@ export const Billing = () => {
                 }
             });
 
-            const data = await response.json();
-            if (data.success) {
+            const dataRes = await response.json();
+            if (dataRes.success) {
                 toast.success('Subscription canceled');
                 setIsPro(false);
                 setSubscription(null);

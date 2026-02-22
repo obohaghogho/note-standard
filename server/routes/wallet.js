@@ -10,24 +10,51 @@ const invoiceService = require("../services/invoiceService");
 const { checkUserPlan, checkConsent } = require("../middleware/monetization");
 const { transactionLimiter } = require("../middleware/rateLimiter");
 
+const fxService = require("../services/fxService");
+
 // Middleware to ensure user is authenticated
 const requireAuth = async (req, res, next) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ error: "Unauthorized" });
+    if (!token) {
+      console.warn("[Wallet Routes] Missing token");
+      return res.status(401).json({ error: "Unauthorized" });
+    }
 
     const { data: { user }, error } = await supabase.auth.getUser(token);
-    if (error || !user) return res.status(401).json({ error: "Unauthorized" });
+
+    if (error) {
+      console.error("[Wallet Routes] Auth error:", error.message);
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    if (!user) {
+      console.warn("[Wallet Routes] No user found for token");
+      return res.status(401).json({ error: "Unauthorized" });
+    }
 
     req.user = user;
     next();
   } catch (err) {
+    console.error("[Wallet Routes] requireAuth unexpected error:", err.message);
+    if (err.cause) console.error("[Wallet Routes] Error cause:", err.cause);
     res.status(500).json({ error: "Server error" });
   }
 };
 
 router.use(requireAuth);
 router.use(checkUserPlan); // Attach plan to req.user
+
+// GET /exchange-rates
+router.get("/exchange-rates", async (req, res) => {
+  try {
+    const rates = await fxService.getAllRates("USD");
+    res.json(rates);
+  } catch (err) {
+    console.error("Error fetching exchange rates:", err);
+    res.status(500).json({ error: "Failed to fetch exchange rates" });
+  }
+});
 
 // GET / - Get all wallets with balances
 router.get("/", async (req, res) => {

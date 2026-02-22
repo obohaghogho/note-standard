@@ -69,9 +69,14 @@ export const AuditLogs = () => {
 
             if (!res.ok) throw new Error('Failed to fetch audit logs');
 
-            const data = await res.json();
-            setLogs(data.logs);
-            setPagination(data.pagination);
+            const data = await res.json() || {};
+            setLogs(data.logs || []);
+            setPagination(data.pagination || {
+                page: 1,
+                limit: 20,
+                total: 0,
+                totalPages: 0
+            });
         } catch (err) {
             console.error('Failed to fetch audit logs:', err);
         } finally {

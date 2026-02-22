@@ -82,9 +82,14 @@ export const UserManagement = () => {
 
             if (!res.ok) throw new Error('Failed to fetch users');
 
-            const data = await res.json();
-            setUsers(data.users);
-            setPagination(data.pagination);
+            const data = await res.json() || {};
+            setUsers(data.users || []);
+            setPagination(data.pagination || {
+                page: 1,
+                limit: 20,
+                total: 0,
+                totalPages: 0
+            });
         } catch (err) {
             console.error('Failed to fetch users:', err);
         } finally {
