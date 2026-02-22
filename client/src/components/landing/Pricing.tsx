@@ -34,8 +34,8 @@ export const Pricing = () => {
     return (
         <section id="pricing" className="py-24 relative overflow-hidden">
             {/* Background blobs */}
-            <div className="absolute top-1/2 left-0 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[100px] -z-10" />
-            <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-[100px] -z-10" />
+            <div className="absolute top-1/2 left-0 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[100px] -z-10 allow-overflow" />
+            <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-[100px] -z-10 allow-overflow" />
 
             <div className="max-w-7xl mx-auto px-6">
                 <div className="text-center mb-16">

@@ -6,8 +6,8 @@ export const Hero = () => {
     return (
         <section className="relative min-h-screen flex items-center justify-center pt-20 overflow-hidden">
             {/* Background gradients */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-primary/20 rounded-full blur-[120px] -z-10" />
-            <div className="absolute bottom-0 right-0 w-[800px] h-[600px] bg-purple-500/10 rounded-full blur-[100px] -z-10" />
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-primary/20 rounded-full blur-[120px] -z-10 allow-overflow" />
+            <div className="absolute bottom-0 right-0 w-[800px] h-[600px] bg-purple-500/10 rounded-full blur-[100px] -z-10 allow-overflow" />
 
             <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-12 items-center">
                 <motion.div
