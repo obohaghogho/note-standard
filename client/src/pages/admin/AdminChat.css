@@ -2,20 +2,42 @@
 
 .admin-chat {
     display: flex;
-    height: calc(100vh - 140px);
+    height: calc(100dvh - 140px);
     background: rgba(30, 30, 46, 0.4);
     border: 1px solid rgba(99, 102, 241, 0.1);
     border-radius: 16px;
     overflow: hidden;
+    width: 100%;
+    min-width: 0;
+}
+
+@media (max-width: 768px) {
+    .admin-chat {
+        flex-direction: column;
+        height: calc(100dvh - 120px);
+    }
 }
 
 /* Chat List */
 .chat-list {
-    width: 340px;
+    width: 100%;
+    max-width: 340px;
     border-right: 1px solid rgba(99, 102, 241, 0.1);
     display: flex;
     flex-direction: column;
     background: rgba(15, 15, 26, 0.6);
+    flex-shrink: 0;
+    min-width: 0;
+}
+
+@media (max-width: 768px) {
+    .chat-list {
+        width: 100%;
+        max-width: 100%;
+        height: 300px; /* Limit height on mobile when stacked */
+        border-right: none;
+        border-bottom: 1px solid rgba(99, 102, 241, 0.1);
+    }
 }
 
 .chat-list-header {
@@ -293,6 +315,21 @@
     color: #9ca3af;
 }
 
+@media (max-width: 480px) {
+    .chat-window-header {
+        padding: 0.75rem 1rem;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+    
+    .chat-window-header .actions {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+    }
+}
+
 .status-select {
     padding: 0.5rem 1rem;
     border-radius: 8px;
@@ -447,10 +484,17 @@
 /* Chat Input */
 .chat-input {
     display: flex;
-    gap: 0.75rem;
-    padding: 1rem 1.5rem;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
     border-top: 1px solid rgba(99, 102, 241, 0.1);
     background: rgba(15, 15, 26, 0.5);
+}
+
+@media (min-width: 768px) {
+    .chat-input {
+        gap: 0.75rem;
+        padding: 1rem 1.5rem;
+    }
 }
 
 .chat-input input {

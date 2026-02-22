@@ -1,6 +1,13 @@
 .autoreply-settings {
-    padding: 1.5rem;
+    padding: 1rem;
     max-width: 800px;
+    width: 100%;
+}
+
+@media (min-width: 768px) {
+    .autoreply-settings {
+        padding: 1.5rem;
+    }
 }
 
 .settings-form {
@@ -109,8 +116,15 @@
 /* Time Grid */
 .time-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+}
+
+@media (min-width: 640px) {
+    .time-grid {
+        grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+        gap: 1.5rem;
+    }
 }
 
 

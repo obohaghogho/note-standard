@@ -53,7 +53,7 @@ export const ManageAds = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold flex items-center gap-2">
                         <Megaphone className="text-primary" />
@@ -62,22 +62,22 @@ export const ManageAds = () => {
                     <p className="text-gray-400">Review and manage user-created advertisements</p>
                 </div>
 
-                <div className="flex bg-white/5 p-1 rounded-lg border border-white/10">
+                <div className="flex bg-white/5 p-1 rounded-lg border border-white/10 overflow-x-auto no-scrollbar">
                     <button
                         onClick={() => setActiveTab('pending')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'pending' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'pending' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}
                     >
                         Pending Review
                     </button>
                     <button
                         onClick={() => setActiveTab('approved')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'approved' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'approved' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}
                     >
                         Live Ads
                     </button>
                     <button
                         onClick={() => setActiveTab('all')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'all' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'all' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}
                     >
                         All History
                     </button>
@@ -109,18 +109,18 @@ export const ManageAds = () => {
                                     </div>
 
                                     {/* Content */}
-                                    <div className="flex-1 space-y-3">
-                                        <div className="flex items-start justify-between">
-                                            <div>
-                                                <h3 className="text-lg font-bold">{ad.title}</h3>
-                                                <div className="flex items-center gap-2 mt-1">
+                                    <div className="flex-1 min-w-0 space-y-3">
+                                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                                            <div className="min-w-0">
+                                                <h3 className="text-lg font-bold truncate">{ad.title}</h3>
+                                                <div className="flex flex-wrap items-center gap-2 mt-1">
                                                     <span className={`text-xs px-2 py-0.5 rounded border ${getStatusColor(ad.status)} capitalize`}>
                                                         {ad.status}
                                                     </span>
-                                                    <span className="text-xs text-gray-500">
+                                                    <span className="text-xs text-gray-500 truncate">
                                                         by {ad.profiles?.full_name || ad.profiles?.email || 'Unknown User'}
                                                     </span>
-                                                    <span className="text-xs text-gray-500">
+                                                    <span className="text-xs text-gray-500 whitespace-nowrap">
                                                         • {new Date(ad.created_at).toLocaleDateString()}
                                                     </span>
                                                 </div>
@@ -131,14 +131,14 @@ export const ManageAds = () => {
                                                 <div className="flex gap-2">
                                                     <Button
                                                         size="sm"
-                                                        className="bg-green-500/20 text-green-400 hover:bg-green-500/30 border-green-500/50"
+                                                        className="bg-green-500/20 text-green-400 hover:bg-green-500/30 border-green-500/50 flex-1 sm:flex-none"
                                                         onClick={() => handleAction(ad.id, 'approved')}
                                                     >
                                                         <Check size={16} className="mr-1" /> Approve
                                                     </Button>
                                                     <Button
                                                         size="sm"
-                                                        className="bg-red-500/20 text-red-400 hover:bg-red-500/30 border-red-500/50"
+                                                        className="bg-red-500/20 text-red-400 hover:bg-red-500/30 border-red-500/50 flex-1 sm:flex-none"
                                                         onClick={() => handleAction(ad.id, 'rejected')}
                                                     >
                                                         <X size={16} className="mr-1" /> Reject
@@ -148,7 +148,7 @@ export const ManageAds = () => {
                                             {ad.status === 'approved' && (
                                                 <Button
                                                     size="sm"
-                                                    className="bg-red-500/20 text-red-400 hover:bg-red-500/30 border-red-500/50"
+                                                    className="bg-red-500/20 text-red-400 hover:bg-red-500/30 border-red-500/50 w-full sm:w-auto"
                                                     onClick={() => handleAction(ad.id, 'rejected')}
                                                 >
                                                     Revoke
@@ -156,7 +156,7 @@ export const ManageAds = () => {
                                             )}
                                         </div>
 
-                                        <p className="text-gray-300">{ad.content}</p>
+                                        <p className="text-gray-300 break-words">{ad.content}</p>
 
                                         {ad.link_url && (
                                             <a

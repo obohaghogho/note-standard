@@ -53,6 +53,33 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* Prevent flex/grid children from overflowing their parents */
+  *:where(:not(html, body, #root)) {
+    min-width: 0;
+  }
+
+  /* Images and media must always scale down */
+  img, video, svg, canvas, iframe {
+    max-width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  /* Pre and code blocks should not cause overflow */
+  pre, code {
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  /* Tables should be contained */
+  table {
+    max-width: 100%;
+    overflow-x: auto;
+    display: block;
+  }
+
   /* Exception for decorative elements that need to ignore max-width */
   .allow-overflow {
     max-width: none !important;
