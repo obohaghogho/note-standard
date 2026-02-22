@@ -50,7 +50,6 @@ exports.createConversation = async (req, res) => {
   try {
     const userId = req.user.id;
     const { type, name, participants: recipientUsernames } = req.body;
-    // recipients: array of usernames
 
     if (!recipientUsernames || recipientUsernames.length === 0) {
       return res.status(400).json({
@@ -72,7 +71,56 @@ exports.createConversation = async (req, res) => {
 
     const participantIds = profiles.map((p) => p.id);
 
-    // 2. Create Conversation
+    // 2. For direct chats, check if a conversation already exists
+    if (type === "direct" && participantIds.length === 1) {
+      const recipientId = participantIds[0];
+
+      // Query to find if these two users already share a direct conversation
+      const { data: existingMembers, error: checkError } = await supabase
+        .from("conversation_members")
+        .select("conversation_id, conversation:conversations!inner(type)")
+        .eq("user_id", userId)
+        .eq("conversation.type", "direct");
+
+      if (!checkError && existingMembers && existingMembers.length > 0) {
+        const convIds = existingMembers.map((m) => m.conversation_id);
+
+        const { data: commonMember, error: commonError } = await supabase
+          .from("conversation_members")
+          .select("conversation_id")
+          .in("conversation_id", convIds)
+          .eq("user_id", recipientId)
+          .maybeSingle();
+
+        if (commonMember) {
+          // Found existing conversation, fetch it and return
+          const { data: fullConv } = await supabase
+            .from("conversations")
+            .select(`
+              *,
+              members:conversation_members (
+                user_id,
+                role,
+                status,
+                profile:profiles (
+                  username,
+                  full_name,
+                  avatar_url
+                )
+              )
+            `)
+            .eq("id", commonMember.conversation_id)
+            .single();
+
+          return res.json({
+            conversation: fullConv,
+            isExisting: true,
+          });
+        }
+      }
+    }
+
+    // 3. Create Conversation
     const { data: convData, error: convError } = await supabase
       .from("conversations")
       .insert([{ type, name }])
@@ -82,8 +130,7 @@ exports.createConversation = async (req, res) => {
     if (convError) throw convError;
     const conversationId = convData.id;
 
-    // 3. Prepare Members Payload
-    // Add creator (Admin, Accepted)
+    // 4. Prepare Members Payload
     const membersPayload = [
       {
         conversation_id: conversationId,
@@ -93,7 +140,6 @@ exports.createConversation = async (req, res) => {
       },
     ];
 
-    // Add other participants (Member, Pending)
     for (const pId of participantIds) {
       membersPayload.push({
         conversation_id: conversationId,
@@ -109,7 +155,7 @@ exports.createConversation = async (req, res) => {
 
     if (memberError) throw memberError;
 
-    // 4. Send notifications to other participants
+    // 5. Send notifications
     const io = req.app.get("io");
     if (io) {
       const { data: creator } = await supabase.from("profiles").select(
@@ -146,16 +192,22 @@ exports.acceptConversation = async (req, res) => {
     const { conversationId } = req.params;
     const userId = req.user.id;
 
-    // Check if already accepted to prevent duplicate notifications
+    // Check if member exists and status
     const { data: existingMember, error: fetchError } = await supabase
       .from("conversation_members")
       .select("status")
       .eq("conversation_id", conversationId)
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
 
     if (fetchError) throw fetchError;
-    if (existingMember?.status === "accepted") {
+    if (!existingMember) {
+      return res.status(404).json({
+        error: "You are not a member of this chat",
+      });
+    }
+
+    if (existingMember.status === "accepted") {
       return res.json({
         success: true,
         message: "Already accepted",
@@ -163,7 +215,7 @@ exports.acceptConversation = async (req, res) => {
       });
     }
 
-    // Update status to accepted for this user in this conversation
+    // Update status to accepted
     const { data, error } = await supabase
       .from("conversation_members")
       .update({ status: "accepted" })
@@ -173,10 +225,9 @@ exports.acceptConversation = async (req, res) => {
 
     if (error) throw error;
 
-    // Notify other members (especially the creator) that the user has accepted
+    // Notify other members
     const io = req.app.get("io");
     if (io) {
-      // Find other members
       const { data: members } = await supabase
         .from("conversation_members")
         .select("user_id")
