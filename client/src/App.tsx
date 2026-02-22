@@ -1,64 +1,62 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { useEffect } from 'react';
-import { LandingPage } from './pages/LandingPage';
-import { Login } from './pages/Login';
-import { Signup } from './pages/Signup';
-import { TermsPage } from './pages/TermsPage';
-import { PrivacyPage } from './pages/PrivacyPage';
-import { ResetPassword } from './pages/ResetPassword';
+import React, { useEffect, Suspense } from 'react';
+
+// Layout & structural components (eagerly loaded — needed immediately)
 import { DashboardLayout } from './components/layout/DashboardLayout';
-import { DashboardHome } from './pages/dashboard/DashboardHome';
-import { Notes } from './pages/dashboard/Notes';
-import { Chat } from './pages/dashboard/Chat';
-import { Shared } from './pages/dashboard/Shared';
-import { Feed } from './pages/dashboard/Feed';
-import { Search } from './pages/dashboard/Search';
-import { Settings } from './pages/dashboard/Settings';
-import { Billing } from './pages/dashboard/Billing';
-import { Affiliates } from './pages/dashboard/Affiliates';
+import { AdminLayout } from './components/layout/AdminLayout';
+import { AuthProvider } from './context/AuthContext';
+import { SocketProvider } from './context/SocketContext';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { ChatProvider } from './context/ChatContext';
+import { NotificationProvider } from './context/NotificationContext';
+import { WalletProvider } from './context/WalletContext';
+import { WebRTCProvider } from './context/WebRTCContext';
+import { PresenceProvider } from './context/PresenceContext';
+import { ChatWidget } from './components/chat/ChatWidget';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
+
+// ─── Lazy-loaded pages (route-level code splitting) ───
+// Public pages
+const LandingPage = React.lazy(() => import('./pages/LandingPage').then(m => ({ default: m.LandingPage })));
+const Login = React.lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
+const Signup = React.lazy(() => import('./pages/Signup').then(m => ({ default: m.Signup })));
+const TermsPage = React.lazy(() => import('./pages/TermsPage').then(m => ({ default: m.TermsPage })));
+const PrivacyPage = React.lazy(() => import('./pages/PrivacyPage').then(m => ({ default: m.PrivacyPage })));
+const ResetPassword = React.lazy(() => import('./pages/ResetPassword').then(m => ({ default: m.ResetPassword })));
+const PaymentSuccess = React.lazy(() => import('./pages/PaymentSuccess').then(m => ({ default: m.PaymentSuccess })));
+const PaymentCancel = React.lazy(() => import('./pages/PaymentCancel').then(m => ({ default: m.PaymentCancel })));
+
+// Dashboard pages
+const DashboardHome = React.lazy(() => import('./pages/dashboard/DashboardHome').then(m => ({ default: m.DashboardHome })));
+const Notes = React.lazy(() => import('./pages/dashboard/Notes').then(m => ({ default: m.Notes })));
+const Chat = React.lazy(() => import('./pages/dashboard/Chat').then(m => ({ default: m.Chat })));
+const Shared = React.lazy(() => import('./pages/dashboard/Shared').then(m => ({ default: m.Shared })));
+const Feed = React.lazy(() => import('./pages/dashboard/Feed').then(m => ({ default: m.Feed })));
+const Search = React.lazy(() => import('./pages/dashboard/Search').then(m => ({ default: m.Search })));
+const Settings = React.lazy(() => import('./pages/dashboard/Settings').then(m => ({ default: m.Settings })));
+const Billing = React.lazy(() => import('./pages/dashboard/Billing').then(m => ({ default: m.Billing })));
+const Affiliates = React.lazy(() => import('./pages/dashboard/Affiliates').then(m => ({ default: m.Affiliates })));
+const Notifications = React.lazy(() => import('./pages/dashboard/Notifications').then(m => ({ default: m.Notifications })));
+const Trends = React.lazy(() => import('./pages/dashboard/Trends').then(m => ({ default: m.Trends })));
+const WalletPage = React.lazy(() => import('./pages/dashboard/WalletPage').then(m => ({ default: m.WalletPage })));
+const TeamsPage = React.lazy(() => import('./pages/teams/TeamsPage').then(m => ({ default: m.TeamsPage })));
+
+// Admin pages
+const AdminDashboard = React.lazy(() => import('./pages/admin/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+const UserManagement = React.lazy(() => import('./pages/admin/UserManagement').then(m => ({ default: m.UserManagement })));
+const AdminChat = React.lazy(() => import('./pages/admin/AdminChat').then(m => ({ default: m.AdminChat })));
+const AuditLogs = React.lazy(() => import('./pages/admin/AuditLogs').then(m => ({ default: m.AuditLogs })));
+const BroadcastManager = React.lazy(() => import('./pages/admin/BroadcastManager').then(m => ({ default: m.BroadcastManager })));
+const AutoReplySettings = React.lazy(() => import('./pages/admin/AutoReplySettings').then(m => ({ default: m.AutoReplySettings })));
+const Analytics = React.lazy(() => import('./pages/admin/Analytics').then(m => ({ default: m.Analytics })));
+const AdminSettings = React.lazy(() => import('./pages/admin/AdminSettings').then(m => ({ default: m.AdminSettings })));
+const ManageAds = React.lazy(() => import('./pages/admin/ManageAds').then(m => ({ default: m.ManageAds })));
 
 const ChatRedirect = () => {
   const { id } = useParams();
   return <Navigate to={`/dashboard/chat?id=${id}`} replace />;
 };
-
-import { Notifications } from './pages/dashboard/Notifications';
-import { Trends } from './pages/dashboard/Trends';
-import { TeamsPage } from './pages/teams/TeamsPage';
-
-// Admin imports
-import { AdminLayout } from './components/layout/AdminLayout';
-import { AdminDashboard } from './pages/admin/AdminDashboard';
-import { UserManagement } from './pages/admin/UserManagement';
-import { AdminChat } from './pages/admin/AdminChat';
-import { AuditLogs } from './pages/admin/AuditLogs';
-import { BroadcastManager } from './pages/admin/BroadcastManager';
-import { AutoReplySettings } from './pages/admin/AutoReplySettings';
-import { Analytics } from './pages/admin/Analytics';
-import { AdminSettings } from './pages/admin/AdminSettings';
-import { ManageAds } from './pages/admin/ManageAds';
-
-import { AuthProvider } from './context/AuthContext';
-import { SocketProvider } from './context/SocketContext';
-import { ProtectedRoute } from './components/auth/ProtectedRoute';
-
-import { ChatProvider } from './context/ChatContext';
-import { NotificationProvider } from './context/NotificationContext';
-import { WalletProvider } from './context/WalletContext';
-import { WalletPage } from './pages/dashboard/WalletPage';
-import { WebRTCProvider } from './context/WebRTCContext';
-import { PresenceProvider } from './context/PresenceContext';
-
-// Payment pages
-import { PaymentSuccess } from './pages/PaymentSuccess';
-import { PaymentCancel } from './pages/PaymentCancel';
-
-// Chat Widget for user support
-import { ChatWidget } from './components/chat/ChatWidget';
-
-// Error Boundary
-import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 function App() {
   useEffect(() => {
@@ -115,6 +113,12 @@ function App() {
   return (
     <>
       <ErrorBoundary>
+        <Suspense fallback={
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0a0a0a' }}>
+            <div style={{ width: 36, height: 36, border: '3px solid rgba(255,255,255,0.1)', borderTopColor: '#10b981', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+          </div>
+        }>
         <Router>
             <AuthProvider>
             <SocketProvider>
@@ -188,6 +192,7 @@ function App() {
             </SocketProvider>
             </AuthProvider>
         </Router>
+        </Suspense>
       </ErrorBoundary>
 
     </>
