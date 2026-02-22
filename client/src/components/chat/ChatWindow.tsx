@@ -391,9 +391,10 @@ const ChatWindow: React.FC = () => {
         : null;
 
     return (
-        <div className="flex flex-col h-full bg-gray-900 text-white w-full max-w-full overflow-hidden">
-            <div className="p-2 md:p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/50 backdrop-blur-md sticky top-0 z-10 w-full overflow-hidden">
-                <div className="flex items-center gap-2 md:gap-3 min-w-0">
+        <div className="flex flex-col absolute inset-0 bg-gray-900 text-white overflow-x-hidden">
+            <div className="pt-safe flex-shrink-0 border-b border-gray-800 bg-gray-900/50 backdrop-blur-md sticky top-0 z-10">
+                <div className="p-2 md:p-4 flex justify-between items-center w-full">
+                    <div className="flex items-center gap-2 md:gap-3 min-w-0">
                     <button 
                         onClick={() => setActiveConversationId(null)}
                         className="p-1.5 -ml-1 text-gray-400 hover:text-white md:hidden"
@@ -446,7 +447,7 @@ const ChatWindow: React.FC = () => {
                     })()}
                 </div>
 
-                <div className="flex items-center gap-0.5 md:gap-3 flex-shrink-0">
+                <div className="flex items-center gap-0.5 md:gap-2 flex-shrink-0">
                     {isSearchOpen ? (
                         <div className="flex-1 max-w-full md:max-w-md absolute md:relative inset-x-0 top-0 h-full bg-gray-900 md:bg-transparent px-4 md:px-0 flex items-center z-20 animate-in slide-in-from-top-4 md:slide-in-from-right-4 duration-300">
                             <Search size={16} className="absolute left-7 md:left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -475,15 +476,15 @@ const ChatWindow: React.FC = () => {
                         <>
                             <button 
                                 onClick={() => handleCall('voice')}
-                                className="p-1.5 md:p-2 text-gray-400 hover:text-green-400 hover:bg-green-400/10 rounded-full transition-all"
+                                className="p-1.5 md:p-2 text-gray-400 hover:text-green-400 hover:bg-green-400/10 rounded-full transition-all flex-shrink-0"
                             >
-                                <Phone size={18} className="md:w-5 md:h-5" />
+                                <Phone size={16} className="md:w-5 md:h-5" />
                             </button>
                             <button 
                                 onClick={() => handleCall('video')}
-                                className="p-1.5 md:p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-full transition-all"
+                                className="p-1.5 md:p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-full transition-all flex-shrink-0"
                             >
-                                <Video size={18} className="md:w-5 md:h-5" />
+                                <Video size={16} className="md:w-5 md:h-5" />
                             </button>
                         </>
                     )}
@@ -506,6 +507,7 @@ const ChatWindow: React.FC = () => {
                     </div>
                 </div>
             </div>
+        </div>
 
             {/* Pagination / Load More */}
             {hasMore[activeConversationId] && (
@@ -520,7 +522,8 @@ const ChatWindow: React.FC = () => {
             )}
 
             <div 
-                className="flex-1 overflow-y-auto p-2 md:p-4 space-y-3 md:space-y-4 scroll-smooth"
+                className="flex-1 overflow-y-auto p-2 md:p-4 space-y-3 md:space-y-4 scroll-smooth overscroll-contain"
+                style={{ WebkitOverflowScrolling: 'touch' }}
                 ref={scrollContainerRef}
                 onScroll={handleScroll}
             >
@@ -707,8 +710,8 @@ const ChatWindow: React.FC = () => {
 
             {/* Input Area */}
             {!isPending ? (
-                <div className="p-1.5 md:p-6 border-t border-gray-800 bg-gray-900/80 backdrop-blur-md pb-safe w-full">
-                    <form onSubmit={handleSend} className="flex flex-col gap-2 md:gap-3 w-full">
+                <div className="p-1 px-1.5 md:p-6 border-t border-gray-800 bg-gray-900/80 backdrop-blur-md pb-[env(safe-area-inset-bottom,6px)] w-full flex-shrink-0">
+                    <form onSubmit={handleSend} className="flex flex-col gap-1.5 md:gap-3 w-full box-border">
                         {isVoiceRecording ? (
                             <div className="flex justify-center p-2 bg-gray-800 rounded-2xl border border-gray-700 animate-in slide-in-from-bottom-2">
                                 <VoiceRecorder onSend={handleVoiceMessage} onCancel={() => setIsVoiceRecording(false)} />
@@ -775,9 +778,9 @@ const ChatWindow: React.FC = () => {
                                 <button
                                     type="submit"
                                     disabled={!inputValue.trim() || isWaitingForOthers}
-                                    className="bg-blue-600 hover:bg-blue-500 text-white w-10 h-10 flex items-center justify-center rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-500/20 active:scale-95 flex-shrink-0"
+                                    className="bg-blue-600 hover:bg-blue-500 text-white w-9 h-9 md:w-11 md:h-11 flex items-center justify-center rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-500/20 active:scale-95 flex-shrink-0"
                                 >
-                                    <Send size={18} />
+                                    <Send size={16} className="md:w-[20px] md:h-[20px]" />
                                 </button>
                             </div>
                         )}
