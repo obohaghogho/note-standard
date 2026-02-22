@@ -132,6 +132,8 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
                     </div>
                     <div className="flex gap-3 items-center">
                         <select
+                            id="swap-card-from-currency"
+                            name="fromCurrency"
                             value={fromCurrency}
                             onChange={(e) => setFromCurrency(e.target.value as Currency)}
                             className="bg-transparent text-xl font-bold text-white focus:outline-none cursor-pointer hover:text-purple-400 transition-colors"
@@ -142,6 +144,8 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
                         </select>
                         <div className="flex-1 relative">
                             <input
+                                id="swap-card-amount-in"
+                                name="amountIn"
                                 type="number"
                                 value={amount}
                                 onChange={(e) => setAmount(e.target.value)}
@@ -176,6 +180,8 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
                     </div>
                     <div className="flex gap-3 items-center">
                         <select
+                            id="swap-card-to-currency"
+                            name="toCurrency"
                             value={toCurrency}
                             onChange={(e) => setToCurrency(e.target.value as Currency)}
                             className="bg-transparent text-xl font-bold text-white focus:outline-none cursor-pointer hover:text-purple-400 transition-colors"
@@ -186,6 +192,8 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
                         </select>
                         <div className="flex-1">
                             <input
+                                id="swap-card-amount-out"
+                                name="amountOut"
                                 type="text"
                                 value={preview ? Number(preview.amountOut || 0).toFixed(6) : ''}
                                 readOnly
