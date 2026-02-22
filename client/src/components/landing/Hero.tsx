@@ -20,7 +20,7 @@ export const Hero = () => {
                         <span className="text-gray-400">v2.0 is now live</span>
                     </div>
 
-                    <h1 className="text-3xl sm:text-5xl lg:text-7xl font-bold leading-tight mb-6">
+                    <h1 className="text-xl sm:text-5xl lg:text-7xl font-bold leading-tight mb-6">
                         Notes for the <br />
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">Modern Team</span>
                     </h1>
