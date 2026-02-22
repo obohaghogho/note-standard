@@ -160,7 +160,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({ isOpen, onClose, s
 
                             {/* Bank Search & Select */}
                             <div className="space-y-1 relative">
-                                <label className="text-xs text-gray-400 font-medium ml-1">Bank Name</label>
+                                <label htmlFor="bank-search-input" className="text-xs text-gray-400 font-medium ml-1">Bank Name</label>
                                 <div className="relative">
                                     <input 
                                         id="bank-search-input"
@@ -226,7 +226,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({ isOpen, onClose, s
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-1">
-                                    <label className="text-xs text-gray-400 font-medium ml-1">Account Number</label>
+                                    <label htmlFor="withdraw-account-number" className="text-xs text-gray-400 font-medium ml-1">Account Number</label>
                                     <input 
                                         id="withdraw-account-number"
                                         name="accountNumber"
@@ -238,7 +238,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({ isOpen, onClose, s
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-xs text-gray-400 font-medium ml-1">Account Holder Name</label>
+                                    <label htmlFor="withdraw-account-name" className="text-xs text-gray-400 font-medium ml-1">Account Holder Name</label>
                                     <input 
                                         id="withdraw-account-name"
                                         name="accountName"
@@ -253,7 +253,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({ isOpen, onClose, s
                         </div>
                     ) : (
                          <div className="space-y-1">
-                            <label className="text-sm text-gray-400 font-medium ml-1">
+                            <label htmlFor="withdraw-destination-address" className="text-sm text-gray-400 font-medium ml-1">
                                 Destination Address
                             </label>
                             <div className="relative">
@@ -275,7 +275,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({ isOpen, onClose, s
                     
                     <div className="space-y-1">
                         <div className="flex justify-between ml-1">
-                            <label className="text-sm text-gray-400 font-medium">Amount</label>
+                            <label htmlFor="withdraw-amount" className="text-sm text-gray-400 font-medium">Amount</label>
                             <span className="text-xs text-gray-400">Available: {formatCurrency(availableBalance, selectedCurrency)}</span>
                         </div>
                         <div className="relative">

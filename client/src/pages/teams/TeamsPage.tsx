@@ -405,7 +405,7 @@ export const TeamsPage: React.FC = () => {
             <h2>Create New Team</h2>
             <form onSubmit={handleCreateTeam} className="teams-page__form">
               <div className="teams-page__form-group">
-                <label>Team name</label>
+                <label htmlFor="new-team-name">Team name</label>
                 <input
                   id="new-team-name"
                   name="teamName"
@@ -417,7 +417,7 @@ export const TeamsPage: React.FC = () => {
                 />
               </div>
               <div className="teams-page__form-group">
-                <label>Description</label>
+                <label htmlFor="new-team-desc">Description</label>
                 <textarea
                   id="new-team-desc"
                   name="description"
@@ -448,7 +448,7 @@ export const TeamsPage: React.FC = () => {
             <h2>Invite Member</h2>
             <form onSubmit={handleInviteMember} className="teams-page__form">
               <div className="teams-page__form-group">
-                <label>Email address</label>
+                <label htmlFor="invite-email">Email address</label>
                 <input
                   id="invite-email"
                   name="email"
@@ -460,7 +460,7 @@ export const TeamsPage: React.FC = () => {
                 />
               </div>
               <div className="teams-page__form-group">
-                <label>Role</label>
+                <label htmlFor="invite-role">Role</label>
                 <select
                   id="invite-role"
                   name="role"
