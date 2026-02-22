@@ -392,14 +392,14 @@ const ChatWindow: React.FC = () => {
 
     return (
         <div className="flex flex-col h-full bg-gray-900 text-white">
-            <div className="p-3 md:p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/50 backdrop-blur-md sticky top-0 z-10">
-                <div className="flex items-center gap-3">
+            <div className="p-2 md:p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/50 backdrop-blur-md sticky top-0 z-10 w-full overflow-hidden">
+                <div className="flex items-center gap-2 md:gap-3 min-w-0">
                     <button 
                         onClick={() => setActiveConversationId(null)}
-                        className="p-2 -ml-2 text-gray-400 hover:text-white md:hidden"
+                        className="p-1.5 -ml-1 text-gray-400 hover:text-white md:hidden"
                         aria-label="Back to conversations"
                     >
-                        <ArrowLeft size={24} />
+                        <ArrowLeft size={22} />
                     </button>
                     {(() => {
                         let displayName = activeConversation?.name;
@@ -415,17 +415,17 @@ const ChatWindow: React.FC = () => {
 
                         return (
                             <>
-                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center overflow-hidden border border-white/10 shadow-lg">
+                                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center overflow-hidden border border-white/10 shadow-lg flex-shrink-0">
                                     {displayAvatar ? (
                                         <SecureImage src={displayAvatar} alt={displayName} className="w-full h-full object-cover" fallbackType="profile" />
                                     ) : (
-                                        <span className="text-white font-bold text-lg">
+                                        <span className="text-white font-bold text-base md:text-lg">
                                             {displayName?.charAt(0).toUpperCase() || '?'}
                                         </span>
                                     )}
                                 </div>
                                 <div className="min-w-0">
-                                    <h2 className="font-semibold truncate max-w-[100px] sm:max-w-[200px] md:max-w-[300px] text-sm md:text-base">{displayName || 'Chat'}</h2>
+                                    <h2 className="font-semibold truncate max-w-[80px] sm:max-w-[150px] md:max-w-[300px] text-xs md:text-base">{displayName || 'Chat'}</h2>
                                     {activeConversation?.type === 'direct' && otherMember ? (
                                         isUserOnline(otherMember.user_id) ? (
                                             <p className="text-[10px] text-green-400 hidden sm:flex items-center gap-1">
@@ -446,22 +446,22 @@ const ChatWindow: React.FC = () => {
                     })()}
                 </div>
 
-                <div className="flex items-center gap-1 md:gap-3 flex-1 justify-end">
+                <div className="flex items-center gap-0.5 md:gap-3 flex-shrink-0">
                     {isSearchOpen ? (
-                        <div className="flex-1 max-w-md relative animate-in slide-in-from-right-4 duration-300">
-                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <div className="flex-1 max-w-full md:max-w-md absolute md:relative inset-x-0 top-0 h-full bg-gray-900 md:bg-transparent px-4 md:px-0 flex items-center z-20 animate-in slide-in-from-top-4 md:slide-in-from-right-4 duration-300">
+                            <Search size={16} className="absolute left-7 md:left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                             <input 
                                 id="chat-search-messages"
                                 name="searchMessages"
                                 autoFocus
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search messages..."
-                                className="w-full bg-gray-800 border border-gray-700 rounded-full py-1.5 pl-9 pr-10 text-xs focus:outline-none focus:border-blue-500"
+                                placeholder="Search..."
+                                className="w-full bg-gray-800 border border-gray-700 rounded-full py-1.5 pl-10 pr-10 text-xs focus:outline-none focus:border-blue-500"
                             />
                             <button 
                                 onClick={() => { setIsSearchOpen(false); setSearchQuery(''); }}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white text-[10px] font-bold"
+                                className="absolute right-7 md:right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white text-[10px] font-bold"
                             >
                                 ESC
                             </button>
@@ -520,7 +520,7 @@ const ChatWindow: React.FC = () => {
             )}
 
             <div 
-                className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth"
+                className="flex-1 overflow-y-auto p-2 md:p-4 space-y-3 md:space-y-4 scroll-smooth"
                 ref={scrollContainerRef}
                 onScroll={handleScroll}
             >
@@ -543,7 +543,7 @@ const ChatWindow: React.FC = () => {
                             className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}
                         >
                         <div
-                            className={`max-w-[85%] md:max-w-[70%] rounded-2xl p-3 shadow-md border ${msg.isOwn
+                            className={`max-w-[92%] md:max-w-[70%] rounded-2xl p-3 shadow-md border ${msg.isOwn
                                 ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-br-sm border-blue-500/50'
                                 : 'bg-gray-800 text-gray-200 rounded-bl-sm border-gray-700'
                                 } relative group`}
@@ -708,7 +708,7 @@ const ChatWindow: React.FC = () => {
             {/* Input Area */}
             {!isPending ? (
                 <div className="p-2 md:p-6 border-t border-gray-800 bg-gray-900/80 backdrop-blur-md pb-safe">
-                    <form onSubmit={handleSend} className="flex flex-col gap-2 md:gap-3">
+                    <form onSubmit={handleSend} className="flex flex-col gap-2 md:gap-3 w-full max-w-full overflow-hidden">
                         {isVoiceRecording ? (
                             <div className="flex justify-center p-2 bg-gray-800 rounded-2xl border border-gray-700 animate-in slide-in-from-bottom-2">
                                 <VoiceRecorder onSend={handleVoiceMessage} onCancel={() => setIsVoiceRecording(false)} />
