@@ -13,14 +13,14 @@
     width: 100%;
     max-width: 100%;
     margin: 0;
-    padding: 0;
-    overflow-x: hidden !important;
+    padding: 0 !important; /* Force remove any automatic padding */
+    overflow-x: clip !important;
     overflow-y: auto;
     position: relative;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     -webkit-text-size-adjust: 100%;
-    overscroll-behavior-x: none;
+    overscroll-behavior: none;
     touch-action: pan-y;
   }
 
@@ -36,10 +36,11 @@
     width: 100%;
     max-width: 100%;
     min-height: 100dvh;
-    overflow-x: hidden;
+    overflow-x: clip;
     position: relative;
     display: flex;
     flex-direction: column;
+    z-index: 1;
   }
 
   /* Universal reset to prevent content-driven overflow */
