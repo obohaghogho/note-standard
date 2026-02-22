@@ -41,22 +41,28 @@ export const LanguageSelector = () => {
         <div className="relative" ref={containerRef}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/10 transition-colors text-sm text-gray-300 hover:text-white"
+                className="flex items-center gap-1.5 md:gap-2 px-2 py-1.5 md:px-3 md:py-2 rounded-lg hover:bg-white/10 transition-colors text-sm text-gray-300 hover:text-white"
                 title={t('common.language')}
             >
-                <Globe size={18} />
-                <span className="hidden md:block">{currentLanguage.name}</span>
+                <Globe size={16} className="md:w-[18px] md:h-[18px]" />
+                <span className="text-[11px] xs:text-sm font-medium uppercase md:capitalize">
+                    {currentLanguage.code === 'zh' ? '中文' : currentLanguage.code.toUpperCase()}
+                </span>
             </button>
 
             <AnimatePresence>
                 {isOpen && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 10 }}
-                        transition={{ duration: 0.2 }}
-                        className="absolute right-0 mt-2 w-48 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-xl overflow-hidden z-50 backdrop-blur-xl"
-                    >
+                    <>
+                        {/* Mobile backdrop to close on tap anywhere else */}
+                        <div className="fixed inset-0 z-40 md:hidden bg-black/20" onClick={() => setIsOpen(false)} />
+                        
+                        <motion.div
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                            transition={{ duration: 0.15, ease: "easeOut" }}
+                            className="absolute right-0 md:right-0 mt-2 w-48 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 backdrop-blur-xl ring-1 ring-black/50"
+                        >
                         <div className="p-1">
                             {languages.map((lang) => (
                                 <button
@@ -75,6 +81,7 @@ export const LanguageSelector = () => {
                             ))}
                         </div>
                     </motion.div>
+                    </>
                 )}
             </AnimatePresence>
         </div>

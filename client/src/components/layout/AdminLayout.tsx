@@ -18,6 +18,7 @@ import {
     Bot,
     Monitor
 } from 'lucide-react';
+import { LanguageSelector } from '../common/LanguageSelector';
 import SecureImage from '../common/SecureImage';
 import './AdminLayout.css';
 
@@ -138,6 +139,8 @@ export const AdminLayout = () => {
                         <h1>Administration</h1>
                     </div>
                     <div className="header-right">
+                        <LanguageSelector />
+                        <div className="h-6 w-[1px] bg-white/10 mx-2" />
                         <button className="notification-btn">
                             <Bell size={20} />
                             {newChatsCount > 0 && <span className="notif-dot" />}

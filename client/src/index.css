@@ -18,16 +18,22 @@
     width: 100%;
     max-width: 100%;
     margin: 0;
-    padding: 0 !important;
+    padding: 0;
     overflow-x: hidden;
     position: relative;
     -webkit-overflow-scrolling: touch;
+    /* Respect Safe Areas (Notches, Home Indicators) */
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
   }
 
   body {
     @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary;
     font-feature-settings: "rlig" 1, "calt" 1;
     min-height: 100dvh;
+    min-height: 100vh; /* Fallback */
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
