@@ -173,6 +173,9 @@ exports.createConversation = async (req, res) => {
           link: `/dashboard/chat?id=${conversationId}`,
           io,
         });
+
+        // CRITICAL: Emit new_conversation event so recipients join the room real-time
+        io.to(p.id).emit("new_conversation", convData);
       }
     }
 
@@ -251,8 +254,22 @@ exports.acceptConversation = async (req, res) => {
             link: `/dashboard/chat?id=${conversationId}`,
             io,
           });
+
+          // Notify about the change in conversation status
+          io.to(m.user_id).emit("conversation_updated", {
+            conversationId,
+            userId,
+            status: "accepted",
+          });
         }
       }
+
+      // Also notify self across tabs
+      io.to(userId).emit("conversation_updated", {
+        conversationId,
+        userId,
+        status: "accepted",
+      });
     }
 
     res.json({ success: true, member: data });
