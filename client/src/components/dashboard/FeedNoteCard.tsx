@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { Card } from '../../components/common/Card';
 import SecureImage from '../../components/common/SecureImage';
 import { Heart, MessageCircle } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
+
+import { API_URL, getAuthHeader } from '../../lib/api';
 
 interface FeedNoteCardProps {
     note: {
@@ -27,40 +28,46 @@ interface FeedNoteCardProps {
 }
 
 export const FeedNoteCard = ({ note, onCommentClick }: FeedNoteCardProps) => {
-    const { user } = useAuth();
+    const { user, session } = useAuth();
     const [liked, setLiked] = useState(note.user_has_liked || false);
     const [likesCount, setLikesCount] = useState(note.likes_count || 0);
     const [loadingLike, setLoadingLike] = useState(false);
 
     const handleLike = async (e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!user || loadingLike) return;
+        if (!user || !session || loadingLike) return;
 
         setLoadingLike(true);
         // Optimistic update
+        const previousLiked = liked;
+        const previousCount = likesCount;
+        
         const newLikedState = !liked;
         setLiked(newLikedState);
         setLikesCount(prev => newLikedState ? prev + 1 : prev - 1);
 
         try {
-            if (newLikedState) {
-                const { error } = await supabase
-                    .from('likes')
-                    .insert({ user_id: user.id, note_id: note.id });
-                if (error) throw error;
-            } else {
-                const { error } = await supabase
-                    .from('likes')
-                    .delete()
-                    .eq('user_id', user.id)
-                    .eq('note_id', note.id);
-                if (error) throw error;
-            }
+            const res = await fetch(`${API_URL}/api/community/like`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(await getAuthHeader())
+                },
+                body: JSON.stringify({
+                    noteId: note.id
+                })
+            });
+
+            if(!res.ok) throw new Error('Failed to toggle like');
+            
+            const data = await res.json();
+            // Ensure state matches server response exactly
+            setLiked(data.liked);
         } catch (error) {
             console.error('Error toggling like:', error);
             // Revert on error
-            setLiked(!newLikedState);
-            setLikesCount(prev => !newLikedState ? prev + 1 : prev - 1);
+            setLiked(previousLiked);
+            setLikesCount(previousCount);
             toast.error('Failed to update like');
         } finally {
             setLoadingLike(false);

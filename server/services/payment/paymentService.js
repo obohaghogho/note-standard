@@ -292,6 +292,24 @@ class PaymentService {
     // 3. Send email receipt (Mock or call email service)
     await this.sendReceipt(tx.user_id, tx);
 
+    // 4. Send In-App Notification
+    try {
+      const { createNotification } = require("../notificationService"); // Use local path or service path
+      await createNotification({
+        receiverId: tx.user_id,
+        senderId: null, // System notification
+        type: "payment_success",
+        title: "Payment Successful",
+        message: `Your payment of ${tx.amount} ${tx.currency} for ${
+          tx.display_label || "your deposit"
+        } has been confirmed.`,
+        link: `/dashboard/wallet`,
+        // io: // io is hard to pass here without refactoring, but createNotification handles persistence
+      });
+    } catch (notifErr) {
+      logger.error("Failed to send payment notification:", notifErr.message);
+    }
+
     return { status: "success" };
   }
 

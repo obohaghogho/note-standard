@@ -349,6 +349,33 @@ router.post(
       );
       if (txError) throw txError;
 
+      // 4. Trigger Notification for Recipient
+      try {
+        const io = req.app.get("io");
+        const { data: sender } = await supabase
+          .from("profiles")
+          .select("username")
+          .eq("id", req.user.id)
+          .single();
+
+        await createNotification({
+          receiverId: targetUserId,
+          senderId: req.user.id,
+          type: "transfer_receive",
+          title: "Funds Received",
+          message: `You received ${transferAmount} ${currency} from ${
+            sender?.username || "a user"
+          }.`,
+          link: `/dashboard/wallet`,
+          io,
+        });
+      } catch (notifErr) {
+        console.error(
+          "[Wallet] Failed to send transfer notification:",
+          notifErr.message,
+        );
+      }
+
       // Log revenue for internal transfer
       if (commission.fee > 0) {
         await commissionService.logRevenue(

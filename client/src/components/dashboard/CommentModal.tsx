@@ -6,6 +6,8 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 
+import { API_URL, getAuthHeader } from '../../lib/api';
+
 interface Comment {
     id: string;
     content: string;
@@ -25,7 +27,7 @@ interface CommentModalProps {
 }
 
 export const CommentModal = ({ isOpen, onClose, noteId }: CommentModalProps) => {
-    const { user } = useAuth();
+    const { user, session } = useAuth();
     const [comments, setComments] = useState<Comment[]>([]);
     const [newComment, setNewComment] = useState('');
     const [loading, setLoading] = useState(false);
@@ -65,19 +67,23 @@ export const CommentModal = ({ isOpen, onClose, noteId }: CommentModalProps) => 
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newComment.trim() || !user || !noteId) return;
+        if (!newComment.trim() || !user || !noteId || !session) return;
 
         setSubmitting(true);
         try {
-            const { error } = await supabase
-                .from('comments')
-                .insert({
-                    content: newComment.trim(),
-                    note_id: noteId,
-                    user_id: user.id
-                });
+            const res = await fetch(`${API_URL}/api/community/comment`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(await getAuthHeader())
+                },
+                body: JSON.stringify({
+                    noteId,
+                    content: newComment.trim()
+                })
+            });
 
-            if (error) throw error;
+            if (!res.ok) throw new Error('Failed to post comment');
 
             setNewComment('');
             fetchComments();
