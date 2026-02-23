@@ -22,7 +22,7 @@ export const Settings = () => {
     // Check params for tab or payment status
     const initialTab = searchParams.get('tab') === 'ads' || searchParams.get('ad_success') ? 'ads' : (searchParams.get('tab') === 'privacy' ? 'privacy' : 'profile');
 
-    const [activeTab, setActiveTab] = useState<'profile' | 'ads' | 'privacy' | 'chat'>(initialTab as any);
+    const [activeTab, setActiveTab] = useState<'profile' | 'ads' | 'privacy' | 'chat' | 'security'>(initialTab as any);
     const [preferredChatLanguage, setPreferredChatLanguage] = useState(authProfile?.preferred_language || 'en');
     const [privacySettings, setPrivacySettings] = useState({
         analytics: true,
@@ -264,6 +264,13 @@ export const Settings = () => {
                 >
                     <span className="flex items-center gap-2 whitespace-nowrap"><MessageSquare size={18} /> Chat & Language</span>
                     {activeTab === 'chat' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
+                </button>
+                <button
+                    onClick={() => setActiveTab('security')}
+                    className={`pb-3 px-1 relative flex-shrink-0 ${activeTab === 'security' ? 'text-primary font-medium' : 'text-gray-400 hover:text-white'}`}
+                >
+                    <span className="flex items-center gap-2 whitespace-nowrap"><Shield size={18} /> Security</span>
+                    {activeTab === 'security' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
                 </button>
             </div>
 
@@ -532,6 +539,63 @@ export const Settings = () => {
                                     <Save size={16} className="mr-2" />
                                     Save Language
                                 </Button>
+                            </div>
+                        </div>
+                    </Card>
+                )
+            }
+
+            {
+                activeTab === 'security' && (
+                    <Card variant="glass" className="p-4 sm:p-6 min-w-0">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="p-2 bg-primary/10 rounded-lg">
+                                <Shield className="text-primary" size={24} />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-semibold">Security Settings</h2>
+                                <p className="text-sm text-gray-400">Manage your account security and password</p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-6">
+                            <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                                <h3 className="text-lg font-medium mb-2 flex items-center gap-2">
+                                    <Lock size={18} className="text-primary" />
+                                    Change Password
+                                </h3>
+                                <p className="text-sm text-gray-400 mb-6">
+                                    For your security, we use email-based password resets. Click the button below to receive a secure link to update your password at <span className="text-white font-medium">{user?.email}</span>.
+                                </p>
+
+                                <Button 
+                                    onClick={async () => {
+                                        if (!user?.email) return;
+                                        setSaving(true);
+                                        try {
+                                            const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+                                                redirectTo: `${window.location.origin}/reset-password`,
+                                            });
+                                            if (error) throw error;
+                                            toast.success('Check your email for the reset link!');
+                                        } catch (err: any) {
+                                            toast.error(err.message || 'Failed to send reset email');
+                                        } finally {
+                                            setSaving(false);
+                                        }
+                                    }} 
+                                    loading={saving}
+                                    variant="outline"
+                                    className="w-full sm:w-auto"
+                                >
+                                    <Globe size={16} className="mr-2" />
+                                    Send Password Reset Email
+                                </Button>
+                            </div>
+
+                            <div className="p-4 rounded-xl border border-white/10 bg-white/5 opacity-60">
+                                <h3 className="text-lg font-medium mb-1">Authenticated Email</h3>
+                                <p className="text-sm text-gray-400">{user?.email}</p>
                             </div>
                         </div>
                     </Card>
