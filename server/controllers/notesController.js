@@ -235,6 +235,7 @@ const shareNote = async (req, res) => {
       .insert({
         note_id: noteId,
         shared_with_user_id: targetUserId,
+        shared_by: ownerId,
         permission: permission || "read",
       });
 
