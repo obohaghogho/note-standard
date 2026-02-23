@@ -10,7 +10,7 @@ export interface Message {
     sender_id: string;
     content: string;
     created_at: string;
-    type: 'text' | 'image' | 'video' | 'file' | 'audio';
+    type: 'text' | 'image' | 'video' | 'file' | 'audio' | 'call';
     isOwn?: boolean;
     original_language?: string;
     read_at?: string;
