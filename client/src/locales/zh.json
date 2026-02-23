@@ -6,7 +6,10 @@
         "profile": "個人資料",
         "logout": "登出",
         "notifications": "通知",
-        "new_note": "新筆記"
+        "new_note": "新筆記",
+        "search_language": "搜索语言...",
+        "available_languages": "可用语言",
+        "auto_save": "更改将自动保存"
     },
     "nav": {
         "home": "首頁",
