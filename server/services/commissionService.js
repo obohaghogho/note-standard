@@ -65,7 +65,7 @@ const commissionService = {
         // Fallback to admin_settings if commission_settings table is empty for this type
         if (transactionType === "FUNDING") {
           const fundingRate = await this.getSetting("funding_fee_percentage") ||
-            3.0; // Default to 3%
+            7.0; // Default to 7%
           rate = fundingRate / 100;
           if (userPlan === "PRO") rate = rate * 0.8; // 20% discount for PRO
           if (userPlan === "BUSINESS") rate = rate * 0.5; // 50% discount for BUSINESS
@@ -74,7 +74,7 @@ const commissionService = {
           const withdrawFlat = await this.getSetting("withdrawal_fee_flat") ||
             0;
           const withdrawPerc =
-            await this.getSetting("withdrawal_fee_percentage") || 3.0; // Default to 3%
+            await this.getSetting("withdrawal_fee_percentage") || 7.0; // Default to 7%
           rate = withdrawPerc / 100;
           if (userPlan === "PRO") rate = rate * 0.8; // 20% discount for PRO
           if (userPlan === "BUSINESS") rate = rate * 0.5; // 50% discount for BUSINESS
@@ -100,7 +100,7 @@ const commissionService = {
    * @param {string} userPlan - 'FREE', 'PRO', 'BUSINESS'
    */
   async calculateSpread(type, marketPrice, userPlan = "FREE") {
-    const defaultSpread = await this.getSetting("spread_percentage") || 3.0; // Default to 3%
+    const defaultSpread = await this.getSetting("spread_percentage") || 7.0; // Default to 7%
     let spreadPercentage = parseFloat(defaultSpread) / 100;
 
     // Requirement 3: PRO Features - Relative spread discount
