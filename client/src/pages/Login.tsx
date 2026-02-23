@@ -131,7 +131,7 @@ export const Login = () => {
                 </div>
 
                 <Card variant="glass" className="p-8">
-                    <form onSubmit={handleSubmit} className="space-y-6">
+                    <form id="login-form" name="login" onSubmit={handleSubmit} className="space-y-6">
                         {error && (
                             <div className="bg-red-500/10 border border-red-500/20 text-red-500 px-4 py-3 rounded-lg text-sm flex flex-col gap-2">
                                 <p>{error}</p>
@@ -186,6 +186,7 @@ export const Login = () => {
                                     <div className="relative flex items-center">
                                         <input
                                             type="checkbox"
+                                            name="remember"
                                             checked={rememberMe}
                                             onChange={(e) => setRememberMe(e.target.checked)}
                                             className="sr-only"

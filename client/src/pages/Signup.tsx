@@ -8,6 +8,7 @@ import { TermsModal } from '../components/auth/TermsModal';
 import { supabase } from '../lib/supabase';
 import { supabaseSafe } from '../lib/supabaseSafe';
 import { toast } from 'react-hot-toast';
+import { cn } from '../utils/cn';
 
 export const Signup = () => {
     const navigate = useNavigate();
@@ -172,69 +173,15 @@ export const Signup = () => {
                 </div>
 
                 <Card variant="glass" className="p-8">
-                    {step === 'verify' ? (
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            <div className="text-center mb-6">
-                                <h2 className="text-xl font-semibold mb-2">Verify Phone</h2>
-                                <p className="text-sm text-gray-400">Enter the code sent to {phone}</p>
+                    <form id="signup-form" name="signup" onSubmit={handleSubmit} className="space-y-6">
+                        {error && (
+                            <div className="bg-red-500/10 border border-red-500/20 text-red-500 px-4 py-2 rounded-lg text-sm">
+                                {error}
                             </div>
+                        )}
 
-                            {error && (
-                                <div className="bg-red-500/10 border border-red-500/20 text-red-500 px-4 py-2 rounded-lg text-sm">
-                                    {error}
-                                </div>
-                            )}
-
-                            <Input
-                                id="emailOtp"
-                                name="emailOtp"
-                                type="text"
-                                label="Email Verification Code"
-                                placeholder="123456"
-                                required
-                                value={emailOtp}
-                                onChange={(e) => setEmailOtp(e.target.value)}
-                                className="text-center letter-spacing-2 text-xl"
-                                autoComplete="one-time-code"
-                            />
-
-                            <Input
-                                id="otp"
-                                name="otp"
-                                type="text"
-                                label="Phone Verification Code"
-                                placeholder="123456"
-                                required
-                                value={otp}
-                                onChange={(e) => setOtp(e.target.value)}
-                                className="text-center letter-spacing-2 text-xl"
-                                autoComplete="one-time-code"
-                            />
-
-                            <Button 
-                                type="submit" 
-                                fullWidth 
-                                loading={loading}
-                                loadingText={loadingStatus}
-                            >
-                                Verify & Access App
-                            </Button>
-
-                            <button
-                                type="button"
-                                onClick={() => setStep('details')}
-                                className="w-full text-sm text-gray-500 hover:text-white mt-4"
-                            >
-                                Back to details
-                            </button>
-                        </form>
-                    ) : (
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            {error && (
-                                <div className="bg-red-500/10 border border-red-500/20 text-red-500 px-4 py-2 rounded-lg text-sm">
-                                    {error}
-                                </div>
-                            )}
+                        {/* Step 1: Details */}
+                        <div className={cn('space-y-6', { 'hidden': step !== 'details' })}>
                             <Input
                                 id="fullName"
                                 name="fullName"
@@ -242,7 +189,7 @@ export const Signup = () => {
                                 type="text"
                                 label="Full Name"
                                 placeholder="John Doe"
-                                required
+                                required={step === 'details'}
                                 value={fullName}
                                 onChange={(e) => setFullName(e.target.value)}
                                 autoComplete="name"
@@ -255,7 +202,7 @@ export const Signup = () => {
                                 type="email"
                                 label="Email Address"
                                 placeholder="name@company.com"
-                                required
+                                required={step === 'details'}
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 autoComplete="email"
@@ -268,7 +215,7 @@ export const Signup = () => {
                                 type="password"
                                 label="Password"
                                 placeholder="Create a password"
-                                required
+                                required={step === 'details'}
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 showPasswordToggle
@@ -282,13 +229,12 @@ export const Signup = () => {
                                 type="tel"
                                 label="Phone Number"
                                 placeholder="+1234567890"
-                                required
+                                required={step === 'details'}
                                 value={phone}
                                 onChange={(e) => setPhone(e.target.value)}
                                 autoComplete="tel"
                             />
 
-                            {/* Terms & Conditions Checkbox */}
                             <div className="flex items-start gap-3">
                                 <input
                                     type="checkbox"
@@ -326,15 +272,64 @@ export const Signup = () => {
                             <Button 
                                 type="submit" 
                                 fullWidth 
-                                loading={loading}
+                                loading={loading && step === 'details'}
                                 loadingText={loadingStatus}
                             >
                                 Send Verification Code
                             </Button>
+                        </div>
 
+                        {/* Step 2: Verify */}
+                        <div className={cn('space-y-6', { 'hidden': step !== 'verify' })}>
+                            <div className="text-center mb-6">
+                                <h2 className="text-xl font-semibold mb-2">Verify account</h2>
+                                <p className="text-sm text-gray-400">Enter the codes sent to your devices</p>
+                            </div>
 
-                        </form>
-                    )}
+                            <Input
+                                id="emailOtp"
+                                name="emailOtp"
+                                type="text"
+                                label="Email Verification Code"
+                                placeholder="123456"
+                                required={step === 'verify'}
+                                value={emailOtp}
+                                onChange={(e) => setEmailOtp(e.target.value)}
+                                className="text-center letter-spacing-2 text-xl"
+                                autoComplete="one-time-code"
+                            />
+
+                            <Input
+                                id="otp"
+                                name="otp"
+                                type="text"
+                                label="Phone Verification Code"
+                                placeholder="123456"
+                                required={step === 'verify'}
+                                value={otp}
+                                onChange={(e) => setOtp(e.target.value)}
+                                className="text-center letter-spacing-2 text-xl"
+                                autoComplete="one-time-code"
+                            />
+
+                            <Button 
+                                type="submit" 
+                                fullWidth 
+                                loading={loading && step === 'verify'}
+                                loadingText={loadingStatus}
+                            >
+                                Verify & Access App
+                            </Button>
+
+                            <button
+                                type="button"
+                                onClick={() => setStep('details')}
+                                className="w-full text-sm text-gray-500 hover:text-white mt-4"
+                            >
+                                Back to details
+                            </button>
+                        </div>
+                    </form>
                 </Card>
 
                 {/* Terms Modal */}
