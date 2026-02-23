@@ -26,7 +26,7 @@ export const TermsModal: React.FC<TermsModalProps> = ({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div className="relative w-full max-w-3xl max-h-[90vh] bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="relative w-full max-w-3xl max-h-[90dvh] bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
                 {/* Header */}
                 <div className="sticky top-0 z-10 flex items-center justify-between p-6 bg-[#0a0a0a]/95 backdrop-blur-sm border-b border-white/10">
                     <h2 className="text-2xl font-bold">Terms & Conditions</h2>
@@ -40,7 +40,7 @@ export const TermsModal: React.FC<TermsModalProps> = ({
                 </div>
 
                 {/* Content */}
-                <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)] space-y-6">
+                <div className="p-6 overflow-y-auto max-h-[calc(90dvh-180px)] space-y-6">
                     <div className="prose prose-invert max-w-none">
                         <p className="text-gray-300 leading-relaxed">
                             Welcome to <strong>Note Standard</strong>. We believe in a new internet model where user privacy and 

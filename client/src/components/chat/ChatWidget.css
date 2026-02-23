@@ -38,7 +38,7 @@
 .chat-widget-window {
     width: min(380px, calc(100% - 48px));
 
-    height: min(520px, 80vh);
+    height: min(520px, 80dvh);
 
     background: #1a1a2e;
     border: 1px solid rgba(99, 102, 241, 0.2);
@@ -356,7 +356,7 @@
 
     .chat-widget-window {
         width: 100%;
-        height: 70vh;
+        height: 70dvh;
         border-radius: 16px;
     }
 

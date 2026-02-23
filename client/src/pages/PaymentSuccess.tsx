@@ -88,7 +88,7 @@ export const PaymentSuccess: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+        <div className="min-h-[100dvh] bg-[#0a0a0a] flex items-center justify-center p-4 w-full max-w-full overflow-hidden">
             <div className="bg-gray-800 rounded-2xl p-8 max-w-md w-full text-center">
                 {status === 'loading' && (
                     <>

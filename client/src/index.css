@@ -8,9 +8,10 @@
     --foreground: 0 0% 93%;
   }
 
-  /* Global Protection */
   * {
     box-sizing: border-box;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
   }
 
   html,
@@ -21,6 +22,7 @@
     padding: 0;
     overflow-x: hidden;
     position: relative;
+    touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
     /* Respect Safe Areas (Notches, Home Indicators) */
     padding-top: env(safe-area-inset-top, 0px);
@@ -33,7 +35,6 @@
     @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary;
     font-feature-settings: "rlig" 1, "calt" 1;
     min-height: 100dvh;
-    min-height: 100vh; /* Fallback */
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
@@ -48,14 +49,11 @@
     display: flex;
     flex-direction: column;
     z-index: 1;
+    overflow-x: hidden;
   }
 
   /* Universal resets to prevent content-driven overflow */
   * {
-    overflow-wrap: break-word;
-    word-wrap: break-word;
-    word-break: break-word; /* Force break to prevent wide elements */
-    max-width: 100%;
     -webkit-tap-highlight-color: transparent;
   }
 
@@ -116,7 +114,7 @@
 
   /* Base modal content style - can be overridden with width/height utilities */
   .modal-content {
-    @apply relative bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] w-full max-w-md p-6;
+    @apply relative bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] w-full max-w-md p-6;
   }
 
   .modal-close {
@@ -154,7 +152,7 @@
     padding: 1.5rem;
     width: 100%;
     max-width: min(480px, 95vw);
-    max-height: 90vh;
+    max-height: 90dvh;
     overflow-y: auto;
     position: relative;
     animation: modalScale 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -208,5 +206,11 @@
 
   .glass-card {
     @apply bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl;
+  }
+}
+/* Prevent auto-zoom on iOS inputs */
+@media screen and (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
   }
 }
