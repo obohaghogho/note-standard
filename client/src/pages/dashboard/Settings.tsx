@@ -533,6 +533,7 @@ export const Settings = () => {
                                 <option value="ja">Japanese (日本語)</option>
                                 <option value="ko">Korean (한국어)</option>
                                 <option value="ru">Russian (Русский)</option>
+                                <option value="ar">Arabic (العربية)</option>
                             </select>
 
                             <div className="pt-4">
