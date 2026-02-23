@@ -5,11 +5,12 @@ import { usePresence } from '../../context/PresenceContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../common/SecureImage';
-import { Send, Languages, AlertTriangle, Flag, Phone, Video, VideoOff, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, MicOff, ArrowLeft, Maximize } from 'lucide-react';
+import { Send, Languages, Flag, Phone, Video, VideoOff, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, MicOff, ArrowLeft, Maximize, Play, Pause } from 'lucide-react';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { MediaUpload } from './MediaUpload';
 import { VoiceRecorder } from './VoiceRecorder';
 import { API_URL } from '../../lib/api';
+import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
 import { MediaPreviewModal } from './MediaPreviewModal';
 
@@ -286,12 +287,53 @@ const ChatWindow: React.FC = () => {
         ), { duration: 5000 });
     };
 
-    const handleVoiceMessage = async (_blob: Blob) => {
+    const handleVoiceMessage = async (blob: Blob) => {
+        if (!session || !activeConversationId) return;
+        
+        const loadingToast = toast.loading('Sending voice message...');
         try {
-            await sendMessage('Sent a voice message', 'audio');
+            const fileName = `voice_${Date.now()}.webm`;
+            const filePath = `${activeConversationId}/${fileName}`;
+
+            // 1. Upload to Supabase Storage
+            const { error: uploadError, data } = await supabase.storage
+                .from('chat-media')
+                .upload(filePath, blob, {
+                    cacheControl: '3600',
+                    upsert: false,
+                    contentType: 'audio/webm'
+                });
+
+            if (uploadError) throw uploadError;
+
+            // 2. Create Attachment Record
+            const res = await fetch(`${API_URL}/api/media/attachments`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`
+                },
+                body: JSON.stringify({
+                    conversationId: activeConversationId,
+                    fileName,
+                    fileType: 'audio/webm',
+                    fileSize: blob.size,
+                    storagePath: data.path,
+                    metadata: {}
+                })
+            });
+
+            if (!res.ok) throw new Error('Failed to create attachment record');
+            const attachment = await res.json();
+
+            // 3. Send Message
+            await sendMessage('Sent a voice message', 'audio', attachment.id);
+            
             setIsVoiceRecording(false);
+            toast.success('Voice message sent', { id: loadingToast });
         } catch (err) {
-            toast.error('Failed to send voice message');
+            console.error('Failed to send voice message:', err);
+            toast.error('Failed to send voice message', { id: loadingToast });
         }
     };
 
@@ -483,7 +525,7 @@ const ChatWindow: React.FC = () => {
                     currentMessages.map((msg) => (
                         <div key={msg.id || Math.random()} className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                             <div className={`max-w-[92%] md:max-w-[70%] rounded-2xl p-3 shadow-md border ${msg.sender_id === user?.id ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-br-sm border-blue-500/50' : 'bg-gray-800 text-gray-200 rounded-bl-sm border-gray-700'} relative group`}>
-                                {msg.attachment && (
+                                {msg.attachment && msg.type !== 'audio' && (
                                     <div className="mb-2 rounded-lg overflow-hidden border border-black/20 bg-black/10">
                                         {msg.type === 'image' ? (
                                             <ImageWithSignedUrl 
@@ -508,33 +550,71 @@ const ChatWindow: React.FC = () => {
                                         )}
                                     </div>
                                 )}
-                                {!msg.isOwn && translations[msg.id] && translations[msg.id] !== 'translating...' && !showOriginal[msg.id] ? (
-                                    <div>
-                                        <div className="flex items-center justify-between mb-1">
-                                            <div className="flex items-center gap-1.5 text-[10px] text-blue-300">
-                                                <Languages size={10} />
-                                                <span>Translated • {msg.original_language || 'detected'}</span>
-                                                <button onClick={() => setShowOriginal(prev => ({ ...prev, [msg.id]: true }))} className="underline hover:text-blue-200 ml-1">Original</button>
-                                            </div>
-                                            <button onClick={() => handleReport(msg.id, msg.content, translations[msg.id])} className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-gray-500 hover:text-red-400 flex items-center gap-1"><Flag size={8} /> Report</button>
+                                
+                                {msg.type === 'call' && (
+                                    <div className="flex items-center gap-2 py-1 px-1 opacity-90">
+                                        <div className={`p-1.5 rounded-full ${msg.content.includes('Missed') ? 'bg-red-500/20 text-red-100' : 'bg-green-500/20 text-green-100'}`}>
+                                            {msg.content.includes('video') ? <Video size={14} /> : <Phone size={14} />}
                                         </div>
-                                        <p className="break-words text-sm leading-relaxed">{translations[msg.id]}</p>
-                                    </div>
-                                ) : (
-                                    <div>
-                                        {msg.sender_id !== user?.id && msg.original_language && msg.original_language !== preferredLanguage && (
-                                            <div className="flex items-center gap-1.5 text-[10px] text-gray-400 mb-1">
-                                                <span>Original ({msg.original_language})</span>
-                                                <button onClick={() => setShowOriginal(prev => ({ ...prev, [msg.id]: false }))} className="underline hover:text-white ml-1">Translate</button>
-                                            </div>
-                                        )}
-                                        <p className="break-words text-sm leading-relaxed">{msg.content}</p>
+                                        <div className="flex flex-col">
+                                            <span className="text-xs font-medium">{msg.content}</span>
+                                            <span className="text-[10px] opacity-70">
+                                                {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                            </span>
+                                        </div>
                                     </div>
                                 )}
-                                <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
-                                    <span className="text-[10px]">{msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}</span>
-                                    {msg.sender_id === user?.id && (<div className="text-white/80 scale-75 origin-right">{msg.read_at ? <CheckCheck size={14} className="text-blue-300" /> : <Check size={14} />}</div>)}
-                                </div>
+
+                                {msg.type === 'audio' && (
+                                    <div className="flex flex-col gap-2 min-w-[200px]">
+                                        <AudioPlayer 
+                                            path={msg.attachment?.storage_path || ''} 
+                                            fetchUrl={fetchSignedUrl} 
+                                        />
+                                        <div className="flex items-center justify-end gap-1 opacity-70">
+                                            <span className="text-[10px]">
+                                                {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}
+                                            </span>
+                                            {msg.sender_id === user?.id && (
+                                                <div className="text-white/80 scale-75 origin-right">
+                                                    {msg.read_at ? <CheckCheck size={14} className="text-blue-300" /> : <Check size={14} />}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {!['call', 'audio'].includes(msg.type) && (
+                                    <>
+                                        {!msg.isOwn && translations[msg.id] && translations[msg.id] !== 'translating...' && !showOriginal[msg.id] ? (
+                                            <div>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <div className="flex items-center gap-1.5 text-[10px] text-blue-300">
+                                                        <Languages size={10} />
+                                                        <span>Translated • {msg.original_language || 'detected'}</span>
+                                                        <button onClick={() => setShowOriginal(prev => ({ ...prev, [msg.id]: true }))} className="underline hover:text-blue-200 ml-1">Original</button>
+                                                    </div>
+                                                    <button onClick={() => handleReport(msg.id, msg.content, translations[msg.id])} className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-gray-500 hover:text-red-400 flex items-center gap-1"><Flag size={8} /> Report</button>
+                                                </div>
+                                                <p className="break-words text-sm leading-relaxed">{translations[msg.id]}</p>
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                {msg.sender_id !== user?.id && msg.original_language && msg.original_language !== preferredLanguage && (
+                                                    <div className="flex items-center gap-1.5 text-[10px] text-gray-400 mb-1">
+                                                        <span>Original ({msg.original_language})</span>
+                                                        <button onClick={() => setShowOriginal(prev => ({ ...prev, [msg.id]: false }))} className="underline hover:text-white ml-1">Translate</button>
+                                                    </div>
+                                                )}
+                                                <p className="break-words text-sm leading-relaxed">{msg.content}</p>
+                                            </div>
+                                        )}
+                                        <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
+                                            <span className="text-[10px]">{msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}</span>
+                                            {msg.sender_id === user?.id && (<div className="text-white/80 scale-75 origin-right">{msg.read_at ? <CheckCheck size={14} className="text-blue-300" /> : <Check size={14} />}</div>)}
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
                     ))
@@ -618,6 +698,74 @@ const ChatWindow: React.FC = () => {
 };
 
 // --- Helper Components ---
+
+const AudioPlayer = ({ path, fetchUrl }: { path: string, fetchUrl: (p: string) => Promise<string | null> }) => {
+    const [url, setUrl] = useState<string | null>(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [duration, setDuration] = useState(0);
+    const [currentTime, setCurrentTime] = useState(0);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+
+    useEffect(() => {
+        fetchUrl(path).then(setUrl);
+    }, [path, fetchUrl]);
+
+    const togglePlay = () => {
+        if (!audioRef.current) return;
+        if (isPlaying) audioRef.current.pause();
+        else audioRef.current.play();
+        setIsPlaying(!isPlaying);
+    };
+
+    const onLoadedMetadata = () => {
+        if (audioRef.current) setDuration(audioRef.current.duration);
+    };
+
+    const onTimeUpdate = () => {
+        if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
+    };
+
+    const formatTime = (time: number) => {
+        const mins = Math.floor(time / 60);
+        const secs = Math.floor(time % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    if (!url) return <div className="p-2 animate-pulse bg-white/5 rounded-lg w-full h-12"></div>;
+
+    return (
+        <div className="flex items-center gap-3 bg-white/10 backdrop-blur-sm p-3 rounded-2xl border border-white/10 w-full max-w-sm">
+            <audio 
+                ref={audioRef} 
+                src={url} 
+                onLoadedMetadata={onLoadedMetadata} 
+                onTimeUpdate={onTimeUpdate} 
+                onEnded={() => setIsPlaying(false)}
+            />
+            <button 
+                onClick={togglePlay} 
+                className="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-full bg-blue-500 hover:bg-blue-400 transition-colors text-white shadow-lg"
+            >
+                {isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} className="ml-0.5" fill="currentColor" />}
+            </button>
+            <div className="flex-1 flex flex-col gap-1">
+                <div className="h-1.5 bg-white/20 rounded-full overflow-hidden relative">
+                    <div 
+                        className="absolute inset-y-0 left-0 bg-white rounded-full transition-all duration-100" 
+                        style={{ width: `${(currentTime / duration) * 100 || 0}%` }}
+                    />
+                </div>
+                <div className="flex justify-between text-[10px] font-medium opacity-60">
+                    <span>{formatTime(currentTime)}</span>
+                    <span>{formatTime(duration)}</span>
+                </div>
+            </div>
+            <div className="flex-shrink-0">
+                <Mic size={14} className="opacity-40" />
+            </div>
+        </div>
+    );
+};
 
 const ImageWithSignedUrl = ({ path, fetchUrl, onPreview }: { path: string, fetchUrl: (p: string) => Promise<string | null>, onPreview?: (url: string) => void }) => {
     const [url, setUrl] = useState<string | null>(null);

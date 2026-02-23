@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { useSocket } from './SocketContext';
 import { useAuth } from './AuthContext';
+import { useChat } from './ChatContext';
 import toast from 'react-hot-toast';
 
 interface CallState {
@@ -36,12 +37,16 @@ const ICE_SERVERS = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' },
     ],
 };
 
 export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { socket, connected: socketConnected } = useSocket();
     const { user } = useAuth();
+    const { sendMessage } = useChat();
     
     const [callState, setCallState] = useState<CallState>({
         type: null,
@@ -138,6 +143,9 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             if (socket && user) {
                 console.log('[WebRTC] Emitting call:init');
                 socket.emit('call:init', { to: otherUserId, from: user.id, type, conversationId });
+                
+                // 4.1 Log call in chat (Non-blocking)
+                sendMessage(`Started ${type} call`, 'call').catch(err => console.warn('Failed to log call:', err));
             } else {
                 console.warn('[WebRTC] Socket or user missing during call init', { hasSocket: !!socket, hasUser: !!user });
             }
@@ -162,6 +170,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         console.log('[WebRTC] Rejecting call');
         if (socket && callState.otherUser && user) {
             socket.emit('call:end', { to: callState.otherUser, from: user.id, conversationId: callState.conversationId });
+            sendMessage('Missed call', 'call').catch(err => console.warn('Failed to log reject:', err));
         }
         cleanup();
     };
@@ -170,6 +179,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         console.log('[WebRTC] Ending call');
         if (socket && callState.otherUser && user) {
             socket.emit('call:end', { to: callState.otherUser, from: user.id, conversationId: callState.conversationId });
+            sendMessage('Call ended', 'call').catch(err => console.warn('Failed to log end:', err));
         }
         cleanup();
     };
