@@ -36,6 +36,28 @@ export const CommentModal = ({ isOpen, onClose, noteId }: CommentModalProps) => 
     useEffect(() => {
         if (isOpen && noteId) {
             fetchComments();
+
+            // Setup Realtime Subscription
+            const channel = supabase
+                .channel(`note-comments-${noteId}`)
+                .on(
+                    'postgres_changes',
+                    {
+                        event: '*',
+                        schema: 'public',
+                        table: 'comments',
+                        filter: `note_id=eq.${noteId}`
+                    },
+                    (payload) => {
+                        console.log('Comment change detected:', payload);
+                        fetchComments(); // Refetch to get profile details and updated list
+                    }
+                )
+                .subscribe();
+
+            return () => {
+                supabase.removeChannel(channel);
+            };
         } else {
             setComments([]);
             setNewComment('');
