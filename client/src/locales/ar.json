@@ -1,0 +1,32 @@
+{
+    "common": {
+        "search": "بحث عالمي...",
+        "language": "اللغة",
+        "settings": "الإعدادات",
+        "profile": "الملف الشخصي",
+        "logout": "تسجيل الخروج",
+        "notifications": "التنبيهات",
+        "new_note": "ملاحظة جديدة",
+        "search_language": "بحث عن لغة...",
+        "available_languages": "اللغات المتاحة",
+        "auto_save": "يتم حفظ التغييرات تلقائياً"
+    },
+    "nav": {
+        "home": "الرئيسية",
+        "notes": "الملاحظات",
+        "chat": "المحادثة",
+        "shared": "تمت مشاركتها",
+        "feed": "الخلاصة",
+        "favorites": "المفضلة",
+        "billing": "الفواتير",
+        "trends": "الاتجاهات",
+        "search_item": "بحث",
+        "teams": "الفرق",
+        "wallet": "المحفظة"
+    },
+    "auth": {
+        "login": "تسجيل الدخول",
+        "signup": "إنشاء حساب",
+        "welcome": "مرحباً بعودتك"
+    }
+}

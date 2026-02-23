@@ -18,6 +18,7 @@ const ALL_LANGUAGES = [
     { code: 'ja', name: 'Japanese', flag: '🇯🇵', native: '日本語' },
     { code: 'ko', name: 'Korean', flag: '🇰🇷', native: '한국어' },
     { code: 'ru', name: 'Russian', flag: '🇷🇺', native: 'Русский' },
+    { code: 'ar', name: 'Arabic', flag: '🇸🇦', native: 'العربية', dir: 'rtl' },
 ];
 
 interface LanguageModalProps {
@@ -188,15 +189,22 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
                         </div>
 
                         {/* Language List - Optimized for mobile touch and desktop scroll */}
-                        <div className="flex-1 overflow-y-auto px-4 pb-8 pt-2 scroll-smooth no-scrollbar overscroll-contain">
+                        <div 
+                            className="flex-1 overflow-y-auto px-4 pb-8 pt-2 scroll-smooth custom-scrollbar-visible overscroll-contain"
+                            style={{ 
+                                scrollbarWidth: 'thin',
+                                scrollbarColor: 'rgba(255,255,255,0.2) transparent'
+                            }}
+                        >
                             <div className="grid gap-2">
                                 {filteredLanguages.length > 0 ? (
-                                    filteredLanguages.map((lang) => {
+                                    filteredLanguages.map((lang: any) => {
                                         const isActive = currentLang === lang.code;
                                         return (
                                             <button
                                                 key={lang.code}
                                                 onClick={() => changeLanguage(lang.code)}
+                                                dir={lang.dir || 'ltr'}
                                                 className={`
                                                     group w-full flex items-center justify-between px-4 py-4 rounded-2xl transition-all duration-300 relative overflow-hidden
                                                     ${isActive 
@@ -205,11 +213,11 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
                                                     }
                                                 `}
                                             >
-                                                <div className="flex items-center gap-4 relative z-10">
+                                                <div className={`flex items-center gap-4 relative z-10 ${lang.dir === 'rtl' ? 'flex-row-reverse' : ''}`}>
                                                     <span className="text-3xl filter drop-shadow-lg group-hover:scale-110 transition-transform duration-500">
                                                         {lang.flag}
                                                     </span>
-                                                    <div className="text-left">
+                                                    <div className={lang.dir === 'rtl' ? 'text-right' : 'text-left'}>
                                                         <div className={`font-bold text-base leading-none mb-1.5 ${isActive ? 'text-primary' : 'text-gray-200'}`}>
                                                             {lang.native}
                                                         </div>
