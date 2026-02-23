@@ -1,12 +1,11 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useChat } from '../../context/ChatContext';
-import type { Message } from '../../context/ChatContext';
 import { usePresence } from '../../context/PresenceContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../common/SecureImage';
-import { Send, Languages, AlertTriangle, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, MicOff, ArrowLeft, Maximize } from 'lucide-react';
+import { Send, Languages, AlertTriangle, Flag, Phone, Video, VideoOff, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, MicOff, ArrowLeft, Maximize } from 'lucide-react';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { MediaUpload } from './MediaUpload';
 import { VoiceRecorder } from './VoiceRecorder';
@@ -137,7 +136,7 @@ const ChatWindow: React.FC = () => {
 
         translateNewMessages();
 
-    }, [currentMessages, activeConversationId, preferredLanguage, user, translations]);
+    }, [currentMessages, activeConversationId, preferredLanguage, user, session?.access_token]);
 
 
     const handleReport = async (msgId: string, original: string, translated: string) => {
@@ -189,7 +188,7 @@ const ChatWindow: React.FC = () => {
         return () => clearTimeout(delayDebounce);
     }, [searchQuery, isSearchOpen, activeConversationId, session?.access_token]);
 
-    const fetchSignedUrl = async (path: string) => {
+    const fetchSignedUrl = useCallback(async (path: string) => {
         if (signedUrls[path]) return signedUrls[path];
         try {
             const res = await fetch(`${API_URL}/api/media/signed-url?path=${encodeURIComponent(path)}`, {
@@ -204,7 +203,7 @@ const ChatWindow: React.FC = () => {
             console.error('Failed to get signed URL:', err);
         }
         return null;
-    };
+    }, [signedUrls, session?.access_token]);
 
     const handleSend = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
@@ -393,7 +392,7 @@ const ChatWindow: React.FC = () => {
     }
 
     return (
-        <div className="flex flex-col absolute inset-0 bg-gray-900 text-white overflow-x-hidden max-w-full">
+        <div className="flex-1 flex flex-col h-full min-h-0 bg-gray-900 text-white overflow-hidden relative">
             <div className="pt-safe flex-shrink-0 border-b border-gray-800 bg-gray-900/50 backdrop-blur-md sticky top-0 z-10">
                 <div className="p-2 md:p-4 flex justify-between items-center w-full">
                     <div className="flex items-center gap-2 md:gap-3 min-w-0">
@@ -474,7 +473,7 @@ const ChatWindow: React.FC = () => {
                             <Search size={20} />
                         </button>
                     )}
-                    {!isPending && !isWaitingForOthers && (
+                    {!isPending && (
                         <div className="flex items-center gap-1 md:gap-2">
                             <button 
                                 onClick={() => handleCall('voice')}
@@ -992,7 +991,7 @@ export const CallOverlay = ({ callState, acceptCall, rejectCall, endCall, localS
                                 className={`p-5 rounded-full transition-all ${!isVideoEnabled ? 'bg-red-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
                                 title={isVideoEnabled ? "Turn Camera Off" : "Turn Camera On"}
                             >
-                                {isVideoEnabled ? <Video size={26} /> : <Video size={26} />}
+                                {isVideoEnabled ? <Video size={26} /> : <VideoOff size={26} />}
                             </button>
                         </div>
                     )}
