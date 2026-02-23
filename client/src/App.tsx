@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import React, { useEffect, Suspense } from 'react';
+import { useEffect, Suspense } from 'react';
 
 // Layout & structural components (eagerly loaded — needed immediately)
 import { DashboardLayout } from './components/layout/DashboardLayout';
@@ -15,43 +15,44 @@ import { WebRTCProvider } from './context/WebRTCContext';
 import { PresenceProvider } from './context/PresenceContext';
 import { ChatWidget } from './components/chat/ChatWidget';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { lazyWithRetry } from './utils/lazyWithRetry';
 
 // ─── Lazy-loaded pages (route-level code splitting) ───
 // Public pages
-const LandingPage = React.lazy(() => import('./pages/LandingPage').then(m => ({ default: m.LandingPage })));
-const Login = React.lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
-const Signup = React.lazy(() => import('./pages/Signup').then(m => ({ default: m.Signup })));
-const TermsPage = React.lazy(() => import('./pages/TermsPage').then(m => ({ default: m.TermsPage })));
-const PrivacyPage = React.lazy(() => import('./pages/PrivacyPage').then(m => ({ default: m.PrivacyPage })));
-const ResetPassword = React.lazy(() => import('./pages/ResetPassword').then(m => ({ default: m.ResetPassword })));
-const PaymentSuccess = React.lazy(() => import('./pages/PaymentSuccess').then(m => ({ default: m.PaymentSuccess })));
-const PaymentCancel = React.lazy(() => import('./pages/PaymentCancel').then(m => ({ default: m.PaymentCancel })));
+const LandingPage = lazyWithRetry(() => import('./pages/LandingPage').then(m => m.LandingPage), 'LandingPage');
+const Login = lazyWithRetry(() => import('./pages/Login').then(m => m.Login), 'Login');
+const Signup = lazyWithRetry(() => import('./pages/Signup').then(m => m.Signup), 'Signup');
+const TermsPage = lazyWithRetry(() => import('./pages/TermsPage').then(m => m.TermsPage), 'TermsPage');
+const PrivacyPage = lazyWithRetry(() => import('./pages/PrivacyPage').then(m => m.PrivacyPage), 'PrivacyPage');
+const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword').then(m => m.ResetPassword), 'ResetPassword');
+const PaymentSuccess = lazyWithRetry(() => import('./pages/PaymentSuccess').then(m => m.PaymentSuccess), 'PaymentSuccess');
+const PaymentCancel = lazyWithRetry(() => import('./pages/PaymentCancel').then(m => m.PaymentCancel), 'PaymentCancel');
 
 // Dashboard pages
-const DashboardHome = React.lazy(() => import('./pages/dashboard/DashboardHome').then(m => ({ default: m.DashboardHome })));
-const Notes = React.lazy(() => import('./pages/dashboard/Notes').then(m => ({ default: m.Notes })));
-const Chat = React.lazy(() => import('./pages/dashboard/Chat').then(m => ({ default: m.Chat })));
-const Shared = React.lazy(() => import('./pages/dashboard/Shared').then(m => ({ default: m.Shared })));
-const Feed = React.lazy(() => import('./pages/dashboard/Feed').then(m => ({ default: m.Feed })));
-const Search = React.lazy(() => import('./pages/dashboard/Search').then(m => ({ default: m.Search })));
-const Settings = React.lazy(() => import('./pages/dashboard/Settings').then(m => ({ default: m.Settings })));
-const Billing = React.lazy(() => import('./pages/dashboard/Billing').then(m => ({ default: m.Billing })));
-const Affiliates = React.lazy(() => import('./pages/dashboard/Affiliates').then(m => ({ default: m.Affiliates })));
-const Notifications = React.lazy(() => import('./pages/dashboard/Notifications').then(m => ({ default: m.Notifications })));
-const Trends = React.lazy(() => import('./pages/dashboard/Trends').then(m => ({ default: m.Trends })));
-const WalletPage = React.lazy(() => import('./pages/dashboard/WalletPage').then(m => ({ default: m.WalletPage })));
-const TeamsPage = React.lazy(() => import('./pages/teams/TeamsPage').then(m => ({ default: m.TeamsPage })));
+const DashboardHome = lazyWithRetry(() => import('./pages/dashboard/DashboardHome').then(m => m.DashboardHome), 'DashboardHome');
+const Notes = lazyWithRetry(() => import('./pages/dashboard/Notes').then(m => m.Notes), 'Notes');
+const Chat = lazyWithRetry(() => import('./pages/dashboard/Chat').then(m => m.Chat), 'Chat');
+const Shared = lazyWithRetry(() => import('./pages/dashboard/Shared').then(m => m.Shared), 'Shared');
+const Feed = lazyWithRetry(() => import('./pages/dashboard/Feed').then(m => m.Feed), 'Feed');
+const Search = lazyWithRetry(() => import('./pages/dashboard/Search').then(m => m.Search), 'Search');
+const Settings = lazyWithRetry(() => import('./pages/dashboard/Settings').then(m => m.Settings), 'Settings');
+const Billing = lazyWithRetry(() => import('./pages/dashboard/Billing').then(m => m.Billing), 'Billing');
+const Affiliates = lazyWithRetry(() => import('./pages/dashboard/Affiliates').then(m => m.Affiliates), 'Affiliates');
+const Notifications = lazyWithRetry(() => import('./pages/dashboard/Notifications').then(m => m.Notifications), 'Notifications');
+const Trends = lazyWithRetry(() => import('./pages/dashboard/Trends').then(m => m.Trends), 'Trends');
+const WalletPage = lazyWithRetry(() => import('./pages/dashboard/WalletPage').then(m => m.WalletPage), 'WalletPage');
+const TeamsPage = lazyWithRetry(() => import('./pages/teams/TeamsPage').then(m => m.TeamsPage), 'TeamsPage');
 
 // Admin pages
-const AdminDashboard = React.lazy(() => import('./pages/admin/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
-const UserManagement = React.lazy(() => import('./pages/admin/UserManagement').then(m => ({ default: m.UserManagement })));
-const AdminChat = React.lazy(() => import('./pages/admin/AdminChat').then(m => ({ default: m.AdminChat })));
-const AuditLogs = React.lazy(() => import('./pages/admin/AuditLogs').then(m => ({ default: m.AuditLogs })));
-const BroadcastManager = React.lazy(() => import('./pages/admin/BroadcastManager').then(m => ({ default: m.BroadcastManager })));
-const AutoReplySettings = React.lazy(() => import('./pages/admin/AutoReplySettings').then(m => ({ default: m.AutoReplySettings })));
-const Analytics = React.lazy(() => import('./pages/admin/Analytics').then(m => ({ default: m.Analytics })));
-const AdminSettings = React.lazy(() => import('./pages/admin/AdminSettings').then(m => ({ default: m.AdminSettings })));
-const ManageAds = React.lazy(() => import('./pages/admin/ManageAds').then(m => ({ default: m.ManageAds })));
+const AdminDashboard = lazyWithRetry(() => import('./pages/admin/AdminDashboard').then(m => m.AdminDashboard), 'AdminDashboard');
+const UserManagement = lazyWithRetry(() => import('./pages/admin/UserManagement').then(m => m.UserManagement), 'UserManagement');
+const AdminChat = lazyWithRetry(() => import('./pages/admin/AdminChat').then(m => m.AdminChat), 'AdminChat');
+const AuditLogs = lazyWithRetry(() => import('./pages/admin/AuditLogs').then(m => m.AuditLogs), 'AuditLogs');
+const BroadcastManager = lazyWithRetry(() => import('./pages/admin/BroadcastManager').then(m => m.BroadcastManager), 'BroadcastManager');
+const AutoReplySettings = lazyWithRetry(() => import('./pages/admin/AutoReplySettings').then(m => m.AutoReplySettings), 'AutoReplySettings');
+const Analytics = lazyWithRetry(() => import('./pages/admin/Analytics').then(m => m.Analytics), 'Analytics');
+const AdminSettings = lazyWithRetry(() => import('./pages/admin/AdminSettings').then(m => m.AdminSettings), 'AdminSettings');
+const ManageAds = lazyWithRetry(() => import('./pages/admin/ManageAds').then(m => m.ManageAds), 'ManageAds');
 
 const ChatRedirect = () => {
   const { id } = useParams();

@@ -30,6 +30,25 @@ export class ErrorBoundary extends Component<Props, State> {
     componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
         console.error('ErrorBoundary caught an error:', error, errorInfo);
         
+        // Handle chunk load errors (often due to new deployments)
+        const isChunkLoadError = 
+            error.name === 'ChunkLoadError' || 
+            error.message.includes('Failed to fetch dynamically imported module') ||
+            error.message.includes('Loading chunk');
+
+        if (isChunkLoadError) {
+            // Check if we've already tried reloading to avoid infinite loops
+            const hasReloaded = sessionStorage.getItem('last_chunk_load_error_reload');
+            const now = Date.now();
+            
+            // If we haven't reloaded in the last 10 seconds, reload.
+            if (!hasReloaded || (now - parseInt(hasReloaded)) > 10000) {
+                sessionStorage.setItem('last_chunk_load_error_reload', now.toString());
+                window.location.reload();
+                return;
+            }
+        }
+
         // Show toast notification
         toast.error(`Something went wrong: ${error.message}`);
     }
