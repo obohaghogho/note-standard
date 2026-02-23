@@ -127,6 +127,19 @@ setInterval(async () => {
 
 // Background job for real-time Trends
 const analyticsService = require("./services/analyticsService");
+
+// 1. Immediate aggregation on startup
+(async () => {
+  try {
+    console.log("[Trends] Running initial aggregation...");
+    await analyticsService.aggregateDailyStats();
+    console.log("[Trends] Initial aggregation complete.");
+  } catch (err) {
+    console.error("[Trends] Initial aggregation failed:", err.message);
+  }
+})();
+
+// 2. Real-time broadcast (Every 60s)
 setInterval(async () => {
   try {
     const stats = await analyticsService.getRealtimeStats();
@@ -136,7 +149,17 @@ setInterval(async () => {
   } catch (err) {
     console.error("[Trends] Interval broadcast failed:", err.message);
   }
-}, 60000); // Every 60 seconds
+}, 60000);
+
+// 3. Periodic persistence (Every 6 hours)
+setInterval(async () => {
+  try {
+    console.log("[Trends] Running scheduled persistence...");
+    await analyticsService.aggregateDailyStats();
+  } catch (err) {
+    console.error("[Trends] Scheduled persistence failed:", err.message);
+  }
+}, 6 * 60 * 60 * 1000);
 
 io.on("connection", async (socket) => {
   const userId = socket.user.id;

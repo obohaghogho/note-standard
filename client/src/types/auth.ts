@@ -6,7 +6,14 @@ export interface Profile {
   avatar_url?: string;
   role?: string;
   preferred_language?: string;
-  preferences?: Record<string, unknown>;
+  user_consent?: boolean;
+  consent_at?: string;
+  preferences?: {
+    analytics?: boolean;
+    offers?: boolean;
+    partners?: boolean;
+    [key: string]: any;
+  };
   updated_at?: string;
 }
 
