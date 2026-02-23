@@ -6,70 +6,74 @@ const analyticsService = {
     try {
       const today = new Date().toISOString().split("T")[0];
 
-      // 1. Get IDs of users who opted IN to analytics
+      // 1. Get IDs of users who have user_consent enabled
       const { data: users, error: userError } = await supabase
         .from("profiles")
         .select("id")
-        .eq("preferences->>analytics", "true");
+        .eq("user_consent", true);
 
       if (userError) throw userError;
 
-      const userIds = users.map((u) => u.id);
+      const userIds = (users || []).map((u) => u.id);
 
-      if (userIds.length === 0) {
-        console.log("No users opted into analytics.");
-        return null;
-      }
-
-      // 2. Calculate Stats for these users only
+      // 2. Calculate Stats
       const startOfDay = new Date();
       startOfDay.setHours(0, 0, 0, 0);
       const startOfDayISO = startOfDay.toISOString();
 
-      // A. Count active users (last_seen >= startOfDay)
-      const { count: activeCount, error: activeError } = await supabase
-        .from("profiles")
-        .select("*", { count: "exact", head: true })
-        .in("id", userIds)
-        .gte("last_seen", startOfDayISO);
+      let activeCount = 0;
+      let notesCount = 0;
+      let topTags = {};
 
-      if (activeError) throw activeError;
+      if (userIds.length > 0) {
+        // A. Count active users (last_active_at >= startOfDay OR last_seen >= startOfDay)
+        const { count, error: activeError } = await supabase
+          .from("profiles")
+          .select("*", { count: "exact", head: true })
+          .in("id", userIds)
+          .or(
+            `last_active_at.gte.${startOfDayISO},last_seen.gte.${startOfDayISO}`,
+          );
 
-      // B. Count notes created today by these users
-      const { data: notes, error: notesError } = await supabase
-        .from("notes")
-        .select("tags")
-        .in("owner_id", userIds)
-        .gte("created_at", startOfDayISO);
+        if (activeError) throw activeError;
+        activeCount = count || 0;
 
-      if (notesError) throw notesError;
+        // B. Count notes created today by these users
+        const { data: notes, error: notesError } = await supabase
+          .from("notes")
+          .select("tags")
+          .in("owner_id", userIds)
+          .gte("created_at", startOfDayISO);
 
-      const notesCount = notes.length;
+        if (notesError) throw notesError;
 
-      // C. Aggregate tags
-      const tagCounts = {};
-      notes.forEach((note) => {
-        if (note.tags && Array.isArray(note.tags)) {
-          note.tags.forEach((tag) => {
-            const t = tag.toLowerCase().trim();
-            if (t) tagCounts[t] = (tagCounts[t] || 0) + 1;
-          });
-        }
-      });
+        notesCount = notes ? notes.length : 0;
 
-      // Get top 5 tags
-      const topTags = Object.entries(tagCounts)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 5)
-        .reduce((obj, [key, val]) => ({ ...obj, [key]: val }), {});
+        // C. Aggregate tags
+        const tagCounts = {};
+        notes?.forEach((note) => {
+          if (note.tags && Array.isArray(note.tags)) {
+            note.tags.forEach((tag) => {
+              const t = tag.toLowerCase().trim();
+              if (t) tagCounts[t] = (tagCounts[t] || 0) + 1;
+            });
+          }
+        });
+
+        // Get top 10 tags
+        topTags = Object.entries(tagCounts)
+          .sort(([, a], [, b]) => b - a)
+          .slice(0, 10)
+          .reduce((obj, [key, val]) => ({ ...obj, [key]: val }), {});
+      }
 
       // 3. Upsert into daily_stats
       const { data: stats, error: statsError } = await supabase
         .from("daily_stats")
         .upsert({
           date: today,
-          total_active_users: activeCount || 0,
-          total_notes_created: notesCount || 0,
+          total_active_users: activeCount,
+          total_notes_created: notesCount,
           top_tags: topTags,
           created_at: new Date().toISOString(),
         })
@@ -86,68 +90,81 @@ const analyticsService = {
   },
 
   async getLatestStats() {
-    const { data, error } = await supabase
-      .from("daily_stats")
-      .select("*")
-      .order("date", { ascending: false })
-      .limit(7); // Last 7 days
+    try {
+      const { data, error } = await supabase
+        .from("daily_stats")
+        .select("*")
+        .order("date", { ascending: false })
+        .limit(7);
 
-    if (error) throw error;
-    return data;
+      if (error) throw error;
+      return data || [];
+    } catch (err) {
+      console.error("Error fetching latest stats:", err);
+      return [];
+    }
   },
 
   async getRealtimeStats() {
     try {
-      // 1. Get IDs of users who opted IN to analytics
+      // 1. Get IDs of users who have user_consent enabled
       const { data: users, error: userError } = await supabase
         .from("profiles")
         .select("id")
-        .eq("preferences->>analytics", "true");
+        .eq("user_consent", true);
 
       if (userError || !users) return null;
       const userIds = users.map((u) => u.id);
-      if (userIds.length === 0) return null;
 
       const startOfDay = new Date();
       startOfDay.setHours(0, 0, 0, 0);
       const startOfDayISO = startOfDay.toISOString();
 
-      // A. Count active users (last_seen >= startOfDay)
-      const { count: activeCount } = await supabase
-        .from("profiles")
-        .select("*", { count: "exact", head: true })
-        .in("id", userIds)
-        .gte("last_seen", startOfDayISO);
+      let activeCount = 0;
+      let notesCount = 0;
+      let topTags = {};
 
-      // B. Count notes created today
-      const { data: notes } = await supabase
-        .from("notes")
-        .select("tags")
-        .in("owner_id", userIds)
-        .gte("created_at", startOfDayISO);
+      if (userIds.length > 0) {
+        // A. Count active users
+        const { count } = await supabase
+          .from("profiles")
+          .select("*", { count: "exact", head: true })
+          .in("id", userIds)
+          .or(
+            `last_active_at.gte.${startOfDayISO},last_seen.gte.${startOfDayISO}`,
+          );
+        activeCount = count || 0;
 
-      const notesCount = notes ? notes.length : 0;
+        // B. Count notes created today
+        const { data: notes } = await supabase
+          .from("notes")
+          .select("tags")
+          .in("owner_id", userIds)
+          .gte("created_at", startOfDayISO);
 
-      // C. Aggregate tags
-      const tagCounts = {};
-      notes?.forEach((note) => {
-        if (note.tags && Array.isArray(note.tags)) {
-          note.tags.forEach((tag) => {
-            const t = tag.toLowerCase().trim();
-            if (t) tagCounts[t] = (tagCounts[t] || 0) + 1;
-          });
-        }
-      });
+        notesCount = notes ? notes.length : 0;
 
-      const topTags = Object.entries(tagCounts)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 10) // More tags for realtime view
-        .reduce((obj, [key, val]) => ({ ...obj, [key]: val }), {});
+        // C. Aggregate tags
+        const tagCounts = {};
+        notes?.forEach((note) => {
+          if (note.tags && Array.isArray(note.tags)) {
+            note.tags.forEach((tag) => {
+              const t = tag.toLowerCase().trim();
+              if (t) tagCounts[t] = (tagCounts[t] || 0) + 1;
+            });
+          }
+        });
+
+        topTags = Object.entries(tagCounts)
+          .sort(([, a], [, b]) => b - a)
+          .slice(0, 10)
+          .reduce((obj, [key, val]) => ({ ...obj, [key]: val }), {});
+      }
 
       return {
         date: new Date().toISOString().split("T")[0],
-        total_active_users: activeCount || 0,
-        total_notes_created: notesCount || 0,
+        total_active_users: activeCount,
+        total_notes_created: notesCount,
         top_tags: topTags,
         is_realtime: true,
       };

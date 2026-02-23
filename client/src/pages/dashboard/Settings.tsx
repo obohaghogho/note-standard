@@ -74,6 +74,11 @@ export const Settings = () => {
             setFullName(authProfile.full_name || '');
             setAvatarUrl(authProfile.avatar_url || '');
             setPreferredChatLanguage(authProfile.preferred_language || 'en');
+            setPrivacySettings({
+                analytics: authProfile.user_consent ?? true,
+                offers: authProfile.preferences?.offers ?? false,
+                partners: authProfile.preferences?.partners ?? false
+            });
             setLoading(false);
         }
     }, [authProfile]);
@@ -178,11 +183,31 @@ export const Settings = () => {
     };
 
     const handleSavePrivacy = async () => {
+        if (!user) return;
         setSaving(true);
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 800));
-        toast.success('Privacy preferences updated');
-        setSaving(false);
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .update({
+                    user_consent: privacySettings.analytics,
+                    consent_at: new Date().toISOString(),
+                    preferences: {
+                        ...profile?.preferences,
+                        analytics: privacySettings.analytics,
+                        offers: privacySettings.offers,
+                        partners: privacySettings.partners
+                    }
+                })
+                .eq('id', user.id);
+
+            if (error) throw error;
+            toast.success('Privacy preferences updated');
+        } catch (error: any) {
+            console.error('Error saving privacy settings:', error);
+            toast.error('Failed to update privacy settings');
+        } finally {
+            setSaving(false);
+        }
     };
 
     const handleSaveChatSettings = async () => {
