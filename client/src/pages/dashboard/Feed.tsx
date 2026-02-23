@@ -70,7 +70,30 @@ export const Feed = () => {
             fetchFeed();
         }, 500);
 
-        return () => clearTimeout(timeoutId);
+        // Setup Realtime Subscriptions for counts
+        const commentChannel = supabase
+            .channel('public-comments')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'comments' },
+                () => fetchFeed() // Simply refetch to get updated counts and user status
+            )
+            .subscribe();
+
+        const likeChannel = supabase
+            .channel('public-likes')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'likes' },
+                () => fetchFeed()
+            )
+            .subscribe();
+
+        return () => {
+            clearTimeout(timeoutId);
+            supabase.removeChannel(commentChannel);
+            supabase.removeChannel(likeChannel);
+        };
     }, [user, searchTerm]);
 
     return (
