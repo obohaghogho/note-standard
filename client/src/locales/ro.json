@@ -6,7 +6,10 @@
         "profile": "Profil",
         "logout": "Deconectare",
         "notifications": "Notificări",
-        "new_note": "Notă nouă"
+        "new_note": "Notă nouă",
+        "search_language": "Caută limba...",
+        "available_languages": "Limbi disponibile",
+        "auto_save": "Modificările sunt salvate automat"
     },
     "nav": {
         "home": "Acasă",

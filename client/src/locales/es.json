@@ -6,7 +6,10 @@
         "profile": "Perfil",
         "logout": "Cerrar sesión",
         "notifications": "Notificaciones",
-        "new_note": "Nueva nota"
+        "new_note": "Nueva nota",
+        "search_language": "Buscar idioma...",
+        "available_languages": "Idiomas disponibles",
+        "auto_save": "Los cambios se guardan automáticamente"
     },
     "nav": {
         "home": "Inicio",
