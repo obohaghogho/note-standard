@@ -95,10 +95,10 @@ export const ResetPassword = () => {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-[#0a0a0a]">
+        <div className="min-h-[100dvh] flex items-center justify-center p-4 relative overflow-hidden bg-[#0a0a0a] w-full max-w-full">
              {/* Background gradients */}
-             <div className="absolute top-0 left-1/4 w-full max-w-[1000px] h-[600px] bg-primary/10 rounded-full blur-[120px] -z-10 allow-overflow" />
-             <div className="absolute bottom-0 right-1/4 w-full max-w-[800px] h-[600px] bg-purple-500/5 rounded-full blur-[100px] -z-10 allow-overflow" />
+             <div className="absolute top-0 left-1/4 w-full max-w-[1000px] h-[600px] bg-primary/10 rounded-full blur-[120px] -z-10" />
+             <div className="absolute bottom-0 right-1/4 w-full max-w-[800px] h-[600px] bg-purple-500/5 rounded-full blur-[100px] -z-10" />
 
             <div className="w-full max-w-md">
                 <div className="text-center mb-8">

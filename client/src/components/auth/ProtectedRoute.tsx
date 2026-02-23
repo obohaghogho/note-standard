@@ -11,7 +11,7 @@ export const ProtectedRoute = ({ allowedRoles }: ProtectedRouteProps) => {
     // Wait until auth state is fully resolved before making redirect decisions
     if (!authReady) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-background">
+            <div className="min-h-[100dvh] flex items-center justify-center bg-background w-full max-w-full">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
             </div>
         );

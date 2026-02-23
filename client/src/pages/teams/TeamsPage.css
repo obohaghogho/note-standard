@@ -4,9 +4,9 @@
 
 .teams-page {
   display: grid;
-  grid-template-columns: 320px 1fr 280px;
+  grid-template-columns: minmax(320px, 20%) 1fr minmax(280px, 15%);
   gap: 24px;
-  height: calc(100vh - 80px);
+  height: calc(100dvh - 80px);
   padding: 24px;
   overflow: hidden;
 }
@@ -600,7 +600,6 @@
     grid-template-columns: 1fr;
     padding: 0;
     gap: 0;
-    height: 100vh;
     height: 100dvh;
   }
 
