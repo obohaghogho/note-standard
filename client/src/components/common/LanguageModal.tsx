@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { X, Check, Globe, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -50,7 +51,8 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
         if (isOpen) {
             window.addEventListener('keydown', handleEsc);
             document.body.style.overflow = 'hidden';
-            // Use a simpler approach for scrollbar padding
+            
+            // Prevent layout shift
             const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
             if (scrollbarWidth > 0) {
                 document.body.style.paddingRight = `${scrollbarWidth}px`;
@@ -72,6 +74,8 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
             await i18n.changeLanguage(lng);
             localStorage.setItem('i18nextLng', lng);
             onClose();
+            // Optional: for some apps, a full reload ensures all translations are picked up
+            // window.location.reload(); 
         } catch (error) {
             console.error('Failed to change language:', error);
         }
@@ -85,28 +89,34 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
 
     const modalVariants: Variants = {
         hidden: { 
-            y: '20%', 
+            y: '100dvh', // Start completely off-screen at the bottom
             opacity: 0,
-            scale: 0.95,
         },
         visible: { 
             y: 0, 
             opacity: 1,
-            scale: 1,
             transition: { 
                 type: 'spring', 
-                damping: 25, 
-                stiffness: 400,
+                damping: 30, 
+                stiffness: 350,
                 mass: 0.8
             }
         },
+        exit: {
+            y: '100dvh',
+            opacity: 0,
+            transition: {
+                duration: 0.2,
+                ease: 'easeIn'
+            }
+        }
     };
 
-    return (
+    const modalContent = (
         <AnimatePresence>
             {isOpen && (
                 <div 
-                    className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center p-0 sm:p-4"
+                    className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center p-0"
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="language-modal-title"
@@ -118,65 +128,68 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
                         animate="visible"
                         exit="hidden"
                         onClick={onClose}
-                        className="fixed inset-0 bg-black/70 backdrop-blur-sm"
+                        className="fixed inset-0 bg-black/80 backdrop-blur-md"
                     />
 
-                    {/* Modal Content */}
+                    {/* Modal Content - Container for Mobile Bottom Sheet and Desktop Center Modal */}
                     <motion.div
                         ref={containerRef}
                         variants={modalVariants}
                         initial="hidden"
                         animate="visible"
-                        exit="hidden"
-                        className="relative w-full sm:max-w-[440px] bg-[#0d0d0d] border border-white/10 rounded-t-[24px] sm:rounded-[24px] shadow-2xl overflow-hidden z-10 flex flex-col max-h-[90dvh] sm:max-h-[85dvh]"
+                        exit="exit"
+                        className="relative w-full sm:max-w-[480px] sm:mx-4 bg-[#0a0a0a] border-t sm:border border-white/10 rounded-t-[32px] sm:rounded-[24px] shadow-2xl overflow-hidden z-20 flex flex-col max-h-[92dvh] sm:max-h-[85dvh]"
                     >
-                        {/* Pull Bar for Mobile */}
-                        <div className="sm:hidden w-full flex justify-center pt-3 pb-1 shrink-0">
-                            <div className="w-12 h-1.5 bg-white/20 rounded-full" />
+                        {/* Interactive Pull Indicator for Mobile */}
+                        <div className="sm:hidden w-full flex justify-center pt-4 pb-2 shrink-0 cursor-grab active:cursor-grabbing">
+                            <div className="w-14 h-1.5 bg-white/20 rounded-full" />
                         </div>
 
-                        {/* Header */}
-                        <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between shrink-0">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                                    <Globe size={20} />
+                        {/* Header Section */}
+                        <div className="px-6 py-6 sm:py-7 border-b border-white/5 flex items-center justify-between shrink-0">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-primary/15 flex items-center justify-center text-primary shadow-inner">
+                                    <Globe size={24} />
                                 </div>
                                 <div className="flex flex-col">
-                                    <h2 id="language-modal-title" className="text-lg font-bold text-white leading-tight">
+                                    <h2 id="language-modal-title" className="text-xl font-bold text-white tracking-tight leading-none mb-1.5">
                                         {t('common.language')}
                                     </h2>
-                                    <span className="text-[11px] text-gray-500 font-medium uppercase tracking-wider">
-                                        {ALL_LANGUAGES.length} {t('common.available_languages', 'Available')}
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                                        <span className="text-[11px] text-gray-500 font-bold uppercase tracking-[0.1em]">
+                                            {ALL_LANGUAGES.length} {t('common.available_languages', 'Available')}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                             <button
                                 onClick={onClose}
-                                className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-all active:scale-95"
+                                className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all active:scale-90 border border-white/5"
                                 aria-label="Close modal"
                             >
-                                <X size={20} />
+                                <X size={22} />
                             </button>
                         </div>
 
-                        {/* Search Input */}
-                        <div className="px-6 py-4 shrink-0">
-                            <div className="relative">
-                                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                        {/* Search Control */}
+                        <div className="px-6 py-5 shrink-0 bg-white/[0.02]">
+                            <div className="relative group">
+                                <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600 group-focus-within:text-primary transition-colors" />
                                 <input
                                     autoFocus
                                     type="text"
                                     placeholder={t('common.search_language', 'Search language...')}
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl h-[44px] pl-10 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/30 transition-all text-sm"
+                                    className="w-full bg-black/40 border border-white/10 rounded-2xl h-[56px] pl-12 pr-5 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all text-base"
                                 />
                             </div>
                         </div>
 
-                        {/* Language List */}
-                        <div className="flex-1 overflow-y-auto px-3 pb-6 scroll-smooth custom-scrollbar">
-                            <div className="grid gap-1">
+                        {/* Language List - Optimized for mobile touch and desktop scroll */}
+                        <div className="flex-1 overflow-y-auto px-4 pb-8 pt-2 scroll-smooth no-scrollbar overscroll-contain">
+                            <div className="grid gap-2">
                                 {filteredLanguages.length > 0 ? (
                                     filteredLanguages.map((lang) => {
                                         const isActive = currentLang === lang.code;
@@ -185,22 +198,22 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
                                                 key={lang.code}
                                                 onClick={() => changeLanguage(lang.code)}
                                                 className={`
-                                                    group w-full flex items-center justify-between px-3 py-3 rounded-xl transition-all duration-200
+                                                    group w-full flex items-center justify-between px-4 py-4 rounded-2xl transition-all duration-300 relative overflow-hidden
                                                     ${isActive 
-                                                        ? 'bg-primary/10 text-white ring-1 ring-primary/30' 
-                                                        : 'hover:bg-white/5 text-gray-400 hover:text-gray-200'
+                                                        ? 'bg-primary/10 text-white ring-1 ring-primary/40' 
+                                                        : 'hover:bg-white/[0.04] text-gray-400 hover:text-gray-100'
                                                     }
                                                 `}
                                             >
-                                                <div className="flex items-center gap-3">
-                                                    <span className="text-xl filter group-hover:scale-110 transition-transform duration-300">
+                                                <div className="flex items-center gap-4 relative z-10">
+                                                    <span className="text-3xl filter drop-shadow-lg group-hover:scale-110 transition-transform duration-500">
                                                         {lang.flag}
                                                     </span>
                                                     <div className="text-left">
-                                                        <div className={`font-semibold text-[14px] ${isActive ? 'text-primary' : 'text-gray-200'}`}>
+                                                        <div className={`font-bold text-base leading-none mb-1.5 ${isActive ? 'text-primary' : 'text-gray-200'}`}>
                                                             {lang.native}
                                                         </div>
-                                                        <div className="text-[10px] opacity-40 uppercase tracking-widest leading-none mt-0.5 font-medium">
+                                                        <div className="text-[12px] opacity-40 uppercase tracking-widest leading-none font-bold">
                                                             {lang.name}
                                                         </div>
                                                     </div>
@@ -210,26 +223,34 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
                                                     <motion.div
                                                         initial={{ scale: 0.5, opacity: 0 }}
                                                         animate={{ scale: 1, opacity: 1 }}
-                                                        className="w-5 h-5 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-primary/20"
+                                                        className="w-7 h-7 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-primary/30 relative z-10"
                                                     >
-                                                        <Check size={12} className="text-white stroke-[3]" />
+                                                        <Check size={16} className="text-white stroke-[4]" />
                                                     </motion.div>
+                                                )}
+
+                                                {/* Background hover effect */}
+                                                {!isActive && (
+                                                    <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/5 to-primary/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 pointer-events-none" />
                                                 )}
                                             </button>
                                         );
                                     })
                                 ) : (
-                                    <div className="py-12 text-center text-gray-500">
-                                        <p className="text-sm">No languages found</p>
+                                    <div className="py-16 text-center">
+                                        <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
+                                            <Search size={24} className="text-gray-600" />
+                                        </div>
+                                        <p className="text-gray-500 font-medium">No results for "{searchQuery}"</p>
                                     </div>
                                 )}
                             </div>
                         </div>
 
-                        {/* Footer */}
-                        <div className="px-6 py-4 bg-[#080808] border-t border-white/5 text-center shrink-0">
-                            <p className="text-[9px] text-gray-600 uppercase tracking-[0.2em] font-bold">
-                                {t('common.auto_save', 'Auto-saved')}
+                        {/* Footer / Info Section */}
+                        <div className="px-6 py-5 bg-black/60 border-t border-white/5 text-center shrink-0">
+                            <p className="text-[10px] text-gray-600 uppercase tracking-[0.3em] font-black">
+                                {t('common.auto_save', 'Preference saved automatically')}
                             </p>
                         </div>
                     </motion.div>
@@ -237,5 +258,8 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
             )}
         </AnimatePresence>
     );
+
+    return createPortal(modalContent, document.body);
 };
+
 
