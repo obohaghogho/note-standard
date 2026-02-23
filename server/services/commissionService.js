@@ -65,17 +65,19 @@ const commissionService = {
         // Fallback to admin_settings if commission_settings table is empty for this type
         if (transactionType === "FUNDING") {
           const fundingRate = await this.getSetting("funding_fee_percentage") ||
-            1.0;
+            3.0; // Default to 3%
           rate = fundingRate / 100;
-          if (userPlan === "PRO") rate = 0.005; // 0.5% for PRO
+          if (userPlan === "PRO") rate = rate * 0.8; // 20% discount for PRO
+          if (userPlan === "BUSINESS") rate = rate * 0.5; // 50% discount for BUSINESS
           fee = amount * rate;
         } else if (transactionType === "WITHDRAWAL") {
           const withdrawFlat = await this.getSetting("withdrawal_fee_flat") ||
             0;
           const withdrawPerc =
-            await this.getSetting("withdrawal_fee_percentage") || 1.0;
+            await this.getSetting("withdrawal_fee_percentage") || 3.0; // Default to 3%
           rate = withdrawPerc / 100;
-          if (userPlan === "PRO") rate = 0.005; // 0.5% for PRO
+          if (userPlan === "PRO") rate = rate * 0.8; // 20% discount for PRO
+          if (userPlan === "BUSINESS") rate = rate * 0.5; // 50% discount for BUSINESS
           fee = withdrawFlat + (amount * rate);
         }
       }
@@ -98,12 +100,14 @@ const commissionService = {
    * @param {string} userPlan - 'FREE', 'PRO', 'BUSINESS'
    */
   async calculateSpread(type, marketPrice, userPlan = "FREE") {
-    const defaultSpread = await this.getSetting("spread_percentage") || 1.0;
+    const defaultSpread = await this.getSetting("spread_percentage") || 3.0; // Default to 3%
     let spreadPercentage = parseFloat(defaultSpread) / 100;
 
-    // Requirement 3: PRO Features - Reduced spread (0.5%)
-    if (userPlan === "PRO" || userPlan === "BUSINESS") {
-      spreadPercentage = 0.005;
+    // Requirement 3: PRO Features - Relative spread discount
+    if (userPlan === "PRO") {
+      spreadPercentage = spreadPercentage * 0.8; // 20% discount
+    } else if (userPlan === "BUSINESS") {
+      spreadPercentage = spreadPercentage * 0.5; // 50% discount
     }
 
     const spreadAmount = marketPrice * spreadPercentage;
