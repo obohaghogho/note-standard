@@ -9,20 +9,31 @@ import {
     Minimize2,
     CheckCheck,
     Check,
-    Headphones
+    Headphones,
+    Phone,
+    Video
 } from 'lucide-react';
 import type { Message, Conversation } from '../../context/ChatContext';
+import { useWebRTC } from '../../context/WebRTCContext';
+import { CallOverlay } from './ChatWindow'; // Reuse CallOverlay from ChatWindow
+import toast from 'react-hot-toast';
 
 // Local interfaces removed in favor of exports from ChatContext
 
 export const ChatWidget = () => {
     const { session, user } = useAuth();
     const { socket, connected } = useSocket();
+    const { 
+        startCall, callState, acceptCall, rejectCall, endCall, 
+        localStream, remoteStream, toggleMute, toggleVideo, 
+        isMuted, isVideoEnabled 
+    } = useWebRTC();
+
     const [isOpen, setIsOpen] = useState(false);
     const [isMinimized, setIsMinimized] = useState(false);
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
-    const [supportChat, setSupportChat] = useState<Partial<Conversation> | null>(null);
+    const [supportChat, setSupportChat] = useState<any | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [adminTyping, setAdminTyping] = useState(false);
@@ -217,6 +228,22 @@ export const ChatWidget = () => {
         }, 2000);
     };
 
+    const handleCall = (type: 'voice' | 'video') => {
+        if (!supportChat?.id) return;
+        
+        // Find an admin/agent in the chat to call
+        const otherMember = supportChat.members?.find((m: any) => m.user_id !== user?.id);
+        
+        if (!otherMember) {
+            toast.error('Waiting for an agent to join the chat...');
+            return;
+        }
+
+        toast.loading(`Starting ${type} call...`, { duration: 2000, id: 'widget-call' });
+        startCall(otherMember.user_id, supportChat.id, type)
+            .catch(() => toast.error('Failed to start call'));
+    };
+
     const formatTime = (dateStr: string) => {
         return new Date(dateStr).toLocaleTimeString('en-US', {
             hour: '2-digit',
@@ -237,6 +264,23 @@ export const ChatWidget = () => {
 
             {isOpen && (
                 <div className="chat-widget-window">
+                    {/* Call Overlay Integration */}
+                    {callState.status !== 'idle' && (
+                        <CallOverlay 
+                            callState={callState} 
+                            acceptCall={acceptCall} 
+                            rejectCall={rejectCall} 
+                            endCall={endCall}
+                            localStream={localStream}
+                            remoteStream={remoteStream}
+                            toggleMute={toggleMute}
+                            toggleVideo={toggleVideo}
+                            isMuted={isMuted}
+                            isVideoEnabled={isVideoEnabled}
+                            otherUserName="Support Agent"
+                        />
+                    )}
+
                     <div className="chat-widget-header">
                         <div className="header-info">
                             <Headphones size={20} />
@@ -248,6 +292,16 @@ export const ChatWidget = () => {
                             </div>
                         </div>
                         <div className="header-actions">
+                            {supportChat && !isMinimized && (
+                                <div className="flex items-center mr-2">
+                                    <button onClick={() => handleCall('voice')} className="p-1.5 text-blue-400 hover:bg-blue-400/10 rounded-full" title="Voice Call">
+                                        <Phone size={16} />
+                                    </button>
+                                    <button onClick={() => handleCall('video')} className="p-1.5 text-blue-400 hover:bg-blue-400/10 rounded-full" title="Video Call">
+                                        <Video size={16} />
+                                    </button>
+                                </div>
+                            )}
                             <button onClick={() => setIsMinimized(!isMinimized)}>
                                 <Minimize2 size={18} />
                             </button>

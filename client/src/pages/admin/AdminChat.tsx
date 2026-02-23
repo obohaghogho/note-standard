@@ -9,9 +9,14 @@ import {
     Send,
     CheckCheck,
     Check,
-    Search
+    Search,
+    Phone,
+    Video
 } from 'lucide-react';
 import type { Message, Conversation } from '../../context/ChatContext';
+import { useWebRTC } from '../../context/WebRTCContext';
+import { CallOverlay } from '../../components/chat/ChatWindow';
+import toast from 'react-hot-toast';
 import SecureImage from '../../components/common/SecureImage';
 import './AdminChat.css';
 
@@ -20,6 +25,11 @@ import './AdminChat.css';
 export const AdminChat = () => {
     const { session, user, isAdmin } = useAuth();
     const { socket, connected } = useSocket();
+    const { 
+        startCall, callState, acceptCall, rejectCall, endCall, 
+        localStream, remoteStream, toggleMute, toggleVideo, 
+        isMuted, isVideoEnabled 
+    } = useWebRTC();
     
     // State
     const [chats, setChats] = useState<Conversation[]>([]);
@@ -243,7 +253,7 @@ export const AdminChat = () => {
     };
 
     const getUserFromChat = (chat: Conversation) => {
-        return chat.members.find(m => m.role !== 'admin')?.profile;
+        return chat.members.find(m => m.role !== 'admin');
     };
 
     const formatTime = (dateStr: string) => {
@@ -251,6 +261,19 @@ export const AdminChat = () => {
             hour: '2-digit',
             minute: '2-digit'
         });
+    };
+
+    const handleCall = (type: 'voice' | 'video') => {
+        if (!activeChat) return;
+        const chatMember = getUserFromChat(activeChat);
+        if (!chatMember || !chatMember.user_id) {
+            toast.error('Cannot find user ID for this call');
+            return;
+        }
+
+        toast.loading(`Starting ${type} call...`, { duration: 2000, id: 'admin-call' });
+        startCall(chatMember.user_id, activeChat.id, type)
+            .catch(() => toast.error('Failed to start call'));
     };
 
     const getSentimentEmoji = (label?: string) => {
@@ -264,7 +287,8 @@ export const AdminChat = () => {
 
     const filteredChats = chats.filter(chat => {
         if (!searchTerm) return true;
-        const userProfile = getUserFromChat(chat);
+        const chatMember = getUserFromChat(chat);
+        const userProfile = chatMember?.profile;
         return (
             chat.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             userProfile?.username?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -313,7 +337,8 @@ export const AdminChat = () => {
                         </div>
                     ) : (
                         filteredChats?.map(chat => {
-                            const userProfile = getUserFromChat(chat);
+                            const chatMember = getUserFromChat(chat);
+                            const userProfile = chatMember?.profile;
                             return (
                                 <div
                                     key={chat.id}
@@ -350,12 +375,29 @@ export const AdminChat = () => {
             </div>
 
             <div className="admin-chat-main">
+                {/* Call Overlay for Admin */}
+                {callState.status !== 'idle' && (
+                    <CallOverlay
+                        callState={callState}
+                        acceptCall={acceptCall}
+                        rejectCall={rejectCall}
+                        endCall={endCall}
+                        localStream={localStream}
+                        remoteStream={remoteStream}
+                        toggleMute={toggleMute}
+                        toggleVideo={toggleVideo}
+                        isMuted={isMuted}
+                        isVideoEnabled={isVideoEnabled}
+                        otherUserName={activeChat ? (getUserFromChat(activeChat)?.profile?.username || 'User') : 'User'}
+                    />
+                )}
                 {activeChat ? (
                     <>
                         <div className="main-header">
                             <div className="user-info">
                                 {(() => {
-                                    const userProfile = getUserFromChat(activeChat);
+                                    const chatMember = getUserFromChat(activeChat);
+                                    const userProfile = chatMember?.profile;
                                     return (
                                         <>
                                             <div className="avatar">
@@ -377,7 +419,23 @@ export const AdminChat = () => {
                                     );
                                 })()}
                             </div>
-                            <div className="actions">
+                             <div className="actions">
+                                <div className="flex items-center gap-1 mr-4">
+                                    <button 
+                                        onClick={() => handleCall('voice')}
+                                        className="p-2 text-gray-400 hover:text-green-500 hover:bg-green-500/10 rounded-full transition-all"
+                                        title="Voice Call"
+                                    >
+                                        <Phone size={18} />
+                                    </button>
+                                    <button 
+                                        onClick={() => handleCall('video')}
+                                        className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-500/10 rounded-full transition-all"
+                                        title="Video Call"
+                                    >
+                                        <Video size={18} />
+                                    </button>
+                                </div>
                                 <select
                                     value={activeChat.support_status}
                                     onChange={(e) => updateChatStatus(activeChat.id, e.target.value)}

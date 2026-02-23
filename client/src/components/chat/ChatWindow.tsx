@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useChat } from '../../context/ChatContext';
+import type { Message } from '../../context/ChatContext';
 import { usePresence } from '../../context/PresenceContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
@@ -343,42 +344,32 @@ const ChatWindow: React.FC = () => {
         }
     };
 
+    const otherUserTitle = activeConversation?.type === 'direct' && otherMember 
+        ? (otherMember.profile?.full_name || otherMember.profile?.username || 'User')
+        : 'Chat';
+
+    const otherUserAvatar = activeConversation?.type === 'direct' && otherMember
+        ? otherMember.profile?.avatar_url
+        : null;
+
     const handleCall = (type: 'voice' | 'video') => {
-        // Diagnostic Logging
-        console.log('[ChatWindow] handleCall triggered:', { 
-            type, 
-            activeConversationId,
-            conversationType: activeConversation?.type,
-            chatType: activeConversation?.chat_type,
-            membersCount: activeConversation?.members?.length,
-            currentUserId: user?.id,
-            otherMemberId: otherMember?.user_id
-        });
-        
-        if (!otherMember?.user_id) {
-            console.error('[ChatWindow] Cannot start call: no recipient found', { otherMember });
-            
-            if (activeConversation?.members && activeConversation.members.length === 1) {
-                if (activeConversation.chat_type === 'support') {
-                    toast.error('Waiting for a support agent to join this chat before you can call.');
-                } else {
-                    toast.error('You are the only member in this chat. Add someone else to start a call!');
-                }
-            } else if (activeConversation?.type === 'group') {
-                toast.error('Group calls are not supported yet');
-            } else {
-                toast.error('Could not find a recipient for this call. Please refresh the chat.');
-            }
+        if (!activeConversationId || !otherMember?.user_id) {
+            toast.error('Could not find participant to call');
             return;
         }
 
         if (isWaitingForOthers) {
-            toast.error('Waiting for recipient to accept message request');
+            toast.error('Waiting for participant to join the conversation');
             return;
         }
 
+        // Check online status
+        if (!isUserOnline(otherMember.user_id)) {
+            toast.error(`${otherUserTitle} is offline. They might not receive your call.`);
+        }
+
         toast.loading(`Starting ${type} call...`, { duration: 2000, id: 'call-start' });
-        startCall(otherMember.user_id, activeConversationId!, type)
+        startCall(otherMember.user_id, activeConversationId, type)
             .catch(err => {
                 console.error('[ChatWindow] startCall failed:', err);
                 toast.error('Failed to start call. Check camera/mic permissions.');
@@ -393,15 +384,13 @@ const ChatWindow: React.FC = () => {
         );
     }
 
-    if (loading) return <div className="p-4 bg-gray-900 h-full">Loading...</div>;
-
-    const otherUserTitle = activeConversation?.type === 'direct' && otherMember 
-        ? (otherMember.profile?.full_name || otherMember.profile?.username || 'User')
-        : 'Chat';
-
-    const otherUserAvatar = activeConversation?.type === 'direct' && otherMember
-        ? otherMember.profile?.avatar_url
-        : null;
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-full bg-gray-900 text-gray-400">
+                <Loader2 className="w-8 h-8 animate-spin" />
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col absolute inset-0 bg-gray-900 text-white overflow-x-hidden max-w-full">
@@ -486,18 +475,20 @@ const ChatWindow: React.FC = () => {
                         </button>
                     )}
                     {!isPending && !isWaitingForOthers && (
-                        <div className="hidden xs:flex items-center gap-0.5 md:gap-2">
+                        <div className="flex items-center gap-1 md:gap-2">
                             <button 
                                 onClick={() => handleCall('voice')}
-                                className="p-1.5 md:p-2 text-gray-400 hover:text-green-400 hover:bg-green-400/10 rounded-full transition-all flex-shrink-0"
+                                className="p-2 text-gray-400 hover:text-green-400 hover:bg-green-400/10 rounded-full transition-all flex-shrink-0"
+                                aria-label="Audio call"
                             >
-                                <Phone size={14} className="md:w-5 md:h-5" />
+                                <Phone size={18} className="md:w-5 md:h-5" />
                             </button>
                             <button 
                                 onClick={() => handleCall('video')}
-                                className="p-1.5 md:p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-full transition-all flex-shrink-0"
+                                className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-full transition-all flex-shrink-0"
+                                aria-label="Video call"
                             >
-                                <Video size={14} className="md:w-5 md:h-5" />
+                                <Video size={18} className="md:w-5 md:h-5" />
                             </button>
                         </div>
                     )}
@@ -582,7 +573,7 @@ const ChatWindow: React.FC = () => {
                                                 isOpen: true,
                                                 url,
                                                 type: 'image',
-                                                fileName: msg.attachment.file_name,
+                                                fileName: msg.attachment?.file_name,
                                                 isSender: msg.isOwn
                                             })}
                                         />
@@ -594,7 +585,7 @@ const ChatWindow: React.FC = () => {
                                                 isOpen: true,
                                                 url,
                                                 type: 'video',
-                                                fileName: msg.attachment.file_name,
+                                                fileName: msg.attachment?.file_name,
                                                 isSender: msg.isOwn
                                             })}
                                         />
@@ -907,7 +898,7 @@ const VideoWithSignedUrl = ({ path, fetchUrl, onPreview }: {
 
 // --- Call Overlay UI Component ---
 
-const CallOverlay = ({ callState, acceptCall, rejectCall, endCall, localStream, remoteStream, toggleMute, toggleVideo, isMuted, isVideoEnabled, otherUserName, otherUserAvatar }: any) => {
+export const CallOverlay = ({ callState, acceptCall, rejectCall, endCall, localStream, remoteStream, toggleMute, toggleVideo, isMuted, isVideoEnabled, otherUserName, otherUserAvatar }: any) => {
     return (
         <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center backdrop-blur-xl animate-in fade-in duration-300">
             <div className="relative w-full h-full md:w-[90vw] md:h-[80vh] bg-gray-900 md:rounded-3xl overflow-hidden shadow-2xl border border-white/5">
