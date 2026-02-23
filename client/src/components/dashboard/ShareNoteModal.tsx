@@ -91,12 +91,12 @@ export const ShareNoteModal = ({ isOpen, onClose, noteId }: ShareNoteModalProps)
         }
     };
 
-    const handleShare = async (userId: string) => {
+    const handleShare = async (targetId: string) => {
         if (!noteId) return;
         setLoading(true);
         try {
             // Check if already shared
-            const exists = sharedUsers.some(u => u.shared_with_user_id === userId);
+            const exists = sharedUsers.some(u => u.shared_with_user_id === targetId);
             if (exists) {
                 toast.error('User already has access');
                 return;
@@ -110,7 +110,7 @@ export const ShareNoteModal = ({ isOpen, onClose, noteId }: ShareNoteModalProps)
                 },
                 body: JSON.stringify({
                     noteId,
-                    targetEmail: searchResults.find(p => p.id === userId)?.email,
+                    targetEmail: searchResults.find(p => p.id === targetId)?.email,
                     permission: 'read'
                 })
             });
@@ -126,7 +126,7 @@ export const ShareNoteModal = ({ isOpen, onClose, noteId }: ShareNoteModalProps)
             fetchSharedUsers();
         } catch (error) {
             console.error('Error sharing note:', error);
-            toast.error('Failed to share note');
+            toast.error(error instanceof Error ? error.message : 'Failed to share note');
         } finally {
             setLoading(false);
         }
