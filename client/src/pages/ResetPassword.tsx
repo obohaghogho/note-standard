@@ -10,6 +10,7 @@ import { toast } from 'react-hot-toast';
 export const ResetPassword = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -25,19 +26,22 @@ export const ResetPassword = () => {
         }
 
         // Listen for the PASSWORD_RECOVERY event which happens when the user clicks the email link
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
-            if (event === 'PASSWORD_RECOVERY') {
-                setError(null); // Clear any previous errors, we act verified
-            } else if (event === 'SIGNED_IN') {
-                 // User is signed in, we can allow password reset
-                 setError(null);
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
+                setError(null);
+                if (session?.user?.email) {
+                    setEmail(session.user.email);
+                }
             }
         });
 
-        // Also check initial session just in case the event fired before we mounted (rare but possible)
+        // Also check initial session just in case the event fired before we mounted
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (session) {
-                setError(null); // Valid session exists
+                setError(null);
+                if (session.user?.email) {
+                    setEmail(session.user.email);
+                }
             } else {
                  // Check if we have a hash with tokens (implicit flow)
                  const hashParams = new URLSearchParams(window.location.hash.substring(1));
@@ -45,24 +49,22 @@ export const ResetPassword = () => {
                  const accessToken = hashParams.get('access_token');
 
                  if (type === 'recovery' && accessToken) {
-                     // We have a recovery token! Supabase *should* have handled this, but let's be lenient
-                     // because the event listener above will likely catch it.
-                     // We just clear error for now and let the timeout verifier run.
                      console.log('Recovery token detected in URL');
                      setError(null);
                  }
 
-                 // Wait a moment for the auth flow to complete (it's async)
-                 // If after 4 seconds we still have no session, show error
+                 // Wait a moment for the auth flow to complete
                  setTimeout(async () => {
                      const { data: { session: retrySession } } = await supabase.auth.getSession();
-                     console.log('Session check (delayed):', !!retrySession);
                      if (retrySession) {
                         setError(null);
+                        if (retrySession.user?.email) {
+                            setEmail(retrySession.user.email);
+                        }
                      } else {
                         setError('No active session found. Please try requesting a new password reset link.');
                      }
-                 }, 4000);
+                  }, 4000);
             }
         });
 
@@ -119,10 +121,18 @@ export const ResetPassword = () => {
                             </Button>
                         </div>
                     ) : (
-                        <form onSubmit={handleUpdatePassword} className="space-y-6">
+                        <form id="reset-password-form" name="reset-password" onSubmit={handleUpdatePassword} className="space-y-6">
+                            {/* Hidden email field for password manager context */}
+                            <input 
+                                type="hidden" 
+                                name="email" 
+                                value={email} 
+                                autoComplete="username email" 
+                            />
+
                             <Input
-                                id="new-password"
-                                name="new-password"
+                                id="password"
+                                name="password"
                                 icon={Lock}
                                 type="password"
                                 label="New Password"
