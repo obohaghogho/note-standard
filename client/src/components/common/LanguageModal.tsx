@@ -29,6 +29,9 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
     const [searchQuery, setSearchQuery] = useState('');
     const containerRef = useRef<HTMLDivElement>(null);
 
+    // Get the base language code (e.g., 'en' from 'en-US')
+    const currentLang = i18n.language?.split('-')[0] || 'en';
+
     // Filter languages based on search
     const filteredLanguages = useMemo(() => {
         return ALL_LANGUAGES.filter(lang => 
@@ -47,7 +50,11 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
         if (isOpen) {
             window.addEventListener('keydown', handleEsc);
             document.body.style.overflow = 'hidden';
-            document.body.style.paddingRight = 'var(--scrollbar-width, 0px)'; // Prevent layout shift
+            // Use a simpler approach for scrollbar padding
+            const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+            if (scrollbarWidth > 0) {
+                document.body.style.paddingRight = `${scrollbarWidth}px`;
+            }
         } else {
             document.body.style.overflow = '';
             document.body.style.paddingRight = '';
@@ -78,33 +85,28 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
 
     const modalVariants: Variants = {
         hidden: { 
-            y: '100%', 
+            y: '20%', 
             opacity: 0,
+            scale: 0.95,
         },
         visible: { 
             y: 0, 
             opacity: 1,
-            transition: { type: 'spring', damping: 25, stiffness: 300 }
-        },
-        desktopVisible: {
-            y: 0,
             scale: 1,
-            opacity: 1,
-            transition: { type: 'spring', damping: 25, stiffness: 300 }
+            transition: { 
+                type: 'spring', 
+                damping: 25, 
+                stiffness: 400,
+                mass: 0.8
+            }
         },
-        desktopHidden: {
-            y: 20,
-            scale: 0.95,
-            opacity: 0,
-            transition: { duration: 0.2 }
-        }
     };
 
     return (
         <AnimatePresence>
             {isOpen && (
                 <div 
-                    className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center pointer-events-none"
+                    className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center p-0 sm:p-4"
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="language-modal-title"
@@ -116,7 +118,7 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
                         animate="visible"
                         exit="hidden"
                         onClick={onClose}
-                        className="fixed inset-0 bg-black/60 backdrop-blur-md pointer-events-auto"
+                        className="fixed inset-0 bg-black/70 backdrop-blur-sm"
                     />
 
                     {/* Modal Content */}
@@ -124,33 +126,33 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
                         ref={containerRef}
                         variants={modalVariants}
                         initial="hidden"
-                        animate={window.innerWidth >= 640 ? "desktopVisible" : "visible"}
-                        exit={window.innerWidth >= 640 ? "desktopHidden" : "hidden"}
-                        className="relative w-full sm:max-w-md bg-[#121212] sm:bg-[#1a1a1a]/95 border-t sm:border border-white/10 rounded-t-[24px] sm:rounded-[20px] shadow-2xl overflow-hidden z-10 flex flex-col max-h-[85dvh] sm:max-h-[80dvh] pointer-events-auto"
+                        animate="visible"
+                        exit="hidden"
+                        className="relative w-full sm:max-w-[440px] bg-[#0d0d0d] border border-white/10 rounded-t-[24px] sm:rounded-[24px] shadow-2xl overflow-hidden z-10 flex flex-col max-h-[90dvh] sm:max-h-[85dvh]"
                     >
                         {/* Pull Bar for Mobile */}
-                        <div className="sm:hidden w-full flex justify-center pt-3 pb-1">
+                        <div className="sm:hidden w-full flex justify-center pt-3 pb-1 shrink-0">
                             <div className="w-12 h-1.5 bg-white/20 rounded-full" />
                         </div>
 
                         {/* Header */}
-                        <div className="px-6 pt-4 pb-4 border-b border-white/5 flex items-center justify-between">
+                        <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between shrink-0">
                             <div className="flex items-center gap-3">
-                                <div className="p-2.5 rounded-xl bg-primary/20 text-primary">
-                                    <Globe size={22} />
+                                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                                    <Globe size={20} />
                                 </div>
                                 <div className="flex flex-col">
-                                    <h2 id="language-modal-title" className="text-xl font-bold text-white tracking-tight">
+                                    <h2 id="language-modal-title" className="text-lg font-bold text-white leading-tight">
                                         {t('common.language')}
                                     </h2>
-                                    <span className="text-xs text-gray-400 font-medium">
-                                        {ALL_LANGUAGES.length} {t('common.available_languages', 'Available Languages')}
+                                    <span className="text-[11px] text-gray-500 font-medium uppercase tracking-wider">
+                                        {ALL_LANGUAGES.length} {t('common.available_languages', 'Available')}
                                     </span>
                                 </div>
                             </div>
                             <button
                                 onClick={onClose}
-                                className="p-2 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all active:scale-90"
+                                className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-all active:scale-95"
                                 aria-label="Close modal"
                             >
                                 <X size={20} />
@@ -158,47 +160,47 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
                         </div>
 
                         {/* Search Input */}
-                        <div className="px-6 py-4">
-                            <div className="relative group">
-                                <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-primary transition-colors" />
+                        <div className="px-6 py-4 shrink-0">
+                            <div className="relative">
+                                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
                                 <input
                                     autoFocus
                                     type="text"
                                     placeholder={t('common.search_language', 'Search language...')}
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl h-[48px] pl-11 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all text-sm"
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl h-[44px] pl-10 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/30 transition-all text-sm"
                                 />
                             </div>
                         </div>
 
                         {/* Language List */}
-                        <div className="flex-1 overflow-y-auto px-4 pb-6 scroll-smooth overscroll-contain no-scrollbar">
-                            <div className="grid gap-1.5">
+                        <div className="flex-1 overflow-y-auto px-3 pb-6 scroll-smooth custom-scrollbar">
+                            <div className="grid gap-1">
                                 {filteredLanguages.length > 0 ? (
                                     filteredLanguages.map((lang) => {
-                                        const isActive = i18n.language === lang.code;
+                                        const isActive = currentLang === lang.code;
                                         return (
                                             <button
                                                 key={lang.code}
                                                 onClick={() => changeLanguage(lang.code)}
                                                 className={`
-                                                    group w-full flex items-center justify-between p-3.5 rounded-2xl transition-all duration-200
+                                                    group w-full flex items-center justify-between px-3 py-3 rounded-xl transition-all duration-200
                                                     ${isActive 
-                                                        ? 'bg-primary/15 text-white ring-1 ring-primary/40' 
+                                                        ? 'bg-primary/10 text-white ring-1 ring-primary/30' 
                                                         : 'hover:bg-white/5 text-gray-400 hover:text-gray-200'
                                                     }
                                                 `}
                                             >
-                                                <div className="flex items-center gap-4">
-                                                    <span className="text-2xl filter group-hover:drop-shadow-sm transition-all duration-300">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-xl filter group-hover:scale-110 transition-transform duration-300">
                                                         {lang.flag}
                                                     </span>
                                                     <div className="text-left">
-                                                        <div className={`font-semibold text-sm ${isActive ? 'text-primary' : ''}`}>
+                                                        <div className={`font-semibold text-[14px] ${isActive ? 'text-primary' : 'text-gray-200'}`}>
                                                             {lang.native}
                                                         </div>
-                                                        <div className="text-[11px] opacity-50 uppercase tracking-widest leading-none mt-1">
+                                                        <div className="text-[10px] opacity-40 uppercase tracking-widest leading-none mt-0.5 font-medium">
                                                             {lang.name}
                                                         </div>
                                                     </div>
@@ -206,10 +208,9 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
                                                 
                                                 {isActive && (
                                                     <motion.div
-                                                        layoutId="active-check-new"
                                                         initial={{ scale: 0.5, opacity: 0 }}
                                                         animate={{ scale: 1, opacity: 1 }}
-                                                        className="w-5 h-5 rounded-full bg-primary flex items-center justify-center"
+                                                        className="w-5 h-5 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-primary/20"
                                                     >
                                                         <Check size={12} className="text-white stroke-[3]" />
                                                     </motion.div>
@@ -219,16 +220,16 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
                                     })
                                 ) : (
                                     <div className="py-12 text-center text-gray-500">
-                                        <p className="text-sm">No languages found matching "{searchQuery}"</p>
+                                        <p className="text-sm">No languages found</p>
                                     </div>
                                 )}
                             </div>
                         </div>
 
-                        {/* Hint */}
-                        <div className="px-6 py-4 bg-white/5 border-t border-white/5 text-center">
-                            <p className="text-[10px] text-gray-500 uppercase tracking-[0.2em] font-bold">
-                                {t('common.auto_save', 'Changes are saved automatically')}
+                        {/* Footer */}
+                        <div className="px-6 py-4 bg-[#080808] border-t border-white/5 text-center shrink-0">
+                            <p className="text-[9px] text-gray-600 uppercase tracking-[0.2em] font-bold">
+                                {t('common.auto_save', 'Auto-saved')}
                             </p>
                         </div>
                     </motion.div>
@@ -237,3 +238,4 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
         </AnimatePresence>
     );
 };
+
