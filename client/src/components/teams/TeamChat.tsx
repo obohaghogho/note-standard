@@ -26,6 +26,8 @@ import toast from 'react-hot-toast';
 import { uploadTeamImage } from '../../lib/teamsApi';
 import type { TeamMessage } from '../../types/teams';
 import SecureImage from '../common/SecureImage';
+import { MediaPreviewModal } from '../chat/MediaPreviewModal';
+import { AnimatePresence } from 'framer-motion';
 import './TeamChat.css';
 
 interface TeamChatProps {
@@ -45,6 +47,17 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [previewMedia, setPreviewMedia] = useState<{
+    isOpen: boolean;
+    url: string;
+    type: 'image' | 'video';
+    fileName?: string;
+    isSender?: boolean;
+  }>({
+    isOpen: false,
+    url: '',
+    type: 'image'
+  });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -259,7 +272,15 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
           {showName && !isOwn && <div className="team-chat__message-name">{senderName}</div>}
           <div className="team-chat__message-bubble">
             {msg.message_type === 'image' && msg.metadata?.image_url && (
-              <div className="team-chat__message-image-container">
+              <div 
+                className="team-chat__message-image-container cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => setPreviewMedia({
+                  isOpen: true,
+                  url: msg.metadata!.image_url!,
+                  type: 'image',
+                  isSender: isOwn
+                })}
+              >
                 <SecureImage 
                   src={msg.metadata.image_url} 
                   alt="Shared image" 
@@ -403,6 +424,18 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
           </Button>
         </div>
       </div>
+      <AnimatePresence>
+        {previewMedia.isOpen && (
+          <MediaPreviewModal 
+            isOpen={previewMedia.isOpen}
+            onClose={() => setPreviewMedia(prev => ({ ...prev, isOpen: false }))}
+            mediaUrl={previewMedia.url}
+            mediaType={previewMedia.type}
+            fileName={previewMedia.fileName}
+            isSender={previewMedia.isSender}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

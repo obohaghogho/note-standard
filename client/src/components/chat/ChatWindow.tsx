@@ -1,15 +1,17 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { useChat } from '../../context/ChatContext';
 import { usePresence } from '../../context/PresenceContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../common/SecureImage';
-import { Send, Languages, AlertTriangle, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, MicOff, ArrowLeft } from 'lucide-react';
+import { Send, Languages, AlertTriangle, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, MicOff, ArrowLeft, Maximize } from 'lucide-react';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { MediaUpload } from './MediaUpload';
 import { VoiceRecorder } from './VoiceRecorder';
 import { API_URL } from '../../lib/api';
 import toast from 'react-hot-toast';
+import { MediaPreviewModal } from './MediaPreviewModal';
 
 const ChatWindow: React.FC = () => {
     const { 
@@ -24,6 +26,17 @@ const ChatWindow: React.FC = () => {
     const [inputValue, setInputValue] = useState('');
     const [showMediaUpload, setShowMediaUpload] = useState(false);
     const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+    const [previewMedia, setPreviewMedia] = useState<{
+        isOpen: boolean;
+        url: string;
+        type: 'image' | 'video';
+        fileName?: string;
+        isSender?: boolean;
+    }>({
+        isOpen: false,
+        url: '',
+        type: 'image'
+    });
     
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -536,7 +549,14 @@ const ChatWindow: React.FC = () => {
                             <p className="text-center text-gray-500 py-10 text-sm">No messages found matching "{searchQuery}"</p>
                         )}
                         {searchResults.map((msg) => (
-                            <SearchMessageItem key={msg.id} msg={msg} isOwn={msg.sender_id === user?.id} query={searchQuery} fetchUrl={fetchSignedUrl} />
+                            <SearchMessageItem 
+                                key={msg.id} 
+                                msg={msg} 
+                                isOwn={msg.sender_id === user?.id} 
+                                query={searchQuery} 
+                                fetchUrl={fetchSignedUrl} 
+                                onPreviewMedia={(data) => setPreviewMedia({ isOpen: true, ...data })}
+                            />
                         ))}
                     </div>
                 ) : (
@@ -555,15 +575,35 @@ const ChatWindow: React.FC = () => {
                             {msg.attachment && (
                                 <div className="mb-2 rounded-lg overflow-hidden border border-black/20 bg-black/10">
                                     {msg.type === 'image' ? (
-                                        <ImageWithSignedUrl path={msg.attachment.storage_path} fetchUrl={fetchSignedUrl} />
+                                        <ImageWithSignedUrl 
+                                            path={msg.attachment?.storage_path || ''} 
+                                            fetchUrl={fetchSignedUrl} 
+                                            onPreview={(url) => setPreviewMedia({
+                                                isOpen: true,
+                                                url,
+                                                type: 'image',
+                                                fileName: msg.attachment.file_name,
+                                                isSender: msg.isOwn
+                                            })}
+                                        />
                                     ) : msg.type === 'video' ? (
-                                        <VideoWithSignedUrl path={msg.attachment.storage_path} fetchUrl={fetchSignedUrl} />
+                                        <VideoWithSignedUrl 
+                                            path={msg.attachment?.storage_path || ''} 
+                                            fetchUrl={fetchSignedUrl} 
+                                            onPreview={(url) => setPreviewMedia({
+                                                isOpen: true,
+                                                url,
+                                                type: 'video',
+                                                fileName: msg.attachment.file_name,
+                                                isSender: msg.isOwn
+                                            })}
+                                        />
                                     ) : (
                                         <div className="p-3 flex items-center gap-3">
                                             <Paperclip size={20} className="text-blue-400" />
                                             <div className="min-w-0">
-                                                <p className="text-sm font-medium truncate">{msg.attachment.file_name}</p>
-                                                <p className="text-[10px] opacity-60">{(msg.attachment.file_size / 1024).toFixed(1)} KB • {msg.attachment.file_type}</p>
+                                    <p className="text-sm font-medium truncate">{msg.attachment?.file_name}</p>
+                                    <p className="text-[10px] opacity-60">{(msg.attachment ? msg.attachment.file_size / 1024 : 0).toFixed(1)} KB • {msg.attachment?.file_type}</p>
                                             </div>
                                         </div>
                                     )}
@@ -679,16 +719,16 @@ const ChatWindow: React.FC = () => {
                 </button>
             )}
 
-            {/* Media Upload Modal Overlay */}
-            {showMediaUpload && (
-                <div className="p-4 absolute bottom-24 left-4 right-4 z-20">
+            {/* Media Upload Modal */}
+            <AnimatePresence>
+                {showMediaUpload && activeConversationId && (
                     <MediaUpload 
                         conversationId={activeConversationId} 
                         onUploadComplete={handleMediaUploadComplete} 
                         onCancel={() => setShowMediaUpload(false)} 
                     />
-                </div>
-            )}
+                )}
+            </AnimatePresence>
 
             {/* Call Overlay */}
             {callState.status !== 'idle' && (
@@ -796,31 +836,73 @@ const ChatWindow: React.FC = () => {
                     Please accept the message request to start chatting.
                 </div>
             )}
+
+            {/* Media Preview Modal */}
+            <MediaPreviewModal 
+                isOpen={previewMedia.isOpen}
+                onClose={() => setPreviewMedia(prev => ({ ...prev, isOpen: false }))}
+                mediaUrl={previewMedia.url}
+                mediaType={previewMedia.type}
+                fileName={previewMedia.fileName}
+                isSender={previewMedia.isSender}
+            />
         </div>
     );
 };
 
 // --- Helper Components for Media Rendering ---
 
-const ImageWithSignedUrl = ({ path, fetchUrl }: { path: string, fetchUrl: (p: string) => Promise<string | null> }) => {
+const ImageWithSignedUrl = ({ path, fetchUrl, onPreview }: { 
+    path: string, 
+    fetchUrl: (p: string) => Promise<string | null>,
+    onPreview?: (url: string) => void
+}) => {
     const [url, setUrl] = useState<string | null>(null);
-    useEffect(() => { fetchUrl(path).then(setUrl); }, [path]);
+    useEffect(() => { fetchUrl(path).then(setUrl); }, [path, fetchUrl]);
     
     return (
         <SecureImage
             src={url || undefined}
             alt="Attached"
             className="max-w-full h-auto cursor-pointer hover:opacity-95 transition-opacity"
-            onClick={() => url && window.open(url, '_blank')}
+            onClick={() => {
+                if (url) {
+                    if (onPreview) onPreview(url);
+                    else window.open(url, '_blank');
+                }
+            }}
         />
     );
 };
 
-const VideoWithSignedUrl = ({ path, fetchUrl }: { path: string, fetchUrl: (p: string) => Promise<string | null> }) => {
+const VideoWithSignedUrl = ({ path, fetchUrl, onPreview }: { 
+    path: string, 
+    fetchUrl: (p: string) => Promise<string | null>,
+    onPreview?: (url: string) => void
+}) => {
     const [url, setUrl] = useState<string | null>(null);
-    useEffect(() => { fetchUrl(path).then(setUrl); }, [path]);
-    if (!url) return <div className="aspect-video bg-gray-700 animate-pulse flex items-center justify-center"><Loader2 className="animate-spin text-gray-500" /></div>;
-    return <video src={url} controls className="max-w-full" />;
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => { 
+        fetchUrl(path).then(u => {
+            setUrl(u);
+            if (u) setIsLoading(false);
+        }); 
+    }, [path, fetchUrl]);
+
+    if (isLoading) return <div className="aspect-video bg-gray-700 animate-pulse flex items-center justify-center"><Loader2 className="animate-spin text-gray-500" /></div>;
+    if (!url) return <div className="p-4 text-center text-xs text-gray-500">Video failed to load</div>;
+
+    return (
+        <div className="relative group cursor-pointer" onClick={() => onPreview && onPreview(url)}>
+            <video src={url} className="max-w-full rounded-lg" />
+            <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-all">
+                <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white border border-white/30">
+                    <Maximize size={20} />
+                </div>
+            </div>
+        </div>
+    );
 };
 
 // --- Call Overlay UI Component ---
@@ -929,7 +1011,13 @@ const CallOverlay = ({ callState, acceptCall, rejectCall, endCall, localStream, 
     );
 };
 
-const SearchMessageItem = ({ msg, isOwn, query, fetchUrl }: { msg: any, isOwn: boolean, query: string, fetchUrl: any }) => {
+const SearchMessageItem = ({ msg, isOwn, query, fetchUrl, onPreviewMedia }: { 
+    msg: any, 
+    isOwn: boolean, 
+    query: string, 
+    fetchUrl: any,
+    onPreviewMedia: (data: any) => void
+}) => {
     const highlight = (text: string) => {
         if (!query) return text;
         const parts = text.split(new RegExp(`(${query})`, 'gi'));
@@ -946,9 +1034,27 @@ const SearchMessageItem = ({ msg, isOwn, query, fetchUrl }: { msg: any, isOwn: b
                 {msg.attachment && (
                     <div className="mb-2 rounded-lg overflow-hidden border border-black/20 bg-black/10 max-h-32">
                         {msg.type === 'image' ? (
-                            <ImageWithSignedUrl path={msg.attachment.storage_path} fetchUrl={fetchUrl} />
+                            <ImageWithSignedUrl 
+                                path={msg.attachment.storage_path} 
+                                fetchUrl={fetchUrl} 
+                                onPreview={(url) => onPreviewMedia({
+                                    url,
+                                    type: 'image',
+                                    fileName: msg.attachment.file_name,
+                                    isSender: isOwn
+                                })}
+                            />
                         ) : msg.type === 'video' ? (
-                            <VideoWithSignedUrl path={msg.attachment.storage_path} fetchUrl={fetchUrl} />
+                            <VideoWithSignedUrl 
+                                path={msg.attachment.storage_path} 
+                                fetchUrl={fetchUrl} 
+                                onPreview={(url) => onPreviewMedia({
+                                    url,
+                                    type: 'video',
+                                    fileName: msg.attachment.file_name,
+                                    isSender: isOwn
+                                })}
+                            />
                         ) : (
                             <div className="p-2 flex items-center gap-2">
                                 <Paperclip size={14} className="text-blue-400" />
