@@ -526,6 +526,7 @@ export const Settings = () => {
                                 <option value="es">Spanish (Español)</option>
                                 <option value="fr">French (Français)</option>
                                 <option value="zh">Chinese (中文)</option>
+                                <option value="ro">Romanian (Română)</option>
                                 <option value="de">German (Deutsch)</option>
                                 <option value="it">Italian (Italiano)</option>
                                 <option value="pt">Portuguese (Português)</option>

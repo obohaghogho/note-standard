@@ -34,9 +34,12 @@ export const Navbar = () => {
                     <Link to="/signup" className="text-sm font-medium px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition-colors">Get Started</Link>
                 </div>
 
-                <button onClick={() => setIsOpen(!isOpen)} className="md:hidden p-2 text-gray-400 hover:text-white">
-                    {isOpen ? <X /> : <Menu />}
-                </button>
+                <div className="flex md:hidden items-center gap-2">
+                    <LanguageSelector />
+                    <button onClick={() => setIsOpen(!isOpen)} className="p-2 text-gray-400 hover:text-white">
+                        {isOpen ? <X /> : <Menu />}
+                    </button>
+                </div>
             </div>
 
             {/* Mobile Menu */}
@@ -49,6 +52,11 @@ export const Navbar = () => {
                     <a href="#features" className="text-base font-medium text-gray-400 hover:text-white">Features</a>
                     <a href="#pricing" className="text-base font-medium text-gray-400 hover:text-white">Pricing</a>
                     <a href="#security" className="text-base font-medium text-gray-400 hover:text-white">Security</a>
+                    <div className="h-px bg-white/10 my-2" />
+                    <div className="flex items-center justify-between">
+                        <span className="text-gray-400 font-medium">Language</span>
+                        <LanguageSelector />
+                    </div>
                     <div className="h-px bg-white/10 my-2" />
                     <Link to="/login" className="w-full py-3 text-center font-medium bg-white/5 rounded-lg block">Login</Link>
                     <Link to="/signup" className="w-full py-3 text-center font-medium bg-primary text-white rounded-lg block">Get Started</Link>

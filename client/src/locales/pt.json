@@ -1,0 +1,32 @@
+{
+    "common": {
+        "search": "Busca global...",
+        "language": "Idioma",
+        "settings": "Configurações",
+        "profile": "Perfil",
+        "logout": "Sair",
+        "notifications": "Notificações",
+        "new_note": "Nova Nota",
+        "search_language": "Pesquisar idioma...",
+        "available_languages": "Idiomas disponíveis",
+        "auto_save": "As alterações são salvas automaticamente"
+    },
+    "nav": {
+        "home": "Início",
+        "notes": "Notas",
+        "chat": "Chat",
+        "shared": "Compartilhado",
+        "feed": "Feed",
+        "favorites": "Favoritos",
+        "billing": "Faturamento",
+        "trends": "Tendências",
+        "search_item": "Pesquisar",
+        "teams": "Equipes",
+        "wallet": "Carteira"
+    },
+    "auth": {
+        "login": "Entrar",
+        "signup": "Cadastrar-se",
+        "welcome": "Bem-vindo de volta"
+    }
+}

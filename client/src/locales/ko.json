@@ -1,0 +1,32 @@
+{
+    "common": {
+        "search": "전체 검색...",
+        "language": "언어",
+        "settings": "설정",
+        "profile": "프로필",
+        "logout": "로그아웃",
+        "notifications": "알림",
+        "new_note": "새 노트",
+        "search_language": "언어 검색...",
+        "available_languages": "사용 가능한 언어",
+        "auto_save": "변경 사항이 자동으로 저장됩니다"
+    },
+    "nav": {
+        "home": "홈",
+        "notes": "노트",
+        "chat": "채팅",
+        "shared": "공유됨",
+        "feed": "피드",
+        "favorites": "즐겨찾기",
+        "billing": "결제",
+        "trends": "트렌드",
+        "search_item": "검색",
+        "teams": "팀",
+        "wallet": "지갑"
+    },
+    "auth": {
+        "login": "로그인",
+        "signup": "가입하기",
+        "welcome": "다시 오신 것을 환영합니다"
+    }
+}
