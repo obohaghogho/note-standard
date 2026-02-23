@@ -11,6 +11,12 @@ const ALL_LANGUAGES = [
     { code: 'fr', name: 'French', flag: '🇫🇷', native: 'Français' },
     { code: 'zh', name: 'Chinese', flag: '🇨🇳', native: '中文' },
     { code: 'ro', name: 'Romanian', flag: '🇷🇴', native: 'Română' },
+    { code: 'de', name: 'German', flag: '🇩🇪', native: 'Deutsch' },
+    { code: 'it', name: 'Italian', flag: '🇮🇹', native: 'Italiano' },
+    { code: 'pt', name: 'Portuguese', flag: '🇵🇹', native: 'Português' },
+    { code: 'ja', name: 'Japanese', flag: '🇯🇵', native: '日本語' },
+    { code: 'ko', name: 'Korean', flag: '🇰🇷', native: '한국어' },
+    { code: 'ru', name: 'Russian', flag: '🇷🇺', native: 'Русский' },
 ];
 
 interface LanguageModalProps {

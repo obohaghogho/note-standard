@@ -1,0 +1,32 @@
+{
+    "common": {
+        "search": "Глобальный поиск...",
+        "language": "Язык",
+        "settings": "Настройки",
+        "profile": "Профиль",
+        "logout": "Выйти",
+        "notifications": "Уведомления",
+        "new_note": "Новая заметка",
+        "search_language": "Поиск языка...",
+        "available_languages": "Доступные языки",
+        "auto_save": "Изменения сохраняются автоматически"
+    },
+    "nav": {
+        "home": "Главная",
+        "notes": "Заметки",
+        "chat": "Чат",
+        "shared": "Общие",
+        "feed": "Лента",
+        "favorites": "Избранное",
+        "billing": "Оплата",
+        "trends": "Тренды",
+        "search_item": "Поиск",
+        "teams": "Команды",
+        "wallet": "Кошелек"
+    },
+    "auth": {
+        "login": "Войти",
+        "signup": "Регистрация",
+        "welcome": "С возвращением"
+    }
+}

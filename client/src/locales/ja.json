@@ -1,0 +1,32 @@
+{
+    "common": {
+        "search": "グローバル検索...",
+        "language": "言語",
+        "settings": "設定",
+        "profile": "プロフィール",
+        "logout": "ログアウト",
+        "notifications": "通知",
+        "new_note": "新しいメモ",
+        "search_language": "言語を検索...",
+        "available_languages": "利用可能な言語",
+        "auto_save": "変更は自動的に保存されます"
+    },
+    "nav": {
+        "home": "ホーム",
+        "notes": "ノート",
+        "chat": "チャット",
+        "shared": "共有",
+        "feed": "フィード",
+        "favorites": "お気に入り",
+        "billing": "請求",
+        "trends": "トレンド",
+        "search_item": "検索",
+        "teams": "チーム",
+        "wallet": "ウォレット"
+    },
+    "auth": {
+        "login": "ログイン",
+        "signup": "サインアップ",
+        "welcome": "おかえりなさい"
+    }
+}
