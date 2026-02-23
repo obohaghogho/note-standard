@@ -5,6 +5,7 @@ import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 import { Card } from '../components/common/Card';
 import { TermsModal } from '../components/auth/TermsModal';
+import { VerificationModal } from '../components/auth/VerificationModal';
 import { supabase } from '../lib/supabase';
 import { supabaseSafe } from '../lib/supabaseSafe';
 import { toast } from 'react-hot-toast';
@@ -24,6 +25,7 @@ export const Signup = () => {
     const [error, setError] = React.useState('');
     const [termsAccepted, setTermsAccepted] = React.useState(false);
     const [showTermsModal, setShowTermsModal] = React.useState(false);
+    const [showVerificationModal, setShowVerificationModal] = React.useState(false);
 
     React.useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
@@ -99,7 +101,8 @@ export const Signup = () => {
                 }
 
                 setStep('verify');
-                toast.success('Verification codes sent to your phone and email!');
+                setShowVerificationModal(true); // Show the new pop-up!
+                toast.success('Verification codes sent to your devices!');
 
             } else {
                 // 3. Verify Email OTP
@@ -336,6 +339,14 @@ export const Signup = () => {
                 <TermsModal
                     isOpen={showTermsModal}
                     onClose={() => setShowTermsModal(false)}
+                />
+
+                {/* Verification Info Modal */}
+                <VerificationModal
+                    isOpen={showVerificationModal}
+                    onClose={() => setShowVerificationModal(false)}
+                    email={email}
+                    phone={phone}
                 />
 
                 <p className="text-center mt-6 text-gray-400">
