@@ -5,7 +5,7 @@ import { usePresence } from '../../context/PresenceContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../common/SecureImage';
-import { Send, Languages, Flag, Phone, Video, VideoOff, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, MicOff, ArrowLeft, Maximize } from 'lucide-react';
+import { Send, Languages, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Maximize } from 'lucide-react';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { MediaUpload } from './MediaUpload';
 import { VoiceRecorder } from './VoiceRecorder';
@@ -23,7 +23,7 @@ const ChatWindow: React.FC = () => {
     } = useChat();
     const { isUserOnline, getUserLastSeen } = usePresence();
     const { user, profile, session } = useAuth();
-    const { startCall, callState, acceptCall, rejectCall, endCall, localStream, remoteStream, toggleMute, toggleVideo, isMuted, isVideoEnabled } = useWebRTC();
+    const { startCall } = useWebRTC();
     
     const [inputValue, setInputValue] = useState('');
     const [showMediaUpload, setShowMediaUpload] = useState(false);
@@ -361,7 +361,7 @@ const ChatWindow: React.FC = () => {
             toast.error(`${otherUserTitle} is offline. They might not receive your call.`);
         }
         toast.loading(`Starting ${type} call...`, { duration: 2000, id: 'call-start' });
-        startCall(otherMember.user_id, activeConversationId, type)
+        startCall(otherMember.user_id, activeConversationId, type, otherUserTitle, otherUserAvatar || undefined)
             .catch(() => {
                 toast.error('Failed to start call. Check camera/mic permissions.');
             });
@@ -651,13 +651,7 @@ const ChatWindow: React.FC = () => {
                 )}
             </AnimatePresence>
 
-            {callState.status !== 'idle' && (
-                <CallOverlay 
-                    callState={callState} acceptCall={acceptCall} rejectCall={rejectCall} endCall={endCall}
-                    localStream={localStream} remoteStream={remoteStream} toggleMute={toggleMute} toggleVideo={toggleVideo}
-                    isMuted={isMuted} isVideoEnabled={isVideoEnabled} otherUserName={otherUserTitle} otherUserAvatar={otherUserAvatar}
-                />
-            )}
+
 
             {!isPending ? (
                 <div className="p-2 md:p-6 border-t border-gray-800 bg-gray-900/80 backdrop-blur-md pb-[max(env(safe-area-inset-bottom,12px),12px)] flex-shrink-0 relative z-10">
@@ -726,57 +720,7 @@ const VideoWithSignedUrl = ({ path, fetchUrl, onPreview }: { path: string, fetch
     );
 };
 
-export const CallOverlay = ({ callState, acceptCall, rejectCall, endCall, localStream, remoteStream, toggleMute, toggleVideo, isMuted, isVideoEnabled, otherUserName, otherUserAvatar }: any) => {
-    return (
-        <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center backdrop-blur-xl animate-in fade-in duration-300">
-            <div className="relative w-full h-full md:w-[90vw] md:h-[80vh] bg-gray-900 md:rounded-3xl overflow-hidden shadow-2xl border border-white/5">
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
-                    {remoteStream ? (
-                        <video ref={(el) => { if (el) el.srcObject = remoteStream; }} autoPlay className="w-full h-full object-cover" />
-                    ) : (
-                        <div className="flex flex-col items-center gap-6">
-                            <div className="relative">
-                                <div className="absolute -inset-4 bg-blue-500/20 rounded-full animate-ping"></div>
-                                <div className="absolute -inset-8 bg-blue-500/10 rounded-full animate-pulse"></div>
-                                <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-4xl font-bold border-4 border-white/10 shadow-2xl overflow-hidden">
-                                    {otherUserAvatar ? <SecureImage src={otherUserAvatar} alt={otherUserName} className="w-full h-full object-cover" /> : <span className="text-white">{otherUserName?.charAt(0).toUpperCase()}</span>}
-                                </div>
-                            </div>
-                            <div className="text-center">
-                                <h3 className="text-2xl font-bold text-white mb-2">{otherUserName}</h3>
-                                <p className="text-blue-400 font-medium animate-pulse">
-                                    {callState.status === 'connected' && !remoteStream ? 'Handshaking...' :
-                                     callState.status === 'connecting' ? 'Joining Chat...' :
-                                     callState.status === 'calling' ? (localStream ? 'Connecting...' : 'Ringing...') : 
-                                     callState.status === 'incoming' ? `${callState.type === 'video' ? 'Video' : 'Voice'} Call Incoming` : 
-                                     'Connecting...'}
-                                </p>
-                            </div>
-                        </div>
-                    )}
-                </div>
-                <div className="absolute top-8 right-8 w-40 h-56 md:w-48 md:h-64 bg-gray-950 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl z-10">
-                    {localStream ? <video ref={(el) => { if (el) el.srcObject = localStream; }} autoPlay muted className={`w-full h-full object-cover ${!isVideoEnabled ? 'hidden' : ''}`} /> : null}
-                    {!isVideoEnabled && <div className="w-full h-full flex items-center justify-center bg-gray-800"><div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center"><Video size={20} className="text-gray-500" /></div></div>}
-                </div>
-                <div className="absolute inset-x-0 bottom-12 flex flex-col items-center gap-8 z-20">
-                    {callState.status === 'incoming' ? (
-                        <div className="flex gap-12">
-                            <div className="flex flex-col items-center gap-3"><button onClick={acceptCall} className="w-20 h-20 rounded-full bg-green-500 flex items-center justify-center text-white hover:bg-green-600 transition-all hover:scale-110 shadow-xl shadow-green-500/30"><Phone size={32} /></button><span className="text-sm font-medium text-green-400">Accept</span></div>
-                            <div className="flex flex-col items-center gap-3"><button onClick={rejectCall} className="w-20 h-20 rounded-full bg-red-500 flex items-center justify-center text-white hover:bg-red-600 transition-all hover:scale-110 shadow-xl shadow-red-500/30"><Phone size={32} className="rotate-[135deg]" /></button><span className="text-sm font-medium text-red-400">Decline</span></div>
-                        </div>
-                    ) : (
-                        <div className="flex items-center gap-6 bg-black/40 backdrop-blur-xl p-6 rounded-[2.5rem] border border-white/10 shadow-3xl">
-                            <button onClick={toggleMute} className={`p-5 rounded-full transition-all ${isMuted ? 'bg-red-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`} title={isMuted ? "Unmute" : "Mute"}>{isMuted ? <MicOff size={26} /> : <Mic size={26} />}</button>
-                            <button onClick={endCall} className="w-20 h-20 rounded-full bg-red-500 flex items-center justify-center text-white hover:bg-red-600 transition-all hover:scale-110 shadow-2xl shadow-red-500/40 transform active:scale-95"><Phone size={34} className="rotate-[135deg]" /></button>
-                            <button onClick={toggleVideo} className={`p-5 rounded-full transition-all ${!isVideoEnabled ? 'bg-red-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`} title={isVideoEnabled ? "Turn Camera Off" : "Turn Camera On"}>{isVideoEnabled ? <Video size={26} /> : <VideoOff size={26} />}</button>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-};
+
 
 const SearchMessageItem = ({ msg, isOwn, query, fetchUrl, onPreviewMedia }: { msg: any, isOwn: boolean, query: string, fetchUrl: any, onPreviewMedia: (data: any) => void }) => {
     const highlight = (text: string) => {

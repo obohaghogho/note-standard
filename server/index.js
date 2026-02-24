@@ -297,7 +297,17 @@ io.on("connection", async (socket) => {
   // --- WebRTC Signaling ---
   socket.on("call:init", ({ to, type, conversationId }) => {
     logger.info(`[WebRTC] Call Init from ${userId} to ${to} (${type})`);
-    io.to(to).emit("call:incoming", { from: userId, type, conversationId });
+    const senderName = socket.user?.user_metadata?.full_name ||
+      socket.user?.user_metadata?.username || socket.user?.email || "User";
+    const senderAvatar = socket.user?.user_metadata?.avatar_url;
+
+    io.to(to).emit("call:incoming", {
+      from: userId,
+      fromName: senderName,
+      fromAvatar: senderAvatar,
+      type,
+      conversationId,
+    });
   });
 
   socket.on("call:ready", ({ to }) => {
