@@ -306,6 +306,7 @@ exports.getMessages = async (req, res) => {
                     attachment:media_attachments(*)
                 `)
         .eq("conversation_id", conversationId)
+        .eq("is_deleted", false)
         .order("created_at", { ascending: false })
         .limit(parseInt(limit));
 
@@ -375,6 +376,7 @@ exports.searchMessages = async (req, res) => {
                     attachment:media_attachments(*)
                 `)
         .eq("conversation_id", conversationId)
+        .eq("is_deleted", false)
         .ilike("content", `%${q}%`)
         .order("created_at", { ascending: false })
         .limit(100);
@@ -888,6 +890,49 @@ exports.clearChatHistory = async (req, res) => {
     res.json({ success: true, message: "Chat history cleared" });
   } catch (err) {
     console.error("Error clearing chat history:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+// Delete a specific message (soft delete)
+exports.deleteMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user.id;
+
+    // Soft delete the message
+    const { data, error } = await supabase
+      .from("messages")
+      .update({
+        is_deleted: true,
+        content: "Message deleted", // Optional: scrub content
+      })
+      .eq("id", messageId)
+      .eq("sender_id", userId) // Force ownership
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === "PGRST116") {
+        return res.status(404).json({
+          error: "Message not found or you don't have permission to delete it",
+        });
+      }
+      throw error;
+    }
+
+    // Notify via Socket.IO
+    const io = req.app.get("io");
+    if (io) {
+      io.to(data.conversation_id).emit("message_deleted", {
+        messageId,
+        conversationId: data.conversation_id,
+      });
+    }
+
+    res.json({ success: true, message: "Message deleted" });
+  } catch (err) {
+    console.error("Error deleting message:", err.message);
     res.status(500).json({ error: "Server Error" });
   }
 };

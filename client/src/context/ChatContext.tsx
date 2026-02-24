@@ -69,6 +69,7 @@ export interface ChatContextValue {
     startConversation: (username: string) => Promise<void>; 
     acceptConversation: (id: string) => Promise<void>;
     deleteConversation: (id: string) => Promise<void>;
+    deleteMessage: (messageId: string) => Promise<void>;
     muteConversation: (id: string, isMuted: boolean) => Promise<void>;
     clearChatHistory: (id: string) => Promise<void>;
     hasMore: Record<string, boolean>;
@@ -252,6 +253,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         socket.on('conversation_updated', onNewConversation);
         socket.on('message_read', onMessageRead);
         socket.on('conversation_deleted', onConversationDeleted);
+        socket.on('message_deleted', ({ messageId, conversationId }: { messageId: string, conversationId: string }) => {
+            setMessages(prev => {
+                const convMessages = prev[conversationId] || [];
+                return {
+                    ...prev,
+                    [conversationId]: convMessages.filter(m => m.id !== messageId)
+                };
+            });
+        });
 
         // Aggressively join rooms on connect/reconnect
         const joinAllRooms = () => {
@@ -426,6 +436,31 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     };
 
+    const deleteMessage = async (messageId: string) => {
+        if (!session || !activeConversationId) throw new Error('No session or active chat');
+
+        try {
+            const res = await fetch(`${API_URL}/api/chat/messages/${messageId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${session.access_token}` }
+            });
+
+            if (res.ok) {
+                // Local state will be updated by socket or proactively
+                setMessages(prev => ({
+                    ...prev,
+                    [activeConversationId]: (prev[activeConversationId] || []).filter(m => m.id !== messageId)
+                }));
+            } else {
+                const data = await res.json();
+                throw new Error(data.error || 'Failed to delete message');
+            }
+        } catch (err) {
+            console.error('[Chat] Failed to delete message:', err);
+            throw err;
+        }
+    };
+
     const muteConversation = async (conversationId: string, isMuted: boolean) => {
         if (!session) throw new Error('No session');
 
@@ -529,6 +564,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             startConversation, 
             acceptConversation, 
             deleteConversation,
+            deleteMessage,
             muteConversation,
             clearChatHistory,
             loading, 
