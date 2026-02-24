@@ -15,11 +15,9 @@ import {
 } from 'lucide-react';
 import type { Message } from '../../context/ChatContext';
 import { useWebRTC } from '../../context/WebRTCContext';
-import { CallOverlay } from './ChatWindow'; // Reuse CallOverlay from ChatWindow
+import { CallOverlay } from './CallOverlay';
 import { AudioPlayer } from './AudioPlayer';
 import toast from 'react-hot-toast';
-
-// Local interfaces removed in favor of exports from ChatContext
 
 export const ChatWidget = () => {
     const { session, user } = useAuth();
@@ -251,7 +249,7 @@ export const ChatWidget = () => {
         if (!supportChat?.id) return;
         
         // Find an admin/agent in the chat to call
-        const otherMember = supportChat.members?.find((m: any) => m.user_id !== user?.id);
+        const otherMember = supportChat.members?.find((m: any) => m.role === 'admin' || m.user_id !== user?.id);
         
         if (!otherMember) {
             toast.error('Waiting for an agent to join the chat...');
@@ -283,23 +281,6 @@ export const ChatWidget = () => {
 
             {isOpen && (
                 <div className="chat-widget-window">
-                    {/* Call Overlay Integration */}
-                    {callState.status !== 'idle' && (
-                        <CallOverlay 
-                            callState={callState} 
-                            acceptCall={acceptCall} 
-                            rejectCall={rejectCall} 
-                            endCall={endCall}
-                            localStream={localStream}
-                            remoteStream={remoteStream}
-                            toggleMute={toggleMute}
-                            toggleVideo={toggleVideo}
-                            isMuted={isMuted}
-                            isVideoEnabled={isVideoEnabled}
-                            otherUserName="Support Agent"
-                        />
-                    )}
-
                     <div className="chat-widget-header">
                         <div className="header-info">
                             <Headphones size={20} />
@@ -421,6 +402,22 @@ export const ChatWidget = () => {
                         </>
                     )}
                 </div>
+            )}
+            
+            {callState.status !== 'idle' && (
+                <CallOverlay 
+                    callState={callState} 
+                    acceptCall={acceptCall} 
+                    rejectCall={rejectCall} 
+                    endCall={endCall}
+                    localStream={localStream} 
+                    remoteStream={remoteStream} 
+                    toggleMute={toggleMute} 
+                    toggleVideo={toggleVideo}
+                    isMuted={isMuted} 
+                    isVideoEnabled={isVideoEnabled} 
+                    otherUserName="Support Agent" 
+                />
             )}
         </div>
     );

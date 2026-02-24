@@ -15,22 +15,15 @@ import {
 } from 'lucide-react';
 import type { Message, Conversation } from '../../context/ChatContext';
 import { useWebRTC } from '../../context/WebRTCContext';
-import { CallOverlay } from '../../components/chat/ChatWindow';
 import { AudioPlayer } from '../../components/chat/AudioPlayer';
 import toast from 'react-hot-toast';
 import SecureImage from '../../components/common/SecureImage';
 import './AdminChat.css';
 
-// Local interfaces removed in favor of exports from ChatContext
-
 export const AdminChat = () => {
     const { session, user, isAdmin } = useAuth();
     const { socket, connected } = useSocket();
-    const { 
-        startCall, callState, acceptCall, rejectCall, endCall, 
-        localStream, remoteStream, toggleMute, toggleVideo, 
-        isMuted, isVideoEnabled 
-    } = useWebRTC();
+    const { startCall } = useWebRTC();
     
     // State
     const [chats, setChats] = useState<Conversation[]>([]);
@@ -41,9 +34,8 @@ export const AdminChat = () => {
     const [statusFilter, setStatusFilter] = useState('');
     const [newMessage, setNewMessage] = useState('');
     const [activeAdmins, setActiveAdmins] = useState<Record<string, string[]>>({});
-    const [typingUsers] = useState<Record<string, boolean>>({});
     const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
-    
+
     // Refs
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -275,24 +267,25 @@ export const AdminChat = () => {
         return chat.members.find(m => m.role !== 'admin');
     };
 
+    const handleCall = (type: 'voice' | 'video') => {
+        if (!activeChat || !session?.access_token) return;
+        const otherUser = getUserFromChat(activeChat);
+        if (!otherUser) {
+            toast.error('Could not find user to call');
+            return;
+        }
+        toast.loading(`Starting ${type} call...`, { duration: 2000, id: 'call-start' });
+        startCall(otherUser.user_id, activeChat.id, type, otherUser.profile?.username, otherUser.profile?.avatar_url)
+            .catch(() => {
+                toast.error('Failed to start call. Check camera/mic permissions.');
+            });
+    };
+
     const formatTime = (dateStr: string) => {
         return new Date(dateStr).toLocaleTimeString('en-US', {
             hour: '2-digit',
             minute: '2-digit'
         });
-    };
-
-    const handleCall = (type: 'voice' | 'video') => {
-        if (!activeChat) return;
-        const chatMember = getUserFromChat(activeChat);
-        if (!chatMember || !chatMember.user_id) {
-            toast.error('Cannot find user ID for this call');
-            return;
-        }
-
-        toast.loading(`Starting ${type} call...`, { duration: 2000, id: 'admin-call' });
-        startCall(chatMember.user_id, activeChat.id, type)
-            .catch(() => toast.error('Failed to start call'));
     };
 
     const getSentimentEmoji = (label?: string) => {
@@ -394,22 +387,6 @@ export const AdminChat = () => {
             </div>
 
             <div className="admin-chat-main">
-                {/* Call Overlay for Admin */}
-                {callState.status !== 'idle' && (
-                    <CallOverlay
-                        callState={callState}
-                        acceptCall={acceptCall}
-                        rejectCall={rejectCall}
-                        endCall={endCall}
-                        localStream={localStream}
-                        remoteStream={remoteStream}
-                        toggleMute={toggleMute}
-                        toggleVideo={toggleVideo}
-                        isMuted={isMuted}
-                        isVideoEnabled={isVideoEnabled}
-                        otherUserName={activeChat ? (getUserFromChat(activeChat)?.profile?.username || 'User') : 'User'}
-                    />
-                )}
                 {activeChat ? (
                     <>
                         <div className="main-header">
@@ -438,7 +415,7 @@ export const AdminChat = () => {
                                     );
                                 })()}
                             </div>
-                             <div className="actions">
+                            <div className="actions">
                                 <div className="flex items-center gap-1 mr-4">
                                     <button 
                                         onClick={() => handleCall('voice')}
@@ -513,9 +490,6 @@ export const AdminChat = () => {
                                     </div>
                                 </div>
                             ))}
-                            {typingUsers[activeChat.id] && (
-                                <div className="typing">User is typing...</div>
-                            )}
                             <div ref={messagesEndRef} />
                         </div>
 
@@ -541,6 +515,8 @@ export const AdminChat = () => {
                     </div>
                 )}
             </div>
+
+
         </div>
     );
 };
