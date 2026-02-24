@@ -13,6 +13,7 @@ import {
   createTeam,
   inviteMember,
   leaveTeam,
+  deleteTeam,
   uploadTeamImage,
   updateTeam,
 } from '../../lib/teamsApi';
@@ -31,9 +32,11 @@ import {
   Loader2,
   ArrowLeft,
   Camera,
+  Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import SecureImage from '../../components/common/SecureImage';
+import { ConfirmationModal } from '../../components/common/ConfirmationModal';
 import './TeamsPage.css';
 
 // ====================================
@@ -48,7 +51,8 @@ const TeamContent: React.FC<{
   onInvite: () => void;
   onBack: () => void;
   onTeamUpdate: () => void;
-}> = ({ selectedTeam, myRole, onLeave, onInvite, onBack, onTeamUpdate }) => {
+  onDelete: () => void;
+}> = ({ selectedTeam, myRole, onLeave, onInvite, onBack, onTeamUpdate, onDelete }) => {
   const { members, teamStats, loading } = useTeamChat();
   const [isUploading, setIsUploading] = useState(false);
 
@@ -132,6 +136,17 @@ const TeamContent: React.FC<{
               >
                 <LogOut size={16} />
                 Leave
+              </Button>
+            )}
+            {myRole === 'owner' && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onDelete}
+                className="text-red-400"
+              >
+                <Trash2 size={16} />
+                Delete Team
               </Button>
             )}
           </div>
@@ -240,6 +255,14 @@ export const TeamsPage: React.FC = () => {
   const [newTeamDescription, setNewTeamDescription] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'member' | 'admin'>('member');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    type: 'leave' | 'delete';
+  }>({
+    isOpen: false,
+    type: 'leave'
+  });
 
   // ====================================
   // LOAD TEAMS
@@ -329,16 +352,40 @@ export const TeamsPage: React.FC = () => {
 
   const handleLeaveTeam = async () => {
     if (!selectedTeamId) return;
-    
-    const confirmed = window.confirm('Are you sure you want to leave this team?');
-    if (!confirmed) return;
+    setConfirmModal({ isOpen: false, type: 'leave' });
 
+    const toastId = toast.loading('Leaving team...');
     const success = await leaveTeam(selectedTeamId);
     if (success) {
-      toast.success('Left team successfully');
+      toast.success('Left team successfully', { id: toastId });
       setSelectedTeamId(null);
       setMobileView('list');
       await loadTeams();
+    } else {
+      toast.error('Failed to leave team', { id: toastId });
+    }
+  };
+
+  const handleDeleteTeam = async () => {
+    if (!selectedTeamId) return;
+    setConfirmModal({ isOpen: false, type: 'delete' });
+    setIsDeleting(true);
+
+    const toastId = toast.loading('Deleting team...');
+    try {
+      const success = await deleteTeam(selectedTeamId);
+      if (success) {
+        toast.success('Team deleted successfully', { id: toastId });
+        setSelectedTeamId(null);
+        setMobileView('list');
+        await loadTeams();
+      } else {
+        toast.error('Failed to delete team', { id: toastId });
+      }
+    } catch (err) {
+      toast.error('Error deleting team', { id: toastId });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -433,10 +480,11 @@ export const TeamsPage: React.FC = () => {
            <TeamContent 
              selectedTeam={selectedTeam} 
              myRole={myRole}
-             onLeave={handleLeaveTeam}
+             onLeave={() => setConfirmModal({ isOpen: true, type: 'leave' })}
              onInvite={() => setShowInviteModal(true)}
              onBack={() => setMobileView('list')}
              onTeamUpdate={() => loadTeams()}
+             onDelete={() => setConfirmModal({ isOpen: true, type: 'delete' })}
            />
         </TeamChatProvider>
       ) : (
@@ -535,6 +583,22 @@ export const TeamsPage: React.FC = () => {
           </Card>
         </div>
       )}
+
+      {/* Delete/Leave Team Confirmation */}
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.type === 'leave' ? handleLeaveTeam : handleDeleteTeam}
+        isLoading={isDeleting}
+        title={confirmModal.type === 'leave' ? 'Leave Team' : 'Delete Team'}
+        message={
+          confirmModal.type === 'leave'
+            ? `Are you sure you want to leave ${selectedTeam?.name}? You will lose access to all messages and shared notes.`
+            : `Are you sure you want to PERMANENTLY delete ${selectedTeam?.name}? This will remove the team and all its history for everyone. This cannot be undone.`
+        }
+        confirmText={confirmModal.type === 'leave' ? 'Leave Team' : 'Delete Everything'}
+        variant="danger"
+      />
     </div>
   );
 };
