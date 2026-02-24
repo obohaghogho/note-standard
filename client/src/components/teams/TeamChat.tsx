@@ -29,6 +29,7 @@ import type { TeamMessage } from '../../types/teams';
 import SecureImage from '../common/SecureImage';
 import { MediaPreviewModal } from '../chat/MediaPreviewModal';
 import { AnimatePresence } from 'framer-motion';
+import { ConfirmationModal } from '../common/ConfirmationModal';
 import './TeamChat.css';
 
 interface TeamChatProps {
@@ -39,19 +40,27 @@ interface TeamChatProps {
 export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) => {
   const { user } = useAuth();
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { messages, members, loading, connected, sendMessage, shareNote, loadMoreMessages, hasMore, deleteMessage, clearChatHistory, error } =
+  const { messages, members, loading, connected, sendMessage, loadMoreMessages, hasMore, deleteMessage, clearChatHistory, error } =
     useTeamChat();
 
   const myMember = members.find(m => m.user_id === user?.id);
   const myRole = myMember?.role || 'member';
   const isAdminOrOwner = myRole === 'admin' || myRole === 'owner';
 
-  // teamId is used in effect via useTeamChat, but if it causes issues we can just log it
-  console.log('[TeamChat] ID:', teamId, user?.id, !!shareNote);
-
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  
+  // Confirmation state
+  const [confirmDelete, setConfirmDelete] = useState<{
+    isOpen: boolean;
+    type: 'message' | 'history';
+    messageId?: string;
+  }>({
+    isOpen: false,
+    type: 'message'
+  });
+
   const [previewMedia, setPreviewMedia] = useState<{
     isOpen: boolean;
     url: string;
@@ -268,11 +277,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
       >
         {canDelete && !msg.isOptimistic && (
           <button
-            onClick={() => {
-              if (window.confirm('Delete this message?')) {
-                deleteMessage(msg.id).catch(() => toast.error('Failed to delete message'));
-              }
-            }}
+            onClick={() => setConfirmDelete({ isOpen: true, type: 'message', messageId: msg.id })}
             className={`absolute top-1/2 -translate-y-1/2 ${isOwn ? '-left-8' : '-right-8'} p-1.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all z-10`}
             title="Delete message"
           >
@@ -379,11 +384,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
               size="sm" 
               variant="ghost" 
               className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
-              onClick={() => {
-                if (window.confirm('Wipe ALL messages in this team chat? This cannot be undone.')) {
-                  clearChatHistory().catch(() => toast.error('Failed to clear chat'));
-                }
-              }}
+              onClick={() => setConfirmDelete({ isOpen: true, type: 'history' })}
             >
               <Trash2 size={16} />
             </Button>
@@ -474,6 +475,41 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
           />
         )}
       </AnimatePresence>
+
+      <ConfirmationModal
+        isOpen={confirmDelete.isOpen}
+        onClose={() => setConfirmDelete({ isOpen: false, type: 'message' })}
+        onConfirm={async () => {
+          const type = confirmDelete.type;
+          const msgId = confirmDelete.messageId;
+          setConfirmDelete(prev => ({ ...prev, isOpen: false }));
+          
+          if (type === 'message' && msgId) {
+            try {
+              await deleteMessage(msgId);
+              toast.success('Message deleted');
+            } catch (err) {
+              toast.error('Failed to delete message');
+            }
+          } else if (type === 'history') {
+            const toastId = toast.loading('Clearing chat history...');
+            try {
+              await clearChatHistory();
+              toast.success('Chat history cleared', { id: toastId });
+            } catch (err) {
+              toast.error('Failed to clear chat', { id: toastId });
+            }
+          }
+        }}
+        title={confirmDelete.type === 'message' ? 'Delete Message' : 'Wipe Chat History'}
+        message={
+          confirmDelete.type === 'message' 
+            ? 'Are you sure you want to delete this message? This action cannot be undone.' 
+            : 'Are you sure you want to wipe ALL messages in this team chat? This will clear the chat for everyone and cannot be recovered.'
+        }
+        confirmText={confirmDelete.type === 'message' ? 'Delete' : 'Wipe Everything'}
+        variant="danger"
+      />
     </div>
   );
 };
