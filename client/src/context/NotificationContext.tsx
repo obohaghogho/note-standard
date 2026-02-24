@@ -139,7 +139,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                         </button>
                     </div>
                 </div>
-            ), { duration: 4000 });
+            ), { duration: 2000 });
         };
 
         socket.on('notification', onNotification);

@@ -16,7 +16,7 @@ import {
   uploadTeamImage,
   updateTeam,
 } from '../../lib/teamsApi';
-import type { TeamWithUnreadCount, TeamMember, TeamStats } from '../../types/teams';
+import type { TeamWithUnreadCount } from '../../types/teams';
 import {
   Users,
   Plus,
@@ -284,6 +284,8 @@ export const TeamsPage: React.FC = () => {
         await loadTeams();
         setSelectedTeamId(team.id);
         setMobileView('chat');
+      } else {
+        toast.error('Failed to create team. Please try again.', { id: toastId });
       }
     } catch (err: any) {
       toast.error(err.message || 'Failed to create team', { id: toastId });
@@ -313,6 +315,8 @@ export const TeamsPage: React.FC = () => {
         // Real-time will handle the update if we are in the Provider, 
         // but for the sidebar we might need a refresh
         await loadTeams();
+      } else {
+        toast.error('Failed to send invitation. Check the email and try again.', { id: toastId });
       }
     } catch (err: any) {
       toast.error(err.message || 'Failed to invite member', { id: toastId });
