@@ -126,7 +126,7 @@ export async function getMyTeams(): Promise<TeamWithUnreadCount[]> {
     );
 
     return teamsWithDetails.filter(Boolean) as TeamWithUnreadCount[];
-  }, { minDelay: 2000 });
+  }, { minDelay: 500 });
 
   return result ?? [];
 }
