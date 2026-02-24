@@ -1,10 +1,10 @@
 // ====================================
-// TEAMS PAGE - Full Example
+// TEAMS PAGE
 // Complete team management + chat UI
 // ====================================
 
-import React, { useEffect, useState } from 'react';
-import { TeamChatProvider } from '../../context/TeamChatContext';
+import React, { useEffect, useState, useCallback } from 'react';
+import { TeamChatProvider, useTeamChat } from '../../context/TeamChatContext';
 import { TeamChat } from '../../components/teams/TeamChat';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
@@ -12,9 +12,9 @@ import {
   getMyTeams,
   createTeam,
   inviteMember,
-  getTeamMembers,
   leaveTeam,
-  getTeamStats,
+  uploadTeamImage,
+  updateTeam,
 } from '../../lib/teamsApi';
 import type { TeamWithUnreadCount, TeamMember, TeamStats } from '../../types/teams';
 import {
@@ -30,21 +30,209 @@ import {
   Calendar,
   Loader2,
   ArrowLeft,
+  Camera,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import SecureImage from '../../components/common/SecureImage';
 import './TeamsPage.css';
 
+// ====================================
+// INNER CONTENT COMPONENT
+// Accesses TeamChatContext
+// ====================================
+
+const TeamContent: React.FC<{
+  selectedTeam: TeamWithUnreadCount;
+  myRole: string;
+  onLeave: () => void;
+  onInvite: () => void;
+  onBack: () => void;
+  onTeamUpdate: () => void;
+}> = ({ selectedTeam, myRole, onLeave, onInvite, onBack, onTeamUpdate }) => {
+  const { members, teamStats, loading } = useTeamChat();
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedTeam) return;
+
+    setIsUploading(true);
+    const toastId = toast.loading('Uploading team avatar...');
+    try {
+      const url = await uploadTeamImage(selectedTeam.id, file);
+      if (url) {
+        await updateTeam(selectedTeam.id, { avatar_url: url });
+        toast.success('Team avatar updated!', { id: toastId });
+        onTeamUpdate();
+      }
+    } catch (err) {
+      toast.error('Failed to update avatar', { id: toastId });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const getRoleIcon = (role: string) => {
+    if (role === 'owner') return <Crown size={14} className="text-yellow-400" />;
+    if (role === 'admin') return <Shield size={14} className="text-blue-400" />;
+    return <User size={14} className="text-gray-400" />;
+  };
+
+  return (
+    <>
+      {/* Main Content - Chat */}
+      <div className="teams-page__main">
+        {/* Team Header */}
+        <div className="teams-page__header">
+          <div className="teams-page__header-left">
+            <button
+              className="teams-page__back-button"
+              onClick={onBack}
+              aria-label="Back to teams list"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <div className="relative group">
+              <div className="teams-page__header-avatar">
+                 {selectedTeam.avatar_url ? (
+                   <SecureImage src={selectedTeam.avatar_url} alt="" fallbackType="default" />
+                 ) : (
+                   selectedTeam.name.charAt(0).toUpperCase()
+                 )}
+                 {(myRole === 'owner' || myRole === 'admin') && (
+                   <label className="teams-page__avatar-edit-overlay cursor-pointer">
+                     <Camera size={16} />
+                     <input type="file" className="hidden" accept="image/*" onChange={handleAvatarChange} disabled={isUploading} />
+                   </label>
+                 )}
+              </div>
+            </div>
+            <div>
+              <h1>{selectedTeam.name}</h1>
+              <p>{selectedTeam.description || 'No description'}</p>
+            </div>
+          </div>
+          <div className="teams-page__header-actions">
+            {(myRole === 'owner' || myRole === 'admin') && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onInvite}
+              >
+                <UserPlus size={16} />
+                Invite
+              </Button>
+            )}
+            {myRole !== 'owner' && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onLeave}
+                className="text-red-400"
+              >
+                <LogOut size={16} />
+                Leave
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Team Chat */}
+        <div className="teams-page__chat">
+          <TeamChat teamId={selectedTeam.id} />
+        </div>
+      </div>
+
+      {/* Right Sidebar - Team Info */}
+      <div className="teams-page__info">
+        <h3>Team Info</h3>
+
+        {/* Stats */}
+        {teamStats ? (
+          <div className="teams-page__info-content">
+            <Card className="teams-page__stats-card">
+              <div className="teams-page__stat">
+                <MessageSquare size={20} />
+                <div>
+                  <p className="teams-page__stat-value">{teamStats.total_messages.toLocaleString()}</p>
+                  <p className="teams-page__stat-label">Messages Sent</p>
+                </div>
+              </div>
+              <div className="teams-page__stat">
+                <Users size={20} />
+                <div>
+                  <p className="teams-page__stat-value">{teamStats.total_members.toLocaleString()}</p>
+                  <p className="teams-page__stat-label">Active Members</p>
+                </div>
+              </div>
+              <div className="teams-page__stat">
+                <FileText size={20} />
+                <div>
+                  <p className="teams-page__stat-value">{teamStats.shared_notes.toLocaleString()}</p>
+                  <p className="teams-page__stat-label">Notes Shared</p>
+                </div>
+              </div>
+              <div className="teams-page__stat">
+                <Calendar size={20} />
+                <div>
+                  <p className="teams-page__stat-value">
+                    {new Date(teamStats.created_at).toLocaleDateString(undefined, { 
+                      month: 'short', day: 'numeric', year: 'numeric' 
+                    })}
+                  </p>
+                  <p className="teams-page__stat-label">Team Since</p>
+                </div>
+              </div>
+            </Card>
+          </div>
+        ) : (
+          <div className="p-4 text-center text-gray-500">
+            {loading ? <Loader2 className="animate-spin mx-auto" /> : 'No stats available'}
+          </div>
+        )}
+
+        {/* Members Preview */}
+        <div className="teams-page__members-preview">
+          <h4>Members ({members.length})</h4>
+          <div className="teams-page__members-list">
+            {members.slice(0, 10).map((member) => (
+              <div key={member.id} className="teams-page__member-item">
+                <div className="teams-page__member-avatar">
+                  {member.profile?.avatar_url ? (
+                    <SecureImage src={member.profile.avatar_url} alt="" fallbackType="profile" />
+                  ) : (
+                    member.profile?.full_name?.charAt(0) || 'U'
+                  )}
+                </div>
+                <div className="teams-page__member-info">
+                  <span>{member.profile?.full_name || member.profile?.email}</span>
+                  <span className="teams-page__member-role">
+                    {getRoleIcon(member.role)} {member.role}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+          {members.length > 10 && (
+            <p className="text-xs text-center text-gray-500 mt-2">Plus {members.length - 10} more members</p>
+          )}
+        </div>
+      </div>
+    </>
+  );
+};
+
+// ====================================
+// MAIN PAGE COMPONENT
+// ====================================
+
 export const TeamsPage: React.FC = () => {
   // State
   const [teams, setTeams] = useState<TeamWithUnreadCount[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
-  const [teamStats, setTeamStats] = useState<TeamStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [showMembersModal, setShowMembersModal] = useState(false);
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
 
   // Form state
@@ -57,7 +245,7 @@ export const TeamsPage: React.FC = () => {
   // LOAD TEAMS
   // ====================================
 
-  const loadTeams = async () => {
+  const loadTeams = useCallback(async () => {
     setLoading(true);
     const data = await getMyTeams();
     setTeams(data);
@@ -68,33 +256,11 @@ export const TeamsPage: React.FC = () => {
     }
     
     setLoading(false);
-  };
+  }, [selectedTeamId]);
 
   useEffect(() => {
     loadTeams();
-  }, []);
-
-  // ====================================
-  // LOAD TEAM DETAILS
-  // ====================================
-
-  useEffect(() => {
-    if (selectedTeamId) {
-      loadTeamDetails();
-    }
-  }, [selectedTeamId]);
-
-  const loadTeamDetails = async () => {
-    if (!selectedTeamId) return;
-
-    const [members, stats] = await Promise.all([
-      getTeamMembers(selectedTeamId),
-      getTeamStats(selectedTeamId),
-    ]);
-
-    setTeamMembers(members);
-    setTeamStats(stats);
-  };
+  }, [loadTeams]);
 
   // ====================================
   // CREATE TEAM
@@ -102,19 +268,25 @@ export const TeamsPage: React.FC = () => {
 
   const handleCreateTeam = async (e: React.FormEvent) => {
     e.preventDefault();
+    const toastId = toast.loading('Creating team...');
 
-    const team = await createTeam({
-      name: newTeamName,
-      description: newTeamDescription,
-    });
+    try {
+      const team = await createTeam({
+        name: newTeamName,
+        description: newTeamDescription,
+      });
 
-    if (team) {
-      toast.success('Team created successfully!');
-      setShowCreateModal(false);
-      setNewTeamName('');
-      setNewTeamDescription('');
-      await loadTeams();
-      setSelectedTeamId(team.id);
+      if (team) {
+        toast.success('Team created successfully!', { id: toastId });
+        setShowCreateModal(false);
+        setNewTeamName('');
+        setNewTeamDescription('');
+        await loadTeams();
+        setSelectedTeamId(team.id);
+        setMobileView('chat');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to create team', { id: toastId });
     }
   };
 
@@ -126,16 +298,24 @@ export const TeamsPage: React.FC = () => {
     e.preventDefault();
     if (!selectedTeamId) return;
 
-    const member = await inviteMember(selectedTeamId, {
-      email: inviteEmail,
-      role: inviteRole,
-    });
+    const toastId = toast.loading('Sending invitation...');
 
-    if (member) {
-      toast.success('Member invited successfully!');
-      setShowInviteModal(false);
-      setInviteEmail('');
-      await loadTeamDetails();
+    try {
+      const member = await inviteMember(selectedTeamId, {
+        email: inviteEmail,
+        role: inviteRole,
+      });
+
+      if (member) {
+        toast.success('Member invited successfully!', { id: toastId });
+        setShowInviteModal(false);
+        setInviteEmail('');
+        // Real-time will handle the update if we are in the Provider, 
+        // but for the sidebar we might need a refresh
+        await loadTeams();
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to invite member', { id: toastId });
     }
   };
 
@@ -153,17 +333,9 @@ export const TeamsPage: React.FC = () => {
     if (success) {
       toast.success('Left team successfully');
       setSelectedTeamId(null);
+      setMobileView('list');
       await loadTeams();
     }
-  };
-
-  // ====================================
-  // GET USER ROLE
-  // ====================================
-
-  const getMyRole = (teamId: string): string => {
-    const team = teams.find((t) => t.id === teamId);
-    return team?.my_role || 'member';
   };
 
   const getRoleIcon = (role: string) => {
@@ -173,17 +345,17 @@ export const TeamsPage: React.FC = () => {
   };
 
   const selectedTeam = teams.find((t) => t.id === selectedTeamId);
-  const myRole = selectedTeamId ? getMyRole(selectedTeamId) : 'member';
+  const myRole = selectedTeam?.my_role || 'member';
 
   // ====================================
   // RENDER
   // ====================================
 
-  if (loading) {
+  if (loading && teams.length === 0) {
     return (
       <div className="teams-page__loading">
         <Loader2 size={48} className="animate-spin" />
-        <p>Loading teams...</p>
+        <p>Loading your teams...</p>
       </div>
     );
   }
@@ -196,7 +368,7 @@ export const TeamsPage: React.FC = () => {
           <h2>My Teams</h2>
           <Button size="sm" onClick={() => setShowCreateModal(true)}>
             <Plus size={16} />
-            New Team
+            New
           </Button>
         </div>
 
@@ -241,7 +413,9 @@ export const TeamsPage: React.FC = () => {
                 </div>
                 {team.last_message && (
                   <p className="teams-page__last-message">
-                    {team.last_message.content?.substring(0, 50)}...
+                    {team.last_message.content ? 
+                      (team.last_message.content.length > 40 ? team.last_message.content.substring(0, 40) + '...' : team.last_message.content) : 
+                      'Shared an item'}
                   </p>
                 )}
               </Card>
@@ -250,147 +424,23 @@ export const TeamsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Content - Chat */}
-      <div className="teams-page__main">
-        {selectedTeamId && selectedTeam ? (
-          <>
-            {/* Team Header */}
-            <div className="teams-page__header">
-              <div className="teams-page__header-left">
-                <button
-                  className="teams-page__back-button"
-                  onClick={() => setMobileView('list')}
-                  aria-label="Back to teams list"
-                >
-                  <ArrowLeft size={20} />
-                </button>
-                <div>
-                  <h1>{selectedTeam.name}</h1>
-                  <p>{selectedTeam.description || 'No description'}</p>
-                </div>
-              </div>
-              <div className="teams-page__header-actions">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setShowMembersModal(true)}
-                >
-                  <Users size={16} />
-                  Members
-                </Button>
-                {(myRole === 'owner' || myRole === 'admin') && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setShowInviteModal(true)}
-                  >
-                    <UserPlus size={16} />
-                    Invite
-                  </Button>
-                )}
-                {myRole !== 'owner' && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={handleLeaveTeam}
-                    className="text-red-400"
-                  >
-                    <LogOut size={16} />
-                    Leave
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {/* Team Chat */}
-            <div className="teams-page__chat">
-              <TeamChatProvider teamId={selectedTeamId}>
-                <TeamChat teamId={selectedTeamId} />
-              </TeamChatProvider>
-            </div>
-          </>
-        ) : (
+      {selectedTeamId && selectedTeam ? (
+        <TeamChatProvider teamId={selectedTeamId}>
+           <TeamContent 
+             selectedTeam={selectedTeam} 
+             myRole={myRole}
+             onLeave={handleLeaveTeam}
+             onInvite={() => setShowInviteModal(true)}
+             onBack={() => setMobileView('list')}
+             onTeamUpdate={() => loadTeams()}
+           />
+        </TeamChatProvider>
+      ) : (
+        <div className="teams-page__main">
           <div className="teams-page__no-selection">
             <MessageSquare size={64} />
             <h2>Select a team to start chatting</h2>
             <p>Choose a team from the sidebar or create a new one</p>
-          </div>
-        )}
-      </div>
-
-      {/* Right Sidebar - Team Info */}
-      {selectedTeamId && selectedTeam && (
-        <div className="teams-page__info">
-          <h3>Team Info</h3>
-
-          {/* Stats */}
-          {teamStats && (
-            <Card className="teams-page__stats-card">
-              <div className="teams-page__stat">
-                <MessageSquare size={20} />
-                <div>
-                  <p className="teams-page__stat-value">{teamStats.total_messages}</p>
-                  <p className="teams-page__stat-label">Messages</p>
-                </div>
-              </div>
-              <div className="teams-page__stat">
-                <Users size={20} />
-                <div>
-                  <p className="teams-page__stat-value">{teamStats.total_members}</p>
-                  <p className="teams-page__stat-label">Members</p>
-                </div>
-              </div>
-              <div className="teams-page__stat">
-                <FileText size={20} />
-                <div>
-                  <p className="teams-page__stat-value">{teamStats.shared_notes}</p>
-                  <p className="teams-page__stat-label">Shared Notes</p>
-                </div>
-              </div>
-              <div className="teams-page__stat">
-                <Calendar size={20} />
-                <div>
-                  <p className="teams-page__stat-value">
-                    {new Date(teamStats.created_at).toLocaleDateString()}
-                  </p>
-                  <p className="teams-page__stat-label">Created</p>
-                </div>
-              </div>
-            </Card>
-          )}
-
-          {/* Members Preview */}
-          <div className="teams-page__members-preview">
-            <h4>Members ({teamMembers.length})</h4>
-            <div className="teams-page__members-list">
-              {teamMembers?.slice(0, 5).map((member) => (
-                <div key={member.id} className="teams-page__member-item">
-                  <div className="teams-page__member-avatar">
-                    {member.profile?.avatar_url ? (
-                      <SecureImage src={member.profile.avatar_url} alt="" fallbackType="profile" />
-                    ) : (
-                      member.profile?.full_name?.charAt(0) || 'U'
-                    )}
-                  </div>
-                  <div className="teams-page__member-info">
-                    <span>{member.profile?.full_name || member.profile?.email}</span>
-                    <span className="teams-page__member-role">
-                      {getRoleIcon(member.role)} {member.role}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {teamMembers.length > 5 && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setShowMembersModal(true)}
-                className="w-full mt-2"
-              >
-                View all {teamMembers.length} members
-              </Button>
-            )}
           </div>
         </div>
       )}
@@ -448,14 +498,14 @@ export const TeamsPage: React.FC = () => {
             <h2>Invite Member</h2>
             <form onSubmit={handleInviteMember} className="teams-page__form">
               <div className="teams-page__form-group">
-                <label htmlFor="invite-email">Email address</label>
+                <label htmlFor="invite-email">Email or Username</label>
                 <input
                   id="invite-email"
                   name="email"
-                  type="email"
+                  type="text"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="user@example.com"
+                  placeholder="user@example.com or username"
                   required
                 />
               </div>
@@ -478,43 +528,6 @@ export const TeamsPage: React.FC = () => {
                 <Button type="submit">Send Invite</Button>
               </div>
             </form>
-          </Card>
-        </div>
-      )}
-
-      {/* Members Modal */}
-      {showMembersModal && (
-        <div className="teams-page__modal-overlay" onClick={() => setShowMembersModal(false)}>
-          <Card
-            className="teams-page__modal teams-page__modal--large"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2>Team Members</h2>
-            <div className="teams-page__members-grid">
-              {teamMembers?.map((member) => (
-                <div key={member.id} className="teams-page__member-card">
-                  <div className="teams-page__member-avatar-large">
-                    {member.profile?.avatar_url ? (
-                      <SecureImage src={member.profile.avatar_url} alt="" fallbackType="profile" />
-                    ) : (
-                      member.profile?.full_name?.charAt(0) || 'U'
-                    )}
-                  </div>
-                  <h4>{member.profile?.full_name || 'Unknown'}</h4>
-                  <p>{member.profile?.email}</p>
-                  <div className="teams-page__member-badge">
-                    {getRoleIcon(member.role)} {member.role}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <Button
-              variant="ghost"
-              onClick={() => setShowMembersModal(false)}
-              className="w-full mt-4"
-            >
-              Close
-            </Button>
           </Card>
         </div>
       )}

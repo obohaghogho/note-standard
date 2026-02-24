@@ -161,16 +161,66 @@
   border-radius: 12px 12px 0 0;
 }
 
-.teams-page__header-left h1 {
-  margin: 0;
-  font-size: 1.75rem;
-  font-weight: 700;
-}
-
 .teams-page__header-left p {
   margin: 4px 0 0 0;
-  font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.5);
+  max-width: 400px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.teams-page__header-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.teams-page__header-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.teams-page__avatar-edit-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  backdrop-filter: blur(2px);
+}
+
+.teams-page__header-avatar:hover .teams-page__avatar-edit-overlay {
+  opacity: 1;
+}
+
+.teams-page__avatar-edit-overlay svg {
+  color: white;
+  transform: scale(0.8);
+  transition: transform 0.2s ease;
+}
+
+.teams-page__avatar-edit-overlay:hover svg {
+  transform: scale(1);
 }
 
 .teams-page__header-actions {
@@ -227,10 +277,16 @@
 }
 
 .teams-page__stats-card {
-  padding: 20px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.teams-page__info-content {
+  margin-bottom: 24px;
 }
 
 .teams-page__stat {

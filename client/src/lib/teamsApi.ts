@@ -229,29 +229,45 @@ export async function getTeamMembers(teamId: string): Promise<TeamMember[]> {
  */
 export async function inviteMember(teamId: string, req: InviteMemberRequest): Promise<TeamMember | null> {
   return safeCall<TeamMember | null>(`invite-member-${teamId}`, async () => {
-    const { data: session } = await supabase.auth.getSession();
-    if (!session.session) throw new Error('Not authenticated');
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) throw new Error('Not authenticated');
 
-    // Find user by email or username
-    let userId: string | null = null;
+    // Find user by email or username (case-insensitive)
+    let invitee: any = null;
 
     if (req.email) {
-      const { data: profile } = await supabase
+      const { data } = await supabase
         .from('profiles')
-        .select('id')
-        .eq('email', req.email)
+        .select('id, full_name, username, email')
+        .ilike('email', req.email.trim())
         .maybeSingle();
-      userId = profile?.id ?? null;
+      invitee = data;
+      if (!invitee) throw new Error(`User with email "${req.email}" not found.`);
     } else if (req.username) {
-      const { data: profile } = await supabase
+      const { data } = await supabase
         .from('profiles')
-        .select('id')
-        .eq('username', req.username)
+        .select('id, full_name, username, email')
+        .ilike('username', req.username.trim())
         .maybeSingle();
-      userId = profile?.id ?? null;
+      invitee = data;
+      if (!invitee) throw new Error(`User with username "${req.username}" not found.`);
     }
 
-    if (!userId) throw new Error('User not found');
+    if (!invitee) throw new Error('Specify an email or username to invite.');
+
+    const userId = invitee.id;
+
+    // Check if user is already a member
+    const { data: existing } = await supabase
+      .from('team_members')
+      .select('id')
+      .eq('team_id', teamId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (existing) {
+      throw new Error('This user is already a member of the team.');
+    }
 
     // Add member
     const { data, error } = await supabase
@@ -260,28 +276,32 @@ export async function inviteMember(teamId: string, req: InviteMemberRequest): Pr
         team_id: teamId,
         user_id: userId,
         role: req.role ?? 'member',
-        invited_by: session.session.user.id,
+        invited_by: sessionData.session.user.id,
       })
       .select()
       .single();
 
     if (error) throw error;
 
+    const inviteeName = invitee.full_name || invitee.username || invitee.email;
+
     // Send system message
     await supabase
       .from('team_messages')
       .insert({
         team_id: teamId,
-        sender_id: session.session.user.id,
+        sender_id: sessionData.session.user.id,
         message_type: 'system',
+        content: `invited ${inviteeName} to the team`,
         metadata: {
           event: 'member_joined',
           user_id: userId,
+          user_name: inviteeName
         },
       });
 
     return data;
-  }, { minDelay: 1000 });
+  }, { minDelay: 500 });
 }
 
 /**
