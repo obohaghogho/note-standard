@@ -5,10 +5,11 @@ import { usePresence } from '../../context/PresenceContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../common/SecureImage';
-import { Send, Languages, Flag, Phone, Video, VideoOff, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, MicOff, ArrowLeft, Maximize, Play, Pause } from 'lucide-react';
+import { Send, Languages, Flag, Phone, Video, VideoOff, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, MicOff, ArrowLeft, Maximize } from 'lucide-react';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { MediaUpload } from './MediaUpload';
 import { VoiceRecorder } from './VoiceRecorder';
+import { AudioPlayer } from './AudioPlayer';
 import { API_URL } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
@@ -292,7 +293,9 @@ const ChatWindow: React.FC = () => {
         
         const loadingToast = toast.loading('Sending voice message...');
         try {
-            const fileName = `voice_${Date.now()}.webm`;
+            const mimeType = blob.type || 'audio/webm';
+            const extension = mimeType.includes('mp4') ? 'm4a' : (mimeType.includes('ogg') ? 'ogg' : 'webm');
+            const fileName = `voice_${Date.now()}.${extension}`;
             const filePath = `${activeConversationId}/${fileName}`;
 
             // 1. Upload to Supabase Storage
@@ -301,7 +304,7 @@ const ChatWindow: React.FC = () => {
                 .upload(filePath, blob, {
                     cacheControl: '3600',
                     upsert: false,
-                    contentType: 'audio/webm'
+                    contentType: mimeType
                 });
 
             if (uploadError) throw uploadError;
@@ -316,10 +319,10 @@ const ChatWindow: React.FC = () => {
                 body: JSON.stringify({
                     conversationId: activeConversationId,
                     fileName,
-                    fileType: 'audio/webm',
+                    fileType: mimeType,
                     fileSize: blob.size,
                     storagePath: data.path,
-                    metadata: {}
+                    metadata: { mimeType }
                 })
             });
 
@@ -359,7 +362,7 @@ const ChatWindow: React.FC = () => {
         }
         toast.loading(`Starting ${type} call...`, { duration: 2000, id: 'call-start' });
         startCall(otherMember.user_id, activeConversationId, type)
-            .catch(err => {
+            .catch(() => {
                 toast.error('Failed to start call. Check camera/mic permissions.');
             });
     };
@@ -699,73 +702,7 @@ const ChatWindow: React.FC = () => {
 
 // --- Helper Components ---
 
-const AudioPlayer = ({ path, fetchUrl }: { path: string, fetchUrl: (p: string) => Promise<string | null> }) => {
-    const [url, setUrl] = useState<string | null>(null);
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [duration, setDuration] = useState(0);
-    const [currentTime, setCurrentTime] = useState(0);
-    const audioRef = useRef<HTMLAudioElement | null>(null);
 
-    useEffect(() => {
-        fetchUrl(path).then(setUrl);
-    }, [path, fetchUrl]);
-
-    const togglePlay = () => {
-        if (!audioRef.current) return;
-        if (isPlaying) audioRef.current.pause();
-        else audioRef.current.play();
-        setIsPlaying(!isPlaying);
-    };
-
-    const onLoadedMetadata = () => {
-        if (audioRef.current) setDuration(audioRef.current.duration);
-    };
-
-    const onTimeUpdate = () => {
-        if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
-    };
-
-    const formatTime = (time: number) => {
-        const mins = Math.floor(time / 60);
-        const secs = Math.floor(time % 60);
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    if (!url) return <div className="p-2 animate-pulse bg-white/5 rounded-lg w-full h-12"></div>;
-
-    return (
-        <div className="flex items-center gap-3 bg-white/10 backdrop-blur-sm p-3 rounded-2xl border border-white/10 w-full max-w-sm">
-            <audio 
-                ref={audioRef} 
-                src={url} 
-                onLoadedMetadata={onLoadedMetadata} 
-                onTimeUpdate={onTimeUpdate} 
-                onEnded={() => setIsPlaying(false)}
-            />
-            <button 
-                onClick={togglePlay} 
-                className="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-full bg-blue-500 hover:bg-blue-400 transition-colors text-white shadow-lg"
-            >
-                {isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} className="ml-0.5" fill="currentColor" />}
-            </button>
-            <div className="flex-1 flex flex-col gap-1">
-                <div className="h-1.5 bg-white/20 rounded-full overflow-hidden relative">
-                    <div 
-                        className="absolute inset-y-0 left-0 bg-white rounded-full transition-all duration-100" 
-                        style={{ width: `${(currentTime / duration) * 100 || 0}%` }}
-                    />
-                </div>
-                <div className="flex justify-between text-[10px] font-medium opacity-60">
-                    <span>{formatTime(currentTime)}</span>
-                    <span>{formatTime(duration)}</span>
-                </div>
-            </div>
-            <div className="flex-shrink-0">
-                <Mic size={14} className="opacity-40" />
-            </div>
-        </div>
-    );
-};
 
 const ImageWithSignedUrl = ({ path, fetchUrl, onPreview }: { path: string, fetchUrl: (p: string) => Promise<string | null>, onPreview?: (url: string) => void }) => {
     const [url, setUrl] = useState<string | null>(null);

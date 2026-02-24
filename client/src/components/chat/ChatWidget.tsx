@@ -13,9 +13,10 @@ import {
     Phone,
     Video
 } from 'lucide-react';
-import type { Message, Conversation } from '../../context/ChatContext';
+import type { Message } from '../../context/ChatContext';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { CallOverlay } from './ChatWindow'; // Reuse CallOverlay from ChatWindow
+import { AudioPlayer } from './AudioPlayer';
 import toast from 'react-hot-toast';
 
 // Local interfaces removed in favor of exports from ChatContext
@@ -39,6 +40,7 @@ export const ChatWidget = () => {
     const [adminTyping, setAdminTyping] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const typingTimeoutRef = useRef<any>(null);
+    const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
 
     const fetchMessages = useCallback(async (chatId: string) => {
         if (!session?.access_token) return;
@@ -208,6 +210,23 @@ export const ChatWidget = () => {
         }
     };
 
+    const fetchSignedUrl = async (path: string) => {
+        if (signedUrls[path]) return signedUrls[path];
+        try {
+            const res = await fetch(`${API_URL}/api/media/signed-url?path=${encodeURIComponent(path)}`, {
+                headers: { 'Authorization': `Bearer ${session?.access_token}` }
+            });
+            if (res.ok) {
+                const { url } = await res.json();
+                setSignedUrls(prev => ({ ...prev, [path]: url }));
+                return url;
+            }
+        } catch (err) {
+            console.error('Failed to get signed URL:', err);
+        }
+        return null;
+    };
+
     const handleTyping = () => {
         if (!supportChat || !socket || !connected) return;
 
@@ -342,7 +361,16 @@ export const ChatWidget = () => {
                                                     className={`chat-message ${msg.sender_id === user?.id ? 'own' : 'other'}`}
                                                 >
                                                     <div className="message-bubble">
-                                                        <p>{msg.content}</p>
+                                                        {msg.type === 'audio' ? (
+                                                            <div className="flex flex-col gap-2 min-w-[200px]">
+                                                                <AudioPlayer 
+                                                                    path={msg.attachment?.storage_path || ''} 
+                                                                    fetchUrl={fetchSignedUrl} 
+                                                                />
+                                                            </div>
+                                                        ) : (
+                                                            <p>{msg.content}</p>
+                                                        )}
                                                         <span className="msg-time">
                                                             {formatTime(msg.created_at)}
                                                             {msg.sender_id === user?.id && (
