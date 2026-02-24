@@ -50,5 +50,6 @@ router.delete(
   chatController.clearChatHistory,
 );
 router.put("/messages/:messageId/read", chatController.markMessageRead);
+router.delete("/messages/:messageId", chatController.deleteMessage);
 
 module.exports = router;

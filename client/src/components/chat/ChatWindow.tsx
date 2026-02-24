@@ -5,7 +5,7 @@ import { usePresence } from '../../context/PresenceContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../common/SecureImage';
-import { Send, Languages, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Maximize } from 'lucide-react';
+import { Send, Languages, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Maximize, Trash2 } from 'lucide-react';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { MediaUpload } from './MediaUpload';
 import { VoiceRecorder } from './VoiceRecorder';
@@ -18,7 +18,7 @@ import { MediaPreviewModal } from './MediaPreviewModal';
 const ChatWindow: React.FC = () => {
     const { 
         activeConversationId, setActiveConversationId, messages, sendMessage, loading, 
-        conversations, acceptConversation, deleteConversation, 
+        conversations, acceptConversation, deleteConversation, deleteMessage,
         muteConversation, clearChatHistory, loadMoreMessages, hasMore 
     } = useChat();
     const { isUserOnline, getUserLastSeen } = usePresence();
@@ -528,6 +528,19 @@ const ChatWindow: React.FC = () => {
                     currentMessages.map((msg) => (
                         <div key={msg.id || Math.random()} className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                             <div className={`max-w-[92%] md:max-w-[70%] rounded-2xl p-3 shadow-md border ${msg.sender_id === user?.id ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-br-sm border-blue-500/50' : 'bg-gray-800 text-gray-200 rounded-bl-sm border-gray-700'} relative group`}>
+                                {msg.sender_id === user?.id && (
+                                    <button 
+                                        onClick={() => {
+                                            if (window.confirm('Delete this message?')) {
+                                                deleteMessage(msg.id).catch(() => toast.error('Failed to delete message'));
+                                            }
+                                        }}
+                                        className="absolute -left-8 top-1/2 -translate-y-1/2 p-1.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                                        title="Delete message"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                )}
                                 {msg.attachment && msg.type !== 'audio' && (
                                     <div className="mb-2 rounded-lg overflow-hidden border border-black/20 bg-black/10">
                                         {msg.type === 'image' ? (

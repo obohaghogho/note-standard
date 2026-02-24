@@ -37,6 +37,8 @@ interface TeamChatContextValue {
   shareNote: (noteId: string, permission?: 'read' | 'edit') => Promise<void>;
   loadMoreMessages: () => Promise<void>;
   hasMore: boolean;
+  deleteMessage: (messageId: string) => Promise<void>;
+  clearChatHistory: () => Promise<void>;
   teamStats: TeamStats | null;
   error: string | null;
 }
@@ -50,6 +52,8 @@ const TeamChatContext = createContext<TeamChatContextValue>({
   shareNote: async () => {},
   loadMoreMessages: async () => {},
   hasMore: false,
+  deleteMessage: async () => {},
+  clearChatHistory: async () => {},
   teamStats: null,
   error: null,
 });
@@ -181,6 +185,39 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
       loadingRef.current = false;
     }
   }, [teamId, messages, hasMore]);
+
+  // ====================================
+  // DELETE MESSAGE
+  // ====================================
+
+  const deleteMessage = useCallback(async (messageId: string) => {
+    if (!teamId) return;
+    try {
+      const { deleteTeamMessage } = await import('../lib/teamsApi');
+      const success = await deleteTeamMessage(teamId, messageId);
+      if (success && isMounted.current) {
+        setMessages(prev => prev.filter(m => m.id !== messageId));
+      }
+    } catch (err) {
+      console.error('[TeamChat] Failed to delete message:', err);
+      toast.error('Failed to delete message');
+    }
+  }, [teamId]);
+
+  const clearChatHistory = useCallback(async () => {
+    if (!teamId) return;
+    try {
+      const { clearTeamChatHistory } = await import('../lib/teamsApi');
+      const success = await clearTeamChatHistory(teamId);
+      if (success && isMounted.current) {
+        setMessages([]);
+        toast.success('Chat history cleared');
+      }
+    } catch (err) {
+      console.error('[TeamChat] Failed to clear chat history:', err);
+      toast.error('Failed to clear chat history');
+    }
+  }, [teamId]);
 
   // ====================================
   // SEND MESSAGE (WITH OPTIMISTIC UI)
@@ -341,6 +378,24 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
         }
       );
 
+      // Listen for message updates (like soft deletion)
+      channel.on(
+        'postgres_changes' as any,
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'team_messages',
+          filter: `team_id=eq.${teamId}`,
+        },
+        async (payload: RealtimePayload<TeamMessage>) => {
+          if (!isMounted.current) return;
+          const updatedMsg = payload.new;
+          if (updatedMsg.is_deleted) {
+             setMessages(prev => prev.filter(m => m.id !== updatedMsg.id));
+          }
+        }
+      );
+
       // Listen for member changes
       channel.on(
         'postgres_changes',
@@ -463,6 +518,8 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
     shareNote,
     loadMoreMessages,
     hasMore,
+    deleteMessage,
+    clearChatHistory,
     teamStats,
     error,
   };

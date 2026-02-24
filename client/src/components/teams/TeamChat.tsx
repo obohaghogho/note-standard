@@ -21,6 +21,7 @@ import {
   UserPlus,
   LogOut,
   Edit3,
+  Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { uploadTeamImage } from '../../lib/teamsApi';
@@ -38,8 +39,12 @@ interface TeamChatProps {
 export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) => {
   const { user } = useAuth();
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { messages, members, loading, connected, sendMessage, shareNote, loadMoreMessages, hasMore, error } =
+  const { messages, members, loading, connected, sendMessage, shareNote, loadMoreMessages, hasMore, deleteMessage, clearChatHistory, error } =
     useTeamChat();
+
+  const myMember = members.find(m => m.user_id === user?.id);
+  const myRole = myMember?.role || 'member';
+  const isAdminOrOwner = myRole === 'admin' || myRole === 'owner';
 
   // teamId is used in effect via useTeamChat, but if it causes issues we can just log it
   console.log('[TeamChat] ID:', teamId, user?.id, !!shareNote);
@@ -174,6 +179,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
 
   const renderMessage = (msg: TeamMessage, index: number) => {
     const isOwn = msg.isOwn;
+    const canDelete = isOwn || isAdminOrOwner;
     const showAvatar = index === 0 || messages[index - 1].sender_id !== msg.sender_id;
     const showName = showAvatar;
 
@@ -258,8 +264,21 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
         key={msg.id}
         className={`team-chat__message ${isOwn ? 'team-chat__message--own' : ''} ${
           msg.isOptimistic ? 'team-chat__message--optimistic' : ''
-        } ${msg.failed ? 'team-chat__message--failed' : ''}`}
+        } ${msg.failed ? 'team-chat__message--failed' : ''} group relative`}
       >
+        {canDelete && !msg.isOptimistic && (
+          <button
+            onClick={() => {
+              if (window.confirm('Delete this message?')) {
+                deleteMessage(msg.id).catch(() => toast.error('Failed to delete message'));
+              }
+            }}
+            className={`absolute top-1/2 -translate-y-1/2 ${isOwn ? '-left-8' : '-right-8'} p-1.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all z-10`}
+            title="Delete message"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
         {!isOwn && showAvatar && (
           <div className="team-chat__message-avatar">
             {senderAvatar ? (
@@ -350,9 +369,25 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
             )}
           </div>
         </div>
-        <div className="team-chat__header-members">
-          <Users size={16} />
-          <span>{members.length} members</span>
+        <div className="flex items-center gap-2">
+          <div className="team-chat__header-members">
+            <Users size={16} />
+            <span>{members.length} members</span>
+          </div>
+          {myRole === 'owner' && (
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
+              onClick={() => {
+                if (window.confirm('Wipe ALL messages in this team chat? This cannot be undone.')) {
+                  clearChatHistory().catch(() => toast.error('Failed to clear chat'));
+                }
+              }}
+            >
+              <Trash2 size={16} />
+            </Button>
+          )}
         </div>
       </div>
 

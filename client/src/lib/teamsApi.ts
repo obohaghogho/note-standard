@@ -667,6 +667,46 @@ export async function uploadTeamImage(teamId: string, file: File): Promise<strin
   }, { minDelay: 500 });
 }
 
+/**
+ * Delete a specific team message (soft delete)
+ */
+export async function deleteTeamMessage(teamId: string, messageId: string): Promise<boolean> {
+  const result = await safeCall<boolean>(`delete-team-message-${messageId}`, async () => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) throw new Error('Not authenticated');
+
+    const { error } = await supabase
+      .from('team_messages')
+      .update({ is_deleted: true })
+      .eq('id', messageId)
+      // RLS handles the permission check (sender or admin)
+      .eq('team_id', teamId);
+
+    if (error) throw error;
+    return true;
+  });
+
+  return result ?? false;
+}
+
+/**
+ * Clear all messages in a team (Owner only, soft or hard)
+ */
+export async function clearTeamChatHistory(teamId: string): Promise<boolean> {
+  const result = await safeCall<boolean>(`clear-team-chat-${teamId}`, async () => {
+    // We'll do a soft delete for all messages
+    const { error } = await supabase
+      .from('team_messages')
+      .update({ is_deleted: true })
+      .eq('team_id', teamId);
+
+    if (error) throw error;
+    return true;
+  });
+
+  return result ?? false;
+}
+
 // ====================================
 // EXPORTS
 // ====================================
