@@ -16,6 +16,7 @@ import {
 import type { Message, Conversation } from '../../context/ChatContext';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { CallOverlay } from '../../components/chat/ChatWindow';
+import { AudioPlayer } from '../../components/chat/AudioPlayer';
 import toast from 'react-hot-toast';
 import SecureImage from '../../components/common/SecureImage';
 import './AdminChat.css';
@@ -41,6 +42,7 @@ export const AdminChat = () => {
     const [newMessage, setNewMessage] = useState('');
     const [activeAdmins, setActiveAdmins] = useState<Record<string, string[]>>({});
     const [typingUsers] = useState<Record<string, boolean>>({});
+    const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
     
     // Refs
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -250,6 +252,23 @@ export const AdminChat = () => {
             console.error('Failed to join chat:', err);
             setActiveChat(chat);
         }
+    };
+
+    const fetchSignedUrl = async (path: string) => {
+        if (signedUrls[path]) return signedUrls[path];
+        try {
+            const res = await fetch(`${API_URL}/api/media/signed-url?path=${encodeURIComponent(path)}`, {
+                headers: { 'Authorization': `Bearer ${session?.access_token}` }
+            });
+            if (res.ok) {
+                const { url } = await res.json();
+                setSignedUrls(prev => ({ ...prev, [path]: url }));
+                return url;
+            }
+        } catch (err) {
+            console.error('Failed to get signed URL:', err);
+        }
+        return null;
     };
 
     const getUserFromChat = (chat: Conversation) => {
@@ -464,7 +483,16 @@ export const AdminChat = () => {
                                     className={`message-row ${msg.sender_id === user?.id ? 'own' : 'other'}`}
                                 >
                                     <div className={`bubble ${msg.sentiment?.label || ''}`}>
-                                        <p>{msg.content}</p>
+                                        {msg.type === 'audio' ? (
+                                            <div className="flex flex-col gap-2 min-w-[200px]">
+                                                <AudioPlayer 
+                                                    path={msg.attachment?.storage_path || ''} 
+                                                    fetchUrl={fetchSignedUrl} 
+                                                />
+                                            </div>
+                                        ) : (
+                                            <p>{msg.content}</p>
+                                        )}
                                         <div className="meta">
                                             {msg.sentiment && (
                                                 <span className="sentiment" title={msg.sentiment.label}>
