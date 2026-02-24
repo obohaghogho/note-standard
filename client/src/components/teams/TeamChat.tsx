@@ -184,19 +184,22 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
 
     // Different rendering based on message type
     if (msg.message_type === 'system') {
+      const inviterName = msg.sender?.full_name || msg.sender?.username || 'Some member';
+      const inviteeName = msg.metadata?.user_name || 'a new member';
+
       return (
         <div key={msg.id} className="team-chat__message--system">
           <span className="team-chat__message-system-text flex items-center gap-2">
             {msg.metadata?.event === 'member_joined' && (
               <>
                 <UserPlus size={14} className="text-green-400" />
-                <span>New member joined the team</span>
+                <span><strong>{inviterName}</strong> invited <strong>{inviteeName}</strong> to the team</span>
               </>
             )}
             {msg.metadata?.event === 'member_left' && (
               <>
                 <LogOut size={14} className="text-red-400" />
-                <span>A member left the team</span>
+                <span><strong>{inviteeName}</strong> left the team</span>
               </>
             )}
             {msg.metadata?.event === 'note_updated' && (

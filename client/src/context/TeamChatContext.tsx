@@ -21,6 +21,7 @@ import type {
   SendMessageRequest,
   ShareNoteRequest,
   RealtimePayload,
+  TeamStats,
 } from '../types/teams';
 
 // ====================================
@@ -36,6 +37,7 @@ interface TeamChatContextValue {
   shareNote: (noteId: string, permission?: 'read' | 'edit') => Promise<void>;
   loadMoreMessages: () => Promise<void>;
   hasMore: boolean;
+  teamStats: TeamStats | null;
   error: string | null;
 }
 
@@ -48,6 +50,7 @@ const TeamChatContext = createContext<TeamChatContextValue>({
   shareNote: async () => {},
   loadMoreMessages: async () => {},
   hasMore: false,
+  teamStats: null,
   error: null,
 });
 
@@ -83,6 +86,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [teamStats, setTeamStats] = useState<TeamStats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Refs for lifecycle and safety
@@ -113,15 +117,17 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
 
     try {
       // Load in parallel for speed
-      const [messagesData, membersData] = await Promise.all([
+      const [messagesData, membersData, statsData] = await Promise.all([
         getTeamMessages(teamId, 50),
         getTeamMembers(teamId),
+        import('../lib/teamsApi').then(m => m.getTeamStats(teamId))
       ]);
 
       if (!isMounted.current) return;
 
       setMessages(messagesData);
       setMembers(membersData);
+      setTeamStats(statsData);
 
       // Mark as read
       await markMessagesRead(teamId);
@@ -457,6 +463,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
     shareNote,
     loadMoreMessages,
     hasMore,
+    teamStats,
     error,
   };
 
