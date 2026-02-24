@@ -15,6 +15,8 @@ import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
 import { MediaPreviewModal } from './MediaPreviewModal';
 
+import { ConfirmationModal } from '../common/ConfirmationModal';
+
 const ChatWindow: React.FC = () => {
     const { 
         activeConversationId, setActiveConversationId, messages, sendMessage, loading, 
@@ -28,6 +30,17 @@ const ChatWindow: React.FC = () => {
     const [inputValue, setInputValue] = useState('');
     const [showMediaUpload, setShowMediaUpload] = useState(false);
     const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+    
+    // Confirmation state
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        type: 'message' | 'clear' | 'delete_chat';
+        messageId?: string;
+    }>({
+        isOpen: false,
+        type: 'message'
+    });
+
     const [previewMedia, setPreviewMedia] = useState<{
         isOpen: boolean;
         url: string;
@@ -233,24 +246,7 @@ const ChatWindow: React.FC = () => {
     const handleClearChat = () => {
         if (!activeConversationId) return;
         setShowMoreMenu(false);
-        toast((t) => (
-            <div className="flex flex-col gap-3">
-                <p className="text-sm font-medium text-gray-800">Clear all messages in this chat? (This only affects you)</p>
-                <div className="flex gap-2 justify-end">
-                    <button onClick={() => toast.dismiss(t.id)} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700">Cancel</button>
-                    <button onClick={async () => {
-                        toast.dismiss(t.id);
-                        const loadingToast = toast.loading('Clearing history...');
-                        try {
-                            await clearChatHistory(activeConversationId);
-                            toast.success('Chat cleared', { id: loadingToast });
-                        } catch (err) {
-                            toast.error('Failed to clear chat', { id: loadingToast });
-                        }
-                    }} className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Clear</button>
-                </div>
-            </div>
-        ), { duration: 5000 });
+        setConfirmModal({ isOpen: true, type: 'clear' });
     };
 
     const handleMuteChat = async () => {
@@ -268,24 +264,7 @@ const ChatWindow: React.FC = () => {
     const handleDeleteChat = () => {
         if (!activeConversationId) return;
         setShowMoreMenu(false);
-        toast((t) => (
-            <div className="flex flex-col gap-3">
-                <p className="text-sm font-medium text-gray-800">Are you sure you want to delete this chat forever?</p>
-                <div className="flex gap-2 justify-end">
-                    <button onClick={() => toast.dismiss(t.id)} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700">Cancel</button>
-                    <button onClick={async () => {
-                        toast.dismiss(t.id);
-                        const loadingToast = toast.loading('Deleting chat...');
-                        try {
-                            await deleteConversation(activeConversationId);
-                            toast.success('Chat deleted', { id: loadingToast });
-                        } catch (err) {
-                            toast.error('Failed to delete chat', { id: loadingToast });
-                        }
-                    }} className="px-3 py-1.5 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600">Delete</button>
-                </div>
-            </div>
-        ), { duration: 5000 });
+        setConfirmModal({ isOpen: true, type: 'delete_chat' });
     };
 
     const handleVoiceMessage = async (blob: Blob) => {
@@ -530,11 +509,7 @@ const ChatWindow: React.FC = () => {
                             <div className={`max-w-[92%] md:max-w-[70%] rounded-2xl p-3 shadow-md border ${msg.sender_id === user?.id ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-br-sm border-blue-500/50' : 'bg-gray-800 text-gray-200 rounded-bl-sm border-gray-700'} relative group`}>
                                 {msg.sender_id === user?.id && (
                                     <button 
-                                        onClick={() => {
-                                            if (window.confirm('Delete this message?')) {
-                                                deleteMessage(msg.id).catch(() => toast.error('Failed to delete message'));
-                                            }
-                                        }}
+                                        onClick={() => setConfirmModal({ isOpen: true, type: 'message', messageId: msg.id })}
                                         className="absolute -left-8 top-1/2 -translate-y-1/2 p-1.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
                                         title="Delete message"
                                     >
@@ -703,6 +678,54 @@ const ChatWindow: React.FC = () => {
             )}
 
             <MediaPreviewModal isOpen={previewMedia.isOpen} onClose={() => setPreviewMedia(prev => ({ ...prev, isOpen: false }))} mediaUrl={previewMedia.url} mediaType={previewMedia.type} fileName={previewMedia.fileName} isSender={previewMedia.isSender} />
+
+            <ConfirmationModal
+                isOpen={confirmModal.isOpen}
+                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={async () => {
+                    const { type, messageId } = confirmModal;
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                    
+                    if (type === 'message' && messageId) {
+                        try {
+                            await deleteMessage(messageId);
+                            toast.success('Message deleted');
+                        } catch (err) {
+                            toast.error('Failed to delete message');
+                        }
+                    } else if (type === 'clear' && activeConversationId) {
+                        const loadingToast = toast.loading('Clearing history...');
+                        try {
+                            await clearChatHistory(activeConversationId);
+                            toast.success('Chat cleared', { id: loadingToast });
+                        } catch (err) {
+                            toast.error('Failed to clear chat', { id: loadingToast });
+                        }
+                    } else if (type === 'delete_chat' && activeConversationId) {
+                        const loadingToast = toast.loading('Deleting chat...');
+                        try {
+                            await deleteConversation(activeConversationId);
+                            toast.success('Chat deleted', { id: loadingToast });
+                        } catch (err) {
+                            toast.error('Failed to delete chat', { id: loadingToast });
+                        }
+                    }
+                }}
+                title={
+                    confirmModal.type === 'message' ? 'Delete Message' : 
+                    confirmModal.type === 'clear' ? 'Clear History' : 'Delete Chat'
+                }
+                message={
+                    confirmModal.type === 'message' ? 'Are you sure you want to delete this message? This action cannot be undone.' :
+                    confirmModal.type === 'clear' ? 'Are you sure you want to clear all messages in this chat? This only affects your view.' :
+                    'Are you sure you want to delete this conversation forever? All history will be lost.'
+                }
+                confirmText={
+                    confirmModal.type === 'message' ? 'Delete' : 
+                    confirmModal.type === 'clear' ? 'Clear' : 'Delete'
+                }
+                variant="danger"
+            />
         </div>
     );
 };
