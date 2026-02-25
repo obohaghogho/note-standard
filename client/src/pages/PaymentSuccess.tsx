@@ -38,45 +38,57 @@ export const PaymentSuccess: React.FC = () => {
             }
 
             try {
-                // Poll for status (webhook may take a moment)
+                // Poll for status (proactive verification now enabled on server)
                 let attempts = 0;
-                const maxAttempts = 10;
-                
-                const pollStatus = async (): Promise<void> => {
+                const maxAttempts = 12; // ~30 seconds total
+                let finished = false;
+
+                while (attempts < maxAttempts && !finished) {
                     attempts++;
-                    const response = await fetch(`${API_URL}/api/webhooks/status/${ref}`);
-                    
-                    if (!response.ok) {
-                        if (attempts < maxAttempts) {
-                            setTimeout(pollStatus, 1500);
-                            return;
+                    try {
+                        const response = await fetch(`${API_URL}/api/webhooks/status/${ref}`);
+                        
+                        if (!response.ok) {
+                            // If it's a 404, it might still be propagating; keep polling
+                            if (response.status === 404 && attempts < maxAttempts) {
+                                await new Promise(resolve => setTimeout(resolve, 2500));
+                                continue;
+                            }
+                            throw new Error(`Server returned ${response.status}`);
                         }
-                        throw new Error('Failed to check status');
-                    }
 
-                    const data = await response.json();
-                    setDeposit(data);
+                        const data = await response.json();
+                        setDeposit(data);
 
-                    if (data.status === 'COMPLETED') {
-                        setStatus('success');
-                        localStorage.removeItem('pendingDepositReference');
-                        toast.success('Deposit successful!');
-                    } else if (data.status === 'PENDING') {
-                        if (attempts < maxAttempts) {
-                            setTimeout(pollStatus, 1500);
+                        if (data.status === 'COMPLETED') {
+                            setStatus('success');
+                            localStorage.removeItem('pendingDepositReference');
+                            toast.success('Deposit successful!');
+                            finished = true;
+                        } else if (data.status === 'FAILED') {
+                            setStatus('error');
+                            localStorage.removeItem('pendingDepositReference');
+                            finished = true;
                         } else {
-                            setStatus('pending');
+                            // Still pending
+                            if (attempts < maxAttempts) {
+                                await new Promise(resolve => setTimeout(resolve, 2500));
+                            } else {
+                                setStatus('pending');
+                                finished = true;
+                            }
                         }
-                    } else if (data.status === 'FAILED') {
-                        setStatus('error');
-                        localStorage.removeItem('pendingDepositReference');
+                    } catch (pollErr) {
+                        console.error('Poll attempt error:', pollErr);
+                        if (attempts >= maxAttempts) {
+                            throw pollErr;
+                        }
+                        await new Promise(resolve => setTimeout(resolve, 2500));
                     }
-                };
-
-                await pollStatus();
+                }
             } catch (err) {
                 console.error('Status check error:', err);
-                // Even if status check fails, payment may have succeeded
+                // Fallback to pending if we timed out or had a transient error
                 setStatus('pending');
             }
         };
