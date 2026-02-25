@@ -16,6 +16,23 @@ class PaymentService {
     metadata = {},
     options = {},
   ) {
+    const idempotencyKey = metadata.idempotencyKey;
+    if (idempotencyKey) {
+      const { data: existing } = await supabase
+        .from("transactions")
+        .select("*")
+        .eq("metadata->>idempotencyKey", idempotencyKey)
+        .single();
+
+      if (existing) {
+        logger.info("Found existing transaction for idempotency key", {
+          idempotencyKey,
+        });
+        // Use existing reference if already initialized with provider
+        return this.verifyPaymentStatus(existing.reference_id);
+      }
+    }
+
     const reference = `tx_${uuidv4().replace(/-/g, "")}`;
     const isCrypto = options.isCrypto || false;
 
@@ -36,13 +53,49 @@ class PaymentService {
       provider: providerName,
     });
 
-    // 2. Create transaction record in DB BEFORE initialization (Mandatory)
+    // 2. Find or create wallet for this currency
+    let { data: wallet } = await supabase
+      .from("wallets")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("currency", currency)
+      .single();
+
+    if (!wallet) {
+      const { data: newWallet, error: createError } = await supabase
+        .from("wallets")
+        .insert({
+          user_id: userId,
+          currency,
+          address: `internal_${userId.substring(0, 8)}_${currency}`,
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        logger.error("Failed to create wallet for deposit", {
+          createError,
+          userId,
+          currency,
+        });
+        throw new Error("Failed to initialize wallet for payment");
+      }
+      wallet = newWallet;
+    }
+
+    // 3. Create transaction record in DB BEFORE initialization (Mandatory)
+    // Updated to support Core Ledger Architecture
     const { data: transaction, error: txError } = await supabase
       .from("transactions")
       .insert({
         user_id: userId,
-        amount: parseFloat(amount),
-        currency: currency,
+        wallet_id: wallet.id, // Linking to wallet is critical for Ledger trigger
+        amount: parseFloat(amount), // legacy
+        currency: currency, // legacy
+        amount_from: parseFloat(amount), // ledger
+        amount_to: parseFloat(amount), // ledger
+        from_currency: currency, // ledger
+        to_currency: currency, // ledger
         status: "PENDING",
         reference_id: reference,
         provider: providerName,
@@ -53,6 +106,7 @@ class PaymentService {
           email,
           category: "digital_assets",
           product_type: "digital_asset",
+          idempotencyKey,
         },
         type: isCrypto
           ? "Digital Assets Purchase"
@@ -182,14 +236,57 @@ class PaymentService {
   async handleWebhook(providerName, headers, body, rawBody = null) {
     const provider = PaymentFactory.getProviderByName(providerName);
 
-    // 0. Verify Signature if not already done in controller
+    // 0. Log Webhook for Audit Trail
+    let logId;
+    try {
+      const { data: logEntry } = await supabase
+        .from("webhook_logs")
+        .insert({
+          provider: providerName,
+          payload: body,
+          headers: headers,
+          reference: body.order_id || body.payment_id || body.reference ||
+            body.data?.reference,
+          ip_address: headers["x-forwarded-for"] || "unknown",
+        })
+        .select("id")
+        .single();
+      logId = logEntry?.id;
+    } catch (err) {
+      logger.error("Failed to log webhook", {
+        error: err.message,
+        provider: providerName,
+      });
+    }
+
+    // 1. Verify Signature
     const isValid = provider.verifyWebhookSignature(headers, body, rawBody);
     if (!isValid) {
       logger.warn(`Invalid signature for ${providerName} webhook`);
+
+      // LOG SECURITY EVENT
+      await supabase.from("security_audit_logs").insert({
+        event_type: "INVALID_WEBHOOK_SIGNATURE",
+        severity: "WARN",
+        description: `Invalid signature for ${providerName} webhook from IP: ${
+          headers["x-forwarded-for"] || "unknown"
+        }`,
+        payload: {
+          provider: providerName,
+          reference: body.reference || body.id,
+        },
+        ip_address: headers["x-forwarded-for"] || "unknown",
+      });
+
+      if (logId) {
+        await supabase.from("webhook_logs").update({
+          processing_error: "Invalid signature",
+        }).eq("id", logId);
+      }
       throw new Error("Invalid signature");
     }
 
-    // 1. Parse Event
+    // 2. Parse Event
     const event = provider.parseWebhookEvent(body);
     logger.info(`Processing ${providerName} event`, {
       type: event.type,
@@ -197,16 +294,25 @@ class PaymentService {
       status: event.status,
     });
 
+    let result;
     if (event.status === "success") {
-      return await this.finalizeTransaction(event.reference, event);
+      result = await this.finalizeTransaction(event.reference, event);
     } else if (event.status === "failed") {
-      return await this.failTransaction(
+      result = await this.failTransaction(
         event.reference,
         "Payment failed at provider",
       );
     }
 
-    return { status: "ignored" };
+    // 3. Mark as processed
+    if (logId) {
+      await supabase.from("webhook_logs").update({
+        processed: true,
+        processing_error: result?.error || null,
+      }).eq("id", logId);
+    }
+
+    return result || { status: "ignored" };
   }
 
   /**
@@ -264,29 +370,59 @@ class PaymentService {
       userId: tx.user_id,
     });
 
-    // 2. Perform business logic based on type
+    // 2. Perform business logic based on type (Side effects ONLY)
+    // Wallet balances are automatically updated by DB triggers when status -> COMPLETED
     const metadata = tx.metadata || {};
 
     switch (tx.type) {
       case "DEPOSIT":
       case "FUNDING":
       case "Digital Assets Purchase":
-        await this.creditUserWallet(tx.user_id, tx.amount, tx.currency, tx.id);
+        // No action needed here, DB trigger handled the balance.
+        logger.info("Deposit finalized via ledger trigger", { txId: tx.id });
         break;
       case "AD_PAYMENT":
         await this.unlockAd(metadata.adId);
         break;
+      case "SUBSCRIPTION_PAYMENT":
       case "SUBSCRIPTION":
-        // Logic for subscription update
-        logger.info("Subscription payment processed", {
-          userId: tx.user_id,
-          plan: metadata.plan,
-        });
+        // Handle subscription activation (plan tiers, expiration, etc.)
+        try {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("plan")
+            .eq("id", tx.user_id)
+            .single();
+
+          const newPlan = metadata.plan || "PRO";
+          if (profile?.plan !== newPlan) {
+            await supabase
+              .from("profiles")
+              .update({ plan: newPlan })
+              .eq("id", tx.user_id);
+
+            // Record in subscription_transactions if possible
+            await supabase.from("subscription_transactions").insert({
+              user_id: tx.user_id,
+              transaction_id: tx.id,
+              event_type: "upgrade",
+              plan_to: newPlan,
+              status: "completed",
+            });
+          }
+        } catch (subErr) {
+          logger.error("Failed to update user subscription plan", {
+            error: subErr.message,
+          });
+        }
         break;
       default:
-        logger.warn(`[PaymentService] Unknown transaction type: ${tx.type}`, {
-          txId: tx.id,
-        });
+        logger.warn(
+          `[PaymentService] No additional logic for type: ${tx.type}`,
+          {
+            txId: tx.id,
+          },
+        );
     }
 
     // 3. Send email receipt (Mock or call email service)
@@ -327,10 +463,11 @@ class PaymentService {
   }
 
   /**
-   * Business Logic: Credit Wallet
+   * Business Logic: Credit Wallet (Internal System Credit)
+   * This should ONLY be used for manual admin adjustments or special rewards.
    */
-  async creditUserWallet(userId, amount, currency, transactionId) {
-    logger.info(`[PaymentService] Crediting wallet`, {
+  async creditUserWallet(userId, amount, currency, transactionId = null) {
+    logger.info(`[PaymentService] Requesting system credit`, {
       userId,
       amount,
       currency,
@@ -352,7 +489,7 @@ class PaymentService {
             user_id: userId,
             currency,
             balance: 0,
-            address: uuidv4(),
+            address: `internal_${userId.substring(0, 8)}_${currency}`,
           })
           .select()
           .single();
@@ -361,21 +498,15 @@ class PaymentService {
         wallet = newWallet;
       }
 
-      // Use atomic increment via RPC to avoid race conditions.
+      // Use the ledger-pure RPC. It creates a 'DEPOSIT' record (System Credit).
       const { error: rpcError } = await supabase.rpc("credit_wallet_atomic", {
         p_wallet_id: wallet.id,
         p_amount: parseFloat(amount),
       });
 
       if (rpcError) throw rpcError;
-
-      // Update the transaction with the wallet_id if it wasn't there
-      await supabase
-        .from("transactions")
-        .update({ wallet_id: wallet.id })
-        .eq("id", transactionId);
     } catch (err) {
-      logger.error("Credit Wallet Failed", {
+      logger.error("System Credit Failed", {
         userId,
         amount,
         currency,
@@ -390,11 +521,11 @@ class PaymentService {
    */
   async unlockAd(adId) {
     if (!adId) return;
-    console.log(`[PaymentService] Unlocking ad ${adId}`);
-    await supabase
-      .from("ads")
-      .update({ status: "pending" }) // Approved after admin review? Or 'active' directly?
-      .eq("id", adId);
+    logger.info(`[PaymentService] Unlocking ad`, { adId });
+    await supabase.from("ads").update({ status: "active", paid: true }).eq(
+      "id",
+      adId,
+    );
   }
 
   /**

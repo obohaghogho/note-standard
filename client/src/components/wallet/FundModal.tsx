@@ -85,12 +85,14 @@ export const FundModal: React.FC<FundModalProps> = ({ isOpen, onClose, selectedC
             return;
         }
 
+        const idempotencyKey = `fund_crypto_${Date.now()}`;
         setLoading(true);
         try {
             const result = await walletApi.initializePayment({
                 amount: parseFloat(amount),
                 currency: selectedCurrency,
-                options: { isCrypto: true }
+                options: { isCrypto: true },
+                metadata: { idempotencyKey }
             });
             
             setCryptoAddress({
@@ -113,9 +115,10 @@ export const FundModal: React.FC<FundModalProps> = ({ isOpen, onClose, selectedC
             return;
         }
 
+        const idempotencyKey = `fund_card_${Date.now()}`;
         setLoading(true);
         try {
-            const result = await walletApi.depositCard(selectedCurrency, parseFloat(amount));
+            const result = await walletApi.depositCard(selectedCurrency, parseFloat(amount), idempotencyKey);
             
             // Store reference for later status check
             localStorage.setItem('pendingDepositReference', result.reference);

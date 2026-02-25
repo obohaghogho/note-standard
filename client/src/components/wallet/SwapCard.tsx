@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowRightLeft, Loader2, RefreshCcw, Info } from 'lucide-react';
+import { ArrowRightLeft, Loader2, RefreshCcw, Info, Clock } from 'lucide-react';
 import { Button } from '../common/Button';
 import { walletApi } from '../../lib/walletApi';
 import { useWallet } from '../../hooks/useWallet';
@@ -28,7 +28,27 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
         fee: number;
         feePercentage: number;
         amountOut: number;
+        lockId: string;
+        expiresAt: number;
     } | null>(null);
+    const [timeLeft, setTimeLeft] = useState<number | null>(null);
+
+    // Countdown logic for rate lock
+    useEffect(() => {
+        if (!preview) return;
+
+        const intervalId = setInterval(() => {
+            const remaining = Math.max(0, Math.ceil((preview.expiresAt - Date.now()) / 1000));
+            setTimeLeft(remaining);
+            
+            if (remaining === 0) {
+                setPreview(null);
+                toast.error('Swap quote expired. Please refresh.');
+            }
+        }, 1000);
+
+        return () => clearInterval(intervalId);
+    }, [preview]);
 
     const fromWallet = wallets.find(w => w.currency === fromCurrency);
     const availableBalance = fromWallet ? (fromWallet.available_balance ?? fromWallet.balance) : 0;
@@ -42,7 +62,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
             } else {
                 setPreview(null);
             }
-        }, 500); // Debounce 500ms
+        }, 800); // Increased debounce to prevent rapid API calls
 
         return () => clearTimeout(timeoutId);
     }, [amount, fromCurrency, toCurrency]);
@@ -55,7 +75,9 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
                 rate: Number(result.rate ?? 0),
                 fee: Number(result.fee ?? 0),
                 feePercentage: Number(result.feePercentage ?? 0),
-                amountOut: Number(result.amountOut ?? 0)
+                amountOut: Number(result.amountOut ?? 0),
+                lockId: result.lockId,
+                expiresAt: result.expiresAt
             });
         } catch (err) {
             console.error('Preview error:', err);
@@ -82,11 +104,18 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
         if (numericAmount <= 0) return toast.error('Please enter a valid amount');
         if (numericAmount > Number(availableBalance || 0)) return toast.error('Insufficient balance');
         if (fromCurrency === toCurrency) return toast.error('Cannot swap same currency');
+        if (!preview?.lockId) return toast.error('Please wait for a quote');
 
         setLoading(true);
         try {
             const idempotencyKey = `swap_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            const result = await walletApi.executeSwap(fromCurrency, toCurrency, numericAmount, idempotencyKey);
+            const result = await walletApi.executeSwap(
+                fromCurrency, 
+                toCurrency, 
+                numericAmount, 
+                idempotencyKey,
+                preview.lockId
+            );
             
             toast.success(
                 `Swapped ${formatCurrency(Number(result.amountIn ?? 0), result.fromCurrency)} → ${formatCurrency(Number(result.amountOut ?? 0), result.toCurrency)}`
@@ -97,6 +126,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
             refresh();
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : 'Swap failed');
+            setPreview(null); // Force refresh quote on failure
         } finally {
             setLoading(false);
         }
@@ -215,6 +245,15 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
                             <div className="flex justify-between text-gray-400">
                                 <span>Fee ({Number(preview.feePercentage || 0).toFixed(2)}%)</span>
                                 <span>{formatCurrency(Number(preview.fee || 0), fromCurrency)}</span>
+                            </div>
+                            <div className="flex justify-between items-center pt-1 border-t border-purple-500/10 mt-1">
+                                <span className="text-gray-500 flex items-center gap-1">
+                                    <Clock size={10} />
+                                    Quote expires in
+                                </span>
+                                <span className={`font-mono font-bold ${Number(timeLeft || 0) < 10 ? 'text-red-400' : 'text-purple-400'}`}>
+                                    {timeLeft}s
+                                </span>
                             </div>
                         </div>
                     ) : (

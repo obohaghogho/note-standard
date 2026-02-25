@@ -95,28 +95,16 @@ exports.handleNowPayments = async (req, res) => {
       return res.status(401).json({ error: "Invalid signature" });
     }
 
-    // 2. Process based on status
-    // Fintech rule: Only credit on "finished" status
-    if (body.payment_status === "finished") {
-      await paymentService.handleWebhook(
-        "nowpayments",
-        headers,
-        body,
-        req.rawBody,
-      );
-      logger.info("NowPayments Webhook Processed Successfully", { orderId });
-    } else {
-      logger.info(
-        "NowPayments Webhook: Payment status not finished, skipping credit",
-        {
-          orderId,
-          status: body.payment_status,
-        },
-      );
-    }
+    // 2. Delegate to PaymentService for full audit logging and processing
+    // The provider's parseWebhookEvent will correctly map only "finished" to success.
+    const result = await paymentService.handleWebhook(
+      "nowpayments",
+      headers,
+      body,
+      req.rawBody,
+    );
 
-    // Always 200 after verification to stop retries from provider
-    res.json({ received: true });
+    res.json({ received: true, status: result?.status });
   } catch (error) {
     logger.error("NowPayments Webhook Error:", {
       message: error.message,

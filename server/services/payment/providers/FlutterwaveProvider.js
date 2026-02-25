@@ -100,10 +100,7 @@ class FlutterwaveProvider extends BaseProvider {
     else if (data.status === "failed") status = "failed";
 
     return {
-      type: (data.meta?.product_type === "digital_asset" ||
-          data.metadata?.product_type === "digital_asset")
-        ? "Digital Assets Purchase"
-        : event,
+      type: "DEPOSIT",
       display_label: "Digital Assets Purchase",
       reference: data.tx_ref || data.reference,
       status: status,

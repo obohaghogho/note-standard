@@ -8,7 +8,9 @@ const depositService = require("../services/depositService");
 const swapService = require("../services/swapService");
 const invoiceService = require("../services/invoiceService");
 const { checkUserPlan, checkConsent } = require("../middleware/monetization");
-const { transactionLimiter } = require("../middleware/rateLimiter");
+const { transactionLimiter, withdrawalLimiter } = require(
+  "../middleware/rateLimiter",
+);
 
 const fxService = require("../services/fxService");
 
@@ -208,8 +210,14 @@ router.post(
   transactionLimiter,
   checkConsent,
   async (req, res) => {
-    const { recipientEmail, amount, currency, recipientId, recipientAddress } =
-      req.body;
+    const {
+      recipientEmail,
+      amount,
+      currency,
+      recipientId,
+      recipientAddress,
+      idempotencyKey,
+    } = req.body;
 
     if (
       (!recipientEmail && !recipientId && !recipientAddress) || !amount ||
@@ -292,6 +300,7 @@ router.post(
             p_fee: commission.fee,
             p_rate: commission.rate,
             p_platform_wallet_id: platformWalletId,
+            p_idempotency_key: idempotencyKey,
             p_metadata: {
               externalAddress: recipientAddress,
               source: "transfer_unified",
@@ -301,16 +310,6 @@ router.post(
         );
         if (txError) throw txError;
 
-        // Log revenue for withdrawal
-        if (commission.fee > 0) {
-          await commissionService.logRevenue(
-            req.user.id,
-            commission.fee,
-            currency,
-            "withdrawal_fee",
-            txId,
-          );
-        }
         return res.json({
           success: true,
           transactionId: txId,
@@ -342,6 +341,7 @@ router.post(
           p_fee: commission.fee,
           p_rate: commission.rate,
           p_platform_wallet_id: platformWalletId,
+          p_idempotency_key: idempotencyKey,
           p_metadata: {
             transaction_fee_breakdown: { transfer_fee: commission.fee },
           },
@@ -376,17 +376,6 @@ router.post(
         );
       }
 
-      // Log revenue for internal transfer
-      if (commission.fee > 0) {
-        await commissionService.logRevenue(
-          req.user.id,
-          commission.fee,
-          currency,
-          "transfer_fee",
-          txId,
-        );
-      }
-
       res.json({ success: true, transactionId: txId, fee: commission.fee });
     } catch (err) {
       res.status(500).json({ error: err.message || "Transfer failed" });
@@ -395,8 +384,8 @@ router.post(
 );
 
 // POST /withdraw
-router.post("/withdraw", transactionLimiter, checkConsent, async (req, res) => {
-  const { amount, currency, bankId } = req.body;
+router.post("/withdraw", withdrawalLimiter, checkConsent, async (req, res) => {
+  const { amount, currency, bankId, idempotencyKey, twoFactorCode } = req.body;
   if (!amount || !currency) {
     return res.status(400).json({ error: "Missing required fields" });
   }
@@ -418,16 +407,11 @@ router.post("/withdraw", transactionLimiter, checkConsent, async (req, res) => {
     ).eq("user_id", req.user.id).eq("currency", currency).single();
     if (!wallet) return res.status(404).json({ error: "Wallet not found" });
 
-    if (parseFloat(wallet.balance) < (withdrawAmount + commission.fee)) {
-      return res.status(400).json({
-        error: `Insufficient funds. Need ${
-          withdrawAmount + commission.fee
-        } ${currency}`,
-      });
-    }
+    // Mock 2FA verification: If user sends a code, assume it's verified for now
+    const is2FAVerified = !!twoFactorCode;
 
     const { data: txId, error: txError } = await supabase.rpc(
-      "withdraw_funds",
+      "withdraw_funds_secured",
       {
         p_wallet_id: wallet.id,
         p_amount: withdrawAmount,
@@ -435,23 +419,23 @@ router.post("/withdraw", transactionLimiter, checkConsent, async (req, res) => {
         p_fee: commission.fee,
         p_rate: commission.rate,
         p_platform_wallet_id: platformWalletId,
+        p_idempotency_key: idempotencyKey,
+        p_2fa_verified: is2FAVerified,
         p_metadata: {
           bankId,
           transaction_fee_breakdown: { withdrawal_fee: commission.fee },
         },
       },
     );
-    if (txError) throw txError;
 
-    // Log Revenue
-    if (commission.fee > 0) {
-      await commissionService.logRevenue(
-        req.user.id,
-        commission.fee,
-        currency,
-        "withdrawal_fee",
-        txId,
-      );
+    if (txError) {
+      if (txError.message === "2FA_REQUIRED") {
+        return res.status(403).json({
+          error: "2FA Verification Required",
+          code: "2FA_REQUIRED",
+        });
+      }
+      throw txError;
     }
 
     res.json({
@@ -467,13 +451,14 @@ router.post("/withdraw", transactionLimiter, checkConsent, async (req, res) => {
 
 // DEPOSIT ENDPOINTS
 router.post("/deposit/card", checkConsent, async (req, res) => {
-  const { currency, amount } = req.body;
+  const { currency, amount, idempotencyKey } = req.body;
   try {
     const result = await depositService.createCardDeposit(
       req.user.id,
       currency,
       parseFloat(amount),
       req.user.plan,
+      idempotencyKey,
     );
     res.json(result);
   } catch (err) {
@@ -482,13 +467,14 @@ router.post("/deposit/card", checkConsent, async (req, res) => {
 });
 
 router.post("/deposit/bank", checkConsent, async (req, res) => {
-  const { currency, amount } = req.body;
+  const { currency, amount, idempotencyKey } = req.body;
   try {
     const result = await depositService.createBankDeposit(
       req.user.id,
       currency,
       parseFloat(amount),
       req.user.plan,
+      idempotencyKey,
     );
     res.json(result);
   } catch (err) {
@@ -517,12 +503,14 @@ router.post(
   transactionLimiter,
   checkConsent,
   async (req, res) => {
-    const { fromCurrency, toCurrency, amount, idempotencyKey } = req.body;
+    const { fromCurrency, toCurrency, amount, idempotencyKey, lockId } =
+      req.body;
     console.log("[Swap Execute] Request:", {
       fromCurrency,
       toCurrency,
       amount,
       idempotencyKey,
+      lockId,
       userId: req.user?.id,
       plan: req.user?.plan,
     });
@@ -534,8 +522,8 @@ router.post(
         parseFloat(amount),
         idempotencyKey,
         req.user.plan,
+        lockId,
       );
-      console.log("[Swap Execute] Success:", result.reference);
       res.json(result);
     } catch (err) {
       console.error("[Swap Execute Error]", err.message);

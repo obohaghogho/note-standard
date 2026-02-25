@@ -13,10 +13,31 @@ interface TransactionHistoryProps {
 export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ transactions, className = '' }) => {
     const getStatusIcon = (status: string) => {
         switch (status) {
-            case 'COMPLETED': return <CheckCircle2 size={16} className="text-green-500" />;
-            case 'FAILED': return <XCircle size={16} className="text-red-500" />;
-            case 'PENDING': return <Clock size={16} className="text-yellow-500" />;
-            default: return <Clock size={16} className="text-gray-500" />;
+            case 'COMPLETED':
+            case 'confirmed': 
+                return <CheckCircle2 size={14} className="text-emerald-500" />;
+            case 'FAILED':
+            case 'failed':
+                return <XCircle size={14} className="text-rose-500" />;
+            case 'PENDING':
+            case 'pending':
+            case 'processing':
+                return <Clock size={14} className="text-amber-500 animate-pulse" />;
+            default: 
+                return <Clock size={14} className="text-gray-500" />;
+        }
+    };
+
+    const getStatusColor = (status: string) => {
+        switch (status) {
+            case 'COMPLETED':
+            case 'confirmed': 
+                return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
+            case 'FAILED':
+            case 'failed':
+                return 'text-rose-500 bg-rose-500/10 border-rose-500/20';
+            default:
+                return 'text-amber-500 bg-amber-500/10 border-amber-500/20';
         }
     };
 
@@ -52,10 +73,10 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ transact
                                         <td className="py-4 pl-2">
                                             <div className="flex items-center gap-3">
                                                 <div className={`p-2 rounded-full ${
-                                                    tx.type === 'DEPOSIT' || tx.type === 'TRANSFER_IN' ? 'bg-green-500/10 text-green-400' : 
+                                                    tx.type === 'DEPOSIT' || tx.type === 'TRANSFER_IN' || tx.type === 'SWAP_IN' ? 'bg-green-500/10 text-green-400' : 
                                                     tx.type === 'SWAP' ? 'bg-purple-500/10 text-purple-400' : 'bg-red-500/10 text-red-400'
                                                 }`}>
-                                                    {tx.type === 'DEPOSIT' || tx.type === 'TRANSFER_IN' ? <ArrowDownLeft size={16} /> : 
+                                                    {tx.type === 'DEPOSIT' || tx.type === 'TRANSFER_IN' || tx.type === 'SWAP_IN' ? <ArrowDownLeft size={16} /> : 
                                                      tx.type === 'SWAP' ? <Clock size={16} /> : <ArrowUpRight size={16} />}
                                                 </div>
                                                 <div>
@@ -77,13 +98,10 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ transact
                                             {formatCurrency(tx.amount, tx.currency)}
                                         </td>
                                         <td className="py-4 pr-2 text-right">
-                                            <div className="flex items-centerjustify-end gap-2 justify-end">
-                                                <div className="flex items-center gap-1.5 bg-gray-900/50 px-2 py-1 rounded text-xs">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${getStatusColor(tx.status)}`}>
                                                     {getStatusIcon(tx.status)}
-                                                    <span className={
-                                                        tx.status === 'COMPLETED' ? 'text-green-500' :
-                                                        tx.status === 'FAILED' ? 'text-red-500' : 'text-yellow-500'
-                                                    }>{tx.status}</span>
+                                                    <span>{tx.status}</span>
                                                 </div>
                                                 {tx.status === 'COMPLETED' && (
                                                     <button 

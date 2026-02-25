@@ -10,8 +10,9 @@ const { createClient } = require("@supabase/supabase-js");
 // Create a Supabase client with service role for admin operations
 const getServiceSupabase = () => {
   return createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY,
+    process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY ||
+      process.env.SUPABASE_KEY,
   );
 };
 
@@ -1159,5 +1160,156 @@ exports.getAffiliateStats = async (req, res) => {
     res.json(referrals);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch affiliate stats" });
+  }
+};
+
+/**
+ * Debug: Force confirm a transaction
+ */
+exports.debugForceConfirm = async (req, res) => {
+  try {
+    const { transactionId } = req.body;
+    const serviceSupabase = getServiceSupabase();
+
+    // 1. Update transaction status
+    const { data: tx, error } = await serviceSupabase
+      .from("transactions")
+      .update({
+        status: "COMPLETED",
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", transactionId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // 2. Manually confirm the ledger entry if it exists
+    await serviceSupabase
+      .from("ledger_entries")
+      .update({ status: "confirmed" })
+      .eq("reference", transactionId);
+
+    // 3. Log Admin Action
+    await logAdminAction(
+      req,
+      "debug_force_confirm",
+      "transaction",
+      transactionId,
+      tx,
+    );
+
+    res.json({ success: true, transaction: tx });
+  } catch (err) {
+    console.error("Debug error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+/**
+ * Debug: Simulate Swap
+ */
+exports.debugSimulateSwap = async (req, res) => {
+  try {
+    const { walletId, fromCurrency, toCurrency, amount, rate, fee } = req.body;
+    const serviceSupabase = getServiceSupabase();
+
+    // 1. Get User ID from wallet
+    const { data: wallet } = await serviceSupabase
+      .from("wallets_store")
+      .select("user_id")
+      .eq("id", walletId)
+      .single();
+
+    if (!wallet) throw new Error("Wallet not found");
+
+    // 2. Find/Create destination wallet
+    let { data: toWallet } = await serviceSupabase
+      .from("wallets_store")
+      .select("id")
+      .eq("user_id", wallet.user_id)
+      .eq("currency", toCurrency)
+      .single();
+
+    if (!toWallet) {
+      const { data: newW } = await serviceSupabase
+        .from("wallets_store")
+        .insert({
+          user_id: wallet.user_id,
+          currency: toCurrency,
+          address: `debug-${Date.now()}`,
+        })
+        .select("id")
+        .single();
+      toWallet = newW;
+    }
+
+    const { data: txId, error } = await serviceSupabase.rpc(
+      "execute_swap_atomic",
+      {
+        p_user_id: wallet.user_id,
+        p_from_wallet_id: walletId,
+        p_to_wallet_id: toWallet.id,
+        p_from_amount: amount,
+        p_to_amount: amount * rate,
+        p_from_currency: fromCurrency,
+        p_to_currency: toCurrency,
+        p_rate: rate,
+        p_fee: fee,
+        p_idempotency_key: `debug-swap-${Date.now()}`,
+      },
+    );
+
+    if (error) throw error;
+
+    await logAdminAction(req, "debug_simulate_swap", "wallet", walletId, {
+      amount,
+      fromCurrency,
+      toCurrency,
+    });
+
+    res.json({ success: true, transactionId: txId });
+  } catch (err) {
+    console.error("Debug swap error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+/**
+ * Debug: Simulate Webhook
+ */
+exports.debugSimulateWebhook = async (req, res) => {
+  try {
+    const { provider, reference, status } = req.body;
+    const paymentService = require("../services/payment/paymentService");
+
+    // We bypass provider-specific verification since this is an admin debug action
+    let result;
+    if (status === "success") {
+      result = await paymentService.finalizeTransaction(reference, {
+        provider,
+        status,
+        debug: true,
+      });
+    } else {
+      result = await paymentService.failTransaction(
+        reference,
+        "Simulated failure",
+      );
+    }
+
+    await logAdminAction(req, "debug_simulate_webhook", "payment", reference, {
+      provider,
+      status,
+    });
+
+    res.json({
+      success: true,
+      message: `Simulated ${status} for ${reference}`,
+      result,
+    });
+  } catch (err) {
+    console.error("Debug webhook error:", err);
+    res.status(500).json({ error: err.message });
   }
 };

@@ -55,4 +55,9 @@ router.put(
 // Affiliate Management
 router.get("/affiliates/stats", adminController.getAffiliateStats);
 
+// Debugging / Testing Mode Tools
+router.post("/debug/force-confirm", adminController.debugForceConfirm);
+router.post("/debug/simulate-swap", adminController.debugSimulateSwap);
+router.post("/debug/simulate-webhook", adminController.debugSimulateWebhook);
+
 module.exports = router;

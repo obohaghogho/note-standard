@@ -2,272 +2,163 @@ const supabase = require("../config/supabase");
 const { v4: uuidv4 } = require("uuid");
 const fxService = require("./fxService");
 const commissionService = require("./commissionService");
+const logger = require("../utils/logger");
 const paystackService = require("./paystackService");
 const CLIENT_URL = process.env.CLIENT_URL || "https://notestandard.com";
 
-/**
- * Create a card deposit session using Paystack
- */
-async function createCardDeposit(userId, currency, amount, userPlan = "FREE") {
-  const referenceId = uuidv4(); // Internal UUID
-  const providerRef = `card_${uuidv4()}`; // External reference for Paystack
+const PaymentService = require("./payment/paymentService");
 
-  // Get or create wallet
-  let { data: wallet } = await supabase
-    .from("wallets")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("currency", currency)
+/**
+ * Create a card deposit session using production PaymentService
+ */
+async function createCardDeposit(
+  userId,
+  currency,
+  amount,
+  userPlan = "FREE",
+  idempotencyKey = null,
+) {
+  // Fetch user profile for email
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("email")
+    .eq("id", userId)
     .single();
 
-  if (!wallet) {
-    const { data: newWallet, error: createError } = await supabase
-      .from("wallets")
-      .insert({
-        user_id: userId,
-        currency,
-        balance: 0,
-        address: uuidv4(),
-      })
-      .select()
-      .single();
-
-    if (createError) throw createError;
-    wallet = newWallet;
+  if (!profile || !profile.email) {
+    throw new Error("User profile or email not found");
   }
 
-  // Calculate Fee
-  const feeResult = await commissionService.calculateCommission(
-    "FUNDING",
+  // Initialize payment through unified service
+  // This handles provider selection (Paystack/Flutterwave/Stripe) and DB records
+  return await PaymentService.initializePayment(
+    userId,
+    profile.email,
     amount,
     currency,
-    userPlan,
+    {
+      type: "DEPOSIT",
+      userPlan,
+      idempotencyKey,
+    },
+    {
+      isCrypto: false,
+    },
   );
-  const netAmount = amount - feeResult.fee;
-
-  // Calculate amount in NGN (Paystack charges in NGN)
-  let amountToChargeNgn;
-  let exchangeRate = 1.0;
-
-  if (currency === "NGN") {
-    amountToChargeNgn = parseFloat(amount);
-  } else {
-    const conversion = await fxService.convert(
-      parseFloat(amount),
-      currency,
-      "NGN",
-      true,
-    );
-    amountToChargeNgn = conversion.amount;
-    exchangeRate = conversion.rate;
-  }
-
-  const amountInSmallestUnit = Math.round(amountToChargeNgn * 100);
-
-  // Create pending deposit transaction
-  const { error: txError } = await supabase
-    .from("transactions")
-    .insert({
-      wallet_id: wallet.id,
-      type: "Digital Assets Purchase",
-      // display_label removed (not in schema)
-      amount: netAmount, // Net amount to be credited
-      currency,
-      status: "PENDING",
-      reference_id: referenceId,
-      fee: feeResult.fee,
-      metadata: {
-        method: "card",
-        user_id: userId,
-        rate: exchangeRate,
-        charged_ngn: amountToChargeNgn,
-        original_amount: amount,
-        category: "digital_assets",
-        product_type: "digital_asset",
-        display_ref: providerRef,
-        display_label: "Digital Assets Purchase",
-        transaction_fee_breakdown: {
-          funding_fee: feeResult.fee,
-          user_plan: userPlan,
-        },
-      },
-      exchange_rate: exchangeRate,
-      charged_amount_ngn: amountToChargeNgn,
-    });
-
-  if (txError) throw txError;
-
-  try {
-    const { data: authUser } = await supabase.auth.admin.getUserById(userId);
-    const userEmail = authUser.user.email;
-    const callbackUrl =
-      `${CLIENT_URL}/dashboard/wallet?payment_callback=true&reference=${providerRef}`;
-
-    const paystackData = await paystackService.initializeTransaction(
-      userEmail,
-      amountInSmallestUnit,
-      callbackUrl,
-      {
-        user_id: userId,
-        wallet_id: wallet.id,
-        currency,
-        amount: amount.toString(),
-        type: "deposit",
-        exchangeRate,
-        chargedAmountNgn: amountToChargeNgn,
-      },
-      providerRef, // Pass our reference explicitly
-    );
-
-    return {
-      reference: providerRef,
-      checkoutUrl: paystackData.authorization_url,
-      accessCode: paystackData.access_code,
-      amount,
-      currency,
-      fee: feeResult.fee,
-      netAmount,
-    };
-  } catch (paystackError) {
-    await supabase.from("transactions").update({
-      status: "FAILED",
-      metadata: { method: "card", error: paystackError.message },
-    }).eq("reference_id", referenceId);
-    throw new Error(`Payment initialization failed: ${paystackError.message}`);
-  }
 }
 
 /**
- * Create a bank transfer deposit
+ * Create a bank transfer deposit using production logic
  */
-async function createBankDeposit(userId, currency, amount, userPlan = "FREE") {
-  const referenceId = uuidv4();
-  const providerRef = `bank_${uuidv4().substring(0, 8).toUpperCase()}`;
+async function createBankDeposit(
+  userId,
+  currency,
+  amount,
+  userPlan = "FREE",
+  idempotencyKey = null,
+) {
+  // Fetch bank details from settings instead of hardcoding
+  const allBankDetails =
+    await commissionService.getSetting("bank_deposit_details") || {
+      NGN: {
+        bankName: "Paystack-Titan MFB",
+        accountNumber: "9901234567",
+        accountName: "NoteStandard Admin",
+        note: "Include reference in transfer description",
+      },
+      USD: {
+        bankName: "Chase Bank",
+        accountNumber: "9876543210",
+        routingNumber: "021000021",
+        accountName: "NoteStandard Inc",
+        note: "Include reference in memo",
+      },
+    };
 
-  // Get or create wallet
-  let { data: wallet } = await supabase
-    .from("wallets")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("currency", currency)
+  const selectedDetails = allBankDetails[currency] || allBankDetails.USD;
+
+  // Fetch user profile for email
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("email")
+    .eq("id", userId)
     .single();
 
-  if (!wallet) {
-    const { data: newWallet, error: createError } = await supabase
-      .from("wallets")
-      .insert({
-        user_id: userId,
-        currency,
-        balance: 0,
-        address: uuidv4(),
-      })
-      .select()
-      .single();
-
-    if (createError) throw createError;
-    wallet = newWallet;
-  }
-
-  // Calculate Fee
-  const feeResult = await commissionService.calculateCommission(
-    "FUNDING",
+  // Unified Payment Record
+  const payment = await PaymentService.initializePayment(
+    userId,
+    profile?.email || "",
     amount,
     currency,
-    userPlan,
+    {
+      type: "DEPOSIT",
+      method: "bank_transfer",
+      userPlan,
+      idempotencyKey,
+    },
+    {
+      isCrypto: false,
+      manualReview: true,
+    },
   );
-  const netAmount = amount - feeResult.fee;
-
-  // Create pending deposit transaction
-  const { error: txError } = await supabase
-    .from("transactions")
-    .insert({
-      wallet_id: wallet.id,
-      type: "Digital Assets Purchase",
-      // display_label removed
-      amount: netAmount,
-      currency,
-      status: "PENDING",
-      reference_id: referenceId,
-      fee: feeResult.fee,
-      metadata: {
-        method: "bank",
-        user_id: userId,
-        original_amount: amount,
-        category: "digital_assets",
-        product_type: "digital_asset",
-        display_ref: providerRef,
-        display_label: "Digital Assets Purchase",
-        transaction_fee_breakdown: {
-          funding_fee: feeResult.fee,
-          user_plan: userPlan,
-        },
-      },
-    });
-
-  if (txError) throw txError;
-
-  const bankDetails = {
-    NGN: {
-      bankName: "Paystack-Titan MFB",
-      accountNumber: "9901234567",
-      accountName: "NoteStandard / " + providerRef,
-      reference: providerRef,
-      note:
-        "Transfer exactly the amount shown. Include the reference in your transfer description.",
-    },
-    USD: {
-      bankName: "Chase Bank",
-      routingNumber: "021000021",
-      accountNumber: "9876543210",
-      accountName: "NoteStandard Inc",
-      reference: providerRef,
-      swiftCode: "CHASUS33",
-      note: "Include the reference in your wire transfer memo.",
-    },
-  };
 
   return {
-    reference: providerRef,
+    reference: payment.reference,
     amount,
     currency,
-    fee: feeResult.fee,
-    netAmount,
-    bankDetails: bankDetails[currency] || bankDetails.USD,
+    bankDetails: {
+      ...selectedDetails,
+      accountName: selectedDetails.accountName + " / " + payment.reference,
+      reference: payment.reference,
+    },
     expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   };
 }
 
-async function getCryptoDepositAddress(userId, currency) {
-  let { data: wallet } = await supabase
-    .from("wallets")
-    .select("id, address")
-    .eq("user_id", userId)
-    .eq("currency", currency)
+/**
+ * Initialize a crypto deposit using real provider (e.g. NOWPayments)
+ */
+async function initializeCryptoDeposit(
+  userId,
+  currency,
+  amount = 10,
+  userPlan = "FREE",
+  idempotencyKey = null,
+) {
+  // Fetch user profile for email
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("email")
+    .eq("id", userId)
     .single();
 
-  if (!wallet) {
-    const address = generateCryptoAddress(currency);
-    const { data: newWallet, error } = await supabase
-      .from("wallets")
-      .insert({
-        user_id: userId,
-        currency,
-        balance: 0,
-        address,
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    wallet = newWallet;
+  if (!profile || !profile.email) {
+    throw new Error("User profile or email not found");
   }
 
-  return {
+  // Initialize payment through unified service
+  return await PaymentService.initializePayment(
+    userId,
+    profile.email,
+    amount,
     currency,
-    address: wallet.address,
-    network: getNetworkName(currency),
-    minDeposit: getMinDeposit(currency),
-  };
+    {
+      type: "Digital Assets Purchase",
+      userPlan,
+      idempotencyKey,
+    },
+    {
+      isCrypto: true,
+    },
+  );
+}
+
+// Deprecated in favor of initializeCryptoDeposit (which requires an amount for real gateways)
+async function getCryptoDepositAddress(userId, currency) {
+  console.warn(
+    "[DepositService] getCryptoDepositAddress is deprecated. Use initializeCryptoDeposit.",
+  );
+  return await initializeCryptoDeposit(userId, currency, 10); // Default placeholder amount
 }
 
 async function confirmDeposit(reference, externalHash = null) {
@@ -296,7 +187,8 @@ async function confirmDeposit(reference, externalHash = null) {
     throw new Error("Cannot confirm a failed transaction");
   }
 
-  // Credit wallet
+  // Credit wallet via ledger-pure RPC
+  // The Migration 067 trigger will automatically recalculate the wallet balance when status -> COMPLETED.
   const { error: rpcError } = await supabase.rpc("confirm_deposit", {
     p_transaction_id: tx.id,
     p_wallet_id: tx.wallet_id,
@@ -305,28 +197,15 @@ async function confirmDeposit(reference, externalHash = null) {
   });
 
   if (rpcError) {
-    // Fallback manual credit
-    const newBalance = parseFloat(tx.wallet.balance) + parseFloat(tx.amount);
-    await supabase.from("wallets").update({ balance: newBalance }).eq(
-      "id",
-      tx.wallet_id,
-    );
-    await supabase.from("transactions").update({
-      status: "COMPLETED",
-      external_hash: externalHash,
-    }).eq("id", tx.id);
+    logger.error("confirm_deposit RPC failed", {
+      error: rpcError.message,
+      txId: tx.id,
+    });
+    throw new Error(`Failed to confirm deposit: ${rpcError.message}`);
   }
 
-  // Log Revenue (Funding Fee)
-  if (tx.fee > 0) {
-    await commissionService.logRevenue(
-      tx.wallet.user_id,
-      tx.fee,
-      tx.currency,
-      "funding_fee",
-      tx.id,
-    );
-  }
+  // NOTE: Revenue logging is now handled by the 'trg_auto_revenue' DB trigger on the transactions table.
+  // We no longer call commissionService.logRevenue here to avoid double-logging.
 
   try {
     const { createNotification } = require("./notificationService");
@@ -364,23 +243,8 @@ async function getDepositStatus(reference) {
   return error || !tx ? null : tx;
 }
 
-function generateCryptoAddress(currency) {
-  const prefix = currency === "BTC" ? "bc1" : "0x";
-  return `${prefix}${uuidv4().replace(/-/g, "").substring(0, 32)}`;
-}
-
-function getNetworkName(currency) {
-  const networks = {
-    "BTC": "Bitcoin Mainnet",
-    "ETH": "Ethereum Mainnet (ERC-20)",
-  };
-  return networks[currency] || "Unknown";
-}
-
-function getMinDeposit(currency) {
-  const mins = { "BTC": 0.0001, "ETH": 0.001 };
-  return mins[currency] || 0;
-}
+// Helpers removed: generateCryptoAddress, getNetworkName, getMinDeposit
+// Logic is now delegated to real providers via PaymentService.
 
 async function getExchangeRate(from, to) {
   return await fxService.getRate(from, to);
@@ -389,6 +253,7 @@ async function getExchangeRate(from, to) {
 module.exports = {
   createCardDeposit,
   createBankDeposit,
+  initializeCryptoDeposit,
   getCryptoDepositAddress,
   confirmDeposit,
   failDeposit,
