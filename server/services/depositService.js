@@ -167,7 +167,7 @@ async function confirmDeposit(reference, externalHash = null) {
   const { data: tx, error: findError } = await supabase
     .from("transactions")
     .select("*, wallet:wallets(id, user_id, balance, currency)")
-    .eq("metadata->>display_ref", reference) // Use metadata lookup
+    .or(`reference_id.eq.${reference},metadata->>display_ref.eq.${reference}`)
     .single();
 
   if (findError || !tx) {
@@ -239,7 +239,8 @@ async function failDeposit(reference, reason = "Payment failed") {
 async function getDepositStatus(reference) {
   const { data: tx, error } = await supabase.from("transactions").select(
     "id, status, amount, currency, created_at, updated_at",
-  ).eq("metadata->>display_ref", reference).single();
+  ).or(`reference_id.eq.${reference},metadata->>display_ref.eq.${reference}`)
+    .single();
   return error || !tx ? null : tx;
 }
 

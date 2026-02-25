@@ -132,7 +132,12 @@ export const FundModal: React.FC<FundModalProps> = ({ isOpen, onClose, selectedC
                 setLoading(false);
             }
         } catch (err: unknown) {
-            toast.error(err instanceof Error ? err.message : 'Card deposit failed');
+            const message = err instanceof Error ? err.message : 'Card deposit failed';
+            if (message.includes('Unauthorized') || message.includes('401')) {
+                toast.error('Session expired. Please refresh the page or log in again.');
+            } else {
+                toast.error(message);
+            }
             setLoading(false);
         }
     };

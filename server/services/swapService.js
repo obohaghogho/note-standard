@@ -36,57 +36,81 @@ async function calculateSwapPreview(
   amount,
   userPlan = "FREE",
 ) {
-  // REQUIREMENT: Integrated real pricing (CoinGecko via fxService)
-  const marketPrice = await fxService.getRate(fromCurrency, toCurrency);
+  try {
+    console.log(
+      `[SwapService] Preview request: ${amount} ${fromCurrency} -> ${toCurrency} (${userPlan})`,
+    );
 
-  const spreadResult = await commissionService.calculateSpread(
-    "SELL",
-    marketPrice,
-    userPlan,
-  );
+    // REQUIREMENT: Integrated real pricing (CoinGecko via fxService)
+    const marketPrice = await fxService.getRate(fromCurrency, toCurrency);
+    if (!marketPrice) {
+      throw new Error(`Could not fetch rate for ${fromCurrency}/${toCurrency}`);
+    }
 
-  const finalPrice = spreadResult.finalPrice;
-  const spreadAmountInQuote = spreadResult.spreadAmount * amount;
+    const spreadResult = await commissionService.calculateSpread(
+      "SELL",
+      marketPrice,
+      userPlan,
+    );
 
-  const feeResult = await commissionService.calculateCommission(
-    "SWAP",
-    amount,
-    fromCurrency,
-    userPlan,
-  );
+    const finalPrice = spreadResult.finalPrice;
+    const spreadAmountInQuote = spreadResult.spreadAmount * amount;
 
-  const amountToSwap = amount - feeResult.fee;
-  const amountOut = amountToSwap * finalPrice;
+    const feeResult = await commissionService.calculateCommission(
+      "SWAP",
+      amount,
+      fromCurrency,
+      userPlan,
+    );
 
-  // REQUIREMENT: Lock rate for 30 seconds
-  const lockId = `lock_${uuidv4()}`;
-  const preview = {
-    lockId,
-    fromCurrency,
-    toCurrency,
-    amountIn: amount,
-    marketPrice: spreadResult.marketPrice,
-    finalPrice: spreadResult.finalPrice,
-    spreadAmount: spreadResult.spreadAmount,
-    spreadPercentage: spreadResult.spreadPercentage,
-    fee: feeResult.fee,
-    feePercentage: feeResult.rate * 100,
-    amountOut: parseFloat(amountOut.toFixed(8)),
-    netAmountSent: amountToSwap,
-    feeBreakdown: {
-      processing_fee: feeResult.fee,
-      spread_fee_equivalent: spreadAmountInQuote,
-      total_fee_label: "Transaction Fees",
-    },
-    expiresAt: Date.now() + LOCK_EXPIRY_MS,
-  };
+    const amountToSwap = amount - feeResult.fee;
+    if (amountToSwap <= 0) {
+      throw new Error(
+        `Amount too small to cover fee (${feeResult.fee} ${fromCurrency})`,
+      );
+    }
 
-  rateLocks.set(lockId, preview);
+    const amountOut = amountToSwap * finalPrice;
 
-  // Cleanup lock after expiry
-  setTimeout(() => rateLocks.delete(lockId), LOCK_EXPIRY_MS + 2000);
+    console.log(
+      `[SwapService] Preview calculated: ${amountToSwap} * ${finalPrice} = ${amountOut}`,
+    );
 
-  return preview;
+    // REQUIREMENT: Lock rate for 30 seconds
+    const lockId = `lock_${uuidv4()}`;
+    const preview = {
+      lockId,
+      fromCurrency,
+      toCurrency,
+      amountIn: amount,
+      marketPrice: spreadResult.marketPrice,
+      rate: spreadResult.finalPrice, // Compatibility with client
+      finalPrice: spreadResult.finalPrice,
+      spreadAmount: spreadResult.spreadAmount,
+      spreadPercentage: spreadResult.spreadPercentage,
+      fee: feeResult.fee,
+      feePercentage: feeResult.rate * 100,
+      amountOut: parseFloat(amountOut.toFixed(8)),
+      netAmount: amountToSwap, // Compatibility with client
+      netAmountSent: amountToSwap,
+      feeBreakdown: {
+        processing_fee: feeResult.fee,
+        spread_fee_equivalent: spreadAmountInQuote,
+        total_fee_label: "Transaction Fees",
+      },
+      expiresAt: Date.now() + LOCK_EXPIRY_MS,
+    };
+
+    rateLocks.set(lockId, preview);
+
+    // Cleanup lock after expiry
+    setTimeout(() => rateLocks.delete(lockId), LOCK_EXPIRY_MS + 2000);
+
+    return preview;
+  } catch (err) {
+    console.error("[SwapService] Preview Error:", err);
+    throw err;
+  }
 }
 
 /**
@@ -133,8 +157,10 @@ async function executeSwap(
     const { data: existing } = await supabase
       .from("transactions")
       .select("id")
-      .eq("metadata->>idempotencyKey", idempotencyKey)
-      .single();
+      .or(
+        `metadata->>'idempotency_key'.eq.${idempotencyKey},metadata->>'idempotencyKey'.eq.${idempotencyKey}`,
+      )
+      .maybeSingle();
 
     if (existing) {
       throw new Error("Duplicate swap request");
@@ -195,7 +221,7 @@ async function executeSwap(
       p_user_id: userId,
       p_from_wallet_id: fromWallet.id,
       p_to_wallet_id: toWallet.id,
-      p_from_amount: parseAmount,
+      p_from_amount: preview.netAmountSent,
       p_to_amount: preview.amountOut,
       p_from_currency: fromCurrency,
       p_to_currency: toCurrency,

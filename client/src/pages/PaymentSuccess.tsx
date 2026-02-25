@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Loader2, ArrowRight } from 'lucide-react';
 import { Button } from '../components/common/Button';
 import toast from 'react-hot-toast';
+import { API_URL } from '../lib/api';
 
 interface DepositStatus {
     id: string;
@@ -43,7 +44,7 @@ export const PaymentSuccess: React.FC = () => {
                 
                 const pollStatus = async (): Promise<void> => {
                     attempts++;
-                    const response = await fetch(`/api/webhooks/status/${ref}`);
+                    const response = await fetch(`${API_URL}/api/webhooks/status/${ref}`);
                     
                     if (!response.ok) {
                         if (attempts < maxAttempts) {

@@ -42,7 +42,10 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ transact
     };
 
     const getTypeColor = (type: string) => {
-        return type.includes('DEPOSIT') || type.includes('IN') ? 'text-green-400' : 'text-white';
+        const t = type.toUpperCase();
+        if (t.includes('DEPOSIT') || t === 'TRANSFER_IN' || t === 'SWAP_IN' || t === 'SWAP_CREDIT') return 'text-green-400';
+        if (t === 'SWAP' || t === 'SWAP_OUT' || t === 'SWAP_DEBIT') return 'text-purple-400';
+        return 'text-white';
     };
 
     return (
@@ -73,11 +76,19 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ transact
                                         <td className="py-4 pl-2">
                                             <div className="flex items-center gap-3">
                                                 <div className={`p-2 rounded-full ${
-                                                    tx.type === 'DEPOSIT' || tx.type === 'TRANSFER_IN' || tx.type === 'SWAP_IN' ? 'bg-green-500/10 text-green-400' : 
-                                                    tx.type === 'SWAP' ? 'bg-purple-500/10 text-purple-400' : 'bg-red-500/10 text-red-400'
+                                                    (() => {
+                                                        const t = tx.type.toUpperCase();
+                                                        if (t === 'DEPOSIT' || t === 'TRANSFER_IN' || t === 'SWAP_IN' || t === 'SWAP_CREDIT') return 'bg-green-500/10 text-green-400';
+                                                        if (t === 'SWAP' || t === 'SWAP_OUT' || t === 'SWAP_DEBIT') return 'bg-purple-500/10 text-purple-400';
+                                                        return 'bg-red-500/10 text-red-400';
+                                                    })()
                                                 }`}>
-                                                    {tx.type === 'DEPOSIT' || tx.type === 'TRANSFER_IN' || tx.type === 'SWAP_IN' ? <ArrowDownLeft size={16} /> : 
-                                                     tx.type === 'SWAP' ? <Clock size={16} /> : <ArrowUpRight size={16} />}
+                                                    {(() => {
+                                                        const t = tx.type.toUpperCase();
+                                                        if (t === 'DEPOSIT' || t === 'TRANSFER_IN' || t === 'SWAP_IN' || t === 'SWAP_CREDIT') return <ArrowDownLeft size={16} />;
+                                                        if (t === 'SWAP' || t === 'SWAP_OUT' || t === 'SWAP_DEBIT') return <ArrowUpRight size={16} />;
+                                                        return <ArrowUpRight size={16} />;
+                                                    })()}
                                                 </div>
                                                 <div>
                                                     <p className="font-medium text-sm text-gray-200">
@@ -94,8 +105,11 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ transact
                                             <span className="block opacity-50">{new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                         </td>
                                         <td className={`py-4 text-sm font-medium text-right ${getTypeColor(tx.type)}`}>
-                                            {tx.type === 'DEPOSIT' || tx.type === 'TRANSFER_IN' ? '+' : '-'}
-                                            {formatCurrency(tx.amount, tx.currency)}
+                                            {(() => {
+                                                const t = tx.type.toUpperCase();
+                                                return (t === 'DEPOSIT' || t === 'TRANSFER_IN' || t === 'SWAP_IN' || t === 'SWAP_CREDIT') ? '+' : '-';
+                                            })()}
+                                            {formatCurrency(tx.amount || tx.amount_from || 0, tx.currency || tx.from_currency || 'USD')}
                                         </td>
                                         <td className="py-4 pr-2 text-right">
                                             <div className="flex items-center justify-end gap-2">

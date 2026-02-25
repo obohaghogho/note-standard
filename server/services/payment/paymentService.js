@@ -129,7 +129,7 @@ class PaymentService {
       const callbackUrl = options.callbackUrl ||
         `${
           process.env.CLIENT_URL || "https://notestandard.com"
-        }/payment-callback?reference=${reference}`;
+        }/payment/success?reference=${reference}`;
 
       const initData = await provider.initialize({
         email,
@@ -154,6 +154,7 @@ class PaymentService {
 
       return {
         url: initData.checkoutUrl,
+        checkoutUrl: initData.checkoutUrl, // Client expects this name
         paymentUrl: initData.paymentUrl || initData.checkoutUrl,
         payAddress: initData.payAddress,
         reference: reference,
