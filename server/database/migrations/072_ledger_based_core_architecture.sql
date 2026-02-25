@@ -251,11 +251,11 @@ BEGIN
 
     -- Step 1: Create Transaction Record (PENDING)
     INSERT INTO public.transactions (
-        user_id, wallet_id, type, from_currency, to_currency, 
-        amount_from, amount_to, rate, status, metadata
+        user_id, wallet_id, type, currency, amount, from_currency, to_currency, 
+        amount_from, amount_to, rate, fee, status, metadata
     ) VALUES (
-        p_user_id, p_from_wallet_id, 'swap', p_from_currency, p_to_currency, 
-        p_from_amount, p_to_amount, p_rate, 'PENDING', 
+        p_user_id, p_from_wallet_id, 'swap', p_from_currency, p_from_amount, p_from_currency, p_to_currency, 
+        p_from_amount, p_to_amount, p_rate, p_fee, 'PENDING', 
         p_metadata || jsonb_build_object('idempotency_key', p_idempotency_key)
     ) RETURNING id INTO v_tx_id;
 

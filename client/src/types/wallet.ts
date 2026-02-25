@@ -30,7 +30,7 @@ export interface Wallet {
 export interface Transaction {
     id: string;
     wallet_id: string;
-    type: 'DEPOSIT' | 'WITHDRAWAL' | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'BUY' | 'SELL' | 'SWAP' | 'Digital Assets Purchase' | string;
+    type: 'DEPOSIT' | 'WITHDRAWAL' | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'BUY' | 'SELL' | 'SWAP' | 'swap' | 'SWAP_IN' | 'SWAP_OUT' | 'Digital Assets Purchase' | string;
     display_label?: string;
     amount: number;
     currency: Currency;
@@ -40,6 +40,12 @@ export interface Transaction {
     fee: number;
     exchange_rate?: number;
     spread_amount?: number;
+    // Swap-specific fields
+    amount_from?: number;
+    amount_to?: number;
+    from_currency?: string;
+    to_currency?: string;
+    rate?: number;
     metadata?: Record<string, any>;
     created_at: string;
     updated_at: string;

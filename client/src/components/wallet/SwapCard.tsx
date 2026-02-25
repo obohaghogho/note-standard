@@ -96,13 +96,19 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
     };
 
     const handleMaxAmount = () => {
-        setAmount(Number(availableBalance || 0).toString());
+        const balance = Number(availableBalance || 0);
+        setAmount(balance.toFixed(8).replace(/\.?0+$/, '')); // Precise but clean
     };
 
     const handleExecuteSwap = async () => {
         const numericAmount = Number(amount || 0);
         if (numericAmount <= 0) return toast.error('Please enter a valid amount');
-        if (numericAmount > Number(availableBalance || 0)) return toast.error('Insufficient balance');
+        
+        // Use a small epsilon for float comparison safety
+        if (numericAmount > Number(availableBalance || 0) + 0.0000000001) {
+            return toast.error('Insufficient balance');
+        }
+
         if (fromCurrency === toCurrency) return toast.error('Cannot swap same currency');
         if (!preview?.lockId) return toast.error('Please wait for a quote');
 

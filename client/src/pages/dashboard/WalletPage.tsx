@@ -40,15 +40,26 @@ export const WalletPage: React.FC = () => {
             setRatesLoading(true);
             try {
                 const exchangeRates = await walletApi.getExchangeRates();
-                // Normalize rates to USD
-                // exchangeRates structure: { "BTC": { "USD": 95000, ... }, "USD": { "BTC": 0.00001, ... } }
+                // Server returns flat object: { "BTC": 0.000015, "ETH": 0.0003, "NGN": 1500 }
+                // These are: 1 USD = X of that currency
+                // We need: 1 unit of currency = Y USD (inverted)
                 
                 const usdRates: Record<string, number> = {};
+                
+                // Handle both flat and nested formats for compatibility
                 Object.keys(exchangeRates).forEach(curr => {
-                    usdRates[curr] = exchangeRates[curr]?.['USD'] || (curr === 'USD' ? 1 : 0);
+                    const val = exchangeRates[curr];
+                    if (typeof val === 'number') {
+                        // Flat format: val = how much of `curr` per 1 USD
+                        // Invert to get: 1 unit of `curr` = ? USD
+                        usdRates[curr] = val > 0 ? 1 / val : 0;
+                    } else if (typeof val === 'object' && val !== null) {
+                        // Nested format: { "USD": 65000 }
+                        usdRates[curr] = val['USD'] || 0;
+                    }
                 });
 
-                // Fallback for missing rates (e.g. if API fails partially)
+                // Ensure USD is always 1
                 usdRates['USD'] = 1;
                 
                 setRates(usdRates);

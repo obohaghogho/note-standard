@@ -17,22 +17,39 @@ const fxService = require("../services/fxService");
 // Middleware to ensure user is authenticated
 const requireAuth = async (req, res, next) => {
   try {
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) {
-      console.warn("[Wallet Routes] Missing token");
-      return res.status(401).json({ error: "Unauthorized" });
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.split(" ")[1];
+
+    if (!token || token === "undefined" || token === "null" || token === "") {
+      console.warn(
+        `[Wallet Routes] Missing/invalid token on ${req.method} ${req.path}`,
+        {
+          hasAuthHeader: !!authHeader,
+          tokenValue: token ? `${token.substring(0, 10)}...` : "NONE",
+        },
+      );
+      return res.status(401).json({
+        error: "Unauthorized - No valid token provided",
+      });
     }
 
     const { data: { user }, error } = await supabase.auth.getUser(token);
 
     if (error) {
-      console.error("[Wallet Routes] Auth error:", error.message);
-      return res.status(401).json({ error: "Unauthorized" });
+      console.error(
+        `[Wallet Routes] Auth error on ${req.method} ${req.path}:`,
+        error.message,
+      );
+      return res.status(401).json({
+        error: "Unauthorized - Token validation failed",
+      });
     }
 
     if (!user) {
-      console.warn("[Wallet Routes] No user found for token");
-      return res.status(401).json({ error: "Unauthorized" });
+      console.warn(
+        `[Wallet Routes] No user found for token on ${req.method} ${req.path}`,
+      );
+      return res.status(401).json({ error: "Unauthorized - User not found" });
     }
 
     req.user = user;
@@ -494,7 +511,11 @@ router.post("/swap/preview", async (req, res) => {
     );
     res.json(preview);
   } catch (err) {
-    res.status(500).json({ error: "Failed to calculate swap" });
+    console.error("[Swap Preview Error]", err);
+    res.status(400).json({
+      error: err.message || "Failed to calculate swap",
+      details: process.env.NODE_ENV === "development" ? err.stack : undefined,
+    });
   }
 });
 

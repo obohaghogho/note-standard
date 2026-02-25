@@ -4,11 +4,27 @@ import type { Wallet, Transaction, InternalTransferRequest, WithdrawalRequest, C
 
 const API_base = `${API_URL}/api`;
 
-async function getAuthHeader() {
-    const { data: { session } } = await supabase.auth.getSession();
+async function getAuthHeader(): Promise<Record<string, string>> {
+    // Try to get session; if expired/null, attempt refresh
+    let { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session?.access_token) {
+        // Session may have expired — force a refresh
+        console.warn('[walletApi] Session expired or missing, attempting refresh...');
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) {
+            console.error('[walletApi] Session refresh failed:', refreshError.message);
+        }
+        session = refreshData?.session ?? null;
+    }
+
+    if (!session?.access_token) {
+        console.error('[walletApi] No valid session after refresh. User may need to re-login.');
+    }
+
     return {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session?.access_token}`
+        'Authorization': `Bearer ${session?.access_token || ''}`
     };
 }
 
@@ -52,7 +68,9 @@ export const walletApi = {
                 return [];
             }
             const data = await response.json();
-            return Array.isArray(data) ? data : [];
+            // Server returns { transactions: [...] } or raw array
+            const txs = Array.isArray(data) ? data : (data?.transactions || []);
+            return Array.isArray(txs) ? txs : [];
         } catch (error) {
             console.error('getTransactions exception:', error);
             return [];
