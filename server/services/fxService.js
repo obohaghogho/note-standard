@@ -1,125 +1,142 @@
-/**
- * FX Service
- * Handles live currency exchange rates with caching
- */
+const axios = require("axios");
+const supabase = require("../config/supabase");
+const logger = require("../utils/logger");
 
-const axios = require('axios');
-const supabase = require('../config/supabase');
-
-// Cache configuration: 1 hour TTL
-const CACHE_TTL = 3600 * 1000;
+// 1. Configuration constants
+const FIAT_CACHE_TTL = 3600 * 1000; // 1 hour for fiat
+const CRYPTO_CACHE_TTL = 30 * 1000; // 30 seconds for crypto (high volatility)
 const rateCache = new Map();
 
-// Fallback rates (Mock data for safety if API is down)
-const FALLBACK_RATES = {
-    'USD': 1.0,
-    'EUR': 0.92,
-    'GBP': 0.79,
-    'NGN': 1550,
-    'BTC': 0.000015,
-    'ETH': 0.00028
+// Map of currency symbols to CoinGecko IDs
+const COINGECKO_ID_MAP = {
+  "BTC": "bitcoin",
+  "ETH": "ethereum",
+  "USDT": "tether",
+  "USDC": "usd-coin",
+  "NGN": "nigerian-naira",
+  "EUR": "euro",
+  "GBP": "british-pound-sterling",
+  "JPY": "japanese-yen",
 };
 
 /**
  * Get exchange rate for a currency pair
- * @param {string} from - Source currency
- * @param {string} to - Target currency
- * @param {boolean} [applyBuffer=false] - Whether to apply safety buffer for volatility
  */
 async function getRate(from, to, applyBuffer = false) {
-    if (from === to) return 1.0;
+  if (from === to) return 1.0;
 
-    const BUFFER = 0.02; // 2% safety buffer
+  try {
+    const cacheKey = `${from}_${to}`;
+    const cached = rateCache.get(cacheKey);
 
-    try {
-        // Try to get from centralized cache (or DB)
-        const cacheKey = `${from}_${to}`;
-        const cached = rateCache.get(cacheKey);
-        
-        let rate;
-        if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
-            rate = cached.rate;
-        } else {
-            // Fetch from API if not in cache or expired
-            const rates = await fetchRatesFromAPI(from);
-            rate = rates[to]; // Direct lookup
+    // Determine TTL based on whether it's crypto or tracked fiat
+    const isCryptoOrTracked = COINGECKO_ID_MAP[from] || COINGECKO_ID_MAP[to];
+    const ttl = isCryptoOrTracked ? CRYPTO_CACHE_TTL : FIAT_CACHE_TTL;
 
-            if (!rate) {
-                console.warn(`[FXService] Rate not found for ${from}->${to}, using fallback`);
-                rate = (FALLBACK_RATES[to] || 1) / (FALLBACK_RATES[from] || 1);
-            }
-
-            // Cache the result
-            rateCache.set(cacheKey, { rate, timestamp: Date.now() });
-            // Also cache the inverse (approximate)
-            rateCache.set(`${to}_${from}`, { rate: 1 / rate, timestamp: Date.now() });
-        }
-
-        // Apply buffer if requested (e.g. for creating charges)
-        // We only buffer when selling base currency (USD) for quote currency (NGN)
-        // effectively increasing the amount of NGN required
-        if (applyBuffer) {
-            rate = rate * (1 + BUFFER);
-        }
-
-        return rate;
-    } catch (error) {
-        console.error(`[FXService] Error fetching rate ${from}->${to}:`, error.message);
-        const fallbackRate = (FALLBACK_RATES[to] || 1) / (FALLBACK_RATES[from] || 1);
-        return applyBuffer ? fallbackRate * (1 + BUFFER) : fallbackRate;
+    if (cached && (Date.now() - cached.timestamp < ttl)) {
+      return cached.rate;
     }
+
+    // Fetch fresh rate
+    let rate;
+
+    // Logic: If either is tracked (crypto or specific fiat), we use CoinGecko
+    if (isCryptoOrTracked) {
+      rate = await fetchCryptoRate(from, to);
+    } else {
+      // Try ExchangeRate-API if key exists
+      rate = await fetchFiatRate(from, to);
+
+      // Fallback to CoinGecko if ExchangeRate-API fails/is unconfigured
+      if (!rate) {
+        rate = await fetchCryptoRate(from, to);
+      }
+    }
+
+    if (!rate) throw new Error(`Could not resolve rate for ${from}->${to}`);
+
+    // Cache the result
+    rateCache.set(cacheKey, { rate, timestamp: Date.now() });
+    rateCache.set(`${to}_${from}`, { rate: 1 / rate, timestamp: Date.now() });
+
+    return rate;
+  } catch (error) {
+    logger.error(`[FXService] getRate Error: ${from}->${to}`, {
+      error: error.message,
+    });
+    // Return null or rethrow to indicate real failure instead of fake values
+    throw error;
+  }
 }
 
 /**
- * Fetch rates from External API
- * Note: Requires EXCHANGERATE_API_KEY in environment
+ * Fetch Crypto Rate via CoinGecko
  */
-async function fetchRatesFromAPI(base) {
-    const apiKey = process.env.EXCHANGERATE_API_KEY;
-    
-    // If no API key, use fallback immediately to avoid slow timeouts in dev
-    if (!apiKey) {
-        return FALLBACK_RATES;
-    }
+async function fetchCryptoRate(from, to) {
+  // We use USD as the base for all CoinGecko comparisons
+  const fromId = COINGECKO_ID_MAP[from];
+  const toId = COINGECKO_ID_MAP[to];
 
-    try {
-        const response = await axios.get(`https://v6.exchangerate-api.com/v6/${apiKey}/latest/${base}`);
-        
-        if (response.data && response.data.result === 'success') {
-            return response.data.conversion_rates;
-        }
-        
-        throw new Error(response.data['error-type'] || 'API failure');
-    } catch (error) {
-        console.error('[FXService] API call failed:', error.message);
-        throw error;
-    }
+  // Case 1: Crypto to Fiat (e.g., BTC -> USD)
+  if (fromId && !toId) {
+    const response = await axios.get(
+      `https://api.coingecko.com/api/v3/simple/price?ids=${fromId}&vs_currencies=${to.toLowerCase()}`,
+    );
+    return response.data[fromId][to.toLowerCase()];
+  }
+
+  // Case 2: Fiat to Crypto (e.g., USD -> BTC)
+  if (!fromId && toId) {
+    const response = await axios.get(
+      `https://api.coingecko.com/api/v3/simple/price?ids=${toId}&vs_currencies=${from.toLowerCase()}`,
+    );
+    const priceInFrom = response.data[toId][from.toLowerCase()];
+    return 1 / priceInFrom;
+  }
+
+  // Case 3: Crypto to Crypto (e.g., BTC -> ETH)
+  if (fromId && toId) {
+    const response = await axios.get(
+      `https://api.coingecko.com/api/v3/simple/price?ids=${fromId},${toId}&vs_currencies=usd`,
+    );
+    const fromPriceUsd = response.data[fromId].usd;
+    const toPriceUsd = response.data[toId].usd;
+    return fromPriceUsd / toPriceUsd;
+  }
+
+  return null;
 }
 
 /**
- * Convert an amount from one currency to another
+ * Fetch Fiat Rate via ExchangeRate-API
  */
-async function convert(amount, from, to, applyBuffer = false) {
-    const rate = await getRate(from, to, applyBuffer);
-    return {
-        amount: amount * rate,
-        rate
-    };
+async function fetchFiatRate(from, to) {
+  const apiKey = process.env.EXCHANGERATE_API_KEY;
+  if (!apiKey) return null;
+
+  const response = await axios.get(
+    `https://v6.exchangerate-api.com/v6/${apiKey}/pair/${from}/${to}`,
+  );
+  return response.data.conversion_rate;
 }
 
-/**
- * Get all rates for a specific base currency
- */
+async function convert(amount, from, to) {
+  const rate = await getRate(from, to);
+  return { amount: amount * rate, rate };
+}
+
 async function getAllRates(base) {
-    try {
-        return await fetchRatesFromAPI(base);
-    } catch (error) {
-        return FALLBACK_RATES;
-    }
+  // Simplified for legacy support
+  const currencies = ["BTC", "ETH", "USD", "NGN"];
+  const results = {};
+  for (const c of currencies) {
+    if (c !== base) results[c] = await getRate(base, c);
+  }
+  return results;
 }
 
 module.exports = {
-    getRate,
-    convert,
-    getAllRates
+  getRate,
+  convert,
+  getAllRates,
 };

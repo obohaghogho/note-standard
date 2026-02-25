@@ -38,7 +38,9 @@ export interface Transaction {
     reference_id?: string;
     external_hash?: string;
     fee: number;
-    metadata?: Record<string, unknown>;
+    exchange_rate?: number;
+    spread_amount?: number;
+    metadata?: Record<string, any>;
     created_at: string;
     updated_at: string;
     wallet?: {

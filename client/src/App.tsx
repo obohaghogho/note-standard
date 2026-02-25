@@ -41,6 +41,7 @@ const Affiliates = lazyWithRetry(() => import('./pages/dashboard/Affiliates').th
 const Notifications = lazyWithRetry(() => import('./pages/dashboard/Notifications').then(m => m.Notifications), 'Notifications');
 const Trends = lazyWithRetry(() => import('./pages/dashboard/Trends').then(m => m.Trends), 'Trends');
 const WalletPage = lazyWithRetry(() => import('./pages/dashboard/WalletPage').then(m => m.WalletPage), 'WalletPage');
+const Transactions = lazyWithRetry(() => import('./pages/dashboard/Transactions').then(m => m.Transactions), 'Transactions');
 const TeamsPage = lazyWithRetry(() => import('./pages/teams/TeamsPage').then(m => m.TeamsPage), 'TeamsPage');
 
 // Admin pages
@@ -52,6 +53,7 @@ const BroadcastManager = lazyWithRetry(() => import('./pages/admin/BroadcastMana
 const AutoReplySettings = lazyWithRetry(() => import('./pages/admin/AutoReplySettings').then(m => m.AutoReplySettings), 'AutoReplySettings');
 const Analytics = lazyWithRetry(() => import('./pages/admin/Analytics').then(m => m.Analytics), 'Analytics');
 const AdminSettings = lazyWithRetry(() => import('./pages/admin/AdminSettings').then(m => m.AdminSettings), 'AdminSettings');
+const AdminDebugTools = lazyWithRetry(() => import('./pages/admin/AdminDebugTools').then(m => m.AdminDebugTools), 'AdminDebugTools');
 const ManageAds = lazyWithRetry(() => import('./pages/admin/ManageAds').then(m => m.ManageAds), 'ManageAds');
 
 const ChatRedirect = () => {
@@ -158,6 +160,7 @@ function App() {
                         <Route path="search" element={<Search />} />
                         <Route path="billing" element={<Billing />} />
                         <Route path="wallet" element={<WalletPage />} />
+                        <Route path="transactions" element={<Transactions />} />
                         <Route path="affiliates" element={<Affiliates />} />
                         <Route path="settings" element={<Settings />} />
 
@@ -178,6 +181,7 @@ function App() {
                         <Route path="auto-reply" element={<AutoReplySettings />} />
                         <Route path="analytics" element={<Analytics />} />
                         <Route path="ads" element={<ManageAds />} />
+                        <Route path="debug" element={<AdminDebugTools />} />
                         <Route path="settings" element={<AdminSettings />} />
                         </Route>
                     </Route>

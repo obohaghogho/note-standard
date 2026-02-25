@@ -64,32 +64,81 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
     }, [user, profile, authReady, fetchData]);
 
-    // Real-time Updates (Listen to wallet balance changes)
+    // Real-time Updates (Listen to ledger and transaction changes)
     useEffect(() => {
         if (!user) return;
 
-        const channel = supabase.channel(`wallet_updates:${user.id}`)
+        // 1. Listen to Ledger Entries (Balance Source of Truth)
+        const ledgerChannel = supabase.channel(`ledger_realtime:${user.id}`)
             .on(
                 'postgres_changes',
                 {
                     event: '*',
                     schema: 'public',
-                    table: 'wallets',
+                    table: 'ledger_entries',
                     filter: `user_id=eq.${user.id}`
                 },
                 (payload) => {
-                    console.log('Wallet update:', payload);
-                    // Refresh data on any wallet change
-                    fetchData();
-                    if (payload.eventType === 'UPDATE') {
-                        toast('Wallet balance updated!', { icon: '💰' });
-                    }
+                    console.log('Ledger update received (Balance Refresh):', payload.eventType);
+                    fetchData(); // Recalculate balances
                 }
             )
             .subscribe();
 
+        // 2. Listen to Transactions (History Source of Truth)
+        const txChannel = supabase.channel(`tx_realtime:${user.id}`)
+             .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'transactions',
+                    filter: `user_id=eq.${user.id}`
+                },
+                (payload) => {
+                    console.log('Transaction update received:', payload.eventType);
+                    fetchData(); // Refresh history and redundant balance check
+                    
+                    // Live Status Notifications
+                    if (payload.eventType === 'UPDATE') {
+                        const newTx = payload.new as any;
+                        const oldTx = payload.old as any;
+
+                        if (oldTx.status === 'PENDING' && newTx.status === 'COMPLETED') {
+                            toast.success(`${newTx.display_label || 'Transaction'} confirmed!`, { 
+                                duration: 5000,
+                                icon: '🟢',
+                                style: {
+                                    background: '#064e3b',
+                                    color: '#ecfdf5',
+                                    borderRadius: '12px',
+                                    border: '1px solid #059669'
+                                }
+                            });
+                        } else if (newTx.status === 'FAILED') {
+                            toast.error(`Transaction failed: ${newTx.metadata?.failReason || 'Unknown error'}`, {
+                                icon: '🔴'
+                            });
+                        }
+                    }
+                    
+                    if (payload.eventType === 'INSERT') {
+                        toast('New transaction initiated', { 
+                            icon: '🟡',
+                            style: {
+                                background: '#451a03',
+                                color: '#fef3c7',
+                                borderRadius: '12px'
+                            }
+                        });
+                    }
+                }
+             )
+             .subscribe();
+
         return () => {
-            supabase.removeChannel(channel);
+            supabase.removeChannel(ledgerChannel);
+            supabase.removeChannel(txChannel);
         };
     }, [user, fetchData]);
 
@@ -108,7 +157,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const sendFunds = async (data: InternalTransferRequest) => {
         try {
-            await walletApi.internalTransfer(data);
+            // Generate idempotency key if not provided
+            const idempotencyKey = data.idempotencyKey || `transfer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            await walletApi.internalTransfer({ ...data, idempotencyKey });
             toast.success(`Successfully sent ${data.amount} ${data.currency}`);
             await fetchData(); // Refresh balances immediately
         } catch (err: unknown) {
@@ -121,7 +172,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const withdraw = async (data: WithdrawalRequest) => {
         try {
-            await walletApi.withdraw(data);
+            // Generate idempotency key if not provided
+            const idempotencyKey = data.idempotencyKey || `withdraw_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            await walletApi.withdraw({ ...data, idempotencyKey });
             toast.success(`Successfully withdrew ${data.amount} ${data.currency}`);
             await fetchData();
         } catch (err: unknown) {

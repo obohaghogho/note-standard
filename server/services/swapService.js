@@ -2,6 +2,11 @@ const supabase = require("../config/supabase");
 const { v4: uuidv4 } = require("uuid");
 const fxService = require("./fxService");
 const commissionService = require("./commissionService");
+const logger = require("../utils/logger");
+
+// Rate Lock Cache: Stores quoted rates for 30 seconds
+const rateLocks = new Map();
+const LOCK_EXPIRY_MS = 30 * 1000; // 30 seconds
 
 /**
  * Get all available exchange rates
@@ -23,7 +28,7 @@ async function getAllExchangeRates() {
 }
 
 /**
- * Calculate swap preview (amount out, fees/spread)
+ * Calculate swap preview (Locked for 30 seconds)
  */
 async function calculateSwapPreview(
   fromCurrency,
@@ -31,14 +36,9 @@ async function calculateSwapPreview(
   amount,
   userPlan = "FREE",
 ) {
+  // REQUIREMENT: Integrated real pricing (CoinGecko via fxService)
   const marketPrice = await fxService.getRate(fromCurrency, toCurrency);
 
-  // Requirement 1: Transaction Spread System
-  // For a swap, we apply spread on the market price
-  // BUY: final_price = market_price + (market_price * spread_percentage)
-  // SELL: final_price = market_price - (market_price * spread_percentage)
-  // In a swap from A to B, it's like selling A for B.
-  // The rate we use is the "SELL" rate of A in terms of B.
   const spreadResult = await commissionService.calculateSpread(
     "SELL",
     marketPrice,
@@ -46,9 +46,8 @@ async function calculateSwapPreview(
   );
 
   const finalPrice = spreadResult.finalPrice;
-  const spreadAmountInQuote = spreadResult.spreadAmount * amount; // This is in toCurrency
+  const spreadAmountInQuote = spreadResult.spreadAmount * amount;
 
-  // We also have a swap fee (processing fee)
   const feeResult = await commissionService.calculateCommission(
     "SWAP",
     amount,
@@ -59,7 +58,10 @@ async function calculateSwapPreview(
   const amountToSwap = amount - feeResult.fee;
   const amountOut = amountToSwap * finalPrice;
 
-  return {
+  // REQUIREMENT: Lock rate for 30 seconds
+  const lockId = `lock_${uuidv4()}`;
+  const preview = {
+    lockId,
     fromCurrency,
     toCurrency,
     amountIn: amount,
@@ -76,7 +78,15 @@ async function calculateSwapPreview(
       spread_fee_equivalent: spreadAmountInQuote,
       total_fee_label: "Transaction Fees",
     },
+    expiresAt: Date.now() + LOCK_EXPIRY_MS,
   };
+
+  rateLocks.set(lockId, preview);
+
+  // Cleanup lock after expiry
+  setTimeout(() => rateLocks.delete(lockId), LOCK_EXPIRY_MS + 2000);
+
+  return preview;
 }
 
 /**
@@ -89,7 +99,35 @@ async function executeSwap(
   amount,
   idempotencyKey = null,
   userPlan = "FREE",
+  lockId = null, // Rate lock optional but highly recommended
 ) {
+  let preview;
+
+  // REQUIREMENT: Verify rate lock
+  if (lockId) {
+    const lockedPreview = rateLocks.get(lockId);
+    if (!lockedPreview) {
+      throw new Error("Rate lock expired or invalid. Please refresh price.");
+    }
+    if (
+      lockedPreview.fromCurrency !== fromCurrency ||
+      lockedPreview.toCurrency !== toCurrency ||
+      Math.abs(lockedPreview.amountIn - amount) > 0.0001
+    ) {
+      throw new Error("Lock parameters mismatch");
+    }
+    preview = lockedPreview;
+    rateLocks.delete(lockId); // Consume lock
+  } else {
+    // Fallback to fresh quote if no lock (less desirable)
+    preview = await calculateSwapPreview(
+      fromCurrency,
+      toCurrency,
+      amount,
+      userPlan,
+    );
+  }
+
   // Check for duplicate request
   if (idempotencyKey) {
     const { data: existing } = await supabase
@@ -106,7 +144,7 @@ async function executeSwap(
   // Get source wallet
   const { data: fromWallet, error: fromErr } = await supabase
     .from("wallets")
-    .select("id, balance")
+    .select("id, available_balance")
     .eq("user_id", userId)
     .eq("currency", fromCurrency)
     .single();
@@ -115,16 +153,18 @@ async function executeSwap(
     throw new Error(`${fromCurrency} wallet not found`);
   }
 
-  // Check balance
+  // Check balance (Use available_balance for ledger safety)
   const parseAmount = parseFloat(amount);
-  if (parseFloat(fromWallet.balance) < parseAmount) {
-    throw new Error(`Insufficient ${fromCurrency} balance`);
+  if (parseFloat(fromWallet.available_balance) < parseAmount) {
+    throw new Error(
+      `Insufficient ${fromCurrency} balance (Available: ${fromWallet.available_balance})`,
+    );
   }
 
   // Get or create destination wallet
   let { data: toWallet } = await supabase
     .from("wallets")
-    .select("id, balance")
+    .select("id")
     .eq("user_id", userId)
     .eq("currency", toCurrency)
     .single();
@@ -135,7 +175,6 @@ async function executeSwap(
       .insert({
         user_id: userId,
         currency: toCurrency,
-        balance: 0,
         address: uuidv4(),
       })
       .select()
@@ -145,113 +184,41 @@ async function executeSwap(
     toWallet = newWallet;
   }
 
-  // Calculate swap with monetization
-  const preview = await calculateSwapPreview(
+  const platformWalletId = await commissionService.getPlatformWalletId(
     fromCurrency,
-    toCurrency,
-    parseAmount,
-    userPlan,
   );
 
-  // Use a UUID for the database reference_id column
-  const referenceId = uuidv4();
-  // Create a human-readable ref for display/metadata
-  const displayRef = `swap_${referenceId.substring(0, 8)}`;
-
-  // Update logic to store spread and logging
-  // Note: Storing detailed pricing info in metadata since columns might not exist
-  const { error: txError } = await supabase.from("transactions").insert([
+  // REQUIREMENT: Store rate in transaction record (via Atomic RPC)
+  const { data: txId, error: txError } = await supabase.rpc(
+    "execute_swap_atomic",
     {
-      wallet_id: fromWallet.id,
-      type: "Digital Assets Purchase",
-      // display_label removed (not in schema), moved to metadata if needed
-      amount: parseAmount,
-      currency: fromCurrency,
-      status: "COMPLETED",
-      reference_id: referenceId,
-      fee: preview.fee,
-      // moved market_price, final_price, spread_amount, transaction_fee_breakdown to metadata
-      metadata: {
-        direction: "OUT",
-        swapTo: toCurrency,
-        rate: preview.finalPrice,
-        amountReceived: preview.amountOut,
-        idempotencyKey,
-        category: "digital_assets",
-        product_type: "digital_asset",
-        display_label: "Digital Assets Purchase",
+      p_user_id: userId,
+      p_from_wallet_id: fromWallet.id,
+      p_to_wallet_id: toWallet.id,
+      p_from_amount: parseAmount,
+      p_to_amount: preview.amountOut,
+      p_from_currency: fromCurrency,
+      p_to_currency: toCurrency,
+      p_rate: preview.finalPrice,
+      p_spread_amount: preview.spreadPercentage,
+      p_fee: preview.fee,
+      p_platform_wallet_id: platformWalletId,
+      p_idempotency_key: idempotencyKey,
+      p_metadata: {
+        lockId,
         market_price: preview.marketPrice,
         final_price: preview.finalPrice,
-        spread_amount: preview.spreadAmount,
-        transaction_fee_breakdown: preview.feeBreakdown,
-        display_ref: displayRef,
+        fee_breakdown: preview.feeBreakdown,
+        user_plan: userPlan,
       },
     },
-    {
-      wallet_id: toWallet.id,
-      type: "Digital Assets Purchase",
-      amount: preview.amountOut,
-      currency: toCurrency,
-      status: "COMPLETED",
-      reference_id: referenceId,
-      fee: 0,
-      metadata: {
-        direction: "IN",
-        swapFrom: fromCurrency,
-        rate: preview.finalPrice,
-        amountSent: parseAmount,
-        idempotencyKey,
-        category: "digital_assets",
-        product_type: "digital_asset",
-        display_label: "Digital Assets Purchase",
-        display_ref: displayRef,
-      },
-    },
-  ]);
+  );
 
-  if (txError) throw txError;
-
-  // Debit/Credit balances
-  await supabase.from("wallets").update({
-    balance: parseFloat(fromWallet.balance) - parseAmount,
-  }).eq("id", fromWallet.id);
-  await supabase.from("wallets").update({
-    balance: parseFloat(toWallet.balance) + preview.amountOut,
-  }).eq("id", toWallet.id);
-
-  // Log Revenues
-  // 1. Processing Fee
-  if (preview.fee > 0) {
-    await commissionService.logRevenue(
-      userId,
-      preview.fee,
-      fromCurrency,
-      "processing_fee",
-      null, // sourceTxId
-      { swap_ref: displayRef, reference_id: referenceId },
-    );
-  }
-  // 2. Spread Revenue (Spread is in terms of the rate difference)
-  // The actual revenue is (marketPrice - finalPrice) * amountSwapped in toCurrency
-  const spreadRevenue = (preview.marketPrice - preview.finalPrice) *
-    preview.netAmountSent;
-  if (spreadRevenue > 0) {
-    await commissionService.logRevenue(
-      userId,
-      spreadRevenue,
-      toCurrency,
-      "spread",
-      null, // sourceTxId
-      {
-        swap_ref: displayRef,
-        reference_id: referenceId,
-        market_price: preview.marketPrice,
-        final_price: preview.finalPrice,
-      },
-    );
+  if (txError) {
+    logger.error("Swap RPC Failed", { error: txError.message, userId });
+    throw new Error(txError.message || "Swap execution failed");
   }
 
-  // Notify user
   try {
     const { createNotification } = require("./notificationService");
     await createNotification({
@@ -262,12 +229,13 @@ async function executeSwap(
         `Successfully swapped ${parseAmount} ${fromCurrency} for ${preview.amountOut} ${toCurrency}`,
       link: "/dashboard/wallet",
     });
-  } catch (nErr) {}
+  } catch (nErr) {
+    logger.warn("Failed to send swap notification", { error: nErr.message });
+  }
 
   return {
     success: true,
-    reference: displayRef, // Return the human-readable reference
-    transactionId: referenceId, // Also return the UUID
+    transactionId: txId,
     fromCurrency,
     toCurrency,
     amountIn: parseAmount,

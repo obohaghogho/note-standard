@@ -16,7 +16,8 @@ import {
     History as HistoryIcon,
     Megaphone,
     Bot,
-    Monitor
+    Monitor,
+    Bug
 } from 'lucide-react';
 import { LanguageSelector } from '../common/LanguageSelector';
 import SecureImage from '../common/SecureImage';
@@ -80,6 +81,7 @@ export const AdminLayout = () => {
         { to: '/admin/broadcasts', icon: Megaphone, label: 'Broadcasts' },
         { to: '/admin/auto-reply', icon: Bot, label: 'Auto-Reply' },
         { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
+        { to: '/admin/debug', icon: Bug, label: 'Debug Tools' },
         { to: '/admin/settings', icon: Settings, label: 'Settings' },
     ];
 

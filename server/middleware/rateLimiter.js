@@ -35,3 +35,14 @@ exports.apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+/**
+ * Strict Withdrawal Limiter
+ * 3 requests per 1 hour to prevent rapid fund draining
+ */
+exports.withdrawalLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  message: { error: "Withdrawal limit exceeded. Please wait an hour." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});

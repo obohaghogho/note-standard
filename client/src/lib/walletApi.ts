@@ -109,12 +109,12 @@ export const walletApi = {
     // ========================================
 
     // Create card deposit
-    async depositCard(currency: string, amount: number): Promise<{ reference: string; checkoutUrl: string; amount: number; currency: string }> {
+    async depositCard(currency: string, amount: number, idempotencyKey?: string): Promise<{ reference: string; checkoutUrl: string; amount: number; currency: string }> {
         const headers = await getAuthHeader();
         const response = await fetch(`${API_base}/wallet/deposit/card`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ currency, amount })
+            body: JSON.stringify({ currency, amount, idempotencyKey })
         });
 
         const result = await response.json();
@@ -125,7 +125,7 @@ export const walletApi = {
     },
 
     // Create bank deposit
-    async depositBank(currency: string, amount: number): Promise<{
+    async depositBank(currency: string, amount: number, idempotencyKey?: string): Promise<{
         reference: string;
         amount: number;
         currency: string;
@@ -136,7 +136,7 @@ export const walletApi = {
         const response = await fetch(`${API_base}/wallet/deposit/bank`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ currency, amount })
+            body: JSON.stringify({ currency, amount, idempotencyKey })
         });
 
         const result = await response.json();
@@ -232,6 +232,8 @@ export const walletApi = {
         feePercentage: number;
         amountOut: number;
         netAmount: number;
+        lockId: string;
+        expiresAt: number;
     }> {
         const headers = await getAuthHeader();
         const response = await fetch(`${API_base}/wallet/swap/preview`, {
@@ -248,7 +250,7 @@ export const walletApi = {
     },
 
     // Execute swap
-    async executeSwap(fromCurrency: string, toCurrency: string, amount: number, idempotencyKey?: string): Promise<{
+    async executeSwap(fromCurrency: string, toCurrency: string, amount: number, idempotencyKey?: string, lockId?: string): Promise<{
         success: boolean;
         reference: string;
         fromCurrency: string;
@@ -262,7 +264,7 @@ export const walletApi = {
         const response = await fetch(`${API_base}/wallet/swap/execute`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ fromCurrency, toCurrency, amount, idempotencyKey })
+            body: JSON.stringify({ fromCurrency, toCurrency, amount, idempotencyKey, lockId })
         });
 
         const result = await response.json();

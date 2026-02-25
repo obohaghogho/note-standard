@@ -113,13 +113,11 @@ class PaystackProvider extends BaseProvider {
     if (event === "charge.success") status = "success";
     else if (event === "charge.failed") status = "failed";
 
-    let type = data.metadata?.product_type === "digital_asset"
-      ? "Digital Assets Purchase"
-      : (data.metadata?.type === "ad"
-        ? "AD_PAYMENT"
-        : (data.metadata?.type === "wallet" || data.metadata?.type === "deposit"
-          ? "DEPOSIT"
-          : event));
+    let type = (data.metadata?.type === "ad" || data.metadata?.type === "ads")
+      ? "AD_PAYMENT"
+      : (data.metadata?.type === "subscription"
+        ? "SUBSCRIPTION_PAYMENT"
+        : "DEPOSIT");
 
     return {
       type: type,

@@ -41,10 +41,6 @@ export const WalletBalanceCard: React.FC<WalletBalanceCardProps> = ({ totalBalan
                             </button>
                         </div>
                     </div>
-                    <div className="bg-green-500/20 text-green-300 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 backdrop-blur-sm border border-green-500/30">
-                        <TrendingUp size={12} />
-                        <span>+2.4%</span>
-                    </div>
                 </div>
 
                 <div className="flex gap-4 mt-6">
