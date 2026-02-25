@@ -7,6 +7,7 @@ const express = require("express");
 const router = express.Router();
 const webhookController = require("../controllers/payment/webhookController");
 const depositService = require("../services/depositService");
+const paymentService = require("../services/payment/paymentService");
 const supabase = require("../config/supabase");
 
 /**
@@ -66,7 +67,8 @@ router.get("/status/:reference", async (req, res) => {
   const { reference } = req.params;
 
   try {
-    const status = await depositService.getDepositStatus(reference);
+    // Proactively verify with provider if pending
+    const status = await paymentService.verifyPaymentStatus(reference);
 
     if (!status) {
       return res.status(404).json({ error: "Deposit not found" });
