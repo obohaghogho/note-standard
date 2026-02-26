@@ -10,7 +10,7 @@
     "client": "cd client && npm run dev",
     "server": "cd server && npm run dev",
     "build:client": "cd client && npm install && npm run build",
-    "prepare": "is-ci || husky"
+    "prepare": "echo 'Skipping husky in production'"
   },
   "dependencies": {
     "cors": "^2.8.5",
