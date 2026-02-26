@@ -22,10 +22,15 @@ export const ProtectedRoute = ({ allowedRoles }: ProtectedRouteProps) => {
         return <Navigate to="/login" replace />;
     }
 
-    // Role-based access: only check if allowedRoles is specified AND profile has loaded with a role
-    // If profile hasn't loaded yet or role is undefined, allow access - the admin page will handle loading state
+    // Account activation check: restrict access if account is not verified
+    // Exceptions: Allow access to the /complete-verification page itself
+    const isVerifying = window.location.pathname === '/complete-verification';
+    if (!profile?.is_verified && !isVerifying) {
+        return <Navigate to="/complete-verification" replace />;
+    }
+
+    // Role-based access
     if (allowedRoles && profile?.role && !allowedRoles.includes(profile.role)) {
-        // User has a profile but doesn't have required role
         return <Navigate to="/dashboard" replace />;
     }
 

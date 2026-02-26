@@ -6,6 +6,7 @@ import { Input } from '../components/common/Input';
 import { Card } from '../components/common/Card';
 import { supabase } from '../lib/supabase';
 import { supabaseSafe } from '../lib/supabaseSafe';
+import { API_URL } from '../lib/api';
 import { toast } from 'react-hot-toast';
 
 export const Login = () => {
@@ -93,22 +94,24 @@ export const Login = () => {
         
         setResetLoading(true);
         
-        // Use safeAuth wrapper
-        const res = await supabaseSafe(
-            'reset-password',
-            async () => supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: `${window.location.origin}/reset-password`,
-            })
-        );
+        try {
+            const response = await fetch(`${API_URL}/api/auth/forgot-password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
 
-        // If safeAuth returned null, it failed (and toasted). 
-        // If it returned empty object {}, it succeeded.
-        if (res) {
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Failed to send reset email');
+            
             setResetSent(true);
             toast.success('Password reset email sent. Please check your inbox.');
-        } 
-        
-        setResetLoading(false);
+        } catch (err: any) {
+            console.error('Password reset error:', err);
+            toast.error(err.message || 'Failed to send reset email. Please try again.');
+        } finally {
+            setResetLoading(false);
+        }
     };
 
 

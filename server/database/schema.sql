@@ -8,8 +8,10 @@ create table profiles (
   email text,
   full_name text,
   avatar_url text,
+  referrer_id uuid, -- Who referred this user
   preferences jsonb default '{"analytics": true, "offers": false, "partners": false}'::jsonb,
   terms_accepted_at timestamp with time zone,
+  is_verified boolean default false,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 

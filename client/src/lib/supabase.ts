@@ -33,9 +33,9 @@ export const supabase = createClient(supabaseUrl || '', supabaseKey || '', {
     auth: {
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: false, // Changed from true to avoid potential redirects/hangs
+        detectSessionInUrl: true, // Required for password recovery links to work
         storage: window.localStorage,
-        flowType: 'pkce'
+        flowType: 'implicit' // PKCE causes 500 errors on recovery endpoint
     },
     global: {
         headers: { 'x-application-name': 'note-standard' }
