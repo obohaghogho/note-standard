@@ -1,5 +1,5 @@
 import React from 'react';
-import { Mail, Phone, ArrowRight, X } from 'lucide-react';
+import { Mail, ArrowRight, X } from 'lucide-react';
 import { Button } from '../common/Button';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -7,14 +7,12 @@ interface VerificationModalProps {
     isOpen: boolean;
     onClose: () => void;
     email: string;
-    phone: string;
 }
 
 export const VerificationModal: React.FC<VerificationModalProps> = ({
     isOpen,
     onClose,
-    email,
-    phone
+    email
 }) => {
     return (
         <AnimatePresence>
@@ -49,9 +47,9 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                                 <Mail size={32} className="animate-bounce" />
                             </div>
 
-                            <h2 className="text-2xl font-bold text-white mb-3">Check your devices</h2>
+                            <h2 className="text-2xl font-bold text-white mb-3">Check your email</h2>
                             <p className="text-gray-400 mb-8 leading-relaxed">
-                                We've sent special verification codes to help keep your account secure. Please check:
+                                We've sent a special verification code to help keep your account secure. Please check:
                             </p>
 
                             <div className="space-y-4 mb-8">
@@ -64,16 +62,6 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                                         <p className="text-sm text-gray-300 truncate font-medium">{email}</p>
                                     </div>
                                 </div>
-
-                                <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 text-left group hover:border-primary/30 transition-all">
-                                    <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
-                                        <Phone size={20} />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="text-xs font-bold text-purple-400 uppercase tracking-widest mb-0.5">Phone Messages</p>
-                                        <p className="text-sm text-gray-300 truncate font-medium">{phone}</p>
-                                    </div>
-                                </div>
                             </div>
 
                             <Button 
@@ -81,12 +69,12 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                                 fullWidth 
                                 className="h-[56px] text-base font-bold rounded-2xl group shadow-lg shadow-primary/20"
                             >
-                                <span>I've Received the Codes</span>
+                                <span>I've Received the Code</span>
                                 <ArrowRight size={18} className="ml-2 group-hover:translate-x-1 transition-transform" />
                             </Button>
 
                             <p className="mt-6 text-xs text-gray-500 font-medium">
-                                Didn't get them? Check your spam folder or wait a few minutes.
+                                Didn't get it? Check your spam folder or wait a few minutes.
                             </p>
                         </div>
 

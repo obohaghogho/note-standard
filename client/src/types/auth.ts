@@ -14,6 +14,7 @@ export interface Profile {
     partners?: boolean;
     [key: string]: any;
   };
+  is_verified?: boolean;
   updated_at?: string;
 }
 

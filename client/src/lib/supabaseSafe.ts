@@ -252,7 +252,7 @@ export async function safeProfile(userId: string): Promise<Profile | null | 'ERR
     async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, username, full_name, avatar_url, role, bio, website")
+        .select("id, username, full_name, avatar_url, role, bio, website, is_verified")
         .eq("id", userId)
         .maybeSingle();
       if (error) throw error;
@@ -479,6 +479,7 @@ export async function ensureProfile(user: any): Promise<Profile | null> {
       username: (user.user_metadata?.username || user.email?.split('@')[0] || 'user') + '_' + user.id.slice(0, 5),
       full_name: user.user_metadata?.full_name || '',
       avatar_url: user.user_metadata?.avatar_url || '',
+      is_verified: user.user_metadata?.is_verified || false
     }, { onConflict: 'id' })
     .select()
     .single();

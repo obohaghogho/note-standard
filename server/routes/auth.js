@@ -3,7 +3,20 @@ const router = express.Router();
 const supabase = require("../config/supabase");
 const { authLimiter } = require("../middleware/rateLimiter");
 
-// signup/login rate limiting
+const { register, verifyOtp, verifyEmail, resendOtp, forgotPassword } = require(
+  "../controllers/authController",
+);
+const { validateRegistration } = require("../middleware/authValidator");
+
+// Custom Signup Flow
+router.post("/register", authLimiter, validateRegistration, register);
+router.post("/signup", authLimiter, validateRegistration, register); // Legacy alias
+router.post("/verify-otp", authLimiter, verifyOtp);
+router.get("/verify-email", authLimiter, verifyEmail);
+router.post("/resend-otp", authLimiter, resendOtp);
+router.post("/forgot-password", authLimiter, forgotPassword);
+
+// Apply rate limiting to critical paths
 router.use("/accept-terms", authLimiter);
 
 router.post("/sync-profile", (req, res) => {
