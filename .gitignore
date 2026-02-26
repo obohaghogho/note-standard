@@ -12,5 +12,6 @@ WALLET_README.md
 *task*
 *walkthrough*
 *debug*
+!client/src/pages/admin/AdminDebugTools.tsx
 result.txt
 *.txt
