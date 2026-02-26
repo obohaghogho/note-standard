@@ -1,7 +1,16 @@
-const PaystackProvider = require("./providers/PaystackProvider");
-const FlutterwaveProvider = require("./providers/FlutterwaveProvider");
-const KorapayProvider = require("./providers/KorapayProvider");
-const NowPaymentsProvider = require("./providers/NowPaymentsProvider");
+const path = require("path");
+const PaystackProvider = require(
+  path.join(__dirname, "providers", "PaystackProvider"),
+);
+const FlutterwaveProvider = require(
+  path.join(__dirname, "providers", "FlutterwaveProvider"),
+);
+const KorapayProvider = require(
+  path.join(__dirname, "providers", "KorapayProvider"),
+);
+const NowPaymentsProvider = require(
+  path.join(__dirname, "providers", "NowPaymentsProvider"),
+);
 const logger = require("../../utils/logger");
 
 class PaymentFactory {

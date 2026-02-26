@@ -16,6 +16,7 @@
   "type": "commonjs",
   "dependencies": {
     "@supabase/supabase-js": "^2.89.0",
+    "agora-access-token": "^2.0.4",
     "axios": "^1.13.5",
     "cloudinary": "^2.8.0",
     "cors": "^2.8.5",

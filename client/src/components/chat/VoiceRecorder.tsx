@@ -58,9 +58,15 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
                 setRecordingTime((prev) => prev + 1);
             }, 1000);
 
-        } catch (error) {
-            console.error('Error accessing microphone:', error);
-            toast.error('Could not access microphone. Please allow permissions.');
+        } catch (error: any) {
+            console.error('Error accessing microphone:', error.name, error.message);
+            if (error.name === 'NotAllowedError' || error.name === 'SecurityError') {
+                toast.error('Microphone access denied. Please enable permissions in your browser settings.');
+            } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+                toast.error('Microphone not found. Please connect a microphone and try again.');
+            } else {
+                toast.error('Could not access microphone. Ensure permissions are granted.');
+            }
         }
     };
 
