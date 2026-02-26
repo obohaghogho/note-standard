@@ -10,15 +10,15 @@
     "client": "cd client && npm run dev",
     "server": "cd server && npm run dev",
     "build:client": "cd client && npm install && npm run build",
-    "prepare": "husky"
+    "prepare": "node -e \"if (process.env.NODE_ENV !== 'production') { try { require('husky') } catch (e) { process.exit(0) } }\" && husky"
   },
   "dependencies": {
     "cors": "^2.8.5",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "husky": "^9.1.7"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2",
-    "husky": "^9.1.7"
+    "concurrently": "^8.2.2"
   },
   "workspaces": [
     "client",
