@@ -53,7 +53,6 @@ const BroadcastManager = lazyWithRetry(() => import('./pages/admin/BroadcastMana
 const AutoReplySettings = lazyWithRetry(() => import('./pages/admin/AutoReplySettings').then(m => m.AutoReplySettings), 'AutoReplySettings');
 const Analytics = lazyWithRetry(() => import('./pages/admin/Analytics').then(m => m.Analytics), 'Analytics');
 const AdminSettings = lazyWithRetry(() => import('./pages/admin/AdminSettings').then(m => m.AdminSettings), 'AdminSettings');
-const AdminDebugTools = lazyWithRetry(() => import('./pages/admin/AdminDebugTools').then(m => m.AdminDebugTools), 'AdminDebugTools');
 const ManageAds = lazyWithRetry(() => import('./pages/admin/ManageAds').then(m => m.ManageAds), 'ManageAds');
 
 const ChatRedirect = () => {
@@ -181,7 +180,6 @@ function App() {
                         <Route path="auto-reply" element={<AutoReplySettings />} />
                         <Route path="analytics" element={<Analytics />} />
                         <Route path="ads" element={<ManageAds />} />
-                        <Route path="debug" element={<AdminDebugTools />} />
                         <Route path="settings" element={<AdminSettings />} />
                         </Route>
                     </Route>

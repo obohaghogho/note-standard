@@ -9,14 +9,16 @@
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "client": "cd client && npm run dev",
     "server": "cd server && npm run dev",
-    "build:client": "cd client && npm install && npm run build"
+    "build:client": "cd client && npm install && npm run build",
+    "prepare": "husky"
   },
   "dependencies": {
-    "express": "^5.2.1",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "express": "^5.2.1"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "husky": "^9.1.7"
   },
   "workspaces": [
     "client",
