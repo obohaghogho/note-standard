@@ -295,6 +295,30 @@ io.on("connection", async (socket) => {
   });
 
   // --- WebRTC Signaling ---
+
+  // Compatibility Aliases (as requested by user)
+  socket.on("call-user", (data) => {
+    logger.info(`[WebRTC] Legacy Call Init from ${userId} to ${data.userId}`);
+    const senderName = socket.user?.user_metadata?.full_name ||
+      socket.user?.user_metadata?.username || socket.user?.email || "User";
+    const senderAvatar = socket.user?.user_metadata?.avatar_url;
+
+    io.to(data.userId).emit("incoming-call", {
+      from: userId,
+      fromName: senderName,
+      fromAvatar: senderAvatar,
+      signal: data.signalData || data.signal,
+      type: data.type || "voice",
+      conversationId: data.conversationId,
+    });
+  });
+
+  socket.on("answer-call", (data) => {
+    logger.debug(`[WebRTC] Legacy Answer from ${userId} to ${data.to}`);
+    io.to(data.to).emit("call-accepted", data.signal);
+  });
+
+  // Standard Events
   socket.on("call:init", ({ to, type, conversationId }) => {
     logger.info(`[WebRTC] Call Init from ${userId} to ${to} (${type})`);
     const senderName = socket.user?.user_metadata?.full_name ||
