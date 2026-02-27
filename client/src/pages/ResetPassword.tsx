@@ -55,14 +55,30 @@ export const ResetPassword = () => {
 
                  // Wait a moment for the auth flow to complete
                  setTimeout(async () => {
-                     const { data: { session: retrySession } } = await supabase.auth.getSession();
-                     if (retrySession) {
-                        setError(null);
-                        if (retrySession.user?.email) {
-                            setEmail(retrySession.user.email);
-                        }
-                     } else {
-                        setError('No active session found. Please try requesting a new password reset link.');
+                     try {
+                         const { data: { session: retrySession }, error: authError } = await supabase.auth.getSession();
+                         if (authError) throw authError;
+
+                         if (retrySession) {
+                            setError(null);
+                            if (retrySession.user?.email) {
+                                setEmail(retrySession.user.email);
+                            }
+                         } else {
+                            setError('No active session found. Please try requesting a new password reset link.');
+                         }
+                     } catch (err: any) {
+                         console.error('Session retrieval error:', err);
+                         if (err.message?.includes('LockManager')) {
+                             setError('Browser storage lock timeout. Please refresh the page and try again, or try opening in an incognito window.');
+                             
+                             // Attempt to force clear the lock from localStorage behind the scenes
+                             Object.keys(localStorage).forEach(key => {
+                                 if (key.includes('-auth-token')) localStorage.removeItem(key);
+                             });
+                         } else {
+                             setError(err.message || 'Error loading session.');
+                         }
                      }
                   }, 4000);
             }
