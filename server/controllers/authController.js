@@ -402,11 +402,17 @@ const forgotPassword = async (req, res) => {
       });
     }
 
-    const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
+    const clientUrl = process.env.CLIENT_URL || "https://notestandard.com";
+    const redirectTo = `${clientUrl}/reset-password`;
+
+    // DEBUG: Log the redirect URL to verify it's correct on Render
+    console.log(
+      `[AUTH-DEBUG] CLIENT_URL=${process.env.CLIENT_URL}, redirectTo=${redirectTo}`,
+    );
 
     // Leverage Supabase's built in email service to send the reset link
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${clientUrl}/reset-password`,
+      redirectTo,
     });
 
     if (error) {
