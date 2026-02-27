@@ -1,10 +1,16 @@
 const nodemailer = require("nodemailer");
 const logger = require("../utils/logger");
 
+// DEBUG: Temporary – verify Render loaded the SMTP env vars (remove after confirming)
+console.log("SMTP_HOST:", process.env.SMTP_HOST);
+console.log("SMTP_USER:", process.env.SMTP_USER);
+console.log("SMTP_PASS:", process.env.SMTP_PASS ? "***SET***" : "undefined");
+
 // Configure Nodemailer transporter
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
+  port: 587,
+  secure: false, // Required for port 587 (STARTTLS)
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
