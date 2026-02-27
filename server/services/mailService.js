@@ -6,16 +6,40 @@ console.log("SMTP_HOST:", process.env.SMTP_HOST);
 console.log("SMTP_USER:", process.env.SMTP_USER);
 console.log("SMTP_PASS:", process.env.SMTP_PASS ? "***SET***" : "undefined");
 
-// Configure Nodemailer transporter
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT || 587,
-  secure: process.env.SMTP_PORT == 465, // True if using port 465 (SSL), false for 587 (STARTTLS)
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+// Configure Nodemailer transporter with validation
+const getTransporter = () => {
+  const host = process.env.SMTP_HOST;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+
+  if (!host || !user || !pass) {
+    logger.error("SMTP Configuration missing", {
+      host: !!host,
+      user: !!user,
+      pass: !!pass,
+    });
+    // Return a dummy transporter that logs errors instead of crashing
+    return {
+      sendMail: () => {
+        throw new Error(
+          "SMTP not configured. Please check environment variables.",
+        );
+      },
+    };
+  }
+
+  return nodemailer.createTransport({
+    host,
+    port: process.env.SMTP_PORT || 587,
+    secure: process.env.SMTP_PORT == 465,
+    auth: { user, pass },
+    pool: true,
+    maxConnections: 5,
+    maxMessages: 100,
+  });
+};
+
+const transporter = getTransporter();
 
 /**
  * Send Verification Email

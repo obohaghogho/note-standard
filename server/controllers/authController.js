@@ -332,23 +332,34 @@ const resendOtp = async (req, res) => {
     }
 
     // Cooldown check (60s)
-    const diff = Math.floor(
-      (new Date() - new Date(record.last_otp_sent_at)) / 1000,
-    );
-    if (diff < 60) {
-      return res.status(429).json({
-        error: `Please wait ${60 - diff}s before resending.`,
-      });
+    const lastSent = record.last_otp_sent_at
+      ? new Date(record.last_otp_sent_at)
+      : null;
+    const now = new Date();
+
+    if (lastSent) {
+      const diff = Math.floor((now - lastSent) / 1000);
+      if (diff < 60) {
+        return res.status(429).json({
+          error: `Please wait ${60 - diff}s before resending.`,
+        });
+      }
     }
 
     const emailOtp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    await supabase.from("pending_verifications").update({
-      email_otp: emailOtp,
-      otp_expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-      last_otp_sent_at: new Date().toISOString(),
-      attempts: 0,
-    }).eq("id", record.id);
+    const { error: updateError } = await supabase.from("pending_verifications")
+      .update({
+        email_otp: emailOtp,
+        otp_expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+        last_otp_sent_at: now.toISOString(),
+        attempts: 0,
+      }).eq("id", record.id);
+
+    if (updateError) {
+      console.error("[Resend-DB-Error]:", updateError.message);
+      throw updateError;
+    }
 
     await sendVerificationEmail(
       email,
@@ -365,7 +376,7 @@ const resendOtp = async (req, res) => {
 
     res.json({ success: true, message: "New codes sent successfully." });
   } catch (err) {
-    console.error("[Resend Error]:", err.message);
+    console.error("[Resend Error]:", err.message, err.stack);
     res.status(500).json({ error: "Failed to resend codes." });
   }
 };
