@@ -9,8 +9,8 @@ console.log("SMTP_PASS:", process.env.SMTP_PASS ? "***SET***" : "undefined");
 // Configure Nodemailer transporter
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
-  port: 587,
-  secure: false, // Required for port 587 (STARTTLS)
+  port: process.env.SMTP_PORT || 587,
+  secure: process.env.SMTP_PORT == 465, // True if using port 465 (SSL), false for 587 (STARTTLS)
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
