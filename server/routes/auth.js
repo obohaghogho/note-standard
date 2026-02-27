@@ -6,6 +6,7 @@ const { authLimiter } = require("../middleware/rateLimiter");
 const { register, verifyOtp, verifyEmail, resendOtp, forgotPassword } = require(
   "../controllers/authController",
 );
+const cors = require("cors");
 const { validateRegistration } = require("../middleware/authValidator");
 
 // Custom Signup Flow
@@ -14,7 +15,8 @@ router.post("/signup", authLimiter, validateRegistration, register); // Legacy a
 router.post("/verify-otp", authLimiter, verifyOtp);
 router.get("/verify-email", authLimiter, verifyEmail);
 router.post("/resend-otp", authLimiter, resendOtp);
-router.post("/forgot-password", authLimiter, forgotPassword);
+// Allow any origin for forgot password to prevent silent CORS preflight failures on custom domains
+router.post("/forgot-password", cors(), authLimiter, forgotPassword);
 
 // Apply rate limiting to critical paths
 router.use("/accept-terms", authLimiter);
