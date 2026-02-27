@@ -136,7 +136,6 @@ function App() {
                     <Route path="/login" element={<Login />} />
                     <Route path="/signup" element={<Signup />} />
                     <Route path="/verify" element={<Verify />} />
-                    <Route path="/complete-verification" element={<CompleteVerification />} />
                     <Route path="/terms" element={<TermsPage />} />
                     <Route path="/privacy" element={<PrivacyPage />} />
                     <Route path="/reset-password" element={<ResetPassword />} />
@@ -150,8 +149,8 @@ function App() {
                     {/* Alias for wallet path */}
                     <Route path="/wallet" element={<WalletPage />} />
 
-                    {/* Protected Routes */}
                     <Route element={<ProtectedRoute />}>
+                        <Route path="/complete-verification" element={<CompleteVerification />} />
                         {/* User Dashboard */}
                         <Route path="/dashboard" element={<DashboardLayout />}>
                         <Route index element={<DashboardHome />} />

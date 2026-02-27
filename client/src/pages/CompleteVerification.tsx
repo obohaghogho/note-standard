@@ -25,12 +25,27 @@ export const CompleteVerification = () => {
     const emailInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
+        // Redirect to dashboard if already verified
         if (profile?.is_verified) {
             navigate('/dashboard');
+            return;
         }
+
+        // Secondary guard: If session is lost for some reason, go to login
+        if (!user) {
+            navigate('/login');
+            return;
+        }
+
         // Auto-focus email field
-        setTimeout(() => emailInputRef.current?.focus(), 500);
-    }, [profile, navigate]);
+        const timer = setTimeout(() => emailInputRef.current?.focus(), 500);
+        return () => clearTimeout(timer);
+    }, [profile, user, navigate]);
+
+    const handleSignOut = async () => {
+        await signOut();
+        navigate('/login');
+    };
 
     const handleResend = async () => {
         if (!user?.email || loading) return;
@@ -99,7 +114,7 @@ export const CompleteVerification = () => {
 
             <div className="w-full max-w-md relative">
                 <button 
-                    onClick={() => signOut()}
+                    onClick={handleSignOut}
                     className="inline-flex items-center text-gray-500 hover:text-white mb-8 transition-all group"
                 >
                     <ArrowLeft size={16} className="mr-2 group-hover:-translate-x-1 transition-transform" />
