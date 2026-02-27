@@ -1,9 +1,7 @@
 const bcrypt = require("bcryptjs");
 const axios = require("axios");
 const supabase = require("../config/supabase");
-const { sendVerificationEmail, sendPasswordResetEmail } = require(
-  "../services/mailService",
-);
+const { sendVerificationEmail } = require("../services/mailService");
 
 /**
  * Handles the initial registration request
@@ -379,8 +377,7 @@ const verifyEmail = (req, res) => {
 };
 
 /**
- * Custom forgot password - bypasses Supabase's broken email delivery
- * Uses Supabase Admin API to generate a reset link, then sends it via our SMTP
+ * Standard forgot password - using Supabase direct email delivery
  */
 const forgotPassword = async (req, res) => {
   try {
@@ -405,38 +402,23 @@ const forgotPassword = async (req, res) => {
       });
     }
 
-    // Generate a password reset link using Supabase Admin API
     const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
-    const { data: linkData, error: linkError } = await supabase.auth.admin
-      .generateLink({
-        type: "recovery",
-        email: email,
-        options: {
-          redirectTo: `${clientUrl}/reset-password`,
-        },
-      });
 
-    if (linkError) {
+    // Leverage Supabase's built in email service to send the reset link
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${clientUrl}/reset-password`,
+    });
+
+    if (error) {
       console.error(
-        `[AUTH-ERROR] Failed to generate reset link: ${linkError.message}`,
+        `[AUTH-ERROR] Failed to send reset email: ${error.message}`,
       );
-      throw linkError;
+      throw error;
     }
 
-    // The generated link contains the token - extract and build our own URL
-    // linkData.properties.action_link contains the full Supabase action link
-    const resetLink = linkData.properties.action_link;
-
-    // Send via our own SMTP (Mailtrap)
-    const sent = await sendPasswordResetEmail(email, resetLink);
-    if (!sent) {
-      console.error(`[AUTH-ERROR] SMTP failed to send reset email to ${email}`);
-      return res.status(500).json({
-        error: "Failed to send reset email. Please try again later.",
-      });
-    }
-
-    console.log(`[AUTH-INFO] Password reset email sent to ${email}`);
+    console.log(
+      `[AUTH-INFO] Password reset email sent via Supabase to ${email}`,
+    );
     res.json({
       success: true,
       message: "If an account exists, a reset email has been sent.",
