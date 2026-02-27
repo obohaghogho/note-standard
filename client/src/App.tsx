@@ -27,8 +27,6 @@ const PrivacyPage = lazyWithRetry(() => import('./pages/PrivacyPage').then(m => 
 const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword').then(m => m.ResetPassword), 'ResetPassword');
 const PaymentSuccess = lazyWithRetry(() => import('./pages/PaymentSuccess').then(m => m.PaymentSuccess), 'PaymentSuccess');
 const PaymentCancel = lazyWithRetry(() => import('./pages/PaymentCancel').then(m => m.PaymentCancel), 'PaymentCancel');
-const Verify = lazyWithRetry(() => import('./pages/Verify').then(m => m.Verify), 'Verify');
-const CompleteVerification = lazyWithRetry(() => import('./pages/CompleteVerification'), 'CompleteVerification');
 
 // Dashboard pages
 const DashboardHome = lazyWithRetry(() => import('./pages/dashboard/DashboardHome').then(m => m.DashboardHome), 'DashboardHome');
@@ -135,7 +133,6 @@ function App() {
                     <Route path="/" element={<LandingPage />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/signup" element={<Signup />} />
-                    <Route path="/verify" element={<Verify />} />
                     <Route path="/terms" element={<TermsPage />} />
                     <Route path="/privacy" element={<PrivacyPage />} />
                     <Route path="/reset-password" element={<ResetPassword />} />
@@ -150,7 +147,6 @@ function App() {
                     <Route path="/wallet" element={<WalletPage />} />
 
                     <Route element={<ProtectedRoute />}>
-                        <Route path="/complete-verification" element={<CompleteVerification />} />
                         {/* User Dashboard */}
                         <Route path="/dashboard" element={<DashboardLayout />}>
                         <Route index element={<DashboardHome />} />

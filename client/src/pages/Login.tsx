@@ -5,7 +5,6 @@ import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 import { Card } from '../components/common/Card';
 import { supabase } from '../lib/supabase';
-import { supabaseSafe } from '../lib/supabaseSafe';
 import { API_URL } from '../lib/api';
 import { toast } from 'react-hot-toast';
 
@@ -33,46 +32,42 @@ export const Login = () => {
 
 
 
+    const [resendLoading, setResendLoading] = React.useState(false);
+    const [needsVerification, setNeedsVerification] = React.useState(false);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setError('');
+        setNeedsVerification(false);
 
         try {
             console.log('Initiating Supabase sign in...');
             
-            // Use safeAuth wrapper which handles 429s and toasts
-            const data = await supabaseSafe<any>(
-                'auth-login',
-                async () => {
-                    const response = await supabase.auth.signInWithPassword({
-                        email,
-                        password,
-                    });
-                    
-                    if (response.error) {
-                        // Throw to let safeAuth handle it or catch it here
-                        throw response.error;
-                    }
-                    return response.data;
+            const { data, error: authError } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            });
+
+            if (authError) {
+                if (authError.message.includes('Email not confirmed')) {
+                    setNeedsVerification(true);
+                    setError('Please confirm your email address before signing in.');
+                } else {
+                    throw authError;
                 }
-            );
+                return;
+            }
 
             if (!data?.user) {
-                // If data is null it means safeAuth caught an error but it didn't return data.
-                // We should check why. If we're here and no error was set, provide a default.
-                if (!error) {
-                    setError('Invalid email or password. Please check your credentials and try again.');
-                    toast.error('Login failed. Please check your credentials.');
-                }
+                setError('Invalid email or password. Please check your credentials and try again.');
+                toast.error('Login failed. Please check your credentials.');
                 setLoading(false);
                 return;
             }
 
-            const { user } = data as any;
-            console.log('Login successful', user.id);
+            console.log('Login successful', data.user.id);
             toast.success('Successfully logged in!');
-
             navigate('/dashboard');
 
         } catch (err: any) {
@@ -82,6 +77,26 @@ export const Login = () => {
             toast.error(errMsg);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleResendVerification = async () => {
+        if (!email) return;
+        setResendLoading(true);
+        try {
+            const { error } = await supabase.auth.resend({
+                type: 'signup',
+                email,
+                options: {
+                    emailRedirectTo: `${window.location.origin}/login`
+                }
+            });
+            if (error) throw error;
+            toast.success('Verification link resent! Check your inbox.');
+        } catch (err: any) {
+            toast.error(err.message || 'Failed to resend link');
+        } finally {
+            setResendLoading(false);
         }
     };
 
@@ -138,6 +153,16 @@ export const Login = () => {
                         {error && (
                             <div className="bg-red-500/10 border border-red-500/20 text-red-500 px-4 py-3 rounded-lg text-sm flex flex-col gap-2">
                                 <p>{error}</p>
+                                {needsVerification && (
+                                    <button
+                                        type="button"
+                                        onClick={handleResendVerification}
+                                        disabled={resendLoading}
+                                        className="text-xs text-primary hover:text-primary/80 font-bold underline text-left disabled:opacity-50"
+                                    >
+                                        {resendLoading ? 'Resending...' : 'Resend Verification Link'}
+                                    </button>
+                                )}
                                 {(error.includes('timeout') || error.includes('Network Error')) && (
                                     <button
                                         type="button"
