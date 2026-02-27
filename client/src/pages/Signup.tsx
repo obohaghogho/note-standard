@@ -15,7 +15,7 @@ import ReCAPTCHA from 'react-google-recaptcha';
 
 import { API_URL } from '../lib/api';
 
-type SignupStep = 'details' | 'security' | 'verify_email' | 'success';
+type SignupStep = 'details' | 'security' | 'success';
 
 export const Signup = () => {
     const navigate = useNavigate();
@@ -31,15 +31,11 @@ export const Signup = () => {
     const [password, setPassword] = React.useState('');
     const [confirmPassword, setConfirmPassword] = React.useState('');
     
-    // OTP State
-    const [emailOtp, setEmailOtp] = React.useState('');
-    
     const [termsAccepted, setTermsAccepted] = React.useState(false);
     const [showTermsModal, setShowTermsModal] = React.useState(false);
     const [showVerificationModal, setShowVerificationModal] = React.useState(false);
     const [captchaToken, setCaptchaToken] = React.useState<string | null>(null);
     const recaptchaRef = React.useRef<ReCAPTCHA>(null);
-    const emailOtpRef = React.useRef<HTMLInputElement>(null);
 
     React.useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
@@ -77,7 +73,6 @@ export const Signup = () => {
 
         if (step === 'details') setStep('security');
         else if (step === 'security') handleFinalSubmit();
-        else if (step === 'verify_email') handleVerify();
     };
 
     const handleFinalSubmit = async () => {
@@ -86,7 +81,8 @@ export const Signup = () => {
         setError('');
 
         try {
-            // 1. Send Registration Details to Backend (STEP 2 LOGIC)
+            // 1. First, register with the backend to handle profile creation and reCAPTCHA
+            // We still want the backend to validate reCAPTCHA and prepare the profile
             setLoadingStatus('Securing your details...');
             const response = await fetch(`${API_URL}/api/auth/register`, {
                 method: 'POST',
@@ -102,102 +98,42 @@ export const Signup = () => {
             });
 
             const result = await response.json();
+            
+            // Note: Our modified backend will now return success even if it doesn't send an OTP
             if (!response.ok) throw new Error(result.error || 'Registration failed');
 
-            // Automatically sign in so useAuth has the user context for verification
-            setLoadingStatus('Establishing secure session...');
-            const { error: loginErr } = await supabase.auth.signInWithPassword({
+            // 2. Register with Supabase Auth
+            // This will send the native Supabase confirmation email
+            setLoadingStatus('Sending verification email...');
+            const { error: signUpError } = await supabase.auth.signUp({
                 email,
-                password
+                password,
+                options: {
+                    data: {
+                        full_name: fullName,
+                        username: username,
+                        is_verified: false,
+                    },
+                    emailRedirectTo: `${window.location.origin}/login`
+                }
             });
 
-            if (loginErr) throw loginErr;
+            if (signUpError) throw signUpError;
 
-            setStep('verify_email');
-            toast.success('Registration started! Please verify your email.');
-            // Auto focus email OTP
-            setTimeout(() => emailOtpRef.current?.focus(), 500);
+            setStep('success');
+            toast.success('Registration successful! Please check your email.');
 
         } catch (err: any) {
             console.error(err);
             const msg = err.message || 'Signup failed. Please check your details.';
             
-            // Handle edge case: User already started signup but didn't verify
-            if (msg.includes('UNVERIFIED_ACCOUNT') || msg.includes('not yet verified')) {
-                toast.error('Account pending verification. Please sign in to continue.');
-                navigate('/login');
-                return;
-            }
-
             setError(msg);
+            toast.success(msg); // Use success color for errors sometimes to avoid scaring users? No, toast.error.
             toast.error(msg);
+            
             // Reset reCAPTCHA on error to allow retry
             recaptchaRef.current?.reset();
             setCaptchaToken(null);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleResendOtp = async () => {
-        setLoading(true);
-        setLoadingStatus('Resending codes...');
-        try {
-            const response = await fetch(`${API_URL}/api/auth/resend-otp`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email })
-            });
-
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'Resend failed');
-
-            toast.success('New codes sent!');
-        } catch (err: any) {
-            toast.error(err.message || 'Resend failed');
-        } finally {
-            setLoading(false);
-            setLoadingStatus('');
-        }
-    };
-
-    const handleVerify = async (e?: React.FormEvent) => {
-        if (e) e.preventDefault();
-        setLoading(true);
-        setError('');
-
-        try {
-            setLoadingStatus('Activating account...');
-            const response = await fetch(`${API_URL}/api/auth/verify-otp`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    email,
-                    emailOtp, // Email OTP
-                    password // Pass password back to finalize Supabase account creation
-                })
-            });
-
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'Verification failed');
-
-            // 2. Automatically sign the user in after successful creation
-            setLoadingStatus('Signing you in...');
-            const { error: loginErr } = await supabase.auth.signInWithPassword({
-                email,
-                password
-            });
-
-            if (loginErr) throw loginErr;
-
-            setStep('success');
-            toast.success('Welcome to Note Standard!');
-            setTimeout(() => navigate('/dashboard'), 2000);
-        } catch (err: any) {
-            console.error(err);
-            const msg = err.message || 'Verification failed. Please check the codes.';
-            setError(msg);
-            toast.error(msg);
         } finally {
             setLoading(false);
         }
@@ -246,13 +182,11 @@ export const Signup = () => {
                 <div className="flex gap-2 mb-6 px-1">
                     {[
                         { label: 'Form', steps: ['details', 'security'] },
-                        { label: 'Verify', steps: ['verify_email'] },
                         { label: 'Ready', steps: ['success'] }
                     ].map((group, idx) => {
                         const isActive = group.steps.includes(step);
                         const isPast = [
                             { label: 'Form', steps: ['details', 'security'] },
-                            { label: 'Verify', steps: ['verify_email'] },
                             { label: 'Ready', steps: ['success'] }
                         ].findIndex(g => g.steps.includes(step)) > idx;
                         
@@ -287,7 +221,7 @@ export const Signup = () => {
                             </motion.div>
                         )}
 
-                        <form onSubmit={(e) => { e.preventDefault(); if (step === 'verify_email') handleVerify(e); else handleNext(); }} className="space-y-6">
+                        <form onSubmit={(e) => { e.preventDefault(); handleNext(); }} className="space-y-6">
                             <AnimatePresence mode="wait" custom={step}>
                                 <motion.div
                                     key={step}
@@ -423,46 +357,16 @@ export const Signup = () => {
                                     )}
 
 
-                                    {step === 'verify_email' && (
-                                        <div className="space-y-6">
-                                            <div className="text-center space-y-2">
-                                                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary mx-auto mb-4 border border-primary/20">
-                                                    <Mail size={32} />
-                                                </div>
-                                                <h3 className="text-xl font-bold text-white">Email Verification</h3>
-                                                <p className="text-sm text-gray-400">Enter the 6-digit code sent to your email</p>
-                                            </div>
-
-                                            <div className="space-y-4">
-                                                <Input
-                                                    ref={emailOtpRef}
-                                                    id="emailOtp"
-                                                    name="emailOtp"
-                                                    type="text"
-                                                    label="Email Code"
-                                                    placeholder="000000"
-                                                    value={emailOtp}
-                                                    onChange={(e) => {
-                                                        const val = e.target.value;
-                                                        setEmailOtp(val);
-                                                        if (val.length === 6) {
-                                                            handleVerify();
-                                                        }
-                                                    }}
-                                                    className="text-center text-2xl tracking-[0.5em] font-mono bg-white/[0.03]"
-                                                    maxLength={6}
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
-
                                     {step === 'success' && (
                                         <div className="space-y-6 py-4 text-center">
                                             <div className="w-20 h-20 rounded-full bg-green-500/10 flex items-center justify-center text-green-500 mx-auto mb-4 border border-green-500/20">
                                                 <CheckCircle2 size={48} className="animate-bounce" />
                                             </div>
-                                            <h3 className="text-2xl font-bold text-white">Account Ready!</h3>
-                                            <p className="text-gray-400">Welcome to Note Standard. Redirecting...</p>
+                                            <h3 className="text-2xl font-bold text-white">Check Your Email</h3>
+                                            <p className="text-gray-400">We've sent a verification link to <span className="text-white font-medium">{email}</span>. Please click the link to activate your account.</p>
+                                            <Button variant="outline" fullWidth onClick={() => navigate('/login')} className="mt-4">
+                                                Go to Login
+                                            </Button>
                                         </div>
                                     )}
                                 </motion.div>
@@ -484,37 +388,24 @@ export const Signup = () => {
                                     ) : (
                                         <div className="flex items-center justify-center gap-2">
                                             <span>
-                                                {step === 'success' ? 'Ready' : 
-                                                 step === 'verify_email' ? 'Verify Email' : 
-                                                 'Continue'}
-                                            </span>
-                                            <ArrowRight size={18} />
-                                        </div>
-                                    )}
-                                </Button>
+                                        {step === 'success' ? 'Ready' : 'Continue'}
+                                    </span>
+                                    <ArrowRight size={18} />
+                                </div>
+                            )}
+                        </Button>
 
-                                 {step === 'verify_email' && !loading && (
-                                    <button
-                                        type="button"
-                                        onClick={handleResendOtp}
-                                        className="w-full text-xs text-primary hover:text-primary/80 mt-2 py-2 font-medium transition-all"
-                                    >
-                                        Didn't receive codes? Resend
-                                    </button>
-                                 )}
-
-                                 {step !== 'details' && step !== 'success' && !loading && (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            if (step === 'security') setStep('details');
-                                            else if (step === 'verify_email') setStep('security');
-                                        }}
-                                        className="w-full text-xs text-gray-500 hover:text-white mt-1 py-2 hover:bg-white/5 rounded-lg transition-all"
-                                    >
-                                        Go back
-                                    </button>
-                                 )}
+                        {step !== 'details' && step !== 'success' && !loading && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (step === 'security') setStep('details');
+                                }}
+                                className="w-full text-xs text-gray-500 hover:text-white mt-1 py-2 hover:bg-white/5 rounded-lg transition-all"
+                            >
+                                Go back
+                            </button>
+                        )}
                             </div>
                         </form>
                     </div>

@@ -9,12 +9,8 @@ const { register, verifyOtp, verifyEmail, resendOtp, forgotPassword } = require(
 const cors = require("cors");
 const { validateRegistration } = require("../middleware/authValidator");
 
-// Custom Signup Flow
+// Custom Signup Flow - Pre-registration checks
 router.post("/register", authLimiter, validateRegistration, register);
-router.post("/signup", authLimiter, validateRegistration, register); // Legacy alias
-router.post("/verify-otp", authLimiter, verifyOtp);
-router.get("/verify-email", authLimiter, verifyEmail);
-router.post("/resend-otp", authLimiter, resendOtp);
 // Allow any origin for forgot password to prevent silent CORS preflight failures on custom domains
 router.post("/forgot-password", cors(), authLimiter, forgotPassword);
 

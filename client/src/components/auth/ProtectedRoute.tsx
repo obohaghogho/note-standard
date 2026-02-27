@@ -22,11 +22,12 @@ export const ProtectedRoute = ({ allowedRoles }: ProtectedRouteProps) => {
         return <Navigate to="/login" replace />;
     }
 
-    // Account activation check: restrict access if account is not verified
-    // Exceptions: Allow access to the /complete-verification page itself
-    const isVerifying = window.location.pathname === '/complete-verification';
-    if (!profile?.is_verified && !isVerifying) {
-        return <Navigate to="/complete-verification" replace />;
+    // Account activation check: restrict access if email is not confirmed
+    if (!user?.email_confirmed_at) {
+        // If not confirmed, we can either redirect to a special message page 
+        // or just stay on login with a message.
+        // For now, let's redirect to login if they somehow bypass it.
+        return <Navigate to="/login" replace />;
     }
 
     // Role-based access
