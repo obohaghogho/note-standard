@@ -181,9 +181,9 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
     };
 
-    const fetchAgoraToken = async (channelName: string, uid: number) => {
+    const fetchAgoraToken = async (channelName: string, uid: string | number) => {
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/agora/token?channelName=${channelName}&uid=${uid}`);
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/agora-token?channel=${channelName}&uid=${uid}`);
             const data = await response.json();
             return data.token;
         } catch (error) {
@@ -212,15 +212,16 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const stream = new MediaStream(tracks.map(t => t.getMediaStreamTrack()));
             setLocalStream(stream);
 
-            // Fetch token from backend
-            const token = await fetchAgoraToken(callState.conversationId, 0);
+            // Fetch token from backend using user.id as UID
+            const uid = user?.id || '0';
+            const token = await fetchAgoraToken(callState.conversationId, uid);
             if (!token) {
                 toast.error('Failed to get security token for call');
                 cleanup();
                 return;
             }
 
-            await agoraClient.join(AGORA_APP_ID, callState.conversationId, token, 0); 
+            await agoraClient.join(AGORA_APP_ID, callState.conversationId, token, uid); 
             await agoraClient.publish(tracks);
 
             setCallState(prev => ({ ...prev, status: 'connected' }));
@@ -281,14 +282,15 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
                 const agoraClient = initClient();
                 try {
-                    const token = await fetchAgoraToken(callState.conversationId, 0);
+                    const uid = user?.id || '0';
+                    const token = await fetchAgoraToken(callState.conversationId, uid);
                     if (!token) {
                         toast.error('Security token failed');
                         cleanup();
                         return;
                     }
 
-                    await agoraClient.join(AGORA_APP_ID, callState.conversationId, token, 0);
+                    await agoraClient.join(AGORA_APP_ID, callState.conversationId, token, uid);
                     if (localAudioTrack.current) await agoraClient.publish(localAudioTrack.current);
                     if (localVideoTrack.current && callState.type === 'video') {
                         await agoraClient.publish(localVideoTrack.current);

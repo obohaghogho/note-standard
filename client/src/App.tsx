@@ -62,6 +62,9 @@ const ChatRedirect = () => {
 
 function App() {
   useEffect(() => {
+    // Debug Agora App ID access
+    console.log('Agora App ID:', import.meta.env.VITE_AGORA_APP_ID);
+
     // Global error handler for uncaught errors
     const handleError = (event: ErrorEvent) => {
       console.error('Global error caught:', event.error);
