@@ -96,7 +96,8 @@ app.use("/api/webhooks", require(path.join(__dirname, "routes", "webhooks")));
 app.use("/webhook", require(path.join(__dirname, "routes", "webhooks"))); // Alias for payment providers
 app.use("/api/payment", require(path.join(__dirname, "routes", "payment")));
 app.use("/api/media", require(path.join(__dirname, "routes", "media")));
-app.use("/api/agora", require(path.join(__dirname, "routes", "agora")));
+app.use("/api/agora-token", require(path.join(__dirname, "routes", "agora")));
+app.use("/api/agora", require(path.join(__dirname, "routes", "agora"))); // Legacy alias
 
 // ─── Serve Frontend (Production) ──────────────────────────────
 // Serve static files from the React app
