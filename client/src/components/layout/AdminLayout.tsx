@@ -124,6 +124,13 @@ export const AdminLayout = () => {
                 </nav>
 
                 <div className="sidebar-footer">
+                    <NavLink
+                        to="/dashboard"
+                        className="nav-item bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary border border-primary/20 mb-2 transition-all duration-200"
+                    >
+                        <Monitor size={20} />
+                        {sidebarOpen && <span className="font-medium">User Dashboard</span>}
+                    </NavLink>
                     <button className="logout-btn" onClick={handleLogout}>
                         <LogOut size={20} />
                         {sidebarOpen && <span>Logout</span>}
