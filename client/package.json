@@ -6,7 +6,7 @@
   "scripts": {
     "start": "vite preview",
     "dev": "vite --host",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && cross-env NODE_OPTIONS=--max-old-space-size=4096 vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "preview": "vite preview"
@@ -18,7 +18,7 @@
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@types/react-google-recaptcha": "^2.1.9",
-    "@vitejs/plugin-react": "^5.1.1",
+    "@vitejs/plugin-react": "^4.3.4",
     "agora-rtc-sdk-ng": "^4.24.2",
     "autoprefixer": "^10.4.23",
     "axios": "^1.13.2",
@@ -45,7 +45,7 @@
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.2.1",
     "typescript": "~5.9.3",
-    "vite": "^7.2.4",
+    "vite": "^6.2.0",
     "zustand": "^5.0.9"
   },
   "devDependencies": {

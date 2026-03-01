@@ -234,6 +234,11 @@ export const Settings = () => {
         } catch (e) {
             console.error(e);
             toast.error('Failed to update language');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const handleDownloadData = async () => {
         if (!user) return;
         setSaving(true);
