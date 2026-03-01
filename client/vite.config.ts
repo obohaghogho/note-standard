@@ -18,6 +18,8 @@ export default defineConfig({
   build: {
     sourcemap: false,
     chunkSizeWarningLimit: 1600,
+    target: 'esnext',
+    minify: 'esbuild',
   },
   preview: {
     host: '0.0.0.0',
