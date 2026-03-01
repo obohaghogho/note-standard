@@ -39,16 +39,35 @@ export const Affiliates = () => {
   useEffect(() => {
     fetchData();
 
-    // Subscribe to real-time updates for affiliate referrals
-    const channel = supabase
-      .channel('affiliate_updates')
+    if (!user?.id) return;
+
+    // 1. Subscribe to real-time updates for affiliate referrals
+    const referralsChannel = supabase
+      .channel('affiliate_referrals_updates')
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'affiliate_referrals',
-          filter: `referrer_user_id=eq.${user?.id}`
+          filter: `referrer_user_id=eq.${user.id}`
+        },
+        () => {
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    // 2. Subscribe to real-time updates for commission rate in admin_settings
+    const settingsChannel = supabase
+      .channel('affiliate_settings_updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'admin_settings',
+          filter: 'key=eq.affiliate_percentage'
         },
         () => {
           fetchData();
@@ -57,7 +76,8 @@ export const Affiliates = () => {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(referralsChannel);
+      supabase.removeChannel(settingsChannel);
     };
   }, [user?.id]);
 
