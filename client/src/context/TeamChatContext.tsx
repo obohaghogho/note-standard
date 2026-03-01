@@ -33,7 +33,7 @@ interface TeamChatContextValue {
   members: TeamMember[];
   loading: boolean;
   connected: boolean;
-  sendMessage: (content: string, metadata?: Record<string, any>) => Promise<void>;
+  sendMessage: (content: string, metadata?: Record<string, any>, type?: import('../types/teams').MessageType) => Promise<void>;
   shareNote: (noteId: string, permission?: 'read' | 'edit') => Promise<void>;
   loadMoreMessages: () => Promise<void>;
   hasMore: boolean;
@@ -224,8 +224,8 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
   // ====================================
 
   const sendMessage = useCallback(
-    async (content: string, metadata?: Record<string, any>) => {
-      if (!user || !content.trim()) return;
+    async (content: string, metadata?: Record<string, any>, type: import('../types/teams').MessageType = 'text') => {
+      if (!user || (!content.trim() && !metadata?.image_url && !metadata?.audio_url)) return;
 
       // Cooldown check (prevent spam)
       if (sendCooldownRef.current) {
@@ -245,7 +245,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
         team_id: teamId,
         sender_id: user.id,
         content,
-        message_type: 'text',
+        message_type: type,
         metadata: metadata ?? {},
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -267,6 +267,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
       try {
         const req: SendMessageRequest = {
           content,
+          message_type: type,
           metadata,
         };
 
