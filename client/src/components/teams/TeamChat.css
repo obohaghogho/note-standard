@@ -533,3 +533,24 @@
   object-fit: cover;
   display: block;
 }
+/* ====================================
+   AUDIO MESSAGES
+   ==================================== */
+
+.team-chat__message-audio-container {
+  margin: 4px 0 8px 0;
+  display: flex;
+  align-items: center;
+  min-width: 250px;
+}
+
+.team-chat__message-audio-container audio {
+  width: 100%;
+  height: 36px;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.2));
+}
+
+/* Custom coloring for audio controls in own messages */
+.team-chat__message--own .team-chat__message-audio-container audio {
+  filter: invert(1) hue-rotate(180deg) brightness(1.2) drop-shadow(0 2px 8px rgba(0, 0, 0, 0.2));
+}

@@ -668,6 +668,30 @@ export async function uploadTeamImage(teamId: string, file: File): Promise<strin
 }
 
 /**
+ * Upload an audio note for a team
+ */
+export async function uploadTeamAudio(teamId: string, audioBlob: Blob): Promise<string | null> {
+  return safeCall<string | null>(`upload-team-audio-${teamId}`, async () => {
+    // Webm is default for most navigator.mediaDevices audio recording, though some do mp4
+    const fileExt = audioBlob.type.includes('mp4') ? 'mp4' : 'webm';
+    const fileName = `${teamId}/audio/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('team-assets')
+      .upload(fileName, audioBlob, { contentType: audioBlob.type });
+
+    if (uploadError) throw uploadError;
+
+    // Get public URL
+    const { data } = supabase.storage
+      .from('team-assets')
+      .getPublicUrl(fileName);
+
+    return data.publicUrl;
+  }, { minDelay: 500 });
+}
+
+/**
  * Delete a specific team message (soft delete)
  */
 export async function deleteTeamMessage(teamId: string, messageId: string): Promise<boolean> {
@@ -730,6 +754,7 @@ export default {
   getTeamMessages,
   sendMessage,
   uploadTeamImage,
+  uploadTeamAudio,
   markMessagesRead,
 
   // Shared Notes

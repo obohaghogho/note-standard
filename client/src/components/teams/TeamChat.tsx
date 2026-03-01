@@ -24,9 +24,10 @@ import {
   Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { uploadTeamImage } from '../../lib/teamsApi';
+import { uploadTeamImage, uploadTeamAudio } from '../../lib/teamsApi';
 import type { TeamMessage } from '../../types/teams';
 import SecureImage from '../common/SecureImage';
+import { VoiceRecorder } from '../chat/VoiceRecorder';
 import { MediaPreviewModal } from '../chat/MediaPreviewModal';
 import { AnimatePresence } from 'framer-motion';
 import { ConfirmationModal } from '../common/ConfirmationModal';
@@ -50,6 +51,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [showRecorder, setShowRecorder] = useState(false);
   
   // Confirmation state
   const [confirmDelete, setConfirmDelete] = useState<{
@@ -171,7 +173,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
 
       if (!imageUrl) throw new Error('Upload failed');
 
-      await sendMessage('', { image_url: imageUrl });
+      await sendMessage('', { image_url: imageUrl }, 'image');
       toast.success('Image sent', { id: loadingToast });
     } catch (err: any) {
       console.error('[TeamChat] Image upload error:', err);
@@ -179,6 +181,37 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
     } finally {
       setIsSending(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  // ====================================
+  // AUDIO UPLOAD HANDLER
+  // ====================================
+
+  const handleSendAudio = async (audioBlob: Blob) => {
+    if (isSending) return;
+
+    if (audioBlob.size > 10 * 1024 * 1024) {
+      toast.error('Audio note must be less than 10MB');
+      return;
+    }
+
+    setIsSending(true);
+    const loadingToast = toast.loading('Sending voice note...');
+
+    try {
+      const audioUrl = await uploadTeamAudio(teamId, audioBlob);
+
+      if (!audioUrl) throw new Error('Upload failed');
+
+      await sendMessage('', { audio_url: audioUrl }, 'audio');
+      toast.success('Voice note sent', { id: loadingToast });
+      setShowRecorder(false);
+    } catch (err: any) {
+      console.error('[TeamChat] Audio upload error:', err);
+      toast.error('Failed to send voice note', { id: loadingToast });
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -315,6 +348,15 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
                 />
               </div>
             )}
+            {msg.message_type === 'audio' && msg.metadata?.audio_url && (
+              <div className="team-chat__message-audio-container mt-1 mb-2">
+                <audio 
+                  controls 
+                  src={msg.metadata.audio_url} 
+                  className={`max-w-[200px] sm:max-w-[250px] h-10 ${isOwn ? 'invert brightness-0 contrast-200 sepia-0 hue-rotate-180 drop-shadow-md' : 'drop-shadow-sm'}`} 
+                />
+              </div>
+            )}
             {msg.content && <div className="team-chat__message-text">{msg.content}</div>}
             <div className="team-chat__message-time">
               {msg.isOptimistic && <Loader2 size={12} className="animate-spin mr-1" />}
@@ -433,18 +475,27 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
 
       {/* Input Area */}
       <div className="team-chat__input-container">
-        <textarea
-          id="team-chat-input"
-          name="message"
-          ref={inputRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyPress={handleKeyPress}
-          placeholder="Type a message..."
-          className="team-chat__input"
-          rows={1}
-          disabled={isSending || !connected}
-        />
+        {showRecorder ? (
+            <div className="flex-1">
+                <VoiceRecorder 
+                    onSend={handleSendAudio} 
+                    onCancel={() => setShowRecorder(false)} 
+                />
+            </div>
+        ) : (
+            <textarea
+              id="team-chat-input"
+              name="message"
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Type a message..."
+              className="team-chat__input"
+              rows={1}
+              disabled={isSending || !connected}
+            />
+        )}
         <div className="team-chat__input-actions">
           <Button
             size="sm"
@@ -461,6 +512,16 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
           >
             {isSending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
           </Button>
+          {!showRecorder && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowRecorder(true)}
+              disabled={isSending || !connected}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-mic"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+            </Button>
+          )}
         </div>
       </div>
       <AnimatePresence>

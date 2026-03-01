@@ -3,7 +3,7 @@
 // ====================================
 
 export type TeamRole = 'owner' | 'admin' | 'member';
-export type MessageType = 'text' | 'note_share' | 'system' | 'image';
+export type MessageType = 'text' | 'note_share' | 'system' | 'image' | 'audio';
 export type NotePermission = 'read' | 'edit';
 
 export interface Team {
