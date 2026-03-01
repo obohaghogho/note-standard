@@ -86,8 +86,19 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             localVideoTrack.current = null;
         }
 
-        setLocalStream(null);
-        setRemoteStream(null);
+        // Clean up any stray MediaStream tracks to prevent hardware locking and duplicate handles
+        setLocalStream((prev) => {
+            if (prev) {
+                prev.getTracks().forEach((track) => track.stop());
+            }
+            return null;
+        });
+        setRemoteStream((prev) => {
+            if (prev) {
+                prev.getTracks().forEach((track) => track.stop());
+            }
+            return null;
+        });
 
         if (client.current) {
             try {
@@ -148,13 +159,15 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             initClient();
             
             let tracks: any[] = [];
+            const audioConfig = { AEC: true, ANS: true, AGC: true };
+
             if (type === 'video') {
-                const [audio, video] = await AgoraRTC.createMicrophoneAndCameraTracks();
+                const [audio, video] = await AgoraRTC.createMicrophoneAndCameraTracks(audioConfig, undefined);
                 localAudioTrack.current = audio;
                 localVideoTrack.current = video;
                 tracks = [audio, video];
             } else {
-                const audio = await AgoraRTC.createMicrophoneAudioTrack();
+                const audio = await AgoraRTC.createMicrophoneAudioTrack(audioConfig);
                 localAudioTrack.current = audio;
                 tracks = [audio];
             }
@@ -198,13 +211,15 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const agoraClient = initClient();
             
             let tracks: any[] = [];
+            const audioConfig = { AEC: true, ANS: true, AGC: true };
+
             if (callState.type === 'video') {
-                const [audio, video] = await AgoraRTC.createMicrophoneAndCameraTracks();
+                const [audio, video] = await AgoraRTC.createMicrophoneAndCameraTracks(audioConfig, undefined);
                 localAudioTrack.current = audio;
                 localVideoTrack.current = video;
                 tracks = [audio, video];
             } else {
-                const audio = await AgoraRTC.createMicrophoneAudioTrack();
+                const audio = await AgoraRTC.createMicrophoneAudioTrack(audioConfig);
                 localAudioTrack.current = audio;
                 tracks = [audio];
             }
@@ -291,8 +306,13 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     }
 
                     await agoraClient.join(AGORA_APP_ID, callState.conversationId, token, uid);
-                    if (localAudioTrack.current) await agoraClient.publish(localAudioTrack.current);
-                    if (localVideoTrack.current && callState.type === 'video') {
+                    
+                    const publishedTracks = agoraClient.localTracks;
+                    
+                    if (localAudioTrack.current && !publishedTracks.includes(localAudioTrack.current)) {
+                        await agoraClient.publish(localAudioTrack.current);
+                    }
+                    if (localVideoTrack.current && callState.type === 'video' && !publishedTracks.includes(localVideoTrack.current)) {
                         await agoraClient.publish(localVideoTrack.current);
                     }
                     setCallState(prev => ({ ...prev, status: 'connected' }));
