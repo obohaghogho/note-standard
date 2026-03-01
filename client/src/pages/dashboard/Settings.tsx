@@ -15,7 +15,7 @@ import { Toggle } from '../../components/common/Toggle';
 import { User, Camera, Save, Loader2, Megaphone, BadgeCheck, Shield, Lock, Download, Trash2, Activity as ActivityIcon, MessageSquare, Globe } from 'lucide-react';
 
 export const Settings = () => {
-    const { user, profile: authProfile, isPro } = useAuth();
+    const { user, profile: authProfile, isPro, signOut } = useAuth();
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
 
@@ -234,6 +234,74 @@ export const Settings = () => {
         } catch (e) {
             console.error(e);
             toast.error('Failed to update language');
+    const handleDownloadData = async () => {
+        if (!user) return;
+        setSaving(true);
+        try {
+            const { data: sessionData } = await supabase.auth.getSession();
+            const token = sessionData.session?.access_token;
+            
+            const response = await fetch(`${API_URL}/api/auth/export`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) throw new Error('Export failed');
+
+            const data = await response.json();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `note-standard-data-${user.id.slice(0, 8)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            toast.success('Data exported successfully');
+        } catch (error) {
+            console.error('Export error:', error);
+            toast.error('Failed to export data');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        if (!user) return;
+        
+        const confirmed = window.confirm(
+            "ARE YOU SURE? This will permanently delete your account, all your notes, and your subscription. This action CANNOT BE UNDONE."
+        );
+        
+        if (!confirmed) return;
+
+        setSaving(true);
+        try {
+            const { data: sessionData } = await supabase.auth.getSession();
+            const token = sessionData.session?.access_token;
+            
+            const response = await fetch(`${API_URL}/api/auth/delete-account`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Delete failed');
+            }
+
+            toast.success('Account deleted. We\'re sorry to see you go.');
+            await signOut();
+            navigate('/', { replace: true });
+        } catch (error: any) {
+            console.error('Delete error:', error);
+            toast.error(error.message || 'Failed to delete account');
         } finally {
             setSaving(false);
         }
@@ -385,7 +453,12 @@ export const Settings = () => {
                                     <h4 className="font-medium text-white">Export Your Data</h4>
                                     <p className="text-sm text-gray-400">Download a complete copy of your notes and profile information in JSON format.</p>
                                 </div>
-                                <Button variant="secondary" className="w-full sm:w-auto gap-2 border-white/10 hover:bg-white/10 flex-shrink-0">
+                                <Button 
+                                    onClick={handleDownloadData} 
+                                    loading={saving} 
+                                    variant="secondary" 
+                                    className="w-full sm:w-auto gap-2 border-white/10 hover:bg-white/10 flex-shrink-0"
+                                >
                                     <Download size={16} /> Download JSON
                                 </Button>
                             </div>
@@ -395,7 +468,11 @@ export const Settings = () => {
                                     <h4 className="font-medium text-red-400">Delete Account</h4>
                                     <p className="text-sm text-gray-400">Permanently remove your account and all associated data. This action cannot be undone.</p>
                                 </div>
-                                <Button className="w-full sm:w-auto gap-2 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border-red-500/50 flex-shrink-0">
+                                <Button 
+                                    onClick={handleDeleteAccount} 
+                                    loading={saving} 
+                                    className="w-full sm:w-auto gap-2 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border-red-500/50 flex-shrink-0"
+                                >
                                     <Trash2 size={16} /> Delete Account
                                 </Button>
                             </div>

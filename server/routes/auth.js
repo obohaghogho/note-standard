@@ -59,9 +59,86 @@ router.post("/accept-terms", async (req, res) => {
       message: "Terms accepted successfully",
       terms_accepted_at: new Date().toISOString(),
     });
+// Export User Data (GDPR Compliance)
+router.post("/export", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+
+    // Fetch all user data in parallel
+    const [profileRes, notesRes, subRes] = await Promise.all([
+      supabase.from("profiles").select("*").eq("id", user.id).single(),
+      supabase.from("notes").select("*").eq("owner_id", user.id),
+      supabase.from("subscriptions").select("*").eq("user_id", user.id).single(),
+    ]);
+
+    const exportData = {
+      account: {
+        id: user.id,
+        email: user.email,
+        created_at: user.created_at,
+      },
+      profile: profileRes.data || {},
+      subscription: subRes.data || {},
+      notes: notesRes.data || [],
+      exported_at: new Date().toISOString(),
+    };
+
+    res.json(exportData);
   } catch (err) {
-    console.error("Error in accept-terms endpoint:", err);
-    res.status(500).json({ error: "Internal server error" });
+    console.error("Export error:", err);
+    res.status(500).json({ error: "Failed to export data" });
+  }
+});
+
+// Delete Account (Right to be Forgotten)
+router.delete("/delete-account", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+
+    console.log(`[Auth] Deleting account for user: ${user.id}`);
+
+    // Delete application data first
+    // Note: If database has ON DELETE CASCADE on foreign keys, 
+    // we only need to delete the profile. But for safety:
+    await Promise.all([
+      supabase.from("notes").delete().eq("owner_id", user.id),
+      supabase.from("subscriptions").delete().eq("user_id", user.id),
+      supabase.from("profiles").delete().eq("id", user.id),
+    ]);
+
+    // Finally delete from Supabase Auth
+    // Use service role if available or admin API
+    const { error: deleteError } = await supabase.auth.admin.deleteUser(user.id);
+    
+    if (deleteError) {
+      console.error("Supabase Auth delete error:", deleteError);
+      return res.status(500).json({ error: "Failed to delete auth identity" });
+    }
+
+    res.json({ success: true, message: "Account deleted successfully" });
+  } catch (err) {
+    console.error("Delete account error:", err);
+    res.status(500).json({ error: "Failed to delete account" });
   }
 });
 
