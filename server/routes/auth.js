@@ -59,6 +59,14 @@ router.post("/accept-terms", async (req, res) => {
       message: "Terms accepted successfully",
       terms_accepted_at: new Date().toISOString(),
     });
+  } catch (err) {
+    console.error("Error updating terms acceptance:", err);
+    return res.status(500).json({
+      error: "Failed to update terms acceptance",
+    });
+  }
+});
+
 // Export User Data (GDPR Compliance)
 router.post("/export", async (req, res) => {
   try {
@@ -68,7 +76,9 @@ router.post("/export", async (req, res) => {
     }
 
     const token = authHeader.split(" ")[1];
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const { data: { user }, error: authError } = await supabase.auth.getUser(
+      token,
+    );
 
     if (authError || !user) {
       return res.status(401).json({ error: "Invalid token" });
@@ -78,7 +88,8 @@ router.post("/export", async (req, res) => {
     const [profileRes, notesRes, subRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
       supabase.from("notes").select("*").eq("owner_id", user.id),
-      supabase.from("subscriptions").select("*").eq("user_id", user.id).single(),
+      supabase.from("subscriptions").select("*").eq("user_id", user.id)
+        .single(),
     ]);
 
     const exportData = {
@@ -109,7 +120,9 @@ router.delete("/delete-account", async (req, res) => {
     }
 
     const token = authHeader.split(" ")[1];
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const { data: { user }, error: authError } = await supabase.auth.getUser(
+      token,
+    );
 
     if (authError || !user) {
       return res.status(401).json({ error: "Invalid token" });
@@ -118,7 +131,7 @@ router.delete("/delete-account", async (req, res) => {
     console.log(`[Auth] Deleting account for user: ${user.id}`);
 
     // Delete application data first
-    // Note: If database has ON DELETE CASCADE on foreign keys, 
+    // Note: If database has ON DELETE CASCADE on foreign keys,
     // we only need to delete the profile. But for safety:
     await Promise.all([
       supabase.from("notes").delete().eq("owner_id", user.id),
@@ -128,8 +141,10 @@ router.delete("/delete-account", async (req, res) => {
 
     // Finally delete from Supabase Auth
     // Use service role if available or admin API
-    const { error: deleteError } = await supabase.auth.admin.deleteUser(user.id);
-    
+    const { error: deleteError } = await supabase.auth.admin.deleteUser(
+      user.id,
+    );
+
     if (deleteError) {
       console.error("Supabase Auth delete error:", deleteError);
       return res.status(500).json({ error: "Failed to delete auth identity" });
