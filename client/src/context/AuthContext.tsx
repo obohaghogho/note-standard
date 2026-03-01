@@ -154,6 +154,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     initAuth();
 
+    // Global Realtime Subscriptions for Profile and Billing
+    let profileChannel: any = null;
+    let subscriptionChannel: any = null;
+
+    const setupSubscriptions = (userId: string) => {
+      // 1. Subscribe to profile changes
+      profileChannel = supabase
+        .channel(`public:profiles:${userId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'profiles',
+            filter: `id=eq.${userId}`
+          },
+          () => {
+            console.log('[Auth] Profile changed, syncing...');
+            syncUserData(userId, undefined, true);
+          }
+        )
+        .subscribe();
+
+      // 2. Subscribe to subscription changes
+      subscriptionChannel = supabase
+        .channel(`public:subscriptions:${userId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'subscriptions',
+            filter: `user_id=eq.${userId}`
+          },
+          () => {
+            console.log('[Auth] Subscription changed, syncing...');
+            syncUserData(userId, undefined, true);
+          }
+        )
+        .subscribe();
+    };
+
     const { data: { subscription: authListener } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (!isMounted.current) return;
       
@@ -162,6 +204,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const currentUser = newSession?.user ?? null;
       
       if (event === 'SIGNED_OUT') {
+        // Cleanup subscriptions
+        if (profileChannel) supabase.removeChannel(profileChannel);
+        if (subscriptionChannel) supabase.removeChannel(subscriptionChannel);
+        
         setSession(null);
         setUser(null);
         setProfile(null);
@@ -174,16 +220,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSession(newSession);
       setUser(currentUser);
 
-      // Background sync on relevant events
-      // Optimization: SIGNED_IN event often fires during signup flow; 
-      // if it's the very first session, we might want to skip or delay 
-      // to avoid competing with registration logic.
-      if (currentUser && (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION')) {
-        // Only sync if we don't already have profile data to avoid double-fetching during signup
-        if (!profile || event === 'USER_UPDATED') {
-          syncUserData(currentUser.id, currentUser).catch(err => {
-            console.error('[Auth] Background sync on event failed:', err);
-          });
+      if (currentUser) {
+        // Setup/Refresh subscriptions if user is logged in
+        if (!profileChannel) {
+          setupSubscriptions(currentUser.id);
+        }
+
+        if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
+          if (!profile || event === 'USER_UPDATED') {
+            syncUserData(currentUser.id, currentUser).catch(err => {
+              console.error('[Auth] Background sync on event failed:', err);
+            });
+          }
         }
       }
     });
@@ -191,6 +239,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       isMounted.current = false;
       authListener.unsubscribe();
+      if (profileChannel) supabase.removeChannel(profileChannel);
+      if (subscriptionChannel) supabase.removeChannel(subscriptionChannel);
     };
   }, [syncUserData]);
 
