@@ -23,7 +23,7 @@ export interface Subscription {
   user_id: string;
   status: 'active' | 'canceled' | 'past_due' | 'trialing' | 'incomplete';
   plan: string;
-  plan_tier: 'free' | 'pro' | 'team' | 'enterprise';
+  plan_tier: 'free' | 'pro' | 'team' | 'business' | 'enterprise';
   current_period_end: string;
   stripe_customer_id?: string;
   created_at?: string;

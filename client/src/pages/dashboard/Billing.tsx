@@ -7,21 +7,15 @@ import { useSearchParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../lib/supabase';
 import { supabaseSafe } from '../../lib/supabaseSafe';
+import { useAuth } from '../../context/AuthContext';
 
-interface Subscription {
-    id: string;
-    plan_tier: string;
-    status: string;
-    created_at: string;
-    stripe_customer_id?: string;
-}
+// Removed local Subscription interface as it is now provided by useAuth
 
 export const Billing = () => {
+    const { isPro, subscription, refreshProfile } = useAuth();
     const [searchParams] = useSearchParams();
     const [loading, setLoading] = useState(true);
-    const [isPro, setIsPro] = useState(false);
     const [processing, setProcessing] = useState(false);
-    const [subscription, setSubscription] = useState<Subscription | null>(null);
     const [showDetails, setShowDetails] = useState(false);
 
     const fetchingRef = useRef(false);
@@ -53,22 +47,6 @@ export const Billing = () => {
             const token = sessionData.session?.access_token;
             if (!token) return; 
 
-            // Fetch Subscription Status
-            const response = await fetch(`${API_URL}/api/subscription/status`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (!response.ok) throw new Error('Failed to fetch subscription status');
-
-            const data = await response.json();
-            
-            if (isMounted.current) {
-                if (data.subscription?.status === 'active' && data.subscription?.plan_tier === 'pro') {
-                    setIsPro(true);
-                    setSubscription(data.subscription);
-                }
-            }
-
             // Fetch Exchange Rate
             try {
                 const rateResponse = await fetch(`${API_URL}/api/subscription/rate`, {
@@ -82,7 +60,7 @@ export const Billing = () => {
                 console.error('Failed to fetch exchange rate', err);
             }
             
-            return data;
+            return { success: true };
         });
         
         if (isMounted.current) {
@@ -108,11 +86,10 @@ export const Billing = () => {
 
             const dataRes = await response.json();
             if (dataRes.success) {
-                setIsPro(true);
                 toast.success('Successfully upgraded to Pro!');
                 // Remove query params to clean URL
                 window.history.replaceState({}, '', '/dashboard/billing');
-                checkSubscriptionStatus(); // Refresh status
+                refreshProfile(); // Refresh global auth state
             } else {
                 toast.error('Verification failed. Please contact support.');
             }
@@ -171,8 +148,7 @@ export const Billing = () => {
             const dataRes = await response.json();
             if (dataRes.success) {
                 toast.success('Subscription canceled');
-                setIsPro(false);
-                setSubscription(null);
+                refreshProfile(); // Refresh global auth state
                 setShowDetails(false);
             } else {
                 toast.error('Failed to cancel subscription');
@@ -213,8 +189,8 @@ export const Billing = () => {
 
             <div className="grid md:grid-cols-3 gap-6">
                 {/* Free Plan */}
-                <Card className={`p-6 border-2 ${subscription?.plan_tier === 'FREE' || !isPro ? 'border-primary bg-primary/5' : 'border-white/5'} transition-colors relative overflow-hidden`}>
-                    {(!isPro && subscription?.plan_tier !== 'BUSINESS') && (
+                <Card className={`p-6 border-2 ${subscription?.plan_tier === 'free' || !isPro ? 'border-primary bg-primary/5' : 'border-white/5'} transition-colors relative overflow-hidden`}>
+                    {(!isPro && subscription?.plan_tier !== 'business') && (
                         <div className="absolute top-0 right-0 bg-primary text-white text-xs font-bold px-3 py-1 rounded-bl-lg">
                             CURRENT
                         </div>
@@ -249,8 +225,8 @@ export const Billing = () => {
                 </Card>
 
                 {/* Pro Plan */}
-                <Card className={`p-6 border-2 ${subscription?.plan_tier === 'PRO' ? 'border-primary bg-primary/5' : 'border-white/5 relative group'}`}>
-                    {subscription?.plan_tier === 'PRO' && (
+                <Card className={`p-6 border-2 ${subscription?.plan_tier === 'pro' ? 'border-primary bg-primary/5' : 'border-white/5 relative group'}`}>
+                    {subscription?.plan_tier === 'pro' && (
                         <div className="absolute top-0 right-0 bg-primary text-white text-xs font-bold px-3 py-1 rounded-bl-lg">
                             ACTIVE
                         </div>
@@ -285,7 +261,7 @@ export const Billing = () => {
                             </li>
                         </ul>
 
-                        {subscription?.plan_tier === 'PRO' ? (
+                        {subscription?.plan_tier === 'pro' ? (
                             <Button variant="secondary" fullWidth onClick={handleManageSubscription} disabled={processing}>
                                 {processing ? <Loader2 className="animate-spin" /> : 'Manage'}
                             </Button>
@@ -302,8 +278,8 @@ export const Billing = () => {
                 </Card>
 
                 {/* Business Plan */}
-                <Card className={`p-6 border-2 ${subscription?.plan_tier === 'BUSINESS' ? 'border-primary bg-primary/5' : 'border-white/5 relative group'}`}>
-                    {subscription?.plan_tier === 'BUSINESS' && (
+                <Card className={`p-6 border-2 ${subscription?.plan_tier === 'business' ? 'border-primary bg-primary/5' : 'border-white/5 relative group'}`}>
+                    {subscription?.plan_tier === 'business' && (
                         <div className="absolute top-0 right-0 bg-primary text-white text-xs font-bold px-3 py-1 rounded-bl-lg">
                             ENTERPRISE
                         </div>
@@ -338,7 +314,7 @@ export const Billing = () => {
                             </li>
                         </ul>
 
-                        {subscription?.plan_tier === 'BUSINESS' ? (
+                        {subscription?.plan_tier === 'business' ? (
                             <Button variant="secondary" fullWidth onClick={handleManageSubscription} disabled={processing}>
                                 {processing ? <Loader2 className="animate-spin" /> : 'Manage'}
                             </Button>
@@ -376,11 +352,11 @@ export const Billing = () => {
                             <Calendar size={18} className="text-gray-400" />
                             <div>
                                 <p className="text-sm text-gray-400">Member since</p>
-                                <p className="font-medium">{new Date(subscription.created_at).toLocaleDateString('en-US', {
+                                <p className="font-medium">{subscription.created_at ? new Date(subscription.created_at).toLocaleDateString('en-US', {
                                     year: 'numeric',
                                     month: 'long',
                                     day: 'numeric'
-                                })}</p>
+                                }) : 'N/A'}</p>
                             </div>
                         </div>
 
