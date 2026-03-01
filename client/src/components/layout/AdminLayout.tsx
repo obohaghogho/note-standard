@@ -101,6 +101,20 @@ export const AdminLayout = () => {
                 </div>
 
                 <nav className="sidebar-nav">
+                    <NavLink
+                        to="/dashboard"
+                        className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                        style={{ 
+                            marginBottom: '1rem',
+                            background: 'rgba(56, 189, 248, 0.1)', 
+                            color: '#38bdf8', 
+                            border: '1px solid rgba(56, 189, 248, 0.2)' 
+                        }}
+                    >
+                        <Monitor size={20} />
+                        {sidebarOpen && <span>User Dashboard</span>}
+                    </NavLink>
+
                     {navItems.map((item) => (
                         <NavLink
                             key={item.to}
@@ -124,13 +138,6 @@ export const AdminLayout = () => {
                 </nav>
 
                 <div className="sidebar-footer">
-                    <NavLink
-                        to="/dashboard"
-                        className="nav-item bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary border border-primary/20 mb-2 transition-all duration-200"
-                    >
-                        <Monitor size={20} />
-                        {sidebarOpen && <span className="font-medium">User Dashboard</span>}
-                    </NavLink>
                     <button className="logout-btn" onClick={handleLogout}>
                         <LogOut size={20} />
                         {sidebarOpen && <span>Logout</span>}
