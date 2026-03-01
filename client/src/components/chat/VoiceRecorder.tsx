@@ -21,7 +21,15 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
 
     const startRecording = async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    sampleRate: 48000,
+                    channelCount: 1
+                }
+            });
             
             // Choose the best supported mime type
             const types = [
@@ -76,8 +84,14 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
             if (timerRef.current) clearInterval(timerRef.current);
             setIsRecording(false);
 
-            // Stop all tracks to release mic
-            mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+            // Stop all tracks to release mic completely
+            if (mediaRecorderRef.current.stream) {
+                mediaRecorderRef.current.stream.getTracks().forEach(track => {
+                    track.stop();
+                    mediaRecorderRef.current?.stream.removeTrack(track); // Clean reference
+                });
+            }
+            mediaRecorderRef.current = null;
         }
     };
 
