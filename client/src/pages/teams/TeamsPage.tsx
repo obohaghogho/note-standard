@@ -106,7 +106,16 @@ const TeamContent: React.FC<{
                  {(myRole === 'owner' || myRole === 'admin') && (
                    <label className="teams-page__avatar-edit-overlay cursor-pointer">
                      <Camera size={16} />
-                     <input type="file" className="hidden" accept="image/*" onChange={handleAvatarChange} disabled={isUploading} />
+                                           <input 
+                        id="team-avatar-upload"
+                        name="team-avatar-upload"
+                        type="file" 
+                        className="hidden" 
+                        accept="image/*" 
+                        onChange={handleAvatarChange} 
+                        disabled={isUploading} 
+                      />
+
                    </label>
                  )}
               </div>
