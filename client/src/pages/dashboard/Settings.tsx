@@ -521,6 +521,8 @@ export const Settings = () => {
                                         )}
                                     </button>
                                     <input
+                                        id="avatar-upload"
+                                        name="avatar-upload"
                                         ref={fileInputRef}
                                         type="file"
                                         accept="image/*"

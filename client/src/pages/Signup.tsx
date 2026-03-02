@@ -326,6 +326,8 @@ export const Signup = () => {
                                                 <label className="flex items-start gap-3 cursor-pointer group">
                                                     <div className="relative flex items-center mt-0.5">
                                                         <input 
+                                                            id="terms-accepted"
+                                                            name="terms-accepted"
                                                             type="checkbox" 
                                                             className="sr-only"
                                                             checked={termsAccepted}

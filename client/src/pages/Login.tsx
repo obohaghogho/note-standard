@@ -213,6 +213,7 @@ export const Login = () => {
                                 <label className="flex items-center gap-2 cursor-pointer group">
                                     <div className="relative flex items-center">
                                         <input
+                                            id="remember-me"
                                             type="checkbox"
                                             name="remember"
                                             checked={rememberMe}

@@ -225,6 +225,8 @@ export const Transactions: React.FC = () => {
                     <div className="relative group min-w-[200px]">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-white transition-colors" size={16} />
                         <input 
+                            id="transaction-search"
+                            name="transaction-search"
                             type="text" 
                             placeholder="Search by ID or Reference..."
                             value={searchTerm}

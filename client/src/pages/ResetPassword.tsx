@@ -140,6 +140,7 @@ export const ResetPassword = () => {
                         <form id="reset-password-form" name="reset-password" onSubmit={handleUpdatePassword} className="space-y-6">
                             {/* Hidden email field for password manager context */}
                             <input 
+                                id="reset-password-email-hidden"
                                 type="hidden" 
                                 name="email" 
                                 value={email} 

@@ -118,6 +118,8 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
                 <div className="relative w-full sm:w-64">
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                     <input
+                        id="history-search"
+                        name="history-search"
                         type="text"
                         placeholder="Search reference or ID..."
                         value={searchQuery}
