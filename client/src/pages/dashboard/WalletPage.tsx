@@ -20,6 +20,16 @@ const SUPPORTED_CURRENCIES = ['BTC', 'ETH', 'USD', 'NGN', 'EUR', 'GBP', 'JPY'];
 
 export const WalletPage: React.FC = () => {
     const { wallets, transactions, loading, refresh, createWallet } = useWallet();
+    
+    console.log("transactions:", transactions);
+    console.log("isArray:", Array.isArray(transactions));
+
+    const safeTransactions = Array.isArray(transactions) ? transactions : [];
+    const completedTransactions = safeTransactions.filter(
+        (tx) => tx.status?.toLowerCase() === "completed"
+    );
+    console.log("completed count:", completedTransactions.length);
+
     const [rates, setRates] = useState<Record<string, number>>({}); // Rates in USD
     const [totalBalance, setTotalBalance] = useState(0);
     const [totalAvailableBalance, setTotalAvailableBalance] = useState(0);
@@ -66,7 +76,7 @@ export const WalletPage: React.FC = () => {
             }
         };
 
-        if (wallets.length > 0) {
+        if (Array.isArray(wallets) && wallets.length > 0) {
             fetchRates();
             const interval = setInterval(fetchRates, 60000);
             return () => clearInterval(interval);
@@ -78,7 +88,8 @@ export const WalletPage: React.FC = () => {
         if (wallets.length > 0 && Object.keys(rates).length > 0) {
             let total = 0;
             let available = 0;
-            wallets.forEach(w => {
+            const safeWallets = Array.isArray(wallets) ? wallets : [];
+            safeWallets.forEach(w => {
                 const rate = rates[w.currency] || 0;
                 total += w.balance * rate;
                 available += (w.available_balance ?? w.balance) * rate;
@@ -89,7 +100,8 @@ export const WalletPage: React.FC = () => {
     }, [wallets, rates]);
 
     const handleAction = (action: 'send' | 'receive' | 'fund' | 'withdraw' | 'swap') => {
-        if (!selectedCurrency && wallets.length > 0) setSelectedCurrency(wallets[0].currency);
+        const safeWallets = Array.isArray(wallets) ? wallets : [];
+        if (!selectedCurrency && safeWallets.length > 0) setSelectedCurrency(safeWallets[0].currency);
 
         switch (action) {
             case 'fund':
@@ -267,8 +279,8 @@ export const WalletPage: React.FC = () => {
                     <h2 className="text-xl font-bold mb-6">Add New Wallet</h2>
                     
                     <div className="grid grid-cols-2 gap-4">
-                      {SUPPORTED_CURRENCIES.map((curr) => {
-                        const exists = wallets.some(w => w.currency === curr);
+                      {(SUPPORTED_CURRENCIES ?? []).map((curr) => {
+                        const exists = (wallets ?? []).some(w => w.currency === curr);
                         if (exists) return null;
                         
                         return (

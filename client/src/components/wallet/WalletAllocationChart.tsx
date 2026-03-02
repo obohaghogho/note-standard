@@ -20,7 +20,8 @@ export const WalletAllocationChart: React.FC<WalletAllocationChartProps> = ({ wa
         const borderColors: string[] = [];
 
         // Sort wallets by value (highest first)
-        const sortedWallets = [...wallets].sort((a, b) => {
+        const safeWallets = Array.isArray(wallets) ? wallets : [];
+        const sortedWallets = [...safeWallets].sort((a, b) => {
             const valA = a.balance * (rates[a.currency] || 0);
             const valB = b.balance * (rates[b.currency] || 0);
             return valB - valA;
