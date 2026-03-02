@@ -127,6 +127,7 @@ setInterval(async () => {
 
 // Background job for real-time Trends
 const analyticsService = require("./services/analyticsService");
+const blockchainService = require("./services/blockchainService");
 
 // 1. Immediate aggregation on startup
 (async () => {
@@ -134,6 +135,9 @@ const analyticsService = require("./services/analyticsService");
     console.log("[Trends] Running initial aggregation...");
     await analyticsService.aggregateDailyStats();
     console.log("[Trends] Initial aggregation complete.");
+
+    // Start blockchain monitoring
+    blockchainService.startMonitoring();
   } catch (err) {
     console.error("[Trends] Initial aggregation failed:", err.message);
   }

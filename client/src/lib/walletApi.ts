@@ -190,6 +190,27 @@ export const walletApi = {
         return result;
     },
 
+    // NEW: Generate a new HD deposit address
+    async generateNewAddress(asset: string): Promise<{
+        address: string;
+        asset: string;
+        path: string;
+        index: number;
+    }> {
+        const headers = await getAuthHeader();
+        const response = await fetch(`${API_base}/wallet/generate-new-address`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ asset })
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to generate new address');
+        }
+        return result;
+    },
+
     // Unified Payment Initialization (New)
     async initializePayment(data: {
         amount: number;
