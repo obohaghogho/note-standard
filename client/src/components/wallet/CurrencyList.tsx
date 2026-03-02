@@ -46,7 +46,7 @@ export const CurrencyList: React.FC<CurrencyListProps> = ({
 }) => {
     return (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {wallets?.map((wallet, index) => {
+            {(Array.isArray(wallets) ? wallets : []).map((wallet, index) => {
                 const colorClass = getCurrencyColor(wallet.currency);
                 const rate = rates[wallet.currency] || 0;
                 const usdValue = wallet.balance * (wallet.currency === 'USD' ? 1 : (rate || 0));

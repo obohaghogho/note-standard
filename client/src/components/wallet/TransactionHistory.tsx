@@ -60,7 +60,8 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
         );
     };
 
-    const filteredTransactions = transactions.filter(tx => matchesFilter(tx) && matchesSearch(tx));
+    const safeTransactions = Array.isArray(transactions) ? transactions : [];
+    const filteredTransactions = safeTransactions.filter(tx => matchesFilter(tx) && matchesSearch(tx));
 
     const getStatusIcon = (status: string) => {
         const s = (status || '').toUpperCase();
@@ -167,7 +168,7 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
                         <div className="w-16 h-16 bg-gray-800/50 rounded-full flex items-center justify-center mx-auto mb-4">
                             <Filter size={24} className="text-gray-600" />
                         </div>
-                        <p className="text-gray-400 font-medium">{transactions.length === 0 ? 'No recent transactions' : 'No matches found'}</p>
+                        <p className="text-gray-400 font-medium">{safeTransactions.length === 0 ? 'No recent transactions' : 'No matches found'}</p>
                         <button onClick={() => {setSearchQuery(''); setActiveFilter('all')}} className="text-purple-400 text-xs mt-2 hover:underline">Clear all filters</button>
                     </div>
                 ) : (
@@ -252,7 +253,7 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
                 )}
             </div>
             
-            {!loading && transactions.length > 0 && (
+            {!loading && safeTransactions.length > 0 && (
                 <div className="mt-8 pt-6 border-t border-gray-800/50 flex justify-center">
                     <button 
                         onClick={() => navigate('/transactions')}

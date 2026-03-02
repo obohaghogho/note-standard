@@ -127,7 +127,7 @@ export const Transactions: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
-    const [hasMore, setHasMore] = useState(false);
+    const [, setHasMore] = useState(false);
     const [selectedTx, setSelectedTx] = useState<any>(null);
     const itemsPerPage = 20;
 
@@ -135,9 +135,9 @@ export const Transactions: React.FC = () => {
         setLoading(true);
         try {
             const data = await walletApi.getTransactions(page, itemsPerPage);
-            setTransactions(data.transactions || []);
-            setTotalCount(data.total || 0);
-            setHasMore(data.hasMore || false);
+            setTransactions(data?.transactions || []);
+            setTotalCount(data?.total || 0);
+            setHasMore(data?.hasMore || false);
         } catch (err) {
             console.error('Failed to fetch transactions', err);
             toast.error('Failed to load transactions');
@@ -150,11 +150,44 @@ export const Transactions: React.FC = () => {
         fetchTransactions(currentPage);
     }, [currentPage]);
 
-    const currencies = ['ALL', ...Array.from(new Set(transactions.map(tx => tx.currency || tx.from_currency)))];
+    const safeTransactions = Array.isArray(transactions) ? transactions : [];
+    const currencies = ['ALL', ...Array.from(new Set(safeTransactions.map(tx => tx.currency || tx.from_currency)))];
     const statuses = ['ALL', 'COMPLETED', 'PENDING', 'FAILED'];
     const types = ['ALL', 'DEPOSIT', 'WITHDRAWAL', 'TRANSFER', 'SWAP'];
 
     const totalPages = Math.ceil(totalCount / itemsPerPage);
+
+    const safeTransactions_filtered = Array.isArray(transactions) ? transactions : [];
+    const filteredTransactions = safeTransactions_filtered.filter(tx => {
+        // Currency Filter
+        if (currencyFilter !== 'ALL') {
+            const txCurr = tx.currency || tx.from_currency;
+            if (txCurr !== currencyFilter) return false;
+        }
+
+        // Status Filter
+        if (statusFilter !== 'ALL') {
+            if (tx.status.toUpperCase() !== statusFilter.toUpperCase()) return false;
+        }
+
+        // Type Filter
+        if (typeFilter !== 'ALL') {
+            const t = tx.type.toUpperCase();
+            if (!t.includes(typeFilter.toUpperCase())) return false;
+        }
+
+        // Search Term
+        if (searchTerm) {
+            const q = searchTerm.toLowerCase();
+            const matches = 
+                tx.id.toLowerCase().includes(q) || 
+                (tx.txn_reference || '').toLowerCase().includes(q) ||
+                (tx.display_label || '').toLowerCase().includes(q);
+            if (!matches) return false;
+        }
+
+        return true;
+    });
 
     const getStatusStyles = (status: string) => {
         const s = status.toUpperCase();
@@ -249,7 +282,7 @@ export const Transactions: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
-                                {transactions.map((tx) => (
+                                {filteredTransactions.map((tx) => (
                                     <tr 
                                         key={tx.id} 
                                         className="hover:bg-white/[0.02] cursor-pointer transition-colors group"
@@ -348,7 +381,7 @@ export const Transactions: React.FC = () => {
                         </div>
                     )}
 
-                    {transactions.length === 0 && !loading && (
+                    {safeTransactions.length === 0 && !loading && (
                         <div className="flex-1 flex flex-col items-center justify-center py-20 bg-white/[0.01]">
                             <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
                                 <Search size={24} className="text-gray-500" />

@@ -42,8 +42,8 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 walletApi.getTransactions()
             ]);
 
-            setWallets(walletsData);
-            setTransactions(transactionsData);
+            setWallets(walletsData || []);
+            setTransactions(transactionsData?.transactions || []);
         } catch (err) {
             console.error('Error fetching wallet data:', err);
             setError(err instanceof Error ? err.message : 'Failed to load wallet data');
