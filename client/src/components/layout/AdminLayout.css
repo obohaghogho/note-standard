@@ -201,6 +201,33 @@
     background-clip: text;
 }
 
+.mobile-toggle-btn {
+    display: none;
+    background: rgba(99, 102, 241, 0.1);
+    border: none;
+    border-radius: 8px;
+    padding: 0.5rem;
+    color: #a5b4fc;
+    cursor: pointer;
+    transition: all 0.2s;
+    align-items: center;
+    justify-content: center;
+}
+
+.mobile-toggle-btn:hover {
+    background: rgba(99, 102, 241, 0.2);
+    color: #c7d2fe;
+}
+
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 90;
+}
+
 .header-right {
     display: flex;
     align-items: center;
@@ -338,6 +365,14 @@
 
     .admin-header h1 {
         font-size: 1.1rem;
+    }
+
+    .mobile-toggle-btn {
+        display: flex;
+    }
+
+    .sidebar-overlay {
+        display: block;
     }
 
     .notification-btn {
