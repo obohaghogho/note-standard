@@ -11,6 +11,7 @@ import { TransferModal } from '../../components/wallet/TransferModal';
 import { WithdrawModal } from '../../components/wallet/WithdrawModal';
 import { ReceiveModal } from '../../components/wallet/ReceiveModal';
 import { WalletAllocationChart } from '../../components/wallet/WalletAllocationChart';
+import { LedgerTrail } from '../../components/wallet/LedgerTrail';
 import { RefreshCw, Plus, X, Loader2 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import toast from 'react-hot-toast';
@@ -21,7 +22,10 @@ export const WalletPage: React.FC = () => {
     const { wallets, transactions, loading, refresh, createWallet } = useWallet();
     const [rates, setRates] = useState<Record<string, number>>({}); // Rates in USD
     const [totalBalance, setTotalBalance] = useState(0);
+    const [totalAvailableBalance, setTotalAvailableBalance] = useState(0);
     const [ratesLoading, setRatesLoading] = useState(true);
+    const [refreshKey, setRefreshKey] = useState(0);
+    const [showBalances, setShowBalances] = useState(true);
 
     // Modals
     const [showFundModal, setShowFundModal] = useState(false);
@@ -40,26 +44,18 @@ export const WalletPage: React.FC = () => {
             setRatesLoading(true);
             try {
                 const exchangeRates = await walletApi.getExchangeRates();
-                // Server returns flat object: { "BTC": 0.000015, "ETH": 0.0003, "NGN": 1500 }
-                // These are: 1 USD = X of that currency
-                // We need: 1 unit of currency = Y USD (inverted)
                 
                 const usdRates: Record<string, number> = {};
                 
-                // Handle both flat and nested formats for compatibility
                 Object.keys(exchangeRates).forEach(curr => {
                     const val = exchangeRates[curr];
                     if (typeof val === 'number') {
-                        // Flat format: val = how much of `curr` per 1 USD
-                        // Invert to get: 1 unit of `curr` = ? USD
                         usdRates[curr] = val > 0 ? 1 / val : 0;
                     } else if (typeof val === 'object' && val !== null) {
-                        // Nested format: { "USD": 65000 }
                         usdRates[curr] = val['USD'] || 0;
                     }
                 });
 
-                // Ensure USD is always 1
                 usdRates['USD'] = 1;
                 
                 setRates(usdRates);
@@ -72,26 +68,27 @@ export const WalletPage: React.FC = () => {
 
         if (wallets.length > 0) {
             fetchRates();
-            // Poll rates every 60 seconds
             const interval = setInterval(fetchRates, 60000);
             return () => clearInterval(interval);
         }
     }, [wallets.length]);
 
-    // Calculate Total Balance
+    // Calculate Total Balance & Available Balance
     useEffect(() => {
         if (wallets.length > 0 && Object.keys(rates).length > 0) {
             let total = 0;
+            let available = 0;
             wallets.forEach(w => {
                 const rate = rates[w.currency] || 0;
                 total += w.balance * rate;
+                available += (w.available_balance ?? w.balance) * rate;
             });
             setTotalBalance(total);
+            setTotalAvailableBalance(available);
         }
     }, [wallets, rates]);
 
     const handleAction = (action: 'send' | 'receive' | 'fund' | 'withdraw' | 'swap') => {
-        // Default currency selection if none selected (usually BTC or first available)
         if (!selectedCurrency && wallets.length > 0) setSelectedCurrency(wallets[0].currency);
 
         switch (action) {
@@ -105,9 +102,7 @@ export const WalletPage: React.FC = () => {
                 setShowWithdrawModal(true);
                 break;
             case 'swap':
-                // Scroll to swap card
                 swapCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                // If it's effectively hidden or far down, maybe focus it
                 break;
             case 'receive':
                 setShowReceiveModal(true);
@@ -126,6 +121,11 @@ export const WalletPage: React.FC = () => {
         }
     };
 
+    const handleRefresh = () => {
+        refresh();
+        setRefreshKey(k => k + 1); // Trigger ledger trail refresh
+    };
+
     return (
         <div className="min-h-[100dvh] bg-gray-950 text-white p-4 sm:p-6 lg:p-8 overflow-x-clip w-full">
             <div className="max-w-7xl mx-auto space-y-8">
@@ -142,7 +142,7 @@ export const WalletPage: React.FC = () => {
                          <Button onClick={() => setShowCreateModal(true)} variant="outline" size="sm" className="hidden sm:flex border-gray-700 hover:border-purple-500">
                             <Plus size={16} className="mr-2" /> Add Wallet
                         </Button>
-                        <Button onClick={refresh} variant="ghost" size="sm" className="bg-gray-800 hover:bg-gray-700">
+                        <Button onClick={handleRefresh} variant="ghost" size="sm" className="bg-gray-800 hover:bg-gray-700">
                             <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
                         </Button>
                     </div>
@@ -154,11 +154,14 @@ export const WalletPage: React.FC = () => {
                     <div className="lg:col-span-2 space-y-6">
                         <WalletBalanceCard 
                             totalBalance={totalBalance} 
+                            availableBalance={totalAvailableBalance}
                             currency="USD"
                             loading={ratesLoading || loading}
+                            showBalance={showBalances}
+                            onToggleBalance={() => setShowBalances(!showBalances)}
                         />
 
-                        {/* Quick Actions (Mobile/Desktop) */}
+                        {/* Quick Actions */}
                         <ActionsGrid 
                             onSend={() => handleAction('send')}
                             onReceive={() => handleAction('receive')}
@@ -184,36 +187,40 @@ export const WalletPage: React.FC = () => {
                                     wallets={wallets} 
                                     rates={rates} 
                                     onSelect={(curr) => setSelectedCurrency(curr)}
+                                    showBalances={showBalances}
                                 />
                             )}
                         </div>
                     </div>
 
-                    {/* Right: Swap Module (Sticky on desktop) */}
+                    {/* Right: Swap Module + Allocation Chart + Ledger Trail */}
                     <div className="lg:col-span-1">
-                        <div className="sticky top-6">
+                        <div className="sticky top-6 space-y-6">
                            <div ref={swapCardRef}>
                                 <SwapCard 
                                     initialFromCurrency={selectedCurrency} 
                                     onSuccess={() => {
-                                        refresh();
+                                        handleRefresh();
                                         toast.success('Balance updated');
                                     }}
                                 />
                            </div>
                            
-                           {/* Quick Market Stats or Mini-History could go here */}
                            {/* Allocation Chart */}
-                           <div className="mt-6">
-                                <WalletAllocationChart wallets={wallets} rates={rates} />
-                           </div>
+                           <WalletAllocationChart wallets={wallets} rates={rates} />
+
+                           {/* Ledger Audit Trail */}
+                           <LedgerTrail refreshKey={refreshKey} />
                         </div>
                     </div>
                 </div>
 
                 {/* Bottom Section: Transaction History */}
                 <div className="pb-12">
-                     <TransactionHistory transactions={transactions} />
+                     <TransactionHistory 
+                        transactions={transactions} 
+                        loading={loading}
+                     />
                 </div>
 
             </div>
@@ -223,14 +230,14 @@ export const WalletPage: React.FC = () => {
                 isOpen={showFundModal} 
                 onClose={() => setShowFundModal(false)} 
                 selectedCurrency={selectedCurrency}
-                onSuccess={refresh}
+                onSuccess={handleRefresh}
             />
              <TransferModal
                 isOpen={showTransferModal}
                 onClose={() => setShowTransferModal(false)}
                 selectedCurrency={selectedCurrency}
                 onSuccess={() => {
-                    refresh();
+                    handleRefresh();
                     toast.success('Transfer successful');
                 }}
             />
@@ -239,7 +246,7 @@ export const WalletPage: React.FC = () => {
                 onClose={() => setShowWithdrawModal(false)}
                 selectedCurrency={selectedCurrency}
                 onSuccess={() => {
-                    refresh();
+                    handleRefresh();
                     toast.success('Withdrawal initiated');
                 }}
             />
@@ -249,7 +256,7 @@ export const WalletPage: React.FC = () => {
                 initialCurrency={selectedCurrency}
             />
 
-            {/* Create Wallet Modal (keep simple inline for now or extract) */}
+            {/* Create Wallet Modal */}
              {showCreateModal && (
                 <div className="modal-overlay p-4">
                   <div className="modal-content w-full max-w-lg">

@@ -159,15 +159,30 @@ router.get("/transactions", async (req, res) => {
     }
 
     const walletIds = wallets.map((w) => w.id);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const start = (page - 1) * limit;
+    const end = start + limit - 1;
 
-    const { data: txs, error: txError } = await supabase
+    // Fetch transactions with pagination
+    const { data: txs, error: txError, count: totalCount } = await supabase
       .from("transactions")
-      .select(`*, wallet:wallets(currency)`)
+      .select(`*, wallet:wallets(currency)`, { count: "exact" })
       .in("wallet_id", walletIds)
       .order("created_at", { ascending: false })
-      .limit(100);
+      .range(start, end);
 
-    return res.json({ transactions: txs || [] });
+    if (txError) throw txError;
+
+    return res.json({
+      transactions: txs || [],
+      pagination: {
+        page,
+        limit,
+        totalCount: totalCount || 0,
+        hasMore: (totalCount || 0) > (page * limit),
+      },
+    });
   } catch (err) {
     return res.json({
       transactions: [],
@@ -504,6 +519,7 @@ router.post("/swap/preview", async (req, res) => {
   const { fromCurrency, toCurrency, amount } = req.body;
   try {
     const preview = await swapService.calculateSwapPreview(
+      req.user.id,
       fromCurrency,
       toCurrency,
       parseFloat(amount),

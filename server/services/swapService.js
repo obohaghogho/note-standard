@@ -31,6 +31,7 @@ async function getAllExchangeRates() {
  * Calculate swap preview (Locked for 30 seconds)
  */
 async function calculateSwapPreview(
+  userId,
   fromCurrency,
   toCurrency,
   amount,
@@ -76,37 +77,80 @@ async function calculateSwapPreview(
       `[SwapService] Preview calculated: ${amountToSwap} * ${finalPrice} = ${amountOut}`,
     );
 
-    // REQUIREMENT: Lock rate for 30 seconds
-    const lockId = `lock_${uuidv4()}`;
-    const preview = {
-      lockId,
-      fromCurrency,
-      toCurrency,
-      amountIn: amount,
-      marketPrice: spreadResult.marketPrice,
-      rate: spreadResult.finalPrice, // Compatibility with client
-      finalPrice: spreadResult.finalPrice,
-      spreadAmount: spreadResult.spreadAmount,
-      spreadPercentage: spreadResult.spreadPercentage,
-      fee: feeResult.fee,
-      feePercentage: feeResult.rate * 100,
-      amountOut: parseFloat(amountOut.toFixed(8)),
-      netAmount: amountToSwap, // Compatibility with client
-      netAmountSent: amountToSwap,
-      feeBreakdown: {
-        processing_fee: feeResult.fee,
-        spread_fee_equivalent: spreadAmountInQuote,
-        total_fee_label: "Transaction Fees",
-      },
-      expiresAt: Date.now() + LOCK_EXPIRY_MS,
+    // REQUIREMENT: Max Swap Limit Check
+    const { data: maxSwapSetting } = await supabase
+      .from("admin_settings")
+      .select("value")
+      .eq("key", "max_swap_amount")
+      .single();
+
+    const maxSwap = parseFloat(maxSwapSetting?.value || "5000");
+    if (amount > maxSwap) {
+      throw new Error(
+        `Maximum swap amount exceeded (Limit: ${maxSwap} USD equivalent)`,
+      );
+    }
+
+    // REQUIREMENT: Ensure both wallets exist to get valid IDs
+    const getOrCreateWallet = async (currency) => {
+      const { data: wallet } = await supabase
+        .from("wallets")
+        .select("id")
+        .eq("currency", currency)
+        .eq("user_id", userId)
+        .single();
+
+      if (wallet) return wallet.id;
+
+      const { data: newWallet, error: createErr } = await supabase
+        .from("wallets")
+        .insert({ user_id: userId, currency, address: uuidv4() })
+        .select("id")
+        .single();
+
+      if (createErr) throw createErr;
+      return newWallet.id;
     };
 
-    rateLocks.set(lockId, preview);
+    const fromWalletId = await getOrCreateWallet(fromCurrency);
+    const toWalletId = await getOrCreateWallet(toCurrency);
 
-    // Cleanup lock after expiry
-    setTimeout(() => rateLocks.delete(lockId), LOCK_EXPIRY_MS + 2000);
+    // REQUIREMENT: Lock rate for 30 seconds (Persistently in DB)
+    const { data: quote, error: quoteError } = await supabase
+      .from("swap_quotes")
+      .insert({
+        user_id: userId,
+        from_wallet_id: fromWalletId,
+        to_wallet_id: toWalletId,
+        from_amount: amount,
+        to_amount: parseFloat(amountOut.toFixed(8)),
+        from_currency: fromCurrency,
+        to_currency: toCurrency,
+        rate: finalPrice,
+        fee: feeResult.fee,
+        expires_at: new Date(Date.now() + LOCK_EXPIRY_MS).toISOString(),
+        metadata: {
+          market_price: spreadResult.marketPrice,
+          spread_percentage: spreadResult.spreadPercentage,
+          user_plan: userPlan,
+          fee_breakdown: {
+            processing_fee: feeResult.fee,
+            spread_fee_equivalent: spreadAmountInQuote,
+          },
+        },
+      })
+      .select()
+      .single();
 
-    return preview;
+    if (quoteError || !quote) {
+      throw new Error(`Failed to create swap quote: ${quoteError?.message}`);
+    }
+
+    return {
+      ...quote,
+      lockId: quote.id, // Compatibility with client
+      netAmount: amountToSwap,
+    };
   } catch (err) {
     console.error("[SwapService] Preview Error:", err);
     throw err;
@@ -167,76 +211,14 @@ async function executeSwap(
     }
   }
 
-  // Get source wallet
-  const { data: fromWallet, error: fromErr } = await supabase
-    .from("wallets")
-    .select("id, available_balance")
-    .eq("user_id", userId)
-    .eq("currency", fromCurrency)
-    .single();
+  // The wallet existence and balance check is now handled by the RPC function
+  // based on the quote ID, which ensures wallets exist and balance is sufficient.
 
-  if (fromErr || !fromWallet) {
-    throw new Error(`${fromCurrency} wallet not found`);
-  }
-
-  // Check balance (Use available_balance for ledger safety)
-  const parseAmount = parseFloat(amount);
-  if (parseFloat(fromWallet.available_balance) < parseAmount) {
-    throw new Error(
-      `Insufficient ${fromCurrency} balance (Available: ${fromWallet.available_balance})`,
-    );
-  }
-
-  // Get or create destination wallet
-  let { data: toWallet } = await supabase
-    .from("wallets")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("currency", toCurrency)
-    .single();
-
-  if (!toWallet) {
-    const { data: newWallet, error: createErr } = await supabase
-      .from("wallets")
-      .insert({
-        user_id: userId,
-        currency: toCurrency,
-        address: uuidv4(),
-      })
-      .select()
-      .single();
-
-    if (createErr) throw createErr;
-    toWallet = newWallet;
-  }
-
-  const platformWalletId = await commissionService.getPlatformWalletId(
-    fromCurrency,
-  );
-
-  // REQUIREMENT: Store rate in transaction record (via Atomic RPC)
   const { data: txId, error: txError } = await supabase.rpc(
-    "execute_swap_atomic",
+    "execute_swap_from_quote",
     {
-      p_user_id: userId,
-      p_from_wallet_id: fromWallet.id,
-      p_to_wallet_id: toWallet.id,
-      p_from_amount: preview.netAmountSent,
-      p_to_amount: preview.amountOut,
-      p_from_currency: fromCurrency,
-      p_to_currency: toCurrency,
-      p_rate: preview.finalPrice,
-      p_spread_amount: preview.spreadPercentage,
-      p_fee: preview.fee,
-      p_platform_wallet_id: platformWalletId,
+      p_quote_id: lockId,
       p_idempotency_key: idempotencyKey,
-      p_metadata: {
-        lockId,
-        market_price: preview.marketPrice,
-        final_price: preview.finalPrice,
-        fee_breakdown: preview.feeBreakdown,
-        user_plan: userPlan,
-      },
     },
   );
 

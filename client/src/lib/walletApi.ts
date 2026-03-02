@@ -1,6 +1,6 @@
 import { API_URL } from './api';
 import { supabase } from './supabase';
-import type { Wallet, Transaction, InternalTransferRequest, WithdrawalRequest, CommissionSettings } from '@/types/wallet';
+import type { Wallet, Transaction, InternalTransferRequest, WithdrawalRequest, CommissionSettings, LedgerEntry } from '@/types/wallet';
 
 const API_base = `${API_URL}/api`;
 
@@ -58,22 +58,31 @@ export const walletApi = {
         return response.json() as Promise<Wallet>;
     },
 
-    // Get transaction history
-    async getTransactions(): Promise<Transaction[]> {
+    // Get transaction history (Paginated)
+    async getTransactions(page: number = 1, limit: number = 20): Promise<{ transactions: Transaction[], total: number, page: number, limit: number, hasMore: boolean }> {
         try {
             const headers = await getAuthHeader();
-            const response = await fetch(`${API_base}/wallet/transactions`, { headers });
+            const response = await fetch(`${API_base}/wallet/transactions?page=${page}&limit=${limit}`, { headers });
             if (!response.ok) {
                 console.error('getTransactions failed:', response.statusText);
-                return [];
+                return { transactions: [], total: 0, page, limit, hasMore: false };
             }
             const data = await response.json();
-            // Server returns { transactions: [...] } or raw array
-            const txs = Array.isArray(data) ? data : (data?.transactions || []);
-            return Array.isArray(txs) ? txs : [];
+            
+            // Server returns { transactions: [...], pagination: { totalCount, hasMore } }
+            const transactions = data.transactions || [];
+            const pagination = data.pagination || {};
+
+            return {
+                transactions: Array.isArray(transactions) ? transactions : [],
+                total: pagination.totalCount ?? transactions.length,
+                page: pagination.page ?? page,
+                limit: pagination.limit ?? limit,
+                hasMore: pagination.hasMore ?? false
+            };
         } catch (error) {
             console.error('getTransactions exception:', error);
-            return [];
+            return { transactions: [], total: 0, page, limit, hasMore: false };
         }
     },
 
@@ -312,6 +321,26 @@ export const walletApi = {
         } catch (error) {
             console.error('Invoice download error:', error);
             throw error;
+        }
+    },
+
+    // Get recent ledger entries (audit trail)
+    async getLedgerEntries(limit: number = 10): Promise<LedgerEntry[]> {
+        try {
+            const { data, error } = await supabase
+                .from('ledger_entries')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(limit);
+
+            if (error) {
+                console.error('getLedgerEntries error:', error);
+                return [];
+            }
+            return (data || []) as LedgerEntry[];
+        } catch (err) {
+            console.error('getLedgerEntries exception:', err);
+            return [];
         }
     }
 };
