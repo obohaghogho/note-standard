@@ -1,4 +1,4 @@
--- Migration 081: HD Wallet Address Regeneration
+-- Migration 081: HD Wallet Address Regeneration (REFINED)
 -- Tracks derivation indices and status of generated crypto addresses
 
 CREATE TABLE IF NOT EXISTS crypto_hd_indices (
@@ -12,20 +12,23 @@ CREATE TABLE IF NOT EXISTS crypto_hd_indices (
     CONSTRAINT unique_user_asset_index UNIQUE (user_id, asset)
 );
 
+-- User requested table structure
 CREATE TABLE IF NOT EXISTS crypto_hd_addresses (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    asset VARCHAR(10) NOT NULL,
-    address TEXT NOT NULL UNIQUE,
-    derivation_path TEXT NOT NULL,
-    address_index INTEGER NOT NULL,
-    status VARCHAR(20) DEFAULT 'unused' CHECK (status IN ('unused', 'used', 'expired')),
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  asset varchar(20) not null,
+  address text not null,
+  derivation_path text not null,
+  address_index integer not null,
+  status varchar(20) default 'unused',
+  created_at timestamptz default now(),
+  used_at timestamptz
 );
 
-CREATE INDEX IF NOT EXISTS idx_hd_addresses_user_asset ON crypto_hd_addresses(user_id, asset);
-CREATE INDEX IF NOT EXISTS idx_hd_addresses_status ON crypto_hd_addresses(status);
+-- Indices as requested by user
+CREATE INDEX IF NOT EXISTS crypto_hd_addresses_user_id_idx ON public.crypto_hd_addresses(user_id);
+CREATE INDEX IF NOT EXISTS crypto_hd_addresses_status_idx ON public.crypto_hd_addresses(status);
+CREATE UNIQUE INDEX IF NOT EXISTS crypto_hd_addresses_asset_address_index_idx ON public.crypto_hd_addresses(asset, address_index);
 
 -- Enable RLS
 ALTER TABLE crypto_hd_indices ENABLE ROW LEVEL SECURITY;
@@ -54,28 +57,6 @@ ON CONFLICT DO NOTHING;
 INSERT INTO crypto_hd_indices (user_id, asset)
 SELECT DISTINCT user_id, 'ETH' FROM wallets WHERE currency = 'ETH'
 ON CONFLICT DO NOTHING;
-
--- Triggers for updated_at (assuming update_updated_at_column exists from 025 migration)
-DO $$
-BEGIN
-    -- Only attempt to create if update_updated_at_column exists
-    IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'update_updated_at_column') THEN
-        IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_hd_indices_updated_at') THEN
-            CREATE TRIGGER update_hd_indices_updated_at
-                BEFORE UPDATE ON crypto_hd_indices
-                FOR EACH ROW
-                EXECUTE FUNCTION update_updated_at_column();
-        END IF;
-
-        IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_hd_addresses_updated_at') THEN
-            CREATE TRIGGER update_hd_addresses_updated_at
-                BEFORE UPDATE ON crypto_hd_addresses
-                FOR EACH ROW
-                EXECUTE FUNCTION update_updated_at_column();
-        END IF;
-    END IF;
-END
-$$;
 
 -- Atomic function to get and increment the next address index
 CREATE OR REPLACE FUNCTION get_and_increment_hd_index(

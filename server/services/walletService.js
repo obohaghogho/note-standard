@@ -159,7 +159,10 @@ class WalletService {
   async markAsUsed(address) {
     const { error } = await supabase
       .from("crypto_hd_addresses")
-      .update({ status: "used" })
+      .update({
+        status: "used",
+        used_at: new Date().toISOString(),
+      })
       .eq("address", address);
 
     if (error) throw error;
