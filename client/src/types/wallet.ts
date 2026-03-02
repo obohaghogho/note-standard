@@ -29,6 +29,7 @@ export interface Wallet {
 
 export interface Transaction {
     id: string;
+    txn_reference?: string;
     wallet_id: string;
     type: 'DEPOSIT' | 'WITHDRAWAL' | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'BUY' | 'SELL' | 'SWAP' | 'swap' | 'SWAP_IN' | 'SWAP_OUT' | 'Digital Assets Purchase' | string;
     display_label?: string;
@@ -150,4 +151,16 @@ export interface SwapResult {
 }
 
 export type ExchangeRates = Record<Currency, Partial<Record<Currency, number>>>;
+
+export interface LedgerEntry {
+    id: string;
+    user_id: string;
+    wallet_id: string;
+    currency: string;
+    amount: number;       // positive = credit, negative = debit
+    type: string;
+    reference: string;
+    status: string;
+    created_at: string;
+}
 

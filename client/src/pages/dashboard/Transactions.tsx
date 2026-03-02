@@ -118,59 +118,43 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({ tx, onC
 };
 
 export const Transactions: React.FC = () => {
-    const { transactions, loading, refresh } = useWallet();
-    const [filteredTransactions, setFilteredTransactions] = useState(transactions);
+    const { refresh } = useWallet();
+    const [transactions, setTransactions] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
     const [currencyFilter, setCurrencyFilter] = useState('ALL');
     const [statusFilter, setStatusFilter] = useState('ALL');
     const [typeFilter, setTypeFilter] = useState('ALL');
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
+    const [totalCount, setTotalCount] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
     const [selectedTx, setSelectedTx] = useState<any>(null);
-    const itemsPerPage = 10;
+    const itemsPerPage = 20;
 
-    const currencies = ['ALL', ...Array.from(new Set(transactions.map(tx => tx.currency)))];
+    const fetchTransactions = async (page: number) => {
+        setLoading(true);
+        try {
+            const data = await walletApi.getTransactions(page, itemsPerPage);
+            setTransactions(data.transactions || []);
+            setTotalCount(data.total || 0);
+            setHasMore(data.hasMore || false);
+        } catch (err) {
+            console.error('Failed to fetch transactions', err);
+            toast.error('Failed to load transactions');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchTransactions(currentPage);
+    }, [currentPage]);
+
+    const currencies = ['ALL', ...Array.from(new Set(transactions.map(tx => tx.currency || tx.from_currency)))];
     const statuses = ['ALL', 'COMPLETED', 'PENDING', 'FAILED'];
     const types = ['ALL', 'DEPOSIT', 'WITHDRAWAL', 'TRANSFER', 'SWAP'];
 
-    useEffect(() => {
-        let filtered = [...transactions];
-
-        if (currencyFilter !== 'ALL') {
-            filtered = filtered.filter(tx => tx.currency === currencyFilter);
-        }
-
-        if (statusFilter !== 'ALL') {
-             filtered = filtered.filter(tx => {
-                const s = tx.status.toUpperCase();
-                if (statusFilter === 'COMPLETED') return s === 'COMPLETED' || s === 'CONFIRMED';
-                if (statusFilter === 'PENDING') return s === 'PENDING' || s === 'PROCESSING';
-                return s === statusFilter;
-             });
-        }
-
-        if (typeFilter !== 'ALL') {
-             filtered = filtered.filter(tx => tx.type.toUpperCase().includes(typeFilter));
-        }
-
-        if (searchTerm) {
-            const lowerSearch = searchTerm.toLowerCase();
-            filtered = filtered.filter(tx => 
-                tx.id.toLowerCase().includes(lowerSearch) || 
-                (tx.display_label || '').toLowerCase().includes(lowerSearch) ||
-                (tx.reference_id || '').toLowerCase().includes(lowerSearch)
-            );
-        }
-
-        setFilteredTransactions(filtered);
-        setCurrentPage(1);
-    }, [transactions, currencyFilter, statusFilter, typeFilter, searchTerm]);
-
-    const paginatedTransactions = filteredTransactions.slice(
-        (currentPage - 1) * itemsPerPage,
-        currentPage * itemsPerPage
-    );
-
-    const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
+    const totalPages = Math.ceil(totalCount / itemsPerPage);
 
     const getStatusStyles = (status: string) => {
         const s = status.toUpperCase();
@@ -265,7 +249,7 @@ export const Transactions: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
-                                {paginatedTransactions.map((tx) => (
+                                {transactions.map((tx) => (
                                     <tr 
                                         key={tx.id} 
                                         className="hover:bg-white/[0.02] cursor-pointer transition-colors group"
@@ -333,7 +317,7 @@ export const Transactions: React.FC = () => {
                     {totalPages > 1 && (
                         <div className="p-6 border-t border-white/5 flex items-center justify-between">
                             <p className="text-xs text-gray-500">
-                                Showing <span className="text-white">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-white">{Math.min(currentPage * itemsPerPage, filteredTransactions.length)}</span> of <span className="text-white">{filteredTransactions.length}</span> transactions
+                                Showing <span className="text-white">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-white">{Math.min(currentPage * itemsPerPage, totalCount)}</span> of <span className="text-white">{totalCount}</span> transactions
                             </p>
                             <div className="flex items-center gap-2">
                                 <Button 
@@ -346,18 +330,10 @@ export const Transactions: React.FC = () => {
                                     <ChevronLeft size={16} />
                                 </Button>
                                 <div className="flex items-center gap-1">
-                                    {[...Array(totalPages)].map((_, i) => (
-                                        <button
-                                            key={i}
-                                            onClick={() => setCurrentPage(i + 1)}
-                                            className={cn(
-                                                "w-8 h-8 rounded-lg text-xs font-bold transition-all",
-                                                currentPage === i + 1 ? "bg-white text-black" : "text-gray-500 hover:text-white hover:bg-white/5"
-                                            )}
-                                        >
-                                            {i + 1}
-                                        </button>
-                                    ))}
+                                    {/* Simple pagination logic for 100+ transactions */}
+                                    <span className="text-xs text-gray-400 px-2 font-mono">
+                                        Page {currentPage} of {totalPages || 1}
+                                    </span>
                                 </div>
                                 <Button 
                                     size="sm" 
@@ -372,13 +348,13 @@ export const Transactions: React.FC = () => {
                         </div>
                     )}
 
-                    {filteredTransactions.length === 0 && !loading && (
+                    {transactions.length === 0 && !loading && (
                         <div className="flex-1 flex flex-col items-center justify-center py-20 bg-white/[0.01]">
                             <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
                                 <Search size={24} className="text-gray-500" />
                             </div>
                             <h3 className="text-lg font-bold">No transactions found</h3>
-                            <p className="text-gray-500 text-sm mt-1 max-w-xs text-center">Try adjusting your filters or search term to find what you're looking for.</p>
+                            <p className="text-gray-500 text-sm mt-1 max-w-xs text-center">Your transaction history is empty.</p>
                         </div>
                     )}
                 </div>

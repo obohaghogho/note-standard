@@ -7,6 +7,7 @@ interface CurrencyListProps {
     wallets: Wallet[];
     rates: Record<string, number>; // Rate to main currency (e.g. USD)
     onSelect: (currency: string) => void;
+    showBalances?: boolean;
 }
 
 const getCurrencyIcon = (curr: string) => {
@@ -29,19 +30,28 @@ const getCurrencyColor = (curr: string) => {
         case 'ETH': return 'from-blue-500/20 to-blue-600/5 text-blue-400 border-blue-500/30';
         case 'USDT': return 'from-emerald-500/20 to-emerald-600/5 text-emerald-400 border-emerald-500/30';
         case 'USD': return 'from-green-500/20 to-green-600/5 text-green-400 border-green-500/30';
+        case 'NGN': return 'from-teal-500/20 to-teal-600/5 text-teal-400 border-teal-500/30';
+        case 'EUR': return 'from-indigo-500/20 to-indigo-600/5 text-indigo-400 border-indigo-500/30';
+        case 'GBP': return 'from-purple-500/20 to-purple-600/5 text-purple-400 border-purple-500/30';
+        case 'JPY': return 'from-rose-500/20 to-rose-600/5 text-rose-400 border-rose-500/30';
         default: return 'from-gray-500/20 to-gray-600/5 text-gray-400 border-gray-500/30';
     }
 };
 
-export const CurrencyList: React.FC<CurrencyListProps> = ({ wallets, rates, onSelect }) => {
+export const CurrencyList: React.FC<CurrencyListProps> = ({ 
+    wallets, 
+    rates, 
+    onSelect,
+    showBalances = true
+}) => {
     return (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {wallets?.map((wallet, index) => {
                 const colorClass = getCurrencyColor(wallet.currency);
                 const rate = rates[wallet.currency] || 0;
-                // If wallet.currency is USD, rate is 1. Else calculate USD value.
-                // Assuming rates[currency] gives price of 1 unit in USD.
                 const usdValue = wallet.balance * (wallet.currency === 'USD' ? 1 : (rate || 0));
+                const availableBalance = wallet.available_balance ?? wallet.balance;
+                const hasLocked = (wallet.balance - availableBalance) > 0.001;
 
                 return (
                     <motion.div
@@ -57,23 +67,28 @@ export const CurrencyList: React.FC<CurrencyListProps> = ({ wallets, rates, onSe
                                 <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center font-bold text-lg backdrop-blur-sm">
                                     {getCurrencyIcon(wallet.currency)}
                                 </div>
-                                <div>
-                                    <h3 className="font-bold text-white">{wallet.currency}</h3>
+                                <div className="min-w-0">
+                                    <h3 className="font-bold text-white truncate">{wallet.currency}</h3>
                                     <p className="text-xs opacity-70">Wallet</p>
                                 </div>
                             </div>
                             {wallet.is_frozen && (
-                                <span className="bg-red-500/20 text-red-500 text-xs px-2 py-0.5 rounded border border-red-500/30">Frozen</span>
+                                <span className="bg-red-500/20 text-red-500 text-[10px] px-1.5 py-0.5 rounded border border-red-500/30 shrink-0">Frozen</span>
                             )}
                         </div>
                         
                         <div className="mt-4">
                             <p className="text-lg sm:text-xl font-bold text-white tracking-tight truncate">
-                                {formatCurrency(wallet.balance, wallet.currency)}
+                                {showBalances ? formatCurrency(wallet.balance, wallet.currency) : '••••••••'}
                             </p>
+                            {hasLocked && (
+                                <p className="text-[10px] text-amber-300/80 mt-0.5 font-medium">
+                                    {showBalances ? `Available: ${formatCurrency(availableBalance, wallet.currency)}` : 'Available: ••••'}
+                                </p>
+                            )}
                             {wallet.currency !== 'USD' && (
                                 <p className="text-xs opacity-60 mt-1">
-                                    ≈ {formatCurrency(usdValue, 'USD')}
+                                    ≈ {showBalances ? formatCurrency(usdValue, 'USD') : '••••'}
                                 </p>
                             )}
                         </div>

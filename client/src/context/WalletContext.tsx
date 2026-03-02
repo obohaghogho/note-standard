@@ -175,7 +175,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             // Generate idempotency key if not provided
             const idempotencyKey = data.idempotencyKey || `withdraw_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             await walletApi.withdraw({ ...data, idempotencyKey });
-            toast.success(`Successfully withdrew ${data.amount} ${data.currency}`);
+            toast.success(`Withdrawal request submitted for ${data.amount} ${data.currency}`);
             await fetchData();
         } catch (err: unknown) {
             console.error('Withdraw error:', err);
