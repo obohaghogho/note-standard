@@ -150,6 +150,12 @@ export const AdminLayout = () => {
                 {/* Top Header */}
                 <header className="admin-header">
                     <div className="header-left">
+                        <button 
+                            className="mobile-toggle-btn"
+                            onClick={() => setSidebarOpen(!sidebarOpen)}
+                        >
+                            {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+                        </button>
                         <h1>Administration</h1>
                     </div>
                     <div className="header-right">
@@ -181,6 +187,14 @@ export const AdminLayout = () => {
                 <main className="admin-content">
                     <Outlet />
                 </main>
+
+                {/* Mobile Overlay */}
+                {sidebarOpen && (
+                    <div 
+                        className="sidebar-overlay" 
+                        onClick={() => setSidebarOpen(false)}
+                    />
+                )}
             </div>
         </div>
     );
