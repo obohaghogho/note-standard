@@ -109,6 +109,24 @@ export const FundModal: React.FC<FundModalProps> = ({ isOpen, onClose, selectedC
         }
     };
 
+    const handleRegenerateAddress = async () => {
+        setLoading(true);
+        try {
+            const result = await walletApi.generateNewAddress(selectedCurrency);
+            setCryptoAddress({
+                address: result.address,
+                network: selectedCurrency === 'BTC' ? 'Bitcoin' : 'Ethereum (ERC20)',
+                reference: `hd_${result.index}_${Date.now()}`
+            });
+            setCryptoStatus('PENDING'); // Reset status for new address
+            toast.success("New deposit address generated!");
+        } catch (err: any) {
+            toast.error(err.message || "Failed to generate new address");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleCardDeposit = async () => {
         if (!amount || parseFloat(amount) <= 0) {
             toast.error('Please enter a valid amount');
@@ -427,9 +445,21 @@ export const FundModal: React.FC<FundModalProps> = ({ isOpen, onClose, selectedC
                                             Send exactly {amount} {selectedCurrency} to the address above.
                                         </p>
                                         
-                                        <Button onClick={onClose} variant="ghost" className="w-full text-gray-400 hover:text-white">
-                                            Cancel & Close
-                                        </Button>
+                                        <div className="flex flex-col gap-2">
+                                            <Button 
+                                                onClick={handleRegenerateAddress} 
+                                                disabled={loading} 
+                                                variant="secondary" 
+                                                className="w-full text-xs py-2 h-auto"
+                                            >
+                                                {loading ? <Loader2 className="animate-spin mr-2" size={14} /> : <Bitcoin className="mr-2" size={14} />}
+                                                Request Another Address
+                                            </Button>
+                                            
+                                            <Button onClick={onClose} variant="ghost" className="w-full text-gray-400 hover:text-white">
+                                                Cancel & Close
+                                            </Button>
+                                        </div>
                                     </>
                                 )}
                             </div>

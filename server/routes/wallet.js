@@ -7,6 +7,7 @@ const commissionService = require("../services/commissionService");
 const depositService = require("../services/depositService");
 const swapService = require("../services/swapService");
 const invoiceService = require("../services/invoiceService");
+const walletService = require("../services/walletService");
 const { checkUserPlan, checkConsent } = require("../middleware/monetization");
 const { transactionLimiter, withdrawalLimiter } = require(
   "../middleware/rateLimiter",
@@ -138,6 +139,22 @@ router.post("/create", async (req, res) => {
   } catch (err) {
     console.error("Error creating wallet:", err);
     res.status(500).json({ error: "Failed to create wallet" });
+  }
+});
+
+// POST /generate-new-address
+router.post("/generate-new-address", async (req, res) => {
+  const { asset } = req.body;
+  if (!asset) return res.status(400).json({ error: "Asset is required" });
+
+  try {
+    const result = await walletService.generateNewAddress(req.user.id, asset);
+    res.json(result);
+  } catch (err) {
+    console.error("Error generating HD address:", err);
+    res.status(500).json({
+      error: err.message || "Failed to generate new address",
+    });
   }
 });
 
