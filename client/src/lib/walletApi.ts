@@ -286,7 +286,7 @@ export const walletApi = {
     },
 
     // Preview swap
-    async previewSwap(fromCurrency: string, toCurrency: string, amount: number): Promise<{
+    async previewSwap(fromCurrency: string, toCurrency: string, amount: number, slippageTolerance?: number): Promise<{
         fromCurrency: string;
         toCurrency: string;
         amountIn: number;
@@ -297,12 +297,13 @@ export const walletApi = {
         netAmount: number;
         lockId: string;
         expiresAt: number;
+        slippage_tolerance?: number;
     }> {
         const headers = await getAuthHeader();
         const response = await fetch(`${API_base}/wallet/swap/preview`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ fromCurrency, toCurrency, amount })
+            body: JSON.stringify({ fromCurrency, toCurrency, amount, ...(slippageTolerance ? { slippageTolerance } : {}) })
         });
 
         const result = await response.json();
@@ -313,7 +314,7 @@ export const walletApi = {
     },
 
     // Execute swap
-    async executeSwap(fromCurrency: string, toCurrency: string, amount: number, idempotencyKey?: string, lockId?: string): Promise<{
+    async executeSwap(fromCurrency: string, toCurrency: string, amount: number, idempotencyKey?: string, lockId?: string, slippageTolerance?: number): Promise<{
         success: boolean;
         reference: string;
         fromCurrency: string;
@@ -327,7 +328,7 @@ export const walletApi = {
         const response = await fetch(`${API_base}/wallet/swap/execute`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ fromCurrency, toCurrency, amount, idempotencyKey, lockId })
+            body: JSON.stringify({ fromCurrency, toCurrency, amount, idempotencyKey, lockId, ...(slippageTolerance ? { slippageTolerance } : {}) })
         });
 
         const result = await response.json();

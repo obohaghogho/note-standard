@@ -23,6 +23,9 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
     const [amount, setAmount] = useState('');
     const [loading, setLoading] = useState(false);
     const [previewLoading, setPreviewLoading] = useState(false);
+    const [slippage, setSlippage] = useState<number>(0.5); // Default 0.5%
+    const [showSlippageSettings, setShowSlippageSettings] = useState(false);
+    
     const [preview, setPreview] = useState<{
         rate: number;
         fee: number;
@@ -70,7 +73,8 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
     const fetchPreview = async () => {
         setPreviewLoading(true);
         try {
-            const result = await walletApi.previewSwap(fromCurrency, toCurrency, parseFloat(amount));
+            const slippageDecimal = slippage / 100;
+            const result = await walletApi.previewSwap(fromCurrency, toCurrency, parseFloat(amount), slippageDecimal);
             setPreview({
                 rate: Number(result.rate ?? 0),
                 fee: Number(result.fee ?? 0),
@@ -115,12 +119,14 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
         setLoading(true);
         try {
             const idempotencyKey = `swap_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const slippageDecimal = slippage / 100;
             const result = await walletApi.executeSwap(
                 fromCurrency, 
                 toCurrency, 
                 numericAmount, 
                 idempotencyKey,
-                preview.lockId
+                preview.lockId,
+                slippageDecimal
             );
             
             toast.success(
@@ -252,6 +258,10 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
                                 <span>Fee ({Number(preview.feePercentage || 0).toFixed(2)}%)</span>
                                 <span>{formatCurrency(Number(preview.fee || 0), fromCurrency)}</span>
                             </div>
+                            <div className="flex justify-between text-xs text-gray-500 pt-1">
+                                <span>Max Slippage</span>
+                                <span>{slippage}%</span>
+                            </div>
                             <div className="flex justify-between items-center pt-1 border-t border-purple-500/10 mt-1">
                                 <span className="text-gray-500 flex items-center gap-1">
                                     <Clock size={10} />
@@ -267,6 +277,51 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
                             <Info size={14} />
                             Enter an amount to see quote
                         </div>
+                    )}
+                </div>
+
+                {/* Advanced Settings (Slippage) */}
+                <div className="pt-1">
+                    <button 
+                        onClick={() => setShowSlippageSettings(!showSlippageSettings)}
+                        className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1 transition-colors uppercase tracking-wider font-bold"
+                    >
+                        Advanced Settings {showSlippageSettings ? '▲' : '▼'}
+                    </button>
+                    
+                    {showSlippageSettings && (
+                        <motion.div 
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            className="mt-2 p-3 bg-gray-800/50 rounded-lg border border-gray-700/50"
+                        >
+                            <div className="text-[10px] text-gray-400 mb-2 uppercase tracking-wide">Slippage Tolerance</div>
+                            <div className="flex gap-2">
+                                {[0.1, 0.5, 1.0].map((val) => (
+                                    <button
+                                        key={val}
+                                        onClick={() => setSlippage(val)}
+                                        className={`px-2 py-1 text-xs rounded transition-colors font-medium ${
+                                            slippage === val 
+                                                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' 
+                                                : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-gray-700'
+                                        }`}
+                                    >
+                                        {val}%
+                                    </button>
+                                ))}
+                                <div className="flex-1 relative">
+                                    <input
+                                        type="number"
+                                        value={slippage}
+                                        onChange={(e) => setSlippage(parseFloat(e.target.value) || 0)}
+                                        step="0.1"
+                                        className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-right text-white focus:outline-none focus:border-purple-500 transition-colors"
+                                    />
+                                    <span className="absolute right-2 top-1.5 text-[10px] text-gray-500">%</span>
+                                </div>
+                            </div>
+                        </motion.div>
                     )}
                 </div>
 
