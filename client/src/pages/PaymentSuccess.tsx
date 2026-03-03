@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Loader2, ArrowRight } from 'lucide-react';
 import { Button } from '../components/common/Button';
 import toast from 'react-hot-toast';
-import { API_URL } from '../lib/api';
+import { API_URL, getAuthHeader } from '../lib/api';
 
 interface DepositStatus {
     id: string;
@@ -23,7 +23,6 @@ export const PaymentSuccess: React.FC = () => {
     useEffect(() => {
         const checkDepositStatus = async () => {
             if (!reference) {
-                // Try to get from localStorage
                 const storedRef = localStorage.getItem('pendingDepositReference');
                 if (!storedRef) {
                     setStatus('error');
@@ -37,25 +36,55 @@ export const PaymentSuccess: React.FC = () => {
                 return;
             }
 
+            const transactionId = searchParams.get('transaction_id');
+
             try {
-                // Poll for status (proactive verification now enabled on server)
+                // ── Step 1: Direct verify with Flutterwave API (bulletproof) ──
+                // This calls the backend which verifies directly with Flutterwave
+                // and credits the wallet immediately, bypassing webhook dependency.
+                if (transactionId) {
+                    try {
+                        const authHeader = await getAuthHeader();
+                        const verifyRes = await fetch(`${API_URL}/api/verify-payment`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                ...authHeader,
+                            },
+                            body: JSON.stringify({ transaction_id: transactionId }),
+                        });
+
+                        if (verifyRes.ok) {
+                            const verifyData = await verifyRes.json();
+                            if (verifyData.success && verifyData.status === 'COMPLETED') {
+                                setDeposit(verifyData.transaction);
+                                setStatus('success');
+                                localStorage.removeItem('pendingDepositReference');
+                                toast.success('Deposit successful!');
+                                return; // Done — no need to poll
+                            }
+                        }
+                    } catch (verifyErr) {
+                        console.warn('Direct verify failed, falling back to polling:', verifyErr);
+                    }
+                }
+
+                // ── Step 2: Fallback — poll status endpoint ──
                 let attempts = 0;
                 const maxAttempts = 12; // ~30 seconds total
                 let finished = false;
 
                 while (attempts < maxAttempts && !finished) {
                     attempts++;
-            try {
-                const transactionId = searchParams.get('transaction_id');
-                const pollUrl = new URL(`${API_URL}/api/webhooks/status/${ref}`);
-                if (transactionId) {
-                    pollUrl.searchParams.append('transaction_id', transactionId);
-                }
+                    try {
+                        const pollUrl = new URL(`${API_URL}/api/webhooks/status/${ref}`);
+                        if (transactionId) {
+                            pollUrl.searchParams.append('transaction_id', transactionId);
+                        }
 
-                const response = await fetch(pollUrl.toString());
-                        
+                        const response = await fetch(pollUrl.toString());
+
                         if (!response.ok) {
-                            // If it's a 404, it might still be propagating; keep polling
                             if (response.status === 404 && attempts < maxAttempts) {
                                 await new Promise(resolve => setTimeout(resolve, 2500));
                                 continue;
@@ -76,7 +105,6 @@ export const PaymentSuccess: React.FC = () => {
                             localStorage.removeItem('pendingDepositReference');
                             finished = true;
                         } else {
-                            // Still pending
                             if (attempts < maxAttempts) {
                                 await new Promise(resolve => setTimeout(resolve, 2500));
                             } else {
@@ -94,7 +122,6 @@ export const PaymentSuccess: React.FC = () => {
                 }
             } catch (err) {
                 console.error('Status check error:', err);
-                // Fallback to pending if we timed out or had a transient error
                 setStatus('pending');
             }
         };

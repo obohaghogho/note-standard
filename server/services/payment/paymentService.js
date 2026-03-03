@@ -330,73 +330,167 @@ class PaymentService {
   }
 
   /**
+  /**
    * Finalize transaction (Credit wallet, unlock ads, etc.)
    */
   async finalizeTransaction(reference, eventData = null) {
+    console.log(`\n--- START FINALIZE TRANSACTION [${reference}] ---`);
     const rawData = eventData?.raw || eventData;
-    // 1. Fetch transaction with basic lock if possible
-    const { data: txList, error: fetchError } = await supabase
+
+    console.log("STEP 1: Found transaction");
+
+    // 1. Fetch transaction safely using unique reference_id
+    const { data: tx, error: fetchError } = await supabase
       .from("transactions")
       .select("*")
-      .or(`reference_id.eq.${reference},provider_reference.eq.${reference}`)
-      .order("created_at", { ascending: false })
-      .limit(1);
+      .eq("reference_id", reference)
+      .single();
 
-    if (fetchError || !txList || txList.length === 0) {
-      logger.error("Transaction not found for finalize", { reference });
-      return { error: "Not found" };
+    if (fetchError || !tx) {
+      console.error(
+        `[Finalize] Transaction not found for reference: ${reference}`,
+        fetchError?.message,
+      );
+      return { status: "verification_failed", error: "Transaction not found" };
     }
 
-    const tx = txList[0];
-
     // 2. IDEMPOTENCY CHECK
-    // If already completed or failed with finality, stop here
     if (tx.status?.toUpperCase() === "COMPLETED") {
-      logger.info(`Transaction ${reference} already completed. Skipping.`);
+      console.log(
+        `[Finalize] Transaction ${reference} already completed. Skipping.`,
+      );
       return { status: "already_completed" };
     }
 
-    // 3. ATOMIC UPDATE (Match by ID and current status to prevent race conditions)
-    const { data: updatedTx, error: updateError } = await supabase
-      .from("transactions")
-      .update({
-        status: "COMPLETED",
-        external_hash: rawData ? (rawData.payment_id || rawData.id) : null,
-        display_label: eventData?.display_label || tx.display_label ||
-          "Digital Assets Purchase",
-        internal_coin: eventData?.internal_coin,
-        internal_amount: eventData?.internal_amount,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", tx.id)
-      .neq("status", "COMPLETED") // Allow PENDING, PROCESSING, FAILED, etc.
-      .select()
-      .maybeSingle();
+    console.log("STEP 2: Verification passed");
 
-    if (updateError || !updatedTx) {
-      // If update returned nothing, it means the status was likely changed by a concurrent process
-      logger.warn(`Finalize: Atomic update failed or skip for ${reference}`, {
-        error: updateError?.message,
-      });
-      return { status: "already_processed_or_failed" };
+    // 2a. Validate Verification Amount & Currency (if provided by eventData)
+    const evAmount = rawData?.amount || eventData?.amount;
+    const evCurrency = rawData?.currency || eventData?.currency ||
+      rawData?.currency_code || eventData?.payment_type;
+
+    if (evAmount !== undefined && evAmount !== null) {
+      const dbAmount = parseFloat(tx.amount);
+      const providerAmount = parseFloat(evAmount);
+
+      if (isNaN(providerAmount) || dbAmount !== providerAmount) {
+        console.error(
+          `[Finalize] Amount mismatch for ${reference}. DB: ${dbAmount}, Provider: ${providerAmount}`,
+        );
+        return {
+          status: "verification_failed",
+          error: "Amount mismatch between provider and database",
+        };
+      }
     }
 
-    logger.info(`Transaction ${reference} finalized successfully.`, {
-      type: tx.type,
-      userId: tx.user_id,
-    });
+    if (evCurrency) {
+      if (
+        String(tx.currency).toUpperCase() !== String(evCurrency).toUpperCase()
+      ) {
+        console.error(
+          `[Finalize] Currency mismatch for ${reference}. DB: ${tx.currency}, Provider: ${evCurrency}`,
+        );
+        return {
+          status: "verification_failed",
+          error: "Currency mismatch between provider and database",
+        };
+      }
+    }
 
-    // 2. Perform business logic based on type (Side effects ONLY)
-    // Wallet balances are automatically updated by DB triggers when status -> COMPLETED
+    const isDeposit = ["DEPOSIT", "FUNDING", "Digital Assets Purchase"]
+      .includes(tx.type?.toUpperCase() || tx.type);
+
+    if (isDeposit) {
+      console.log("STEP 3: Calling confirm_deposit");
+
+      if (!tx.wallet_id) {
+        console.error(
+          `[Finalize] Missing wallet_id for transaction ${tx.id}. Cannot credit wallet.`,
+        );
+        return { status: "verification_failed", error: "Missing wallet_id" };
+      }
+
+      const safeAmount = parseFloat(tx.amount);
+      if (isNaN(safeAmount) || safeAmount <= 0) {
+        console.error(`[Finalize] Invalid transaction amount: ${tx.amount}`);
+        return { status: "verification_failed", error: "Invalid amount" };
+      }
+
+      const externalHash = rawData
+        ? (rawData.payment_id || rawData.id || rawData.tx_ref || null)
+        : null;
+
+      // ── USE confirm_deposit RPC (atomic: wallets_store + transactions + ledger_entries) ──
+      const { error: rpcError } = await supabase.rpc("confirm_deposit", {
+        p_transaction_id: tx.id,
+        p_wallet_id: tx.wallet_id,
+        p_amount: safeAmount,
+        p_external_hash: externalHash ? String(externalHash) : null,
+      });
+
+      if (rpcError) {
+        console.error(
+          `[Finalize] confirm_deposit RPC failed for ${reference}:`,
+          rpcError.message || rpcError,
+        );
+
+        // Handle specific idempotent exceptions from the SQL RPC
+        if (
+          rpcError.message?.includes("already completed") ||
+          rpcError.message?.includes("already")
+        ) {
+          console.log(
+            `[Finalize] Transaction ${reference} was completed concurrently inside RPC.`,
+          );
+          return { status: "already_completed" };
+        }
+
+        return { status: "rpc_failed", error: rpcError.message };
+      }
+
+      console.log("STEP 4: Wallet credited successfully");
+    } else {
+      // ── NON-DEPOSIT types: manual update (subscriptions, ads, etc.) ──
+      console.log(`STEP 3: Updating Non-Deposit Transaction (${tx.type})`);
+
+      const externalHash = rawData ? (rawData.payment_id || rawData.id) : null;
+
+      const { data: updatedTx, error: updateError } = await supabase
+        .from("transactions")
+        .update({
+          status: "COMPLETED",
+          external_hash: externalHash ? String(externalHash) : null,
+          display_label: eventData?.display_label || tx.display_label ||
+            "Payment",
+          internal_coin: eventData?.internal_coin,
+          internal_amount: eventData?.internal_amount,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", tx.id)
+        .neq("status", "COMPLETED")
+        .select()
+        .single(); // Enforce we actually updated the row
+
+      if (updateError || !updatedTx) {
+        console.warn(
+          `[Finalize] Atomic update failed or skip for ${reference}. Concurrent process won.`,
+          updateError?.message,
+        );
+        return { status: "already_completed" };
+      }
+      console.log("STEP 4: Non-Deposit record updated successfully");
+    }
+
+    // 4. Perform business logic based on type (Side effects ONLY)
     const metadata = tx.metadata || {};
 
-    switch (tx.type) {
+    switch (tx.type?.toUpperCase() || tx.type) {
       case "DEPOSIT":
       case "FUNDING":
       case "Digital Assets Purchase":
-        // No action needed here, DB trigger handled the balance.
-        logger.info("Deposit finalized via ledger trigger", { txId: tx.id });
-        break;
+      case "DIGITAL ASSETS PURCHASE":
+        break; // Core processed via RPC
       case "AD_PAYMENT":
         await this.unlockAd(metadata.adId);
         break;

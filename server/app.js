@@ -99,6 +99,12 @@ app.use("/api/nowpayments/webhook", (req, res, next) => {
   req.url = "/nowpayments";
   next();
 }, require(path.join(__dirname, "routes", "webhooks")));
+
+app.use("/api/flutterwave/webhook", (req, res, next) => {
+  // Map this strictly to the Flutterwave handler in webhooks
+  req.url = "/flutterwave";
+  next();
+}, require(path.join(__dirname, "routes", "webhooks")));
 app.use("/api/payment", require(path.join(__dirname, "routes", "payment")));
 
 // Direct Verify Payment Route (as requested)

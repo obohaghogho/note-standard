@@ -21,6 +21,15 @@ exports.handlePaystack = async (req, res) => {
 };
 
 exports.handleFlutterwave = async (req, res) => {
+  // IMPORTANT: Verify Flutterwave secret hash before processing
+  const secretHash = process.env.FLW_SECRET_HASH;
+  if (req.headers["verif-hash"] !== secretHash) {
+    console.warn(
+      "[WebhookController] Flutterwave: Invalid verif-hash rejected",
+    );
+    return res.status(401).end();
+  }
+
   try {
     await paymentService.handleWebhook(
       "flutterwave",
