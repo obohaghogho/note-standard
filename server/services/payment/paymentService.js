@@ -177,22 +177,35 @@ class PaymentService {
   /**
    * Verify and update a single transaction status
    */
-  async verifyPaymentStatus(reference) {
-    const { data: tx, error } = await supabase
-      .from("transactions")
-      .select("*")
-      .eq("reference_id", reference)
-      .single();
+  async verifyPaymentStatus(reference, externalId = null) {
+    let query = supabase.from("transactions").select("*");
 
-    if (error || !tx) return null;
+    if (reference) {
+      query = query.eq("reference_id", reference);
+    } else if (externalId) {
+      // If no internal reference provided, try to find by provider_reference
+      query = query.eq("provider_reference", externalId);
+    } else {
+      return null;
+    }
+
+    const { data: tx, error } = await query.maybeSingle();
+
+    if (error || !tx) {
+      // If we still can't find it but we have an externalId,
+      // it might be a new transaction we haven't linked yet,
+      // or we need to verify with provider first to GET the reference.
+      // But for now, we expect the transaction to exist.
+      return null;
+    }
 
     // If already completed or failed, just return
     if (tx.status !== "PENDING") return tx;
 
     try {
       const provider = PaymentFactory.getProviderByName(tx.provider);
-      // Use provider_reference if available, otherwise fallback to reference_id
-      const queryRef = tx.provider_reference || tx.reference_id;
+      // Use externalId if provided, otherwise provider_reference, finally reference_id
+      const queryRef = externalId || tx.provider_reference || tx.reference_id;
 
       const verification = await provider.verify(queryRef);
 
@@ -321,22 +334,24 @@ class PaymentService {
    */
   async finalizeTransaction(reference, eventData = null) {
     const rawData = eventData?.raw || eventData;
-    // 1. Fetch transaction with basic lock if possible (Supabase doesn't support forUpdate directly in client)
-    // We use status check for idempotency
-    const { data: tx, error: fetchError } = await supabase
+    // 1. Fetch transaction with basic lock if possible
+    const { data: txList, error: fetchError } = await supabase
       .from("transactions")
       .select("*")
       .or(`reference_id.eq.${reference},provider_reference.eq.${reference}`)
-      .single();
+      .order("created_at", { ascending: false })
+      .limit(1);
 
-    if (fetchError || !tx) {
+    if (fetchError || !txList || txList.length === 0) {
       logger.error("Transaction not found for finalize", { reference });
       return { error: "Not found" };
     }
 
+    const tx = txList[0];
+
     // 2. IDEMPOTENCY CHECK
     // If already completed or failed with finality, stop here
-    if (tx.status === "COMPLETED") {
+    if (tx.status?.toUpperCase() === "COMPLETED") {
       logger.info(`Transaction ${reference} already completed. Skipping.`);
       return { status: "already_completed" };
     }
@@ -354,9 +369,9 @@ class PaymentService {
         updated_at: new Date().toISOString(),
       })
       .eq("id", tx.id)
-      .eq("status", "PENDING") // Critical: only update if still pending
+      .neq("status", "COMPLETED") // Allow PENDING, PROCESSING, FAILED, etc.
       .select()
-      .single();
+      .maybeSingle();
 
     if (updateError || !updatedTx) {
       // If update returned nothing, it means the status was likely changed by a concurrent process

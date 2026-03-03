@@ -59,19 +59,34 @@ class FlutterwaveProvider extends BaseProvider {
 
   async verify(reference) {
     try {
-      // Flutterwave can verify by tx_ref (our ref) or ID
-      const response = await this.client.get(
-        `/transactions/verify_by_reference?tx_ref=${reference}`,
-      );
-      const { status, amount, currency, tx_ref } = response.data.data;
+      // Use the specific transaction ID verification if it looks like a numeric ID or a Flutterwave ID
+      // Otherwise fallback to verify_by_reference (tx_ref)
+      let endpoint = `/transactions/verify_by_reference?tx_ref=${reference}`;
+
+      // If reference is a number or contains only digits, treat as transaction ID
+      if (/^\d+$/.test(reference)) {
+        endpoint = `/transactions/${reference}/verify`;
+      }
+
+      console.log(`[FlutterwaveProvider] Verifying via endpoint: ${endpoint}`);
+      const response = await this.client.get(endpoint);
+
+      const data = response.data.data;
+      const { status, amount, currency, tx_ref } = data;
+
+      // MAP INTERNAL STATUS: PaymentService expects 'success' or 'failed'
+      const mappedStatus = status === "successful"
+        ? "success"
+        : (["failed", "cancelled"].includes(status) ? "failed" : "pending");
 
       return {
-        success: status === "successful",
-        status: status,
+        success: response.data.status === "success" && status === "successful",
+        status: mappedStatus,
         amount: amount,
         currency: currency,
         reference: tx_ref,
         provider: "flutterwave",
+        raw: data,
       };
     } catch (error) {
       console.error(

@@ -13,6 +13,7 @@
     "prepare": "echo 'Skipping husky in production'"
   },
   "dependencies": {
+    "bip39": "^3.1.0",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "husky": "^9.1.7"

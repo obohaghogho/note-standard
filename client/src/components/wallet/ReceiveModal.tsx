@@ -4,6 +4,7 @@ import { Button } from '../common/Button';
 import { useWallet } from '../../hooks/useWallet';
 import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
+import { walletApi } from '../../lib/walletApi';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface ReceiveModalProps {
@@ -16,20 +17,54 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
     const { wallets, createWallet, loading: walletLoading } = useWallet();
     const [selectedCurrency, setSelectedCurrency] = useState(initialCurrency);
     const [copied, setCopied] = useState(false);
+    const [hdAddress, setHdAddress] = useState<string | null>(null);
+    const [hdLoading, setHdLoading] = useState(false);
 
     // Filter only crypto wallets for receiving (assuming fiat deposits are handled in FundModal)
-    // cryptoWallets variable removed as it was unused.
     const currentWallet = wallets.find(w => w.currency === selectedCurrency);
+    const displayAddress = hdAddress || currentWallet?.address || '';
 
     useEffect(() => {
-        if (isOpen && initialCurrency) {
+        if (isOpen) {
             setSelectedCurrency(initialCurrency);
+            fetchCurrentHdAddress(initialCurrency);
         }
     }, [isOpen, initialCurrency]);
 
+    const fetchCurrentHdAddress = async (asset: string) => {
+        if (['BTC', 'ETH', 'USDT'].includes(asset)) {
+            try {
+                setHdLoading(true);
+                const result = await walletApi.getCurrentAddress(asset);
+                setHdAddress(result.address);
+            } catch (error) {
+                console.error('Failed to fetch HD address:', error);
+            } finally {
+                setHdLoading(false);
+            }
+        } else {
+            setHdAddress(null);
+        }
+    };
+
+    const handleGenerateNew = async () => {
+        if (!['BTC', 'ETH', 'USDT'].includes(selectedCurrency)) return;
+        
+        try {
+            setHdLoading(true);
+            const result = await walletApi.generateNewAddress(selectedCurrency);
+            setHdAddress(result.address);
+            toast.success('New address generated');
+        } catch (error: any) {
+            toast.error(error.message || 'Failed to generate new address');
+        } finally {
+            setHdLoading(false);
+        }
+    };
+
     const handleCopy = () => {
-        if (currentWallet?.address) {
-            navigator.clipboard.writeText(currentWallet.address);
+        if (displayAddress) {
+            navigator.clipboard.writeText(displayAddress);
             setCopied(true);
             toast.success('Address copied to clipboard');
             setTimeout(() => setCopied(false), 2000);
@@ -37,11 +72,11 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
     };
 
     const handleShare = async () => {
-        if (currentWallet?.address && navigator.share) {
+        if (displayAddress && navigator.share) {
             try {
                 await navigator.share({
                     title: `Receive ${selectedCurrency}`,
-                    text: `My ${selectedCurrency} address: ${currentWallet.address}`,
+                    text: `My ${selectedCurrency} address: ${displayAddress}`,
                 });
             } catch (err) {
                 console.error('Share failed:', err);
@@ -54,6 +89,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
     // Auto-create wallet if it doesn't exist for selected currency
     const handleCurrencyChange = async (currency: string) => {
         setSelectedCurrency(currency);
+        fetchCurrentHdAddress(currency);
         const exists = wallets.find(w => w.currency === currency);
         if (!exists) {
             try {
@@ -104,7 +140,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
                     </div>
 
                     <AnimatePresence mode="wait">
-                        {currentWallet ? (
+                        {currentWallet || hdAddress ? (
                             <motion.div 
                                 key={selectedCurrency}
                                 initial={{ opacity: 0, y: 10 }}
@@ -113,27 +149,42 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
                                 className="space-y-6"
                             >
                                 {/* QR Code Card */}
-                                <div className="bg-white p-6 rounded-2xl mx-auto w-max shadow-xl ring-4 ring-white/10">
+                                <div className="bg-white p-6 rounded-2xl mx-auto w-max shadow-xl ring-4 ring-white/10 relative">
+                                    {hdLoading ? (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-2xl backdrop-blur-sm z-10">
+                                             <Loader2 className="animate-spin text-purple-600" size={40} />
+                                        </div>
+                                    ) : null}
                                     <QRCodeSVG 
-                                        value={currentWallet.address} 
+                                        value={displayAddress} 
                                         size={200}
                                         level="H"
                                         includeMargin={false}
-
                                     />
                                 </div>
 
                                 {/* Address Display */}
                                 <div className="space-y-2">
-                                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wider ml-1">
-                                        Your {selectedCurrency} Address
-                                    </label>
+                                    <div className="flex justify-between items-end ml-1">
+                                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Your {selectedCurrency} Address
+                                        </label>
+                                        {['BTC', 'ETH', 'USDT'].includes(selectedCurrency) && (
+                                            <button 
+                                                onClick={handleGenerateNew}
+                                                disabled={hdLoading}
+                                                className="text-[10px] text-purple-400 hover:text-purple-300 font-bold uppercase tracking-tighter transition-colors disabled:opacity-50"
+                                            >
+                                                {hdLoading ? 'Generating...' : 'Regenerate New'}
+                                            </button>
+                                        )}
+                                    </div>
                                     <div 
                                         onClick={handleCopy}
                                         className="group relative bg-gray-800/50 border border-gray-700/50 hover:border-purple-500/50 rounded-xl p-4 cursor-pointer transition-all active:scale-[0.99]"
                                     >
                                         <p className="font-mono text-sm text-gray-300 break-all text-center select-all">
-                                            {currentWallet.address}
+                                            {hdLoading ? '••••••••••••••••••••••••••••••••••••' : displayAddress}
                                         </p>
                                         <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl backdrop-blur-[1px]">
                                             <span className="text-white font-medium flex items-center gap-2">

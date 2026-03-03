@@ -67,8 +67,12 @@ router.get("/status/:reference", async (req, res) => {
   const { reference } = req.params;
 
   try {
+    const { transaction_id } = req.query;
     // Proactively verify with provider if pending
-    const status = await paymentService.verifyPaymentStatus(reference);
+    const status = await paymentService.verifyPaymentStatus(
+      reference,
+      transaction_id,
+    );
 
     if (!status) {
       return res.status(404).json({ error: "Deposit not found" });

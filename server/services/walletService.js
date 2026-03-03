@@ -140,6 +140,31 @@ class WalletService {
   }
 
   /**
+   * Get the latest "unused" address for a user/asset
+   * If none exists, generate a new one
+   */
+  async getLatestUnusedAddress(userId, asset) {
+    const upAsset = asset.toUpperCase();
+    const { data, error } = await supabase
+      .from("crypto_hd_addresses")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("asset", upAsset)
+      .eq("status", "unused")
+      .order("address_index", { ascending: false })
+      .limit(1);
+
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      return data[0];
+    }
+
+    // If no unused address found, generate a fresh one
+    return await this.generateNewAddress(userId, upAsset);
+  }
+
+  /**
    * Get a list of "unused" addresses for monitoring
    */
   async getUnusedAddresses(limit = 100) {

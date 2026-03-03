@@ -67,6 +67,7 @@ exports.handleCrypto = async (req, res) => {
 };
 
 exports.handleNowPayments = async (req, res) => {
+  console.log("Webhook body:", req.body);
   const { headers, body } = req;
   const paymentId = body.payment_id;
   const orderId = body.order_id;

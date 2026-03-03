@@ -35,6 +35,7 @@ exports.apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
 /**
  * Strict Withdrawal Limiter
  * 3 requests per 1 hour to prevent rapid fund draining
@@ -43,6 +44,20 @@ exports.withdrawalLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 3,
   message: { error: "Withdrawal limit exceeded. Please wait an hour." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
+ * HD Address Generation Limiter
+ * 10 requests per 1 hour as requested
+ */
+exports.hdAddressLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  message: {
+    error: "Address generation limit exceeded. Please try again in an hour.",
+  },
   standardHeaders: true,
   legacyHeaders: false,
 });
