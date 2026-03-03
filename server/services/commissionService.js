@@ -1,4 +1,5 @@
 const supabase = require("../config/supabase");
+const mathUtils = require("../utils/mathUtils");
 
 const commissionService = {
   /**
@@ -54,7 +55,7 @@ const commissionService = {
         if (userPlan === "BUSINESS") rate = rate * 0.5; // 50% discount on fees
 
         if (setting.commission_type === "PERCENTAGE") {
-          fee = amount * rate;
+          fee = parseFloat(mathUtils.multiply(amount, rate));
         } else if (setting.commission_type === "FIXED") {
           fee = rate;
         }
@@ -69,7 +70,7 @@ const commissionService = {
           rate = fundingRate / 100;
           if (userPlan === "PRO") rate = rate * 0.8; // 20% discount for PRO
           if (userPlan === "BUSINESS") rate = rate * 0.5; // 50% discount for BUSINESS
-          fee = amount * rate;
+          fee = parseFloat(mathUtils.multiply(amount, rate));
         } else if (transactionType === "WITHDRAWAL") {
           const withdrawFlat = await this.getSetting("withdrawal_fee_flat") ||
             0;
@@ -78,14 +79,18 @@ const commissionService = {
           rate = withdrawPerc / 100;
           if (userPlan === "PRO") rate = rate * 0.8; // 20% discount for PRO
           if (userPlan === "BUSINESS") rate = rate * 0.5; // 50% discount for BUSINESS
-          fee = withdrawFlat + (amount * rate);
+
+          const percentFee = parseFloat(mathUtils.multiply(amount, rate));
+          fee = withdrawFlat + percentFee;
         }
       }
 
+      const netAmountPrecise = parseFloat(amount) - fee;
+
       return {
-        fee: parseFloat(fee.toFixed(8)),
+        fee: mathUtils.formatForCurrency(fee, currency),
         rate: rate,
-        netAmount: parseFloat((amount - fee).toFixed(8)),
+        netAmount: mathUtils.formatForCurrency(netAmountPrecise, currency),
       };
     } catch (err) {
       console.error("Error calculating commission:", err);
@@ -110,7 +115,9 @@ const commissionService = {
       spreadPercentage = spreadPercentage * 0.5; // 50% discount
     }
 
-    const spreadAmount = marketPrice * spreadPercentage;
+    const spreadAmount = parseFloat(
+      mathUtils.multiply(marketPrice, spreadPercentage),
+    );
     const finalPrice = type === "BUY"
       ? marketPrice + spreadAmount
       : marketPrice - spreadAmount;

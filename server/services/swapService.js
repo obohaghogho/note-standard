@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require("uuid");
 const fxService = require("./fxService");
 const commissionService = require("./commissionService");
 const logger = require("../utils/logger");
+const mathUtils = require("../utils/mathUtils");
 
 // Rate Lock Cache: Stores quoted rates for 30 seconds
 const rateLocks = new Map();
@@ -36,6 +37,7 @@ async function calculateSwapPreview(
   toCurrency,
   amount,
   userPlan = "FREE",
+  slippageTolerance = 0.005, // 0.5% default
 ) {
   try {
     console.log(
@@ -44,8 +46,10 @@ async function calculateSwapPreview(
 
     // REQUIREMENT: Integrated real pricing (CoinGecko via fxService)
     const marketPrice = await fxService.getRate(fromCurrency, toCurrency);
-    if (!marketPrice) {
-      throw new Error(`Could not fetch rate for ${fromCurrency}/${toCurrency}`);
+    if (!marketPrice || marketPrice <= 0) {
+      throw new Error(
+        `Could not fetch reliable rate for ${fromCurrency}/${toCurrency}. Swapping is temporarily unavailable.`,
+      );
     }
 
     const spreadResult = await commissionService.calculateSpread(
@@ -71,10 +75,23 @@ async function calculateSwapPreview(
       );
     }
 
-    const amountOut = amountToSwap * finalPrice;
+    // Determine output based on quote rate
+    // Note: fxService.getRate returns price of `fromCurrency` in terms of `toCurrency`
+    // Example: getRate('USD', 'ETH') => 1 USD = 0.0003 ETH
+    // Example: getRate('ETH', 'USD') => 1 ETH = 3000 USD
+    // Therefore we ALWAY multiply amountToSwap * rate from fxService natively
+
+    // We use mathUtils to protect precision against float math bugs
+    const preciseAmountOut = mathUtils.multiply(amountToSwap, finalPrice);
+
+    // Format output with correct decimal precision
+    const formattedAmountOut = mathUtils.formatForCurrency(
+      parseFloat(preciseAmountOut),
+      toCurrency,
+    );
 
     console.log(
-      `[SwapService] Preview calculated: ${amountToSwap} * ${finalPrice} = ${amountOut}`,
+      `[SwapService] Preview calculated: ${amountToSwap} * ${finalPrice} = ${formattedAmountOut}`,
     );
 
     // REQUIREMENT: Max Swap Limit Check
@@ -87,8 +104,14 @@ async function calculateSwapPreview(
     const maxSwap = parseFloat(maxSwapSetting?.value || "5000");
     if (amount > maxSwap) {
       throw new Error(
-        `Maximum swap amount exceeded (Limit: ${maxSwap} USD equivalent)`,
+        `Maximum swap amount exceeded (Limit: ${maxSwap} equivalent)`,
       );
+    }
+
+    // REQUIREMENT: Min Swap Limit Check
+    const minSwap = 1; // E.g., at least 1 USD/EUR equivalent
+    if (amount < minSwap) {
+      throw new Error(`Minimum swap amount is ${minSwap} ${fromCurrency}`);
     }
 
     // REQUIREMENT: Ensure both wallets exist to get valid IDs
@@ -123,11 +146,12 @@ async function calculateSwapPreview(
         from_wallet_id: fromWalletId,
         to_wallet_id: toWalletId,
         from_amount: amount,
-        to_amount: parseFloat(amountOut.toFixed(8)),
+        to_amount: formattedAmountOut,
         from_currency: fromCurrency,
         to_currency: toCurrency,
         rate: finalPrice,
         fee: feeResult.fee,
+        slippage_tolerance: slippageTolerance,
         expires_at: new Date(Date.now() + LOCK_EXPIRY_MS).toISOString(),
         metadata: {
           market_price: spreadResult.marketPrice,
@@ -168,6 +192,7 @@ async function executeSwap(
   idempotencyKey = null,
   userPlan = "FREE",
   lockId = null, // Rate lock optional but highly recommended
+  slippageTolerance = 0.005, // 0.5% default
 ) {
   let preview;
 
@@ -189,11 +214,14 @@ async function executeSwap(
   } else {
     // Fallback to fresh quote if no lock (less desirable)
     preview = await calculateSwapPreview(
+      userId, // Fixed missing userId
       fromCurrency,
       toCurrency,
       amount,
       userPlan,
+      slippageTolerance,
     );
+    lockId = preview.lockId; // Generate lock dynamically
   }
 
   // Check for duplicate request
@@ -214,10 +242,14 @@ async function executeSwap(
   // The wallet existence and balance check is now handled by the RPC function
   // based on the quote ID, which ensures wallets exist and balance is sufficient.
 
+  // Get exact current market price at time of execution to enforce slippage strictly in RPC
+  const currentMarketRate = await fxService.getRate(fromCurrency, toCurrency);
+
   const { data: txId, error: txError } = await supabase.rpc(
     "execute_swap_from_quote",
     {
       p_quote_id: lockId,
+      p_current_market_rate: currentMarketRate,
       p_idempotency_key: idempotencyKey,
     },
   );
@@ -234,7 +266,7 @@ async function executeSwap(
       type: "wallet_swap",
       title: "Swap Completed",
       message:
-        `Successfully swapped ${parseAmount} ${fromCurrency} for ${preview.amountOut} ${toCurrency}`,
+        `Successfully swapped ${amount} ${fromCurrency} for ${preview.to_amount} ${toCurrency}`,
       link: "/dashboard/wallet",
     });
   } catch (nErr) {
@@ -246,10 +278,10 @@ async function executeSwap(
     transactionId: txId,
     fromCurrency,
     toCurrency,
-    amountIn: parseAmount,
-    amountOut: preview.amountOut,
+    amountIn: amount,
+    amountOut: preview.to_amount,
     fee: preview.fee,
-    rate: preview.finalPrice,
+    rate: preview.rate,
   };
 }
 

@@ -556,7 +556,7 @@ router.post("/deposit/bank", checkConsent, async (req, res) => {
 
 // SWAP ENDPOINTS
 router.post("/swap/preview", async (req, res) => {
-  const { fromCurrency, toCurrency, amount } = req.body;
+  const { fromCurrency, toCurrency, amount, slippageTolerance } = req.body;
   try {
     const preview = await swapService.calculateSwapPreview(
       req.user.id,
@@ -564,6 +564,7 @@ router.post("/swap/preview", async (req, res) => {
       toCurrency,
       parseFloat(amount),
       req.user.plan,
+      slippageTolerance ? parseFloat(slippageTolerance) : 0.005,
     );
     res.json(preview);
   } catch (err) {
@@ -580,14 +581,21 @@ router.post(
   transactionLimiter,
   checkConsent,
   async (req, res) => {
-    const { fromCurrency, toCurrency, amount, idempotencyKey, lockId } =
-      req.body;
+    const {
+      fromCurrency,
+      toCurrency,
+      amount,
+      idempotencyKey,
+      lockId,
+      slippageTolerance,
+    } = req.body;
     console.log("[Swap Execute] Request:", {
       fromCurrency,
       toCurrency,
       amount,
       idempotencyKey,
       lockId,
+      slippageTolerance,
       userId: req.user?.id,
       plan: req.user?.plan,
     });
@@ -600,6 +608,7 @@ router.post(
         idempotencyKey,
         req.user.plan,
         lockId,
+        slippageTolerance ? parseFloat(slippageTolerance) : 0.005,
       );
       res.json(result);
     } catch (err) {
