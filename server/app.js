@@ -94,7 +94,19 @@ app.use(
 );
 app.use("/api/webhooks", require(path.join(__dirname, "routes", "webhooks")));
 app.use("/webhook", require(path.join(__dirname, "routes", "webhooks"))); // Alias for payment providers
+app.use("/api/nowpayments/webhook", (req, res, next) => {
+  // Map this strictly to the NowPayments handler in webhooks
+  req.url = "/nowpayments";
+  next();
+}, require(path.join(__dirname, "routes", "webhooks")));
 app.use("/api/payment", require(path.join(__dirname, "routes", "payment")));
+
+// Direct Verify Payment Route (as requested)
+const { requireAuth } = require(path.join(__dirname, "middleware", "auth"));
+const paymentController = require(
+  path.join(__dirname, "controllers", "payment", "paymentController"),
+);
+app.post("/api/verify-payment", requireAuth, paymentController.verifyPayment);
 app.use("/api/media", require(path.join(__dirname, "routes", "media")));
 app.use("/api/agora-token", require(path.join(__dirname, "routes", "agora")));
 app.use("/api/agora", require(path.join(__dirname, "routes", "agora"))); // Legacy alias

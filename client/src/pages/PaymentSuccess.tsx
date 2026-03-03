@@ -45,8 +45,14 @@ export const PaymentSuccess: React.FC = () => {
 
                 while (attempts < maxAttempts && !finished) {
                     attempts++;
-                    try {
-                        const response = await fetch(`${API_URL}/api/webhooks/status/${ref}`);
+            try {
+                const transactionId = searchParams.get('transaction_id');
+                const pollUrl = new URL(`${API_URL}/api/webhooks/status/${ref}`);
+                if (transactionId) {
+                    pollUrl.searchParams.append('transaction_id', transactionId);
+                }
+
+                const response = await fetch(pollUrl.toString());
                         
                         if (!response.ok) {
                             // If it's a 404, it might still be propagating; keep polling

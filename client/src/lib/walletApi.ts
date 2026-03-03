@@ -211,6 +211,21 @@ export const walletApi = {
         return result;
     },
 
+    async getCurrentAddress(asset: string): Promise<{ address: string; asset: string; path: string; index: number }> {
+        const headers = await getAuthHeader();
+        const response = await fetch(`${API_base}/wallet/current-address?asset=${asset}`, {
+            method: 'GET',
+            headers,
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to fetch current address');
+        }
+
+        return response.json();
+    },
+
     // Unified Payment Initialization (New)
     async initializePayment(data: {
         amount: number;

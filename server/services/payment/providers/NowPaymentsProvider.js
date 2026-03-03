@@ -48,8 +48,9 @@ class NowPaymentsProvider extends BaseProvider {
       const data = await nowpaymentsService.getPaymentStatus(reference);
 
       let status = "pending";
-      if (data.payment_status === "finished") status = "success";
-      else if (["failed", "expired"].includes(data.payment_status)) {
+      if (["finished", "confirmed"].includes(data.payment_status)) {
+        status = "success";
+      } else if (["failed", "expired"].includes(data.payment_status)) {
         status = "failed";
       }
 
@@ -85,7 +86,7 @@ class NowPaymentsProvider extends BaseProvider {
     const paymentStatus = payload.payment_status;
     let status = "pending";
 
-    if (paymentStatus === "finished") status = "success";
+    if (["finished", "confirmed"].includes(paymentStatus)) status = "success";
     else if (["failed", "expired"].includes(paymentStatus)) status = "failed";
 
     return {

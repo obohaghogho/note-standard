@@ -44,32 +44,87 @@ class BlockchainService {
   }
 
   /**
-   * Iterate through all unused addresses and check for balances
+   * Iterate through all users/assets and ensure up to 20 addresses lookahead
    */
   async pollAddresses() {
     try {
       logger.info(
-        "[BlockchainService] Polling unused HD addresses for activity...",
+        "[BlockchainService] Starting poll with 20-address gap limit...",
       );
 
-      // Get addresses that are 'unused' and not 'expired'
-      const { data: addresses, error } = await supabase
-        .from("crypto_hd_addresses")
-        .select("*")
-        .eq("status", "unused")
-        .order("created_at", { ascending: true })
-        .limit(50); // Process in manageable batches
+      // 1. Get all unique user/asset pairs that have HD indices
+      const { data: userAssets, error: fetchError } = await supabase
+        .from("crypto_hd_indices")
+        .select("user_id, asset, next_index");
 
-      if (error) throw error;
-      if (!addresses || addresses.length === 0) {
-        logger.info("[BlockchainService] No unused addresses to poll.");
+      if (fetchError) throw fetchError;
+      if (!userAssets || userAssets.length === 0) {
+        logger.info("[BlockchainService] No HD indices found to monitor.");
         return;
       }
 
-      for (const addrRecord of addresses) {
-        await this.checkAddressActivity(addrRecord);
-        // Respect rate limits of public APIs
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+      for (const { user_id, asset, next_index } of userAssets) {
+        // 2. Ensure we have derived and stored up to (next_index + 20)
+        // This implements the lookahead/gap limit
+        const gapLimit = 20;
+        const targetMaxIndex = next_index + gapLimit;
+
+        // Check if we already have these addresses
+        const { data: existingAddr, error: addrError } = await supabase
+          .from("crypto_hd_addresses")
+          .select("address_index, status")
+          .eq("user_id", user_id)
+          .eq("asset", asset)
+          .gte("address_index", next_index)
+          .lte("address_index", targetMaxIndex);
+
+        if (addrError) {
+          logger.error(
+            `Error fetching addresses for ${user_id}/${asset}:`,
+            addrError.message,
+          );
+          continue;
+        }
+
+        const existingIndices = new Set(
+          existingAddr.map((a) => a.address_index),
+        );
+
+        // derive missing addresses in the gap
+        for (let i = next_index; i <= targetMaxIndex; i++) {
+          if (!existingIndices.has(i)) {
+            try {
+              await walletService.generateNewAddress(user_id, asset);
+            } catch (genError) {
+              logger.error(
+                `Failed to pre-derive index ${i} for ${user_id}/${asset}:`,
+                genError.message,
+              );
+            }
+          }
+        }
+
+        // 3. Poll all "unused" addresses for this user/asset
+        const { data: unusedForUser, error: unusedError } = await supabase
+          .from("crypto_hd_addresses")
+          .select("*")
+          .eq("user_id", user_id)
+          .eq("asset", asset)
+          .eq("status", "unused");
+
+        if (unusedError) {
+          logger.error(
+            `Error fetching unused for ${user_id}/${asset}:`,
+            unusedError.message,
+          );
+          continue;
+        }
+
+        for (const addrRecord of unusedForUser) {
+          await this.checkAddressActivity(addrRecord);
+          // Small delay to respect rate limits
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
       }
     } catch (error) {
       logger.error("[BlockchainService] Polling error:", error.message);

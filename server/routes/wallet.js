@@ -9,7 +9,7 @@ const swapService = require("../services/swapService");
 const invoiceService = require("../services/invoiceService");
 const walletService = require("../services/walletService");
 const { checkUserPlan, checkConsent } = require("../middleware/monetization");
-const { transactionLimiter, withdrawalLimiter } = require(
+const { transactionLimiter, withdrawalLimiter, hdAddressLimiter } = require(
   "../middleware/rateLimiter",
 );
 
@@ -143,17 +143,40 @@ router.post("/create", async (req, res) => {
 });
 
 // POST /generate-new-address
-router.post("/generate-new-address", async (req, res) => {
-  const { asset } = req.body;
+router.post(
+  "/generate-new-address",
+  hdAddressLimiter,
+  async (req, res) => {
+    const { asset } = req.body;
+    if (!asset) return res.status(400).json({ error: "Asset is required" });
+
+    try {
+      const result = await walletService.generateNewAddress(req.user.id, asset);
+      res.json(result);
+    } catch (err) {
+      console.error("Error generating HD address:", err);
+      res.status(500).json({
+        error: err.message || "Failed to generate new address",
+      });
+    }
+  },
+);
+
+// GET /current-address
+router.get("/current-address", async (req, res) => {
+  const { asset } = req.query;
   if (!asset) return res.status(400).json({ error: "Asset is required" });
 
   try {
-    const result = await walletService.generateNewAddress(req.user.id, asset);
+    const result = await walletService.getLatestUnusedAddress(
+      req.user.id,
+      asset,
+    );
     res.json(result);
   } catch (err) {
-    console.error("Error generating HD address:", err);
+    console.error("Error fetching current HD address:", err);
     res.status(500).json({
-      error: err.message || "Failed to generate new address",
+      error: err.message || "Failed to fetch current address",
     });
   }
 });
