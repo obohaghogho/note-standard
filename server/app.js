@@ -107,6 +107,18 @@ const paymentController = require(
   path.join(__dirname, "controllers", "payment", "paymentController"),
 );
 app.post("/api/verify-payment", requireAuth, paymentController.verifyPayment);
+
+// Direct Flutterwave Webhook Route (as requested)
+app.post("/api/flutterwave-webhook", async (req, res) => {
+  try {
+    console.log("Webhook received:", JSON.stringify(req.body, null, 2));
+    return res.status(200).send("Webhook received");
+  } catch (error) {
+    console.error("Webhook Error:", error);
+    return res.status(500).send("Error");
+  }
+});
+
 app.use("/api/media", require(path.join(__dirname, "routes", "media")));
 app.use("/api/agora-token", require(path.join(__dirname, "routes", "agora")));
 app.use("/api/agora", require(path.join(__dirname, "routes", "agora"))); // Legacy alias
