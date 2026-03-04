@@ -32,7 +32,7 @@ export const LedgerTrail: React.FC<LedgerTrailProps> = ({ className = '', refres
             'transfer_in': 'Received',
             'swap_debit': 'Swap Out',
             'swap_credit': 'Swap In',
-            'fee': 'Fee',
+            'fee': 'Service Fee',
             'payout': 'Payout',
             'affiliate_commission': 'Commission',
             'subscription_payment': 'Subscription',

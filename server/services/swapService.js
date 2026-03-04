@@ -69,7 +69,7 @@ async function calculateSwapPreview(
 
     if (netAmount <= 0) {
       throw new Error(
-        `Amount too small to cover the 7.5% platform fee (${
+        `Amount too small to cover the 7.5% platform service fee (${
           totalFee.toFixed(2)
         } ${fromCurrency})`,
       );

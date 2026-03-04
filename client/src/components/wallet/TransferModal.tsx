@@ -165,7 +165,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, s
                                 className="bg-blue-900/10 border border-blue-500/20 p-4 rounded-xl text-sm space-y-2"
                             >
                                 <div className="flex justify-between text-gray-400">
-                                    <span>Network Fee (Est.)</span>
+                                    <span>Digital Asset Access Fee</span>
                                     <span>{formatCurrency(transferFee.fee, selectedCurrency)}</span>
                                 </div>
                                 <div className="flex justify-between font-bold text-white pt-2 border-t border-blue-500/20">

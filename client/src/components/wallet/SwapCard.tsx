@@ -255,7 +255,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
                                 <span className="text-purple-300">1 {fromCurrency} ≈ {formatCurrency(Number(preview.rate || 0), toCurrency)}</span>
                             </div>
                             <div className="flex justify-between text-gray-400">
-                                <span>Fee (7.5%)</span>
+                                <span>Transaction Processing Fee (7.5%)</span>
                                 <span>{formatCurrency(Number(preview.fee || 0), fromCurrency)}</span>
                             </div>
                             
