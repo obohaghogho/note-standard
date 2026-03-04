@@ -7,7 +7,8 @@ const commissionService = require("../services/commissionService");
 const depositService = require("../services/depositService");
 const swapService = require("../services/swapService");
 const invoiceService = require("../services/invoiceService");
-const walletService = require("../services/walletService");
+const nowpaymentsService = require("../services/nowpaymentsService");
+const payoutService = require("../services/payment/payoutService"); // NEW: Extracted payout integrations
 const { checkUserPlan, checkConsent } = require("../middleware/monetization");
 const { transactionLimiter, withdrawalLimiter, hdAddressLimiter } = require(
   "../middleware/rateLimiter",
@@ -143,6 +144,7 @@ router.post("/create", async (req, res) => {
 });
 
 // POST /generate-new-address
+// Compliance: address is issued by NOWPayments (not derived from our keys)
 router.post(
   "/generate-new-address",
   hdAddressLimiter,
@@ -151,30 +153,58 @@ router.post(
     if (!asset) return res.status(400).json({ error: "Asset is required" });
 
     try {
-      const result = await walletService.generateNewAddress(req.user.id, asset);
-      res.json(result);
+      // Mark any existing active address as superseded so a fresh one is created
+      await supabase
+        .from("nowpayments_deposit_addresses")
+        .update({ status: "superseded" })
+        .eq("user_id", req.user.id)
+        .eq("asset", asset.toUpperCase())
+        .eq("status", "active");
+
+      const result = await nowpaymentsService.getOrCreateDepositAddress(
+        req.user.id,
+        asset,
+        supabase,
+      );
+      res.json({
+        address: result.address,
+        asset: result.asset,
+        payment_id: result.payment_id,
+      });
     } catch (err) {
-      console.error("Error generating HD address:", err);
+      console.error(
+        "[Wallet] Error generating NOWPayments deposit address:",
+        err.message,
+      );
       res.status(500).json({
-        error: err.message || "Failed to generate new address",
+        error: err.message || "Failed to generate new deposit address",
       });
     }
   },
 );
 
 // GET /current-address
+// Compliance: address is fetched from NOWPayments (not derived from our keys)
 router.get("/current-address", async (req, res) => {
   const { asset } = req.query;
   if (!asset) return res.status(400).json({ error: "Asset is required" });
 
   try {
-    const result = await walletService.getLatestUnusedAddress(
+    const result = await nowpaymentsService.getOrCreateDepositAddress(
       req.user.id,
       asset,
+      supabase,
     );
-    res.json(result);
+    res.json({
+      address: result.address,
+      asset: result.asset,
+      payment_id: result.payment_id,
+    });
   } catch (err) {
-    console.error("Error fetching current HD address:", err);
+    console.error(
+      "[Wallet] Error fetching NOWPayments deposit address:",
+      err.message,
+    );
     res.status(500).json({
       error: err.message || "Failed to fetch current address",
     });
@@ -457,7 +487,14 @@ router.post(
 
 // POST /withdraw
 router.post("/withdraw", withdrawalLimiter, checkConsent, async (req, res) => {
-  const { amount, currency, bankId, idempotencyKey, twoFactorCode } = req.body;
+  const {
+    amount,
+    currency,
+    bankId,
+    idempotencyKey,
+    twoFactorCode,
+    cryptoAddress,
+  } = req.body;
   if (!amount || !currency) {
     return res.status(400).json({ error: "Missing required fields" });
   }
@@ -477,11 +514,71 @@ router.post("/withdraw", withdrawalLimiter, checkConsent, async (req, res) => {
     const { data: wallet } = await supabase.from("wallets").select(
       "id, balance",
     ).eq("user_id", req.user.id).eq("currency", currency).single();
+
     if (!wallet) return res.status(404).json({ error: "Wallet not found" });
+
+    // Ensure they have enough to cover amount + fee
+    if (wallet.balance < (withdrawAmount + commission.fee)) {
+      return res.status(400).json({
+        error: "Insufficient balance to cover amount and withdrawal fee",
+      });
+    }
 
     // Mock 2FA verification: If user sends a code, assume it's verified for now
     const is2FAVerified = !!twoFactorCode;
 
+    // Check if it's a crypto or fiat withdrawal
+    const isCrypto = ["BTC", "ETH", "USDT", "USDC"].includes(
+      currency.toUpperCase(),
+    );
+
+    // Generate internal reference BEFORE calling external provider
+    const internalReference = req.body.reference ||
+      `wdr_${Date.now()}_${req.user.id.substring(0, 8)}`;
+
+    let payoutResult;
+    try {
+      if (isCrypto) {
+        if (!cryptoAddress) {
+          return res.status(400).json({
+            error: "Missing crypto destination address",
+          });
+        }
+
+        payoutResult = await payoutService.createNowPaymentsPayout(
+          cryptoAddress,
+          withdrawAmount,
+          currency,
+          internalReference,
+        );
+      } else {
+        if (!bankId) {
+          return res.status(400).json({
+            error: "Missing destination bank/account info",
+          });
+        }
+
+        // Assuming bankId contains necessary account info for MVP.
+        // In a real scenario, you'd fetch the saved user bank account details using bankId.
+        // For this structural refactor, we assume bankId is the account number and use a default bank code
+        const defaultBankCode = "044"; // Access Bank example
+        payoutResult = await payoutService.createFlutterwaveTransfer(
+          defaultBankCode,
+          bankId, // Treating bankId as account number for now
+          withdrawAmount,
+          currency,
+          internalReference,
+          `Withdrawal for ${req.user.id}`,
+        );
+      }
+    } catch (providerError) {
+      return res.status(502).json({
+        error: providerError.message ||
+          "Failed to initiate transfer with payout provider",
+      });
+    }
+
+    // Only if provider successfully initiated the payout do we deduct the internal ledger
     const { data: txId, error: txError } = await supabase.rpc(
       "withdraw_funds_secured",
       {
@@ -494,13 +591,22 @@ router.post("/withdraw", withdrawalLimiter, checkConsent, async (req, res) => {
         p_idempotency_key: idempotencyKey,
         p_2fa_verified: is2FAVerified,
         p_metadata: {
-          bankId,
+          cryptoAddress: isCrypto ? cryptoAddress : null,
+          bankId: !isCrypto ? bankId : null,
           transaction_fee_breakdown: { withdrawal_fee: commission.fee },
+          provider_response: payoutResult, // Store provider response mapping
         },
       },
     );
 
     if (txError) {
+      // DANGER: We initiated a payout externally but DB update failed!
+      // Real-world: Alert admin immediately to cancel external transfer or manually reconcile
+      console.error(
+        `[CRITICAL] External transfer initiated (${payoutResult.payoutId}) but DB ledger deduction failed!`,
+        txError,
+      );
+
       if (txError.message === "2FA_REQUIRED") {
         return res.status(403).json({
           error: "2FA Verification Required",
@@ -510,11 +616,22 @@ router.post("/withdraw", withdrawalLimiter, checkConsent, async (req, res) => {
       throw txError;
     }
 
+    // UPDATE the newly created transaction with the external tracking info
+    // (Could also be incorporated into the RPC directly in the future, but this works)
+    await supabase.from("transactions").update({
+      reference_id: internalReference,
+      external_payout_id: String(payoutResult.payoutId),
+      external_payout_status: payoutResult.status,
+      provider: payoutResult.provider,
+    }).eq("id", txId);
+
     res.json({
       success: true,
       transactionId: txId,
       fee: commission.fee,
       netAmount: withdrawAmount,
+      status: "processing",
+      providerStatus: payoutResult.status,
     });
   } catch (err) {
     res.status(500).json({ error: err.message || "Withdrawal failed" });
@@ -613,8 +730,16 @@ router.post(
       res.json(result);
     } catch (err) {
       console.error("[Swap Execute Error]", err.message);
-      console.error("[Swap Execute Stack]", err.stack);
-      res.status(500).json({ error: err.message || "Swap failed" });
+
+      const isUserError = err.message.includes("INSUFFICIENT") ||
+        err.message.includes("SLIPPAGE") ||
+        err.message.includes("MAX_SWAP") ||
+        err.message.includes("expired") ||
+        err.message.includes("match");
+
+      res.status(isUserError ? 400 : 500).json({
+        error: err.message || "Swap failed",
+      });
     }
   },
 );

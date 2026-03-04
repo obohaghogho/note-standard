@@ -36,12 +36,25 @@ export const Footer = () => {
                     </div>
                 </div>
 
-                <div className="pt-8 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-500">
+                <div className="pt-8 mb-4 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-500">
                     <p>© 2024 Note Standard. All rights reserved.</p>
                     <div className="flex gap-4">
                         <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
                         <Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
                     </div>
+                </div>
+
+                {/* --- LEGAL DISCLAIMER --- */}
+                <div className="pt-4 border-t border-white/10 text-[10px] md:text-xs text-gray-500/80 text-center max-w-4xl mx-auto space-y-2 leading-relaxed">
+                    <p>
+                        <strong>Note Standard is a financial technology software platform, not a bank.</strong> We provide a dashboard interface and facilitate access to payment and digital asset services.
+                    </p>
+                    <p>
+                        All fiat currency processing, transmission, and custody are handled exclusively by licensed third-party financial institutions and payment gateways (e.g., Flutterwave). Note Standard does not hold, manage, or directly transmit fiat funds on behalf of users.
+                    </p>
+                    <p>
+                        All digital asset (cryptocurrency) conversion, processing, and custody are provided by licensed third-party virtual asset service providers (e.g., NOWPayments). Note Standard does not generate wallets, hold private keys, or operate an internal cryptocurrency exchange.
+                    </p>
                 </div>
             </div>
         </footer>

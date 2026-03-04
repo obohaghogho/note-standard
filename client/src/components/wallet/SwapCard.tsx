@@ -108,7 +108,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
         const numericAmount = Number(amount || 0);
         if (numericAmount <= 0) return toast.error('Please enter a valid amount');
         
-        // Use a small epsilon for float comparison safety
+        // Inclusion fee logic: Just check if amount > balance
         if (numericAmount > Number(availableBalance || 0) + 0.0000000001) {
             return toast.error('Insufficient balance');
         }
@@ -145,7 +145,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
     };
 
     const numericAmount = Number(amount || 0);
-    const isInsufficient = numericAmount > Number(availableBalance || 0) && numericAmount > 0;
+    const isInsufficient = numericAmount > (Number(availableBalance || 0) + 0.0000000001) && numericAmount > 0;
 
     return (
         <motion.div 
@@ -255,9 +255,20 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
                                 <span className="text-purple-300">1 {fromCurrency} ≈ {formatCurrency(Number(preview.rate || 0), toCurrency)}</span>
                             </div>
                             <div className="flex justify-between text-gray-400">
-                                <span>Fee ({Number(preview.feePercentage || 0).toFixed(2)}%)</span>
+                                <span>Fee (7.5%)</span>
                                 <span>{formatCurrency(Number(preview.fee || 0), fromCurrency)}</span>
                             </div>
+                            
+                            {/* Detailed breakdown */}
+                            <div className="grid grid-cols-2 gap-y-0.5 text-[9px] text-gray-500 pt-1 border-t border-purple-500/5">
+                                <span>Platform (6%)</span>
+                                <span className="text-right">{formatCurrency(numericAmount * 0.06, fromCurrency)}</span>
+                                <span>Referrer (0.5%)</span>
+                                <span className="text-right">{formatCurrency(numericAmount * 0.005, fromCurrency)}</span>
+                                <span>Reward (1%)</span>
+                                <span className="text-right">{formatCurrency(numericAmount * 0.01, fromCurrency)}</span>
+                            </div>
+
                             <div className="flex justify-between text-xs text-gray-500 pt-1">
                                 <span>Max Slippage</span>
                                 <span>{slippage}%</span>
