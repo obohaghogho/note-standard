@@ -253,7 +253,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
                             </div>
                             <div className="flex justify-between text-gray-400">
                                 <span className="flex flex-col">
-                                    <span>Total Fee (7.5%)</span>
+                                    <span>Transaction Processing Fee (7.5%)</span>
                                 </span>
                                 <span>{formatCurrency(Number(preview.fee || 0), fromCurrency)}</span>
                             </div>
