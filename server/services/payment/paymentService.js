@@ -13,6 +13,7 @@ class PaymentService {
     email,
     amount,
     currency,
+    network = "native",
     metadata = {},
     options = {},
   ) {
@@ -59,6 +60,7 @@ class PaymentService {
       .select("id")
       .eq("user_id", userId)
       .eq("currency", currency)
+      .eq("network", network)
       .single();
 
     if (!wallet) {
@@ -67,7 +69,8 @@ class PaymentService {
         .insert({
           user_id: userId,
           currency,
-          address: `internal_${userId.substring(0, 8)}_${currency}`,
+          network,
+          address: `internal_${userId.substring(0, 8)}_${currency}_${network}`,
         })
         .select()
         .single();
@@ -96,6 +99,7 @@ class PaymentService {
         amount_to: parseFloat(amount), // ledger
         from_currency: currency, // ledger
         to_currency: currency, // ledger
+        network: network,
         status: "PENDING",
         reference_id: reference,
         provider: providerName,
@@ -135,6 +139,7 @@ class PaymentService {
         email,
         amount,
         currency,
+        network,
         reference,
         callbackUrl,
         metadata: {

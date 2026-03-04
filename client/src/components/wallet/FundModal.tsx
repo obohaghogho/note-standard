@@ -10,12 +10,19 @@ interface FundModalProps {
     isOpen: boolean;
     onClose: () => void;
     selectedCurrency: Currency;
+    selectedNetwork?: string;
     onSuccess: () => void;
 }
 
 type DepositMethod = 'card' | 'bank' | 'crypto';
 
-export const FundModal: React.FC<FundModalProps> = ({ isOpen, onClose, selectedCurrency, onSuccess: _onSuccess }) => {
+export const FundModal: React.FC<FundModalProps> = ({ 
+    isOpen, 
+    onClose, 
+    selectedCurrency, 
+    selectedNetwork = 'native',
+    onSuccess: _onSuccess 
+}) => {
     const [method, setMethod] = useState<DepositMethod>('card');
     const [amount, setAmount] = useState('');
     const [loading, setLoading] = useState(false);
@@ -37,7 +44,7 @@ export const FundModal: React.FC<FundModalProps> = ({ isOpen, onClose, selectedC
     } | null>(null);
     const [cryptoStatus, setCryptoStatus] = useState<string>('PENDING');
 
-    const isCrypto = selectedCurrency === 'BTC' || selectedCurrency === 'ETH';
+    const isCrypto = selectedCurrency === 'BTC' || selectedCurrency === 'ETH' || selectedCurrency.startsWith('USDT') || selectedCurrency.startsWith('USDC');
     const isFiat = !isCrypto; 
 
     useEffect(() => {
@@ -91,6 +98,7 @@ export const FundModal: React.FC<FundModalProps> = ({ isOpen, onClose, selectedC
             const result = await walletApi.initializePayment({
                 amount: parseFloat(amount),
                 currency: selectedCurrency,
+                network: selectedNetwork,
                 options: { isCrypto: true },
                 metadata: { idempotencyKey }
             });
@@ -99,7 +107,7 @@ export const FundModal: React.FC<FundModalProps> = ({ isOpen, onClose, selectedC
                 address: result.payAddress || '',
                 reference: result.reference,
                 paymentUrl: result.paymentUrl,
-                network: selectedCurrency === 'BTC' ? 'Bitcoin' : 'Ethereum'
+                network: selectedNetwork !== 'native' ? selectedNetwork : (selectedCurrency === 'BTC' ? 'Bitcoin' : 'Ethereum')
             });
             toast.success('Deposit address generated!');
         } catch (err: unknown) {
@@ -115,8 +123,8 @@ export const FundModal: React.FC<FundModalProps> = ({ isOpen, onClose, selectedC
             const result = await walletApi.generateNewAddress(selectedCurrency);
             setCryptoAddress({
                 address: result.address,
-                network: selectedCurrency === 'BTC' ? 'Bitcoin' : 'Ethereum (ERC20)',
-                reference: `hd_${result.index}_${Date.now()}`
+                network: selectedCurrency.includes('_') ? selectedCurrency.split('_')[1] : (selectedCurrency === 'BTC' ? 'Bitcoin' : 'Ethereum (ERC20)'),
+                reference: `np_${result.payment_id}_${Date.now()}`
             });
             setCryptoStatus('PENDING'); // Reset status for new address
             toast.success("New deposit address generated!");

@@ -12,16 +12,34 @@ class NowPaymentsProvider extends BaseProvider {
    * Initialize crypto payment link
    */
   async initialize(data) {
-    const { amount, currency, reference, callbackUrl, metadata } = data;
+    const { amount, currency, network, reference, callbackUrl, metadata } =
+      data;
 
     try {
+      // Derive payCurrency from currency and network
+      const payCurrencyMap = {
+        "BTC_BITCOIN": "btc",
+        "ETH_ETHEREUM": "eth",
+        "USDT_TRC20": "usdttrc20",
+        "USDT_ERC20": "usdterc20",
+        "USDT_BEP20": "usdtbsc",
+        "USDC_ERC20": "usdcerc20",
+        "USDC_POLYGON": "usdcmatictoken",
+      };
+
+      const lookupKey = `${currency.toUpperCase()}_${
+        (network || "native").toUpperCase()
+      }`;
+      const payCurrency = metadata.payCurrency || payCurrencyMap[lookupKey] ||
+        currency.toLowerCase();
+
       const paymentData = await nowpaymentsService.createNowPaymentsPayment({
         amount,
         currency,
         orderId: reference,
-        orderDescription: "Digital Assets Purchase",
+        orderDescription: `Digital Assets Purchase: ${currency} (${network})`,
         ipnCallbackUrl: process.env.NOWPAYMENTS_WEBHOOK_URL || callbackUrl,
-        payCurrency: metadata.payCurrency || "btc",
+        payCurrency: payCurrency,
       });
 
       return {

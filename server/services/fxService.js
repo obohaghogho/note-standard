@@ -1,6 +1,8 @@
 const axios = require("axios");
 const supabase = require("../config/supabase");
 const logger = require("../utils/logger");
+const nowpaymentsService = require("./nowpaymentsService");
+const exchangeRateService = require("./exchangeRateService");
 
 // 1. Configuration constants
 const FIAT_CACHE_TTL = 3600 * 1000; // 1 hour for fiat
@@ -12,7 +14,12 @@ const COINGECKO_ID_MAP = {
   "BTC": "bitcoin",
   "ETH": "ethereum",
   "USDT": "tether",
+  "USDT_TRC20": "tether",
+  "USDT_ERC20": "tether",
+  "USDT_BEP20": "tether",
   "USDC": "usd-coin",
+  "USDC_ERC20": "usd-coin",
+  "USDC_POLYGON": "usd-coin",
   "NGN": "nigerian-naira",
   "EUR": "euro",
   "GBP": "british-pound-sterling",
@@ -22,34 +29,75 @@ const COINGECKO_ID_MAP = {
 /**
  * Get exchange rate for a currency pair
  */
-async function getRate(from, to, applyBuffer = false) {
-  if (from === to) return 1.0;
+async function getRate(
+  from,
+  to,
+  applyBuffer = false,
+  fromNetwork = "native",
+  toNetwork = "native",
+) {
+  if (from === to && fromNetwork === toNetwork) return 1.0;
 
   try {
     const cacheKey = `${from}_${to}`;
     const cached = rateCache.get(cacheKey);
 
-    // Determine TTL based on whether it's crypto or tracked fiat
-    const isCryptoOrTracked = COINGECKO_ID_MAP[from] || COINGECKO_ID_MAP[to];
-    const ttl = isCryptoOrTracked ? CRYPTO_CACHE_TTL : FIAT_CACHE_TTL;
+    // Determine if we are dealing with crypto or fiat
+    const isCryptoPair = COINGECKO_ID_MAP[from] && COINGECKO_ID_MAP[to];
+    const fromIsCrypto = COINGECKO_ID_MAP[from] &&
+      !["EUR", "GBP", "JPY", "NGN"].includes(from);
+    const toIsCrypto = COINGECKO_ID_MAP[to] &&
+      !["EUR", "GBP", "JPY", "NGN"].includes(to);
+    const isFiatPair = !fromIsCrypto && !toIsCrypto;
 
-    if (cached && (Date.now() - cached.timestamp < ttl)) {
-      return cached.rate;
+    // REQUIREMENT: For crypto-to-crypto swaps on specific networks, prioritize provider estimates (NOWPayments)
+    if (isCryptoPair && fromNetwork !== "native" && toNetwork !== "native") {
+      try {
+        const providerRate = await getProviderRate(
+          from,
+          to,
+          1,
+          fromNetwork,
+          toNetwork,
+        );
+        if (providerRate) return providerRate;
+      } catch (err) {
+        logger.warn(
+          `[FXService] Provider rate fetch failed for ${from}->${to}, falling back...`,
+        );
+      }
     }
 
-    // Fetch fresh rate
+    // Fetch fresh rate logic
     let rate;
 
-    // Logic: If either is tracked (crypto or specific fiat), we use CoinGecko
-    if (isCryptoOrTracked) {
-      rate = await fetchCryptoRate(from, to);
-    } else {
-      // Try ExchangeRate-API if key exists
-      rate = await fetchFiatRate(from, to);
-
-      // Fallback to CoinGecko if ExchangeRate-API fails/is unconfigured
-      if (!rate) {
+    // RULE: If it's a fiat pair (e.g. USD->NGN, USD->EUR) or for displaying fiat balances,
+    // prioritize the dedicated ExchangeRate-API.
+    if (isFiatPair) {
+      try {
+        rate = await exchangeRateService.getFiatRate(from, to);
+      } catch (err) {
+        logger.warn(
+          `[FXService] exchangeRateService primary failed for ${from}->${to}, trying CoinGecko fallback...`,
+        );
         rate = await fetchCryptoRate(from, to);
+      }
+    } else {
+      // It's a crypto pair: use CoinGecko as primary
+      try {
+        rate = await fetchCryptoRate(from, to);
+        // Fallback to ExchangeRate-API if crypto API fails and it's a crypto-fiat pair
+        if (!rate && (fromIsCrypto !== toIsCrypto)) {
+          logger.info(
+            `[FXService] Primary crypto API failed for ${from}->${to}, attempting fallback...`,
+          );
+          rate = await exchangeRateService.getFiatRate(from, to);
+        }
+      } catch (err) {
+        logger.warn(
+          `[FXService] Primary crypto API error for ${from}->${to}, attempting fallback...`,
+        );
+        rate = await exchangeRateService.getFiatRate(from, to);
       }
     }
 
@@ -165,22 +213,12 @@ async function fetchCryptoRate(from, to) {
 }
 
 /**
- * Fetch Fiat Rate via ExchangeRate-API
+ * Fetch Fiat Rate via dedicated service
  */
 async function fetchFiatRate(from, to) {
-  const apiKey = process.env.EXCHANGERATE_API_KEY;
-  if (!apiKey) return null;
-
   try {
-    const response = await axios.get(
-      `https://v6.exchangerate-api.com/v6/${apiKey}/pair/${from}/${to}`,
-      { timeout: 5000 },
-    );
-    return response.data.conversion_rate;
+    return await exchangeRateService.getFiatRate(from, to);
   } catch (err) {
-    logger.warn(
-      `[FXService] Fiat fetch failed for ${from}->${to}: ${err.message}`,
-    );
     return null;
   }
 }
@@ -192,7 +230,20 @@ async function convert(amount, from, to) {
 
 async function getAllRates(base) {
   // REQUIREMENT: Optimized batch fetching for all supported currencies
-  const currencies = ["BTC", "ETH", "USD", "NGN", "EUR", "GBP", "JPY"];
+  const currencies = [
+    "BTC",
+    "ETH",
+    "USD",
+    "NGN",
+    "EUR",
+    "GBP",
+    "JPY",
+    "USDT_TRC20",
+    "USDT_ERC20",
+    "USDT_BEP20",
+    "USDC_ERC20",
+    "USDC_POLYGON",
+  ];
   const results = {};
 
   // Try to batch fetch as many as possible via CoinGecko
@@ -236,8 +287,32 @@ async function getAllRates(base) {
   return results;
 }
 
+/**
+ * Fetch rate from NOWPayments provider
+ */
+async function getProviderRate(from, to, amount = 1, fromNetwork, toNetwork) {
+  try {
+    const fromTicker = fromNetwork && fromNetwork !== "native"
+      ? `${from}_${fromNetwork.toUpperCase()}`
+      : from;
+    const toTicker = toNetwork && toNetwork !== "native"
+      ? `${to}_${toNetwork.toUpperCase()}`
+      : to;
+
+    const estimate = await nowpaymentsService.getExchangeEstimate(
+      fromTicker,
+      toTicker,
+      amount,
+    );
+    return estimate.rate;
+  } catch (err) {
+    return null;
+  }
+}
+
 module.exports = {
   getRate,
   convert,
   getAllRates,
+  getProviderRate,
 };

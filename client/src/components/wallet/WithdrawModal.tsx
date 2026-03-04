@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, ArrowUpRight, Loader2, Building2 } from 'lucide-react';
+import { X, ArrowUpRight, Loader2, Building2, AlertTriangle, Clock, ShieldCheck } from 'lucide-react';
 import { Button } from '../common/Button';
 import { useWallet } from '../../hooks/useWallet';
 import { formatCurrency } from '../../lib/CurrencyFormatter';
@@ -11,10 +11,17 @@ interface WithdrawModalProps {
     isOpen: boolean;
     onClose: () => void;
     selectedCurrency: Currency;
+    selectedNetwork?: string;
     onSuccess: () => void;
 }
 
-export const WithdrawModal: React.FC<WithdrawModalProps> = ({ isOpen, onClose, selectedCurrency, onSuccess }) => {
+export const WithdrawModal: React.FC<WithdrawModalProps> = ({ 
+    isOpen, 
+    onClose, 
+    selectedCurrency, 
+    selectedNetwork = 'native',
+    onSuccess 
+}) => {
     const { withdraw, getCommissionRate, wallets } = useWallet();
     const [address, setAddress] = useState('');
     const [amount, setAmount] = useState('');
@@ -36,7 +43,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({ isOpen, onClose, s
         b.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const wallet = wallets.find(w => w.currency === selectedCurrency);
+    const wallet = wallets.find(w => w.currency === selectedCurrency && w.network === selectedNetwork);
     const availableBalance = wallet ? (wallet.available_balance ?? wallet.balance) : 0;
 
     useEffect(() => {
@@ -96,7 +103,8 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({ isOpen, onClose, s
                 bank_name: isFiat ? selectedBank?.name : undefined,
                 account_number: isFiat ? accountNumber : undefined,
                 account_name: isFiat ? accountName : undefined,
-                country: isFiat ? selectedCountry : undefined
+                country: isFiat ? selectedCountry : undefined,
+                network: isFiat ? undefined : selectedNetwork
             });
             onSuccess();
             onClose();
@@ -127,7 +135,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({ isOpen, onClose, s
 
                 <h2 className="modal-header">
                     <ArrowUpRight size={20} className="text-orange-500" />
-                    Withdraw {selectedCurrency}
+                    Withdraw {selectedCurrency} {selectedNetwork !== 'native' ? `(${selectedNetwork})` : ''}
                 </h2>
                 
                 <form onSubmit={handleWithdraw} className="modal-body flex flex-col gap-5">
@@ -252,23 +260,58 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({ isOpen, onClose, s
                             </div>
                         </div>
                     ) : (
-                         <div className="space-y-1">
-                            <label htmlFor="withdraw-destination-address" className="text-sm text-gray-400 font-medium ml-1">
-                                Destination Address
-                            </label>
-                            <div className="relative">
-                                <input 
-                                    id="withdraw-destination-address"
-                                    name="address"
-                                    type="text" 
-                                    value={address}
-                                    onChange={(e) => setAddress(e.target.value)}
-                                    className="w-full bg-gray-800 border border-gray-700 rounded-xl p-3.5 pl-10 text-white focus:border-orange-500 outline-none transition-all"
-                                    placeholder="Wallet Address (0x...)"
-                                    required
-                                    autoComplete="off"
-                                />
-                                <Building2 className="absolute left-3.5 top-3.5 text-gray-500" size={18} />
+                          <div className="space-y-4">
+                            {/* Network Warning & Info */}
+                            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 space-y-3">
+                                <div className="flex gap-3 text-red-400">
+                                    <AlertTriangle size={20} className="shrink-0" />
+                                    <div className="text-xs space-y-1">
+                                        <p className="font-bold uppercase tracking-wider">Network Warning</p>
+                                        <p>Send only <strong>{selectedCurrency} ({selectedNetwork?.toUpperCase()})</strong> to this address. Sending via other networks will result in permanent loss of funds.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-3 space-y-1">
+                                    <div className="flex items-center gap-2 text-gray-400 text-[10px] uppercase font-bold tracking-widest">
+                                        <ShieldCheck size={12} />
+                                        <span>Min. Withdrawal</span>
+                                    </div>
+                                    <p className="text-sm font-medium text-white">0.001 {selectedCurrency}</p>
+                                </div>
+                                <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-3 space-y-1">
+                                    <div className="flex items-center gap-2 text-gray-400 text-[10px] uppercase font-bold tracking-widest">
+                                        <Clock size={12} />
+                                        <span>Est. Arrival</span>
+                                    </div>
+                                    <p className="text-sm font-medium text-white">10 - 30 Mins</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label htmlFor="withdraw-destination-address" className="text-sm text-gray-400 font-medium ml-1">
+                                    Destination Address
+                                </label>
+                                <div className="relative">
+                                    <input 
+                                        id="withdraw-destination-address"
+                                        name="address"
+                                        type="text" 
+                                        value={address}
+                                        onChange={(e) => setAddress(e.target.value)}
+                                        className="w-full bg-gray-800 border border-gray-700 rounded-xl p-3.5 pl-10 text-white focus:border-orange-500 outline-none transition-all"
+                                        placeholder={
+                                            selectedNetwork === 'trc20' ? "TRC20 Address (T...)" : 
+                                            selectedNetwork === 'polygon' ? "Polygon Address (0x...)" :
+                                            selectedNetwork === 'bep20' ? "BEP20 Address (0x...)" :
+                                            "Wallet Address (0x...)"
+                                        }
+                                        required
+                                        autoComplete="off"
+                                    />
+                                    <Building2 className="absolute left-3.5 top-3.5 text-gray-500" size={18} />
+                                </div>
                             </div>
                         </div>
                     )}

@@ -111,7 +111,7 @@ router.get("/commission-rate", async (req, res) => {
 
 // POST /create
 router.post("/create", async (req, res) => {
-  const { currency } = req.body;
+  const { currency, network = "native" } = req.body;
   if (!currency) return res.status(400).json({ error: "Currency is required" });
 
   try {
@@ -120,7 +120,8 @@ router.post("/create", async (req, res) => {
       .select("id")
       .eq("user_id", req.user.id)
       .eq("currency", currency)
-      .single();
+      .eq("network", network)
+      .maybeSingle();
 
     if (existing) return res.json(existing);
 
@@ -129,8 +130,9 @@ router.post("/create", async (req, res) => {
       .insert({
         user_id: req.user.id,
         currency: currency,
+        network: network,
         balance: 0,
-        address: uuidv4(),
+        address: uuidv4(), // Fallback; normally generated on-demand by provider
       })
       .select()
       .single();
@@ -149,26 +151,31 @@ router.post(
   "/generate-new-address",
   hdAddressLimiter,
   async (req, res) => {
-    const { asset } = req.body;
+    const { asset, network } = req.body;
     if (!asset) return res.status(400).json({ error: "Asset is required" });
 
     try {
+      const upAsset = asset.toUpperCase().trim();
+      const upNetwork = (network || "").toUpperCase().trim();
+
       // Mark any existing active address as superseded so a fresh one is created
       await supabase
         .from("nowpayments_deposit_addresses")
         .update({ status: "superseded" })
         .eq("user_id", req.user.id)
-        .eq("asset", asset.toUpperCase())
+        .eq("asset", upAsset)
         .eq("status", "active");
 
       const result = await nowpaymentsService.getOrCreateDepositAddress(
         req.user.id,
-        asset,
+        upAsset,
+        upNetwork,
         supabase,
       );
       res.json({
         address: result.address,
-        asset: result.asset,
+        currency: result.currency,
+        network: result.network,
         payment_id: result.payment_id,
       });
     } catch (err) {
@@ -186,18 +193,23 @@ router.post(
 // GET /current-address
 // Compliance: address is fetched from NOWPayments (not derived from our keys)
 router.get("/current-address", async (req, res) => {
-  const { asset } = req.query;
+  const { asset, network } = req.query;
   if (!asset) return res.status(400).json({ error: "Asset is required" });
 
   try {
+    const upAsset = asset.toUpperCase().trim();
+    const upNetwork = (network || "").toUpperCase().trim();
+
     const result = await nowpaymentsService.getOrCreateDepositAddress(
       req.user.id,
-      asset,
+      upAsset,
+      upNetwork,
       supabase,
     );
     res.json({
       address: result.address,
-      asset: result.asset,
+      currency: result.currency,
+      network: result.network,
       payment_id: result.payment_id,
     });
   } catch (err) {
@@ -313,12 +325,9 @@ router.post(
   checkConsent,
   async (req, res) => {
     const {
-      recipientEmail,
-      amount,
-      currency,
-      recipientId,
       recipientAddress,
       idempotencyKey,
+      network = "native",
     } = req.body;
 
     if (
@@ -336,7 +345,10 @@ router.post(
       if (!targetUserId && recipientAddress) {
         const { data: targetWallet } = await supabase.from("wallets").select(
           "user_id",
-        ).eq("address", recipientAddress).eq("currency", currency).single();
+        ).eq("address", recipientAddress).eq("currency", currency).eq(
+          "network",
+          network,
+        ).single();
         if (targetWallet) targetUserId = targetWallet.user_id;
         else if (
           (currency === "BTC" &&
@@ -375,7 +387,10 @@ router.post(
 
       const { data: senderWallet } = await supabase.from("wallets").select(
         "id, balance",
-      ).eq("user_id", req.user.id).eq("currency", currency).single();
+      ).eq("user_id", req.user.id).eq("currency", currency).eq(
+        "network",
+        network,
+      ).single();
       if (!senderWallet) {
         return res.status(404).json({
           error: "Sender wallet not found",
@@ -422,11 +437,15 @@ router.post(
       // Internal transfer logic...
       let { data: recipientWallet } = await supabase.from("wallets").select(
         "id",
-      ).eq("user_id", targetUserId).eq("currency", currency).single();
+      ).eq("user_id", targetUserId).eq("currency", currency).eq(
+        "network",
+        network,
+      ).single();
       if (!recipientWallet) {
         const { data: newWallet } = await supabase.from("wallets").insert({
           user_id: targetUserId,
           currency,
+          network,
           balance: 0,
           address: uuidv4(),
         }).select().single();
@@ -494,6 +513,7 @@ router.post("/withdraw", withdrawalLimiter, checkConsent, async (req, res) => {
     idempotencyKey,
     twoFactorCode,
     cryptoAddress,
+    network = "native",
   } = req.body;
   if (!amount || !currency) {
     return res.status(400).json({ error: "Missing required fields" });
@@ -513,7 +533,8 @@ router.post("/withdraw", withdrawalLimiter, checkConsent, async (req, res) => {
 
     const { data: wallet } = await supabase.from("wallets").select(
       "id, balance",
-    ).eq("user_id", req.user.id).eq("currency", currency).single();
+    ).eq("user_id", req.user.id).eq("currency", currency).eq("network", network)
+      .single();
 
     if (!wallet) return res.status(404).json({ error: "Wallet not found" });
 
@@ -528,8 +549,8 @@ router.post("/withdraw", withdrawalLimiter, checkConsent, async (req, res) => {
     const is2FAVerified = !!twoFactorCode;
 
     // Check if it's a crypto or fiat withdrawal
-    const isCrypto = ["BTC", "ETH", "USDT", "USDC"].includes(
-      currency.toUpperCase(),
+    const isCrypto = ["BTC", "ETH", "USDT", "USDC", "MATIC"].some((c) =>
+      currency.toUpperCase().startsWith(c)
     );
 
     // Generate internal reference BEFORE calling external provider
@@ -550,6 +571,7 @@ router.post("/withdraw", withdrawalLimiter, checkConsent, async (req, res) => {
           withdrawAmount,
           currency,
           internalReference,
+          network,
         );
       } else {
         if (!bankId) {
@@ -617,12 +639,12 @@ router.post("/withdraw", withdrawalLimiter, checkConsent, async (req, res) => {
     }
 
     // UPDATE the newly created transaction with the external tracking info
-    // (Could also be incorporated into the RPC directly in the future, but this works)
     await supabase.from("transactions").update({
       reference_id: internalReference,
       external_payout_id: String(payoutResult.payoutId),
       external_payout_status: payoutResult.status,
       provider: payoutResult.provider,
+      status: "PROCESSING",
     }).eq("id", txId);
 
     res.json({
@@ -673,7 +695,14 @@ router.post("/deposit/bank", checkConsent, async (req, res) => {
 
 // SWAP ENDPOINTS
 router.post("/swap/preview", async (req, res) => {
-  const { fromCurrency, toCurrency, amount, slippageTolerance } = req.body;
+  const {
+    fromCurrency,
+    toCurrency,
+    amount,
+    slippageTolerance,
+    fromNetwork,
+    toNetwork,
+  } = req.body;
   try {
     const preview = await swapService.calculateSwapPreview(
       req.user.id,
@@ -682,6 +711,8 @@ router.post("/swap/preview", async (req, res) => {
       parseFloat(amount),
       req.user.plan,
       slippageTolerance ? parseFloat(slippageTolerance) : 0.005,
+      fromNetwork || "native",
+      toNetwork || "native",
     );
     res.json(preview);
   } catch (err) {
@@ -705,6 +736,8 @@ router.post(
       idempotencyKey,
       lockId,
       slippageTolerance,
+      fromNetwork,
+      toNetwork,
     } = req.body;
     console.log("[Swap Execute] Request:", {
       fromCurrency,
@@ -726,6 +759,8 @@ router.post(
         req.user.plan,
         lockId,
         slippageTolerance ? parseFloat(slippageTolerance) : 0.005,
+        fromNetwork || "native",
+        toNetwork || "native",
       );
       res.json(result);
     } catch (err) {
