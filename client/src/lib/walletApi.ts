@@ -190,12 +190,11 @@ export const walletApi = {
         return result;
     },
 
-    // NEW: Generate a new HD deposit address
+    // NEW: Generate a fresh NOWPayments deposit address (marks existing as superseded)
     async generateNewAddress(asset: string): Promise<{
         address: string;
         asset: string;
-        path: string;
-        index: number;
+        payment_id: string;
     }> {
         const headers = await getAuthHeader();
         const response = await fetch(`${API_base}/wallet/generate-new-address`, {
@@ -211,7 +210,8 @@ export const walletApi = {
         return result;
     },
 
-    async getCurrentAddress(asset: string): Promise<{ address: string; asset: string; path: string; index: number }> {
+    // Get or create active NOWPayments deposit address for the given asset
+    async getCurrentAddress(asset: string): Promise<{ address: string; asset: string; payment_id: string }> {
         const headers = await getAuthHeader();
         const response = await fetch(`${API_base}/wallet/current-address?asset=${asset}`, {
             method: 'GET',

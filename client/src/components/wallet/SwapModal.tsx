@@ -98,7 +98,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
             return;
         }
 
-        if (numericAmount > Number(availableBalance || 0)) {
+        if (numericAmount > Number(availableBalance || 0) + 0.0000000001) {
             toast.error('Insufficient balance');
             return;
         }
@@ -130,7 +130,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
     if (!isOpen) return null;
 
     const numericAmount = Number(amount || 0);
-    const isInsufficient = numericAmount > Number(availableBalance || 0) && numericAmount > 0;
+    const isInsufficient = numericAmount > (Number(availableBalance || 0) + 0.0000000001) && numericAmount > 0;
 
     return (
         <div className="modal-overlay">
@@ -249,15 +249,28 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
                         <div className="bg-gray-800 rounded-lg p-3 space-y-2 text-sm">
                             <div className="flex justify-between text-gray-400">
                                 <span>Exchange Rate</span>
-                                <span>1 {fromCurrency} = {formatCurrency(Number(preview.rate || 0), toCurrency)}</span>
+                                <span className="font-medium">1 {fromCurrency} = {formatCurrency(Number(preview.rate || 0), toCurrency)}</span>
                             </div>
                             <div className="flex justify-between text-gray-400">
-                                <span>Fee ({Number(preview.feePercentage || 0).toFixed(2)}%)</span>
+                                <span className="flex flex-col">
+                                    <span>Total Fee (7.5%)</span>
+                                </span>
                                 <span>{formatCurrency(Number(preview.fee || 0), fromCurrency)}</span>
                             </div>
+                            
+                            {/* Detailed breakdown in small text */}
+                            <div className="grid grid-cols-2 gap-y-1 text-[10px] text-gray-500 pt-1 border-t border-gray-700/50">
+                                <span>Platform (6%)</span>
+                                <span className="text-right">{formatCurrency(numericAmount * 0.06, fromCurrency)}</span>
+                                <span>Referrer (0.5%)</span>
+                                <span className="text-right">{formatCurrency(numericAmount * 0.005, fromCurrency)}</span>
+                                <span>Reward (1%)</span>
+                                <span className="text-right">{formatCurrency(numericAmount * 0.01, fromCurrency)}</span>
+                            </div>
+
                             <div className="flex justify-between font-medium pt-2 border-t border-gray-700">
                                 <span>You'll get (approx)</span>
-                                <span className="text-green-400">{formatCurrency(Number(preview.amountOut || 0), toCurrency)}</span>
+                                <span className="text-green-400 font-bold">{formatCurrency(Number(preview.amountOut || 0), toCurrency)}</span>
                             </div>
                             <div className="flex justify-between text-xs text-gray-500 pt-1">
                                 <span>Max Slippage allowed</span>

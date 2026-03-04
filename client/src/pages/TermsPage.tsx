@@ -21,78 +21,183 @@ export const TermsPage = () => {
                 </button>
 
                 <Card variant="glass" className="p-8 md:p-12">
-                    <h1 className="text-4xl font-bold mb-8">Terms & Conditions</h1>
+                    <h1 className="text-4xl font-bold mb-4">TERMS & CONDITIONS</h1>
+                    
+                    <div className="mb-8 text-gray-400 text-sm space-y-1">
+                        <p><strong>Effective Date:</strong> 04/03/2026</p>
+                        <p><strong>Company Name:</strong> aghogho plyboard enterprise</p>
+                        <p><strong>App Name:</strong> notestandard</p>
+                    </div>
 
                     <div className="space-y-8 text-gray-300">
                         <div>
-                            <p className="leading-relaxed mb-6">
-                                Welcome to <strong>Note Standard</strong>. We believe in a new internet model where user privacy and 
-                                sustainable monetization coexist. By signing up for our services, you agree to the following terms and conditions:
-                            </p>
+                            <h2 className="text-2xl font-semibold text-white mb-4">1. Introduction</h2>
+                            <p className="mb-2">Welcome to notestandard (“Platform”).</p>
+                            <p className="mb-2">We provide a financial technology platform that enables users to access payment processing and digital asset services through licensed third-party providers.</p>
+                            <p className="mb-2">By using this Platform, you agree to these Terms & Conditions.</p>
+                            <p>If you do not agree, do not use the Platform.</p>
                         </div>
 
                         <div>
-                            <h2 className="text-2xl font-semibold text-white mb-4">1. Our Core Principles</h2>
-                            <div className="grid md:grid-cols-2 gap-6 mb-8">
-                                <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-                                    <h4 className="text-primary font-bold mb-2">Transparency</h4>
-                                    <p className="text-sm">We treat user data as a liability to be protected, not an asset to be exploited. Users must know exactly how their data is used.</p>
-                                </div>
-                                <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-                                    <h4 className="text-primary font-bold mb-2">Control</h4>
-                                    <p className="text-sm">Users have granular control (opt-in/opt-out) over monetization features through the Privacy Dashboard.</p>
-                                </div>
+                            <h2 className="text-2xl font-semibold text-white mb-4">2. Nature of Our Services</h2>
+                            <p className="mb-4">notestandard is a technology platform.</p>
+                            
+                            <h3 className="text-lg font-medium text-white mb-2">We:</h3>
+                            <ul className="list-disc list-inside space-y-2 ml-4 mb-4">
+                                <li>Facilitate payment processing through third-party licensed payment providers including Paystack and Flutterwave.</li>
+                                <li>Facilitate cryptocurrency services through NOWPayments.</li>
+                                <li>Provide a user interface to manage transaction records and balances.</li>
+                            </ul>
+
+                            <h3 className="text-lg font-medium text-white mb-2">We DO NOT:</h3>
+                            <ul className="list-disc list-inside space-y-2 ml-4 mb-4">
+                                <li>Operate as a bank.</li>
+                                <li>Provide banking services.</li>
+                                <li>Hold customer deposits as a financial institution.</li>
+                                <li>Directly custody cryptocurrency private keys.</li>
+                                <li>Offer investment advisory or guaranteed returns.</li>
+                            </ul>
+                            <p className="font-semibold text-primary">All financial transactions are processed and executed by third-party providers.</p>
+                        </div>
+
+                        <div>
+                            <h2 className="text-2xl font-semibold text-white mb-4">3. Third-Party Payment Processing</h2>
+                            <p className="mb-2">All fiat transactions (card payments, bank transfers, payouts) are processed by regulated third-party providers.</p>
+                            <p className="mb-2">By using the Platform, you also agree to comply with the terms of:</p>
+                            <ul className="list-disc list-inside space-y-2 ml-4 mb-4">
+                                <li>Paystack</li>
+                                <li>Flutterwave</li>
+                            </ul>
+                            <p>We are not responsible for delays, chargebacks, reversals, compliance reviews, or restrictions imposed by these providers.</p>
+                        </div>
+
+                        <div>
+                            <h2 className="text-2xl font-semibold text-white mb-4">4. Cryptocurrency Services</h2>
+                            <p className="mb-4">Cryptocurrency transactions, storage, and processing are powered by NOWPayments.</p>
+                            
+                            <h3 className="text-lg font-medium text-white mb-2">We do not:</h3>
+                            <ul className="list-disc list-inside space-y-2 ml-4 mb-4">
+                                <li>Control private keys</li>
+                                <li>Directly store cryptocurrency assets</li>
+                                <li>Guarantee blockchain confirmation times</li>
+                            </ul>
+
+                            <h3 className="text-lg font-medium text-white mb-2">All crypto transactions are subject to:</h3>
+                            <ul className="list-disc list-inside space-y-2 ml-4 mb-4">
+                                <li>Blockchain network conditions</li>
+                                <li>Fees</li>
+                                <li>Volatility</li>
+                            </ul>
+                            <p className="font-semibold text-red-400">Cryptocurrency transactions are irreversible once confirmed.</p>
+                        </div>
+
+                        <div>
+                            <h2 className="text-2xl font-semibold text-white mb-4">5. No Financial Advice</h2>
+                            <p className="mb-2">The Platform does not provide financial, investment, tax, or legal advice.</p>
+                            <p>Cryptocurrency prices are volatile. You assume full responsibility for any financial loss.</p>
+                        </div>
+
+                        <div>
+                            <h2 className="text-2xl font-semibold text-white mb-4">6. User Responsibilities</h2>
+                            <p className="mb-2">By using this Platform, you agree:</p>
+                            <ul className="list-disc list-inside space-y-2 ml-4 mb-4">
+                                <li>To provide accurate personal information</li>
+                                <li>Not to use the Platform for fraud, money laundering, or illegal activities</li>
+                                <li>Not to misuse payment systems</li>
+                                <li>To comply with applicable laws</li>
+                            </ul>
+                            <p>We reserve the right to suspend accounts involved in suspicious activity.</p>
+                        </div>
+
+                        <div>
+                            <h2 className="text-2xl font-semibold text-white mb-4">7. KYC & Compliance</h2>
+                            <p className="mb-2">We may request identity verification in compliance with Anti-Money Laundering (AML) regulations.</p>
+                            <p className="mb-2">Failure to provide required documentation may result in:</p>
+                            <ul className="list-disc list-inside space-y-2 ml-4">
+                                <li>Account suspension</li>
+                                <li>Transaction delays</li>
+                                <li>Permanent restrictions</li>
+                            </ul>
+                        </div>
+
+                        <div>
+                            <h2 className="text-2xl font-semibold text-white mb-4">8. Fees</h2>
+                            <p className="mb-2">Transaction fees may apply for:</p>
+                            <ul className="list-disc list-inside space-y-2 ml-4 mb-4">
+                                <li>Deposits</li>
+                                <li>Withdrawals</li>
+                                <li>Swaps</li>
+                                <li>Network processing</li>
+                            </ul>
+                            <p className="mb-2">All applicable fees will be displayed before transaction confirmation.</p>
+                            <p>We reserve the right to adjust fees with notice.</p>
+                        </div>
+
+                        <div>
+                            <h2 className="text-2xl font-semibold text-white mb-4">9. Internal Wallet Ledger</h2>
+                            <p className="mb-2">Displayed balances reflect transaction records based on confirmations received from third-party providers.</p>
+                            <p>Balances shown are ledger representations and do not constitute a bank deposit.</p>
+                        </div>
+
+                        <div>
+                            <h2 className="text-2xl font-semibold text-white mb-4">10. Limitation of Liability</h2>
+                            <p className="mb-2">We are not liable for:</p>
+                            <ul className="list-disc list-inside space-y-2 ml-4 mb-4">
+                                <li>Loss caused by third-party payment providers</li>
+                                <li>Blockchain network failures</li>
+                                <li>Delays in transaction confirmations</li>
+                                <li>Price volatility losses</li>
+                                <li>Government regulatory actions</li>
+                            </ul>
+                            <p>Our maximum liability is limited to the fees paid to us in the 30 days preceding the claim.</p>
+                        </div>
+
+                        <div>
+                            <h2 className="text-2xl font-semibold text-white mb-4">11. Suspension & Termination</h2>
+                            <p className="mb-2">We may suspend or terminate accounts if:</p>
+                            <ul className="list-disc list-inside space-y-2 ml-4">
+                                <li>Fraud is suspected</li>
+                                <li>Chargebacks are excessive</li>
+                                <li>Legal requests are received</li>
+                                <li>Terms are violated</li>
+                            </ul>
+                        </div>
+
+                        <div>
+                            <h2 className="text-2xl font-semibold text-white mb-4">12. Risk Disclosure</h2>
+                            <p className="mb-2">Cryptocurrency transactions involve significant risk including:</p>
+                            <ul className="list-disc list-inside space-y-2 ml-4 mb-4">
+                                <li>Price volatility</li>
+                                <li>Loss of funds</li>
+                                <li>Irreversible blockchain transactions</li>
+                            </ul>
+                            <p className="font-semibold text-white">By using this Platform, you acknowledge and accept these risks.</p>
+                        </div>
+
+                        <div>
+                            <h2 className="text-2xl font-semibold text-white mb-4">13. Intellectual Property</h2>
+                            <p className="mb-2">All branding, software, and content on this Platform are owned by aghogho plyboard enterprise.</p>
+                            <p>Unauthorized reproduction is prohibited.</p>
+                        </div>
+
+                        <div>
+                            <h2 className="text-2xl font-semibold text-white mb-4">14. Changes to Terms</h2>
+                            <p className="mb-2">We may update these Terms at any time.</p>
+                            <p>Continued use of the Platform constitutes acceptance of updated Terms.</p>
+                        </div>
+
+                        <div>
+                            <h2 className="text-2xl font-semibold text-white mb-4">15. Governing Law</h2>
+                            <p>These Terms shall be governed by the laws of the Federal Republic of Nigeria.</p>
+                        </div>
+
+                        <div className="pt-8 border-t border-white/10">
+                            <h2 className="text-2xl font-semibold text-white mb-4">16. Contact Information</h2>
+                            <div className="space-y-2">
+                                <p><strong>Company Name:</strong> aghogho plyboard enterprise</p>
+                                <p><strong>Email:</strong> admin@notestandard.com</p>
+                                <p><strong>Business Address:</strong> 12 udu road delta,nigeria</p>
                             </div>
-                        </div>
-
-                        <div>
-                            <h2 className="text-2xl font-semibold text-white mb-4">2. Community Guidelines</h2>
-                            <ul className="list-disc list-inside space-y-2 ml-4">
-                                <li>No abusive, offensive, or harmful language/behavior is allowed.</li>
-                                <li>Violations may result in immediate suspension or permanent banning.</li>
-                                <li>Users are responsible for all content they create or share.</li>
-                            </ul>
-                        </div>
-
-                        <div>
-                            <h2 className="text-2xl font-semibold text-white mb-4">3. Data Usage & Privacy</h2>
-                            <ul className="list-disc list-inside space-y-2 ml-4">
-                                <li><strong>Anonymized Analytics</strong>: We process non-identifiable usage data to improve our services. Consent can be revoked in settings.</li>
-                                <li><strong>Contextual Advertising</strong>: We may show ads based on session tags. We do NOT use behavioral tracking or track users across sites.</li>
-                                <li><strong>Affiliate Partnerships</strong>: We suggest tools that integrate with our app. Exporting data to these tools is user-initiated.</li>
-                            </ul>
-                        </div>
-
-                        <div>
-                            <h2 className="text-2xl font-semibold text-white mb-4">4. Financial & Wallet Services</h2>
-                            <ul className="list-disc list-inside space-y-2 ml-4">
-                                <li><strong>Custodianship</strong>: We provide managed wallet services. Users enjoy secure internal transfers and multi-currency support.</li>
-                                <li><strong>Transaction Fees</strong>: Fees and spreads apply to withdrawals, swaps, and certain external transfers as shown in the UI.</li>
-                                <li><strong>Finality</strong>: Digital asset transfers are final and non-refundable once processed on the ledger.</li>
-                            </ul>
-                        </div>
-
-                        <div>
-                            <h2 className="text-2xl font-semibold text-white mb-4">5. Affiliate Program</h2>
-                            <ul className="list-disc list-inside space-y-2 ml-4">
-                                <li>Commission rates are set by admin settings (standard 10% of revenue generated).</li>
-                                <li>Earnings are credited instantly to your internal system wallet.</li>
-                            </ul>
-                        </div>
-
-                        <div className="mt-8 p-6 bg-primary/10 border border-primary/20 rounded-lg">
-                            <h3 className="text-lg font-semibold text-white mb-3">Agreement</h3>
-                            <p className="text-sm leading-relaxed">
-                                By creating an account with Note Standard, you acknowledge that you have read,
-                                understood, and agree to be bound by these Terms & Conditions.
-                                If you do not agree to these terms, please do not use our services.
-                            </p>
-                        </div>
-
-                        <div className="pt-6 border-t border-white/10">
-                            <p className="text-sm text-gray-400">
-                                Last updated: February 14, 2026
-                            </p>
                         </div>
                     </div>
                 </Card>

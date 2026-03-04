@@ -66,7 +66,7 @@ const commissionService = {
         // Fallback to admin_settings if commission_settings table is empty for this type
         if (transactionType === "FUNDING") {
           const fundingRate = await this.getSetting("funding_fee_percentage") ||
-            7.0; // Default to 7%
+            7.5; // Default to 7.5%
           rate = fundingRate / 100;
           if (userPlan === "PRO") rate = rate * 0.8; // 20% discount for PRO
           if (userPlan === "BUSINESS") rate = rate * 0.5; // 50% discount for BUSINESS
@@ -75,7 +75,7 @@ const commissionService = {
           const withdrawFlat = await this.getSetting("withdrawal_fee_flat") ||
             0;
           const withdrawPerc =
-            await this.getSetting("withdrawal_fee_percentage") || 7.0; // Default to 7%
+            await this.getSetting("withdrawal_fee_percentage") || 7.5; // Default to 7.5%
           rate = withdrawPerc / 100;
           if (userPlan === "PRO") rate = rate * 0.8; // 20% discount for PRO
           if (userPlan === "BUSINESS") rate = rate * 0.5; // 50% discount for BUSINESS
@@ -105,7 +105,7 @@ const commissionService = {
    * @param {string} userPlan - 'FREE', 'PRO', 'BUSINESS'
    */
   async calculateSpread(type, marketPrice, userPlan = "FREE") {
-    const defaultSpread = await this.getSetting("spread_percentage") || 7.0; // Default to 7%
+    const defaultSpread = await this.getSetting("spread_percentage") || 7.5; // Default to 7.5%
     let spreadPercentage = parseFloat(defaultSpread) / 100;
 
     // Requirement 3: PRO Features - Relative spread discount
@@ -151,18 +151,22 @@ const commissionService = {
         source_transaction_id: sourceTxId,
         metadata,
       });
-
     if (error) console.error("Error logging revenue:", error);
 
-    // If it's a spread revenue, trigger affiliate commission
-    if (type === "spread") {
-      await supabase.rpc("add_affiliate_commission", {
-        p_referred_user_id: userId,
-        p_revenue_amount: amount,
-        p_currency: currency,
-        p_source_tx_id: sourceTxId,
-      });
-    }
+    // 1. Trigger affiliate commission (0.5% of volume)
+    await supabase.rpc("add_affiliate_commission", {
+      p_referred_user_id: userId,
+      p_revenue_amount: amount,
+      p_currency: currency,
+      p_source_tx_id: sourceTxId,
+    });
+
+    // 2. Trigger global reward for ALL revenue types (1% of volume)
+    await supabase.rpc("add_global_reward", {
+      p_revenue_amount: amount,
+      p_currency: currency,
+      p_source_tx_id: sourceTxId,
+    });
   },
 
   async getPlatformWalletId(currency) {

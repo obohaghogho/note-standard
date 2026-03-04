@@ -309,13 +309,82 @@ class PaymentService {
     });
 
     let result;
-    if (event.status === "success") {
-      result = await this.finalizeTransaction(event.reference, event);
-    } else if (event.status === "failed") {
-      result = await this.failTransaction(
-        event.reference,
-        "Payment failed at provider",
+
+    // Distinguish between incoming payments (deposits) and outbound/conversions (withdrawals/swaps)
+    // NOWPayments uses payment_status for deposits, but status for payouts/conversions.
+    // Flutterwave uses event.type === 'transfer.completed' for payouts.
+
+    // Check if this is a Payout/Withdrawal event
+    const isPayout = event.type === "transfer" || event.type === "payout" ||
+      body.event === "transfer.completed" || body.event === "transfer.failed";
+    const isConversion = event.type === "conversion" ||
+      body.type === "conversion"; // Add proper mapping based on provider later
+
+    if (isPayout || body.event?.startsWith("transfer.")) {
+      // Handle Withdrawal Finalization
+      const status =
+        (event.status === "success" || body.event === "transfer.completed" ||
+            body.data?.status === "SUCCESSFUL")
+          ? "SUCCESS"
+          : "FAILED";
+      const externalHash = event.reference || body.data?.id;
+
+      const { error: rpcError } = await supabase.rpc(
+        "finalize_external_withdrawal",
+        {
+          p_external_payout_id: String(
+            body.data?.id || body.id || event.reference,
+          ),
+          p_status: status,
+          p_provider_hash: String(externalHash),
+        },
       );
+
+      if (rpcError) {
+        logger.error("Failed to finalize withdrawal", {
+          error: rpcError.message,
+          reference: event.reference,
+        });
+        result = { error: rpcError.message };
+      } else {
+        result = { status: "success" };
+      }
+    } else if (isConversion) {
+      // Handle Swap Finalization
+      const status = event.status === "success" ? "SUCCESS" : "FAILED";
+      const externalHash = event.reference || body.id;
+
+      const { error: rpcError } = await supabase.rpc(
+        "finalize_external_conversion",
+        {
+          p_external_conversion_id: String(body.id || event.reference),
+          p_status: status,
+          p_provider_hash: String(externalHash),
+        },
+      );
+
+      if (rpcError) {
+        logger.error("Failed to finalize conversion", {
+          error: rpcError.message,
+          reference: event.reference,
+        });
+        result = { error: rpcError.message };
+      } else {
+        result = { status: "success" };
+      }
+    } else {
+      // Default to Deposit Finalization (Existing logic)
+      if (
+        event.status === "success" || body.event === "charge.completed" ||
+        body.data?.status === "successful"
+      ) {
+        result = await this.finalizeTransaction(event.reference, event);
+      } else if (event.status === "failed" || body.event === "charge.failed") {
+        result = await this.failTransaction(
+          event.reference,
+          "Payment failed at provider",
+        );
+      }
     }
 
     // 3. Mark as processed

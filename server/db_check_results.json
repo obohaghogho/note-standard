@@ -1,0 +1,125 @@
+{
+  "profiles": [
+    {
+      "id": "446231de-ecc8-4c34-b661-6276bad9579b",
+      "username": "admin_44623",
+      "email": "admin@test123.com",
+      "role": "user"
+    },
+    {
+      "id": "7de52fd8-e0c0-4591-9dd8-8f3561dbc0f3",
+      "username": "testhealthcheck1234",
+      "email": "testhealthcheck1234@gmail.com",
+      "role": "user"
+    },
+    {
+      "id": "23d27c92-e259-47f3-9bd1-ad938c32f797",
+      "username": "valid.email.user.12345",
+      "email": "valid.email.user.12345@gmail.com",
+      "role": "user"
+    },
+    {
+      "id": "20374ed1-aa20-4973-8a7c-7e51dfa86b3a",
+      "username": "saintjossy",
+      "email": "saintjossy0@gmail.com",
+      "role": "user"
+    },
+    {
+      "id": "6872e2a9-5552-4813-b4e5-b9c696b82054",
+      "username": "dennis964225",
+      "email": "dennis964225@gmail.com",
+      "role": "user"
+    },
+    {
+      "id": "7ed6886b-237d-4812-8149-938a7ee8fe3b",
+      "username": "johntatyana45",
+      "email": "johntatyana45@gmail.com",
+      "role": "user"
+    },
+    {
+      "id": "16f7d123-a196-435f-99c8-26a567be8261",
+      "username": "obohaghogho107",
+      "email": "obohaghogho107@gmail.com",
+      "role": "user"
+    },
+    {
+      "id": "f08ce799-7a0a-4594-a518-4db0fc55c6a8",
+      "username": "onome.john.test",
+      "email": "onome.john.test@gmail.com",
+      "role": "user"
+    },
+    {
+      "id": "5089c266-1ad6-4a83-b23f-064d65995345",
+      "username": "Aghoghojossy107",
+      "email": "onomejohn107@gmail.com",
+      "role": "admin"
+    },
+    {
+      "id": "c60cde6a-54d2-4913-b020-3e9dc3d46b0e",
+      "username": "sherifflamidi74",
+      "email": "sherifflamidi74@gmail.com",
+      "role": "user"
+    },
+    {
+      "id": "930dab79-7c43-4975-b9a4-57cf1ef0ab63",
+      "username": "petersonjossy107",
+      "email": "petersonjossy107@gmail.com",
+      "role": "user"
+    }
+  ],
+  "settings": [
+    {
+      "key": "withdrawal_fee_flat",
+      "value": 0,
+      "updated_at": "2026-02-14T06:57:19.271789+00:00"
+    },
+    {
+      "key": "subscription_pricing",
+      "value": {
+        "PRO": 9.99,
+        "FREE": 0,
+        "BUSINESS": 49.99
+      },
+      "updated_at": "2026-02-14T06:57:19.271789+00:00"
+    },
+    {
+      "key": "daily_limits",
+      "value": {
+        "PRO": 10000,
+        "FREE": 1000,
+        "BUSINESS": 50000
+      },
+      "updated_at": "2026-02-14T06:57:19.271789+00:00"
+    },
+    {
+      "key": "affiliate_percentage",
+      "value": 2,
+      "updated_at": "2026-02-14T06:57:19.271789+00:00"
+    },
+    {
+      "key": "spread_percentage",
+      "value": 7,
+      "updated_at": "2026-02-14T06:57:19.271789+00:00"
+    },
+    {
+      "key": "funding_fee_percentage",
+      "value": 7,
+      "updated_at": "2026-02-14T06:57:19.271789+00:00"
+    },
+    {
+      "key": "withdrawal_fee_percentage",
+      "value": 7,
+      "updated_at": "2026-02-14T06:57:19.271789+00:00"
+    },
+    {
+      "key": "min_withdrawal_amount",
+      "value": 10,
+      "updated_at": "2026-03-02T12:17:49.745791+00:00"
+    },
+    {
+      "key": "max_swap_amount",
+      "value": 5000,
+      "updated_at": "2026-03-02T12:17:49.745791+00:00"
+    }
+  ]
+}
