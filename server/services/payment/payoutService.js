@@ -1,6 +1,6 @@
 const axios = require("axios");
 const crypto = require("crypto");
-const logger = require("../utils/logger");
+const logger = require("../../utils/logger");
 
 const FLUTTERWAVE_SECRET_KEY = process.env.FLUTTERWAVE_SECRET_KEY;
 const NOWPAYMENTS_API_KEY = process.env.NOWPAYMENTS_API_KEY;
