@@ -11,31 +11,34 @@ interface ReceiveModalProps {
     isOpen: boolean;
     onClose: () => void;
     initialCurrency?: string;
+    initialNetwork?: string;
 }
 
-export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, initialCurrency = 'BTC' }) => {
+export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, initialCurrency = 'BTC', initialNetwork = 'native' }) => {
     const { wallets, createWallet, loading: walletLoading } = useWallet();
     const [selectedCurrency, setSelectedCurrency] = useState(initialCurrency);
+    const [selectedNetwork, setSelectedNetwork] = useState(initialNetwork);
     const [copied, setCopied] = useState(false);
     const [hdAddress, setHdAddress] = useState<string | null>(null);
     const [hdLoading, setHdLoading] = useState(false);
 
     // Filter only crypto wallets for receiving (assuming fiat deposits are handled in FundModal)
-    const currentWallet = wallets.find(w => w.currency === selectedCurrency);
+    const currentWallet = wallets.find(w => w.currency === selectedCurrency && w.network === selectedNetwork);
     const displayAddress = hdAddress || currentWallet?.address || '';
 
     useEffect(() => {
         if (isOpen) {
             setSelectedCurrency(initialCurrency);
-            fetchCurrentHdAddress(initialCurrency);
+            setSelectedNetwork(initialNetwork);
+            fetchCurrentHdAddress(initialCurrency, initialNetwork);
         }
-    }, [isOpen, initialCurrency]);
+    }, [isOpen, initialCurrency, initialNetwork]);
 
-    const fetchCurrentHdAddress = async (asset: string) => {
-        if (['BTC', 'ETH', 'USDT'].includes(asset)) {
+    const fetchCurrentHdAddress = async (asset: string, network: string) => {
+        if (['BTC', 'ETH', 'USDT', 'USDC'].includes(asset)) {
             try {
                 setHdLoading(true);
-                const result = await walletApi.getCurrentAddress(asset);
+                const result = await walletApi.getCurrentAddress(asset, network);
                 setHdAddress(result.address);
             } catch (error) {
                 console.error('Failed to fetch HD address:', error);
@@ -48,11 +51,11 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
     };
 
     const handleGenerateNew = async () => {
-        if (!['BTC', 'ETH', 'USDT'].includes(selectedCurrency)) return;
+        if (!['BTC', 'ETH', 'USDT', 'USDC'].includes(selectedCurrency)) return;
         
         try {
             setHdLoading(true);
-            const result = await walletApi.generateNewAddress(selectedCurrency);
+            const result = await walletApi.generateNewAddress(selectedCurrency, selectedNetwork);
             setHdAddress(result.address);
             toast.success('New address generated');
         } catch (error: any) {
@@ -86,15 +89,16 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
         }
     };
     
-    // Auto-create wallet if it doesn't exist for selected currency
-    const handleCurrencyChange = async (currency: string) => {
+    // Auto-create wallet if it doesn't exist for selected currency/network
+    const handleCurrencyChange = async (currency: string, network: string) => {
         setSelectedCurrency(currency);
-        fetchCurrentHdAddress(currency);
-        const exists = wallets.find(w => w.currency === currency);
+        setSelectedNetwork(network);
+        fetchCurrentHdAddress(currency, network);
+        const exists = wallets.find(w => w.currency === currency && w.network === network);
         if (!exists) {
             try {
-                toast.loading(`Creating ${currency} wallet...`, { id: 'create-wallet' });
-                await createWallet(currency);
+                toast.loading(`Creating ${currency} ${network !== 'native' ? `(${network})` : ''} wallet...`, { id: 'create-wallet' });
+                await createWallet(currency, network);
                 toast.success(`${currency} wallet ready`, { id: 'create-wallet' });
             } catch (error) {
                 toast.error(`Failed to create ${currency} wallet`, { id: 'create-wallet' });
@@ -124,17 +128,18 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
                 <div className="modal-body">
                     {/* Currency Selector */}
                     <div className="flex gap-2 overflow-x-auto pb-4 mb-2 scrollbar-hide">
-                        {['BTC', 'ETH', 'USDT', 'USDC'].map(curr => (
+                        {wallets.filter(w => ['BTC', 'ETH', 'USDT', 'USDC'].includes(w.currency)).map(w => (
                             <button
-                                key={curr}
-                                onClick={() => handleCurrencyChange(curr)}
-                                className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all whitespace-nowrap ${
-                                    selectedCurrency === curr 
+                                key={`${w.currency}_${w.network}`}
+                                onClick={() => handleCurrencyChange(w.currency, w.network)}
+                                className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all whitespace-nowrap flex flex-col items-center ${
+                                    selectedCurrency === w.currency && selectedNetwork === w.network
                                     ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-500/20' 
                                     : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:text-white'
                                 }`}
                             >
-                                {curr}
+                                <span>{w.currency}</span>
+                                {w.network !== 'native' && <span className="text-[10px] opacity-70 uppercase">{w.network}</span>}
                             </button>
                         ))}
                     </div>
@@ -167,9 +172,9 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
                                 <div className="space-y-2">
                                     <div className="flex justify-between items-end ml-1">
                                         <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Your {selectedCurrency} Address
+                                            Your {selectedCurrency} {selectedNetwork !== 'native' ? `(${selectedNetwork})` : ''} Address
                                         </label>
-                                        {['BTC', 'ETH', 'USDT'].includes(selectedCurrency) && (
+                                        {['BTC', 'ETH', 'USDT', 'USDC'].includes(selectedCurrency) && (
                                             <button 
                                                 onClick={handleGenerateNew}
                                                 disabled={hdLoading}
@@ -242,7 +247,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
                                     </p>
                                 </div>
                                 {!walletLoading && (
-                                    <Button onClick={() => handleCurrencyChange(selectedCurrency)} className="bg-purple-600 hover:bg-purple-500">
+                                    <Button onClick={() => handleCurrencyChange(selectedCurrency, selectedNetwork)} className="bg-purple-600 hover:bg-purple-500">
                                         Create {selectedCurrency} Wallet
                                     </Button>
                                 )}

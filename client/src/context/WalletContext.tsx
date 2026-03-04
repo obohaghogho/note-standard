@@ -11,7 +11,7 @@ export interface WalletContextValue {
     loading: boolean;
     error: string | null;
     refresh: () => Promise<void>;
-    createWallet: (currency: string) => Promise<Wallet>;
+    createWallet: (currency: string, network?: string) => Promise<Wallet>;
     sendFunds: (data: InternalTransferRequest) => Promise<void>;
     withdraw: (data: WithdrawalRequest) => Promise<void>;
     getCommissionRate: (type: string, currency: string) => Promise<CommissionSettings[]>;
@@ -142,9 +142,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         };
     }, [user, fetchData]);
 
-    const createWallet = async (currency: string) => {
+    const createWallet = async (currency: string, network: string = 'native') => {
         try {
-            const wallet = await walletApi.createWallet(currency);
+            const wallet = await walletApi.createWallet(currency, network);
             await fetchData();
             return wallet;
         } catch (err: unknown) {

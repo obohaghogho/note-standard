@@ -20,7 +20,10 @@ class PaymentFactory {
   static getProvider(currency, region = "NG", isCrypto = false) {
     // 1. Crypto Logic
     if (
-      isCrypto || ["BTC", "USDT", "ETH", "USDC", "MATIC"].includes(currency)
+      isCrypto ||
+      ["BTC", "USDT", "ETH", "USDC", "MATIC"].some((c) =>
+        currency.toString().toUpperCase().startsWith(c)
+      )
     ) {
       const cryptoProvider = (process.env.CRYPTO_PROVIDER || "nowpayments")
         .toLowerCase();

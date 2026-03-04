@@ -74,22 +74,45 @@ exports.createNowPaymentsPayment = async (data) => {
  * @param {object} supabase  - Supabase client instance
  * @returns {{ address: string, asset: string, payment_id: string, pay_amount: number|null }}
  */
-exports.getOrCreateDepositAddress = async (userId, asset, supabase) => {
+exports.getOrCreateDepositAddress = async (
+  userId,
+  asset,
+  network,
+  supabase,
+) => {
   const upAsset = asset.toUpperCase();
+  const upNetwork = (network || "").toUpperCase();
 
   const payCurrencyMap = {
-    BTC: "btc",
-    ETH: "eth",
-    USDT: "usdterc20",
-    USDC: "usdcerc20",
+    BTC_BITCOIN: "btc",
+    ETH_ETHEREUM: "eth",
+    USDT_ERC20: "usdterc20",
+    USDT_TRC20: "usdttrc20",
+    USDT_BEP20: "usdtbsc",
+    USDC_ERC20: "usdcerc20",
+    USDC_POLYGON: "usdcmatictoken",
   };
 
-  const payCurrency = payCurrencyMap[upAsset];
-  if (!payCurrency) {
-    throw new Error(`Asset ${upAsset} is not supported for crypto deposit`);
+  // Construct lookup key. If network is provided, use it; else fallback to legacy mapping if any.
+  // The migration 090 handles legacy data, so we expect split fields here.
+  let lookupKey = `${upAsset}_${upNetwork}`;
+
+  // Minimal fallbacks for common missing network inputs
+  if (!network) {
+    if (upAsset === "BTC") lookupKey = "BTC_BITCOIN";
+    else if (upAsset === "ETH") lookupKey = "ETH_ETHEREUM";
+    else if (upAsset === "USDT") lookupKey = "USDT_TRC20"; // Default to TRC20 if unspecified
+    else if (upAsset === "USDC") lookupKey = "USDC_ERC20"; // Default to ERC20 if unspecified
   }
 
-  // 1. Try to reuse existing active address
+  const payCurrency = payCurrencyMap[lookupKey];
+  if (!payCurrency) {
+    throw new Error(
+      `Asset ${upAsset} on network ${upNetwork} is not supported`,
+    );
+  }
+
+  // 1. Try to reuse existing active address from cache table
   const { data: existing, error: fetchError } = await supabase
     .from("nowpayments_deposit_addresses")
     .select("*")
@@ -100,40 +123,29 @@ exports.getOrCreateDepositAddress = async (userId, asset, supabase) => {
     .limit(1)
     .maybeSingle();
 
-  if (fetchError) {
-    logger.error(
-      "[NowPayments] Error fetching existing deposit address:",
-      fetchError.message,
-    );
-  }
-
   if (existing) {
     logger.info(
       `[NowPayments] Reusing active ${upAsset} address for user ${userId}`,
     );
     return {
       address: existing.address,
-      asset: upAsset,
+      currency: upAsset,
+      network: upNetwork,
       payment_id: existing.payment_id,
-      pay_amount: existing.pay_amount,
     };
   }
 
   // 2. No active address — request a new one from NOWPayments
-  const orderId = `${userId}_${upAsset}_${Date.now()}`;
+  const orderId = `${userId}_${upAsset}_${upNetwork}_${Date.now()}`;
   const ipnCallbackUrl = process.env.NOWPAYMENTS_WEBHOOK_URL ||
     `${process.env.SERVER_URL}/api/webhooks/nowpayments`;
 
-  logger.info(
-    `[NowPayments] Creating new deposit address for user ${userId} / asset ${upAsset}`,
-  );
-
   const payment = await exports.createNowPaymentsPayment({
-    amount: 1, // Minimal placeholder price; real amounts are tracked via IPN
+    amount: 1,
     currency: "usd",
     payCurrency,
     orderId,
-    orderDescription: `${upAsset} Deposit — ${userId}`,
+    orderDescription: `${upAsset} (${upNetwork}) Deposit — ${userId}`,
     ipnCallbackUrl,
   });
 
@@ -141,47 +153,46 @@ exports.getOrCreateDepositAddress = async (userId, asset, supabase) => {
     throw new Error("NOWPayments did not return a deposit address");
   }
 
-  // 3. Mark any old active row for this user/asset as 'superseded'
-  const { error: updateError } = await supabase
+  // 3. Mark old addresses as superseded
+  await supabase
     .from("nowpayments_deposit_addresses")
     .update({ status: "superseded" })
     .eq("user_id", userId)
     .eq("asset", upAsset)
     .eq("status", "active");
 
-  if (updateError) {
-    logger.warn(
-      "[NowPayments] Could not mark old address as superseded:",
-      updateError.message,
-    );
-  }
-
-  // 4. Cache the new address
-  const { error: insertError } = await supabase
-    .from("nowpayments_deposit_addresses")
-    .insert({
+  // 4. Cache the new address and UPDATE THE WALLET TABLE
+  const [{ error: cacheError }, { error: walletError }] = await Promise.all([
+    supabase.from("nowpayments_deposit_addresses").insert({
       user_id: userId,
       asset: upAsset,
       pay_currency: payCurrency,
       address: payment.pay_address,
       payment_id: String(payment.payment_id),
-      pay_amount: payment.pay_amount || null,
       status: "active",
-    });
+    }),
+    supabase.from("wallets").update({
+      address: payment.pay_address,
+      provider: "nowpayments",
+      provider_reference: String(payment.payment_id),
+    })
+      .eq("user_id", userId)
+      .eq("currency", upAsset)
+      .eq("network", upNetwork),
+  ]);
 
-  if (insertError) {
-    // Non-fatal: still return the address even if caching fails
-    logger.error(
-      "[NowPayments] Failed to cache deposit address:",
-      insertError.message,
-    );
+  if (cacheError) {
+    logger.error("[NowPayments] Cache Error:", cacheError.message);
+  }
+  if (walletError) {
+    logger.error("[NowPayments] Wallet Update Error:", walletError.message);
   }
 
   return {
     address: payment.pay_address,
-    asset: upAsset,
+    currency: upAsset,
+    network: upNetwork,
     payment_id: String(payment.payment_id),
-    pay_amount: payment.pay_amount || null,
   };
 };
 
@@ -236,6 +247,53 @@ exports.getPaymentStatus = async (paymentId) => {
       paymentId,
       error: error.response?.data || error.message,
     });
+    throw error;
+  }
+};
+/**
+ * Get exchange estimate (Direct API Check)
+ * GET /v1/estimate?amount={amount}&currency_from={from}&currency_to={to}
+ */
+exports.getExchangeEstimate = async (fromCurrency, toCurrency, amount = 1) => {
+  try {
+    const payCurrencyMap = {
+      BTC_BITCOIN: "btc",
+      ETH_ETHEREUM: "eth",
+      USDT_ERC20: "usdterc20",
+      USDT_TRC20: "usdttrc20",
+      USDT_BEP20: "usdtbsc",
+      USDC_ERC20: "usdcerc20",
+      USDC_POLYGON: "usdcmatictoken",
+    };
+
+    // Helper to resolve ticker - expected input is "CURRENCY" or "CURRENCY_NETWORK"
+    const resolveTicker = (ticker) => {
+      if (payCurrencyMap[ticker]) return payCurrencyMap[ticker];
+      return ticker.toLowerCase();
+    };
+
+    const from = resolveTicker(fromCurrency);
+    const to = resolveTicker(toCurrency);
+
+    // NOWPayments estimate endpoint
+    const response = await nowpayments.get(
+      `/estimate?amount=${amount}&currency_from=${from}&currency_to=${to}`,
+    );
+
+    return {
+      estimated_amount: response.data.estimated_amount,
+      rate: response.data.estimated_amount / amount,
+      from_currency: from,
+      to_currency: to,
+    };
+  } catch (error) {
+    logger.error("NowPayments: Estimate Fetch Failed", {
+      fromCurrency,
+      toCurrency,
+      amount,
+      error: error.response?.data || error.message,
+    });
+    // Do not return 1.0 here; let the caller decide fallback
     throw error;
   }
 };

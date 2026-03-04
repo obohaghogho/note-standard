@@ -43,7 +43,7 @@ export const WalletPage: React.FC = () => {
     const [showWithdrawModal, setShowWithdrawModal] = useState(false);
     const [showReceiveModal, setShowReceiveModal] = useState(false);
     const [showCreateModal, setShowCreateModal] = useState(false);
-    const [selectedCurrency, setSelectedCurrency] = useState<string>('BTC');
+    const [selectedAsset, setSelectedAsset] = useState<{ currency: string; network: string }>({ currency: 'BTC', network: 'native' });
 
     // Stats
     const swapCardRef = useRef<HTMLDivElement>(null);
@@ -101,7 +101,9 @@ export const WalletPage: React.FC = () => {
 
     const handleAction = (action: 'send' | 'receive' | 'fund' | 'withdraw' | 'swap') => {
         const safeWallets = Array.isArray(wallets) ? wallets : [];
-        if (!selectedCurrency && safeWallets.length > 0) setSelectedCurrency(safeWallets[0].currency);
+        if (!selectedAsset.currency && safeWallets.length > 0) {
+            setSelectedAsset({ currency: safeWallets[0].currency, network: safeWallets[0].network });
+        }
 
         switch (action) {
             case 'fund':
@@ -198,7 +200,7 @@ export const WalletPage: React.FC = () => {
                                 <CurrencyList 
                                     wallets={wallets} 
                                     rates={rates} 
-                                    onSelect={(curr) => setSelectedCurrency(curr)}
+                                    onSelect={(curr, net) => setSelectedAsset({ currency: curr, network: net || 'native' })}
                                     showBalances={showBalances}
                                 />
                             )}
@@ -210,8 +212,8 @@ export const WalletPage: React.FC = () => {
                         <div className="sticky top-6 space-y-6">
                            <div ref={swapCardRef}>
                                 <SwapCard 
-                                    initialFromCurrency={selectedCurrency} 
-                                    onSuccess={() => {
+                                    initialFromCurrency={selectedAsset.currency} 
+                                    initialFromNetwork={selectedAsset.network}                                    onSuccess={() => {
                                         handleRefresh();
                                         toast.success('Balance updated');
                                     }}
@@ -241,13 +243,15 @@ export const WalletPage: React.FC = () => {
             <FundModal 
                 isOpen={showFundModal} 
                 onClose={() => setShowFundModal(false)} 
-                selectedCurrency={selectedCurrency}
+                selectedCurrency={selectedAsset.currency}
+                selectedNetwork={selectedAsset.network}
                 onSuccess={handleRefresh}
             />
              <TransferModal
                 isOpen={showTransferModal}
                 onClose={() => setShowTransferModal(false)}
-                selectedCurrency={selectedCurrency}
+                selectedCurrency={selectedAsset.currency}
+                selectedNetwork={selectedAsset.network}
                 onSuccess={() => {
                     handleRefresh();
                     toast.success('Transfer successful');
@@ -256,7 +260,8 @@ export const WalletPage: React.FC = () => {
             <WithdrawModal
                 isOpen={showWithdrawModal}
                 onClose={() => setShowWithdrawModal(false)}
-                selectedCurrency={selectedCurrency}
+                selectedCurrency={selectedAsset.currency}
+                selectedNetwork={selectedAsset.network}
                 onSuccess={() => {
                     handleRefresh();
                     toast.success('Withdrawal initiated');
@@ -265,7 +270,8 @@ export const WalletPage: React.FC = () => {
             <ReceiveModal
                 isOpen={showReceiveModal}
                 onClose={() => setShowReceiveModal(false)}
-                initialCurrency={selectedCurrency}
+                initialCurrency={selectedAsset.currency}
+                initialNetwork={selectedAsset.network}
             />
 
             {/* Create Wallet Modal */}

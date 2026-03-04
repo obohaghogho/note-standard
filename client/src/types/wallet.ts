@@ -19,9 +19,12 @@ export interface Wallet {
     id: string;
     user_id: string;
     currency: Currency;
+    network: string;
     balance: number;
     available_balance: number;
     address: string;
+    provider: string;
+    provider_reference?: string;
     is_frozen: boolean;
     created_at: string;
     updated_at: string;
@@ -41,6 +44,7 @@ export interface Transaction {
     fee: number;
     exchange_rate?: number;
     spread_amount?: number;
+    network?: string;
     // Swap-specific fields
     amount_from?: number;
     amount_to?: number;
@@ -61,6 +65,7 @@ export interface InternalTransferRequest {
     recipientAddress?: string;
     amount: number;
     currency: Currency;
+    network?: string;
     idempotencyKey?: string;
 }
 
@@ -74,6 +79,7 @@ export interface WithdrawalRequest {
     account_name?: string;
     bank_name?: string;
     country?: string;
+    network?: string;
     idempotencyKey?: string;
 }
 
@@ -125,6 +131,8 @@ export interface SwapRequest {
     fromCurrency: Currency;
     toCurrency: Currency;
     amount: number;
+    fromNetwork?: string;
+    toNetwork?: string;
     idempotencyKey?: string;
 }
 

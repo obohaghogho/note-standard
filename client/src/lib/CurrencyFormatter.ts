@@ -14,7 +14,7 @@ export const formatCurrency = (amount: number, currency: string) => {
   }
 
   // For crypto like USDT, BTC, etc.
-  return `${amount.toFixed(2)} ${currency}`;
+  return `${amount.toFixed(getDecimalPlaces(currency))} ${currency.replace('_', ' ')}`;
 };
 
 /**

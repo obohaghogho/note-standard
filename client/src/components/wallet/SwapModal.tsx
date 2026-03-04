@@ -14,7 +14,11 @@ interface SwapModalProps {
     onSuccess: () => void;
 }
 
-const CURRENCIES: Currency[] = ['BTC', 'ETH', 'USD', 'NGN', 'EUR', 'GBP', 'JPY'];
+const CURRENCIES: Currency[] = [
+    'BTC', 'ETH', 'USD', 'NGN', 'EUR', 'GBP', 'JPY',
+    'USDT_TRC20' as Currency, 'USDT_ERC20' as Currency, 'USDT_BEP20' as Currency,
+    'USDC_ERC20' as Currency, 'USDC_POLYGON' as Currency
+];
 
 export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFromCurrency, onSuccess }) => {
     const { wallets } = useWallet();
@@ -164,7 +168,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
                                     const isInsufficient = numericAmount > Number(balance || 0) && numericAmount > 0;
                                     return (
                                         <option key={c} value={c}>
-                                            {c} - {formatCurrency(Number(balance || 0), c)}
+                                            {c.replace('_', ' ')} - {formatCurrency(Number(balance || 0), c)}
                                             {isInsufficient ? ' - Insufficient' : ''}
                                         </option>
                                     );
@@ -223,7 +227,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
                                     const balance = wallet ? (wallet.available_balance ?? wallet.balance) : 0;
                                     return (
                                         <option key={c} value={c}>
-                                            {c} - {formatCurrency(Number(balance || 0), c)}
+                                            {c.replace('_', ' ')} - {formatCurrency(Number(balance || 0), c)}
                                         </option>
                                     );
                                 })}

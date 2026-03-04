@@ -6,16 +6,18 @@ import type { Wallet } from '@/types/wallet';
 interface CurrencyListProps {
     wallets: Wallet[];
     rates: Record<string, number>; // Rate to main currency (e.g. USD)
-    onSelect: (currency: string) => void;
+    onSelect: (currency: string, network?: string) => void;
     showBalances?: boolean;
 }
 
 const getCurrencyIcon = (curr: string) => {
-    switch (curr) {
+    const code = curr.toUpperCase();
+    if (code === 'USDT') return '₮';
+    if (code === 'USDC') return 'U';
+    switch (code) {
         case 'BTC': return '₿';
         case 'ETH': return 'Ξ';
         case 'USD': return '$';
-        case 'USDT': return '₮';
         case 'NGN': return '₦';
         case 'EUR': return '€';
         case 'GBP': return '£';
@@ -25,10 +27,12 @@ const getCurrencyIcon = (curr: string) => {
 };
 
 const getCurrencyColor = (curr: string) => {
-    switch (curr) {
+    const code = curr.toUpperCase();
+    if (code === 'USDT') return 'from-emerald-500/20 to-emerald-600/5 text-emerald-400 border-emerald-500/30';
+    if (code === 'USDC') return 'from-blue-400/20 to-blue-500/5 text-blue-300 border-blue-400/30';
+    switch (code) {
         case 'BTC': return 'from-orange-500/20 to-orange-600/5 text-orange-400 border-orange-500/30';
         case 'ETH': return 'from-blue-500/20 to-blue-600/5 text-blue-400 border-blue-500/30';
-        case 'USDT': return 'from-emerald-500/20 to-emerald-600/5 text-emerald-400 border-emerald-500/30';
         case 'USD': return 'from-green-500/20 to-green-600/5 text-green-400 border-green-500/30';
         case 'NGN': return 'from-teal-500/20 to-teal-600/5 text-teal-400 border-teal-500/30';
         case 'EUR': return 'from-indigo-500/20 to-indigo-600/5 text-indigo-400 border-indigo-500/30';
@@ -59,7 +63,7 @@ export const CurrencyList: React.FC<CurrencyListProps> = ({
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ delay: index * 0.05 }}
-                        onClick={() => onSelect(wallet.currency)}
+                        onClick={() => onSelect(wallet.currency, wallet.network)}
                         className={`p-4 rounded-xl border bg-gradient-to-br ${colorClass} hover:bg-opacity-30 cursor-pointer transition-all hover:scale-[1.02] shadow-sm`}
                     >
                         <div className="flex justify-between items-start mb-2">
@@ -68,8 +72,15 @@ export const CurrencyList: React.FC<CurrencyListProps> = ({
                                     {getCurrencyIcon(wallet.currency)}
                                 </div>
                                 <div className="min-w-0">
-                                    <h3 className="font-bold text-white truncate">{wallet.currency}</h3>
-                                    <p className="text-xs opacity-70">Wallet</p>
+                                    <h3 className="font-bold text-white truncate flex items-center gap-1.5">
+                                        {wallet.currency}
+                                        {wallet.network && wallet.network !== 'native' && wallet.network !== 'internal' && (
+                                            <span className="text-[9px] bg-white/10 px-1 rounded uppercase tracking-tighter opacity-70">
+                                                {wallet.network}
+                                            </span>
+                                        )}
+                                    </h3>
+                                    <p className="text-xs opacity-70">{wallet.provider === 'nowpayments' ? 'External Wallet' : 'Vault Wallet'}</p>
                                 </div>
                             </div>
                             {wallet.is_frozen && (

@@ -10,17 +10,24 @@ interface TransferModalProps {
     isOpen: boolean;
     onClose: () => void;
     selectedCurrency: Currency;
+    selectedNetwork?: string;
     onSuccess: () => void;
 }
 
-export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, selectedCurrency, onSuccess }) => {
+export const TransferModal: React.FC<TransferModalProps> = ({ 
+    isOpen, 
+    onClose, 
+    selectedCurrency, 
+    selectedNetwork = 'native',
+    onSuccess 
+}) => {
     const { sendFunds, getCommissionRate, wallets } = useWallet();
     const [recipient, setRecipient] = useState('');
     const [amount, setAmount] = useState('');
     const [isSending, setIsSending] = useState(false);
     const [transferFee, setTransferFee] = useState<{ fee: number, net: number } | null>(null);
 
-    const wallet = wallets.find(w => w.currency === selectedCurrency);
+    const wallet = wallets.find(w => w.currency === selectedCurrency && w.network === selectedNetwork);
     const availableBalance = wallet ? (wallet.available_balance ?? wallet.balance) : 0;
 
     useEffect(() => {
@@ -40,7 +47,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, s
             const val = parseFloat(amount);
             
             const isEmail = recipient.includes('@');
-            const isAddress = !isEmail && (recipient.startsWith('0x') || recipient.startsWith('bc1') || recipient.length > 20);
+            const isAddress = !isEmail && (recipient.startsWith('0x') || recipient.startsWith('bc1') || recipient.startsWith('T') || recipient.length > 30);
             
             const type = isAddress ? 'WITHDRAWAL' : 'TRANSFER_OUT';
             const settings = await getCommissionRate(type, selectedCurrency);
@@ -66,7 +73,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, s
         setIsSending(true);
         try {
             const isEmail = recipient.includes('@');
-            const isAddress = !isEmail && (recipient.startsWith('0x') || recipient.startsWith('bc1') || recipient.length > 20);
+            const isAddress = !isEmail && (recipient.startsWith('0x') || recipient.startsWith('bc1') || recipient.startsWith('T') || recipient.length > 30);
 
             await sendFunds({
                 currency: selectedCurrency,
@@ -104,7 +111,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, s
 
                 <h2 className="modal-header">
                     <Send size={20} className="text-blue-500" />
-                    Send {selectedCurrency}
+                    Send {selectedCurrency} {selectedNetwork !== 'native' ? `(${selectedNetwork})` : ''}
                 </h2>
                 
                 <form onSubmit={handleSend} className="modal-body flex flex-col gap-5">

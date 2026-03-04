@@ -47,12 +47,12 @@ export const walletApi = {
     },
 
     // Create a new wallet
-    async createWallet(currency: string): Promise<Wallet> {
+    async createWallet(currency: string, network: string = 'native'): Promise<Wallet> {
         const headers = await getAuthHeader();
         const response = await fetch(`${API_base}/wallet/create`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ currency })
+            body: JSON.stringify({ currency, network })
         });
         if (!response.ok) throw new Error('Failed to create wallet');
         return response.json() as Promise<Wallet>;
@@ -191,16 +191,25 @@ export const walletApi = {
     },
 
     // NEW: Generate a fresh NOWPayments deposit address (marks existing as superseded)
-    async generateNewAddress(asset: string): Promise<{
+    async generateNewAddress(asset: string, network?: string): Promise<{
         address: string;
-        asset: string;
+        currency: string;
+        network: string;
         payment_id: string;
     }> {
         const headers = await getAuthHeader();
+        
+        // Handle legacy "ASSET_NETWORK" format if network is missing
+        let finalAsset = asset;
+        let finalNetwork = network;
+        if (!network && asset.includes('_')) {
+            [finalAsset, finalNetwork] = asset.split('_');
+        }
+
         const response = await fetch(`${API_base}/wallet/generate-new-address`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ asset })
+            body: JSON.stringify({ asset: finalAsset, network: finalNetwork })
         });
 
         const result = await response.json();
@@ -210,10 +219,21 @@ export const walletApi = {
         return result;
     },
 
-    // Get or create active NOWPayments deposit address for the given asset
-    async getCurrentAddress(asset: string): Promise<{ address: string; asset: string; payment_id: string }> {
+    // Get current address for a specific asset and network
+    async getCurrentAddress(asset: string, network?: string): Promise<{
+        address: string;
+        network: string;
+        asset: string;
+    }> {
         const headers = await getAuthHeader();
-        const response = await fetch(`${API_base}/wallet/current-address?asset=${asset}`, {
+        let finalAsset = asset;
+        let finalNetwork = network;
+
+        if (asset.includes('_')) {
+            [finalAsset, finalNetwork] = asset.split('_');
+        }
+
+        const response = await fetch(`${API_base}/wallet/current-address?asset=${finalAsset}&network=${finalNetwork || ''}`, {
             method: 'GET',
             headers,
         });
@@ -227,9 +247,10 @@ export const walletApi = {
     },
 
     // Unified Payment Initialization (New)
-    async initializePayment(data: {
+    async initializePayment(params: {
         amount: number;
         currency: string;
+        network?: string;
         metadata?: any;
         options?: { isCrypto?: boolean; [key: string]: any };
     }): Promise<{
@@ -243,7 +264,7 @@ export const walletApi = {
         const response = await fetch(`${API_base}/payment/initialize`, {
             method: 'POST',
             headers,
-            body: JSON.stringify(data)
+            body: JSON.stringify(params)
         });
 
         const result = await response.json();
@@ -286,7 +307,7 @@ export const walletApi = {
     },
 
     // Preview swap
-    async previewSwap(fromCurrency: string, toCurrency: string, amount: number, slippageTolerance?: number): Promise<{
+    async previewSwap(fromCurrency: string, toCurrency: string, amount: number, slippageTolerance?: number, fromNetwork?: string, toNetwork?: string): Promise<{
         fromCurrency: string;
         toCurrency: string;
         amountIn: number;
@@ -303,7 +324,14 @@ export const walletApi = {
         const response = await fetch(`${API_base}/wallet/swap/preview`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ fromCurrency, toCurrency, amount, ...(slippageTolerance ? { slippageTolerance } : {}) })
+            body: JSON.stringify({ 
+                fromCurrency, 
+                toCurrency, 
+                amount, 
+                fromNetwork,
+                toNetwork,
+                ...(slippageTolerance ? { slippageTolerance } : {}) 
+            })
         });
 
         const result = await response.json();
@@ -314,7 +342,7 @@ export const walletApi = {
     },
 
     // Execute swap
-    async executeSwap(fromCurrency: string, toCurrency: string, amount: number, idempotencyKey?: string, lockId?: string, slippageTolerance?: number): Promise<{
+    async executeSwap(fromCurrency: string, toCurrency: string, amount: number, idempotencyKey?: string, lockId?: string, slippageTolerance?: number, fromNetwork?: string, toNetwork?: string): Promise<{
         success: boolean;
         reference: string;
         fromCurrency: string;
@@ -328,7 +356,16 @@ export const walletApi = {
         const response = await fetch(`${API_base}/wallet/swap/execute`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ fromCurrency, toCurrency, amount, idempotencyKey, lockId, ...(slippageTolerance ? { slippageTolerance } : {}) })
+            body: JSON.stringify({ 
+                fromCurrency, 
+                toCurrency, 
+                amount, 
+                idempotencyKey, 
+                lockId, 
+                fromNetwork,
+                toNetwork,
+                ...(slippageTolerance ? { slippageTolerance } : {}) 
+            })
         });
 
         const result = await response.json();

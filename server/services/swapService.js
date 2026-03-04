@@ -39,14 +39,22 @@ async function calculateSwapPreview(
   amount,
   userPlan = "FREE",
   slippageTolerance = 0.005, // 0.5% default
+  fromNetwork = "native",
+  toNetwork = "native",
 ) {
   try {
     console.log(
       `[SwapService] Preview request: ${amount} ${fromCurrency} -> ${toCurrency} (${userPlan})`,
     );
 
-    // REQUIREMENT: Integrated real pricing (CoinGecko via fxService)
-    const marketPrice = await fxService.getRate(fromCurrency, toCurrency);
+    // REQUIREMENT: Integrated real pricing (NOWPayments Estimate preferred)
+    const marketPrice = await fxService.getRate(
+      fromCurrency,
+      toCurrency,
+      false,
+      fromNetwork,
+      toNetwork,
+    );
     if (!marketPrice || marketPrice <= 0) {
       throw new Error(
         `Could not fetch reliable rate for ${fromCurrency}/${toCurrency}. Swapping is temporarily unavailable.`,
@@ -108,6 +116,7 @@ async function calculateSwapPreview(
         .from("wallets")
         .select("id")
         .eq("currency", currency)
+        .eq("network", network)
         .eq("user_id", userId)
         .single();
 
@@ -115,7 +124,7 @@ async function calculateSwapPreview(
 
       const { data: newWallet, error: createErr } = await supabase
         .from("wallets")
-        .insert({ user_id: userId, currency, address: uuidv4() })
+        .insert({ user_id: userId, currency, network, address: uuidv4() })
         .select("id")
         .single();
 
@@ -123,8 +132,8 @@ async function calculateSwapPreview(
       return newWallet.id;
     };
 
-    const fromWalletId = await getOrCreateWallet(fromCurrency);
-    const toWalletId = await getOrCreateWallet(toCurrency);
+    const fromWalletId = await getOrCreateWallet(fromCurrency, fromNetwork);
+    const toWalletId = await getOrCreateWallet(toCurrency, toNetwork);
 
     // REQUIREMENT: Lock rate for 30 seconds (Persistently in DB)
     const { data: quote, error: quoteError } = await supabase
@@ -184,6 +193,8 @@ async function executeSwap(
   userPlan = "FREE",
   lockId = null, // Rate lock optional but highly recommended
   slippageTolerance = 0.005, // 0.5% default
+  fromNetwork = "native",
+  toNetwork = "native",
 ) {
   let preview;
 
@@ -236,6 +247,8 @@ async function executeSwap(
     lockId = preview.lockId; // Generate lock dynamically
   }
 
+  const netAmount = preview.netAmount || (amount * (1 - 0.075));
+
   // Check for duplicate request
   if (idempotencyKey) {
     const { data: existing } = await supabase
@@ -255,7 +268,13 @@ async function executeSwap(
   // based on the quote ID, which ensures wallets exist and balance is sufficient.
 
   // Get exact current market price at time of execution to enforce slippage strictly in RPC
-  const rawMarketRate = await fxService.getRate(fromCurrency, toCurrency);
+  const rawMarketRate = await fxService.getRate(
+    fromCurrency,
+    toCurrency,
+    false,
+    fromNetwork,
+    toNetwork,
+  );
 
   // Apply the same commission spread to the live rate so we are comparing apples-to-apples correctly in slippage
   const spreadResult = await commissionService.calculateSpread(
@@ -279,8 +298,10 @@ async function executeSwap(
     conversionResult = await payoutService.createNowPaymentsConversion(
       fromCurrency,
       toCurrency,
-      amount,
+      netAmount, // Facilitate conversion of the NET amount
       internalReference,
+      fromNetwork,
+      toNetwork,
     );
   } catch (providerError) {
     throw new Error(
@@ -297,7 +318,7 @@ async function executeSwap(
   ).eq("id", lockId).single();
 
   const { data: txId, error: txError } = await supabase.rpc(
-    "initiate_external_swap_intent", // A new RPC we need to create to safely freeze funds
+    "initiate_external_swap_intent",
     {
       p_from_wallet_id: quoteRecord.from_wallet_id,
       p_to_wallet_id: quoteRecord.to_wallet_id,
@@ -305,7 +326,7 @@ async function executeSwap(
       p_quote_id: lockId,
       p_reference: internalReference,
       p_external_conversion_id: String(conversionResult.conversionId),
-      p_provider: "NOWPAYMENTS",
+      p_provider: conversionResult.provider || "NOWPAYMENTS",
     },
   );
 
@@ -314,12 +335,23 @@ async function executeSwap(
       error: txError.message,
       userId,
     });
-    require("fs").appendFileSync(
-      "swap_error_debug.log",
-      JSON.stringify(txError) + "\n",
-    );
     throw new Error(txError.message || "Swap execution failed");
   }
+
+  // Update transaction with detailed fee breakdown for auditing
+  await supabase.from("transactions")
+    .update({
+      metadata: {
+        ...preview.metadata, // Carry over metadata from quote
+        platform_fee_percentage: 6.0,
+        referrer_fee_percentage: 0.5,
+        reward_fee_percentage: 1.0,
+        total_fee_percentage: 7.5,
+        external_reference: conversionResult.conversionId,
+        provider_status: conversionResult.status,
+      },
+    })
+    .eq("id", txId);
 
   try {
     const { createNotification } = require("./notificationService");

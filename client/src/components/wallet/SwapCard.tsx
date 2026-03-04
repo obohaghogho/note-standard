@@ -10,16 +10,23 @@ import { motion } from 'framer-motion';
 
 interface SwapCardProps {
     initialFromCurrency?: Currency;
+    initialFromNetwork?: string;
     className?: string;
     onSuccess?: () => void;
 }
 
-const CURRENCIES: Currency[] = ['BTC', 'ETH', 'USD', 'NGN', 'EUR', 'GBP', 'JPY'];
 
-export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC', className = '', onSuccess }) => {
+export const SwapCard: React.FC<SwapCardProps> = ({ 
+    initialFromCurrency = 'BTC', 
+    initialFromNetwork = 'native',
+    className = '', 
+    onSuccess 
+}) => {
     const { wallets, refresh } = useWallet();
     const [fromCurrency, setFromCurrency] = useState<Currency>(initialFromCurrency);
+    const [fromNetwork, setFromNetwork] = useState<string>(initialFromNetwork);
     const [toCurrency, setToCurrency] = useState<Currency>('USD');
+    const [toNetwork, setToNetwork] = useState<string>('native');
     const [amount, setAmount] = useState('');
     const [loading, setLoading] = useState(false);
     const [previewLoading, setPreviewLoading] = useState(false);
@@ -53,7 +60,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
         return () => clearInterval(intervalId);
     }, [preview]);
 
-    const fromWallet = wallets.find(w => w.currency === fromCurrency);
+    const fromWallet = wallets.find(w => w.currency === fromCurrency && w.network === fromNetwork);
     const availableBalance = fromWallet ? (fromWallet.available_balance ?? fromWallet.balance) : 0;
 
     // Auto-preview when amount changes
@@ -68,13 +75,13 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
         }, 800); // Increased debounce to prevent rapid API calls
 
         return () => clearTimeout(timeoutId);
-    }, [amount, fromCurrency, toCurrency]);
+    }, [amount, fromCurrency, fromNetwork, toCurrency, toNetwork]);
 
     const fetchPreview = async () => {
         setPreviewLoading(true);
         try {
             const slippageDecimal = slippage / 100;
-            const result = await walletApi.previewSwap(fromCurrency, toCurrency, parseFloat(amount), slippageDecimal);
+            const result = await walletApi.previewSwap(fromCurrency, toCurrency, parseFloat(amount), slippageDecimal, fromNetwork, toNetwork);
             setPreview({
                 rate: Number(result.rate ?? 0),
                 fee: Number(result.fee ?? 0),
@@ -92,9 +99,12 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
     };
 
     const handleSwapCurrencies = () => {
-        const temp = fromCurrency;
+        const tempCurr = fromCurrency;
+        const tempNet = fromNetwork;
         setFromCurrency(toCurrency);
-        setToCurrency(temp);
+        setFromNetwork(toNetwork);
+        setToCurrency(tempCurr);
+        setToNetwork(tempNet);
         setAmount('');
         setPreview(null);
     };
@@ -126,7 +136,9 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
                 numericAmount, 
                 idempotencyKey,
                 preview.lockId,
-                slippageDecimal
+                slippageDecimal,
+                fromNetwork,
+                toNetwork
             );
             
             toast.success(
@@ -176,13 +188,19 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
                         <select
                             id="swap-card-from-currency"
                             name="fromCurrency"
-                            value={fromCurrency}
-                            onChange={(e) => setFromCurrency(e.target.value as Currency)}
+                            value={`${fromCurrency}_${fromNetwork}`}
+                            onChange={(e) => {
+                                const [c, n] = e.target.value.split('_');
+                                setFromCurrency(c);
+                                setFromNetwork(n);
+                            }}
                             className="bg-transparent text-xl font-bold text-white focus:outline-none cursor-pointer hover:text-purple-400 transition-colors"
                         >
-                            {CURRENCIES?.map(c => (
-                                <option key={c} value={c} className="bg-gray-800 text-base">{c}</option>
-                            ))}
+                             {wallets.map(w => (
+                                 <option key={`${w.currency}_${w.network}`} value={`${w.currency}_${w.network}`} className="bg-gray-800 text-base">
+                                     {w.currency} {w.network !== 'native' ? `(${w.network})` : ''}
+                                 </option>
+                             ))}
                         </select>
                         <div className="flex-1 relative">
                             <input
@@ -224,13 +242,19 @@ export const SwapCard: React.FC<SwapCardProps> = ({ initialFromCurrency = 'BTC',
                         <select
                             id="swap-card-to-currency"
                             name="toCurrency"
-                            value={toCurrency}
-                            onChange={(e) => setToCurrency(e.target.value as Currency)}
+                            value={`${toCurrency}_${toNetwork}`}
+                            onChange={(e) => {
+                                const [c, n] = e.target.value.split('_');
+                                setToCurrency(c);
+                                setToNetwork(n);
+                            }}
                             className="bg-transparent text-xl font-bold text-white focus:outline-none cursor-pointer hover:text-purple-400 transition-colors"
                         >
-                            {CURRENCIES?.filter(c => c !== fromCurrency).map(c => (
-                                <option key={c} value={c} className="bg-gray-800 text-base">{c}</option>
-                            ))}
+                             {wallets.filter(w => w.currency !== fromCurrency || w.network !== fromNetwork).map(w => (
+                                 <option key={`${w.currency}_${w.network}`} value={`${w.currency}_${w.network}`} className="bg-gray-800 text-base">
+                                     {w.currency} {w.network !== 'native' ? `(${w.network})` : ''}
+                                 </option>
+                             ))}
                         </select>
                         <div className="flex-1">
                             <input
