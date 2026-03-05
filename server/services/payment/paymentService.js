@@ -250,63 +250,9 @@ class PaymentService {
   }
 
   /**
-   * Handle Webhook confirmation
+   * Execute Webhook core business logic (Delegated from BaseProvider)
    */
-  async handleWebhook(providerName, headers, body, rawBody = null) {
-    const provider = PaymentFactory.getProviderByName(providerName);
-
-    // 0. Log Webhook for Audit Trail
-    let logId;
-    try {
-      const { data: logEntry } = await supabase
-        .from("webhook_logs")
-        .insert({
-          provider: providerName,
-          payload: body,
-          headers: headers,
-          reference: body.order_id || body.payment_id || body.reference ||
-            body.data?.reference,
-          ip_address: headers["x-forwarded-for"] || "unknown",
-        })
-        .select("id")
-        .single();
-      logId = logEntry?.id;
-    } catch (err) {
-      logger.error("Failed to log webhook", {
-        error: err.message,
-        provider: providerName,
-      });
-    }
-
-    // 1. Verify Signature
-    const isValid = provider.verifyWebhookSignature(headers, body, rawBody);
-    if (!isValid) {
-      logger.warn(`Invalid signature for ${providerName} webhook`);
-
-      // LOG SECURITY EVENT
-      await supabase.from("security_audit_logs").insert({
-        event_type: "INVALID_WEBHOOK_SIGNATURE",
-        severity: "WARN",
-        description: `Invalid signature for ${providerName} webhook from IP: ${
-          headers["x-forwarded-for"] || "unknown"
-        }`,
-        payload: {
-          provider: providerName,
-          reference: body.reference || body.id,
-        },
-        ip_address: headers["x-forwarded-for"] || "unknown",
-      });
-
-      if (logId) {
-        await supabase.from("webhook_logs").update({
-          processing_error: "Invalid signature",
-        }).eq("id", logId);
-      }
-      throw new Error("Invalid signature");
-    }
-
-    // 2. Parse Event
-    const event = provider.parseWebhookEvent(body);
+  async executeWebhookAction(event, body, providerName) {
     logger.info(`Processing ${providerName} event`, {
       type: event.type,
       reference: event.reference,
@@ -316,22 +262,20 @@ class PaymentService {
     let result;
 
     // Distinguish between incoming payments (deposits) and outbound/conversions (withdrawals/swaps)
-    // NOWPayments uses payment_status for deposits, but status for payouts/conversions.
-    // Flutterwave uses event.type === 'transfer.completed' for payouts.
-
-    // Check if this is a Payout/Withdrawal event
-    const isPayout = event.type === "transfer" || event.type === "payout" ||
-      body.event === "transfer.completed" || body.event === "transfer.failed";
+    const isPayout = event.type === "transfer" ||
+      event.type === "payout" ||
+      body.event === "transfer.completed" ||
+      body.event === "transfer.failed";
     const isConversion = event.type === "conversion" ||
-      body.type === "conversion"; // Add proper mapping based on provider later
+      body.type === "conversion";
 
     if (isPayout || body.event?.startsWith("transfer.")) {
       // Handle Withdrawal Finalization
-      const status =
-        (event.status === "success" || body.event === "transfer.completed" ||
-            body.data?.status === "SUCCESSFUL")
-          ? "SUCCESS"
-          : "FAILED";
+      const status = event.status === "success" ||
+          body.event === "transfer.completed" ||
+          body.data?.status === "SUCCESSFUL"
+        ? "SUCCESS"
+        : "FAILED";
       const externalHash = event.reference || body.data?.id;
 
       const { error: rpcError } = await supabase.rpc(
@@ -378,26 +322,22 @@ class PaymentService {
         result = { status: "success" };
       }
     } else {
-      // Default to Deposit Finalization (Existing logic)
+      // Default to Deposit Finalization
       if (
-        event.status === "success" || body.event === "charge.completed" ||
+        event.status === "success" ||
+        body.event === "charge.completed" ||
         body.data?.status === "successful"
       ) {
         result = await this.finalizeTransaction(event.reference, event);
-      } else if (event.status === "failed" || body.event === "charge.failed") {
+      } else if (
+        event.status === "failed" ||
+        body.event === "charge.failed"
+      ) {
         result = await this.failTransaction(
           event.reference,
           "Payment failed at provider",
         );
       }
-    }
-
-    // 3. Mark as processed
-    if (logId) {
-      await supabase.from("webhook_logs").update({
-        processed: true,
-        processing_error: result?.error || null,
-      }).eq("id", logId);
     }
 
     return result || { status: "ignored" };

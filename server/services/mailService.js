@@ -31,7 +31,9 @@ const getTransporter = () => {
   return nodemailer.createTransport({
     host,
     port: process.env.SMTP_PORT || 587,
-    secure: process.env.SMTP_PORT == 465,
+    secure: process.env.SMTP_SECURE !== undefined
+      ? process.env.SMTP_SECURE === "true"
+      : process.env.SMTP_PORT == 465,
     auth: { user, pass },
     pool: true,
     maxConnections: 5,

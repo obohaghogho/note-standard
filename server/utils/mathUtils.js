@@ -5,7 +5,7 @@ const { ethers } = require("ethers");
  * Avoids native JavaScript floating point precision issues.
  */
 
-const CRYPTO_DECIMALS = 18;
+const CRYPTO_DECIMALS = 8; // Enforce standard 8-decimal precision for Crypto (Satoshi standard)
 const FIAT_DECIMALS = 2;
 
 // Used for high-precision internal calculations
@@ -71,12 +71,13 @@ function divide(a, b, decimals = CALCULATION_DECIMALS) {
 }
 
 /**
- * Format final output to appropriate decimal places based on currency
+ * Format final output to appropriate decimal places strictly as a String
+ * This prevents float manipulation exploits downstream.
  */
 function formatForCurrency(amount, currency) {
   const decimals = getDecimals(currency);
   const value = typeof amount === "string" ? parseFloat(amount) : amount;
-  return parseFloat(value.toFixed(decimals));
+  return Number(value).toFixed(decimals); // Explicit string serialization
 }
 
 module.exports = {

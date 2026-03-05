@@ -1,128 +1,33 @@
-const paymentService = require("../../services/payment/paymentService");
+const PaymentFactory = require("../../services/payment/PaymentFactory");
 const logger = require("../../utils/logger");
 
 /**
  * Unified Webhook Controller
- * Handles incoming webhooks from all providers
+ * Directly routes HTTP req/res to provider implementations
+ * to enforce idempotency, try/catch, and HTTP 200 stability rules.
  */
 exports.handlePaystack = async (req, res) => {
-  try {
-    await paymentService.handleWebhook(
-      "paystack",
-      req.headers,
-      req.body,
-      req.rawBody,
-    );
-    res.json({ received: true });
-  } catch (error) {
-    console.error("[WebhookController] Paystack Error:", error.message);
-    res.status(200).json({ received: true, error: error.message }); // Always 200 to acknowledge receipt unless it's a critical crash
-  }
+  const provider = PaymentFactory.getProviderByName("paystack");
+  return provider.processWebhook(req, res);
 };
 
 exports.handleFlutterwave = async (req, res) => {
-  // IMPORTANT: Verify Flutterwave secret hash before processing
-  const secretHash = process.env.FLW_SECRET_HASH;
-  if (req.headers["verif-hash"] !== secretHash) {
-    console.warn(
-      "[WebhookController] Flutterwave: Invalid verif-hash rejected",
-    );
-    return res.status(401).end();
-  }
-
-  try {
-    await paymentService.handleWebhook(
-      "flutterwave",
-      req.headers,
-      req.body,
-      req.rawBody,
-    );
-    res.json({ received: true });
-  } catch (error) {
-    console.error("[WebhookController] Flutterwave Error:", error.message);
-    res.status(200).json({ received: true, error: error.message });
-  }
+  const provider = PaymentFactory.getProviderByName("flutterwave");
+  return provider.processWebhook(req, res);
 };
 
 exports.handleKorapay = async (req, res) => {
-  try {
-    await paymentService.handleWebhook(
-      "korapay",
-      req.headers,
-      req.body,
-      req.rawBody,
-    );
-    res.json({ received: true });
-  } catch (error) {
-    console.error("[WebhookController] Korapay Error:", error.message);
-    res.status(200).json({ received: true, error: error.message });
-  }
+  const provider = PaymentFactory.getProviderByName("korapay");
+  return provider.processWebhook(req, res);
 };
 
 exports.handleCrypto = async (req, res) => {
-  try {
-    const provider = process.env.CRYPTO_PROVIDER || "crypto";
-    await paymentService.handleWebhook(
-      provider,
-      req.headers,
-      req.body,
-      req.rawBody,
-    );
-    res.json({ received: true });
-  } catch (error) {
-    console.error("[WebhookController] Crypto Error:", error.message);
-    res.status(200).json({ received: true, error: error.message });
-  }
+  const providerName = process.env.CRYPTO_PROVIDER || "crypto";
+  const provider = PaymentFactory.getProviderByName(providerName);
+  return provider.processWebhook(req, res);
 };
 
 exports.handleNowPayments = async (req, res) => {
-  console.log("Webhook body:", req.body);
-  const { headers, body } = req;
-  const paymentId = body.payment_id;
-  const orderId = body.order_id;
-
-  try {
-    logger.info("NowPayments Webhook Received", {
-      paymentId,
-      orderId,
-      status: body.payment_status,
-    });
-
-    // 1. Verify Signature
-    const isValid = await paymentService.verifyWebhookSignature(
-      "nowpayments",
-      headers,
-      body,
-      req.rawBody,
-    );
-
-    if (!isValid) {
-      logger.warn("Suspicious Webhook Attempt (Unauthorized signature)", {
-        paymentId,
-        orderId,
-        ip: req.ip,
-      });
-      return res.status(401).json({ error: "Invalid signature" });
-    }
-
-    // 2. Delegate to PaymentService for full audit logging and processing
-    // The provider's parseWebhookEvent will correctly map only "finished" to success.
-    const result = await paymentService.handleWebhook(
-      "nowpayments",
-      headers,
-      body,
-      req.rawBody,
-    );
-
-    res.json({ received: true, status: result?.status });
-  } catch (error) {
-    logger.error("NowPayments Webhook Error:", {
-      message: error.message,
-      orderId,
-      paymentId,
-    });
-    // Still return 200 unless it's a code-level crash we want to debug,
-    // to avoid infinite retry loops if we've already logged the error properly.
-    res.status(200).json({ received: true, error: error.message });
-  }
+  const provider = PaymentFactory.getProviderByName("nowpayments");
+  return provider.processWebhook(req, res);
 };

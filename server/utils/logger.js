@@ -1,8 +1,15 @@
 /**
  * Structured Logger
+ * Respects LOG_LEVEL env var: error > warn > info > debug
  */
+const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
+const currentLevel =
+  LOG_LEVELS[(process.env.LOG_LEVEL || "info").toLowerCase()] ??
+    LOG_LEVELS.info;
+
 const logger = {
   info: (message, context = {}) => {
+    if (currentLevel < LOG_LEVELS.info) return;
     console.log(
       JSON.stringify({
         level: "INFO",
@@ -23,6 +30,7 @@ const logger = {
     );
   },
   warn: (message, context = {}) => {
+    if (currentLevel < LOG_LEVELS.warn) return;
     console.warn(
       JSON.stringify({
         level: "WARN",
@@ -33,7 +41,8 @@ const logger = {
     );
   },
   debug: (message, context = {}) => {
-    // Only log debug to console if DEBUG=true or in development
+    if (currentLevel < LOG_LEVELS.debug) return;
+    // Also respect legacy DEBUG=true flag
     if (
       process.env.DEBUG === "true" || process.env.NODE_ENV === "development"
     ) {

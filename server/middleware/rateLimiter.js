@@ -1,12 +1,17 @@
 const rateLimit = require("express-rate-limit");
 
+// ── Configurable defaults from environment ──────────────────
+const DEFAULT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) ||
+  15 * 60 * 1000; // 15 min
+const DEFAULT_MAX = parseInt(process.env.RATE_LIMIT_MAX, 10) || 100;
+
 /**
  * Standard Auth Limiter
- * 100 requests per 15 minutes
+ * Uses env-configured window/max, defaults to 100 req / 15 min
  */
 exports.authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
+  windowMs: DEFAULT_WINDOW_MS,
+  max: DEFAULT_MAX,
   message: { error: "Too many requests. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
@@ -14,10 +19,10 @@ exports.authLimiter = rateLimit({
 
 /**
  * Strict Transaction Limiter
- * 10 requests per 15 minutes for high-value actions
+ * 10 requests per window for high-value actions
  */
 exports.transactionLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
+  windowMs: DEFAULT_WINDOW_MS,
   max: 10,
   message: { error: "Too many transaction attempts. Please try again later." },
   standardHeaders: true,
@@ -26,11 +31,11 @@ exports.transactionLimiter = rateLimit({
 
 /**
  * API General Limiter
- * 200 requests per 15 minutes
+ * 2x the default max per window
  */
 exports.apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 200,
+  windowMs: DEFAULT_WINDOW_MS,
+  max: DEFAULT_MAX * 2,
   message: { error: "Too many API requests. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
@@ -50,7 +55,7 @@ exports.withdrawalLimiter = rateLimit({
 
 /**
  * HD Address Generation Limiter
- * 10 requests per 1 hour as requested
+ * 10 requests per 1 hour
  */
 exports.hdAddressLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -58,6 +63,19 @@ exports.hdAddressLimiter = rateLimit({
   message: {
     error: "Address generation limit exceeded. Please try again in an hour.",
   },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
+ * Strict Email Limiter
+ * Prevents attackers from spamming reset/verification emails
+ */
+const EMAIL_WINDOW_MIN = parseInt(process.env.EMAIL_RATE_WINDOW_MIN, 10) || 15;
+exports.emailLimiter = rateLimit({
+  windowMs: EMAIL_WINDOW_MIN * 60 * 1000,
+  max: parseInt(process.env.EMAIL_RATE_LIMIT, 10) || 5,
+  message: { error: "Too many email requests. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
 });
