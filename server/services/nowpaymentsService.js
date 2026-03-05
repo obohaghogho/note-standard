@@ -268,7 +268,10 @@ exports.getExchangeEstimate = async (fromCurrency, toCurrency, amount = 1) => {
 
     // Helper to resolve ticker - expected input is "CURRENCY" or "CURRENCY_NETWORK"
     const resolveTicker = (ticker) => {
-      if (payCurrencyMap[ticker]) return payCurrencyMap[ticker];
+      const upTicker = ticker.toUpperCase();
+      if (payCurrencyMap[upTicker]) return payCurrencyMap[upTicker];
+
+      // Handle "BTC", "USD", etc.
       return ticker.toLowerCase();
     };
 

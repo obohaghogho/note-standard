@@ -13,6 +13,7 @@ const { checkUserPlan, checkConsent } = require("../middleware/monetization");
 const { transactionLimiter, withdrawalLimiter, hdAddressLimiter } = require(
   "../middleware/rateLimiter",
 );
+const { validateAmount } = require("../middleware/amountValidator");
 
 const fxService = require("../services/fxService");
 
@@ -505,163 +506,172 @@ router.post(
 );
 
 // POST /withdraw
-router.post("/withdraw", withdrawalLimiter, checkConsent, async (req, res) => {
-  const {
-    amount,
-    currency,
-    bankId,
-    idempotencyKey,
-    twoFactorCode,
-    cryptoAddress,
-    network = "native",
-  } = req.body;
-  if (!amount || !currency) {
-    return res.status(400).json({ error: "Missing required fields" });
-  }
-
-  try {
-    const withdrawAmount = parseFloat(amount);
-    const commission = await commissionService.calculateCommission(
-      "WITHDRAWAL",
-      withdrawAmount,
+router.post(
+  "/withdraw",
+  withdrawalLimiter,
+  validateAmount,
+  checkConsent,
+  async (req, res) => {
+    const {
+      amount,
       currency,
-      req.user.plan,
-    );
-    const platformWalletId = await commissionService.getPlatformWalletId(
-      currency,
-    );
-
-    const { data: wallet } = await supabase.from("wallets").select(
-      "id, balance",
-    ).eq("user_id", req.user.id).eq("currency", currency).eq("network", network)
-      .single();
-
-    if (!wallet) return res.status(404).json({ error: "Wallet not found" });
-
-    // Ensure they have enough to cover amount + fee
-    if (wallet.balance < (withdrawAmount + commission.fee)) {
-      return res.status(400).json({
-        error: "Insufficient balance to cover amount and withdrawal fee",
-      });
+      bankId,
+      idempotencyKey,
+      twoFactorCode,
+      cryptoAddress,
+      network = "native",
+    } = req.body;
+    if (!amount || !currency) {
+      return res.status(400).json({ error: "Missing required fields" });
     }
 
-    // Mock 2FA verification: If user sends a code, assume it's verified for now
-    const is2FAVerified = !!twoFactorCode;
-
-    // Check if it's a crypto or fiat withdrawal
-    const isCrypto = ["BTC", "ETH", "USDT", "USDC", "MATIC"].some((c) =>
-      currency.toUpperCase().startsWith(c)
-    );
-
-    // Generate internal reference BEFORE calling external provider
-    const internalReference = req.body.reference ||
-      `wdr_${Date.now()}_${req.user.id.substring(0, 8)}`;
-
-    let payoutResult;
     try {
-      if (isCrypto) {
-        if (!cryptoAddress) {
-          return res.status(400).json({
-            error: "Missing crypto destination address",
-          });
-        }
-
-        payoutResult = await payoutService.createNowPaymentsPayout(
-          cryptoAddress,
-          withdrawAmount,
-          currency,
-          internalReference,
-          network,
-        );
-      } else {
-        if (!bankId) {
-          return res.status(400).json({
-            error: "Missing destination bank/account info",
-          });
-        }
-
-        // Assuming bankId contains necessary account info for MVP.
-        // In a real scenario, you'd fetch the saved user bank account details using bankId.
-        // For this structural refactor, we assume bankId is the account number and use a default bank code
-        const defaultBankCode = "044"; // Access Bank example
-        payoutResult = await payoutService.createFlutterwaveTransfer(
-          defaultBankCode,
-          bankId, // Treating bankId as account number for now
-          withdrawAmount,
-          currency,
-          internalReference,
-          `Withdrawal for ${req.user.id}`,
-        );
-      }
-    } catch (providerError) {
-      return res.status(502).json({
-        error: providerError.message ||
-          "Failed to initiate transfer with payout provider",
-      });
-    }
-
-    // Only if provider successfully initiated the payout do we deduct the internal ledger
-    const { data: txId, error: txError } = await supabase.rpc(
-      "withdraw_funds_secured",
-      {
-        p_wallet_id: wallet.id,
-        p_amount: withdrawAmount,
-        p_currency: currency,
-        p_fee: commission.fee,
-        p_rate: commission.rate,
-        p_platform_wallet_id: platformWalletId,
-        p_idempotency_key: idempotencyKey,
-        p_2fa_verified: is2FAVerified,
-        p_metadata: {
-          cryptoAddress: isCrypto ? cryptoAddress : null,
-          bankId: !isCrypto ? bankId : null,
-          transaction_fee_breakdown: { withdrawal_fee: commission.fee },
-          provider_response: payoutResult, // Store provider response mapping
-        },
-      },
-    );
-
-    if (txError) {
-      // DANGER: We initiated a payout externally but DB update failed!
-      // Real-world: Alert admin immediately to cancel external transfer or manually reconcile
-      console.error(
-        `[CRITICAL] External transfer initiated (${payoutResult.payoutId}) but DB ledger deduction failed!`,
-        txError,
+      const withdrawAmount = parseFloat(amount);
+      const commission = await commissionService.calculateCommission(
+        "WITHDRAWAL",
+        withdrawAmount,
+        currency,
+        req.user.plan,
+      );
+      const platformWalletId = await commissionService.getPlatformWalletId(
+        currency,
       );
 
-      if (txError.message === "2FA_REQUIRED") {
-        return res.status(403).json({
-          error: "2FA Verification Required",
-          code: "2FA_REQUIRED",
+      const { data: wallet } = await supabase.from("wallets").select(
+        "id, balance",
+      ).eq("user_id", req.user.id).eq("currency", currency).eq(
+        "network",
+        network,
+      )
+        .single();
+
+      if (!wallet) return res.status(404).json({ error: "Wallet not found" });
+
+      // Ensure they have enough to cover amount + fee
+      if (wallet.balance < (withdrawAmount + commission.fee)) {
+        return res.status(400).json({
+          error: "Insufficient balance to cover amount and withdrawal fee",
         });
       }
-      throw txError;
+
+      // Mock 2FA verification: If user sends a code, assume it's verified for now
+      const is2FAVerified = !!twoFactorCode;
+
+      // Check if it's a crypto or fiat withdrawal
+      const isCrypto = ["BTC", "ETH", "USDT", "USDC", "MATIC"].some((c) =>
+        currency.toUpperCase().startsWith(c)
+      );
+
+      // Generate internal reference BEFORE calling external provider
+      const internalReference = req.body.reference ||
+        `wdr_${Date.now()}_${req.user.id.substring(0, 8)}`;
+
+      let payoutResult;
+      try {
+        if (isCrypto) {
+          if (!cryptoAddress) {
+            return res.status(400).json({
+              error: "Missing crypto destination address",
+            });
+          }
+
+          payoutResult = await payoutService.createNowPaymentsPayout(
+            cryptoAddress,
+            withdrawAmount,
+            currency,
+            internalReference,
+            network,
+          );
+        } else {
+          if (!bankId) {
+            return res.status(400).json({
+              error: "Missing destination bank/account info",
+            });
+          }
+
+          // Assuming bankId contains necessary account info for MVP.
+          // In a real scenario, you'd fetch the saved user bank account details using bankId.
+          // For this structural refactor, we assume bankId is the account number and use a default bank code
+          const defaultBankCode = "044"; // Access Bank example
+          payoutResult = await payoutService.createFlutterwaveTransfer(
+            defaultBankCode,
+            bankId, // Treating bankId as account number for now
+            withdrawAmount,
+            currency,
+            internalReference,
+            `Withdrawal for ${req.user.id}`,
+          );
+        }
+      } catch (providerError) {
+        return res.status(502).json({
+          error: providerError.message ||
+            "Failed to initiate transfer with payout provider",
+        });
+      }
+
+      // Only if provider successfully initiated the payout do we deduct the internal ledger
+      const { data: txId, error: txError } = await supabase.rpc(
+        "withdraw_funds_secured",
+        {
+          p_wallet_id: wallet.id,
+          p_amount: withdrawAmount,
+          p_currency: currency,
+          p_fee: commission.fee,
+          p_rate: commission.rate,
+          p_platform_wallet_id: platformWalletId,
+          p_idempotency_key: idempotencyKey,
+          p_2fa_verified: is2FAVerified,
+          p_metadata: {
+            cryptoAddress: isCrypto ? cryptoAddress : null,
+            bankId: !isCrypto ? bankId : null,
+            transaction_fee_breakdown: { withdrawal_fee: commission.fee },
+            provider_response: payoutResult, // Store provider response mapping
+          },
+        },
+      );
+
+      if (txError) {
+        // DANGER: We initiated a payout externally but DB update failed!
+        // Real-world: Alert admin immediately to cancel external transfer or manually reconcile
+        console.error(
+          `[CRITICAL] External transfer initiated (${payoutResult.payoutId}) but DB ledger deduction failed!`,
+          txError,
+        );
+
+        if (txError.message === "2FA_REQUIRED") {
+          return res.status(403).json({
+            error: "2FA Verification Required",
+            code: "2FA_REQUIRED",
+          });
+        }
+        throw txError;
+      }
+
+      // UPDATE the newly created transaction with the external tracking info
+      await supabase.from("transactions").update({
+        reference_id: internalReference,
+        external_payout_id: String(payoutResult.payoutId),
+        external_payout_status: payoutResult.status,
+        provider: payoutResult.provider,
+        status: "PROCESSING",
+      }).eq("id", txId);
+
+      res.json({
+        success: true,
+        transactionId: txId,
+        fee: commission.fee,
+        netAmount: withdrawAmount,
+        status: "processing",
+        providerStatus: payoutResult.status,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message || "Withdrawal failed" });
     }
-
-    // UPDATE the newly created transaction with the external tracking info
-    await supabase.from("transactions").update({
-      reference_id: internalReference,
-      external_payout_id: String(payoutResult.payoutId),
-      external_payout_status: payoutResult.status,
-      provider: payoutResult.provider,
-      status: "PROCESSING",
-    }).eq("id", txId);
-
-    res.json({
-      success: true,
-      transactionId: txId,
-      fee: commission.fee,
-      netAmount: withdrawAmount,
-      status: "processing",
-      providerStatus: payoutResult.status,
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message || "Withdrawal failed" });
-  }
-});
+  },
+);
 
 // DEPOSIT ENDPOINTS
-router.post("/deposit/card", checkConsent, async (req, res) => {
+router.post("/deposit/card", validateAmount, checkConsent, async (req, res) => {
   const { currency, amount, idempotencyKey } = req.body;
   try {
     const result = await depositService.createCardDeposit(
@@ -677,7 +687,7 @@ router.post("/deposit/card", checkConsent, async (req, res) => {
   }
 });
 
-router.post("/deposit/bank", checkConsent, async (req, res) => {
+router.post("/deposit/bank", validateAmount, checkConsent, async (req, res) => {
   const { currency, amount, idempotencyKey } = req.body;
   try {
     const result = await depositService.createBankDeposit(
@@ -694,7 +704,7 @@ router.post("/deposit/bank", checkConsent, async (req, res) => {
 });
 
 // SWAP ENDPOINTS
-router.post("/swap/preview", async (req, res) => {
+router.post("/swap/preview", validateAmount, async (req, res) => {
   const {
     fromCurrency,
     toCurrency,
@@ -727,6 +737,7 @@ router.post("/swap/preview", async (req, res) => {
 router.post(
   "/swap/execute",
   transactionLimiter,
+  validateAmount,
   checkConsent,
   async (req, res) => {
     const {
