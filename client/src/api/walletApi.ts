@@ -1,179 +1,301 @@
+import { v4 as uuidv4 } from "uuid";
 import { supabase } from '../lib/supabaseSafe';
 import type { Wallet, Transaction, InternalTransferRequest, WithdrawalRequest, CommissionSettings, LedgerEntry } from '@/types/wallet';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-const API_BASE = `${API_URL}/api`;
+// -----------------------------
+// Mock Wallet Data (in-memory for dev)
+// -----------------------------
+const mockWallets: Record<string, Record<string, number>> = {
+  user1: {
+    USD: 1000,
+    BTC: 0.01,
+    ETH: 0.1,
+    USDT: 100,
+    USDC: 50,
+  },
+};
 
-async function getAuthHeader(): Promise<Record<string, string>> {
-  const { data: { session } } = await supabase.auth.getSession();
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${session?.access_token || ''}`
-  };
+const ledgerEntries: Record<string, any[]> = {
+  user1: [],
+};
+
+// -----------------------------
+// Exchange Rate Cache
+// -----------------------------
+const rateCache: Record<string, { rate: number; timestamp: number }> = {};
+const CACHE_TTL = 60 * 1000; // 60s cache
+
+// Helper to get consistent userId
+async function getMockUserId(): Promise<string> {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user?.id || 'user1';
 }
 
 export const walletApi = {
-  // Get all wallets
+  // Get all wallets (mapped to mock balances)
   async getWallets(): Promise<Wallet[]> {
-    try {
-      const headers = await getAuthHeader();
-      const response = await fetch(`${API_BASE}/wallet`, { headers });
-      if (!response.ok) return [];
-      const data = await response.json();
-      return Array.isArray(data) ? data : [];
-    } catch (error) {
-      console.error('getWallets error:', error);
-      return [];
-    }
+    const userId = await getMockUserId();
+    const balances = mockWallets[userId] || mockWallets['user1'];
+    return Object.entries(balances).map(([currency, balance]) => ({
+        id: uuidv4(),
+        user_id: userId,
+        currency,
+        balance: balance as number,
+        available_balance: balance as number,
+        network: 'native',
+        address: `${currency}_ADDR_${(userId || 'user1').slice(0, 8)}`,
+        provider: 'MOCK_PROVIDER',
+        is_frozen: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+    }));
   },
 
-  // Create a new wallet
+  // Create or fetch a wallet
   async createWallet(currency: string, network: string = 'native'): Promise<Wallet> {
-    const headers = await getAuthHeader();
-    const response = await fetch(`${API_BASE}/wallet/create`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ currency, network })
-    });
-    if (!response.ok) throw new Error('Failed to create wallet');
-    return response.json();
+    const userId = await getMockUserId();
+    if (!mockWallets[userId]) mockWallets[userId] = {};
+    if (mockWallets[userId][currency] === undefined) {
+        mockWallets[userId][currency] = 0;
+    }
+    const balance = mockWallets[userId][currency];
+    return {
+        id: uuidv4(),
+        user_id: userId,
+        currency,
+        balance,
+        available_balance: balance,
+        network,
+        address: `${currency}_ADDR_${userId.slice(0, 8)}`,
+        provider: 'MOCK_PROVIDER',
+        is_frozen: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+    };
   },
 
-  // Get transaction history (Paginated)
+  // Get transaction history (mapped to ledger)
   async getTransactions(page: number = 1, limit: number = 20): Promise<{ transactions: Transaction[], total: number, page: number, limit: number, hasMore: boolean }> {
-    try {
-      const headers = await getAuthHeader();
-      const response = await fetch(`${API_BASE}/wallet/transactions?page=${page}&limit=${limit}`, { headers });
-      if (!response.ok) return { transactions: [], total: 0, page, limit, hasMore: false };
-      const data = await response.json();
-      
-      const transactions = data.transactions || [];
-      const pagination = data.pagination || {};
+    const userId = await getMockUserId();
+    const entries = ledgerEntries[userId] || [];
+    const start = (page - 1) * limit;
+    const paginated = entries.slice(start, start + limit).reverse();
 
-      return {
-        transactions: Array.isArray(transactions) ? transactions : [],
-        total: pagination.totalCount ?? transactions.length,
-        page: pagination.page ?? page,
-        limit: pagination.limit ?? limit,
-        hasMore: pagination.hasMore ?? false
-      };
-    } catch (error) {
-      console.error('getTransactions error:', error);
-      return { transactions: [], total: 0, page, limit, hasMore: false };
-    }
+    return {
+      transactions: paginated.map(e => ({
+          id: e.id,
+          wallet_id: 'mock_wallet_id',
+          user_id: userId,
+          type: e.type,
+          amount: e.fromAmount || e.amount || 0,
+          currency: e.fromCurrency || e.currency || 'USD',
+          status: 'COMPLETED',
+          fee: e.adminFee || 0,
+          created_at: new Date(e.timestamp).toISOString(),
+          updated_at: new Date(e.timestamp).toISOString(),
+          metadata: e
+      })) as any,
+      total: entries.length,
+      page,
+      limit,
+      hasMore: entries.length > start + limit
+    };
   },
 
   async internalTransfer(data: InternalTransferRequest & { captchaToken?: string }): Promise<{ success: boolean; transactionId: string }> {
-    const headers = await getAuthHeader();
-    const response = await fetch(`${API_BASE}/wallet/transfer`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(data)
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'Transfer failed');
-    return result;
+    const userId = await getMockUserId();
+    const userWallet = mockWallets[userId];
+    if (!userWallet || (userWallet[data.currency] || 0) < data.amount) {
+        throw new Error('Insufficient balance');
+    }
+    
+    userWallet[data.currency] -= data.amount;
+    const txId = uuidv4();
+    const entry = {
+        id: txId,
+        type: "TRANSFER_OUT",
+        currency: data.currency,
+        amount: -data.amount,
+        recipient: data.recipientAddress || data.recipientEmail,
+        timestamp: Date.now(),
+    };
+    ledgerEntries[userId] = ledgerEntries[userId] || [];
+    ledgerEntries[userId].push(entry);
+
+    return { success: true, transactionId: txId };
   },
 
   async withdraw(data: WithdrawalRequest & { captchaToken?: string }): Promise<{ success: boolean; transactionId: string; fee: number; netAmount: number }> {
-    const headers = await getAuthHeader();
-    const response = await fetch(`${API_BASE}/wallet/withdraw`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(data)
+    const userId = await getMockUserId();
+    const userWallet = mockWallets[userId];
+    const fee = 1.0; // Mock fee
+    if (!userWallet || (userWallet[data.currency] || 0) < (data.amount + fee)) {
+        throw new Error('Insufficient balance');
+    }
+
+    userWallet[data.currency] -= (data.amount + fee);
+    const txId = uuidv4();
+    ledgerEntries[userId] = ledgerEntries[userId] || [];
+    ledgerEntries[userId].push({
+        id: txId,
+        type: "WITHDRAWAL",
+        currency: data.currency,
+        amount: -data.amount,
+        fee,
+        destination: data.address || data.account_number,
+        timestamp: Date.now(),
     });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'Withdrawal failed');
-    return result;
+
+    return { success: true, transactionId: txId, fee, netAmount: data.amount };
   },
 
   async getCommissionRate(type: string, currency: string): Promise<CommissionSettings[]> {
-    const headers = await getAuthHeader();
-    // Assuming we might want to standardize this too, but for now leaving as is or moving to /api/wallet
-    const response = await fetch(`${API_BASE}/wallet/commission-rate?type=${type}&currency=${currency}`, { headers });
-    if (!response.ok) return [];
-    return response.json();
+    return [{ 
+        transaction_type: type, 
+        commission_type: 'PERCENTAGE', 
+        value: 0.06, 
+        min_fee: 0, 
+        max_fee: null, 
+        currency 
+    }];
   },
 
   // ========================================
   // SWAP METHODS
   // ========================================
 
-  async getExchangeRates(): Promise<Record<string, Record<string, number>>> {
-    const headers = await getAuthHeader();
-    const response = await fetch(`${API_BASE}/wallet/exchange-rates`, { headers });
-    if (!response.ok) return {};
-    return response.json();
+  async getExchangeRates(): Promise<Record<string, number>> {
+    const pairs = ["USD/BTC", "USD/ETH", "USD/USDT", "USD/USDC"];
+    const rates: Record<string, number> = {};
+    const now = Date.now();
+
+    pairs.forEach((pair) => {
+      if (rateCache[pair] && now - rateCache[pair].timestamp < CACHE_TTL) {
+        rates[pair] = rateCache[pair].rate;
+      } else {
+        const fallbackRates: Record<string, number> = {
+          "USD/BTC": 0.00003,
+          "USD/ETH": 0.0005,
+          "USD/USDT": 1,
+          "USD/USDC": 1,
+        };
+        const rate = fallbackRates[pair] || 1;
+        rates[pair] = rate;
+        rateCache[pair] = { rate, timestamp: now };
+      }
+    });
+    return rates;
   },
 
-  async previewSwap(fromCurrency: string, toCurrency: string, amount: number, slippageTolerance?: number, fromNetwork?: string, toNetwork?: string): Promise<any> {
-    const headers = await getAuthHeader();
-    const response = await fetch(`${API_BASE}/wallet/swap/preview`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ fromCurrency, toCurrency, amount, slippageTolerance, fromNetwork, toNetwork })
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'Swap preview failed');
-    return result;
+  async previewSwap(fromCurrency: string, toCurrency: string, amount: number): Promise<any> {
+    const rates = await this.getExchangeRates();
+    const pair = `${fromCurrency}/${toCurrency}`;
+    const rate = rates[pair] || 1;
+    return {
+        estimatedAmount: amount * rate,
+        rate,
+        fee: amount * 0.075 // 7.5% total
+    };
   },
 
-  async executeSwap(fromCurrency: string, toCurrency: string, amount: number, idempotencyKey: string, lockId: string, slippageTolerance?: number, fromNetwork?: string, toNetwork?: string, captchaToken?: string): Promise<any> {
-    const headers = await getAuthHeader();
-    const response = await fetch(`${API_BASE}/wallet/swap`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ fromCurrency, toCurrency, amount, idempotencyKey, lockId, slippageTolerance, fromNetwork, toNetwork, captchaToken })
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'Swap execution failed');
-    return result;
+  async executeSwap(fromCurrency: string, toCurrency: string, amount: number): Promise<any> {
+    const userId = await getMockUserId();
+    if (!mockWallets[userId]) mockWallets[userId] = { ...mockWallets['user1'] };
+    if (amount <= 0) throw new Error("Amount must be positive");
+
+    const userWallet = mockWallets[userId];
+    if ((userWallet[fromCurrency] || 0) < amount)
+        throw new Error("Insufficient balance");
+
+    const pair = `${fromCurrency}/${toCurrency}`;
+    let rate: number;
+    const now = Date.now();
+
+    if (rateCache[pair] && now - rateCache[pair].timestamp < CACHE_TTL) {
+        rate = rateCache[pair].rate;
+    } else {
+        const fallbackRates: Record<string, number> = {
+            "USD/BTC": 0.00003, "USD/ETH": 0.0005, "USD/USDT": 1, "USD/USDC": 1,
+            "BTC/USD": 35000, "ETH/USD": 2000, "USDT/USD": 1, "USDC/USD": 1,
+            "BTC/ETH": 15, "ETH/BTC": 0.066, "BTC/USDT": 35000, "USDT/BTC": 0.0000285,
+            "ETH/USDT": 2000, "USDT/ETH": 0.0005,
+        };
+        rate = fallbackRates[pair] || 1;
+        rateCache[pair] = { rate, timestamp: now };
+    }
+
+    const rawToAmount = amount * rate;
+    const adminFee = 0.06 * rawToAmount;
+    const referrerFee = 0.005 * rawToAmount;
+    const userReward = 0.01 * rawToAmount;
+    const finalAmount = rawToAmount - adminFee - referrerFee - userReward;
+
+    userWallet[fromCurrency] -= amount;
+    userWallet[toCurrency] = (userWallet[toCurrency] || 0) + finalAmount;
+
+    const txId = uuidv4();
+    const entry = {
+        id: txId,
+        type: "SWAP",
+        fromCurrency,
+        toCurrency,
+        fromAmount: amount,
+        toAmount: finalAmount,
+        adminFee,
+        referrerFee,
+        userReward,
+        timestamp: Date.now(),
+    };
+    ledgerEntries[userId] = ledgerEntries[userId] || [];
+    ledgerEntries[userId].push(entry);
+
+    return entry;
   },
 
   async downloadInvoice(transactionId: string): Promise<void> {
-    const headers = await getAuthHeader();
-    const response = await fetch(`${API_BASE}/wallet/transactions/${transactionId}/invoice`, { headers });
-    if (!response.ok) throw new Error('Failed to download invoice');
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `invoice_${transactionId.substring(0, 8)}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
+    console.log(`Mock invoice download for transaction: ${transactionId}`);
+    // No-op for dev mock
   },
 
   async getLedgerEntries(limit: number = 10): Promise<LedgerEntry[]> {
-    try {
-      const headers = await getAuthHeader();
-      const response = await fetch(`${API_BASE}/wallet/ledger?limit=${limit}`, { headers });
-      if (!response.ok) throw new Error('Failed to fetch ledger');
-      const data = await response.json();
-      return (data.entries || []) as LedgerEntry[];
-    } catch (error) {
-      console.error('getLedgerEntries error:', error);
-      return [];
-    }
+    const userId = await getMockUserId();
+    const entries = ledgerEntries[userId] || [];
+    return entries.slice(0, limit).reverse().map(e => ({
+        id: e.id,
+        user_id: userId,
+        wallet_id: 'mock_wallet_id',
+        currency: e.currency || e.toCurrency || 'USD',
+        amount: e.amount || e.toAmount || 0,
+        type: e.type,
+        reference: e.id,
+        status: 'COMPLETED',
+        created_at: new Date(e.timestamp).toISOString()
+    }));
   },
 
   async getCurrentAddress(currency: string, network: string = 'native'): Promise<{ address: string; currency: string; network: string }> {
-    const headers = await getAuthHeader();
-    const response = await fetch(`${API_BASE}/wallet/address?currency=${currency}&network=${network}`, { headers });
-    if (!response.ok) throw new Error('Failed to fetch address');
-    return response.json();
+    const mockAddress = `${currency}_ADDR_${uuidv4().slice(0, 8)}`;
+    return { address: mockAddress, currency, network };
   },
 
   async generateNewAddress(currency: string, network: string = 'native'): Promise<{ address: string; currency: string; network: string }> {
-    const headers = await getAuthHeader();
-    // For now, we reuse the address retrieval logic which generates if not exists
-    // In a full HD implementation, this would trigger a new index increment on the backend
-    const response = await fetch(`${API_BASE}/wallet/address?currency=${currency}&network=${network}&rotate=true`, { 
-      method: 'POST',
-      headers 
-    });
-    if (!response.ok) throw new Error('Failed to generate new address');
-    return response.json();
+    return this.getCurrentAddress(currency, network);
+  },
+
+  async deposit(currency: string, amount: number, userId?: string): Promise<any> {
+    const uid = userId || await getMockUserId();
+    if (!mockWallets[uid]) mockWallets[uid] = {};
+    mockWallets[uid][currency] = (mockWallets[uid][currency] || 0) + amount;
+
+    const entry = {
+        id: uuidv4(),
+        type: "DEPOSIT",
+        currency,
+        amount,
+        timestamp: Date.now(),
+    };
+    ledgerEntries[uid] = ledgerEntries[uid] || [];
+    ledgerEntries[uid].push(entry);
+    return entry;
   }
 };
