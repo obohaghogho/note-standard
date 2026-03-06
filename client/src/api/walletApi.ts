@@ -151,7 +151,7 @@ export const walletApi = {
       const response = await fetch(`${API_BASE}/wallet/ledger?limit=${limit}`, { headers });
       if (!response.ok) throw new Error('Failed to fetch ledger');
       const data = await response.json();
-      return (data || []) as LedgerEntry[];
+      return (data.entries || []) as LedgerEntry[];
     } catch (error) {
       console.error('getLedgerEntries error:', error);
       return [];
@@ -162,6 +162,18 @@ export const walletApi = {
     const headers = await getAuthHeader();
     const response = await fetch(`${API_BASE}/wallet/address?currency=${currency}&network=${network}`, { headers });
     if (!response.ok) throw new Error('Failed to fetch address');
+    return response.json();
+  },
+
+  async generateNewAddress(currency: string, network: string = 'native'): Promise<{ address: string; currency: string; network: string }> {
+    const headers = await getAuthHeader();
+    // For now, we reuse the address retrieval logic which generates if not exists
+    // In a full HD implementation, this would trigger a new index increment on the backend
+    const response = await fetch(`${API_BASE}/wallet/address?currency=${currency}&network=${network}&rotate=true`, { 
+      method: 'POST',
+      headers 
+    });
+    if (!response.ok) throw new Error('Failed to generate new address');
     return response.json();
   }
 };
