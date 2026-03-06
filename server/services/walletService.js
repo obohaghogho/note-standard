@@ -21,6 +21,18 @@ class WalletService {
   }
 
   /**
+   * Get or create a specific wallet address
+   */
+  async getAddress(userId, currency, network = "native") {
+    const wallet = await this.createWallet(userId, currency, network);
+    return {
+      address: wallet.address,
+      currency: wallet.currency,
+      network: wallet.network,
+    };
+  }
+
+  /**
    * Create or fetch a wallet
    */
   async createWallet(userId, currency, network = "native") {
