@@ -17,6 +17,7 @@ router.use(apiLimiter);
 
 // Wallet Endpoints
 router.get("/", walletController.getBalances);
+router.get("/address", walletController.getAddress);
 router.post("/create", transactionLimiter, walletController.createWallet);
 router.get("/transactions", transactionController.getHistory);
 router.post(

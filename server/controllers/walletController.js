@@ -57,3 +57,18 @@ exports.createWallet = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+exports.getAddress = async (req, res) => {
+  try {
+    const { currency, network } = req.query;
+    if (!currency) throw new Error("Currency is required");
+    const result = await walletService.getAddress(
+      req.user.id,
+      currency,
+      network || "native",
+    );
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
