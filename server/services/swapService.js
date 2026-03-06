@@ -67,11 +67,15 @@ class SwapService {
       (quote.to_currency === "USD" || quote.to_currency === "NGN");
 
     if (isInternal) {
+      const env = require("../config/env");
       const { data: txId, error: txError } = await supabase.rpc(
         "execute_production_swap",
         {
           p_quote_id: lockId,
           p_idempotency_key: idempotencyKey,
+          p_admin_rate: env.ADMIN_FEE_RATE,
+          p_partner_rate: env.PARTNER_FEE_RATE,
+          p_referrer_rate: env.REFERRAL_FEE_RATE,
         },
       );
 

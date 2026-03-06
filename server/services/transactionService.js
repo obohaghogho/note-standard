@@ -9,49 +9,53 @@ class TransactionService {
   /**
    * Get paginated transaction history for a user
    */
-  async getTransactions(userId, { page = 1, limit = 20, type = null } = {}) {
-    const { data: wallets, error: walletError } = await supabase
-      .from("wallets")
-      .select("id")
-      .eq("user_id", userId);
+  async getHistory(userId, { page = 1, limit = 20, type = null } = {}) {
+    try {
+      const pageNum = parseInt(page) || 1;
+      const limitNum = parseInt(limit) || 20;
+      const start = (pageNum - 1) * limitNum;
+      const end = start + limitNum - 1;
 
-    if (walletError || !wallets || wallets.length === 0) {
+      let query = supabase
+        .from("transactions")
+        .select(`*`, { count: "exact" })
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+
+      if (type) {
+        query = query.eq("type", type);
+      }
+
+      const { data: txs, error: txError, count: totalCount } = await query
+        .range(
+          start,
+          end,
+        );
+
+      if (txError) {
+        logger.error(
+          `[TransactionService] Error fetching transactions: ${txError.message}`,
+          txError,
+        );
+        throw txError;
+      }
+
       return {
-        transactions: [],
-        pagination: { page, limit, totalCount: 0, hasMore: false },
+        transactions: txs || [],
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          totalCount: totalCount || 0,
+          hasMore: (totalCount || 0) > (pageNum * limitNum),
+        },
       };
+    } catch (err) {
+      logger.error(
+        `[TransactionService] getHistory Crash: ${err.message}`,
+        err,
+      );
+      throw err;
     }
-
-    const walletIds = wallets.map((w) => w.id);
-    const start = (page - 1) * limit;
-    const end = start + limit - 1;
-
-    let query = supabase
-      .from("transactions")
-      .select(`*, wallet:wallets(currency, network)`, { count: "exact" })
-      .in("wallet_id", walletIds)
-      .order("created_at", { ascending: false });
-
-    if (type) {
-      query = query.eq("type", type);
-    }
-
-    const { data: txs, error: txError, count: totalCount } = await query.range(
-      start,
-      end,
-    );
-
-    if (txError) throw txError;
-
-    return {
-      transactions: txs || [],
-      pagination: {
-        page,
-        limit,
-        totalCount: totalCount || 0,
-        hasMore: (totalCount || 0) > (page * limit),
-      },
-    };
   }
 
   /**

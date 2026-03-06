@@ -1,6 +1,8 @@
+const env = require("../config/env");
+
 /**
  * Fee Service
- * Standard production fee rules: 6% Admin, 1% Partner, 0.5% Referrer.
+ * Configurable production fee rules.
  */
 class FeeService {
   /**
@@ -9,9 +11,13 @@ class FeeService {
   calculateFees(amount, currency) {
     const gross = parseFloat(amount);
 
-    const adminFee = gross * 0.06;
-    const partnerAward = gross * 0.01;
-    const referrerFee = gross * 0.005;
+    const adminRate = env.ADMIN_FEE_RATE;
+    const partnerRate = env.PARTNER_FEE_RATE;
+    const referrerRate = env.REFERRAL_FEE_RATE;
+
+    const adminFee = gross * adminRate;
+    const partnerAward = gross * partnerRate;
+    const referrerFee = gross * referrerRate;
 
     const totalFee = adminFee + partnerAward + referrerFee;
     const netAmount = gross - totalFee;
@@ -30,10 +36,10 @@ class FeeService {
         referrer: referrerFee,
       },
       rates: {
-        admin: 0.06,
-        partner: 0.01,
-        referrer: 0.005,
-        total: 0.075,
+        admin: adminRate,
+        partner: partnerRate,
+        referrer: referrerRate,
+        total: adminRate + partnerRate + referrerRate,
       },
     };
   }

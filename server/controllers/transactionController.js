@@ -14,6 +14,10 @@ exports.getHistory = async (req, res) => {
     });
     res.json(history);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Wallet transactions route crash:", err);
+    res.status(500).json({
+      error: "Failed to fetch transactions",
+      message: err.message,
+    });
   }
 };
