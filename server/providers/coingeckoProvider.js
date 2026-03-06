@@ -4,7 +4,7 @@ const env = require("../config/env");
 
 class CoinGeckoProvider {
   constructor() {
-    this.baseUrl = env.COINGECKO_BASE_URL;
+    this.baseUrl = env.COINGECKO_BASE_URL || "https://api.coingecko.com/api/v3";
     this.apiKey = env.CG_API_KEY;
   }
 
