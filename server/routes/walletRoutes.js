@@ -18,6 +18,7 @@ router.use(apiLimiter);
 // Wallet Endpoints
 router.get("/", walletController.getBalances);
 router.get("/address", walletController.getAddress);
+router.post("/address", walletController.getAddress); // Reusing getAddress for now, can be extended for rotation
 router.get("/ledger", walletController.getLedger);
 router.post("/create", transactionLimiter, walletController.createWallet);
 router.get("/transactions", transactionController.getHistory);

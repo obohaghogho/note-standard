@@ -83,7 +83,7 @@ exports.getLedger = async (req, res) => {
       .limit(limit);
 
     if (error) throw error;
-    res.json(data);
+    res.json({ entries: data || [] });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
