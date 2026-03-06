@@ -19,4 +19,13 @@ module.exports = {
   EXCHANGE_RATE_API_KEY: process.env.EXCHANGE_RATE_API_KEY,
   FLUTTERWAVE_SECRET_KEY: process.env.FLUTTERWAVE_SECRET_KEY,
   RECAPTCHA_SECRET_KEY: process.env.RECAPTCHA_SECRET_KEY,
+
+  // Wallet Fees
+  ADMIN_FEE_RATE: parseFloat(process.env.ADMIN_FEE_PERCENT || 6) / 100,
+  PARTNER_FEE_RATE: parseFloat(process.env.PARTNER_FEE_PERCENT || 1) / 100,
+  REFERRAL_FEE_RATE: parseFloat(process.env.REFERRAL_FEE_PERCENT || 0.5) / 100,
+
+  // Provider Config
+  COINGECKO_BASE_URL: process.env.COINGECKO_API ||
+    "https://api.coingecko.com/api/v3",
 };
