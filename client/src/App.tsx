@@ -40,7 +40,7 @@ const Billing = lazyWithRetry(() => import('./pages/dashboard/Billing').then(m =
 const Affiliates = lazyWithRetry(() => import('./pages/dashboard/Affiliates').then(m => m.Affiliates), 'Affiliates');
 const Notifications = lazyWithRetry(() => import('./pages/dashboard/Notifications').then(m => m.Notifications), 'Notifications');
 const Trends = lazyWithRetry(() => import('./pages/dashboard/Trends').then(m => m.Trends), 'Trends');
-const WalletPage = lazyWithRetry(() => import('./pages/dashboard/WalletPage').then(m => m.WalletPage), 'WalletPage');
+const WalletPage = lazyWithRetry(() => import('./pages/WalletPage').then(m => m.WalletPage), 'WalletPage');
 const Transactions = lazyWithRetry(() => import('./pages/dashboard/Transactions').then(m => m.Transactions), 'Transactions');
 const TeamsPage = lazyWithRetry(() => import('./pages/teams/TeamsPage').then(m => m.TeamsPage), 'TeamsPage');
 

@@ -8,7 +8,7 @@ const router = express.Router();
 const webhookController = require("../controllers/payment/webhookController");
 const depositService = require("../services/depositService");
 const paymentService = require("../services/payment/paymentService");
-const supabase = require("../config/supabase");
+const supabase = require("../config/database");
 
 /**
  * Legacy/Existing Paystack Webhook (Refactored to use controller or kept for compatibility)

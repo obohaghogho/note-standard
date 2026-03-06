@@ -1,5 +1,5 @@
 const paystackService = require("../services/paystackService");
-const supabase = require("../config/supabase");
+const supabase = require("../config/database");
 const fxService = require("../services/fxService");
 
 exports.createCheckoutSession = async (req, res) => {

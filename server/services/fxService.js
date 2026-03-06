@@ -1,164 +1,104 @@
-const axios = require("axios");
-const supabase = require("../config/supabase");
+const coingeckoProvider = require("../providers/coingeckoProvider");
+const exchangeRateProvider = require("../providers/exchangeRateProvider");
 const logger = require("../utils/logger");
-const nowpaymentsService = require("./nowpaymentsService");
-const exchangeRateService = require("./exchangeRateService");
-
-// 1. Configuration constants
-const FIAT_CACHE_TTL = 3600 * 1000; // 1 hour for fiat
-const CRYPTO_CACHE_TTL = 30 * 1000; // 30 seconds for crypto (high volatility)
-const rateCache = new Map();
-
-// Currency classification helpers
-const CRYPTO_CURRENCIES = ["BTC", "ETH", "USDT", "USDC", "MATIC", "SOL"];
-const FIAT_CURRENCIES = ["USD", "NGN", "EUR", "GBP", "JPY", "CAD"];
+const cache = require("../utils/cache");
 
 /**
- * Get exchange rate for a currency pair
+ * FX Service
+ * Handles currency rates using decoupled providers.
  */
-async function getRate(
-  from,
-  to,
-  applyBuffer = false,
-  fromNetwork = "native",
-  toNetwork = "native",
-) {
-  const fromSym = from.toUpperCase().split("_")[0];
-  const toSym = to.toUpperCase().split("_")[0];
-
-  if (fromSym === toSym && fromNetwork === toNetwork) return 1.0;
-
-  // ── CORE ARCHITECTURE: USD BASE MODEL ──
-  // All internal price routing goes through USD to ensure parity and prevent split-pricing.
-  // Model: Base(A) -> USD -> Target(B)
-  if (fromSym !== "USD" && toSym !== "USD") {
-    const rateToUsd = await getRate(from, "USD");
-    const rateUsdToTarget = await getRate("USD", to);
-    return rateToUsd * rateUsdToTarget;
+class FXService {
+  constructor() {
+    this.CRYPTO_CACHE_TTL = 30; // 30 seconds
+    this.coinMapping = {
+      "BTC": "bitcoin",
+      "ETH": "ethereum",
+      "USDT": "tether",
+      "USDC": "usd-coin",
+    };
   }
 
-  try {
-    const cacheKey = `${from}_${to}_${fromNetwork}_${toNetwork}`;
-    const cached = rateCache.get(cacheKey);
+  /**
+   * Get price of crypto in USD
+   */
+  async getCryptoPrice(symbol) {
+    const coinId = this.coinMapping[symbol.toUpperCase()];
+    if (!coinId) return null;
 
-    // Dynamic TTL: Fiat is stable, Crypto is volatile
-    const isCrypto = CRYPTO_CURRENCIES.includes(fromSym) ||
-      CRYPTO_CURRENCIES.includes(toSym);
-    const ttl = isCrypto ? CRYPTO_CACHE_TTL : FIAT_CACHE_TTL;
-
-    if (cached && (Date.now() - cached.timestamp < ttl)) {
-      return cached.rate;
-    }
-
-    // 1. Try to fetch live rate (Crypto from NOWPayments, Fiat from ExchangeRate-API)
-    let liveRate = null;
-    if (isCrypto) {
-      try {
-        liveRate = await getProviderRate(from, to, 1, fromNetwork, toNetwork);
-      } catch (err) {
-        logger.warn(
-          `[FXService] NOWPayments failed for ${from}->${to}: ${err.message}`,
-        );
-      }
-    } else {
-      try {
-        liveRate = await exchangeRateService.getFiatRate(fromSym, toSym);
-      } catch (err) {
-        logger.error(
-          `[FXService] ExchangeRate-API failed for ${from}->${to}: ${err.message}`,
-        );
-      }
-    }
-
-    // 2. Fallback to cache if live rate failed
-    if (liveRate) {
-      rateCache.set(cacheKey, { rate: liveRate, timestamp: Date.now() });
-      return liveRate;
-    } else if (cached) {
-      logger.warn(
-        `[FXService] APIs failed. Using stale cache for ${from}->${to}`,
-      );
-      return cached.rate;
-    }
-
-    // 3. Block swap if both fail (Never return 1.0)
-    logger.error(
-      `[FXService] CRITICAL: No live or cached rate available for ${from}->${to}`,
+    return cache.wrap(
+      `crypto_price_${symbol.toUpperCase()}`,
+      this.CRYPTO_CACHE_TTL,
+      async () => {
+        try {
+          return await coingeckoProvider.getPrice(coinId);
+        } catch (err) {
+          logger.error(
+            `[FXService] Crypto Price Error for ${symbol}: ${err.message}`,
+          );
+          return null;
+        }
+      },
     );
-    throw new Error(`Pricing temporarily unavailable for ${from}->${to}`);
-  } catch (error) {
-    // We explicitly throw here to ensure the swap is blocked upstream
-    logger.error(`[FXService] Critical Rate Fetch Error: ${from}->${to}`, {
-      error: error.message,
-    });
-    throw new Error(`Pricing temporarily unavailable for ${from}->${to}`);
   }
-}
 
-/**
- * Convert amount
- */
-async function convert(amount, from, to) {
-  const rate = await getRate(from, to);
-  return { amount: amount * rate, rate };
-}
+  /**
+   * Get exchange rate for any pair (Base -> USD -> Target)
+   */
+  async getRate(from, to) {
+    const fromSym = from.toUpperCase();
+    const toSym = to.toUpperCase();
+    if (fromSym === toSym) return 1.0;
 
-/**
- * Get all rates for a base currency
- */
-async function getAllRates(base) {
-  const currencies = [
-    "BTC",
-    "ETH",
-    "USDT",
-    "USDC",
-    "USD",
-    "NGN",
-    "EUR",
-    "GBP",
-  ];
-
-  const results = {};
-  for (const c of currencies) {
-    if (c === base.toUpperCase()) continue;
     try {
-      results[c] = await getRate(base, c);
+      // 1. Get USD value of FROM
+      let fromInUsd = 1.0;
+      if (fromSym !== "USD") {
+        if (this.coinMapping[fromSym]) {
+          fromInUsd = await this.getCryptoPrice(fromSym);
+        } else {
+          fromInUsd = await exchangeRateProvider.getFiatRate(fromSym, "USD");
+        }
+      }
+
+      // 2. Get value of TARGET in USD
+      let usdInTo = 1.0;
+      if (toSym !== "USD") {
+        if (this.coinMapping[toSym]) {
+          const toPrice = await this.getCryptoPrice(toSym);
+          usdInTo = toPrice ? 1 / toPrice : null;
+        } else {
+          usdInTo = await exchangeRateProvider.getFiatRate("USD", toSym);
+        }
+      }
+
+      if (fromInUsd === null || usdInTo === null) {
+        throw new Error(`Pricing unavailable for ${from}/${to}`);
+      }
+
+      return fromInUsd * usdInTo;
     } catch (err) {
-      results[c] = 1.0;
+      logger.error(
+        `[FXService] GetRate Error for ${from}/${to}: ${err.message}`,
+      );
+      throw err;
     }
   }
 
-  return results;
-}
-
-/**
- * Fetch rate from NOWPayments provider
- */
-async function getProviderRate(from, to, amount = 1, fromNetwork, toNetwork) {
-  try {
-    const fromTicker =
-      fromNetwork && fromNetwork !== "native" && fromNetwork !== "internal"
-        ? `${from}_${fromNetwork.toUpperCase()}`
-        : from;
-    const toTicker =
-      toNetwork && toNetwork !== "native" && toNetwork !== "internal"
-        ? `${to}_${toNetwork.toUpperCase()}`
-        : to;
-
-    const estimate = await nowpaymentsService.getExchangeEstimate(
-      fromTicker,
-      toTicker,
-      amount,
-    );
-    return estimate.rate;
-  } catch (err) {
-    throw err;
+  /**
+   * For dashboard display
+   */
+  async getAllRates(base = "USD") {
+    const targets = ["BTC", "ETH", "USDT", "NGN", "USD"];
+    const results = {};
+    for (const t of targets) {
+      try {
+        results[t] = await this.getRate(base, t);
+      } catch (e) {
+        results[t] = 0;
+      }
+    }
+    return results;
   }
 }
 
-module.exports = {
-  getRate,
-  convert,
-  getAllRates,
-  getProviderRate,
-};
+module.exports = new FXService();

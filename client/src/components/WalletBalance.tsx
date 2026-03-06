@@ -1,6 +1,6 @@
 import React from 'react';
 import { Eye, EyeOff, Lock } from 'lucide-react';
-import { formatCurrency } from '../../lib/CurrencyFormatter';
+import { formatCurrency } from '../lib/CurrencyFormatter';
 import { motion } from 'framer-motion';
 
 interface WalletBalanceCardProps {

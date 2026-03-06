@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const axios = require("axios");
-const supabase = require("../config/supabase");
+const supabase = require("../config/database");
+const env = require("../config/env");
 
 /**
  * Handles the initial registration request
@@ -19,13 +20,13 @@ const register = async (req, res) => {
 
     // 1. reCAPTCHA check
     if (
-      process.env.RECAPTCHA_SECRET_KEY && process.env.NODE_ENV === "production"
+      env.RECAPTCHA_SECRET_KEY && env.NODE_ENV === "production"
     ) {
       if (!captchaToken) {
         return res.status(400).json({ error: "Please verify you are human." });
       }
       const verify = await axios.post(
-        `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`,
+        `https://www.google.com/recaptcha/api/siteverify?secret=${env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`,
       );
       if (!verify.data.success) {
         console.warn(`[AUTH-WARN] reCAPTCHA failed for ${email}`);
@@ -109,12 +110,12 @@ const forgotPassword = async (req, res) => {
       });
     }
 
-    const clientUrl = process.env.CLIENT_URL || "https://notestandard.com";
+    const clientUrl = env.CLIENT_URL || "https://notestandard.com";
     const redirectTo = `${clientUrl}/reset-password`;
 
     // DEBUG: Log the redirect URL to verify it's correct on Render
     console.log(
-      `[AUTH-DEBUG] CLIENT_URL=${process.env.CLIENT_URL}, redirectTo=${redirectTo}`,
+      `[AUTH-DEBUG] CLIENT_URL=${env.CLIENT_URL}, redirectTo=${redirectTo}`,
     );
 
     // Leverage Supabase's built in email service to send the reset link

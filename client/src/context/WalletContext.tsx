@@ -1,6 +1,6 @@
 import React, { createContext, useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseSafe';
-import { walletApi } from '../lib/walletApi';
+import { walletApi } from '../api/walletApi';
 import type { Wallet, Transaction, InternalTransferRequest, WithdrawalRequest, CommissionSettings } from '@/types/wallet';
 import { useAuth } from './AuthContext';
 import toast from 'react-hot-toast';

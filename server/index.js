@@ -1,23 +1,11 @@
-// ─── Backend Server ──────────────────────────────────────────
-// This file is the main entry point for the backend.
-// It imports the Express app from app.js and adds:
-//   - Socket.IO (WebSockets)
-//   - server.listen()
-//
-// Render starts this file using: node server/index.js
-
 const path = require("path");
 const logger = require("./utils/logger");
-
-if (process.env.NODE_ENV !== "production") {
-  require("dotenv").config({ path: path.join(__dirname, ".env.development") });
-}
-require("dotenv").config();
+const env = require("./config/env");
 
 const app = require("./app");
 const http = require("http");
 const { Server } = require("socket.io");
-const supabase = require(path.join(__dirname, "config", "supabase"));
+const supabase = require("./config/database");
 const { whitelist } = require("./utils/cors");
 
 const server = http.createServer(app);
@@ -32,7 +20,7 @@ const io = new Server(server, {
 
 app.set("io", io);
 
-const PORT = process.env.PORT || 5000;
+const PORT = env.PORT;
 
 // Socket.io Middleware for Authentication
 io.use(async (socket, next) => {

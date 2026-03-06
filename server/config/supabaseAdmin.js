@@ -1,18 +1,15 @@
 const { createClient } = require("@supabase/supabase-js");
-require("dotenv").config();
+const env = require("./env");
 
-if (!process.env.SUPABASE_SERVICE_KEY) {
+if (!env.SUPABASE_SERVICE_ROLE_KEY) {
   console.warn(
-    "⚠️  SUPABASE_SERVICE_KEY missing! Admin operations (like analytics) may fail.",
+    "⚠️  SUPABASE_SERVICE_ROLE_KEY missing! Admin operations may fail.",
   );
 }
 
-// Create a Supabase client with the SERVICE ROLE key to bypass RLS
 const supabaseAdmin = createClient(
-  process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL ||
-    "https://placeholder.supabase.co",
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY ||
-    process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || "placeholder",
+  env.SUPABASE_URL || "https://placeholder.supabase.co",
+  env.SUPABASE_SERVICE_ROLE_KEY || "placeholder",
   {
     auth: {
       autoRefreshToken: false,
