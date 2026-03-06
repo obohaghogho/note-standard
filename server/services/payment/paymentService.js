@@ -1,4 +1,4 @@
-const supabase = require("../../config/supabase");
+const supabase = require("../../config/database");
 const PaymentFactory = require("./PaymentFactory");
 const { v4: uuidv4 } = require("uuid");
 const logger = require("../../utils/logger");

@@ -1,10 +1,3 @@
-// ─── Express Application ─────────────────────────────────────
-// This file contains the Express app with all middleware, routes,
-// and error handling.
-//
-// This module is imported by index.js which adds Socket.IO and
-// starts the server.
-
 const express = require("express");
 const logger = require("./utils/logger");
 const path = require("path");
@@ -12,41 +5,24 @@ const cors = require("cors");
 const { corsOptions } = require("./utils/cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
-const cloudinary = require("cloudinary").v2;
-const Sentiment = require("sentiment");
-const sentimentAnalyzer = new Sentiment();
-
-if (process.env.NODE_ENV !== "production") {
-  require("dotenv").config({ path: path.join(__dirname, ".env.development") });
-}
-require("dotenv").config(); // Load .env as fallback or for production
-
-const supabase = require(path.join(__dirname, "config", "supabase"));
-
-// Configure Cloudinary from CLOUDINARY_URL env variable
-if (process.env.CLOUDINARY_URL) {
-  cloudinary.config();
-  logger.info("Cloudinary configured successfully");
-}
+const env = require("./config/env");
+const cloudinary = require("./config/cloudinary");
 
 const app = express();
 
 // Configure CORS (Strict)
-// Configure CORS (Strict) - using centralized config
 app.use(cors(corsOptions));
-
-// VERY IMPORTANT (Using regex for Express 5 compatibility)
 app.options(/.*/, cors(corsOptions));
 
-// Trust proxy (works for both NGINX and Netlify CDN)
+// Trust proxy
 app.set("trust proxy", 1);
 
-// 2. Security headers (after CORS to avoid conflicts)
+// Security headers
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
 }));
 
-// 3. Body parsers
+// Body parsers
 app.use(express.json({
   verify: (req, res, buf) => {
     req.rawBody = buf;
@@ -59,23 +35,23 @@ app.get("/", (req, res) => {
   res.json({ message: "Note Standard API is running 🚀" });
 });
 
-const notesRoutes = require(path.join(__dirname, "routes", "notes"));
-const authRoutes = require(path.join(__dirname, "routes", "auth"));
-const chatRoutes = require(path.join(__dirname, "routes", "chat"));
-const uploadRoutes = require(path.join(__dirname, "routes", "upload"));
-const subscriptionRoutes = require(
-  path.join(__dirname, "routes", "subscription"),
-);
-const adminRoutes = require(path.join(__dirname, "routes", "admin"));
-const notificationRoutes = require(
-  path.join(__dirname, "routes", "notifications"),
-);
-const communityRoutes = require(path.join(__dirname, "routes", "community"));
-const adsRoutes = require(path.join(__dirname, "routes", "ads"));
-const broadcastsRoutes = require(path.join(__dirname, "routes", "broadcasts"));
-const analyticsRoutes = require(path.join(__dirname, "routes", "analytics"));
+// Load Routes
+const authRoutes = require("./routes/authRoutes");
+const walletRoutes = require("./routes/walletRoutes");
+const notesRoutes = require("./routes/notes");
+const chatRoutes = require("./routes/chat");
+const uploadRoutes = require("./routes/upload");
+const subscriptionRoutes = require("./routes/subscription");
+const adminRoutes = require("./routes/admin");
+const notificationRoutes = require("./routes/notifications");
+const communityRoutes = require("./routes/community");
+const adsRoutes = require("./routes/ads");
+const broadcastsRoutes = require("./routes/broadcasts");
+const analyticsRoutes = require("./routes/analytics");
 
+// API Mounts
 app.use("/api/auth", authRoutes);
+app.use("/api/wallet", walletRoutes);
 app.use("/api/notes", notesRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/upload", uploadRoutes);
@@ -87,34 +63,30 @@ app.use("/api/ads", adsRoutes);
 app.use("/api/broadcasts", broadcastsRoutes);
 app.use("/api/analytics", analyticsRoutes);
 
-app.use("/api/wallet", require(path.join(__dirname, "routes", "wallet")));
-app.use(
-  "/api/paystack",
-  require(path.join(__dirname, "routes", "paystackRoutes")),
-);
-app.use("/api/webhooks", require(path.join(__dirname, "routes", "webhooks")));
-app.use("/webhook", require(path.join(__dirname, "routes", "webhooks"))); // Alias for payment providers
+// Legacy/Provider Specific Routes
+app.use("/api/paystack", require("./routes/paystackRoutes"));
+app.use("/api/webhooks", require("./routes/webhooks"));
+app.use("/webhook", require("./routes/webhooks"));
+app.use("/api/payment", require("./routes/payment"));
+
+// Dedicated Webhook Handlers
 app.use("/api/nowpayments/webhook", (req, res, next) => {
-  // Map this strictly to the NowPayments handler in webhooks
   req.url = "/nowpayments";
   next();
-}, require(path.join(__dirname, "routes", "webhooks")));
+}, require("./routes/webhooks"));
 
 app.use("/api/flutterwave/webhook", (req, res, next) => {
-  // Map this strictly to the Flutterwave handler in webhooks
   req.url = "/flutterwave";
   next();
-}, require(path.join(__dirname, "routes", "webhooks")));
-app.use("/api/payment", require(path.join(__dirname, "routes", "payment")));
+}, require("./routes/webhooks"));
 
-// Direct Verify Payment Route (as requested)
-const { requireAuth } = require(path.join(__dirname, "middleware", "auth"));
-const paymentController = require(
-  path.join(__dirname, "controllers", "payment", "paymentController"),
-);
+// Middleware
+const { requireAuth } = require("./middleware/authMiddleware");
+const paymentController = require("./controllers/payment/paymentController");
+
 app.post("/api/verify-payment", requireAuth, paymentController.verifyPayment);
 
-// Direct Flutterwave Webhook Route (as requested)
+// Direct Flutterwave Webhook Route
 app.post("/api/flutterwave-webhook", async (req, res) => {
   try {
     console.log("Webhook received:", JSON.stringify(req.body, null, 2));
@@ -125,9 +97,8 @@ app.post("/api/flutterwave-webhook", async (req, res) => {
   }
 });
 
-app.use("/api/media", require(path.join(__dirname, "routes", "media")));
-app.use("/api/agora-token", require(path.join(__dirname, "routes", "agora")));
-app.use("/api/agora", require(path.join(__dirname, "routes", "agora"))); // Legacy alias
+app.use("/api/media", require("./routes/media"));
+app.use("/api/agora", require("./routes/agora"));
 
 // ─── Serve Frontend (Production) ──────────────────────────────
 // Serve static files from the React app

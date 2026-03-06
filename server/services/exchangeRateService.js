@@ -1,55 +1,37 @@
 const axios = require("axios");
+const cacheUtil = require("../utils/cache");
 
-let cache = {
-  rates: null,
-  timestamp: 0,
-};
-
-const CACHE_TIME = 5 * 60 * 1000; // 5 minutes
+const CACHE_TIME = 5 * 60; // 5 minutes in seconds
 
 /**
  * Fetch fiat exchange rates using ExchangeRate-API
  * Always fetches latest rates relative to USD (Global Base Model)
  */
 async function getFiatRates() {
-  const now = Date.now();
+  return cacheUtil.wrap("fiat_exchange_rates", CACHE_TIME, async () => {
+    try {
+      const API_KEY = process.env.EXCHANGERATE_API_KEY;
+      if (!API_KEY) {
+        throw new Error("EXCHANGERATE_API_KEY is not defined");
+      }
 
-  // Return cached rates if still valid
-  if (cache.rates && now - cache.timestamp < CACHE_TIME) {
-    return cache.rates;
-  }
+      const response = await axios.get(
+        `https://v6.exchangerate-api.com/v6/${API_KEY}/latest/USD`,
+      );
 
-  try {
-    const API_KEY = process.env.EXCHANGERATE_API_KEY;
-    if (!API_KEY) {
-      throw new Error("EXCHANGERATE_API_KEY is not defined");
+      if (response.data && response.data.conversion_rates) {
+        return response.data.conversion_rates;
+      }
+
+      throw new Error("Invalid response format from ExchangeRate-API");
+    } catch (error) {
+      console.error(
+        "[exchangeRateService] API Failed:",
+        error.response?.data || error.message,
+      );
+      return null; // wrap will handle null/undefined
     }
-
-    const response = await axios.get(
-      `https://v6.exchangerate-api.com/v6/${API_KEY}/latest/USD`,
-    );
-
-    if (response.data && response.data.conversion_rates) {
-      cache = {
-        rates: response.data.conversion_rates,
-        timestamp: now,
-      };
-      return cache.rates;
-    }
-
-    throw new Error("Invalid response format from ExchangeRate-API");
-  } catch (error) {
-    console.error(
-      "[exchangeRateService] API Failed, attempting stale cache fallback:",
-      error.response?.data || error.message,
-    );
-
-    if (cache.rates) {
-      return cache.rates;
-    }
-
-    throw new Error("No fiat exchange rates available (API Down & No Cache)");
-  }
+  });
 }
 
 /**

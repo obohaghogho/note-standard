@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowRightLeft, Loader2, RefreshCcw, Info, Clock } from 'lucide-react';
-import { Button } from '../common/Button';
-import { walletApi } from '../../lib/walletApi';
-import { useWallet } from '../../hooks/useWallet';
+import { Button } from './common/Button';
+import { walletApi } from '../api/walletApi';
+import { useWallet } from '../hooks/useWallet';
 import toast from 'react-hot-toast';
 import type { Currency } from '@/types/wallet';
-import { formatCurrency } from '../../lib/CurrencyFormatter';
+import { formatCurrency } from '../lib/CurrencyFormatter';
 import { motion } from 'framer-motion';
+import ReCAPTCHA from 'react-google-recaptcha';
 
 interface SwapCardProps {
     initialFromCurrency?: Currency;
@@ -14,7 +15,6 @@ interface SwapCardProps {
     className?: string;
     onSuccess?: () => void;
 }
-
 
 export const SwapCard: React.FC<SwapCardProps> = ({ 
     initialFromCurrency = 'BTC', 
@@ -32,6 +32,8 @@ export const SwapCard: React.FC<SwapCardProps> = ({
     const [previewLoading, setPreviewLoading] = useState(false);
     const [slippage, setSlippage] = useState<number>(0.5); // Default 0.5%
     const [showSlippageSettings, setShowSlippageSettings] = useState(false);
+    const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+    const recaptchaRef = React.useRef<ReCAPTCHA>(null);
     
     const [preview, setPreview] = useState<{
         rate: number;
@@ -107,6 +109,8 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         setToNetwork(tempNet);
         setAmount('');
         setPreview(null);
+        setCaptchaToken(null);
+        recaptchaRef.current?.reset();
     };
 
     const handleMaxAmount = () => {
@@ -126,6 +130,11 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         if (fromCurrency === toCurrency) return toast.error('Cannot swap same currency');
         if (!preview?.lockId) return toast.error('Please wait for a quote');
 
+        // Security: Demand reCAPTCHA for financial swaps
+        if (!captchaToken && import.meta.env.PROD) {
+            return toast.error('Please complete the reCAPTCHA verification');
+        }
+
         setLoading(true);
         try {
             const idempotencyKey = `swap_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -138,7 +147,8 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                 preview.lockId,
                 slippageDecimal,
                 fromNetwork,
-                toNetwork
+                toNetwork,
+                captchaToken || undefined
             );
             
             toast.success(
@@ -146,11 +156,15 @@ export const SwapCard: React.FC<SwapCardProps> = ({
             );
             setAmount('');
             setPreview(null);
+            setCaptchaToken(null);
+            recaptchaRef.current?.reset();
             if (onSuccess) onSuccess();
             refresh();
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : 'Swap failed');
             setPreview(null); // Force refresh quote on failure
+            setCaptchaToken(null);
+            recaptchaRef.current?.reset();
         } finally {
             setLoading(false);
         }
@@ -359,6 +373,18 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                         </motion.div>
                     )}
                 </div>
+
+                {/* reCAPTCHA for Financial Security */}
+                {preview && (
+                    <div className="flex justify-center p-2 bg-gray-800/30 rounded-xl border border-gray-800">
+                        <ReCAPTCHA
+                            ref={recaptchaRef}
+                            sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI'} // Generic test key for dev
+                            onChange={(token) => setCaptchaToken(token)}
+                            theme="dark"
+                        />
+                    </div>
+                )}
 
                 <Button
                     onClick={handleExecuteSwap}

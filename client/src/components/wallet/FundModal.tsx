@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, CreditCard, Building2, Bitcoin, Copy, ArrowRight, Loader2, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { Button } from '../common/Button';
-import { walletApi } from '../../lib/walletApi';
+import { walletApi } from '../../api/walletApi';
 import toast from 'react-hot-toast';
 import type { Currency } from '@/types/wallet';
 import { motion, AnimatePresence } from 'framer-motion';

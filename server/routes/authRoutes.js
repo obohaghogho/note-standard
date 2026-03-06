@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const supabase = require("../config/supabase");
+const supabase = require("../config/database");
 const { authLimiter, emailLimiter } = require("../middleware/rateLimiter");
 
 const { register, verifyOtp, verifyEmail, resendOtp, forgotPassword } = require(

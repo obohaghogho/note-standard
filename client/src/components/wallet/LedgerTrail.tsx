@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
-import { walletApi } from '../../lib/walletApi';
+import { walletApi } from '../../api/walletApi';
 import type { LedgerEntry } from '@/types/wallet';
 import { formatCurrency } from '../../lib/CurrencyFormatter';
 import { motion } from 'framer-motion';

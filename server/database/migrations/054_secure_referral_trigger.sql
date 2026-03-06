@@ -12,7 +12,8 @@ BEGIN
     full_name, 
     avatar_url,
     user_consent,
-    terms_accepted_at
+    terms_accepted_at,
+    referrer_id
   )
   VALUES (
     NEW.id, 
@@ -21,7 +22,8 @@ BEGIN
     NEW.raw_user_meta_data->>'full_name',
     NEW.raw_user_meta_data->>'avatar_url',
     COALESCE((NEW.raw_user_meta_data->>'terms_accepted')::boolean, false),
-    (NEW.raw_user_meta_data->>'terms_accepted_at')::timestamp with time zone
+    (NEW.raw_user_meta_data->>'terms_accepted_at')::timestamp with time zone,
+    (NEW.raw_user_meta_data->>'referrer_id')::UUID
   );
 
   -- 2. Handle Affiliate Referral (Safely)
