@@ -146,11 +146,22 @@ export const walletApi = {
   },
 
   async getLedgerEntries(limit: number = 10): Promise<LedgerEntry[]> {
-    const { data } = await supabase
-      .from('ledger_entries')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(limit);
-    return (data || []) as LedgerEntry[];
+    try {
+      const headers = await getAuthHeader();
+      const response = await fetch(`${API_BASE}/wallet/ledger?limit=${limit}`, { headers });
+      if (!response.ok) throw new Error('Failed to fetch ledger');
+      const data = await response.json();
+      return (data || []) as LedgerEntry[];
+    } catch (error) {
+      console.error('getLedgerEntries error:', error);
+      return [];
+    }
+  },
+
+  async getCurrentAddress(currency: string, network: string = 'native'): Promise<{ address: string; currency: string; network: string }> {
+    const headers = await getAuthHeader();
+    const response = await fetch(`${API_BASE}/wallet/address?currency=${currency}&network=${network}`, { headers });
+    if (!response.ok) throw new Error('Failed to fetch address');
+    return response.json();
   }
 };

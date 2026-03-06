@@ -72,3 +72,19 @@ exports.getAddress = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+exports.getLedger = async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+    const { data, error } = await require("../config/database")
+      .from("ledger_entries")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
