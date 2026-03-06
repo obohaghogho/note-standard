@@ -16,10 +16,16 @@ export const LedgerTrail: React.FC<LedgerTrailProps> = ({ className = '', refres
 
     useEffect(() => {
         const fetchEntries = async () => {
-            setLoading(true);
-            const data = await walletApi.getLedgerEntries(5);
-            setEntries(Array.isArray(data) ? data : []);
-            setLoading(false);
+            try {
+                setLoading(true);
+                const data = await walletApi.getLedgerEntries(5);
+                setEntries(Array.isArray(data) ? data : []);
+            } catch (err) {
+                console.error("Error fetching ledger entries", err);
+                setEntries([]);
+            } finally {
+                setLoading(false);
+            }
         };
         fetchEntries();
     }, [refreshKey]);
