@@ -1,5 +1,6 @@
 const axios = require("axios");
 const cacheUtil = require("../utils/cache");
+const env = require("../config/env");
 
 const CACHE_TIME = 5 * 60; // 5 minutes in seconds
 
@@ -10,9 +11,10 @@ const CACHE_TIME = 5 * 60; // 5 minutes in seconds
 async function getFiatRates() {
   return cacheUtil.wrap("fiat_exchange_rates", CACHE_TIME, async () => {
     try {
-      const API_KEY = process.env.EXCHANGERATE_API_KEY;
+      console.log("ExchangeRate key:", env.EXCHANGE_RATE_API_KEY);
+      const API_KEY = env.EXCHANGE_RATE_API_KEY;
       if (!API_KEY) {
-        throw new Error("EXCHANGERATE_API_KEY is not defined");
+        throw new Error("EXCHANGE_RATE_API_KEY is not defined");
       }
 
       const response = await axios.get(
