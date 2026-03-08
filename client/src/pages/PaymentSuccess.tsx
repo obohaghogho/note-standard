@@ -61,6 +61,8 @@ export const PaymentSuccess: React.FC = () => {
                                 await walletContext.refresh();
                             }
                             finished = true;
+                            // Auto-navigate to wallet after 3 seconds
+                            setTimeout(() => navigate('/dashboard/wallet'), 3000);
                         } else if (['FAILED', 'CANCELLED'].includes(upperStatus)) {
                             setStatus('error');
                             localStorage.removeItem('pendingDepositReference');
@@ -91,8 +93,11 @@ export const PaymentSuccess: React.FC = () => {
         checkDepositStatus();
     }, [reference]);
 
-    const handleGoToWallet = () => {
-        navigate('/wallet');
+    const handleGoToWallet = async () => {
+        if (walletContext) {
+            await walletContext.refresh();
+        }
+        navigate('/dashboard/wallet');
     };
 
     return (
