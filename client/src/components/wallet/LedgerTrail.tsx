@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
-import { walletApi } from '../../api/walletApi';
+import walletApi from '../../api/walletApi';
 import type { LedgerEntry } from '@/types/wallet';
 import { formatCurrency } from '../../lib/CurrencyFormatter';
 import { motion } from 'framer-motion';
@@ -18,8 +18,10 @@ export const LedgerTrail: React.FC<LedgerTrailProps> = ({ className = '', refres
         const fetchEntries = async () => {
             try {
                 setLoading(true);
-                const data = await walletApi.getLedgerEntries(5);
-                setEntries(Array.isArray(data) ? data : []);
+                const data = await walletApi.getLedgerEntries({ limit: 5 });
+                // The backend returns { entries: [], total: number }
+                // So we need to array-check the entries property
+                setEntries(Array.isArray(data?.entries) ? data.entries : []);
             } catch (err) {
                 console.error("Error fetching ledger entries", err);
                 setEntries([]);

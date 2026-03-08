@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, XCircle, FileText, Search, Filter } from 'lucide-react';
 import type { Transaction } from '@/types/wallet';
 import { formatCurrency } from '../lib/CurrencyFormatter';
-import { walletApi } from '../api/walletApi';
+import walletApi from '../api/walletApi';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 

@@ -13,16 +13,16 @@ class PaymentService {
     email,
     amount,
     currency,
-    network = "native",
     metadata = {},
     options = {},
   ) {
+    const network = metadata.network || options.network || "native";
     const idempotencyKey = metadata.idempotencyKey;
     if (idempotencyKey) {
       const { data: existing } = await supabase
         .from("transactions")
         .select("*")
-        .eq("metadata->>idempotencyKey", idempotencyKey)
+        .eq("idempotency_key", idempotencyKey)
         .single();
 
       if (existing) {
@@ -37,12 +37,14 @@ class PaymentService {
     const reference = `tx_${uuidv4().replace(/-/g, "")}`;
     const isCrypto = options.isCrypto || false;
 
-    // 1. Determine provider via Factory
-    const provider = PaymentFactory.getProvider(
-      currency,
-      metadata.region || "NG",
-      isCrypto,
-    );
+    // 1. Determine provider via Factory or explicit request
+    const provider = options.provider
+      ? PaymentFactory.getProviderByName(options.provider)
+      : PaymentFactory.getProvider(
+        currency,
+        metadata.region || "NG",
+        isCrypto,
+      );
     const providerName = provider.constructor.name.replace("Provider", "")
       .toLowerCase();
 
@@ -60,17 +62,17 @@ class PaymentService {
       .select("id")
       .eq("user_id", userId)
       .eq("currency", currency)
-      .eq("network", network)
       .single();
 
     if (!wallet) {
+      // IMPORTANT: Insert into wallets_store (the actual table), NOT wallets (which is a VIEW)
       const { data: newWallet, error: createError } = await supabase
-        .from("wallets")
+        .from("wallets_store")
         .insert({
           user_id: userId,
           currency,
-          network,
-          address: `internal_${userId.substring(0, 8)}_${currency}_${network}`,
+          network: network || null,
+          address: `${currency}_${userId.substring(0, 8)}`,
         })
         .select()
         .single();
@@ -86,22 +88,45 @@ class PaymentService {
       wallet = newWallet;
     }
 
-    // 3. Create transaction record in DB BEFORE initialization (Mandatory)
-    // Updated to support Core Ledger Architecture
+    // 3. Create payment record (Source of Truth for Gateway)
+    const { error: paymentError } = await supabase
+      .from("payments")
+      .insert({
+        user_id: userId,
+        reference: reference,
+        provider: providerName,
+        amount: parseFloat(amount),
+        currency: currency,
+        status: "pending",
+        credited: false,
+        metadata: { ...metadata, idempotencyKey },
+      });
+
+    if (paymentError) {
+      logger.error("DB Error creating payment record", {
+        error: paymentError,
+        userId,
+        reference,
+      });
+      throw new Error("Failed to create payment record");
+    }
+
+    // 4. Create transaction record in DB BEFORE initialization (Mandatory for Ledger)
     const { data: transaction, error: txError } = await supabase
       .from("transactions")
       .insert({
         user_id: userId,
-        wallet_id: wallet.id, // Linking to wallet is critical for Ledger trigger
-        amount: parseFloat(amount), // legacy
-        currency: currency, // legacy
-        amount_from: parseFloat(amount), // ledger
-        amount_to: parseFloat(amount), // ledger
-        from_currency: currency, // ledger
-        to_currency: currency, // ledger
+        wallet_id: wallet.id,
+        amount: parseFloat(amount),
+        currency: currency,
+        amount_from: parseFloat(amount),
+        amount_to: parseFloat(amount),
+        from_currency: currency,
+        to_currency: currency,
         network: network,
         status: "PENDING",
         reference_id: reference,
+        idempotency_key: idempotencyKey,
         provider: providerName,
         display_label: "Digital Assets Purchase",
         metadata: {
@@ -328,7 +353,8 @@ class PaymentService {
         body.event === "charge.completed" ||
         body.data?.status === "successful"
       ) {
-        result = await this.finalizeTransaction(event.reference, event);
+        // RE-VERIFY with gateway API before finalizing (Industry Standard)
+        result = await this.verifyPaymentStatus(event.reference);
       } else if (
         event.status === "failed" ||
         body.event === "charge.failed"
@@ -368,10 +394,16 @@ class PaymentService {
       return { status: "verification_failed", error: "Transaction not found" };
     }
 
-    // 2. IDEMPOTENCY CHECK
-    if (tx.status?.toUpperCase() === "COMPLETED") {
+    // 2. IDEMPOTENCY CHECK (using both tables for safety)
+    const { data: payRecord } = await supabase
+      .from("payments")
+      .select("status, credited")
+      .eq("reference", reference)
+      .single();
+
+    if (tx.status?.toUpperCase() === "COMPLETED" || payRecord?.credited) {
       console.log(
-        `[Finalize] Transaction ${reference} already completed. Skipping.`,
+        `[Finalize] Transaction ${reference} already completed or credited. Skipping.`,
       );
       return { status: "already_completed" };
     }
@@ -463,7 +495,18 @@ class PaymentService {
         return { status: "rpc_failed", error: rpcError.message };
       }
 
-      console.log("STEP 4: Wallet credited successfully");
+      // ── Update payments table status ──
+      await supabase
+        .from("payments")
+        .update({
+          status: "success",
+          credited: true,
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("reference", reference);
+
+      console.log("STEP 4: Wallet credited and payment marked successfully");
     } else {
       // ── NON-DEPOSIT types: manual update (subscriptions, ads, etc.) ──
       console.log(`STEP 3: Updating Non-Deposit Transaction (${tx.type})`);
@@ -582,6 +625,16 @@ class PaymentService {
         updated_at: new Date().toISOString(),
       })
       .eq("reference_id", reference);
+
+    // Sync with payments table
+    await supabase
+      .from("payments")
+      .update({
+        status: "failed",
+        metadata: { failReason: reason },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("reference", reference);
 
     return { status: "failed" };
   }
