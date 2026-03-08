@@ -7,6 +7,7 @@ import AgoraRTC, {
 import { useSocket } from './SocketContext';
 import { useAuth } from './AuthContext';
 import { useChat } from './ChatContext';
+import { API_URL } from '../lib/api';
 import { CallOverlay } from '../components/chat/CallOverlay';
 import toast from 'react-hot-toast';
 
@@ -196,7 +197,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const fetchAgoraToken = async (channelName: string, uid: string | number) => {
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/agora-token?channel=${channelName}&uid=${uid}`);
+            const response = await fetch(`${API_URL}/api/agora-token?channel=${channelName}&uid=${uid}`);
             const data = await response.json();
             return data.token;
         } catch (error) {
