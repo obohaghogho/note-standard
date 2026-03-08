@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Loader2, ArrowRight } from 'lucide-react';
 import { Button } from '../components/common/Button';
 import toast from 'react-hot-toast';
-import { API_URL, getAuthHeader } from '../lib/api';
+import walletApi from '../api/walletApi';
+import { WalletContext } from '../context/WalletContext';
 
 interface DepositStatus {
     id: string;
@@ -14,6 +15,7 @@ interface DepositStatus {
 
 export const PaymentSuccess: React.FC = () => {
     const navigate = useNavigate();
+    const walletContext = React.useContext(WalletContext);
     const [searchParams] = useSearchParams();
     const [status, setStatus] = useState<'loading' | 'success' | 'pending' | 'error'>('loading');
     const [deposit, setDeposit] = useState<DepositStatus | null>(null);
@@ -39,37 +41,7 @@ export const PaymentSuccess: React.FC = () => {
             const transactionId = searchParams.get('transaction_id');
 
             try {
-                // ── Step 1: Direct verify with Flutterwave API (bulletproof) ──
-                // This calls the backend which verifies directly with Flutterwave
-                // and credits the wallet immediately, bypassing webhook dependency.
-                if (transactionId) {
-                    try {
-                        const authHeader = await getAuthHeader();
-                        const verifyRes = await fetch(`${API_URL}/api/verify-payment`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                ...authHeader,
-                            },
-                            body: JSON.stringify({ transaction_id: transactionId }),
-                        });
-
-                        if (verifyRes.ok) {
-                            const verifyData = await verifyRes.json();
-                            if (verifyData.success && verifyData.status === 'COMPLETED') {
-                                setDeposit(verifyData.transaction);
-                                setStatus('success');
-                                localStorage.removeItem('pendingDepositReference');
-                                toast.success('Deposit successful!');
-                                return; // Done — no need to poll
-                            }
-                        }
-                    } catch (verifyErr) {
-                        console.warn('Direct verify failed, falling back to polling:', verifyErr);
-                    }
-                }
-
-                // ── Step 2: Fallback — poll status endpoint ──
+                // Poll using authenticated walletApi instead of raw fetch
                 let attempts = 0;
                 const maxAttempts = 12; // ~30 seconds total
                 let finished = false;
@@ -77,34 +49,24 @@ export const PaymentSuccess: React.FC = () => {
                 while (attempts < maxAttempts && !finished) {
                     attempts++;
                     try {
-                        const pollUrl = new URL(`${API_URL}/api/webhooks/status/${ref}`);
-                        if (transactionId) {
-                            pollUrl.searchParams.append('transaction_id', transactionId);
-                        }
-
-                        const response = await fetch(pollUrl.toString());
-
-                        if (!response.ok) {
-                            if (response.status === 404 && attempts < maxAttempts) {
-                                await new Promise(resolve => setTimeout(resolve, 2500));
-                                continue;
-                            }
-                            throw new Error(`Server returned ${response.status}`);
-                        }
-
-                        const data = await response.json();
+                        const data = await walletApi.proactiveVerifyPayment(ref, transactionId || undefined);
                         setDeposit(data);
 
-                        if (data.status === 'COMPLETED') {
+                        const upperStatus = (data.status || '').toUpperCase();
+                        if (['COMPLETED', 'SUCCESS', 'SUCCESSFUL'].includes(upperStatus)) {
                             setStatus('success');
                             localStorage.removeItem('pendingDepositReference');
                             toast.success('Deposit successful!');
+                            if (walletContext) {
+                                await walletContext.refresh();
+                            }
                             finished = true;
-                        } else if (data.status === 'FAILED') {
+                        } else if (['FAILED', 'CANCELLED'].includes(upperStatus)) {
                             setStatus('error');
                             localStorage.removeItem('pendingDepositReference');
                             finished = true;
                         } else {
+                            // Still pending
                             if (attempts < maxAttempts) {
                                 await new Promise(resolve => setTimeout(resolve, 2500));
                             } else {
