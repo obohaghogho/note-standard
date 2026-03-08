@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useWallet } from '../hooks/useWallet';
-import { walletApi } from '../api/walletApi';
+import walletApi from '../api/walletApi';
 import { WalletBalanceCard } from '../components/WalletBalance';
 import { ActionsGrid } from '../components/wallet/ActionsGrid';
 import { CurrencyList } from '../components/wallet/CurrencyList';
@@ -36,6 +37,47 @@ export const WalletPage: React.FC = () => {
     const [ratesLoading, setRatesLoading] = useState(true);
     const [refreshKey, setRefreshKey] = useState(0);
     const [showBalances, setShowBalances] = useState(true);
+    const [searchParams, setSearchParams] = useSearchParams();
+
+    // Instant Proactive Polling for external redirects (e.g. Flutterwave)
+    useEffect(() => {
+        const txRef = searchParams.get('tx_ref');
+        const transactionId = searchParams.get('transaction_id');
+        const statusParam = searchParams.get('status');
+
+        if (txRef && statusParam) {
+            let isActive = true;
+            const verifyPayment = async () => {
+                const toastId = toast.loading('Verifying your payment...', { duration: 10000 });
+                try {
+                    const res = await walletApi.proactiveVerifyPayment(txRef, transactionId || undefined);
+                    if (!isActive) return;
+
+                    if (['COMPLETED', 'SUCCESS', 'SUCCESSFUL', 'success'].includes(res.status?.toUpperCase() || '')) {
+                        toast.success('Payment verified successfully!', { id: toastId });
+                        setSearchParams({});
+                        await refresh();
+                        setRefreshKey(k => k + 1);
+                    } else if (['FAILED', 'CANCELLED'].includes(res.status?.toUpperCase() || '')) {
+                        toast.error('Payment failed or was cancelled.', { id: toastId });
+                        setSearchParams({});
+                    } else {
+                        toast.success('Payment is pending. Tracking your transaction...', { id: toastId });
+                        setSearchParams({});
+                        await refresh();
+                    }
+                } catch (err) {
+                    if (isActive) {
+                        toast.error('Payment confirmation delayed. Balance will update shortly.', { id: toastId });
+                        setSearchParams({});
+                    }
+                }
+            };
+            verifyPayment();
+            
+            return () => { isActive = false; };
+        }
+    }, [searchParams, setSearchParams, refresh]);
 
     // Modals
     const [showFundModal, setShowFundModal] = useState(false);

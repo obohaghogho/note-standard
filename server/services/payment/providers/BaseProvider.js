@@ -76,92 +76,111 @@ class BaseProvider {
         return res.status(401).json({ error: "Invalid signature" });
       }
 
-      // 2. Parse Event & Get Reference
-      const event = this.parseWebhookEvent(req.body);
-      const reference = event.reference ||
-        req.body.order_id ||
-        req.body.payment_id ||
-        req.body.data?.reference ||
-        req.body.tx_ref;
+      // 2. Early return HTTP 200 OK to prevent provider retry spam/timeout
+      res.status(200).json({ received: true });
 
-      // 3. Log Webhook for Audit Trail
-      let logId;
-      try {
-        const { data: logEntry } = await supabase
-          .from("webhook_logs")
-          .insert({
-            provider: providerName,
-            payload: req.body,
-            headers: req.headers,
-            reference: reference,
-            ip_address: req.headers["x-forwarded-for"] || "unknown",
-          })
-          .select("id")
-          .single();
-        logId = logEntry?.id;
-      } catch (err) {
-        logger.error(`[${providerName}] Failed to log webhook`, {
-          error: err.message,
-        });
-      }
+      // 3. Process the webhook asynchronously in the background
+      (async () => {
+        try {
+          // Parse Event & Get Reference
+          const event = this.parseWebhookEvent(req.body);
+          const reference = event.reference ||
+            req.body.order_id ||
+            req.body.payment_id ||
+            req.body.data?.reference ||
+            req.body.tx_ref;
 
-      // 4. Idempotency Check (status !== COMPLETED)
-      if (reference) {
-        const { data: tx } = await supabase
-          .from("transactions")
-          .select("status")
-          .eq("reference_id", reference)
-          .single();
+          // Log Webhook for Audit Trail
+          let logId;
+          try {
+            const { data: logEntry } = await supabase
+              .from("webhook_logs")
+              .insert({
+                provider: providerName,
+                payload: req.body,
+                headers: req.headers,
+                reference: reference,
+                ip_address: req.headers["x-forwarded-for"] || "unknown",
+              })
+              .select("id")
+              .single();
+            logId = logEntry?.id;
+          } catch (err) {
+            logger.error(`[${providerName}] Failed to log webhook`, {
+              error: err.message,
+            });
+          }
 
-        if (
-          tx &&
-          ["COMPLETED", "SUCCESS", "FAILED"].includes(tx.status?.toUpperCase())
-        ) {
-          logger.info(
-            `[${providerName}] Idempotency Check: Transaction ${reference} already ${tx.status}. Skipping.`,
+          // Idempotency Check (status !== COMPLETED or payments.credited)
+          if (reference) {
+            const { data: tx } = await supabase
+              .from("transactions")
+              .select("status")
+              .eq("reference_id", reference)
+              .single();
+
+            const { data: payRecord } = await supabase
+              .from("payments")
+              .select("credited")
+              .eq("reference", reference)
+              .single();
+
+            if (
+              (tx &&
+                ["COMPLETED", "SUCCESS", "FAILED"].includes(
+                  tx.status?.toUpperCase(),
+                )) ||
+              payRecord?.credited
+            ) {
+              logger.info(
+                `[${providerName}] Idempotency Check: Transaction ${reference} already processed. Skipping.`,
+              );
+              if (logId) {
+                await supabase
+                  .from("webhook_logs")
+                  .update({
+                    processed: true,
+                    processing_error: "Already processed",
+                  })
+                  .eq("id", logId);
+              }
+              return; // Already sent 200 OK
+            }
+          }
+
+          // Hand Over to PaymentService Main Execution
+          const paymentService = require("../paymentService");
+          const result = await paymentService.executeWebhookAction(
+            event,
+            req.body,
+            providerName,
           );
+
           if (logId) {
             await supabase
               .from("webhook_logs")
               .update({
                 processed: true,
-                processing_error: "Already completed",
+                processing_error: result?.error || null,
               })
               .eq("id", logId);
           }
-          return res.status(200).json({
-            received: true,
-            message: "Already Processed",
-          });
+        } catch (backgroundError) {
+          logger.error(
+            `[BaseProvider] Background Webhook Processing Error: ${backgroundError.message}`,
+          );
         }
-      }
-
-      // 5. Hand Over to PaymentService Main Execution
-      const paymentService = require("../paymentService");
-      const result = await paymentService.executeWebhookAction(
-        event,
-        req.body,
-        providerName,
-      );
-
-      if (logId) {
-        await supabase
-          .from("webhook_logs")
-          .update({ processed: true, processing_error: result?.error || null })
-          .eq("id", logId);
-      }
-
-      // 6. Return 200 HTTP Always
-      return res.status(200).json({ received: true });
+      })();
     } catch (error) {
       logger.error(
         `[BaseProvider] Critical Webhook Crash Caught: ${error.message}`,
       );
-      // GMAIL BOUNCE FIX: Output 200 to prevent provider loop spam
-      return res.status(200).json({
-        received: true,
-        error: "Internal processing error logged",
-      });
+      if (!res.headersSent) {
+        return res.status(200).json({
+          received: true,
+          error: "Internal processing error logged",
+        });
+      }
     }
   }
 }
