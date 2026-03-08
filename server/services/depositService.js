@@ -4,6 +4,7 @@ const fxService = require("./fxService");
 const commissionService = require("./commissionService");
 const logger = require("../utils/logger");
 const paystackService = require("./paystackService");
+const { checkDailyLimit } = require("../utils/limitCheck");
 const CLIENT_URL = process.env.CLIENT_URL || "https://notestandard.com";
 
 const PaymentService = require("./payment/paymentService");
@@ -27,6 +28,23 @@ async function createCardDeposit(
 
   if (!profile || !profile.email) {
     throw new Error("User profile or email not found");
+  }
+
+  // 1. Check Internal Daily Limits
+  const limit = await checkDailyLimit(userId, userPlan, amount);
+  if (!limit.allowed) {
+    throw new Error(
+      `Daily limit exceeded. You have ${limit.remaining} ${currency} remaining for today.`,
+    );
+  }
+
+  // 2. Check Provider/Test Mode Limits (Flutterwave test mode cap)
+  // EUR 4281 is approx $5000 USD. We use a safe margin.
+  const MAX_TRANSACTION = 4000;
+  if (amount > MAX_TRANSACTION) {
+    throw new Error(
+      `Transaction amount too high. Maximum per transaction is ${MAX_TRANSACTION} ${currency}.`,
+    );
   }
 
   // Initialize payment through unified service
@@ -84,6 +102,14 @@ async function createBankDeposit(
     .eq("id", userId)
     .single();
 
+  // Check Daily Limits
+  const limit = await checkDailyLimit(userId, userPlan, amount);
+  if (!limit.allowed) {
+    throw new Error(
+      `Daily limit exceeded. You have ${limit.remaining} ${currency} remaining for today.`,
+    );
+  }
+
   // Unified Payment Record
   const payment = await PaymentService.initializePayment(
     userId,
@@ -125,6 +151,9 @@ async function initializeCryptoDeposit(
   userPlan = "FREE",
   idempotencyKey = null,
 ) {
+  console.log(
+    `[DepositService] Initializing crypto deposit for user ${userId}, amount ${amount}`,
+  );
   // Fetch user profile for email
   const { data: profile } = await supabase
     .from("profiles")
@@ -134,6 +163,14 @@ async function initializeCryptoDeposit(
 
   if (!profile || !profile.email) {
     throw new Error("User profile or email not found");
+  }
+
+  // Check Daily Limits
+  const limit = await checkDailyLimit(userId, userPlan, amount);
+  if (!limit.allowed) {
+    throw new Error(
+      `Daily limit exceeded. You have ${limit.remaining} ${currency} remaining for today.`,
+    );
   }
 
   // Initialize payment through unified service

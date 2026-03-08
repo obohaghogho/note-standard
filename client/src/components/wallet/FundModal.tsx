@@ -5,6 +5,7 @@ import walletApi from '../../api/walletApi';
 import toast from 'react-hot-toast';
 import type { Currency } from '@/types/wallet';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '../../context/AuthContext';
 
 interface FundModalProps {
     isOpen: boolean;
@@ -23,6 +24,7 @@ export const FundModal: React.FC<FundModalProps> = ({
     selectedNetwork = 'native',
     onSuccess: _onSuccess 
 }) => {
+    const { profile } = useAuth();
     const [method, setMethod] = useState<DepositMethod>('card');
     const [amount, setAmount] = useState('');
     const [loading, setLoading] = useState(false);
@@ -43,6 +45,16 @@ export const FundModal: React.FC<FundModalProps> = ({
         paymentUrl?: string;
     } | null>(null);
     const [cryptoStatus, setCryptoStatus] = useState<string>('PENDING');
+
+    const DAILY_LIMITS = {
+        FREE: 1000,
+        PRO: 10000,
+        BUSINESS: 50000
+    };
+    const MAX_PER_TRANSACTION = 4000;
+
+    const userPlan = (profile?.plan || 'FREE').toUpperCase() as keyof typeof DAILY_LIMITS;
+    const dailyLimit = DAILY_LIMITS[userPlan] || DAILY_LIMITS.FREE;
 
     const isCrypto = selectedCurrency === 'BTC' || selectedCurrency === 'ETH' || selectedCurrency.startsWith('USDT') || selectedCurrency.startsWith('USDC');
     const isFiat = !isCrypto; 
@@ -92,6 +104,17 @@ export const FundModal: React.FC<FundModalProps> = ({
             return;
         }
 
+        const numAmount = parseFloat(amount);
+        if (numAmount > dailyLimit) {
+            toast.error(`Daily limit for ${userPlan} plan is ${dailyLimit} ${selectedCurrency}`);
+            return;
+        }
+
+        if (numAmount > MAX_PER_TRANSACTION) {
+            toast.error(`Maximum per transaction is ${MAX_PER_TRANSACTION} ${selectedCurrency}`);
+            return;
+        }
+
         setLoading(true);
         try {
             const result = await walletApi.initializePayment({
@@ -107,8 +130,8 @@ export const FundModal: React.FC<FundModalProps> = ({
                 network: selectedNetwork !== 'native' ? selectedNetwork : (selectedCurrency === 'BTC' ? 'Bitcoin' : 'Ethereum')
             });
             toast.success('Deposit address generated!');
-        } catch (err: unknown) {
-            toast.error(err instanceof Error ? err.message : 'Failed to generate crypto address');
+        } catch (err: any) {
+            toast.error(err.response?.data?.error || err.message || 'Failed to generate crypto address');
         } finally {
             setLoading(false);
         }
@@ -138,6 +161,17 @@ export const FundModal: React.FC<FundModalProps> = ({
             return;
         }
 
+        const numAmount = parseFloat(amount);
+        if (numAmount > dailyLimit) {
+            toast.error(`Daily limit for ${userPlan} plan is ${dailyLimit} ${selectedCurrency}`);
+            return;
+        }
+
+        if (numAmount > MAX_PER_TRANSACTION) {
+            toast.error(`Maximum per transaction is ${MAX_PER_TRANSACTION} ${selectedCurrency}`);
+            return;
+        }
+
         setLoading(true);
         try {
             const result = await walletApi.depositCard({
@@ -156,8 +190,8 @@ export const FundModal: React.FC<FundModalProps> = ({
                 toast.error('Payment initialization failed - no checkout URL received');
                 setLoading(false);
             }
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'Card deposit failed';
+        } catch (err: any) {
+            const message = err.response?.data?.error || err.message || 'Card deposit failed';
             if (message.includes('Unauthorized') || message.includes('401')) {
                 toast.error('Session expired. Please refresh the page or log in again.');
             } else {
@@ -173,6 +207,17 @@ export const FundModal: React.FC<FundModalProps> = ({
             return;
         }
 
+        const numAmount = parseFloat(amount);
+        if (numAmount > dailyLimit) {
+            toast.error(`Daily limit for ${userPlan} plan is ${dailyLimit} ${selectedCurrency}`);
+            return;
+        }
+
+        if (numAmount > MAX_PER_TRANSACTION) {
+            toast.error(`Maximum per transaction is ${MAX_PER_TRANSACTION} ${selectedCurrency}`);
+            return;
+        }
+
         setLoading(true);
         try {
             const result = await walletApi.depositTransfer({
@@ -181,8 +226,8 @@ export const FundModal: React.FC<FundModalProps> = ({
             });
             setBankDetails(result);
             toast.success('Bank transfer details generated!');
-        } catch (err: unknown) {
-            toast.error(err instanceof Error ? err.message : 'Failed to generate bank details');
+        } catch (err: any) {
+            toast.error(err.response?.data?.error || err.message || 'Failed to generate bank details');
         } finally {
             setLoading(false);
         }
@@ -301,6 +346,10 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         <span className="absolute right-4 top-3 text-gray-400 font-bold">
                                             {selectedCurrency}
                                         </span>
+                                    </div>
+                                    <div className="flex justify-between mt-2 px-1">
+                                        <span className="text-[10px] text-gray-500">Daily Limit: {dailyLimit} {selectedCurrency}</span>
+                                        <span className="text-[10px] text-gray-500">Transaction Max: {MAX_PER_TRANSACTION} {selectedCurrency}</span>
                                     </div>
                                 </div>
                                 <Button onClick={handleCardDeposit} disabled={loading} className="w-full">

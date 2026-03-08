@@ -45,7 +45,13 @@ exports.depositCard = async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: error.message || "Server error" });
+    const isValidationError = error.message.includes("limit") ||
+      error.message.includes("Maximum") ||
+      error.message.includes("must not exceed");
+
+    res.status(isValidationError ? 400 : 500).json({
+      error: error.message || "Server error",
+    });
   }
 };
 
@@ -72,7 +78,13 @@ exports.depositTransfer = async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: error.message || "Server error" });
+    const isValidationError = error.message.includes("limit") ||
+      error.message.includes("Maximum") ||
+      error.message.includes("must not exceed");
+
+    res.status(isValidationError ? 400 : 500).json({
+      error: error.message || "Server error",
+    });
   }
 };
 

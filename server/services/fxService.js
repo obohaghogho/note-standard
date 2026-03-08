@@ -88,7 +88,7 @@ class FXService {
    * For dashboard display
    */
   async getAllRates(base = "USD") {
-    const targets = ["BTC", "ETH", "USDT", "NGN", "USD"];
+    const targets = ["BTC", "ETH", "USDT", "NGN", "USD", "EUR", "GBP", "JPY"];
     const results = {};
     for (const t of targets) {
       try {
