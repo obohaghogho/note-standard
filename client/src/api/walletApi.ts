@@ -110,6 +110,18 @@ export const walletApi = {
       return response.data;
   },
 
+  // Swap Preview
+  async previewSwap(from: string, to: string, amount: number, slippage: number, fromNetwork: string = 'native', toNetwork: string = 'native'): Promise<any> {
+      const response = await api.post('/wallet/swap/preview', { from, to, amount, slippage, fromNetwork, toNetwork });
+      return response.data;
+  },
+
+  // Execute Swap
+  async executeSwap(from: string, to: string, amount: number, idempotencyKey: string, lockId: string, slippage: number, fromNetwork: string = 'native', toNetwork: string = 'native', captchaToken?: string): Promise<any> {
+      const response = await api.post('/wallet/swap', { from, to, amount, idempotencyKey, lockId, slippage, fromNetwork, toNetwork, captchaToken });
+      return response.data;
+  },
+
   // Placeholder for missing invoice download
   async downloadInvoice(txId: string): Promise<void> {
       console.warn('Invoice download not implemented in backend for tx:', txId);
