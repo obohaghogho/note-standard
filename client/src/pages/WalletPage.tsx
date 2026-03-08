@@ -22,6 +22,11 @@ const SUPPORTED_CURRENCIES = ['BTC', 'ETH', 'USD', 'NGN', 'EUR', 'GBP', 'JPY'];
 export const WalletPage: React.FC = () => {
     const { wallets, transactions, loading, refresh, createWallet } = useWallet();
     
+    // Force-refresh wallet data on mount (ensures fresh data after payment redirect)
+    useEffect(() => {
+        refresh();
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    
     console.log("transactions:", transactions);
     console.log("isArray:", Array.isArray(transactions));
 
