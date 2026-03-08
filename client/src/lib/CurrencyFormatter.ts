@@ -4,7 +4,7 @@
  */
 
 export const formatCurrency = (amount: number, currency: string) => {
-  const supportedFiatCurrencies = ["USD", "EUR", "GBP", "NGN"];
+  const supportedFiatCurrencies = ["USD", "EUR", "GBP", "NGN", "JPY"];
 
   if (supportedFiatCurrencies.includes(currency)) {
     return new Intl.NumberFormat("en-US", {
