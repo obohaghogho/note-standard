@@ -311,6 +311,8 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
                                     ))}
                                     <div className="flex-1 relative">
                                         <input
+                                            id="swap-slippage"
+                                            name="slippage"
                                             type="number"
                                             value={slippage}
                                             onChange={(e) => setSlippage(parseFloat(e.target.value) || 0)}

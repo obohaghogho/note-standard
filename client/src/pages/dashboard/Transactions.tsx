@@ -252,6 +252,8 @@ export const Transactions: React.FC = () => {
 
                     <div className="flex items-center gap-2">
                         <select 
+                            id="currency-filter"
+                            name="currency"
                             value={currencyFilter}
                             onChange={(e) => setCurrencyFilter(e.target.value)}
                             className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs outline-none focus:ring-2 focus:ring-white/10 appearance-none"
@@ -260,6 +262,8 @@ export const Transactions: React.FC = () => {
                         </select>
 
                         <select 
+                            id="type-filter"
+                            name="type"
                             value={typeFilter}
                             onChange={(e) => setTypeFilter(e.target.value)}
                             className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs outline-none focus:ring-2 focus:ring-white/10 appearance-none"
