@@ -119,6 +119,32 @@ class NowPaymentsProvider {
       throw error;
     }
   }
+
+  async getRate(fromCurrency, toCurrency, amount = 1) {
+    if (!this.apiKey) throw new Error("NOWPayments API key missing");
+
+    const from = this.getTicker(fromCurrency);
+    const to = this.getTicker(toCurrency);
+
+    try {
+      const response = await axios.get(
+        `${this.baseUrl}/estimate?amount=${amount}&currency_from=${from}&currency_to=${to}`,
+        {
+          headers: {
+            "x-api-key": this.apiKey,
+          },
+        },
+      );
+
+      return response.data.estimated_amount / amount;
+    } catch (error) {
+      logger.error(
+        `[NowPaymentsProvider] Rate Error for ${from}/${to}:`,
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  }
 }
 
 module.exports = new NowPaymentsProvider();

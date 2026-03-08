@@ -1,4 +1,5 @@
 const coingeckoProvider = require("../providers/coingeckoProvider");
+const nowpaymentsProvider = require("../providers/nowpaymentsProvider");
 const exchangeRateProvider = require("../providers/exchangeRateProvider");
 const logger = require("../utils/logger");
 const cache = require("../utils/cache");
@@ -44,15 +45,45 @@ class FXService {
         if (coinIds.length === 0) return {};
 
         try {
-          const prices = await coingeckoProvider.getPrices(coinIds);
           const results = {};
-          symbols.forEach((s) => {
-            const id = this.coinMapping[s.toUpperCase()];
-            results[s.toUpperCase()] = prices[id] || null;
-          });
+          try {
+            const prices = await coingeckoProvider.getPrices(coinIds);
+            symbols.forEach((s) => {
+              const id = this.coinMapping[s.toUpperCase()];
+              results[s.toUpperCase()] = prices[id] || null;
+            });
+          } catch (err) {
+            logger.warn(
+              `[FXService] CoinGecko Batch failed, seeking fallback: ${err.message}`,
+            );
+          }
+
+          // Fallback for missing/failed assets using NowPayments
+          const missing = symbols.filter((s) => !results[s.toUpperCase()]);
+          if (missing.length > 0) {
+            logger.info(
+              `[FXService] Attempting NowPayments fallback for: ${
+                missing.join(", ")
+              }`,
+            );
+            for (const sym of missing) {
+              try {
+                // NowPayments estimate is usually quite reliable
+                const rate = await nowpaymentsProvider.getRate(sym, "USD");
+                if (rate) results[sym.toUpperCase()] = rate;
+              } catch (fallbackErr) {
+                logger.error(
+                  `[FXService] Fallback failed for ${sym}: ${fallbackErr.message}`,
+                );
+              }
+            }
+          }
+
           return results;
         } catch (err) {
-          logger.error(`[FXService] Crypto Batch API failed: ${err.message}`);
+          logger.error(
+            `[FXService] All Crypto Providers failed: ${err.message}`,
+          );
           return {};
         }
       },

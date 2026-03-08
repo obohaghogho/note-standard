@@ -123,7 +123,7 @@ export const WalletPage: React.FC = () => {
 
         if (Array.isArray(wallets) && wallets.length > 0) {
             fetchRates();
-            const interval = setInterval(fetchRates, 15000); // 15s refresh
+            const interval = setInterval(fetchRates, 30000); // 30s refresh (stable for production)
             return () => clearInterval(interval);
         }
     }, [wallets.length]);
