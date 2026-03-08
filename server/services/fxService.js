@@ -9,7 +9,7 @@ const cache = require("../utils/cache");
  */
 class FXService {
   constructor() {
-    this.CRYPTO_CACHE_TTL = 30; // 30 seconds
+    this.CRYPTO_CACHE_TTL = 60; // 60 seconds (safe for free tier)
     this.coinMapping = {
       "BTC": "bitcoin",
       "ETH": "ethereum",
@@ -22,22 +22,38 @@ class FXService {
    * Get price of crypto in USD
    */
   async getCryptoPrice(symbol) {
-    const coinId = this.coinMapping[symbol.toUpperCase()];
-    if (!coinId) return null;
+    const prices = await this.getMultipleCryptoPrices([symbol]);
+    return prices[symbol.toUpperCase()] || null;
+  }
+
+  /**
+   * Get multiple crypto prices in one batch
+   */
+  async getMultipleCryptoPrices(symbols) {
+    const keys = symbols.map((s) => s.toUpperCase());
+    const cacheKey = `crypto_batch_${keys.sort().join("_")}`;
 
     return cache.wrap(
-      `crypto_price_${symbol.toUpperCase()}`,
+      cacheKey,
       this.CRYPTO_CACHE_TTL,
       async () => {
+        const coinIds = symbols
+          .map((s) => this.coinMapping[s.toUpperCase()])
+          .filter(Boolean);
+
+        if (coinIds.length === 0) return {};
+
         try {
-          const price = await coingeckoProvider.getPrice(coinId);
-          if (price !== null && price !== undefined) return price;
-          throw new Error("API returned null price");
+          const prices = await coingeckoProvider.getPrices(coinIds);
+          const results = {};
+          symbols.forEach((s) => {
+            const id = this.coinMapping[s.toUpperCase()];
+            results[s.toUpperCase()] = prices[id] || null;
+          });
+          return results;
         } catch (err) {
-          logger.error(
-            `[FXService] Crypto Price API failed for ${symbol}: ${err.message}`,
-          );
-          return null;
+          logger.error(`[FXService] Crypto Batch API failed: ${err.message}`);
+          return {};
         }
       },
     );
@@ -91,15 +107,48 @@ class FXService {
    */
   async getAllRates(base = "USD") {
     const targets = ["BTC", "ETH", "USDT", "NGN", "USD", "EUR", "GBP", "JPY"];
-    const results = {};
-    for (const t of targets) {
-      try {
-        results[t] = await this.getRate(base, t);
-      } catch (e) {
-        results[t] = 0;
+    const cryptoTargets = targets.filter((t) => this.coinMapping[t]);
+    const fiatTargets = targets.filter((t) =>
+      !this.coinMapping[t] && t !== "USD"
+    );
+
+    const results = { "USD": 1.0 };
+
+    try {
+      // 1. Batch fetch all crypto prices
+      const cryptoPrices = await this.getMultipleCryptoPrices(cryptoTargets);
+      Object.keys(cryptoPrices).forEach((sym) => {
+        const price = cryptoPrices[sym];
+        if (base === "USD") {
+          results[sym] = price ? 1 / price : 0;
+        } else {
+          // Cross conversion handled via getRate if base isn't USD
+          // but usually it's USD for dashboard
+        }
+      });
+
+      // 2. Fetch fiat rates sequentially (usually low frequency/stable)
+      for (const t of fiatTargets) {
+        try {
+          results[t] = await this.getRate(base, t);
+        } catch (e) {
+          results[t] = 0;
+        }
       }
+
+      // If base isn't USD, normalize everything
+      if (base !== "USD") {
+        const basePrice = results[base] || 1;
+        Object.keys(results).forEach((k) => {
+          results[k] = results[k] / basePrice;
+        });
+      }
+
+      return results;
+    } catch (err) {
+      logger.error(`[FXService] GetAllRates Error: ${err.message}`);
+      return results;
     }
-    return results;
   }
 }
 
