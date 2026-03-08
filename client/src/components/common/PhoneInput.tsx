@@ -34,7 +34,7 @@ interface PhoneInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElemen
     error?: string;
 }
 
-export const PhoneInput: React.FC<PhoneInputProps> = ({ value, onChange, label, error, className, ...props }) => {
+export const PhoneInput: React.FC<PhoneInputProps> = ({ value, onChange, label, error, className, id, name, ...props }) => {
     const [selectedCountry, setSelectedCountry] = React.useState(COUNTRIES[2]); // Default to Nigeria for Africa focus
     const [isOpen, setIsOpen] = React.useState(false);
     const dropdownRef = React.useRef<HTMLDivElement>(null);
@@ -107,6 +107,8 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({ value, onChange, label, 
 
                 <div className="relative flex-1">
                     <input
+                        id={id || name || 'phone-input'}
+                        name={name || id || 'phone'}
                         type="tel"
                         value={displayValue}
                         onChange={handlePhoneChange}
