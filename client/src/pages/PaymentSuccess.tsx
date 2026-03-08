@@ -21,10 +21,11 @@ export const PaymentSuccess: React.FC = () => {
     const [deposit, setDeposit] = useState<DepositStatus | null>(null);
 
     const reference = searchParams.get('reference');
+    const txRef = searchParams.get('tx_ref');
 
     useEffect(() => {
         const checkDepositStatus = async () => {
-            if (!reference) {
+            if (!reference && !txRef) {
                 const storedRef = localStorage.getItem('pendingDepositReference');
                 if (!storedRef) {
                     setStatus('error');
@@ -32,18 +33,18 @@ export const PaymentSuccess: React.FC = () => {
                 }
             }
 
-            const ref = reference || localStorage.getItem('pendingDepositReference');
+            const ref = reference || txRef || localStorage.getItem('pendingDepositReference');
             if (!ref) {
                 setStatus('error');
                 return;
             }
 
-            const transactionId = searchParams.get('transaction_id');
+            const transactionId = searchParams.get('transaction_id') || searchParams.get('flw_ref');
 
             try {
                 // Poll using authenticated walletApi instead of raw fetch
                 let attempts = 0;
-                const maxAttempts = 12; // ~30 seconds total
+                const maxAttempts = 24; // ~60 seconds total (2.5s intervals)
                 let finished = false;
 
                 while (attempts < maxAttempts && !finished) {
@@ -91,7 +92,7 @@ export const PaymentSuccess: React.FC = () => {
         };
 
         checkDepositStatus();
-    }, [reference]);
+    }, [reference, txRef, searchParams]);
 
     const handleGoToWallet = async () => {
         if (walletContext) {
