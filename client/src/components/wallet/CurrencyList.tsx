@@ -98,13 +98,16 @@ export const CurrencyList: React.FC<CurrencyListProps> = ({
                                 </p>
                             )}
                             {wallet.currency !== 'USD' && (
-                                <div className="flex justify-between items-center mt-2 pt-2 border-t border-white/5">
-                                    <p className="text-xs opacity-60">
+                                <div className="flex justify-between items-center mt-3 pt-3 border-t border-white/10">
+                                    <p className="text-xs text-white/50">
                                         ≈ {showBalances ? formatCurrency(usdValue, 'USD') : '••••'}
                                     </p>
-                                    <p className="text-[10px] opacity-40 font-medium">
-                                        {rate > 0 ? `1 ${wallet.currency} = ${formatCurrency(rate, 'USD')}` : 'Price Loading...'}
-                                    </p>
+                                    <div className="flex items-center gap-1.5 bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
+                                        <div className="w-1 h-1 rounded-full bg-green-400 shadow-[0_0_5px_rgba(74,222,128,0.5)]" />
+                                        <p className="text-[10px] font-bold text-white/90 whitespace-nowrap">
+                                            {rate > 0 ? `1 ${wallet.currency} = ${formatCurrency(rate, 'USD')}` : 'Loading...'}
+                                        </p>
+                                    </div>
                                 </div>
                             )}
                         </div>
