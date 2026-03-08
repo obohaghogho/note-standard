@@ -63,14 +63,16 @@ class BaseProvider {
    * 4. Always returns HTTP 200 OK (unless signature fails)
    */
   async processWebhook(req, res) {
+    // 1. ABSOLUTE EARLY RETURN: Guaranteed 200 OK to stop retries/timeouts
+    // Send this immediately before ANY database or logging logic.
+    if (!res.headersSent) {
+      res.status(200).json({ received: true });
+    }
+
     try {
       const providerName = this.constructor.name.replace("Provider", "")
         .toLowerCase();
       logger.info(`[${providerName}] Webhook Received`);
-
-      // 2. Early return HTTP 200 OK to prevent provider retry spam/timeout
-      // We ALWAYS return 200 OK immediately, even if it's fraudulent, to stop retries.
-      res.status(200).json({ received: true });
 
       // 3. Process the webhook asynchronously in the background
       (async () => {

@@ -44,26 +44,30 @@ export const WalletPage: React.FC = () => {
     const [showBalances, setShowBalances] = useState(true);
     const [searchParams, setSearchParams] = useSearchParams();
 
-    // Instant Proactive Polling for external redirects (e.g. Flutterwave)
+    // Instant Proactive Polling for external redirects (e.g. Flutterwave/Paystack)
     useEffect(() => {
         const txRef = searchParams.get('tx_ref');
-        const transactionId = searchParams.get('transaction_id');
+        const reference = searchParams.get('reference');
+        const transactionId = searchParams.get('transaction_id') || searchParams.get('flw_ref');
         const statusParam = searchParams.get('status');
 
-        if (txRef && statusParam) {
+        const refToVerify = txRef || reference;
+
+        if (refToVerify && (statusParam || reference)) {
             let isActive = true;
             const verifyPayment = async () => {
                 const toastId = toast.loading('Verifying your payment...', { duration: 10000 });
                 try {
-                    const res = await walletApi.proactiveVerifyPayment(txRef, transactionId || undefined);
+                    const res = await walletApi.proactiveVerifyPayment(refToVerify, transactionId || undefined);
                     if (!isActive) return;
 
-                    if (['COMPLETED', 'SUCCESS', 'SUCCESSFUL', 'success'].includes(res.status?.toUpperCase() || '')) {
+                    const upperStatus = (res.status || '').toUpperCase();
+                    if (['COMPLETED', 'SUCCESS', 'SUCCESSFUL'].includes(upperStatus)) {
                         toast.success('Payment verified successfully!', { id: toastId });
                         setSearchParams({});
                         await refresh();
                         setRefreshKey(k => k + 1);
-                    } else if (['FAILED', 'CANCELLED'].includes(res.status?.toUpperCase() || '')) {
+                    } else if (['FAILED', 'CANCELLED'].includes(upperStatus)) {
                         toast.error('Payment failed or was cancelled.', { id: toastId });
                         setSearchParams({});
                     } else {
