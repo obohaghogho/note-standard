@@ -68,29 +68,28 @@ class BaseProvider {
         .toLowerCase();
       logger.info(`[${providerName}] Webhook Received`);
 
-      // 1. Verify Signature
-      if (!this.verifyWebhookSignature(req.headers, req.body, req.rawBody)) {
-        logger.warn(
-          `[${providerName}] Suspicious Webhook Attempt (Unauthorized signature)`,
-        );
-        return res.status(401).json({ error: "Invalid signature" });
-      }
-
       // 2. Early return HTTP 200 OK to prevent provider retry spam/timeout
+      // We ALWAYS return 200 OK immediately, even if it's fraudulent, to stop retries.
       res.status(200).json({ received: true });
 
       // 3. Process the webhook asynchronously in the background
       (async () => {
         try {
           // Parse Event & Get Reference
-          const event = this.parseWebhookEvent(req.body);
-          const reference = event.reference ||
-            req.body.order_id ||
-            req.body.payment_id ||
-            req.body.data?.reference ||
-            req.body.tx_ref;
+          let event = {};
+          let reference = null;
+          try {
+            event = this.parseWebhookEvent(req.body);
+            reference = event.reference || req.body.order_id ||
+              req.body.payment_id || req.body.data?.reference ||
+              req.body.tx_ref;
+          } catch (err) {
+            logger.warn(
+              `[${providerName}] Could not parse webhook event cleanly.`,
+            );
+          }
 
-          // Log Webhook for Audit Trail
+          // Log Webhook for Audit Trail FIRST (so we can debug signature mismatches exactly)
           let logId;
           try {
             const { data: logEntry } = await supabase
@@ -99,7 +98,7 @@ class BaseProvider {
                 provider: providerName,
                 payload: req.body,
                 headers: req.headers,
-                reference: reference,
+                reference: reference || "unknown",
                 ip_address: req.headers["x-forwarded-for"] || "unknown",
               })
               .select("id")
@@ -109,6 +108,22 @@ class BaseProvider {
             logger.error(`[${providerName}] Failed to log webhook`, {
               error: err.message,
             });
+          }
+
+          // 1. Verify Signature AFTER logging!
+          if (
+            !this.verifyWebhookSignature(req.headers, req.body, req.rawBody)
+          ) {
+            logger.warn(
+              `[${providerName}] Suspicious Webhook Attempt (Unauthorized signature) logged and dropped.`,
+            );
+            if (logId) {
+              await supabase.from("webhook_logs").update({
+                processed: false,
+                processing_error: "Invalid signature hook dropped anonymously",
+              }).eq("id", logId);
+            }
+            return; // Secretly drop bad payloads
           }
 
           // Idempotency Check (status !== COMPLETED or payments.credited)
