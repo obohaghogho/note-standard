@@ -22,6 +22,60 @@ exports.deposit = async (req, res) => {
   }
 };
 
+exports.depositCard = async (req, res) => {
+  try {
+    let { amount, currency } = req.body;
+
+    if (!amount || !currency) {
+      return res.status(400).json({
+        error: "Amount and currency are required",
+      });
+    }
+
+    currency = String(currency).replace(/"/g, "");
+
+    const result = await require("../services/depositService")
+      .createCardDeposit(
+        req.user.id,
+        currency,
+        parseFloat(amount),
+        req.userProfile?.plan || "FREE",
+      );
+
+    res.json(result);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message || "Server error" });
+  }
+};
+
+exports.depositTransfer = async (req, res) => {
+  try {
+    let { amount, currency } = req.body;
+
+    if (!amount || !currency) {
+      return res.status(400).json({
+        error: "Amount and currency are required",
+      });
+    }
+
+    currency = String(currency).replace(/"/g, "");
+
+    const result = await require("../services/depositService")
+      .createBankDeposit(
+        req.user.id,
+        currency,
+        parseFloat(amount),
+        req.userProfile?.plan || "FREE",
+      );
+
+    res.json(result);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message || "Server error" });
+  }
+};
+
 exports.withdraw = async (req, res) => {
   try {
     const result = await walletService.withdraw(req.user.id, req.body);
@@ -84,6 +138,22 @@ exports.getLedger = async (req, res) => {
 
     if (error) throw error;
     res.json({ entries: data || [] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+exports.getDepositStatus = async (req, res) => {
+  try {
+    const { reference } = req.query;
+    if (!reference) throw new Error("Reference is required");
+    const status = await require("../services/depositService").getDepositStatus(
+      reference,
+    );
+    if (!status) {
+      return res.status(404).json({ error: "Transaction not found" });
+    }
+    res.json(status);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

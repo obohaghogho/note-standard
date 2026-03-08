@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, CreditCard, Building2, Bitcoin, Copy, ArrowRight, Loader2, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { Button } from '../common/Button';
-import { walletApi } from '../../api/walletApi';
+import walletApi from '../../api/walletApi';
 import toast from 'react-hot-toast';
 import type { Currency } from '@/types/wallet';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -92,15 +92,12 @@ export const FundModal: React.FC<FundModalProps> = ({
             return;
         }
 
-        const idempotencyKey = `fund_crypto_${Date.now()}`;
         setLoading(true);
         try {
             const result = await walletApi.initializePayment({
                 amount: parseFloat(amount),
                 currency: selectedCurrency,
-                network: selectedNetwork,
-                options: { isCrypto: true },
-                metadata: { idempotencyKey }
+                provider: selectedNetwork || 'native'
             });
             
             setCryptoAddress({
@@ -124,7 +121,7 @@ export const FundModal: React.FC<FundModalProps> = ({
             setCryptoAddress({
                 address: result.address,
                 network: selectedCurrency.includes('_') ? selectedCurrency.split('_')[1] : (selectedCurrency === 'BTC' ? 'Bitcoin' : 'Ethereum (ERC20)'),
-                reference: `np_${result.payment_id}_${Date.now()}`
+                reference: `mock_${Date.now()}`
             });
             setCryptoStatus('PENDING'); // Reset status for new address
             toast.success("New deposit address generated!");
@@ -141,10 +138,12 @@ export const FundModal: React.FC<FundModalProps> = ({
             return;
         }
 
-        const idempotencyKey = `fund_card_${Date.now()}`;
         setLoading(true);
         try {
-            const result = await walletApi.depositCard(selectedCurrency, parseFloat(amount), idempotencyKey);
+            const result = await walletApi.depositCard({
+                amount: Number(amount),
+                currency: selectedCurrency
+            });
             
             // Store reference for later status check
             localStorage.setItem('pendingDepositReference', result.reference);
@@ -176,7 +175,10 @@ export const FundModal: React.FC<FundModalProps> = ({
 
         setLoading(true);
         try {
-            const result = await walletApi.depositBank(selectedCurrency, parseFloat(amount));
+            const result = await walletApi.depositTransfer({
+                amount: Number(amount),
+                currency: selectedCurrency
+            });
             setBankDetails(result);
             toast.success('Bank transfer details generated!');
         } catch (err: unknown) {

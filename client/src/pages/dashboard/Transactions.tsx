@@ -13,7 +13,7 @@ import {
     ArrowRight
 } from 'lucide-react';
 import { formatCurrency } from '../../lib/CurrencyFormatter';
-import { walletApi } from '../../api/walletApi';
+import walletApi from '../../api/walletApi';
 import toast from 'react-hot-toast';
 import { Button } from '../../components/common/Button';
 import { cn } from '../../utils/cn';

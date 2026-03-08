@@ -21,6 +21,18 @@ router.get("/address", walletController.getAddress);
 router.post("/address", walletController.getAddress); // Reusing getAddress for now, can be extended for rotation
 router.get("/ledger", walletController.getLedger);
 router.post("/create", transactionLimiter, walletController.createWallet);
+router.post(
+  "/deposit/card",
+  transactionLimiter,
+  walletController.depositCard,
+);
+router.post(
+  "/deposit/transfer",
+  transactionLimiter,
+  walletController.depositTransfer,
+);
+router.post("/deposit", transactionLimiter, walletController.deposit);
+router.get("/deposit/status", walletController.getDepositStatus);
 router.get("/transactions", transactionController.getHistory);
 router.post(
   "/transfer",

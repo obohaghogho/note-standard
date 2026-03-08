@@ -37,22 +37,22 @@ class WalletService {
    */
   async createWallet(userId, currency, network = "native") {
     const { data: existing } = await supabase
-      .from("wallets")
+      .from("wallets_store")
       .select("*")
       .eq("user_id", userId)
       .eq("currency", currency)
-      .eq("network", network)
       .maybeSingle();
 
     if (existing) return existing;
 
     const { data: wallet, error } = await supabase
-      .from("wallets")
+      .from("wallets_store")
       .insert({
         user_id: userId,
         currency: currency,
         network: network,
         balance: 0,
+        available_balance: 0,
         address: uuidv4(),
       })
       .select()

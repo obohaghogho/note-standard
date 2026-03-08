@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowRightLeft, Loader2, RefreshCcw, Info, Clock } from 'lucide-react';
 import { Button } from './common/Button';
-import { walletApi } from '../api/walletApi';
+import walletApi from '../api/walletApi';
 import { useWallet } from '../hooks/useWallet';
 import toast from 'react-hot-toast';
 import type { Currency } from '@/types/wallet';

@@ -8,7 +8,14 @@ exports.initialize = async (req, res) => {
   try {
     const userId = req.user.id;
     const { email } = req.user;
-    const { amount, currency, network, metadata, options } = req.body;
+    const {
+      amount,
+      currency,
+      network,
+      metadata,
+      options,
+      provider: requestedProvider,
+    } = req.body;
 
     if (!amount || !currency) {
       return res.status(400).json({
@@ -21,9 +28,8 @@ exports.initialize = async (req, res) => {
       email,
       amount,
       currency,
-      network || "native",
-      metadata || {},
-      options || {},
+      { ...metadata, network: network || "native" },
+      { ...options, provider: requestedProvider } || {},
     );
 
     res.json(result);

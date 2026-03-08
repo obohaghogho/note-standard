@@ -4,7 +4,7 @@ import { Button } from '../common/Button';
 import { useWallet } from '../../hooks/useWallet';
 import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
-import { walletApi } from '../../api/walletApi';
+import walletApi from '../../api/walletApi';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface ReceiveModalProps {

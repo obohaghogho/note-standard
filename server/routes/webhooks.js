@@ -19,6 +19,11 @@ router.post("/paystack", webhookController.handlePaystack);
  * Flutterwave Webhook
  */
 router.post("/flutterwave", webhookController.handleFlutterwave);
+router.get(
+  "/flutterwave",
+  (req, res) =>
+    res.status(200).send("Webhook endpoint only accepts POST requests"),
+);
 
 /**
  * Korapay Webhook
