@@ -9,15 +9,28 @@ class CoinGeckoProvider {
   }
 
   async getPrice(coinId, vsCurrency = "usd") {
+    const prices = await this.getPrices([coinId], vsCurrency);
+    return prices[coinId] || null;
+  }
+
+  async getPrices(coinIds, vsCurrency = "usd") {
     try {
+      const ids = coinIds.join(",");
       const response = await axios.get(
-        `${this.baseUrl}/simple/price?ids=${coinId}&vs_currencies=${vsCurrency}`,
+        `${this.baseUrl}/simple/price?ids=${ids}&vs_currencies=${vsCurrency}`,
         this.apiKey ? { headers: { "x-cg-demo-api-key": this.apiKey } } : {},
       );
-      return response.data[coinId]?.[vsCurrency];
+
+      const results = {};
+      coinIds.forEach((id) => {
+        results[id] = response.data[id]?.[vsCurrency] || null;
+      });
+      return results;
     } catch (err) {
-      logger.error(`[CoinGeckoProvider] Error for ${coinId}: ${err.message}`);
-      return null;
+      logger.error(
+        `[CoinGeckoProvider] Batch Error for ${coinIds}: ${err.message}`,
+      );
+      return {};
     }
   }
 }
