@@ -98,9 +98,14 @@ export const CurrencyList: React.FC<CurrencyListProps> = ({
                                 </p>
                             )}
                             {wallet.currency !== 'USD' && (
-                                <p className="text-xs opacity-60 mt-1">
-                                    ≈ {showBalances ? formatCurrency(usdValue, 'USD') : '••••'}
-                                </p>
+                                <div className="flex justify-between items-center mt-2 pt-2 border-t border-white/5">
+                                    <p className="text-xs opacity-60">
+                                        ≈ {showBalances ? formatCurrency(usdValue, 'USD') : '••••'}
+                                    </p>
+                                    <p className="text-[10px] opacity-40 font-medium">
+                                        {rate > 0 ? `1 ${wallet.currency} = ${formatCurrency(rate, 'USD')}` : 'Price Loading...'}
+                                    </p>
+                                </div>
                             )}
                         </div>
                     </motion.div>
