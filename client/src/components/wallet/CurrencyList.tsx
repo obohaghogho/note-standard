@@ -71,15 +71,25 @@ export const CurrencyList: React.FC<CurrencyListProps> = ({
                                 <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center font-bold text-lg backdrop-blur-sm">
                                     {getCurrencyIcon(wallet.currency)}
                                 </div>
-                                <div className="min-w-0">
-                                    <h3 className="font-bold text-white truncate flex items-center gap-1.5">
-                                        {wallet.currency}
-                                        {wallet.network && wallet.network !== 'native' && wallet.network !== 'internal' && (
-                                            <span className="text-[9px] bg-white/10 px-1 rounded uppercase tracking-tighter opacity-70">
-                                                {wallet.network}
-                                            </span>
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex justify-between items-center gap-2">
+                                        <h3 className="font-bold text-white truncate flex items-center gap-1.5">
+                                            {wallet.currency}
+                                            {wallet.network && wallet.network !== 'native' && wallet.network !== 'internal' && (
+                                                <span className="text-[9px] bg-white/10 px-1 rounded uppercase tracking-tighter opacity-70">
+                                                    {wallet.network}
+                                                </span>
+                                            )}
+                                        </h3>
+                                        {wallet.currency !== 'USD' && (
+                                            <div className="flex items-center gap-1.5 bg-black/20 px-2 py-0.5 rounded-full border border-white/10 backdrop-blur-md">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse shadow-[0_0_8px_rgba(74,222,128,0.6)]" />
+                                                <p className="text-[10px] font-black text-white whitespace-nowrap">
+                                                    {rate > 0 ? formatCurrency(rate, 'USD') : '...'}
+                                                </p>
+                                            </div>
                                         )}
-                                    </h3>
+                                    </div>
                                     <p className="text-xs opacity-70">{wallet.provider === 'nowpayments' ? 'External Wallet' : 'Vault Wallet'}</p>
                                 </div>
                             </div>
@@ -98,17 +108,9 @@ export const CurrencyList: React.FC<CurrencyListProps> = ({
                                 </p>
                             )}
                             {wallet.currency !== 'USD' && (
-                                <div className="flex justify-between items-center mt-3 pt-3 border-t border-white/10">
-                                    <p className="text-xs text-white/50">
-                                        ≈ {showBalances ? formatCurrency(usdValue, 'USD') : '••••'}
-                                    </p>
-                                    <div className="flex items-center gap-1.5 bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
-                                        <div className="w-1 h-1 rounded-full bg-green-400 shadow-[0_0_5px_rgba(74,222,128,0.5)]" />
-                                        <p className="text-[10px] font-bold text-white/90 whitespace-nowrap">
-                                            {rate > 0 ? `1 ${wallet.currency} = ${formatCurrency(rate, 'USD')}` : 'Loading...'}
-                                        </p>
-                                    </div>
-                                </div>
+                                <p className="text-xs text-white/50 mt-1.5">
+                                    ≈ {showBalances ? formatCurrency(usdValue, 'USD') : '••••'}
+                                </p>
                             )}
                         </div>
                     </motion.div>

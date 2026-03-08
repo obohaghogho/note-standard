@@ -15,6 +15,7 @@ import { WalletAllocationChart } from '../components/wallet/WalletAllocationChar
 import { LedgerTrail } from '../components/wallet/LedgerTrail';
 import { RefreshCw, Plus, X, Loader2 } from 'lucide-react';
 import { Button } from '../components/common/Button';
+import { formatCurrency } from '../lib/CurrencyFormatter';
 import toast from 'react-hot-toast';
 
 const SUPPORTED_CURRENCIES = ['BTC', 'ETH', 'USD', 'NGN', 'EUR', 'GBP', 'JPY'];
@@ -27,15 +28,8 @@ export const WalletPage: React.FC = () => {
         refresh();
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
     
-    console.log("transactions:", transactions);
-    console.log("isArray:", Array.isArray(transactions));
-
     const safeTransactions = Array.isArray(transactions) ? transactions : [];
-    const completedTransactions = safeTransactions.filter(
-        (tx) => tx.status?.toLowerCase() === "completed"
-    );
-    console.log("completed count:", completedTransactions.length);
-
+    
     const [rates, setRates] = useState<Record<string, number>>({}); // Rates in USD
     const [totalBalance, setTotalBalance] = useState(0);
     const [totalAvailableBalance, setTotalAvailableBalance] = useState(0);
@@ -129,7 +123,7 @@ export const WalletPage: React.FC = () => {
 
         if (Array.isArray(wallets) && wallets.length > 0) {
             fetchRates();
-            const interval = setInterval(fetchRates, 60000);
+            const interval = setInterval(fetchRates, 15000); // 15s refresh
             return () => clearInterval(interval);
         }
     }, [wallets.length]);
@@ -195,6 +189,21 @@ export const WalletPage: React.FC = () => {
         <div className="min-h-[100dvh] bg-gray-950 text-white p-4 sm:p-6 lg:p-8 overflow-x-clip w-full">
             <div className="max-w-7xl mx-auto space-y-8">
                 
+                {/* Market Price Ticker */}
+                {!loading && Object.keys(rates).length > 0 && (
+                    <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-none no-scrollbar">
+                        {['BTC', 'ETH'].map(curr => (
+                            <div key={curr} className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full shrink-0">
+                                <span className={`w-2 h-2 rounded-full bg-green-400 animate-pulse`} />
+                                <span className="text-xs font-bold text-gray-300">{curr}/USD</span>
+                                <span className="text-xs font-black text-white">
+                                    {formatCurrency(rates[curr] || 0, 'USD')}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
                 {/* Header */}
                 <div className="flex justify-between items-center">
                     <div>
@@ -264,7 +273,8 @@ export const WalletPage: React.FC = () => {
                            <div ref={swapCardRef}>
                                 <SwapCard 
                                     initialFromCurrency={selectedAsset.currency} 
-                                    initialFromNetwork={selectedAsset.network}                                    onSuccess={() => {
+                                    initialFromNetwork={selectedAsset.network}
+                                    onSuccess={() => {
                                         handleRefresh();
                                         toast.success('Balance updated');
                                     }}
@@ -283,7 +293,7 @@ export const WalletPage: React.FC = () => {
                 {/* Bottom Section: Transaction History */}
                 <div className="pb-12">
                      <TransactionHistory 
-                        transactions={transactions} 
+                        transactions={safeTransactions} 
                         loading={loading}
                      />
                 </div>
