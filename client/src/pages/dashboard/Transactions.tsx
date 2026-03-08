@@ -134,10 +134,10 @@ export const Transactions: React.FC = () => {
     const fetchTransactions = async (page: number) => {
         setLoading(true);
         try {
-            const data = await walletApi.getTransactions(page, itemsPerPage);
+            const data = await walletApi.getTransactions({ page, limit: itemsPerPage });
             setTransactions(data?.transactions || []);
-            setTotalCount(data?.total || 0);
-            setHasMore(data?.hasMore || false);
+            setTotalCount(data?.pagination?.totalCount || data?.total || 0);
+            setHasMore(data?.pagination?.hasMore || false);
         } catch (err) {
             console.error('Failed to fetch transactions', err);
             toast.error('Failed to load transactions');

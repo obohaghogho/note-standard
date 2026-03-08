@@ -27,13 +27,22 @@ export const walletApi = {
   },
 
   // Get transaction history
-  async getTransactions(params?: { 
+  async getTransactions(params: { 
+    page?: number; 
     limit?: number; 
-    offset?: number; 
     currency?: string;
     status?: string;
     type?: string; 
-  }): Promise<{ transactions: Transaction[], total: number }> {
+  } = {}): Promise<{ 
+    transactions: Transaction[], 
+    total?: number, 
+    pagination?: { 
+        page: number, 
+        limit: number, 
+        totalCount: number, 
+        hasMore: boolean 
+    } 
+  }> {
     const response = await api.get('/wallet/transactions', { params });
     return response.data;
   },
