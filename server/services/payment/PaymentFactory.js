@@ -49,7 +49,7 @@ class PaymentFactory {
       return new PaystackProvider();
     }
 
-    if (["USD", "GBP", "EUR"].includes(currency)) {
+    if (["USD", "GBP", "EUR", "JPY"].includes(currency)) {
       return new FlutterwaveProvider();
     }
 

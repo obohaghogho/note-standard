@@ -39,12 +39,26 @@ async function createCardDeposit(
   }
 
   // 2. Check Provider/Test Mode Limits (Flutterwave test mode cap)
-  // EUR 4281 is approx $5000 USD. We use a safe margin.
-  const MAX_TRANSACTION = 4000;
-  if (amount > MAX_TRANSACTION) {
-    throw new Error(
-      `Transaction amount too high. Maximum per transaction is ${MAX_TRANSACTION} ${currency}.`,
-    );
+  // We use a safe margin of $5,000 USD equivalent.
+  const MAX_USD_EQUIVALENT = 5000;
+  try {
+    const amountInUsd = await fxService.getRate(currency, "USD") * amount;
+    if (amountInUsd > MAX_USD_EQUIVALENT) {
+      const maxInCurrency = Math.floor(
+        MAX_USD_EQUIVALENT / (await fxService.getRate(currency, "USD")),
+      );
+      throw new Error(
+        `Transaction amount too high. Maximum per transaction is approximately ${maxInCurrency} ${currency} ($${MAX_USD_EQUIVALENT} USD).`,
+      );
+    }
+  } catch (fxErr) {
+    // If FX fails, fallback to a VERY safe hardcoded cap for known currencies or just allow (failing safe)
+    if (currency === "JPY" && amount > 1000000) {
+      throw new Error("JPY amount too high for test mode");
+    }
+    if (currency === "EUR" && amount > 4000) {
+      throw new Error("EUR amount too high for test mode");
+    }
   }
 
   // Initialize payment through unified service
