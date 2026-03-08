@@ -42,8 +42,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 walletApi.getTransactions()
             ]);
 
-            setWallets(walletsData || []);
-            setTransactions(transactionsData?.transactions || []);
+            // Defensive checks: API might return { error: "..." } instead of array
+            setWallets(Array.isArray(walletsData) ? walletsData : []);
+            setTransactions(Array.isArray(transactionsData?.transactions) ? transactionsData.transactions : []);
         } catch (err) {
             console.error('Error fetching wallet data:', err);
             setError(err instanceof Error ? err.message : 'Failed to load wallet data');
@@ -104,7 +105,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                         const newTx = payload.new as any;
                         const oldTx = payload.old as any;
 
-                        if (oldTx.status === 'PENDING' && newTx.status === 'COMPLETED') {
+                        if (oldTx.status === 'PENDING' && (newTx.status === 'COMPLETED' || newTx.status === 'SUCCESSFUL')) {
                             toast.success(`${newTx.display_label || 'Transaction'} confirmed!`, { 
                                 duration: 5000,
                                 icon: '🟢',
@@ -186,7 +187,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     const getCommissionRate = async (type: string, currency: string) => {
-        return walletApi.getCommissionRate(type, currency);
+        return walletApi.getCommissionRate(type as any, currency);
     };
 
     return (

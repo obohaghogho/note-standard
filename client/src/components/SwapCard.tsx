@@ -62,7 +62,8 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         return () => clearInterval(intervalId);
     }, [preview]);
 
-    const fromWallet = wallets.find(w => w.currency === fromCurrency && w.network === fromNetwork);
+    const safeWallets = Array.isArray(wallets) ? wallets : [];
+    const fromWallet = safeWallets.find(w => w.currency === fromCurrency && w.network === fromNetwork);
     const availableBalance = fromWallet ? (fromWallet.available_balance ?? fromWallet.balance) : 0;
 
     // Auto-preview when amount changes
@@ -210,7 +211,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                             }}
                             className="bg-transparent text-xl font-bold text-white focus:outline-none cursor-pointer hover:text-purple-400 transition-colors"
                         >
-                             {wallets.map(w => (
+                             {safeWallets.map(w => (
                                  <option key={`${w.currency}_${w.network}`} value={`${w.currency}_${w.network}`} className="bg-gray-800 text-base">
                                      {w.currency} {w.network !== 'native' ? `(${w.network})` : ''}
                                  </option>
@@ -264,7 +265,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                             }}
                             className="bg-transparent text-xl font-bold text-white focus:outline-none cursor-pointer hover:text-purple-400 transition-colors"
                         >
-                             {wallets.filter(w => w.currency !== fromCurrency || w.network !== fromNetwork).map(w => (
+                             {safeWallets.filter(w => w.currency !== fromCurrency || w.network !== fromNetwork).map(w => (
                                  <option key={`${w.currency}_${w.network}`} value={`${w.currency}_${w.network}`} className="bg-gray-800 text-base">
                                      {w.currency} {w.network !== 'native' ? `(${w.network})` : ''}
                                  </option>
