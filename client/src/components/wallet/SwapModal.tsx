@@ -35,6 +35,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
         fee: number;
         feePercentage: number;
         amountOut: number;
+        lockId: string;
     } | null>(null);
 
     const fromWallet = wallets.find(w => w.currency === fromCurrency);
@@ -73,7 +74,8 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
                 rate: Number(result.rate ?? 0),
                 fee: Number(result.fee ?? 0),
                 feePercentage: Number(result.feePercentage ?? 0),
-                amountOut: Number(result.amountOut ?? 0)
+                amountOut: Number(result.amountOut ?? 0),
+                lockId: result.lockId
             });
         } catch (err) {
             console.error('Preview error:', err);
@@ -114,9 +116,14 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
 
         setLoading(true);
         try {
+            if (!preview?.lockId) {
+                toast.error('Quote information is missing. Please refresh.');
+                return;
+            }
+
             const idempotencyKey = `swap_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             const slippageDecimal = slippage / 100;
-            const result = await walletApi.executeSwap(fromCurrency, toCurrency, numericAmount, idempotencyKey, undefined, slippageDecimal);
+            const result = await walletApi.executeSwap(fromCurrency, toCurrency, numericAmount, idempotencyKey, preview.lockId, slippageDecimal);
             
             toast.success(
                 `Swapped ${formatCurrency(Number(result.amountIn ?? 0), result.fromCurrency)} → ${formatCurrency(Number(result.amountOut ?? 0), result.toCurrency)}`,
@@ -174,7 +181,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
                                     );
                                 })}
                             </select>
-                            <div className="flex-1 relative">
+                            <div className="flex-1 relative flex items-center">
                                 <label htmlFor="swap-amount-in" className="sr-only">Amount to swap</label>
                                 <input
                                     id="swap-amount-in"
@@ -183,16 +190,18 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
                                     value={amount}
                                     onChange={(e) => setAmount(e.target.value)}
                                     placeholder="0.00"
-                                    className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-right focus:border-purple-500 outline-none"
+                                    className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-right focus:border-purple-500 outline-none pr-12"
                                     autoComplete="off"
                                 />
-                                <button
-                                    onClick={handleMaxAmount}
-                                    className="absolute right-2 top-2 text-xs text-purple-400 hover:text-purple-300"
-                                    aria-label="Use maximum balance"
-                                >
-                                    MAX
-                                </button>
+                                <div className="absolute right-2 flex items-center">
+                                    <button
+                                        onClick={handleMaxAmount}
+                                        className="text-xs font-bold text-purple-400 hover:text-purple-300 bg-gray-700 px-1 rounded"
+                                        aria-label="Use maximum balance"
+                                    >
+                                        MAX
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

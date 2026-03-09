@@ -19,6 +19,11 @@ async function createCardDeposit(
   userPlan = "FREE",
   idempotencyKey = null,
 ) {
+  const upCurrency = currency.toUpperCase();
+  if (upCurrency === "BTC" || upCurrency === "ETH") {
+    throw new Error("BTC and ETH deposits are not supported via payment");
+  }
+
   // Fetch user profile for email
   const { data: profile } = await supabase
     .from("profiles")
@@ -89,6 +94,11 @@ async function createBankDeposit(
   userPlan = "FREE",
   idempotencyKey = null,
 ) {
+  const upCurrency = currency.toUpperCase();
+  if (upCurrency === "BTC" || upCurrency === "ETH") {
+    throw new Error("BTC and ETH deposits are not supported via bank transfer");
+  }
+
   // Fetch bank details from settings instead of hardcoding
   const allBankDetails =
     await commissionService.getSetting("bank_deposit_details") || {
@@ -165,6 +175,11 @@ async function initializeCryptoDeposit(
   userPlan = "FREE",
   idempotencyKey = null,
 ) {
+  const upCurrency = currency.toUpperCase();
+  if (upCurrency === "BTC" || upCurrency === "ETH") {
+    throw new Error("BTC and ETH deposits are not supported");
+  }
+
   console.log(
     `[DepositService] Initializing crypto deposit for user ${userId}, amount ${amount}`,
   );

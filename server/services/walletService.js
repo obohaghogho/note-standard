@@ -36,24 +36,88 @@ class WalletService {
    * Create or fetch a wallet
    */
   async createWallet(userId, currency, network = "native") {
+    const upCurrency = currency.toUpperCase();
+    const upNetwork = (network || "native").toUpperCase();
+
     const { data: existing } = await supabase
       .from("wallets_store")
       .select("*")
       .eq("user_id", userId)
-      .eq("currency", currency)
+      .eq("currency", upCurrency)
+      .eq("network", upNetwork)
       .maybeSingle();
 
-    if (existing) return existing;
+    if (existing) {
+      // If crypto wallet but address is still a UUID (mock), try to upgrade it
+      const isCrypto = ["BTC", "ETH", "USDT", "USDC"].includes(upCurrency);
+      const isMock = existing.address && existing.address.includes("-"); // UUIDs have dashes
+
+      if (isCrypto && isMock) {
+        try {
+          const nowpayments = require("./nowpaymentsService");
+          const real = await nowpayments.getOrCreateDepositAddress(
+            userId,
+            upCurrency,
+            upNetwork,
+            supabase,
+          );
+          return { ...existing, address: real.address };
+        } catch (e) {
+          logger.error("[WalletService] Failed to upgrade mock address", e);
+        }
+      }
+      return existing;
+    }
+
+    // New Wallet Creation
+    let address = uuidv4();
+    let provider = "internal";
+
+    const isCrypto = ["BTC", "ETH", "USDT", "USDC"].includes(upCurrency);
+    if (isCrypto) {
+      try {
+        const nowpayments = require("./nowpaymentsService");
+        const real = await nowpayments.getOrCreateDepositAddress(
+          userId,
+          upCurrency,
+          upNetwork,
+          supabase,
+        );
+        address = real.address;
+        provider = "nowpayments";
+      } catch (e) {
+        logger.error("[WalletService] Failed to get real crypto address", e);
+        // Fallback to UUID if NOWPayments fails (prevents breaking the app)
+      }
+    } else {
+      // Fiat/Internal - Use Email or ID
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("email, username")
+          .eq("id", userId)
+          .single();
+        if (profile) {
+          address = profile.email || profile.username || userId;
+        }
+      } catch (e) {
+        logger.error(
+          "[WalletService] Failed to fetch profile for fiat address",
+          e,
+        );
+      }
+    }
 
     const { data: wallet, error } = await supabase
       .from("wallets_store")
       .insert({
         user_id: userId,
-        currency: currency,
-        network: network,
+        currency: upCurrency,
+        network: upNetwork,
         balance: 0,
         available_balance: 0,
-        address: uuidv4(),
+        address: address,
+        provider: provider,
       })
       .select()
       .single();
