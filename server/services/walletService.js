@@ -37,13 +37,20 @@ class WalletService {
    */
   async createWallet(userId, currency, network = "native") {
     const upCurrency = currency.toUpperCase();
-    const upNetwork = (network || "native").toUpperCase();
+
+    // Normalize network casing: blockchain names are lowercase, layer names are uppercase
+    let normNetwork = (network || "native").toLowerCase();
+    if (["erc20", "trc20", "bep20", "polygon"].includes(normNetwork)) {
+      normNetwork = normNetwork.toUpperCase();
+    }
+    const upNetwork = normNetwork;
 
     const { data: existing } = await supabase
       .from("wallets_store")
       .select("*")
       .eq("user_id", userId)
       .eq("currency", upCurrency)
+      .eq("network", upNetwork)
       .maybeSingle();
 
     if (existing) {
@@ -56,6 +63,9 @@ class WalletService {
       if (isCrypto && (isMock || networkMismatch)) {
         try {
           const nowpayments = require("./nowpaymentsService");
+          logger.info(
+            `[WalletService] Upgrading mock address for ${upCurrency} (${upNetwork}) for user ${userId}`,
+          );
           const real = await nowpayments.getOrCreateDepositAddress(
             userId,
             upCurrency,
@@ -65,8 +75,8 @@ class WalletService {
           return { ...existing, address: real.address, network: upNetwork };
         } catch (e) {
           logger.error(
-            "[WalletService] Failed to upgrade mock/network address",
-            e,
+            `[WalletService] Failed to upgrade mock address for ${upCurrency}: ${e.message}`,
+            { stack: e.stack },
           );
         }
       }
@@ -134,6 +144,7 @@ class WalletService {
           .select("*")
           .eq("user_id", userId)
           .eq("currency", upCurrency)
+          .eq("network", upNetwork)
           .maybeSingle();
         if (retry) return retry;
       }

@@ -56,19 +56,36 @@ class Cache {
 
   /**
    * Helper to wrap async functions with caching
+   * Also implements Request Collapsing to prevent duplicate concurrent calls.
    * @param {string} key
    * @param {number} ttlSeconds
    * @param {Function} fn
    */
   async wrap(key, ttlSeconds, fn) {
+    // 1. Check for resolved cache
     const cached = this.get(key);
     if (cached !== null) return cached;
 
-    const result = await fn();
-    if (result !== null && result !== undefined) {
-      this.set(key, result, ttlSeconds);
+    // 2. Check for ongoing request (Request Collapsing)
+    const pendingKey = `pending_${key}`;
+    if (this.store.has(pendingKey)) {
+      return this.store.get(pendingKey);
     }
-    return result;
+
+    // 3. Trigger new request and track it
+    const promise = fn();
+    this.store.set(pendingKey, promise);
+
+    try {
+      const result = await promise;
+      if (result !== null && result !== undefined) {
+        this.set(key, result, ttlSeconds);
+      }
+      return result;
+    } finally {
+      // Always cleanup pending key
+      this.store.delete(pendingKey);
+    }
   }
 }
 

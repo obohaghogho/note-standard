@@ -1,0 +1,20 @@
+[
+  {
+    "user_id": "8677bd57-6fdf-46a3-b237-d8ec2e4ae7cd",
+    "currency": "ETH",
+    "network": "native",
+    "address": "21edd1a2-cf6d-456e-b7b5-561d42fa101c"
+  },
+  {
+    "user_id": "8677bd57-6fdf-46a3-b237-d8ec2e4ae7cd",
+    "currency": "BTC",
+    "network": "native",
+    "address": "3480a57f-5c1d-4dc6-a4cb-85c5ef80194f"
+  },
+  {
+    "user_id": "5089c266-1ad6-4a83-b23f-064d65995345",
+    "currency": "BTC",
+    "network": "native",
+    "address": "2c7a2ad0-65b1-4f4f-91e7-b285faea2fd6"
+  }
+]
