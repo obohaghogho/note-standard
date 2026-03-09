@@ -1,19 +1,37 @@
 const axios = require("axios");
-const env = require("../config/env");
 const logger = require("../utils/logger");
 
 class ExchangeRateProvider {
   constructor() {
-    this.apiKey = env.EXCHANGE_RATE_API_KEY;
-    this.baseUrl = `https://v6.exchangerate-api.com/v6/${this.apiKey}`;
+    this.baseUrl = "https://open.er-api.com/v6/latest";
   }
 
   async getFiatRate(from, to) {
-    if (!this.apiKey) throw new Error("ExchangeRate-API key missing");
-
     try {
-      const response = await axios.get(`${this.baseUrl}/pair/${from}/${to}`);
-      return response.data.conversion_rate;
+      const upFrom = from.toUpperCase();
+      const upTo = to.toUpperCase();
+      if (upFrom === upTo) return 1;
+
+      const apiKey = process.env.EXCHANGERATE_API_KEY;
+      const url = apiKey
+        ? `https://v6.exchangerate-api.com/v6/${apiKey}/latest/${upFrom}`
+        : `${this.baseUrl}/${upFrom}`;
+
+      const response = await axios.get(url, { timeout: 5000 });
+
+      if (
+        response.data && response.data.conversion_rates &&
+        response.data.conversion_rates[upTo]
+      ) {
+        return response.data.conversion_rates[upTo];
+      }
+
+      // Fallback for v4 style response (used by open.er-api.com)
+      if (response.data && response.data.rates && response.data.rates[upTo]) {
+        return response.data.rates[upTo];
+      }
+
+      throw new Error(`Rate for ${upTo} not found in response`);
     } catch (err) {
       logger.error(
         `[ExchangeRateProvider] Error for ${from}/${to}: ${err.message}`,

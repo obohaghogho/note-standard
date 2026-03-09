@@ -321,7 +321,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                             <label htmlFor="withdraw-amount" className="text-sm text-gray-400 font-medium">Amount</label>
                             <span className="text-xs text-gray-400">Available: {formatCurrency(availableBalance, selectedCurrency)}</span>
                         </div>
-                        <div className="relative">
+                        <div className="relative flex items-center">
                             <input 
                                 id="withdraw-amount"
                                 name="amount"
@@ -329,19 +329,22 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                                 step="any"
                                 value={amount}
                                 onChange={(e) => setAmount(e.target.value)}
-                                className="w-full bg-gray-800 border border-gray-700 rounded-xl p-3.5 text-white focus:border-orange-500 outline-none transition-all pr-16"
+                                className="w-full bg-gray-800 border border-gray-700 rounded-xl p-3.5 text-white focus:border-orange-500 outline-none transition-all pr-[100px]"
                                 placeholder="0.00"
                                 required
                                 autoComplete="off"
                             />
-                            <span className="absolute right-14 top-3.5 text-gray-400 font-bold">{selectedCurrency}</span>
-                            <button 
-                                type="button"
-                                onClick={handleMax}
-                                className="absolute right-3 top-3.5 text-xs font-bold text-orange-500 hover:text-orange-400"
-                            >
-                                MAX
-                            </button>
+                            <div className="absolute right-3 flex items-center gap-2">
+                                <span className="text-gray-400 font-bold text-sm bg-gray-800">{selectedCurrency}</span>
+                                <div className="h-4 w-px bg-gray-700"></div>
+                                <button 
+                                    type="button"
+                                    onClick={handleMax}
+                                    className="text-xs font-bold text-orange-500 hover:text-orange-400 bg-gray-800 px-1"
+                                >
+                                    MAX
+                                </button>
+                            </div>
                         </div>
                     </div>
 

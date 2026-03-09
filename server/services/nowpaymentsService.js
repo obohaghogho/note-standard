@@ -23,7 +23,7 @@ const nowpayments = axios.create({
     "Content-Type": "application/json",
   },
   httpsAgent: new https.Agent({ keepAlive: true }),
-  timeout: 30000,
+  timeout: 10000,
 });
 
 /**
@@ -171,7 +171,7 @@ exports.getOrCreateDepositAddress = async (
       payment_id: String(payment.payment_id),
       status: "active",
     }),
-    supabase.from("wallets").update({
+    supabase.from("wallets_store").update({
       address: payment.pay_address,
       provider: "nowpayments",
       provider_reference: String(payment.payment_id),

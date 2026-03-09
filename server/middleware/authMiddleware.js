@@ -73,6 +73,18 @@ const requireAuth = async (req, res, next) => {
     }
 
     req.user = data.user;
+
+    // Populate user profile for downstream use (plan, role, etc.)
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("id, role, status, plan, email, username")
+      .eq("id", data.user.id)
+      .single();
+
+    if (profile) {
+      req.userProfile = profile;
+    }
+
     next();
   } catch (err) {
     console.error("[Auth] Fatal Error:", err.message);

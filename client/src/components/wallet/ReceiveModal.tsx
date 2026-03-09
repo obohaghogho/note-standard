@@ -22,7 +22,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
     const [hdAddress, setHdAddress] = useState<string | null>(null);
     const [hdLoading, setHdLoading] = useState(false);
 
-    // Filter only crypto wallets for receiving (assuming fiat deposits are handled in FundModal)
+    const isCrypto = ['BTC', 'ETH', 'USDT', 'USDC'].includes(selectedCurrency);
     const currentWallet = wallets.find(w => w.currency === selectedCurrency && w.network === selectedNetwork);
     const displayAddress = hdAddress || currentWallet?.address || '';
 
@@ -30,28 +30,28 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
         if (isOpen) {
             setSelectedCurrency(initialCurrency);
             setSelectedNetwork(initialNetwork);
-            fetchCurrentHdAddress(initialCurrency, initialNetwork);
+            if (['BTC', 'ETH', 'USDT', 'USDC'].includes(initialCurrency)) {
+                fetchCurrentHdAddress(initialCurrency, initialNetwork);
+            } else {
+                setHdAddress(null);
+            }
         }
     }, [isOpen, initialCurrency, initialNetwork]);
 
     const fetchCurrentHdAddress = async (asset: string, network: string) => {
-        if (['BTC', 'ETH', 'USDT', 'USDC'].includes(asset)) {
-            try {
-                setHdLoading(true);
-                const result = await walletApi.getCurrentAddress(asset, network);
-                setHdAddress(result.address);
-            } catch (error) {
-                console.error('Failed to fetch HD address:', error);
-            } finally {
-                setHdLoading(false);
-            }
-        } else {
-            setHdAddress(null);
+        try {
+            setHdLoading(true);
+            const result = await walletApi.getCurrentAddress(asset, network);
+            setHdAddress(result.address);
+        } catch (error) {
+            console.error('Failed to fetch address:', error);
+        } finally {
+            setHdLoading(false);
         }
     };
 
     const handleGenerateNew = async () => {
-        if (!['BTC', 'ETH', 'USDT', 'USDC'].includes(selectedCurrency)) return;
+        if (!isCrypto) return;
         
         try {
             setHdLoading(true);
@@ -69,7 +69,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
         if (displayAddress) {
             navigator.clipboard.writeText(displayAddress);
             setCopied(true);
-            toast.success('Address copied to clipboard');
+            toast.success(`${isCrypto ? 'Address' : 'ID'} copied to clipboard`);
             setTimeout(() => setCopied(false), 2000);
         }
     };
@@ -79,7 +79,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
             try {
                 await navigator.share({
                     title: `Receive ${selectedCurrency}`,
-                    text: `My ${selectedCurrency} address: ${displayAddress}`,
+                    text: `My ${selectedCurrency} ${isCrypto ? 'address' : 'ID'}: ${displayAddress}`,
                 });
             } catch (err) {
                 console.error('Share failed:', err);
@@ -93,7 +93,11 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
     const handleCurrencyChange = async (currency: string, network: string) => {
         setSelectedCurrency(currency);
         setSelectedNetwork(network);
-        fetchCurrentHdAddress(currency, network);
+        if (['BTC', 'ETH', 'USDT', 'USDC'].includes(currency)) {
+            fetchCurrentHdAddress(currency, network);
+        } else {
+            setHdAddress(null);
+        }
         const exists = wallets.find(w => w.currency === currency && w.network === network);
         if (!exists) {
             try {
@@ -128,7 +132,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
                 <div className="modal-body">
                     {/* Currency Selector */}
                     <div className="flex gap-2 overflow-x-auto pb-4 mb-2 scrollbar-hide">
-                        {wallets.filter(w => ['BTC', 'ETH', 'USDT', 'USDC'].includes(w.currency)).map(w => (
+                        {wallets.map(w => (
                             <button
                                 key={`${w.currency}_${w.network}`}
                                 onClick={() => handleCurrencyChange(w.currency, w.network)}
@@ -172,9 +176,9 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
                                 <div className="space-y-2">
                                     <div className="flex justify-between items-end ml-1">
                                         <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Your {selectedCurrency} {selectedNetwork !== 'native' ? `(${selectedNetwork})` : ''} Address
+                                            {isCrypto ? `Your ${selectedCurrency} Address` : `Your Email / User ID (${selectedCurrency})`}
                                         </label>
-                                        {['BTC', 'ETH', 'USDT', 'USDC'].includes(selectedCurrency) && (
+                                        {isCrypto && (
                                             <button 
                                                 onClick={handleGenerateNew}
                                                 disabled={hdLoading}
@@ -219,9 +223,14 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
                                 <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-4 flex gap-3 text-orange-200/90 text-sm">
                                     <AlertTriangle size={20} className="shrink-0 text-orange-500" />
                                     <div>
-                                        <p className="font-bold text-orange-400 mb-1">Send only {selectedCurrency} to this address.</p>
+                                        <p className="font-bold text-orange-400 mb-1">
+                                            {isCrypto ? `Send only ${selectedCurrency} to this address.` : `Receive ${selectedCurrency} via Internal Transfer.`}
+                                        </p>
                                         <p className="text-xs opacity-80 leading-relaxed">
-                                            Sending any other asset to this address may result in the permanent loss of your funds. Ensure you are on the correct network.
+                                            {isCrypto 
+                                                ? `Sending any other asset to this address may result in the permanent loss of your funds. Ensure you are on the correct network.`
+                                                : `Provide your Email or User ID above to the sender. This ${selectedCurrency} will be credited to your account instantly once sent internally.`
+                                            }
                                         </p>
                                     </div>
                                 </div>

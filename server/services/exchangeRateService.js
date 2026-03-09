@@ -5,24 +5,18 @@ const env = require("../config/env");
 const CACHE_TIME = 5 * 60; // 5 minutes in seconds
 
 /**
- * Fetch fiat exchange rates using ExchangeRate-API
+ * Fetch fiat exchange rates using ExchangeRate-API Open Access
  * Always fetches latest rates relative to USD (Global Base Model)
  */
 async function getFiatRates() {
   return cacheUtil.wrap("fiat_exchange_rates", CACHE_TIME, async () => {
     try {
-      console.log("ExchangeRate key:", env.EXCHANGE_RATE_API_KEY);
-      const API_KEY = env.EXCHANGE_RATE_API_KEY;
-      if (!API_KEY) {
-        throw new Error("EXCHANGE_RATE_API_KEY is not defined");
-      }
-
       const response = await axios.get(
-        `https://v6.exchangerate-api.com/v6/${API_KEY}/latest/USD`,
+        `https://open.er-api.com/v6/latest/USD`,
       );
 
-      if (response.data && response.data.conversion_rates) {
-        return response.data.conversion_rates;
+      if (response.data && response.data.rates) {
+        return response.data.rates;
       }
 
       throw new Error("Invalid response format from ExchangeRate-API");

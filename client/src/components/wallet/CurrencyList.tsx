@@ -98,19 +98,46 @@ export const CurrencyList: React.FC<CurrencyListProps> = ({
                             )}
                         </div>
                         
-                        <div className="mt-4">
-                            <p className="text-lg sm:text-xl font-bold text-white tracking-tight truncate">
-                                {showBalances ? formatCurrency(wallet.balance, wallet.currency) : '••••••••'}
-                            </p>
-                            {hasLocked && (
-                                <p className="text-[10px] text-amber-300/80 mt-0.5 font-medium">
-                                    {showBalances ? `Available: ${formatCurrency(availableBalance, wallet.currency)}` : 'Available: ••••'}
+                        <div className="mt-4 space-y-2">
+                            <div>
+                                <p className="text-lg sm:text-xl font-bold text-white tracking-tight truncate">
+                                    {showBalances ? formatCurrency(wallet.balance, wallet.currency) : '••••••••'}
                                 </p>
-                            )}
-                            {wallet.currency !== 'USD' && (
-                                <p className="text-xs text-white/50 mt-1.5">
-                                    ≈ {showBalances ? formatCurrency(usdValue, 'USD') : '••••'}
-                                </p>
+                                {hasLocked && (
+                                    <p className="text-[10px] text-amber-300/80 mt-0.5 font-medium">
+                                        {showBalances ? `Available: ${formatCurrency(availableBalance, wallet.currency)}` : 'Available: ••••'}
+                                    </p>
+                                )}
+                                {wallet.currency !== 'USD' && (
+                                    <p className="text-xs text-white/50 mt-1">
+                                        ≈ {showBalances ? formatCurrency(usdValue, 'USD') : '••••'}
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* Wallet Address for Crypto */}
+                            {['BTC', 'ETH', 'USDT', 'USDC'].some(c => wallet.currency.startsWith(c)) && wallet.address && (
+                                <div className="pt-2 border-t border-white/5 mt-2">
+                                    <div className="flex items-center justify-between gap-2 bg-black/20 p-2 rounded-lg group/addr transition-colors hover:bg-black/30">
+                                        <p className="text-[10px] font-mono text-white/40 truncate select-all" title={wallet.address}>
+                                            {wallet.address.length > 12 
+                                                ? `${wallet.address.substring(0, 6)}...${wallet.address.substring(wallet.address.length - 4)}`
+                                                : wallet.address
+                                            }
+                                        </p>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                navigator.clipboard.writeText(wallet.address);
+                                                alert(`${wallet.currency} address copied!`);
+                                            }}
+                                            className="text-[10px] text-white/20 hover:text-white/60 transition-colors"
+                                            title="Copy Full Address"
+                                        >
+                                            Copy
+                                        </button>
+                                    </div>
+                                </div>
                             )}
                         </div>
                     </motion.div>

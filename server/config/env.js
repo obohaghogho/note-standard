@@ -16,8 +16,6 @@ module.exports = {
   CLOUDINARY_URL: process.env.CLOUDINARY_URL,
   CLIENT_URL: process.env.CLIENT_URL || "http://localhost:3000",
   CG_API_KEY: process.env.CG_API_KEY,
-  EXCHANGE_RATE_API_KEY: process.env.EXCHANGERATE_API_KEY ||
-    process.env.EXCHANGE_RATE_API_KEY,
   FLUTTERWAVE_SECRET_KEY: process.env.FLUTTERWAVE_SECRET_KEY,
   RECAPTCHA_SECRET_KEY: process.env.RECAPTCHA_SECRET_KEY,
 

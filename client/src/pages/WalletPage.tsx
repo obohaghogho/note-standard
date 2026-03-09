@@ -242,6 +242,11 @@ export const WalletPage: React.FC = () => {
                             onSwap={() => handleAction('swap')}
                             onWithdraw={() => handleAction('withdraw')}
                             onDeposit={() => handleAction('fund')}
+                            disabledActions={
+                                ['BTC', 'ETH', 'USDT', 'USDC'].some(c => selectedAsset.currency?.startsWith(c)) 
+                                ? ['Deposit'] 
+                                : []
+                            }
                         />
                          
                          {/* Wallet List (Breakdown) */}
