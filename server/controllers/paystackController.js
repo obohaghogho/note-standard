@@ -157,7 +157,7 @@ async function handleWalletFunding(
 
   // Fetch or Init Wallet
   let { data: wallet } = await supabase
-    .from("wallets")
+    .from("wallets_store")
     .select("*")
     .eq("user_id", userId)
     .eq("currency", currency)
@@ -172,9 +172,9 @@ async function handleWalletFunding(
     wallet = newWallet;
   }
 
-  // Update Balance
+  // Update Balance - Targeting wallets_store directly to bypass broken view trigger
   const { error: updateError } = await supabase
-    .from("wallets")
+    .from("wallets_store")
     .update({
       balance: wallet.balance + amount,
       available_balance: wallet.available_balance + amount,
@@ -184,18 +184,33 @@ async function handleWalletFunding(
 
   if (updateError) throw updateError;
 
-  // Record Transaction
-  await supabase.from("transactions").insert({
-    wallet_id: wallet.id,
-    type: "Digital Assets Purchase",
-    display_label: "Digital Assets Purchase",
-    amount: amount,
-    currency: currency,
-    status: "COMPLETED",
-    reference_id: uuidv4(),
-    external_hash: reference,
-    metadata: { ...metadata, provider: "paystack" },
-  });
+  // Record Transaction & Ledger
+  const { data: tx, error: txError } = await supabase.from("transactions")
+    .insert({
+      user_id: userId,
+      wallet_id: wallet.id,
+      type: "deposit",
+      display_label: "Digital Assets Purchase",
+      amount: amount,
+      currency: currency,
+      status: "COMPLETED",
+      reference_id: uuidv4(),
+      external_hash: reference,
+      metadata: { ...metadata, provider: "paystack" },
+      completed_at: new Date().toISOString(),
+    }).select().single();
+
+  if (!txError && tx) {
+    await supabase.from("ledger_entries").insert({
+      user_id: userId,
+      wallet_id: wallet.id,
+      currency: currency,
+      amount: amount,
+      type: "deposit",
+      reference: tx.id,
+      status: "confirmed",
+    });
+  }
 
   // Notify user
   try {
@@ -247,7 +262,7 @@ async function handleAdPayment(
 
   // Record against a wallet for consistency
   let { data: wallet } = await supabase
-    .from("wallets")
+    .from("wallets_store")
     .select("id")
     .eq("user_id", userId)
     .eq("currency", currency)

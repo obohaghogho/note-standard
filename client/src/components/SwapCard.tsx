@@ -64,7 +64,11 @@ export const SwapCard: React.FC<SwapCardProps> = ({
 
     const safeWallets = Array.isArray(wallets) ? wallets : [];
     const fromWallet = safeWallets.find(w => w.currency === fromCurrency && w.network === fromNetwork);
-    const availableBalance = fromWallet ? (fromWallet.available_balance ?? fromWallet.balance) : 0;
+    // Robust balance check: detect desync (available=0 but balance>0)
+    const availableBalance = fromWallet 
+        ? (fromWallet.available_balance > 0 ? fromWallet.available_balance : fromWallet.balance) 
+        : 0;
+    const isDesynced = fromWallet && (fromWallet.available_balance === 0 || fromWallet.available_balance === "0") && Number(fromWallet.balance) > 0;
 
     // Auto-correct invalid default selections to match real wallets
     useEffect(() => {
@@ -147,7 +151,9 @@ export const SwapCard: React.FC<SwapCardProps> = ({
 
     const handleMaxAmount = () => {
         const balance = Number(availableBalance || 0);
-        setAmount(balance.toFixed(8).replace(/\.?0+$/, '')); // Precise but clean
+        // Floor to 8 decimals to avoid rounding up and triggering insufficiency
+        const floored = Math.floor(balance * 100000000) / 100000000;
+        setAmount(floored.toString());
     };
 
     const handleExecuteSwap = async () => {
@@ -226,8 +232,13 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                 <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 transition-colors focus-within:border-purple-500/50">
                     <div className="flex justify-between items-center mb-2">
                         <label htmlFor="swap-card-from-currency" className="text-xs text-gray-400 font-medium uppercase tracking-wider">From</label>
-                        <span className="text-xs text-gray-400">
+                        <span className={`text-xs font-medium ${isDesynced ? 'text-amber-400' : 'text-gray-400'}`}>
                             Balance: {formatCurrency(Number(availableBalance || 0), fromCurrency)}
+                            {isDesynced && (
+                                <span className="ml-1 inline-flex items-center" title="Balance synchronization in progress">
+                                    <Info size={10} className="animate-pulse" />
+                                </span>
+                            )}
                         </span>
                     </div>
                     <div className="flex gap-3 items-center">

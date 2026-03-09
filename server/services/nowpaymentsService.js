@@ -85,25 +85,33 @@ exports.getOrCreateDepositAddress = async (
 
   const payCurrencyMap = {
     BTC_BITCOIN: "btc",
+    BTC_NATIVE: "btc",
     ETH_ETHEREUM: "eth",
+    ETH_NATIVE: "eth",
     USDT_ERC20: "usdterc20",
     USDT_TRC20: "usdttrc20",
     USDT_BEP20: "usdtbsc",
+    USDT_NATIVE: "usdttrc20", // Default to TRC20 for native
     USDC_ERC20: "usdcerc20",
     USDC_POLYGON: "usdcmatictoken",
+    USDC_NATIVE: "usdcerc20", // Default to ERC20 for native
   };
 
-  // Construct lookup key. If network is provided, use it; else fallback to legacy mapping if any.
-  // The migration 090 handles legacy data, so we expect split fields here.
-  let lookupKey = `${upAsset}_${upNetwork}`;
+  // Construct lookup key.
+  // We now handle NATIVE specifically in the map, so we just normalize it.
+  const networkKey = upNetwork === "NATIVE" || !network
+    ? (upAsset === "BTC"
+      ? "BITCOIN"
+      : upAsset === "ETH"
+      ? "ETHEREUM"
+      : upAsset === "USDT"
+      ? "TRC20"
+      : upAsset === "USDC"
+      ? "ERC20"
+      : upNetwork)
+    : upNetwork;
 
-  // Minimal fallbacks for common missing network inputs
-  if (!network) {
-    if (upAsset === "BTC") lookupKey = "BTC_BITCOIN";
-    else if (upAsset === "ETH") lookupKey = "ETH_ETHEREUM";
-    else if (upAsset === "USDT") lookupKey = "USDT_TRC20"; // Default to TRC20 if unspecified
-    else if (upAsset === "USDC") lookupKey = "USDC_ERC20"; // Default to ERC20 if unspecified
-  }
+  const lookupKey = `${upAsset}_${networkKey}`;
 
   const payCurrency = payCurrencyMap[lookupKey];
   if (!payCurrency) {
@@ -141,7 +149,7 @@ exports.getOrCreateDepositAddress = async (
     `${process.env.SERVER_URL}/api/webhooks/nowpayments`;
 
   const payment = await exports.createNowPaymentsPayment({
-    amount: 1,
+    amount: 100,
     currency: "usd",
     payCurrency,
     orderId,
