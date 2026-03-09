@@ -1,7 +1,6 @@
 const supabase = require("../config/database");
 const fxService = require("./fxService");
 const feeService = require("./feeService");
-const nowpaymentsProvider = require("../providers/nowpaymentsProvider");
 const logger = require("../utils/logger");
 
 /**
@@ -34,7 +33,7 @@ class SwapService {
         to_currency: toCurrency,
         rate: marketPrice,
         fee: fees.totalFee,
-        expires_at: new Date(Date.now() + 30000).toISOString(),
+        expires_at: new Date(Date.now() + 120000).toISOString(),
         metadata: {
           fee_breakdown: fees,
           calculated_at: new Date().toISOString(),
@@ -43,7 +42,13 @@ class SwapService {
       .select().single();
 
     if (error) throw error;
-    return { ...quote, lockId: quote.id };
+    return {
+      ...quote,
+      lockId: quote.id,
+      expiresAt: new Date(quote.expires_at).getTime(),
+      feePercentage: (fees.totalFee / amount) * 100,
+      amountOut: amountOut,
+    };
   }
 
   /**
@@ -61,63 +66,43 @@ class SwapService {
       throw new Error("Quote expired or invalid.");
     }
 
-    // Determine if Internal (Native to Native) or External (Cross-asset)
-    const isInternal =
-      (quote.from_currency === "USD" || quote.from_currency === "NGN") &&
-      (quote.to_currency === "USD" || quote.to_currency === "NGN");
-
-    if (isInternal) {
-      const env = require("../config/env");
-      const { data: txId, error: txError } = await supabase.rpc(
-        "execute_production_swap",
-        {
-          p_quote_id: lockId,
-          p_idempotency_key: idempotencyKey,
-          p_admin_rate: env.ADMIN_FEE_RATE,
-          p_partner_rate: env.PARTNER_FEE_RATE,
-          p_referrer_rate: env.REFERRAL_FEE_RATE,
-        },
-      );
-
-      if (txError) throw txError;
-      return { success: true, transactionId: txId, amountOut: quote.to_amount };
-    }
-
-    // External Conversion Flow
-    const internalReference = `swp_${Date.now()}_${userId.substring(0, 8)}`;
-    const conversionResult = await nowpaymentsProvider.createConversion(
-      quote.from_currency,
-      quote.to_currency,
-      quote.metadata.fee_breakdown.netAmount,
-      internalReference,
-    );
-
+    // All swaps use the atomic production swap RPC.
+    // This is the standard approach used by Coinbase, Remitano, etc.:
+    // The platform holds all balances internally, so swaps are instant
+    // ledger transfers — debit source wallet, credit destination wallet,
+    // distribute fees — all in a single atomic database transaction.
+    const env = require("../config/env");
     const { data: txId, error: txError } = await supabase.rpc(
-      "initiate_external_swap_intent",
+      "execute_production_swap",
       {
-        p_from_wallet_id: quote.from_wallet_id,
-        p_to_wallet_id: quote.to_wallet_id,
-        p_gross_amount: quote.from_amount,
-        p_fee_amount: quote.fee,
         p_quote_id: lockId,
-        p_reference: internalReference,
-        p_external_conversion_id: String(conversionResult.conversionId),
-        p_provider: conversionResult.provider,
+        p_idempotency_key: idempotencyKey,
+        p_admin_rate: env.ADMIN_FEE_RATE,
+        p_partner_rate: env.PARTNER_FEE_RATE,
+        p_referrer_rate: env.REFERRAL_FEE_RATE,
       },
     );
 
-    if (txError) throw txError;
+    if (txError) {
+      logger.error(`[SwapService] RPC error: ${txError.message}`, {
+        hint: txError.hint,
+        details: txError.details,
+        code: txError.code,
+        quoteId: lockId,
+      });
+      throw txError;
+    }
 
-    // Record Fee Audit
-    const fb = quote.metadata.fee_breakdown;
-    await supabase.from("fees").insert({
-      transaction_id: txId,
-      admin_fee: fb.adminFee,
-      partner_fee: fb.partnerAward,
-      referral_fee: fb.referrerFee,
-    });
-
-    return { success: true, transactionId: txId, amountOut: quote.to_amount };
+    return {
+      success: true,
+      transactionId: txId,
+      fromCurrency: quote.from_currency,
+      toCurrency: quote.to_currency,
+      amountIn: quote.from_amount,
+      amountOut: quote.to_amount,
+      fee: quote.fee,
+      rate: quote.rate,
+    };
   }
 }
 

@@ -39,6 +39,11 @@ exports.execute = async (req, res) => {
     );
     res.json(result);
   } catch (err) {
+    console.error(
+      "[SwapController] Execute error:",
+      err.message,
+      err.details || err.hint || "",
+    );
     res.status(500).json({ error: err.message });
   }
 };

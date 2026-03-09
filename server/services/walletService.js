@@ -12,7 +12,7 @@ class WalletService {
    */
   async getWallets(userId) {
     const { data: wallets, error } = await supabase
-      .from("wallets")
+      .from("wallets_store")
       .select("*")
       .eq("user_id", userId);
 
@@ -219,9 +219,10 @@ class WalletService {
 
     // Resolve recipient
     if (!targetUserId && recipientAddress) {
-      const { data: targetWallet } = await supabase.from("wallets").select(
-        "user_id",
-      )
+      const { data: targetWallet } = await supabase.from("wallets_store")
+        .select(
+          "user_id",
+        )
         .eq("address", recipientAddress).eq("currency", currency).eq(
           "network",
           network,
@@ -251,7 +252,7 @@ class WalletService {
       throw new Error("Could not resolve recipient");
     }
 
-    const { data: senderWallet } = await supabase.from("wallets").select(
+    const { data: senderWallet } = await supabase.from("wallets_store").select(
       "id, balance",
     )
       .eq("user_id", userId).eq("currency", currency).eq("network", network)
