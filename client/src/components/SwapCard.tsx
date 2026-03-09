@@ -66,6 +66,37 @@ export const SwapCard: React.FC<SwapCardProps> = ({
     const fromWallet = safeWallets.find(w => w.currency === fromCurrency && w.network === fromNetwork);
     const availableBalance = fromWallet ? (fromWallet.available_balance ?? fromWallet.balance) : 0;
 
+    // Auto-correct invalid default selections to match real wallets
+    useEffect(() => {
+        if (safeWallets.length > 0) {
+            const validFrom = safeWallets.some(w => w.currency === fromCurrency && w.network === fromNetwork);
+            if (!validFrom) {
+                const matchFromCurr = safeWallets.find(w => w.currency === fromCurrency);
+                if (matchFromCurr) {
+                    setFromNetwork(matchFromCurr.network);
+                } else {
+                    setFromCurrency(safeWallets[0].currency);
+                    setFromNetwork(safeWallets[0].network);
+                }
+            }
+            
+            const validTo = safeWallets.some(w => w.currency === toCurrency && w.network === toNetwork);
+            if (!validTo) {
+                const possibleTos = safeWallets.filter(w => w.currency !== (validFrom ? fromCurrency : safeWallets[0]?.currency) || w.network !== (validFrom ? fromNetwork : safeWallets[0]?.network));
+                if (possibleTos.length > 0) {
+                    const matchToCurr = possibleTos.find(w => w.currency === toCurrency);
+                    if (matchToCurr) {
+                        setToNetwork(matchToCurr.network);
+                    } else {
+                        setToCurrency(possibleTos[0].currency);
+                        setToNetwork(possibleTos[0].network);
+                    }
+                }
+            }
+        }
+    }, [wallets, fromCurrency, fromNetwork, toCurrency, toNetwork]);
+
+
     // Auto-preview when amount changes
     useEffect(() => {
         const timeoutId = setTimeout(() => {

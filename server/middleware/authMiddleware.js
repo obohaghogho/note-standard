@@ -4,27 +4,39 @@ const supabase = require("../config/database");
  * Helper to fetch user with retry logic for Supabase Auth
  * Mitigates transient network/service availability issues
  */
-const getUserWithRetry = async (token, maxAttempts = 3) => {
+const getUserWithRetry = async (token, maxAttempts = 4) => {
   let lastError = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const { data, error } = await supabase.auth.getUser(token);
 
-      // If we got a response (even if it's "Invalid token"), return it
-      // We only retry on actual exceptions/service failures
-      if (!error || error.status !== 500) {
+      // Return immediately for valid auth responses (success or auth errors like "Invalid token")
+      // Only retry on service-level failures (status 500 or status 0 = network failure)
+      if (!error) {
         return { data, error };
       }
 
+      // Auth-level errors (401, 403, invalid token) are not retryable
+      if (error.status && error.status !== 500 && error.status !== 0) {
+        return { data, error };
+      }
+
+      // Service/network failure — retry
       lastError = error;
+      console.warn(
+        `[Auth] Attempt ${attempt}/${maxAttempts} failed (status=${error.status}): ${error.message}`,
+      );
     } catch (err) {
       lastError = err;
+      console.warn(
+        `[Auth] Attempt ${attempt}/${maxAttempts} threw: ${err.message}`,
+      );
     }
 
-    // Wait before next attempt (exponential backoff: 500ms, 1000ms...)
+    // Wait before next attempt (exponential backoff: 800ms, 1600ms, 3200ms)
     if (attempt < maxAttempts) {
-      const delay = Math.pow(2, attempt - 1) * 500;
+      const delay = Math.pow(2, attempt - 1) * 800;
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
@@ -50,7 +62,10 @@ const requireAuth = async (req, res, next) => {
       if (error.status === 401 || error.message?.includes("invalid")) {
         return res.status(401).json({ error: "Invalid token" });
       }
-      return res.status(500).json({ error: "Auth service unavailable" });
+      // Network/service failure — return 503 (retryable) not 500
+      return res.status(503).json({
+        error: "Auth service temporarily unavailable. Please retry.",
+      });
     }
 
     if (!data?.user) {
