@@ -7,6 +7,12 @@ const NOWPAYMENTS_API_KEY = process.env.NOWPAYMENTS_API_KEY;
 const NOWPAYMENTS_API_URL = process.env.NOWPAYMENTS_API_URL ||
   "https://api.nowpayments.io/v1";
 
+// Default timeout for API calls (15 seconds)
+const API_TIMEOUT = 15000;
+const api = axios.create({
+  timeout: API_TIMEOUT,
+});
+
 class PayoutService {
   /**
    * Initiate a fiat payout via Flutterwave
@@ -25,7 +31,7 @@ class PayoutService {
     }
 
     try {
-      const response = await axios.post(
+      const response = await api.post(
         "https://api.flutterwave.com/v3/transfers",
         {
           account_bank: bankCode,
@@ -99,7 +105,7 @@ class PayoutService {
 
     try {
       // Step 1: Request withdrawal
-      const response = await axios.post(
+      const response = await api.post(
         `${NOWPAYMENTS_API_URL}/payout`,
         {
           withdrawals: [
@@ -180,7 +186,7 @@ class PayoutService {
     try {
       // REQUIREMENT: Facilitate conversion via NOWPayments
       // In License-Light, we use the Exchange API to swap funds
-      const response = await axios.post(
+      const response = await api.post(
         `${NOWPAYMENTS_API_URL}/exchange`,
         {
           from_currency: fromTicker,

@@ -49,7 +49,7 @@ export const walletApi = {
 
   // Get commission rates
   async getCommissionRate(type: 'swap' | 'withdrawal' | 'deposit', currency: string): Promise<CommissionSettings[]> {
-    const response = await api.get('/admin/commissions', { 
+    const response = await api.get('/wallet/commissions', { 
         params: { type, currency } 
     });
     return response.data.commissions;

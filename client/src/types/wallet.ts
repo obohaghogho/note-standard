@@ -60,13 +60,13 @@ export interface Transaction {
 }
 
 export interface InternalTransferRequest {
-    recipientEmail?: string;
-    recipientId?: string;
-    recipientAddress?: string;
+    currency: string;
     amount: number;
-    currency: Currency;
-    network?: string;
+    recipientEmail?: string;
+    recipientAddress?: string;
+    recipientId?: string;
     idempotencyKey?: string;
+    captchaToken?: string;
 }
 
 export interface WithdrawalRequest {
@@ -81,6 +81,7 @@ export interface WithdrawalRequest {
     country?: string;
     network?: string;
     idempotencyKey?: string;
+    captchaToken?: string;
 }
 
 export interface CommissionSettings {

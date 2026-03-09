@@ -6,6 +6,7 @@ import { formatCurrency } from '../../lib/CurrencyFormatter';
 import type { Currency } from '@/types/wallet';
 import { POPULAR_BANKS, COUNTRIES } from '../../lib/bankList';
 import { motion, AnimatePresence } from 'framer-motion';
+import ReCAPTCHA from 'react-google-recaptcha';
 
 interface WithdrawModalProps {
     isOpen: boolean;
@@ -35,6 +36,8 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
     const [accountNumber, setAccountNumber] = useState('');
     const [accountName, setAccountName] = useState('');
     const [showBankList, setShowBankList] = useState(false);
+    const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+    const recaptchaRef = React.useRef<ReCAPTCHA>(null);
 
     const isFiat = selectedCurrency === 'USD' || selectedCurrency === 'NGN' || selectedCurrency === 'EUR' || selectedCurrency === 'GBP';
 
@@ -93,6 +96,11 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
 
         if (parseFloat(amount) > availableBalance) return;
 
+        // reCAPTCHA check
+        if (!captchaToken && import.meta.env.PROD) {
+            return;
+        }
+
         setIsWithdrawing(true);
         try {
             await withdraw({
@@ -104,12 +112,14 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                 account_number: isFiat ? accountNumber : undefined,
                 account_name: isFiat ? accountName : undefined,
                 country: isFiat ? selectedCountry : undefined,
-                network: isFiat ? undefined : selectedNetwork
+                network: isFiat ? undefined : selectedNetwork,
+                captchaToken: captchaToken || undefined
             });
             onSuccess();
             onClose();
         } catch (err) {
-            // Error handled in context
+            setCaptchaToken(null);
+            recaptchaRef.current?.reset();
         } finally {
             setIsWithdrawing(false);
         }
@@ -367,6 +377,16 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                             </motion.div>
                         )}
                     </AnimatePresence>
+
+                    {/* reCAPTCHA for Financial Security */}
+                    <div className="flex justify-center p-2 bg-gray-800/30 rounded-xl border border-gray-800">
+                        <ReCAPTCHA
+                            ref={recaptchaRef}
+                            sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI'}
+                            onChange={(token) => setCaptchaToken(token)}
+                            theme="dark"
+                        />
+                    </div>
 
                     <div className="flex gap-3 justify-end mt-2">
                         <Button variant="ghost" onClick={onClose} type="button">
