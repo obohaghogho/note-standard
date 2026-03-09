@@ -156,7 +156,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
     };
 
-    const sendFunds = async (data: InternalTransferRequest) => {
+    const sendFunds = async (data: InternalTransferRequest & { captchaToken?: string }) => {
         try {
             // Generate idempotency key if not provided
             const idempotencyKey = data.idempotencyKey || `transfer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;

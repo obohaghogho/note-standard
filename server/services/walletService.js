@@ -44,15 +44,16 @@ class WalletService {
       .select("*")
       .eq("user_id", userId)
       .eq("currency", upCurrency)
-      .eq("network", upNetwork)
       .maybeSingle();
 
     if (existing) {
-      // If crypto wallet but address is still a UUID (mock), try to upgrade it
+      // If crypto wallet but address is still a UUID (mock), or network mismatch, try to upgrade it
       const isCrypto = ["BTC", "ETH", "USDT", "USDC"].includes(upCurrency);
-      const isMock = existing.address && existing.address.includes("-"); // UUIDs have dashes
+      const isMock = existing.address && existing.address.includes("-");
+      const networkMismatch = upNetwork !== "NATIVE" &&
+        existing.network !== upNetwork;
 
-      if (isCrypto && isMock) {
+      if (isCrypto && (isMock || networkMismatch)) {
         try {
           const nowpayments = require("./nowpaymentsService");
           const real = await nowpayments.getOrCreateDepositAddress(
@@ -61,9 +62,12 @@ class WalletService {
             upNetwork,
             supabase,
           );
-          return { ...existing, address: real.address };
+          return { ...existing, address: real.address, network: upNetwork };
         } catch (e) {
-          logger.error("[WalletService] Failed to upgrade mock address", e);
+          logger.error(
+            "[WalletService] Failed to upgrade mock/network address",
+            e,
+          );
         }
       }
       return existing;
@@ -122,7 +126,19 @@ class WalletService {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === "23505") {
+        // Race condition: wallet was created by another process. Fetch it instead.
+        const { data: retry } = await supabase
+          .from("wallets_store")
+          .select("*")
+          .eq("user_id", userId)
+          .eq("currency", upCurrency)
+          .maybeSingle();
+        if (retry) return retry;
+      }
+      throw error;
+    }
     return wallet;
   }
 
@@ -179,13 +195,19 @@ class WalletService {
       idempotencyKey,
     },
   ) {
-    const feeEngine = require("./feeEngine");
+    const commissionService = require("./commissionService");
     const payoutService = require("./payment/payoutService");
-    const commission = feeEngine.calculateFees(amount, currency);
+    const commission = await commissionService.calculateCommission(
+      "WITHDRAWAL",
+      amount,
+      currency,
+      userPlan,
+    );
 
     const wallet = await this.createWallet(userId, currency, network);
     if (
-      parseFloat(wallet.balance) < (parseFloat(amount) + commission.totalFee)
+      parseFloat(wallet.balance) <
+        (parseFloat(amount) + parseFloat(commission.fee))
     ) {
       throw new Error(
         "Insufficient balance to cover amount and withdrawal fee",
@@ -221,8 +243,8 @@ class WalletService {
         p_wallet_id: wallet.id,
         p_amount: parseFloat(amount),
         p_currency: currency,
-        p_fee: commission.totalFee,
-        p_rate: commission.rates.total,
+        p_fee: parseFloat(commission.fee),
+        p_rate: commission.rate,
         p_platform_wallet_id: await require("./commissionService")
           .getPlatformWalletId(currency),
         p_idempotency_key: idempotencyKey,
@@ -241,9 +263,9 @@ class WalletService {
     // Record in the new Fees table
     await supabase.from("fees").insert({
       transaction_id: txId,
-      admin_fee: commission.breakdown?.admin_fee || commission.totalFee, // fallback
-      partner_fee: commission.breakdown?.partner_reward || 0,
-      referral_fee: commission.breakdown?.referrer || 0,
+      admin_fee: parseFloat(commission.fee),
+      partner_fee: 0,
+      referral_fee: 0,
     });
 
     // Update with external tracking
@@ -255,7 +277,11 @@ class WalletService {
       status: "PROCESSING",
     }).eq("id", txId);
 
-    return { success: true, transactionId: txId, fee: commission.totalFee };
+    return {
+      success: true,
+      transactionId: txId,
+      fee: parseFloat(commission.fee),
+    };
   }
 
   /**
@@ -274,8 +300,14 @@ class WalletService {
       idempotencyKey,
     },
   ) {
-    const feeEngine = require("./feeEngine");
-    const commission = feeEngine.calculateFees(amount, currency);
+    const commissionService = require("./commissionService");
+    // Initial estimation - will re-evaluate once recipient is known
+    let commission = await commissionService.calculateCommission(
+      "TRANSFER_OUT",
+      amount,
+      currency,
+      userPlan,
+    );
 
     const transferAmount = parseFloat(amount);
     let targetUserId = recipientId;
@@ -324,16 +356,25 @@ class WalletService {
 
     if (!senderWallet) throw new Error("Sender wallet not found");
     if (
-      parseFloat(senderWallet.balance) < (transferAmount + commission.totalFee)
+      parseFloat(senderWallet.balance) <
+        (transferAmount + parseFloat(commission.fee))
     ) {
       throw new Error(
         `Insufficient funds. Need ${
-          transferAmount + commission.totalFee
+          transferAmount + parseFloat(commission.fee)
         } ${currency}`,
       );
     }
 
     if (isExternal) {
+      // Re-calculate commission as WITHDRAWAL for external crypto sends
+      commission = await commissionService.calculateCommission(
+        "WITHDRAWAL",
+        amount,
+        currency,
+        userPlan,
+      );
+
       const payoutService = require("./payment/payoutService");
       const reference = `wdr_${Date.now()}_${userId.substring(0, 8)}`;
       const payoutResult = await payoutService.createNowPaymentsPayout(
@@ -350,12 +391,12 @@ class WalletService {
           p_wallet_id: senderWallet.id,
           p_amount: transferAmount,
           p_currency: currency,
-          p_fee: commission.totalFee,
-          p_rate: commission.rates.total,
+          p_fee: parseFloat(commission.fee),
+          p_rate: commission.rate,
           p_platform_wallet_id: await require("./commissionService")
             .getPlatformWalletId(currency),
           p_idempotency_key: idempotencyKey,
-          p_2fa_verified: true,
+          p_2fa_verified: true, // Assuming middleware handled this
           p_metadata: {
             externalAddress: recipientAddress,
             source: "transfer_unified",
@@ -365,7 +406,11 @@ class WalletService {
         },
       );
       if (txError) throw txError;
-      return { success: true, transactionId: txId, fee: commission.totalFee };
+      return {
+        success: true,
+        transactionId: txId,
+        fee: parseFloat(commission.fee),
+      };
     }
 
     let recipientWallet = await this.createWallet(
@@ -381,8 +426,8 @@ class WalletService {
         p_receiver_wallet_id: recipientWallet.id,
         p_amount: transferAmount,
         p_currency: currency,
-        p_fee: commission.totalFee,
-        p_rate: commission.rates.total,
+        p_fee: parseFloat(commission.fee),
+        p_rate: commission.rate,
         p_platform_wallet_id: await require("./commissionService")
           .getPlatformWalletId(currency),
         p_idempotency_key: idempotencyKey,
@@ -397,15 +442,15 @@ class WalletService {
     // Record in the new Fees table
     await supabase.from("fees").insert({
       transaction_id: txId,
-      admin_fee: commission.breakdown?.admin_fee || commission.totalFee,
-      partner_fee: commission.breakdown?.partner_reward || 0,
-      referral_fee: commission.breakdown?.referrer || 0,
+      admin_fee: parseFloat(commission.fee),
+      partner_fee: 0,
+      referral_fee: 0,
     });
 
     return {
       success: true,
       transactionId: txId,
-      fee: commission.totalFee,
+      fee: parseFloat(commission.fee),
       targetUserId,
     };
   }

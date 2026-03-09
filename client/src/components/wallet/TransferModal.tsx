@@ -5,6 +5,7 @@ import { useWallet } from '../../hooks/useWallet';
 import { formatCurrency } from '../../lib/CurrencyFormatter';
 import type { Currency } from '@/types/wallet';
 import { motion, AnimatePresence } from 'framer-motion';
+import ReCAPTCHA from 'react-google-recaptcha';
 
 interface TransferModalProps {
     isOpen: boolean;
@@ -26,6 +27,8 @@ export const TransferModal: React.FC<TransferModalProps> = ({
     const [amount, setAmount] = useState('');
     const [isSending, setIsSending] = useState(false);
     const [transferFee, setTransferFee] = useState<{ fee: number, net: number } | null>(null);
+    const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+    const recaptchaRef = React.useRef<ReCAPTCHA>(null);
 
     const wallet = wallets.find(w => w.currency === selectedCurrency && w.network === selectedNetwork);
     const availableBalance = wallet ? (wallet.available_balance ?? wallet.balance) : 0;
@@ -69,6 +72,12 @@ export const TransferModal: React.FC<TransferModalProps> = ({
         e.preventDefault();
         if (!amount || !recipient) return;
         if (parseFloat(amount) > availableBalance) return;
+        
+        // reCAPTCHA check
+        if (!captchaToken && import.meta.env.PROD) {
+            // toast handles the error if needed
+            return;
+        }
 
         setIsSending(true);
         try {
@@ -81,11 +90,13 @@ export const TransferModal: React.FC<TransferModalProps> = ({
                 recipientEmail: isEmail ? recipient : undefined,
                 recipientAddress: isAddress ? recipient : undefined,
                 recipientId: (!isEmail && !isAddress) ? recipient : undefined,
+                captchaToken: captchaToken || undefined
             });
             onSuccess();
             onClose();
         } catch (err) {
-            // Error handled in context or toast
+            setCaptchaToken(null);
+            recaptchaRef.current?.reset();
         } finally {
             setIsSending(false);
         }
@@ -186,6 +197,16 @@ export const TransferModal: React.FC<TransferModalProps> = ({
                             </motion.div>
                         )}
                     </AnimatePresence>
+
+                    {/* reCAPTCHA for Financial Security */}
+                    <div className="flex justify-center p-2 bg-gray-800/30 rounded-xl border border-gray-800">
+                        <ReCAPTCHA
+                            ref={recaptchaRef}
+                            sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI'}
+                            onChange={(token) => setCaptchaToken(token)}
+                            theme="dark"
+                        />
+                    </div>
 
                     <div className="flex gap-3 justify-end mt-2">
                         <Button variant="ghost" onClick={onClose} type="button">

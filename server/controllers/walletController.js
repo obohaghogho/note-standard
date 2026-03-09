@@ -170,3 +170,27 @@ exports.getDepositStatus = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+exports.getCommissions = async (req, res) => {
+  try {
+    const { type, currency } = req.query;
+    const supabase = require("../config/database");
+
+    let query = supabase
+      .from("commission_settings")
+      .select("*")
+      .eq("is_active", true);
+
+    if (type) query = query.eq("transaction_type", type);
+    if (currency) query = query.or(`currency.eq.${currency},currency.is.null`);
+
+    const { data: commissions, error } = await query.order("currency", {
+      ascending: false,
+    });
+
+    if (error) throw error;
+    res.json({ commissions: commissions || [] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
