@@ -49,7 +49,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             reconnectionAttempts: MAX_RETRIES,
             reconnectionDelay: 2000,
             timeout: 20000,
-            transports: ['polling', 'websocket']
+            transports: ['polling']
         });
 
         socket.on('connect', () => {
