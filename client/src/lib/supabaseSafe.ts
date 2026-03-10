@@ -240,7 +240,7 @@ export async function safeAuth(): Promise<Session | null> {
     const { data, error } = await supabase.auth.getSession();
     if (error) throw error;
     return data.session;
-  }, { minDelay: 100, retries: 1, timeout: 3000 }); // Very fast checkout for auth
+  }, { minDelay: 100, retries: 1, timeout: 10000 }); // More resilient timeout for auth
 }
 
 // --------------------------

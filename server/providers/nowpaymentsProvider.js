@@ -49,6 +49,7 @@ class NowPaymentsProvider {
             "x-api-key": this.apiKey,
             "Content-Type": "application/json",
           },
+          timeout: 10000,
         },
       );
 
@@ -95,6 +96,7 @@ class NowPaymentsProvider {
             "x-api-key": this.apiKey,
             "Content-Type": "application/json",
           },
+          timeout: 10000,
         },
       );
 
@@ -133,6 +135,7 @@ class NowPaymentsProvider {
           headers: {
             "x-api-key": this.apiKey,
           },
+          timeout: 10000,
         },
       );
 

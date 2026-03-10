@@ -72,6 +72,9 @@ function App() {
     // Global handler for unhandled promise rejections
     const handler = (e: PromiseRejectionEvent) => {
       console.error('[Unhandled Promise]', e.reason);
+      if (e.reason instanceof Error && e.reason.stack) {
+        console.error('[Stack Trace]', e.reason.stack);
+      }
     };
 
     // Global handler for online/offline status

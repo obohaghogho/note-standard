@@ -18,7 +18,10 @@ class CoinGeckoProvider {
       const ids = coinIds.join(",");
       const response = await axios.get(
         `${this.baseUrl}/simple/price?ids=${ids}&vs_currencies=${vsCurrency}`,
-        this.apiKey ? { headers: { "x-cg-demo-api-key": this.apiKey } } : {},
+        {
+          headers: this.apiKey ? { "x-cg-demo-api-key": this.apiKey } : {},
+          timeout: 10000,
+        },
       );
 
       const results = {};
