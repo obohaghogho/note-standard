@@ -10,6 +10,16 @@ const { whitelist } = require("./utils/cors");
 
 const server = http.createServer(app);
 
+// ─── PeerJS Signaling Server ──────────────────────────────────
+const { ExpressPeerServer } = require("peer");
+const peerServer = ExpressPeerServer(server, {
+  debug: true,
+  path: "/",
+  allow_discovery: false,
+});
+app.use("/peerjs", peerServer);
+// ──────────────────────────────────────────────────────────────
+
 const io = new Server(server, {
   cors: {
     origin: whitelist,
@@ -306,9 +316,11 @@ io.on("connection", async (socket) => {
     io.to(data.to).emit("call-accepted", data.signal);
   });
 
-  // Standard Events
-  socket.on("call:init", ({ to, type, conversationId }) => {
-    logger.info(`[WebRTC] Call Init from ${userId} to ${to} (${type})`);
+  // Standard Events (PeerJS + Socket.io signaling)
+  socket.on("call:init", ({ to, type, conversationId, peerId }) => {
+    logger.info(
+      `[WebRTC] Call Init from ${userId} to ${to} (${type}) peerId=${peerId}`,
+    );
     const senderName = socket.user?.user_metadata?.full_name ||
       socket.user?.user_metadata?.username || socket.user?.email || "User";
     const senderAvatar = socket.user?.user_metadata?.avatar_url;
@@ -319,12 +331,15 @@ io.on("connection", async (socket) => {
       fromAvatar: senderAvatar,
       type,
       conversationId,
+      peerId,
     });
   });
 
-  socket.on("call:ready", ({ to }) => {
-    logger.debug(`[WebRTC] Recipient ${userId} is ready for offer to ${to}`);
-    io.to(to).emit("call:ready", { from: userId });
+  socket.on("call:ready", ({ to, peerId }) => {
+    logger.debug(
+      `[WebRTC] Recipient ${userId} is ready for offer to ${to} peerId=${peerId}`,
+    );
+    io.to(to).emit("call:ready", { from: userId, peerId });
   });
 
   socket.on("call:offer", ({ to, offer }) => {

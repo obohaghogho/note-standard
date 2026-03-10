@@ -98,7 +98,7 @@ app.post("/api/flutterwave-webhook", async (req, res) => {
 });
 
 app.use("/api/media", require("./routes/media"));
-app.use("/api/agora", require("./routes/agora"));
+// PeerJS signaling is mounted directly on the HTTP server in index.js
 
 // ─── Serve Frontend (Production) ──────────────────────────────
 // Serve static files from the React app
