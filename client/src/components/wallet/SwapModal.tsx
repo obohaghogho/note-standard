@@ -94,7 +94,12 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
     };
 
     const handleMaxAmount = () => {
-        setAmount(Number(availableBalance || 0).toString());
+        // Use the raw balance value with full precision to ensure MAX fills the entire balance
+        const bal = parseFloat(String(availableBalance || 0));
+        // For crypto: up to 8 decimals, for fiat: up to 2 decimals
+        const isCrypto = ['BTC', 'ETH', 'USDT_TRC20', 'USDT_ERC20', 'USDT_BEP20', 'USDC_ERC20', 'USDC_POLYGON'].includes(fromCurrency);
+        const decimals = isCrypto ? 8 : 2;
+        setAmount(bal > 0 ? parseFloat(bal.toFixed(decimals)).toString() : '0');
     };
 
     const handleExecuteSwap = async () => {
