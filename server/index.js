@@ -11,13 +11,31 @@ const { whitelist } = require("./utils/cors");
 const server = http.createServer(app);
 
 // ─── PeerJS Signaling Server ──────────────────────────────────
-const { ExpressPeerServer } = require("peer");
-const peerServer = ExpressPeerServer(server, {
-  debug: true,
-  path: "/",
-  allow_discovery: false,
-});
-app.use("/peerjs", peerServer);
+let peerServer;
+try {
+  const { ExpressPeerServer } = require("peer");
+  peerServer = ExpressPeerServer(server, {
+    path: "/",
+    allow_discovery: false,
+    proxied: true, // Required for Render/Cloudflare/Nginx proxies
+  });
+  app.use("/peerjs", peerServer);
+  logger.info("[WebRTC] PeerJS signaling server mounted on /peerjs");
+
+  peerServer.on("connection", (client) => {
+    logger.debug(`[WebRTC] Peer connected: ${client.getId()}`);
+  });
+
+  peerServer.on("disconnect", (client) => {
+    logger.debug(`[WebRTC] Peer disconnected: ${client.getId()}`);
+  });
+
+  peerServer.on("error", (err) => {
+    logger.error(`[WebRTC] PeerJS error: ${err.message}`);
+  });
+} catch (err) {
+  logger.error(`[WebRTC] Failed to initialize PeerJS server: ${err.message}`);
+}
 // ──────────────────────────────────────────────────────────────
 
 const io = new Server(server, {
@@ -26,9 +44,21 @@ const io = new Server(server, {
     methods: ["GET", "POST"],
     credentials: true,
   },
+  transports: ["polling", "websocket"], // Allow both, client will decide
 });
 
 app.set("io", io);
+
+// Global Error Handlers for Process Stability
+process.on("uncaughtException", (err) => {
+  logger.error("[Process] Uncaught Exception:", err);
+  // Give logger time to write before potentially failing
+  setTimeout(() => process.exit(1), 1000);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  logger.error("[Process] Unhandled Rejection at:", promise, "reason:", reason);
+});
 
 const PORT = env.PORT;
 
