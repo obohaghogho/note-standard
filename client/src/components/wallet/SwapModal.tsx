@@ -94,12 +94,19 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
     };
 
     const handleMaxAmount = () => {
-        // Use the raw balance value with full precision to ensure MAX fills the entire balance
+        // Use the raw balance value and FLOOR it to the required precision 
+        // to ensure we never round up and cause "Insufficient balance" errors.
         const bal = parseFloat(String(availableBalance || 0));
+        
         // For crypto: up to 8 decimals, for fiat: up to 2 decimals
         const isCrypto = ['BTC', 'ETH', 'USDT_TRC20', 'USDT_ERC20', 'USDT_BEP20', 'USDC_ERC20', 'USDC_POLYGON'].includes(fromCurrency);
-        const decimals = isCrypto ? 8 : 2;
-        setAmount(bal > 0 ? parseFloat(bal.toFixed(decimals)).toString() : '0');
+        const precision = isCrypto ? 8 : 2;
+        
+        // Precise flooring logic
+        const factor = Math.pow(10, precision);
+        const flooredBal = Math.floor(bal * factor) / factor;
+        
+        setAmount(flooredBal > 0 ? flooredBal.toFixed(precision).replace(/\.?0+$/, '') : '0');
     };
 
     const handleExecuteSwap = async () => {
@@ -109,7 +116,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
             return;
         }
 
-        if (numericAmount > Number(availableBalance || 0) + 0.0000000001) {
+        if (numericAmount > Number(availableBalance || 0)) {
             toast.error('Insufficient balance');
             return;
         }
@@ -146,7 +153,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
     if (!isOpen) return null;
 
     const numericAmount = Number(amount || 0);
-    const isInsufficient = numericAmount > (Number(availableBalance || 0) + 0.0000000001) && numericAmount > 0;
+    const isInsufficient = numericAmount > Number(availableBalance || 0) && numericAmount > 0;
 
     return (
         <div className="modal-overlay">
