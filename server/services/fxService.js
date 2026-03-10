@@ -158,14 +158,19 @@ class FXService {
         }
       });
 
-      // 2. Fetch fiat rates sequentially (usually low frequency/stable)
-      for (const t of fiatTargets) {
+      // 2. Fetch fiat rates in parallel
+      const fiatPromises = fiatTargets.map(async (t) => {
         try {
-          results[t] = await this.getRate(base, t);
+          return { symbol: t, rate: await this.getRate(base, t) };
         } catch (e) {
-          results[t] = 0;
+          return { symbol: t, rate: 0 };
         }
-      }
+      });
+
+      const fiatResults = await Promise.all(fiatPromises);
+      fiatResults.forEach(({ symbol, rate }) => {
+        results[symbol] = rate;
+      });
 
       // If base isn't USD, normalize everything
       if (base !== "USD") {

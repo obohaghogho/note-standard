@@ -194,3 +194,38 @@ exports.getCommissions = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+exports.getMyAffiliateStats = async (req, res) => {
+  try {
+    const supabase = require("../config/database");
+
+    // 1. Fetch referrals where user is the referrer
+    const { data: referrals, error } = await supabase
+      .from("affiliate_referrals")
+      .select(`
+        *,
+        referred:profiles!referred_user_id(username, email, avatar_url, created_at)
+      `)
+      .eq("referrer_user_id", req.user.id)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    // 2. Get global commission rate
+    const { data: commissionRateSetting } = await supabase
+      .from("admin_settings")
+      .select("value")
+      .eq("key", "affiliate_percentage")
+      .maybeSingle();
+
+    res.json({
+      referrals: referrals || [],
+      commissionRate: commissionRateSetting
+        ? parseFloat(commissionRateSetting.value)
+        : 0.1,
+    });
+  } catch (err) {
+    console.error("[WalletController] getMyAffiliateStats error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};

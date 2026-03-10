@@ -1,4 +1,4 @@
-const { ethers } = require("ethers");
+const ethers = require("ethers");
 
 /**
  * Math utilities using ethers.js BigNumber for safe, precise currency calculations.

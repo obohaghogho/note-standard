@@ -58,4 +58,7 @@ router.post(
   swapController.execute,
 );
 
+// Affiliate Endpoints
+router.get("/affiliates/my-stats", walletController.getMyAffiliateStats);
+
 module.exports = router;
