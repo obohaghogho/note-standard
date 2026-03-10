@@ -30,3 +30,12 @@ module.exports = {
   NOWPAYMENTS_API_KEY: process.env.NOWPAYMENTS_API_KEY,
   SERVER_URL: process.env.SERVER_URL || process.env.BACKEND_URL,
 };
+
+// Log loaded fee rates for verification
+console.log(
+  `[Env] Fees Loaded - Admin: ${
+    module.exports.ADMIN_FEE_RATE * 100
+  }%, Partner: ${module.exports.PARTNER_FEE_RATE * 100}%, Referrer: ${
+    module.exports.REFERRAL_FEE_RATE * 100
+  }%`,
+);
