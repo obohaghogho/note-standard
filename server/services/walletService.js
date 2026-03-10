@@ -50,7 +50,6 @@ class WalletService {
       .select("*")
       .eq("user_id", userId)
       .eq("currency", upCurrency)
-      .eq("network", upNetwork)
       .maybeSingle();
 
     if (existing) {
@@ -144,7 +143,6 @@ class WalletService {
           .select("*")
           .eq("user_id", userId)
           .eq("currency", upCurrency)
-          .eq("network", upNetwork)
           .maybeSingle();
         if (retry) return retry;
       }
