@@ -336,18 +336,18 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                                 <span className="text-purple-300">1 {fromCurrency} ≈ {formatCurrency(Number(preview.rate || 0), toCurrency)}</span>
                             </div>
                             <div className="flex justify-between text-gray-400">
-                                <span>Transaction Processing Fee (7.5%)</span>
+                                <span>Transaction Processing Fee (4.7%)</span>
                                 <span>{formatCurrency(Number(preview.fee || 0), fromCurrency)}</span>
                             </div>
                             
                             {/* Detailed breakdown */}
                             <div className="grid grid-cols-2 gap-y-0.5 text-[9px] text-gray-500 pt-1 border-t border-purple-500/5">
-                                <span>Platform (6%)</span>
-                                <span className="text-right">{formatCurrency(numericAmount * 0.06, fromCurrency)}</span>
-                                <span>Referrer (0.5%)</span>
-                                <span className="text-right">{formatCurrency(numericAmount * 0.005, fromCurrency)}</span>
-                                <span>Reward (1%)</span>
-                                <span className="text-right">{formatCurrency(numericAmount * 0.01, fromCurrency)}</span>
+                                <span>Platform (4.5%)</span>
+                                <span className="text-right">{formatCurrency(numericAmount * 0.045, fromCurrency)}</span>
+                                <span>Referrer (0.1%)</span>
+                                <span className="text-right">{formatCurrency(numericAmount * 0.001, fromCurrency)}</span>
+                                <span>Reward (0.1%)</span>
+                                <span className="text-right">{formatCurrency(numericAmount * 0.001, fromCurrency)}</span>
                             </div>
 
                             <div className="flex justify-between text-xs text-gray-500 pt-1">
