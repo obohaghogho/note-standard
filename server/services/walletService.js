@@ -45,6 +45,14 @@ class WalletService {
     }
     const upNetwork = normNetwork;
 
+    // SAFEGUARD: If recipientAddress looks like a UUID, treat it as recipientId.
+    // UUIDs (36 chars) can be misclassified as crypto addresses by old frontend builds.
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!recipientId && recipientAddress && UUID_REGEX.test(recipientAddress)) {
+      recipientId = recipientAddress;
+      recipientAddress = undefined;
+    }
+
     const { data: existing } = await supabase
       .from("wallets_store")
       .select("*")
@@ -315,6 +323,14 @@ class WalletService {
       normNetwork = normNetwork.toUpperCase();
     }
     const upNetwork = normNetwork;
+
+    // SAFEGUARD: If recipientAddress looks like a UUID, treat it as recipientId.
+    // UUIDs (36 chars) can be misclassified as crypto addresses by old frontend builds.
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!recipientId && recipientAddress && UUID_REGEX.test(recipientAddress)) {
+      recipientId = recipientAddress;
+      recipientAddress = undefined;
+    }
 
     const commissionService = require("./commissionService");
     // Initial estimation - will re-evaluate once recipient is known
