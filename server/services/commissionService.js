@@ -55,7 +55,8 @@ const commissionService = {
         if (userPlan === "BUSINESS") rate = rate * 0.5; // 50% discount on fees
 
         if (setting.commission_type === "PERCENTAGE") {
-          fee = parseFloat(mathUtils.multiply(amount, rate));
+          const rateValue = rate / 100;
+          fee = parseFloat(mathUtils.multiply(amount, rateValue));
         } else if (setting.commission_type === "FIXED") {
           fee = rate;
         }
