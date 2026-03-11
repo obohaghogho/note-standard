@@ -16,12 +16,13 @@ exports.getRates = async (req, res) => {
 
 exports.preview = async (req, res) => {
   try {
-    const { from, to, amount } = req.body;
+    const { from, to, amount, slippage } = req.body;
     const quote = await swapService.calculateSwap(
       req.user.id,
       from,
       to,
       amount,
+      slippage,
     );
     res.json(quote);
   } catch (err) {

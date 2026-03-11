@@ -125,8 +125,51 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
         }
     };
 
-    const handleMax = () => {
-        setAmount(availableBalance.toString());
+    const handleMax = async () => {
+        const bal = parseFloat(String(availableBalance || 0));
+        if (bal <= 0) {
+            setAmount('0');
+            return;
+        }
+
+        const SAFETY_BUFFER = 0.000001;
+        try {
+            const settings = await getCommissionRate('WITHDRAWAL', selectedCurrency);
+            let maxAmount = bal;
+            
+            if (settings && settings.length > 0) {
+                const s = settings[0];
+                const rateValue = s.value > 1 ? s.value / 100 : s.value;
+
+                if (s.commission_type === 'PERCENTAGE') {
+                    // amount + (amount * rate) = balance => amount = balance / (1 + rate)
+                    maxAmount = bal / (1 + rateValue) - SAFETY_BUFFER;
+                } else {
+                    maxAmount = Math.max(0, bal - s.value - SAFETY_BUFFER);
+                }
+
+                // Check for min/max fee constraints
+                let estimatedFee = bal - maxAmount;
+                if (s.min_fee && estimatedFee < s.min_fee) {
+                    maxAmount = bal - s.min_fee - SAFETY_BUFFER;
+                } else if (s.max_fee && estimatedFee > s.max_fee) {
+                    maxAmount = bal - s.max_fee - SAFETY_BUFFER;
+                }
+            } else {
+                maxAmount = bal - SAFETY_BUFFER;
+            }
+
+            // Professional precision: 8 decimals for all crypto tokens
+            const isCrypto = ['BTC', 'ETH', 'USDT', 'USDC', 'TRC20', 'ERC20', 'BEP20', 'POLYGON'].some(c => selectedCurrency.includes(c));
+            const precision = isCrypto ? 8 : 2;
+            const factor = Math.pow(10, precision);
+            const flooredMax = Math.floor(maxAmount * factor) / factor;
+            
+            setAmount(flooredMax > 0 ? flooredMax.toFixed(precision).replace(/\.?0+$/, '') : '0');
+        } catch (err) {
+            console.error('Error calculating max withdrawal:', err);
+            setAmount(bal.toString());
+        }
     };
 
     if (!isOpen) return null;
