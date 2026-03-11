@@ -16,8 +16,8 @@ exports.handleFlutterwave = async (req, res) => {
   return provider.processWebhook(req, res);
 };
 
-exports.handleKorapay = async (req, res) => {
-  const provider = PaymentFactory.getProviderByName("korapay");
+exports.handleFincra = async (req, res) => {
+  const provider = PaymentFactory.getProviderByName("fincra");
   return provider.processWebhook(req, res);
 };
 

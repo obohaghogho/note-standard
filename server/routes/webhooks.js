@@ -26,9 +26,9 @@ router.get(
 );
 
 /**
- * Korapay Webhook
+ * Fincra Webhook
  */
-router.post("/korapay", webhookController.handleKorapay);
+router.post("/fincra", webhookController.handleFincra);
 
 /**
  * Crypto Webhook (NowPayments)
