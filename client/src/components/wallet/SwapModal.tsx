@@ -21,14 +21,15 @@ const CURRENCIES: Currency[] = [
 ];
 
 export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFromCurrency, onSuccess }) => {
-    const { wallets } = useWallet();
+    const { wallets, getCommissionRate } = useWallet();
     const [fromCurrency, setFromCurrency] = useState<Currency>(initialFromCurrency || 'BTC');
     const [toCurrency, setToCurrency] = useState<Currency>('USD');
     const [amount, setAmount] = useState('');
     const [loading, setLoading] = useState(false);
     const [previewLoading, setPreviewLoading] = useState(false);
-    const [slippage, setSlippage] = useState<number>(0.5); // Default 0.5%
+    const [slippage, setSlippage] = useState<number>(0.5); // Initial default, refined by useEffect
     const [showSlippageSettings, setShowSlippageSettings] = useState(false);
+    const SAFETY_BUFFER = 0.000001;
     
     const [preview, setPreview] = useState<{
         rate: number;
@@ -47,8 +48,28 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
             // Set default target currency
             const defaultTo = initialFromCurrency === 'BTC' ? 'USD' : 'BTC';
             setToCurrency(defaultTo);
+
+            // Set Dynamic Slippage Defaults
+            if (['USDT_TRC20', 'USDT_ERC20', 'USDT_BEP20', 'USDC_ERC20', 'USDC_POLYGON', 'USD', 'EUR'].includes(initialFromCurrency)) {
+                setSlippage(0.1);
+            } else if (['BTC', 'ETH'].includes(initialFromCurrency)) {
+                setSlippage(0.5);
+            } else {
+                setSlippage(1.0);
+            }
         }
     }, [isOpen, initialFromCurrency]);
+
+    // Handle slippage when fromCurrency changes manually
+    useEffect(() => {
+        if (['USDT_TRC20', 'USDT_ERC20', 'USDT_BEP20', 'USDC_ERC20', 'USDC_POLYGON', 'USD', 'EUR'].includes(fromCurrency)) {
+            setSlippage(0.1);
+        } else if (['BTC', 'ETH'].includes(fromCurrency)) {
+            setSlippage(0.5);
+        } else {
+            setSlippage(1.0);
+        }
+    }, [fromCurrency]);
 
     // Auto-preview when amount changes
     useEffect(() => {
@@ -93,20 +114,56 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
         setPreview(null);
     };
 
-    const handleMaxAmount = () => {
+    const handleMaxAmount = async () => {
         // Use the raw balance value and FLOOR it to the required precision 
         // to ensure we never round up and cause "Insufficient balance" errors.
         const bal = parseFloat(String(availableBalance || 0));
-        
-        // For crypto: up to 8 decimals, for fiat: up to 2 decimals
-        const isCrypto = ['BTC', 'ETH', 'USDT_TRC20', 'USDT_ERC20', 'USDT_BEP20', 'USDC_ERC20', 'USDC_POLYGON'].includes(fromCurrency);
-        const precision = isCrypto ? 8 : 2;
-        
-        // Precise flooring logic
-        const factor = Math.pow(10, precision);
-        const flooredBal = Math.floor(bal * factor) / factor;
-        
-        setAmount(flooredBal > 0 ? flooredBal.toFixed(precision).replace(/\.?0+$/, '') : '0');
+        if (bal <= 0) {
+            setAmount('0');
+            return;
+        }
+
+        try {
+            // Fetch commission settings for Swap
+            const settings = await getCommissionRate('SWAP', fromCurrency);
+            let maxAmount = bal;
+            
+            if (settings && settings.length > 0) {
+                const s = settings[0];
+                const rateValue = s.value > 1 ? s.value / 100 : s.value;
+                
+                if (s.commission_type === 'PERCENTAGE') {
+                    let estimatedFee = bal * rateValue;
+                    if (s.min_fee && estimatedFee < s.min_fee) estimatedFee = s.min_fee;
+                    if (s.max_fee && estimatedFee > s.max_fee) estimatedFee = s.max_fee;
+                    
+                    maxAmount = Math.max(0, bal - estimatedFee - SAFETY_BUFFER);
+                } else {
+                    maxAmount = Math.max(0, bal - s.value - SAFETY_BUFFER);
+                }
+            } else {
+                // Fallback to 4.7% if no settings found (matching UI text)
+                maxAmount = bal * (1 - 0.047) - SAFETY_BUFFER;
+            }
+            
+            // Professional precision: 8 decimals for all crypto tokens
+            const isCrypto = ['BTC', 'ETH', 'USDT', 'USDC', 'TRC20', 'ERC20', 'BEP20', 'POLYGON'].some(c => fromCurrency.includes(c));
+            const precision = isCrypto ? 8 : 2;
+            
+            // Precise flooring logic
+            const factor = Math.pow(10, precision);
+            const flooredMax = Math.floor(maxAmount * factor) / factor;
+            
+            setAmount(flooredMax > 0 ? flooredMax.toFixed(precision).replace(/\.?0+$/, '') : '0');
+        } catch (err) {
+            console.error('Error calculating max swap amount:', err);
+            // Fallback to naive logic (but with a safe buffer) if API fails
+            const isCrypto = ['BTC', 'ETH', 'USDT', 'USDC', 'TRC20', 'ERC20', 'BEP20', 'POLYGON'].some(c => fromCurrency.includes(c));
+            const precision = isCrypto ? 8 : 2;
+            const factor = Math.pow(10, precision);
+            const flooredBal = Math.floor(bal * 0.95 * factor) / factor; // Use 95% as safe fallback
+            setAmount(flooredBal > 0 ? flooredBal.toFixed(precision).replace(/\.?0+$/, '') : '0');
+        }
     };
 
     const handleExecuteSwap = async () => {
