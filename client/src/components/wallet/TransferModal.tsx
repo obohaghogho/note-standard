@@ -49,7 +49,8 @@ export const TransferModal: React.FC<TransferModalProps> = ({
             }
                 const val = parseFloat(amount);
                 const isEmail = recipient.includes('@');
-                const isAddress = !isEmail && (recipient.startsWith('0x') || recipient.startsWith('bc1') || recipient.startsWith('T') || recipient.length > 30);
+                const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(recipient);
+                const isAddress = !isEmail && !isUUID && (recipient.startsWith('0x') || recipient.startsWith('bc1') || recipient.startsWith('T') || recipient.length > 30);
                 
                 const type = isAddress ? 'WITHDRAWAL' : 'TRANSFER_OUT';
                 const settings = await getCommissionRate(type, selectedCurrency);
@@ -85,7 +86,8 @@ export const TransferModal: React.FC<TransferModalProps> = ({
         setIsSending(true);
         try {
             const isEmail = recipient.includes('@');
-            const isAddress = !isEmail && (recipient.startsWith('0x') || recipient.startsWith('bc1') || recipient.startsWith('T') || recipient.length > 30);
+            const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(recipient);
+            const isAddress = !isEmail && !isUUID && (recipient.startsWith('0x') || recipient.startsWith('bc1') || recipient.startsWith('T') || recipient.length > 30);
 
             await sendFunds({
                 currency: selectedCurrency,
@@ -113,7 +115,8 @@ export const TransferModal: React.FC<TransferModalProps> = ({
         }
 
         const isEmail = recipient.includes('@');
-        const isAddress = !isEmail && (recipient.startsWith('0x') || recipient.startsWith('bc1') || recipient.startsWith('T') || recipient.length > 30);
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(recipient);
+        const isAddress = !isEmail && !isUUID && (recipient.startsWith('0x') || recipient.startsWith('bc1') || recipient.startsWith('T') || recipient.length > 30);
         
         // Internal transfers are free, external transfers (address) have withdrawal fees
         if (!isAddress) {
