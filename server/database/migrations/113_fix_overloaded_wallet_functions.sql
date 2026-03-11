@@ -21,9 +21,9 @@ UPDATE public.admin_settings SET value = '0' WHERE key = 'internal_transfer_fee'
 UPDATE public.commission_settings SET value = 0.0 WHERE transaction_type = 'TRANSFER_OUT';
 
 -- 4. RECREATE transfer_funds
--- KEY FIX: Insert sender transaction as PENDING, insert ledger entries manually,
--- then update to COMPLETED. This prevents the trg_auto_ledger trigger from
--- creating duplicate ledger entries.
+-- KEY FIX: Uses stored wallets_store.available_balance (what the UI shows),
+-- NOT the ledger-based get_wallet_available_balance() which is out of sync.
+-- Insert transactions as PENDING first to avoid auto-ledger trigger duplicates.
 CREATE OR REPLACE FUNCTION public.transfer_funds(
     p_sender_wallet_id UUID,
     p_receiver_wallet_id UUID,
@@ -50,25 +50,35 @@ BEGIN
 
     -- Lock both wallets (Ordered by UUID to prevent deadlocks)
     IF p_sender_wallet_id < p_receiver_wallet_id THEN
-        PERFORM 1 FROM public.wallets_store WHERE id = p_sender_wallet_id FOR UPDATE;
+        SELECT user_id, available_balance INTO v_sender_uid, v_avail FROM public.wallets_store WHERE id = p_sender_wallet_id FOR UPDATE;
         PERFORM 1 FROM public.wallets_store WHERE id = p_receiver_wallet_id FOR UPDATE;
     ELSE
         PERFORM 1 FROM public.wallets_store WHERE id = p_receiver_wallet_id FOR UPDATE;
-        PERFORM 1 FROM public.wallets_store WHERE id = p_sender_wallet_id FOR UPDATE;
+        SELECT user_id, available_balance INTO v_sender_uid, v_avail FROM public.wallets_store WHERE id = p_sender_wallet_id FOR UPDATE;
     END IF;
 
-    -- Get user IDs
-    SELECT user_id INTO v_sender_uid FROM public.wallets_store WHERE id = p_sender_wallet_id;
     SELECT user_id INTO v_receiver_uid FROM public.wallets_store WHERE id = p_receiver_wallet_id;
 
-    -- Check balance (use the wallets view which calculates from ledger)
-    v_avail := public.get_wallet_available_balance(p_sender_wallet_id);
+    -- Check balance using STORED available_balance (matches what the UI displays)
     IF v_avail < (p_amount + p_fee) THEN
         RAISE EXCEPTION 'Insufficient funds (Available: %, Needed: %)', v_avail, (p_amount + p_fee);
     END IF;
 
     v_ref_id := uuid_generate_v4();
     v_txn_ref := 'TXN-' || TO_CHAR(NOW(), 'YYYY') || '-' || UPPER(SUBSTRING(uuid_generate_v4()::text FROM 1 FOR 8));
+
+    -- Update stored balances directly (keeps UI in sync)
+    UPDATE public.wallets_store 
+    SET balance = balance - (p_amount + p_fee), 
+        available_balance = available_balance - (p_amount + p_fee),
+        updated_at = NOW()
+    WHERE id = p_sender_wallet_id;
+
+    UPDATE public.wallets_store 
+    SET balance = balance + p_amount, 
+        available_balance = available_balance + p_amount,
+        updated_at = NOW()
+    WHERE id = p_receiver_wallet_id;
 
     -- Step 1: Insert sender transaction as PENDING (trigger will skip PENDING status)
     INSERT INTO public.transactions (user_id, wallet_id, type, amount_from, amount_to, from_currency, to_currency, status, reference_id, fee, metadata, idempotency_key, txn_reference)
