@@ -5,8 +5,8 @@ const PaystackProvider = require(
 const FlutterwaveProvider = require(
   path.join(__dirname, "providers", "FlutterwaveProvider"),
 );
-const KorapayProvider = require(
-  path.join(__dirname, "providers", "KorapayProvider"),
+const FincraProvider = require(
+  path.join(__dirname, "providers", "FincraProvider"),
 );
 const NowPaymentsProvider = require(
   path.join(__dirname, "providers", "NowPaymentsProvider"),
@@ -54,7 +54,7 @@ class PaymentFactory {
     }
 
     // 3. Fallback for other cross-border flows
-    return new KorapayProvider();
+    return new FincraProvider();
   }
 
   /**
@@ -68,8 +68,8 @@ class PaymentFactory {
         return new PaystackProvider();
       case "flutterwave":
         return new FlutterwaveProvider();
-      case "korapay":
-        return new KorapayProvider();
+      case "fincra":
+        return new FincraProvider();
       case "nowpayments":
       case "crypto": // Legacy alias
         return new NowPaymentsProvider();
