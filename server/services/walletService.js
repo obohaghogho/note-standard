@@ -309,12 +309,19 @@ class WalletService {
       idempotencyKey,
     },
   ) {
+    const upCurrency = currency.toUpperCase();
+    let normNetwork = (network || "native").toLowerCase();
+    if (["erc20", "trc20", "bep20", "polygon"].includes(normNetwork)) {
+      normNetwork = normNetwork.toUpperCase();
+    }
+    const upNetwork = normNetwork;
+
     const commissionService = require("./commissionService");
     // Initial estimation - will re-evaluate once recipient is known
     let commission = await commissionService.calculateCommission(
       "TRANSFER_OUT",
       amount,
-      currency,
+      upCurrency,
       userPlan,
     );
 
@@ -328,16 +335,16 @@ class WalletService {
         .select(
           "user_id",
         )
-        .eq("address", recipientAddress).eq("currency", currency).eq(
+        .eq("address", recipientAddress).eq("currency", upCurrency).eq(
           "network",
-          network,
+          upNetwork,
         ).single();
 
       if (targetWallet) targetUserId = targetWallet.user_id;
       else if (
-        (currency === "BTC" &&
+        (upCurrency === "BTC" &&
           /^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,39}$/.test(recipientAddress)) ||
-        (currency === "ETH" && /^0x[a-fA-F0-9]{40}$/.test(recipientAddress))
+        (upCurrency === "ETH" && /^0x[a-fA-F0-9]{40}$/.test(recipientAddress))
       ) {
         isExternal = true;
       } else {
@@ -357,11 +364,7 @@ class WalletService {
       throw new Error("Could not resolve recipient");
     }
 
-    const { data: senderWallet } = await supabase.from("wallets_store").select(
-      "id, balance",
-    )
-      .eq("user_id", userId).eq("currency", currency).eq("network", network)
-      .single();
+    const senderWallet = await this.createWallet(userId, upCurrency, upNetwork);
 
     if (!senderWallet) throw new Error("Sender wallet not found");
     if (
@@ -380,7 +383,7 @@ class WalletService {
       commission = await commissionService.calculateCommission(
         "WITHDRAWAL",
         amount,
-        currency,
+        upCurrency,
         userPlan,
       );
 
@@ -389,9 +392,9 @@ class WalletService {
       const payoutResult = await payoutService.createNowPaymentsPayout(
         recipientAddress,
         transferAmount,
-        currency,
+        upCurrency,
         reference,
-        network,
+        upNetwork,
       );
 
       const { data: txId, error: txError } = await supabase.rpc(
@@ -399,11 +402,11 @@ class WalletService {
         {
           p_wallet_id: senderWallet.id,
           p_amount: transferAmount,
-          p_currency: currency,
+          p_currency: upCurrency,
           p_fee: parseFloat(commission.fee),
           p_rate: commission.rate,
           p_platform_wallet_id: await require("./commissionService")
-            .getPlatformWalletId(currency),
+            .getPlatformWalletId(upCurrency),
           p_idempotency_key: idempotencyKey,
           p_2fa_verified: true, // Assuming middleware handled this
           p_metadata: {
@@ -424,8 +427,8 @@ class WalletService {
 
     let recipientWallet = await this.createWallet(
       targetUserId,
-      currency,
-      network,
+      upCurrency,
+      upNetwork,
     );
 
     const { data: txId, error: txError } = await supabase.rpc(
@@ -434,15 +437,12 @@ class WalletService {
         p_sender_wallet_id: senderWallet.id,
         p_receiver_wallet_id: recipientWallet.id,
         p_amount: transferAmount,
-        p_currency: currency,
+        p_currency: upCurrency,
         p_fee: parseFloat(commission.fee),
-        p_rate: commission.rate,
-        p_platform_wallet_id: await require("./commissionService")
-          .getPlatformWalletId(currency),
-        p_idempotency_key: idempotencyKey,
         p_metadata: {
           transaction_fee_breakdown: commission,
         },
+        p_idempotency_key: idempotencyKey,
       },
     );
 
