@@ -5,11 +5,17 @@
 BEGIN;
 
 -- 1. DROP ALL POTENTIAL OVERLOADS FOR transfer_funds
--- We drop by signature to be precise.
+-- We drop by signature to be precise based on the error logs.
+
+-- Candidate 1 (7 params, we want to KEEP this one eventually, but drop first to avoid ambiguity issues)
+DROP FUNCTION IF EXISTS public.transfer_funds(uuid, uuid, numeric, character varying, numeric, jsonb, text);
+
+-- Candidate 2 (9 params, the old one causing conflict)
+DROP FUNCTION IF EXISTS public.transfer_funds(uuid, uuid, numeric, character varying, numeric, numeric, uuid, text, jsonb);
+
+-- Other potential stale versions
 DROP FUNCTION IF EXISTS public.transfer_funds(UUID, UUID, NUMERIC, VARCHAR, NUMERIC, NUMERIC, UUID, JSONB);
 DROP FUNCTION IF EXISTS public.transfer_funds(UUID, UUID, NUMERIC, VARCHAR, NUMERIC, JSONB);
--- This is the current one we WANT in v077, but we drop it first to be sure no conflicts remain before recreating.
-DROP FUNCTION IF EXISTS public.transfer_funds(UUID, UUID, NUMERIC, VARCHAR, NUMERIC, JSONB, TEXT);
 
 -- 2. RECREATE DEFINITIVE transfer_funds (From Migration 077/110)
 CREATE OR REPLACE FUNCTION public.transfer_funds(
