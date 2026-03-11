@@ -121,7 +121,13 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             setNotifications(prev => [notification, ...prev]);
 
             toast.custom((t: Toast) => (
-                <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-[#1a1a1a] shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5 border border-white/10`}>
+                <div 
+                    className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-[#1a1a1a] shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5 border border-white/10 cursor-pointer`}
+                    onClick={() => {
+                        markAsRead(notification.id);
+                        toast.dismiss(t.id);
+                    }}
+                >
                     <div className="flex-1 w-0 p-4">
                         <div className="flex items-start">
                             <div className="ml-3 flex-1">
@@ -132,14 +138,17 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                     </div>
                     <div className="flex border-l border-white/10">
                         <button
-                            onClick={() => toast.dismiss(t.id)}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                toast.dismiss(t.id);
+                            }}
                             className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-primary hover:text-primary/80 focus:outline-none"
                         >
                             Close
                         </button>
                     </div>
                 </div>
-            ), { duration: 2000 });
+            ), { duration: 4000 });
         };
 
         socket.on('notification', onNotification);

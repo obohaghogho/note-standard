@@ -127,7 +127,9 @@ export const NotificationBell = () => {
                                         "p-4 border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors relative flex gap-3 cursor-pointer",
                                         !notif.is_read && "bg-primary/5"
                                     )}
-                                    onClick={() => !notif.is_read && markAsRead(notif.id)}
+                                    onClick={() => {
+                                        if (!notif.is_read) markAsRead(notif.id);
+                                    }}
                                 >
                                     <div className="flex-shrink-0 mt-1">
                                         <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10 relative overflow-hidden">
@@ -160,6 +162,7 @@ export const NotificationBell = () => {
                                                 className="text-[10px] text-primary hover:text-primary/80 flex items-center gap-1 w-fit mt-2 font-medium"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
+                                                    if (!notif.is_read) markAsRead(notif.id);
                                                     setIsOpen(false);
                                                 }}
                                             >

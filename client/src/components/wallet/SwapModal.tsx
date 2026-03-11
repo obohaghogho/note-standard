@@ -85,12 +85,19 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
         return () => clearTimeout(timeoutId);
     }, [amount, fromCurrency, toCurrency]);
 
-    const fetchPreview = async () => {
+    const fetchPreview = async (customAmount?: string) => {
+        const amountToPreview = customAmount ?? amount;
+        const numericAmount = parseFloat(amountToPreview);
+        if (isNaN(numericAmount) || numericAmount <= 0) {
+            setPreview(null);
+            return;
+        }
+
         setPreviewLoading(true);
         try {
             // Pass slippage as decimal (e.g., 0.5% -> 0.005)
             const slippageDecimal = slippage / 100;
-            const result = await walletApi.previewSwap(fromCurrency, toCurrency, parseFloat(amount), slippageDecimal);
+            const result = await walletApi.previewSwap(fromCurrency, toCurrency, numericAmount, slippageDecimal);
             setPreview({
                 rate: Number(result.rate ?? 0),
                 fee: Number(result.fee ?? 0),
@@ -153,8 +160,13 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
             // Precise flooring logic
             const factor = Math.pow(10, precision);
             const flooredMax = Math.floor(maxAmount * factor) / factor;
+            const maxStr = flooredMax > 0 ? flooredMax.toFixed(precision).replace(/\.?0+$/, '') : '0';
             
-            setAmount(flooredMax > 0 ? flooredMax.toFixed(precision).replace(/\.?0+$/, '') : '0');
+            setAmount(maxStr);
+            // Trigger preview immediately for MAX
+            if (flooredMax > 0) {
+                fetchPreview(maxStr);
+            }
         } catch (err) {
             console.error('Error calculating max swap amount:', err);
             // Fallback to naive logic (but with a safe buffer) if API fails
@@ -162,7 +174,41 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
             const precision = isCrypto ? 8 : 2;
             const factor = Math.pow(10, precision);
             const flooredBal = Math.floor(bal * 0.95 * factor) / factor; // Use 95% as safe fallback
-            setAmount(flooredBal > 0 ? flooredBal.toFixed(precision).replace(/\.?0+$/, '') : '0');
+            const fallbackStr = flooredBal > 0 ? flooredBal.toFixed(precision).replace(/\.?0+$/, '') : '0';
+            setAmount(fallbackStr);
+            if (flooredBal > 0) {
+                fetchPreview(fallbackStr);
+            }
+        }
+    };
+
+    const handleAmountOutChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        const numericOut = parseFloat(val);
+        
+        if (!val || isNaN(numericOut) || numericOut <= 0) {
+            setAmount('');
+            setPreview(null);
+            return;
+        }
+
+        // We use the last known rate to estimate. In a real system, 
+        // we'd call a dedicated "reverse preview" endpoint.
+        if (preview?.rate) {
+            const feeRate = (preview.feePercentage || 4.7) / 100;
+            // Formula: In = Out / (Rate * (1 - Fee))
+            const estimatedIn = numericOut / (preview.rate * (1 - feeRate));
+            
+            const isCrypto = ['BTC', 'ETH', 'USDT', 'USDC', 'TRC20', 'ERC20', 'BEP20', 'POLYGON'].some(c => fromCurrency.includes(c));
+            const precision = isCrypto ? 8 : 2;
+            setAmount(estimatedIn.toFixed(precision).replace(/\.?0+$/, ''));
+            
+            // We don't trigger fetchPreview here to avoid infinite loops, 
+            // but we update the preview's amountOut to match what the user typed.
+            setPreview(prev => prev ? { ...prev, amountOut: numericOut } : null);
+        } else {
+            // If No preview yet, we can't do reverse calculation accurately. 
+            setAmount('');
         }
     };
 
@@ -289,8 +335,13 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
                     {/* To Currency */}
                     <div className="bg-gray-800 rounded-lg p-4">
                         <div className="flex justify-between items-center mb-2">
-                            <label htmlFor="swap-to-currency" className="text-sm text-gray-400 cursor-pointer">To</label>
-                            {previewLoading && <Loader2 className="animate-spin text-purple-400" size={16} />}
+                            <label htmlFor="swap-to-currency" className="text-sm text-gray-400 cursor-pointer">To (Receive)</label>
+                            <span className="text-sm text-gray-400">
+                                Balance: {formatCurrency(
+                                    Number(wallets.find(w => w.currency === toCurrency)?.available_balance || 0), 
+                                    toCurrency
+                                )}
+                            </span>
                         </div>
                         <div className="flex gap-3">
                             <select
@@ -298,30 +349,31 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
                                 name="toCurrency"
                                 value={toCurrency}
                                 onChange={(e) => setToCurrency(e.target.value as Currency)}
-                                className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-purple-500 outline-none"
+                                className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-purple-500 outline-none w-[140px]"
                             >
-                                {CURRENCIES.filter(c => c !== fromCurrency).map(c => {
-                                    const wallet = wallets.find(w => w.currency === c);
-                                    const balance = wallet ? (wallet.available_balance ?? wallet.balance) : 0;
-                                    return (
-                                        <option key={c} value={c}>
-                                            {c.replace('_', ' ')} - {formatCurrency(Number(balance || 0), c)}
-                                        </option>
-                                    );
-                                })}
+                                {CURRENCIES.filter(c => c !== fromCurrency).map(c => (
+                                    <option key={c} value={c}>
+                                        {c.replace('_', ' ')}
+                                    </option>
+                                ))}
                             </select>
-                            <div className="flex-1">
+                            <div className="flex-1 relative flex items-center">
                                 <label htmlFor="swap-amount-out" className="sr-only">Estimated amount out</label>
                                 <input
                                     id="swap-amount-out"
                                     name="amountOut"
-                                    type="text"
-                                    value={preview ? Number(preview.amountOut || 0).toFixed(8) : ''}
-                                    readOnly
+                                    type="number"
+                                    value={preview ? Number(preview.amountOut || 0).toFixed(['BTC', 'ETH', 'USDT', 'USDC', 'TRC20', 'ERC20', 'BEP20', 'POLYGON'].some(c => toCurrency.includes(c)) ? 8 : 2).replace(/\.?0+$/, '') : ''}
+                                    onChange={handleAmountOutChange}
                                     placeholder="0.00"
-                                    className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-right outline-none"
+                                    className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-right outline-none font-medium text-green-400 focus:border-purple-500"
                                     autoComplete="off"
                                 />
+                                {previewLoading && (
+                                    <div className="absolute left-2">
+                                        <Loader2 className="animate-spin text-purple-400" size={14} />
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
