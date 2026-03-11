@@ -17,7 +17,17 @@ DROP FUNCTION IF EXISTS public.transfer_funds(uuid, uuid, numeric, character var
 DROP FUNCTION IF EXISTS public.transfer_funds(UUID, UUID, NUMERIC, VARCHAR, NUMERIC, NUMERIC, UUID, JSONB);
 DROP FUNCTION IF EXISTS public.transfer_funds(UUID, UUID, NUMERIC, VARCHAR, NUMERIC, JSONB);
 
--- 2. RECREATE DEFINITIVE transfer_funds (From Migration 077/110)
+-- 2. DROP CONFLICTING CONSTRAINTS
+-- Internal transfers use the same reference_id to link sender/receiver.
+-- Migration 106 incorrectly added a UNIQUE constraint to this column.
+ALTER TABLE public.transactions DROP CONSTRAINT IF EXISTS unique_transaction_reference_id;
+
+-- 3. ENSURE INTERNAL TRANSFERS ARE FREE
+-- (Resets any incorrect manual settings)
+UPDATE public.admin_settings SET value = '0' WHERE key = 'internal_transfer_fee';
+UPDATE public.commission_settings SET value = 0.0 WHERE transaction_type = 'TRANSFER_OUT';
+
+-- 4. RECREATE DEFINITIVE transfer_funds (From Migration 077/110)
 CREATE OR REPLACE FUNCTION public.transfer_funds(
     p_sender_wallet_id UUID,
     p_receiver_wallet_id UUID,

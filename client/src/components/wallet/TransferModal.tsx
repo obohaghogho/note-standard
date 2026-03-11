@@ -47,23 +47,26 @@ export const TransferModal: React.FC<TransferModalProps> = ({
                 setTransferFee(null);
                 return;
             }
-            const val = parseFloat(amount);
-            
-            const isEmail = recipient.includes('@');
-            const isAddress = !isEmail && (recipient.startsWith('0x') || recipient.startsWith('bc1') || recipient.startsWith('T') || recipient.length > 30);
-            
-            const type = isAddress ? 'WITHDRAWAL' : 'TRANSFER_OUT';
-            const settings = await getCommissionRate(type, selectedCurrency);
-            
-            let fee = 0;
-            if (settings && settings.length > 0) {
-                const s = settings[0];
-                if (s.commission_type === 'PERCENTAGE') fee = val * s.value;
-                else fee = s.value;
-                if (s.min_fee && fee < s.min_fee) fee = s.min_fee;
-                if (s.max_fee && fee > s.max_fee) fee = s.max_fee;
-            }
-            setTransferFee({ fee, net: val + fee });
+                const val = parseFloat(amount);
+                const isEmail = recipient.includes('@');
+                const isAddress = !isEmail && (recipient.startsWith('0x') || recipient.startsWith('bc1') || recipient.startsWith('T') || recipient.length > 30);
+                
+                const type = isAddress ? 'WITHDRAWAL' : 'TRANSFER_OUT';
+                const settings = await getCommissionRate(type, selectedCurrency);
+                
+                let fee = 0;
+                if (settings && settings.length > 0) {
+                    const s = settings[0];
+                    if (s.commission_type === 'PERCENTAGE') {
+                        const rateValue = s.value > 1 ? s.value / 100 : s.value;
+                        fee = val * rateValue;
+                    } else {
+                        fee = s.value;
+                    }
+                    if (s.min_fee && fee < s.min_fee) fee = s.min_fee;
+                    if (s.max_fee && fee > s.max_fee) fee = s.max_fee;
+                }
+                setTransferFee({ fee, net: val + fee });
         };
         calculateFee();
     }, [amount, recipient, selectedCurrency, getCommissionRate]);
