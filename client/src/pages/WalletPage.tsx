@@ -101,11 +101,18 @@ export const WalletPage: React.FC = () => {
             const usdRates: Record<string, number> = {};
             
             Object.keys(exchangeRates).forEach(curr => {
-                const val = exchangeRates[curr];
-                if (typeof val === 'number') {
-                    usdRates[curr] = val > 0 ? 1 / val : 0;
-                } else if (typeof val === 'object' && val !== null) {
-                    usdRates[curr] = val['USD'] || 0;
+                let val = exchangeRates[curr];
+                
+                // Handle objects (old provider format)
+                if (typeof val === 'object' && val !== null) {
+                    val = val['USD'] || val[curr] || 0;
+                }
+
+                const numVal = typeof val === 'string' ? parseFloat(val) : val;
+                
+                if (typeof numVal === 'number' && !isNaN(numVal) && numVal > 0) {
+                    // Convert "1 USD = X Currency" to "1 Currency = Y USD"
+                    usdRates[curr] = 1 / numVal;
                 }
             });
 
@@ -149,13 +156,19 @@ export const WalletPage: React.FC = () => {
             let total = 0;
             let available = 0;
             const safeWallets = Array.isArray(wallets) ? wallets : [];
+            
             safeWallets.forEach(w => {
                 const rate = rates[w.currency] || 0;
-                total += w.balance * rate;
-                available += (w.available_balance ?? w.balance) * rate;
+                // Using a slightly more robust multiplication to reduce float noise
+                const balValue = Number((w.balance * rate).toFixed(12));
+                const availValue = Number(((w.available_balance ?? w.balance) * rate).toFixed(12));
+                
+                total += balValue;
+                available += availValue;
             });
-            setTotalBalance(total);
-            setTotalAvailableBalance(available);
+
+            setTotalBalance(Number(total.toFixed(8)));
+            setTotalAvailableBalance(Number(available.toFixed(8)));
         }
     }, [wallets, rates]);
 
@@ -212,7 +225,10 @@ export const WalletPage: React.FC = () => {
                                 <span className={`w-2 h-2 rounded-full bg-green-400 animate-pulse`} />
                                 <span className="text-xs font-bold text-gray-300">{curr}/USD</span>
                                 <span className="text-xs font-black text-white">
-                                    {formatCurrency(rates[curr] || 0, 'USD')}
+                                    { (rates[curr] || 0) < 0.01 
+                                        ? `$${(rates[curr] || 0).toFixed((rates[curr] || 0) < 0.0001 ? 6 : 4)}` 
+                                        : formatCurrency(rates[curr] || 0, 'USD') 
+                                    }
                                 </span>
                             </div>
                         ))}
