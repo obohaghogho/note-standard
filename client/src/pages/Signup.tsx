@@ -323,7 +323,7 @@ export const Signup = () => {
                                             />
                                             
                                             <div className="pt-2 space-y-4">
-                                                <label className="flex items-start gap-3 cursor-pointer group">
+                                                <label htmlFor="terms-accepted" className="flex items-start gap-3 cursor-pointer group">
                                                     <div className="relative flex items-center mt-0.5">
                                                         <input 
                                                             id="terms-accepted"

@@ -104,7 +104,7 @@ const TeamContent: React.FC<{
                    selectedTeam.name.charAt(0).toUpperCase()
                  )}
                  {(myRole === 'owner' || myRole === 'admin') && (
-                   <label className="teams-page__avatar-edit-overlay cursor-pointer">
+                   <label htmlFor="team-avatar-upload" className="teams-page__avatar-edit-overlay cursor-pointer">
                      <Camera size={16} />
                                            <input 
                         id="team-avatar-upload"

@@ -62,7 +62,7 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({ value, onChange, label, 
     return (
         <div className="flex flex-col gap-1.5 w-full">
             {label && (
-                <label className="text-sm font-medium text-gray-300 ml-1">
+                <label htmlFor={id || name || 'phone-input'} className="text-sm font-medium text-gray-300 ml-1">
                     {label}
                 </label>
             )}

@@ -175,9 +175,9 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
                                 {/* Address Display */}
                                 <div className="space-y-2">
                                     <div className="flex justify-between items-end ml-1">
-                                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                                             {isCrypto ? `Your ${selectedCurrency} Address` : `Your Email / User ID (${selectedCurrency})`}
-                                        </label>
+                                        </span>
                                         {isCrypto && (
                                             <button 
                                                 onClick={handleGenerateNew}
