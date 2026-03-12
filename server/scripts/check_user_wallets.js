@@ -1,37 +1,28 @@
 const { createClient } = require("@supabase/supabase-js");
-require("dotenv").config();
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, "../.env") });
 
 const supabase = createClient(
-  process.env.VITE_SUPABASE_URL,
+  process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
 
 async function checkUserWallets() {
-  const userId = "8677bd57-6fdf-46a3-b237-d8ec2e4ae7cd";
-  console.log(`--- Checking Wallets for User: ${userId} ---`);
-
-  const { data: wallets, error } = await supabase
+  const userId = "5089c266-1ad6-4a83-b23f-064d65995345";
+  const { data, error } = await supabase
     .from("wallets_store")
     .select("*")
     .eq("user_id", userId);
-
+    
   if (error) {
-    console.error("Error fetching wallets:", error.message);
+    console.error("Error fetching user wallets:", error);
     return;
   }
-
-  if (!wallets || wallets.length === 0) {
-    console.log("No wallets found for this user.");
-    return;
-  }
-
-  wallets.forEach((w) => {
-    console.log(`--- Wallet ---`);
-    console.log(`Currency: ${w.currency}`);
-    console.log(`Network: ${w.network}`);
-    console.log(`Balance: ${w.balance}`);
-    console.log(`Avail: ${w.available_balance}`);
+  
+  console.log(`Wallets for User ${userId}:`);
+  data.forEach(w => {
+    console.log(`- ${w.currency} (${w.network}): ${w.address} | Provider: ${w.provider}`);
   });
 }
 
-checkUserWallets().catch(console.error);
+checkUserWallets();
