@@ -15,6 +15,7 @@ interface FundModalProps {
     selectedCurrency: Currency;
     selectedNetwork?: string;
     onSuccess: () => void;
+    initialIsPurchase?: boolean;
 }
 
 type DepositMethod = 'card' | 'bank' | 'crypto';
@@ -24,7 +25,8 @@ export const FundModal: React.FC<FundModalProps> = ({
     onClose, 
     selectedCurrency, 
     selectedNetwork = 'native',
-    onSuccess: _onSuccess 
+    onSuccess: _onSuccess,
+    initialIsPurchase = false
 }) => {
     const { subscription } = useAuth();
     const { wallets } = useWallet();
@@ -50,7 +52,17 @@ export const FundModal: React.FC<FundModalProps> = ({
     const [cryptoStatus, setCryptoStatus] = useState<string>('PENDING');
 
     // Direct Purchase State
-    const [isPurchase, setIsPurchase] = useState(false);
+    const [isPurchase, setIsPurchase] = useState(initialIsPurchase);
+    
+    useEffect(() => {
+        if (isOpen) {
+            setIsPurchase(initialIsPurchase);
+            if (initialIsPurchase) {
+                setMethod('card');
+            }
+        }
+    }, [initialIsPurchase, isOpen]);
+
     const [targetCurrency, setTargetCurrency] = useState<string>('USDT');
     const [targetNetwork] = useState<string>('native');
 

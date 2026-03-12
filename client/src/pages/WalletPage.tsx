@@ -86,6 +86,7 @@ export const WalletPage: React.FC = () => {
 
     // Modals
     const [showFundModal, setShowFundModal] = useState(false);
+    const [isBuyMode, setIsBuyMode] = useState(false);
     const [showTransferModal, setShowTransferModal] = useState(false);
     const [showWithdrawModal, setShowWithdrawModal] = useState(false);
     const [showReceiveModal, setShowReceiveModal] = useState(false);
@@ -172,7 +173,7 @@ export const WalletPage: React.FC = () => {
         }
     }, [wallets, rates]);
 
-    const handleAction = (action: 'send' | 'receive' | 'fund' | 'withdraw' | 'swap') => {
+    const handleAction = (action: 'send' | 'receive' | 'fund' | 'withdraw' | 'swap' | 'buy') => {
         const safeWallets = Array.isArray(wallets) ? wallets : [];
         if (!selectedAsset.currency && safeWallets.length > 0) {
             // Prefer a fiat wallet as default for global actions (better feature discoverability)
@@ -183,6 +184,17 @@ export const WalletPage: React.FC = () => {
 
         switch (action) {
             case 'fund':
+                setShowFundModal(true);
+                break;
+            case 'buy':
+                // For buy action, default to a crypto wallet to trigger direct purchase
+                if (['USD', 'EUR', 'NGN', 'GBP'].includes(selectedAsset.currency)) {
+                    const cryptoWallet = safeWallets.find(w => !['USD', 'EUR', 'NGN', 'GBP'].includes(w.currency));
+                    if (cryptoWallet) {
+                        setSelectedAsset({ currency: cryptoWallet.currency, network: cryptoWallet.network });
+                    }
+                }
+                setIsBuyMode(true);
                 setShowFundModal(true);
                 break;
             case 'send':
@@ -276,6 +288,7 @@ export const WalletPage: React.FC = () => {
                             onSwap={() => handleAction('swap')}
                             onWithdraw={() => handleAction('withdraw')}
                             onDeposit={() => handleAction('fund')}
+                            onBuy={() => handleAction('buy')}
                             disabledActions={
                                 ['BTC', 'ETH', 'USDT', 'USDC'].some(c => selectedAsset.currency?.startsWith(c)) 
                                 ? ['Deposit'] 
@@ -343,10 +356,14 @@ export const WalletPage: React.FC = () => {
             {showFundModal && (
                 <FundModal 
                     isOpen={showFundModal} 
-                    onClose={() => setShowFundModal(false)} 
+                    onClose={() => {
+                        setShowFundModal(false);
+                        setIsBuyMode(false);
+                    }} 
                     selectedCurrency={selectedAsset.currency}
                     selectedNetwork={selectedAsset.network}
                     onSuccess={handleRefresh}
+                    initialIsPurchase={isBuyMode}
                 />
             )}
             {showTransferModal && (
