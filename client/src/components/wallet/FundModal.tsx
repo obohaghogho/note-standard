@@ -24,17 +24,13 @@ export const FundModal: React.FC<FundModalProps> = ({
     selectedNetwork = 'native',
     onSuccess: _onSuccess 
 }) => {
-    const { profile } = useAuth();
+    const { profile, subscription } = useAuth();
     const [method, setMethod] = useState<DepositMethod>('card');
     const [amount, setAmount] = useState('');
     const [loading, setLoading] = useState(false);
     
     // Bank deposit state
-    const [bankDetails, setBankDetails] = useState<{
-        reference: string;
-        bankDetails: { bankName: string; accountNumber: string; accountName: string; reference: string };
-        expiresAt?: string;
-    } | null>(null);
+    const [bankDetails, setBankDetails] = useState<any>(null);
 
     // Crypto deposit state
     const [cryptoAddress, setCryptoAddress] = useState<{
@@ -58,7 +54,7 @@ export const FundModal: React.FC<FundModalProps> = ({
     };
     const MAX_PER_TRANSACTION = 4000;
 
-    const userPlan = (profile?.plan || 'FREE').toUpperCase() as keyof typeof DAILY_LIMITS;
+    const userPlan = (subscription?.plan_tier || 'FREE').toUpperCase() as keyof typeof DAILY_LIMITS;
     const dailyLimit = DAILY_LIMITS[userPlan] || DAILY_LIMITS.FREE;
 
     const isCrypto = selectedCurrency === 'BTC' || selectedCurrency === 'ETH' || selectedCurrency.startsWith('USDT') || selectedCurrency.startsWith('USDC');
