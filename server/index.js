@@ -6,7 +6,7 @@ const app = require("./app");
 const http = require("http");
 const { Server } = require("socket.io");
 const supabase = require("./config/database");
-const { whitelist } = require("./utils/cors");
+const { whitelist, isOriginAllowed } = require("./utils/cors");
 
 const server = http.createServer(app);
 
@@ -40,7 +40,13 @@ try {
 
 const io = new Server(server, {
   cors: {
-    origin: whitelist,
+    origin: (origin, callback) => {
+      if (isOriginAllowed(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     methods: ["GET", "POST"],
     credentials: true,
   },
