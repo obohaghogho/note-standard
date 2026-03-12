@@ -103,6 +103,42 @@ class FlutterwaveProvider extends BaseProvider {
     return signature && secretHash && signature === secretHash;
   }
 
+  /**
+   * Request a virtual account for NGN/USD/EUR deposits
+   */
+  async createVirtualAccount(data) {
+    const { currency, email, firstName, lastName, phone } = data;
+    try {
+      const response = await this.client.post("/virtual-account-numbers", {
+        email: email,
+        is_permanent: false,
+        tx_ref: `va_${Date.now()}_${email.substring(0, 5)}`,
+        currency: currency,
+        firstname: firstName,
+        lastname: lastName,
+        phonenumber: phone,
+      });
+
+      const entry = response.data.data;
+      return {
+        bankName: entry.bank_name,
+        accountNumber: entry.account_number,
+        accountName: `${firstName} ${lastName}`,
+        currency: entry.currency,
+        reference: entry.flw_ref,
+        provider: "flutterwave",
+      };
+    } catch (error) {
+      console.error(
+        "Flutterwave Virtual Account Error:",
+        error.response?.data || error.message,
+      );
+      throw new Error(
+        error.response?.data?.message || "Failed to generate virtual account",
+      );
+    }
+  }
+
   parseWebhookEvent(payload) {
     const event = payload.event || (payload["event.type"]);
     const data = payload.data || payload;
