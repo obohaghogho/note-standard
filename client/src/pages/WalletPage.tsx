@@ -340,39 +340,47 @@ export const WalletPage: React.FC = () => {
             </div>
 
             {/* Modals */}
-            <FundModal 
-                isOpen={showFundModal} 
-                onClose={() => setShowFundModal(false)} 
-                selectedCurrency={selectedAsset.currency}
-                selectedNetwork={selectedAsset.network}
-                onSuccess={handleRefresh}
-            />
-             <TransferModal
-                isOpen={showTransferModal}
-                onClose={() => setShowTransferModal(false)}
-                selectedCurrency={selectedAsset.currency}
-                selectedNetwork={selectedAsset.network}
-                onSuccess={() => {
-                    handleRefresh();
-                    toast.success('Transfer successful');
-                }}
-            />
-            <WithdrawModal
-                isOpen={showWithdrawModal}
-                onClose={() => setShowWithdrawModal(false)}
-                selectedCurrency={selectedAsset.currency}
-                selectedNetwork={selectedAsset.network}
-                onSuccess={() => {
-                    handleRefresh();
-                    toast.success('Withdrawal initiated');
-                }}
-            />
-            <ReceiveModal
-                isOpen={showReceiveModal}
-                onClose={() => setShowReceiveModal(false)}
-                initialCurrency={selectedAsset.currency}
-                initialNetwork={selectedAsset.network}
-            />
+            {showFundModal && (
+                <FundModal 
+                    isOpen={showFundModal} 
+                    onClose={() => setShowFundModal(false)} 
+                    selectedCurrency={selectedAsset.currency}
+                    selectedNetwork={selectedAsset.network}
+                    onSuccess={handleRefresh}
+                />
+            )}
+            {showTransferModal && (
+                <TransferModal
+                    isOpen={showTransferModal}
+                    onClose={() => setShowTransferModal(false)}
+                    selectedCurrency={selectedAsset.currency}
+                    selectedNetwork={selectedAsset.network}
+                    onSuccess={() => {
+                        handleRefresh();
+                        toast.success('Transfer successful');
+                    }}
+                />
+            )}
+            {showWithdrawModal && (
+                <WithdrawModal
+                    isOpen={showWithdrawModal}
+                    onClose={() => setShowWithdrawModal(false)}
+                    selectedCurrency={selectedAsset.currency}
+                    selectedNetwork={selectedAsset.network}
+                    onSuccess={() => {
+                        handleRefresh();
+                        toast.success('Withdrawal initiated');
+                    }}
+                />
+            )}
+            {showReceiveModal && (
+                <ReceiveModal
+                    isOpen={showReceiveModal}
+                    onClose={() => setShowReceiveModal(false)}
+                    initialCurrency={selectedAsset.currency}
+                    initialNetwork={selectedAsset.network}
+                />
+            )}
 
             {/* Create Wallet Modal */}
              {showCreateModal && (
