@@ -19,7 +19,9 @@ async function createCardDeposit(
   amount,
   userPlan = "FREE",
   idempotencyKey = null,
+  options = {},
 ) {
+  const { toCurrency, toNetwork } = options;
   const upCurrency = currency.toUpperCase();
   if (upCurrency === "BTC" || upCurrency === "ETH") {
     throw new Error("BTC and ETH deposits are not supported via payment");
@@ -75,9 +77,11 @@ async function createCardDeposit(
     amount,
     currency,
     {
-      type: "DEPOSIT",
+      type: toCurrency && toCurrency !== currency ? "Digital Assets Purchase" : "DEPOSIT",
       userPlan,
       idempotencyKey,
+      targetCurrency: toCurrency,
+      targetNetwork: toNetwork,
     },
     {
       isCrypto: false,
@@ -94,7 +98,9 @@ async function createBankDeposit(
   amount,
   userPlan = "FREE",
   idempotencyKey = null,
+  options = {},
 ) {
+  const { toCurrency, toNetwork } = options;
   const upCurrency = currency.toUpperCase();
   if (upCurrency === "BTC" || upCurrency === "ETH") {
     throw new Error("BTC and ETH deposits are not supported via bank transfer");
@@ -184,10 +190,12 @@ async function createBankDeposit(
     amount,
     currency,
     {
-      type: "DEPOSIT",
+      type: toCurrency && toCurrency !== currency ? "Digital Assets Purchase" : "DEPOSIT",
       method: "bank_transfer",
       userPlan,
       idempotencyKey,
+      targetCurrency: toCurrency,
+      targetNetwork: toNetwork,
     },
     {
       isCrypto: false,
