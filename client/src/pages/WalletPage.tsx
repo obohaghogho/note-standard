@@ -175,7 +175,10 @@ export const WalletPage: React.FC = () => {
     const handleAction = (action: 'send' | 'receive' | 'fund' | 'withdraw' | 'swap') => {
         const safeWallets = Array.isArray(wallets) ? wallets : [];
         if (!selectedAsset.currency && safeWallets.length > 0) {
-            setSelectedAsset({ currency: safeWallets[0].currency, network: safeWallets[0].network });
+            // Prefer a fiat wallet as default for global actions (better feature discoverability)
+            const fiatWallet = safeWallets.find(w => ['USD', 'EUR', 'NGN', 'GBP'].includes(w.currency));
+            const defaultWallet = fiatWallet || safeWallets[0];
+            setSelectedAsset({ currency: defaultWallet.currency, network: defaultWallet.network });
         }
 
         switch (action) {

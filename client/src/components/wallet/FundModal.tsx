@@ -6,6 +6,8 @@ import toast from 'react-hot-toast';
 import type { Currency } from '@/types/wallet';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
+import { useWallet } from '../../hooks/useWallet';
+import { ChevronDown, Plus } from 'lucide-react';
 
 interface FundModalProps {
     isOpen: boolean;
@@ -25,6 +27,11 @@ export const FundModal: React.FC<FundModalProps> = ({
     onSuccess: _onSuccess 
 }) => {
     const { profile, subscription } = useAuth();
+    const { wallets } = useWallet();
+    const [activeCurrency, setActiveCurrency] = useState<Currency>(selectedCurrency);
+    const [activeNetwork, setActiveNetwork] = useState<string>(selectedNetwork);
+    const [showAssetSelector, setShowAssetSelector] = useState(false);
+    
     const [method, setMethod] = useState<DepositMethod>('card');
     const [amount, setAmount] = useState('');
     const [loading, setLoading] = useState(false);
@@ -57,19 +64,27 @@ export const FundModal: React.FC<FundModalProps> = ({
     const userPlan = (subscription?.plan_tier || 'FREE').toUpperCase() as keyof typeof DAILY_LIMITS;
     const dailyLimit = DAILY_LIMITS[userPlan] || DAILY_LIMITS.FREE;
 
-    const isCrypto = selectedCurrency === 'BTC' || selectedCurrency === 'ETH' || selectedCurrency.startsWith('USDT') || selectedCurrency.startsWith('USDC');
+    const isCrypto = activeCurrency === 'BTC' || activeCurrency === 'ETH' || activeCurrency.startsWith('USDT') || activeCurrency.startsWith('USDC');
     const isFiat = !isCrypto; 
 
     useEffect(() => {
-        // Reset state when modal opens
+        // Reset state when modal opens or activeCurrency changes
         if (isOpen) {
-            setAmount('');
             setBankDetails(null);
             setCryptoAddress(null);
             setCryptoStatus('PENDING');
             setMethod(isCrypto ? 'crypto' : 'card');
+            setIsPurchase(false);
         }
-    }, [isOpen, isCrypto]);
+    }, [isOpen, activeCurrency, isCrypto]);
+
+    useEffect(() => {
+        if (isOpen) {
+            setActiveCurrency(selectedCurrency);
+            setActiveNetwork(selectedNetwork);
+            setAmount('');
+        }
+    }, [isOpen, selectedCurrency, selectedNetwork]);
 
     // Polling for crypto status
     useEffect(() => {
@@ -120,15 +135,15 @@ export const FundModal: React.FC<FundModalProps> = ({
         try {
             const result = await walletApi.initializePayment({
                 amount: parseFloat(amount),
-                currency: selectedCurrency,
-                provider: selectedNetwork || 'native'
+                currency: activeCurrency,
+                provider: activeNetwork || 'native'
             });
             
             setCryptoAddress({
                 address: result.payAddress || '',
                 reference: result.reference,
                 paymentUrl: result.paymentUrl,
-                network: selectedNetwork !== 'native' ? selectedNetwork : (selectedCurrency === 'BTC' ? 'Bitcoin' : 'Ethereum')
+                network: activeNetwork !== 'native' ? activeNetwork : (activeCurrency === 'BTC' ? 'Bitcoin' : 'Ethereum')
             });
             toast.success('Deposit address generated!');
         } catch (err: any) {
@@ -141,7 +156,7 @@ export const FundModal: React.FC<FundModalProps> = ({
     const handleRegenerateAddress = async () => {
         setLoading(true);
         try {
-            const result = await walletApi.generateNewAddress(selectedCurrency);
+            const result = await walletApi.generateNewAddress(activeCurrency);
             setCryptoAddress({
                 address: result.address,
                 network: selectedCurrency.includes('_') ? selectedCurrency.split('_')[1] : (selectedCurrency === 'BTC' ? 'Bitcoin' : 'Ethereum (ERC20)'),
@@ -177,7 +192,7 @@ export const FundModal: React.FC<FundModalProps> = ({
         try {
             const result = await walletApi.depositCard({
                 amount: Number(amount),
-                currency: selectedCurrency,
+                currency: activeCurrency,
                 toCurrency: isPurchase ? targetCurrency : undefined,
                 toNetwork: isPurchase ? targetNetwork : undefined,
             });
@@ -225,7 +240,7 @@ export const FundModal: React.FC<FundModalProps> = ({
         try {
             const result = await walletApi.depositTransfer({
                 amount: Number(amount),
-                currency: selectedCurrency,
+                currency: activeCurrency,
                 toCurrency: isPurchase ? targetCurrency : undefined,
                 toNetwork: isPurchase ? targetNetwork : undefined,
             });
@@ -265,23 +280,82 @@ export const FundModal: React.FC<FundModalProps> = ({
                     Secure Payment Protocol
                 </p>
 
+                {/* Asset Selector */}
+                <div className="relative mb-6">
+                    <label className="text-xs text-gray-400 font-medium ml-1 mb-1 block">Funding Wallet</label>
+                    <button 
+                        onClick={() => setShowAssetSelector(!showAssetSelector)}
+                        className="w-full flex items-center justify-between bg-gray-800/80 border border-gray-700/50 rounded-xl px-4 py-3 hover:border-purple-500/50 transition-all group"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-sm font-bold text-white group-hover:scale-110 transition-transform">
+                                {activeCurrency[0]}
+                            </div>
+                            <div className="text-left">
+                                <div className="text-sm font-bold text-white tracking-wide">{activeCurrency}</div>
+                                <div className="text-[10px] text-gray-500 uppercase font-medium">{activeNetwork !== 'native' ? activeNetwork : 'Universal Network'}</div>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                             <div className="px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-[10px] text-purple-400 font-bold uppercase">Change</div>
+                             <ChevronDown size={16} className={`text-gray-500 transition-transform duration-300 ${showAssetSelector ? 'rotate-180' : ''}`} />
+                        </div>
+                    </button>
+
+                    <AnimatePresence>
+                        {showAssetSelector && (
+                            <motion.div 
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="absolute top-full left-0 right-0 mt-2 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden"
+                            >
+                                <div className="p-2 grid grid-cols-1 gap-1 max-h-60 overflow-y-auto custom-scrollbar">
+                                    {wallets.map(w => (
+                                        <button
+                                            key={`${w.currency}-${w.network}`}
+                                            onClick={() => {
+                                                setActiveCurrency(w.currency as Currency);
+                                                setActiveNetwork(w.network || 'native');
+                                                setShowAssetSelector(false);
+                                            }}
+                                            className={`flex items-center justify-between p-3 rounded-lg transition-all ${activeCurrency === w.currency ? 'bg-purple-600/20 border border-purple-500/30' : 'hover:bg-white/5 border border-transparent'}`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-xs font-bold">{w.currency[0]}</div>
+                                                <div className="text-left">
+                                                    <div className="text-sm font-bold">{w.currency}</div>
+                                                    <div className="text-[10px] text-gray-500">{w.network || 'Native'}</div>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="text-xs font-bold">{(w.available_balance ?? w.balance).toLocaleString()}</div>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+
                 {/* Summary Card */}
                 <div className="bg-gray-800/50 rounded-xl p-4 mb-6 border border-gray-700/50">
                     <div className="flex justify-between items-center mb-1">
-                        <span className="text-gray-400 text-xs uppercase tracking-wider">Product</span>
+                        <span className="text-gray-400 text-xs uppercase tracking-wider">Target Action</span>
                         <span className="text-white text-sm font-medium">
-                            {isPurchase ? `Purchase ${targetCurrency}` : 'Digital Assets Funding'}
+                            {isPurchase ? `Purchase ${targetCurrency}` : `Deposit to ${activeCurrency}`}
                         </span>
                     </div>
                     <div className="flex justify-between items-end">
                         <span className="text-gray-400 text-xs uppercase tracking-wider">
-                            {isPurchase ? 'Pay Amount' : 'Total Amount'}
+                            {isPurchase ? 'Pay Amount' : 'Deposit Amount'}
                         </span>
                         <div className="text-right">
                             <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">
                                 {amount || '0.00'}
                             </span>
-                            <span className="ml-2 text-gray-500 font-medium">{selectedCurrency}</span>
+                            <span className="ml-2 text-gray-500 font-medium">{activeCurrency}</span>
                         </div>
                     </div>
                 </div>
