@@ -113,6 +113,9 @@ class PaymentService {
     }
 
     // 4. Create transaction record in DB BEFORE initialization (Mandatory for Ledger)
+    const targetCurrency = metadata.targetCurrency || currency;
+    const targetNetwork = metadata.targetNetwork || network;
+
     const { data: transaction, error: txError } = await supabase
       .from("transactions")
       .insert({
@@ -121,15 +124,15 @@ class PaymentService {
         amount: math.formatForCurrency(amount, currency),
         currency: currency,
         amount_from: math.formatForCurrency(amount, currency),
-        amount_to: math.formatForCurrency(amount, currency),
+        amount_to: math.formatForCurrency(amount, currency), // Will be recalculated on finalization for purchases
         from_currency: currency,
-        to_currency: currency,
-        network: network,
+        to_currency: targetCurrency,
+        network: targetNetwork,
         status: "PENDING",
         reference_id: reference,
         idempotency_key: idempotencyKey,
         provider: providerName,
-        display_label: "Digital Assets Purchase",
+        display_label: metadata.display_label || (targetCurrency !== currency ? `Purchase ${targetCurrency}` : "Digital Assets Purchase"),
         metadata: {
           ...metadata,
           userId,
@@ -137,8 +140,10 @@ class PaymentService {
           category: "digital_assets",
           product_type: "digital_asset",
           idempotencyKey,
+          targetCurrency,
+          targetNetwork,
         },
-        type: isCrypto
+        type: isCrypto || targetCurrency !== currency
           ? "Digital Assets Purchase"
           : (metadata.type || "DEPOSIT"),
       })
@@ -448,17 +453,42 @@ class PaymentService {
     if (isDeposit) {
       console.log("STEP 3: Calling confirm_deposit");
 
-      if (!tx.wallet_id) {
-        console.error(
-          `[Finalize] Missing wallet_id for transaction ${tx.id}. Cannot credit wallet.`,
-        );
-        return { status: "verification_failed", error: "Missing wallet_id" };
-      }
+      let targetWalletId = tx.wallet_id;
+      let creditAmount = safeAmount;
+      let creditCurrency = tx.currency;
 
-      const safeAmount = math.formatForCurrency(tx.amount, tx.currency);
-      if (math.isEqual(safeAmount, 0)) {
-        console.error(`[Finalize] Invalid transaction amount: ${tx.amount}`);
-        return { status: "verification_failed", error: "Invalid amount" };
+      // Handle Direct Fiat-to-Crypto Purchase
+      if (tx.from_currency !== tx.to_currency && (tx.type === "Digital Assets Purchase" || tx.type === "DIGITAL ASSETS PURCHASE")) {
+        console.log(`[Finalize] Direct Purchase detected: ${tx.from_currency} -> ${tx.to_currency}`);
+        try {
+          const fxService = require("../fxService");
+          const walletService = require("../walletService");
+          
+          const rate = await fxService.getRate(tx.from_currency, tx.to_currency);
+          creditAmount = math.multiply(safeAmount, rate);
+          creditCurrency = tx.to_currency;
+
+          // Find or create the target wallet
+          const targetWallet = await walletService.createWallet(tx.user_id, tx.to_currency, tx.network);
+          targetWalletId = targetWallet.id;
+
+          console.log(`[Finalize] Converted ${safeAmount} ${tx.from_currency} to ${creditAmount} ${creditCurrency} at rate ${rate}`);
+          
+          // Update transaction with conversion details
+          await supabase.from("transactions").update({
+            amount_to: math.formatForCurrency(creditAmount, creditCurrency),
+            metadata: { 
+              ...tx.metadata, 
+              applied_rate: rate,
+              original_fiat_amount: safeAmount,
+              original_fiat_currency: tx.from_currency
+            }
+          }).eq("id", tx.id);
+
+        } catch (convErr) {
+          console.error(`[Finalize] Conversion failed for direct purchase: ${convErr.message}`);
+          return { status: "verification_failed", error: "Conversion failed during finalization" };
+        }
       }
 
       const externalHash = rawData
@@ -468,8 +498,8 @@ class PaymentService {
       // ── USE confirm_deposit RPC (atomic: wallets_store + transactions + ledger_entries) ──
       const { error: rpcError } = await supabase.rpc("confirm_deposit", {
         p_transaction_id: tx.id,
-        p_wallet_id: tx.wallet_id,
-        p_amount: safeAmount,
+        p_wallet_id: targetWalletId,
+        p_amount: math.formatForCurrency(creditAmount, creditCurrency),
         p_external_hash: externalHash ? String(externalHash) : null,
       });
 

@@ -24,7 +24,7 @@ exports.deposit = async (req, res) => {
 
 exports.depositCard = async (req, res) => {
   try {
-    let { amount, currency } = req.body;
+    let { amount, currency, toCurrency, toNetwork } = req.body;
 
     if (!amount || !currency) {
       return res.status(400).json({
@@ -40,6 +40,8 @@ exports.depositCard = async (req, res) => {
         currency,
         amount,
         req.userProfile?.plan || "FREE",
+        null,
+        { toCurrency, toNetwork }
       );
 
     res.json(result);
@@ -57,7 +59,7 @@ exports.depositCard = async (req, res) => {
 
 exports.depositTransfer = async (req, res) => {
   try {
-    let { amount, currency } = req.body;
+    let { amount, currency, toCurrency, toNetwork } = req.body;
 
     if (!amount || !currency) {
       return res.status(400).json({
@@ -73,6 +75,8 @@ exports.depositTransfer = async (req, res) => {
         currency,
         amount,
         req.userProfile?.plan || "FREE",
+        null,
+        { toCurrency, toNetwork }
       );
 
     res.json(result);
