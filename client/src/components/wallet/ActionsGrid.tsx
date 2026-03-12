@@ -1,5 +1,5 @@
 import React from 'react';
-import { Send, Download, ArrowRightLeft, ArrowUpRight, CreditCard } from 'lucide-react';
+import { Send, Download, ArrowRightLeft, ArrowUpRight, CreditCard, ShoppingCart } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface ActionsGridProps {
@@ -8,13 +8,15 @@ interface ActionsGridProps {
     onSwap: () => void;
     onWithdraw: () => void;
     onDeposit: () => void;
+    onBuy: () => void;
     disabledActions?: string[];
 }
 
-export const ActionsGrid: React.FC<ActionsGridProps> = ({ onSend, onReceive, onSwap, onWithdraw, onDeposit, disabledActions = [] }) => {
+export const ActionsGrid: React.FC<ActionsGridProps> = ({ onSend, onReceive, onSwap, onWithdraw, onDeposit, onBuy, disabledActions = [] }) => {
     const actions = [
         { label: 'Send', icon: Send, onClick: onSend, color: 'bg-blue-500', delay: 0 },
         { label: 'Receive', icon: Download, onClick: onReceive, color: 'bg-green-500', delay: 0.1 },
+        { label: 'Buy', icon: ShoppingCart, onClick: onBuy, color: 'bg-emerald-500', delay: 0.15 },
         { label: 'Swap', icon: ArrowRightLeft, onClick: onSwap, color: 'bg-purple-500', delay: 0.2 },
         { label: 'Withdraw', icon: ArrowUpRight, onClick: onWithdraw, color: 'bg-orange-500', delay: 0.3 },
         { label: 'Deposit', icon: CreditCard, onClick: onDeposit, color: 'bg-pink-500', delay: 0.4 },
