@@ -186,7 +186,7 @@ exports.getOrCreateDepositAddress = async (
     })
       .eq("user_id", userId)
       .eq("currency", upAsset)
-      .eq("network", upNetwork),
+      .ilike("network", upNetwork),
   ]);
 
   if (cacheError) {

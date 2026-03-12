@@ -71,6 +71,13 @@ class WalletService {
             upNetwork,
             supabase,
           );
+
+          await supabase.from("wallets_store").update({
+            address: real.address,
+            network: upNetwork,
+            provider: "nowpayments",
+          }).eq("id", existing.id);
+
           return { ...existing, address: real.address, network: upNetwork };
         } catch (e) {
           logger.error(
@@ -337,22 +344,36 @@ class WalletService {
     let targetUserId = recipientId;
     let isExternal = false;
 
-    // Resolve recipient
+    // Resolve username if recipientId is not a UUID
+    if (targetUserId && !UUID_REGEX.test(targetUserId)) {
+      const { data: profile } = await supabase.from("profiles").select("id").eq("username", targetUserId).maybeSingle();
+      if (profile) {
+        targetUserId = profile.id;
+      } else {
+        const { data: profileEmail } = await supabase.from("profiles").select("id").eq("email", targetUserId).maybeSingle();
+        if (profileEmail) {
+          targetUserId = profileEmail.id;
+        } else {
+          targetUserId = null;
+        }
+      }
+    }
+
+    // Resolve recipient from address
     if (!targetUserId && recipientAddress) {
       const { data: targetWallet } = await supabase.from("wallets_store")
-        .select(
-          "user_id",
-        )
-        .eq("address", recipientAddress).eq("currency", upCurrency).eq(
-          "network",
-          upNetwork,
-        ).single();
+        .select("user_id")
+        .eq("address", recipientAddress)
+        .eq("currency", upCurrency)
+        .eq("network", upNetwork)
+        .maybeSingle();
 
-      if (targetWallet) targetUserId = targetWallet.user_id;
-      else if (
-        (upCurrency === "BTC" &&
-          /^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,39}$/.test(recipientAddress)) ||
-        (upCurrency === "ETH" && /^0x[a-fA-F0-9]{40}$/.test(recipientAddress))
+      if (targetWallet) {
+        targetUserId = targetWallet.user_id;
+      } else if (
+        (upCurrency === "BTC" && /^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,39}$/.test(recipientAddress)) ||
+        (["ETH", "USDT", "USDC"].includes(upCurrency) && /^0x[a-fA-F0-9]{40}$/.test(recipientAddress)) ||
+        (upCurrency === "USDT" && /^T[A-Za-z1-9]{33}$/.test(recipientAddress))
       ) {
         isExternal = true;
       } else {
@@ -361,15 +382,16 @@ class WalletService {
     }
 
     if (!targetUserId && !isExternal && recipientEmail) {
-      const { data: profile } = await supabase.from("profiles").select("id").eq(
-        "email",
-        recipientEmail,
-      ).single();
+      const { data: profile } = await supabase.from("profiles").select("id").eq("email", recipientEmail).maybeSingle();
       if (profile) targetUserId = profile.id;
     }
 
     if (!targetUserId && !isExternal) {
       throw new Error("Could not resolve recipient");
+    }
+
+    if (targetUserId && targetUserId === userId) {
+      throw new Error("Cannot transfer to your own account");
     }
 
     const senderWallet = await this.createWallet(userId, upCurrency, upNetwork);
