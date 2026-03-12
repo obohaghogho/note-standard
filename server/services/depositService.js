@@ -227,9 +227,6 @@ async function initializeCryptoDeposit(
   idempotencyKey = null,
 ) {
   const upCurrency = currency.toUpperCase();
-  if (upCurrency === "BTC" || upCurrency === "ETH") {
-    throw new Error("BTC and ETH deposits are not supported");
-  }
 
   console.log(
     `[DepositService] Initializing crypto deposit for user ${userId}, amount ${amount}`,
