@@ -125,11 +125,11 @@ async function createBankDeposit(
     .eq("id", userId)
     .single();
 
-  let selectedDetails = allBankDetails[currency] || allBankDetails.USD;
+  let selectedDetails = allBankDetails[upCurrency] || allBankDetails.USD;
 
-  // 1a. For NGN, try to get a real-time virtual account from Paystack
-  if (upCurrency === "NGN") {
-    try {
+  // 1a. Attempt Real-time Virtual Account Generation
+  try {
+    if (upCurrency === "NGN") {
       const PaystackProvider = require("./payment/providers/PaystackProvider");
       const paystack = new PaystackProvider();
       const virtualAccount = await paystack.getDedicatedAccount(
@@ -145,9 +145,28 @@ async function createBankDeposit(
         accountName: virtualAccount.accountName,
         note: "Funds are credited instantly after transfer",
       };
-    } catch (err) {
-      logger.warn(`Failed to auto-generate Paystack virtual account, falling back to static details: ${err.message}`);
+    } else if (["USD", "EUR", "GBP"].includes(upCurrency)) {
+      // Try Fincra or Flutterwave for Global Accounts
+      const FincraProvider = require("./payment/providers/FincraProvider");
+      const fincra = new FincraProvider();
+      const virtualAccount = await fincra.createVirtualAccount({
+        currency: upCurrency,
+        email: profile.email,
+        firstName: profile.first_name || profile.full_name?.split(" ")[0] || "User",
+        lastName: profile.last_name || profile.full_name?.split(" ").slice(1).join(" ") || "Standard",
+        phone: profile.phone || "",
+      });
+
+      selectedDetails = {
+        bankName: virtualAccount.bankName,
+        accountNumber: virtualAccount.accountNumber,
+        accountName: virtualAccount.accountName,
+        routingNumber: virtualAccount.routingNumber || virtualAccount.swiftCode,
+        note: `Funds are credited after ${upCurrency} settlement (1-3 days)`,
+      };
     }
+  } catch (err) {
+    logger.warn(`Failed to auto-generate ${upCurrency} virtual account, falling back to static details: ${err.message}`);
   }
 
   // Check Daily Limits

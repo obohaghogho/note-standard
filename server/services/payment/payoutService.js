@@ -19,12 +19,9 @@ class PayoutService {
    * https://developer.flutterwave.com/reference/endpoints/transfers/
    */
   async createFlutterwaveTransfer(
-    bankCode,
-    accountNumber,
-    amount,
-    currency,
     reference,
     narration = "Withdrawal",
+    options = {},
   ) {
     if (!FLUTTERWAVE_SECRET_KEY) {
       throw new Error("Flutterwave configuration missing");
@@ -39,8 +36,10 @@ class PayoutService {
           amount: amount,
           currency: currency,
           narration: narration,
-          reference: reference, // Unique transaction reference from our DB
+          reference: reference, 
           callback_url: `${process.env.SERVER_URL}/api/webhooks/flutterwave`,
+          destination_branch_code: options.branchCode || options.swiftCode,
+          beneficiary_country: options.country || "NG",
         },
         {
           headers: {

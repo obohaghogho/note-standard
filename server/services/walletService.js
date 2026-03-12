@@ -227,6 +227,10 @@ class WalletService {
       network,
       destination,
       bankId,
+      bankCode,
+      country,
+      branchCode,
+      swiftCode,
       userPlan,
       idempotencyKey,
     },
@@ -261,14 +265,19 @@ class WalletService {
         network,
       );
     } else {
-      const defaultBankCode = "044";
+      const finalBankCode = bankCode || bankId || "044"; // Fallback to 044 only for NGN if nothing else provided
       payoutResult = await payoutService.createFlutterwaveTransfer(
-        defaultBankCode,
+        finalBankCode,
         bankId,
         math.formatForCurrency(amount, currency),
         currency,
         reference,
         `Withdrawal for ${userId}`,
+        {
+          country: country || (currency === "NGN" ? "NG" : "US"),
+          branchCode: branchCode || swiftCode,
+          swiftCode: swiftCode,
+        },
       );
     }
 

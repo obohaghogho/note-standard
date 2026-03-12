@@ -97,6 +97,42 @@ class FincraProvider extends BaseProvider {
     return hash === signature;
   }
 
+  /**
+   * Request a virtual account for USD/EUR/GBP deposits
+   */
+  async createVirtualAccount(data) {
+    const { currency, email, firstName, lastName, phone } = data;
+    try {
+      const response = await this.client.post("/virtual-accounts/individual", {
+        currency: currency,
+        accountType: "individual",
+        customer: {
+          name: `${firstName} ${lastName}`,
+          email: email,
+          phoneNumber: phone,
+        },
+        channel: currency === "NGN" ? "vanso" : "wema", // Just examples, Fincra API varies
+      });
+
+      return {
+        bankName: response.data.data.bankName,
+        accountNumber: response.data.data.accountNumber,
+        accountName: response.data.data.accountName,
+        currency: response.data.data.currency,
+        reference: response.data.data.reference,
+        provider: "fincra",
+      };
+    } catch (error) {
+      console.error(
+        "Fincra Virtual Account Error:",
+        error.response?.data || error.message,
+      );
+      throw new Error(
+        error.response?.data?.message || "Failed to generate virtual account",
+      );
+    }
+  }
+
   parseWebhookEvent(payload) {
     // Fincra webhook payload structure: { event: "charge.success", data: { ... } }
     const event = payload.event;
