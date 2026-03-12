@@ -4,6 +4,7 @@ const fxService = require("./fxService");
 const commissionService = require("./commissionService");
 const logger = require("../utils/logger");
 const paystackService = require("./paystackService");
+const math = require("../utils/mathUtils");
 const { checkDailyLimit } = require("../utils/limitCheck");
 const CLIENT_URL = process.env.CLIENT_URL || "https://notestandard.com";
 
@@ -47,11 +48,11 @@ async function createCardDeposit(
   // We use a safe margin of $5,000 USD equivalent.
   const MAX_USD_EQUIVALENT = 5000;
   try {
-    const amountInUsd = await fxService.getRate(currency, "USD") * amount;
-    if (amountInUsd > MAX_USD_EQUIVALENT) {
-      const maxInCurrency = Math.floor(
-        MAX_USD_EQUIVALENT / (await fxService.getRate(currency, "USD")),
-      );
+    const rate = await fxService.getRate(currency, "USD");
+    const amountInUsd = math.multiply(amount, rate);
+    
+    if (parseFloat(amountInUsd) > MAX_USD_EQUIVALENT) {
+      const maxInCurrency = math.divide(MAX_USD_EQUIVALENT, rate, math.getDecimals(currency));
       throw new Error(
         `Transaction amount too high. Maximum per transaction is approximately ${maxInCurrency} ${currency} ($${MAX_USD_EQUIVALENT} USD).`,
       );
@@ -117,14 +118,37 @@ async function createBankDeposit(
       },
     };
 
-  const selectedDetails = allBankDetails[currency] || allBankDetails.USD;
-
-  // Fetch user profile for email
+  // Fetch user profile for email/names
   const { data: profile } = await supabase
     .from("profiles")
-    .select("email")
+    .select("email, full_name, first_name, last_name, phone")
     .eq("id", userId)
     .single();
+
+  let selectedDetails = allBankDetails[currency] || allBankDetails.USD;
+
+  // 1a. For NGN, try to get a real-time virtual account from Paystack
+  if (upCurrency === "NGN") {
+    try {
+      const PaystackProvider = require("./payment/providers/PaystackProvider");
+      const paystack = new PaystackProvider();
+      const virtualAccount = await paystack.getDedicatedAccount(
+        profile.email,
+        profile.first_name || profile.full_name?.split(" ")[0] || "User",
+        profile.last_name || profile.full_name?.split(" ").slice(1).join(" ") || "Standard",
+        profile.phone || ""
+      );
+      
+      selectedDetails = {
+        bankName: virtualAccount.bankName,
+        accountNumber: virtualAccount.accountNumber,
+        accountName: virtualAccount.accountName,
+        note: "Funds are credited instantly after transfer",
+      };
+    } catch (err) {
+      logger.warn(`Failed to auto-generate Paystack virtual account, falling back to static details: ${err.message}`);
+    }
+  }
 
   // Check Daily Limits
   const limit = await checkDailyLimit(userId, userPlan, amount);
@@ -148,17 +172,17 @@ async function createBankDeposit(
     },
     {
       isCrypto: false,
-      manualReview: true,
+      manualReview: upCurrency !== "NGN", // Real-time for NGN via webhooks
     },
   );
 
   return {
     reference: payment.reference,
-    amount,
+    amount: math.formatForCurrency(amount, currency),
     currency,
     bankDetails: {
       ...selectedDetails,
-      accountName: selectedDetails.accountName + " / " + payment.reference,
+      accountName: selectedDetails.accountName + (upCurrency !== "NGN" ? " / " + payment.reference : ""),
       reference: payment.reference,
     },
     expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),

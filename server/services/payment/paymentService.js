@@ -3,6 +3,7 @@ const PaymentFactory = require("./PaymentFactory");
 const { v4: uuidv4 } = require("uuid");
 const logger = require("../../utils/logger");
 const mailService = require("../mailService");
+const math = require("../../utils/mathUtils");
 
 class PaymentService {
   /**
@@ -95,7 +96,7 @@ class PaymentService {
         user_id: userId,
         reference: reference,
         provider: providerName,
-        amount: parseFloat(amount),
+        amount: math.formatForCurrency(amount, currency),
         currency: currency,
         status: "pending",
         credited: false,
@@ -117,10 +118,10 @@ class PaymentService {
       .insert({
         user_id: userId,
         wallet_id: wallet.id,
-        amount: parseFloat(amount),
+        amount: math.formatForCurrency(amount, currency),
         currency: currency,
-        amount_from: parseFloat(amount),
-        amount_to: parseFloat(amount),
+        amount_from: math.formatForCurrency(amount, currency),
+        amount_to: math.formatForCurrency(amount, currency),
         from_currency: currency,
         to_currency: currency,
         network: network,
@@ -416,12 +417,9 @@ class PaymentService {
       rawData?.currency_code || eventData?.payment_type;
 
     if (evAmount !== undefined && evAmount !== null) {
-      const dbAmount = parseFloat(tx.amount);
-      const providerAmount = parseFloat(evAmount);
-
-      if (isNaN(providerAmount) || dbAmount !== providerAmount) {
+      if (!math.isEqual(tx.amount, evAmount)) {
         console.error(
-          `[Finalize] Amount mismatch for ${reference}. DB: ${dbAmount}, Provider: ${providerAmount}`,
+          `[Finalize] Amount mismatch for ${reference}. DB: ${tx.amount}, Provider: ${evAmount}`,
         );
         return {
           status: "verification_failed",
@@ -457,8 +455,8 @@ class PaymentService {
         return { status: "verification_failed", error: "Missing wallet_id" };
       }
 
-      const safeAmount = parseFloat(tx.amount);
-      if (isNaN(safeAmount) || safeAmount <= 0) {
+      const safeAmount = math.formatForCurrency(tx.amount, tx.currency);
+      if (math.isEqual(safeAmount, 0)) {
         console.error(`[Finalize] Invalid transaction amount: ${tx.amount}`);
         return { status: "verification_failed", error: "Invalid amount" };
       }
@@ -678,7 +676,7 @@ class PaymentService {
       // Use the ledger-pure RPC. It creates a 'DEPOSIT' record (System Credit).
       const { error: rpcError } = await supabase.rpc("credit_wallet_atomic", {
         p_wallet_id: wallet.id,
-        p_amount: parseFloat(amount),
+        p_amount: math.formatForCurrency(amount, currency),
       });
 
       if (rpcError) throw rpcError;

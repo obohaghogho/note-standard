@@ -1,5 +1,6 @@
 const supabase = require("../config/database");
 const { v4: uuidv4 } = require("uuid");
+const math = require("../utils/mathUtils");
 const logger = require("../utils/logger");
 
 /**
@@ -240,10 +241,9 @@ class WalletService {
     );
 
     const wallet = await this.createWallet(userId, currency, network);
-    if (
-      parseFloat(wallet.balance) <
-        (parseFloat(amount) + parseFloat(commission.fee))
-    ) {
+    const totalDebit = math.formatSafe(math.parseSafe(amount).add(math.parseSafe(commission.fee)), math.getDecimals(currency));
+    
+    if (!math.isGreaterOrEqual(wallet.balance, totalDebit)) {
       throw new Error(
         "Insufficient balance to cover amount and withdrawal fee",
       );
@@ -255,7 +255,7 @@ class WalletService {
     if (type === "crypto") {
       payoutResult = await payoutService.createNowPaymentsPayout(
         destination,
-        parseFloat(amount),
+        math.formatForCurrency(amount, currency),
         currency,
         reference,
         network,
@@ -265,7 +265,7 @@ class WalletService {
       payoutResult = await payoutService.createFlutterwaveTransfer(
         defaultBankCode,
         bankId,
-        parseFloat(amount),
+        math.formatForCurrency(amount, currency),
         currency,
         reference,
         `Withdrawal for ${userId}`,
@@ -276,9 +276,9 @@ class WalletService {
       "withdraw_funds_secured",
       {
         p_wallet_id: wallet.id,
-        p_amount: parseFloat(amount),
+        p_amount: math.formatForCurrency(amount, currency),
         p_currency: currency,
-        p_fee: parseFloat(commission.fee),
+        p_fee: math.formatForCurrency(commission.fee, currency),
         p_rate: commission.rate,
         p_platform_wallet_id: await require("./commissionService")
           .getPlatformWalletId(currency),
@@ -359,7 +359,7 @@ class WalletService {
       userPlan,
     );
 
-    const transferAmount = parseFloat(amount);
+    const transferAmount = math.formatForCurrency(amount, upCurrency);
     let targetUserId = recipientId;
     let isExternal = false;
 
@@ -426,14 +426,11 @@ class WalletService {
     const senderWallet = await this.createWallet(userId, upCurrency, upNetwork);
 
     if (!senderWallet) throw new Error("Sender wallet not found");
-    if (
-      parseFloat(senderWallet.balance) <
-        (transferAmount + parseFloat(commission.fee))
-    ) {
+    const totalDebit = math.formatSafe(math.parseSafe(transferAmount).add(math.parseSafe(commission.fee)), math.getDecimals(upCurrency));
+
+    if (!math.isGreaterOrEqual(senderWallet.balance, totalDebit)) {
       throw new Error(
-        `Insufficient funds. Need ${
-          transferAmount + parseFloat(commission.fee)
-        } ${currency}`,
+        `Insufficient funds. Need ${totalDebit} ${currency}`,
       );
     }
 
@@ -462,7 +459,7 @@ class WalletService {
           p_wallet_id: senderWallet.id,
           p_amount: transferAmount,
           p_currency: upCurrency,
-          p_fee: parseFloat(commission.fee),
+          p_fee: math.formatForCurrency(commission.fee, upCurrency),
           p_rate: commission.rate,
           p_platform_wallet_id: await require("./commissionService")
             .getPlatformWalletId(upCurrency),
@@ -480,7 +477,7 @@ class WalletService {
       return {
         success: true,
         transactionId: txId,
-        fee: parseFloat(commission.fee),
+        fee: math.formatForCurrency(commission.fee, upCurrency),
       };
     }
 
@@ -497,7 +494,7 @@ class WalletService {
         p_receiver_wallet_id: recipientWallet.id,
         p_amount: transferAmount,
         p_currency: upCurrency,
-        p_fee: parseFloat(commission.fee),
+        p_fee: math.formatForCurrency(commission.fee, upCurrency),
         p_metadata: {
           transaction_fee_breakdown: commission,
         },
@@ -510,7 +507,7 @@ class WalletService {
     // Record in the new Fees table
     await supabase.from("fees").insert({
       transaction_id: txId,
-      admin_fee: parseFloat(commission.fee),
+      admin_fee: math.formatForCurrency(commission.fee, upCurrency),
       partner_fee: 0,
       referral_fee: 0,
     });
@@ -518,7 +515,7 @@ class WalletService {
     return {
       success: true,
       transactionId: txId,
-      fee: parseFloat(commission.fee),
+      fee: math.formatForCurrency(commission.fee, upCurrency),
       targetUserId,
     };
   }

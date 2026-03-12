@@ -212,19 +212,6 @@ class PayoutService {
         provider: "NOWPAYMENTS",
       };
     } catch (error) {
-      // Fallback for simulation if API is not yet fully activated for conversions
-      if (error.response?.status === 404 || error.response?.status === 403) {
-        logger.warn(
-          `[PayoutService] NOWPayments Exchange API unavailable (404/403), using structural simulation for reference ${reference}`,
-        );
-        return {
-          success: true,
-          conversionId: `sim_conv_${Date.now()}`,
-          status: "processing",
-          provider: "NOWPAYMENTS_SIM",
-        };
-      }
-
       logger.error(
         "[PayoutService] NOWPayments Conversion Error:",
         error.response?.data || error.message,
