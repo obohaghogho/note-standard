@@ -5,7 +5,7 @@ import './index.css'
 import './i18n'
 import App from './App.tsx'
 
-console.log('🚀 NoteStandard Client Version 1.0.3 - Global Payments & Direct Purchase Sync');
+console.log('🚀 NoteStandard Client Version 1.0.4 - Directly Buy Crypto Visibility Fix');
 console.log("ENV CHECK:", import.meta.env);
 
 window.onerror = function(msg, url, line, col, _error) {
