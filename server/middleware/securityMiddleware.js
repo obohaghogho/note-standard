@@ -31,16 +31,22 @@ const requireRecaptcha = async (req, res, next) => {
       logger.warn(`[Security] reCAPTCHA verification failed`, {
         ip: req.ip,
         errors: response.data["error-codes"],
+        origin: req.headers.origin,
       });
       return res.status(400).json({
         error: "Bot protection: reCAPTCHA verification failed.",
         code: "RECAPTCHA_FAILED",
+        details: response.data["error-codes"],
       });
     }
 
+    logger.info(`[Security] reCAPTCHA verified successfully for ${req.ip}`);
     next();
   } catch (error) {
-    logger.error(`[Security] reCAPTCHA service error: ${error.message}`);
+    logger.error(`[Security] reCAPTCHA service error: ${error.message}`, {
+      stack: error.stack,
+      requestOrigin: req.headers.origin,
+    });
     // If service is down, allowed but logged in production?
     // Usually safer to fail closed for financial apps.
     res.status(503).json({

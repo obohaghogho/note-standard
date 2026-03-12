@@ -21,25 +21,31 @@ whitelist.push(
  * Express cors() middleware options.
  * Usage: app.use(cors(corsOptions));
  */
+const isOriginAllowed = (origin) => {
+  if (!origin) return true;
+
+  // Dynamic checks for allowed domains (User requested)
+  const isNoteStandard = origin.endsWith(".notestandard.com") ||
+    origin === (process.env.CLIENT_URL || "https://notestandard.com") ||
+    origin === "https://www.notestandard.com";
+
+  // Robust local check: allow any localhost port or common dev variations
+  const isLocal = origin.startsWith("http://localhost") ||
+    origin.startsWith("http://127.0.0.1") ||
+    origin.includes("[::1]");
+
+  return isNoteStandard || isLocal;
+};
+
+/**
+ * Express cors() middleware options.
+ * Usage: app.use(cors(corsOptions));
+ */
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (server-to-server, health checks, etc)
-    if (!origin) return callback(null, true);
-
-    // Dynamic checks for allowed domains (User requested)
-    const isNoteStandard = origin.endsWith(".notestandard.com") ||
-      origin === (process.env.CLIENT_URL || "https://notestandard.com") ||
-      origin === "https://www.notestandard.com";
-
-    // Robust local check: allow any localhost port or common dev variations
-    const isLocal = origin.startsWith("http://localhost") ||
-      origin.startsWith("http://127.0.0.1") ||
-      origin.includes("[::1]");
-
-    if (isNoteStandard || isLocal) {
+    if (isOriginAllowed(origin)) {
       return callback(null, true);
     }
-
     console.warn(`CORS blocked for origin: ${origin}`);
     return callback(new Error("Not allowed by CORS"));
   },
@@ -59,4 +65,4 @@ const corsOptions = {
   optionsSuccessStatus: 200,
 };
 
-module.exports = { whitelist, corsOptions };
+module.exports = { whitelist, corsOptions, isOriginAllowed };

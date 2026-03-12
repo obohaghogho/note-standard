@@ -365,12 +365,22 @@ class WalletService {
 
     // Resolve recipient from address
     if (!targetUserId && recipientAddress) {
-      const { data: targetWallet } = await supabase.from("wallets_store")
+      let { data: targetWallet } = await supabase.from("wallets_store")
         .select("user_id")
         .eq("address", recipientAddress)
         .eq("currency", upCurrency)
         .eq("network", upNetwork)
         .maybeSingle();
+
+      // If not found with network, try network-agnostic lookup for internal users
+      if (!targetWallet) {
+        const { data: fallbackWallet } = await supabase.from("wallets_store")
+          .select("user_id")
+          .eq("address", recipientAddress)
+          .eq("currency", upCurrency)
+          .maybeSingle();
+        targetWallet = fallbackWallet;
+      }
 
       if (targetWallet) {
         targetUserId = targetWallet.user_id;
