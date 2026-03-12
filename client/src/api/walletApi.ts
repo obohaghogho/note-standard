@@ -76,7 +76,13 @@ export const walletApi = {
   },
 
   // Unified payment initialization (for FundModal crypto/etc)
-  async initializePayment(data: { amount: number, currency: string, provider?: string }): Promise<any> {
+  async initializePayment(data: { 
+      amount: number, 
+      currency: string, 
+      provider?: string,
+      targetCurrency?: string,
+      targetNetwork?: string
+  }): Promise<any> {
       const response = await api.post('/wallet/deposit', data);
       return response.data;
   },
@@ -98,13 +104,25 @@ export const walletApi = {
   },
 
   // Card Deposit Initialization (Match UI signature)
-  async depositCard(data: { amount: number, currency: string, network?: string }): Promise<{ authorization_url?: string, checkoutUrl?: string, reference: string }> {
+  async depositCard(data: { 
+      amount: number, 
+      currency: string, 
+      network?: string,
+      toCurrency?: string,
+      toNetwork?: string
+  }): Promise<{ authorization_url?: string, checkoutUrl?: string, reference: string }> {
       const response = await api.post('/wallet/deposit/card', data);
       return response.data;
   },
 
   // Bank Transfer Deposit Initialization (Match UI signature)
-  async depositTransfer(data: { amount: number, currency: string, network?: string }): Promise<{ reference: string, bankDetails: any }> {
+  async depositTransfer(data: { 
+      amount: number, 
+      currency: string, 
+      network?: string,
+      toCurrency?: string,
+      toNetwork?: string
+  }): Promise<{ reference: string, bankDetails: any }> {
       const response = await api.post('/wallet/deposit/transfer', data);
       return response.data;
   },

@@ -33,9 +33,9 @@ export const FundModal: React.FC<FundModalProps> = ({
     const [bankDetails, setBankDetails] = useState<{
         reference: string;
         bankDetails: { bankName: string; accountNumber: string; accountName: string; reference: string };
-        expiresAt: string;
+        expiresAt?: string;
     } | null>(null);
-    
+
     // Crypto deposit state
     const [cryptoAddress, setCryptoAddress] = useState<{
         address: string;
@@ -45,6 +45,11 @@ export const FundModal: React.FC<FundModalProps> = ({
         paymentUrl?: string;
     } | null>(null);
     const [cryptoStatus, setCryptoStatus] = useState<string>('PENDING');
+
+    // Direct Purchase State
+    const [isPurchase, setIsPurchase] = useState(false);
+    const [targetCurrency, setTargetCurrency] = useState<string>('USDT');
+    const [targetNetwork, setTargetNetwork] = useState<string>('native');
 
     const DAILY_LIMITS = {
         FREE: 1000,
@@ -176,7 +181,9 @@ export const FundModal: React.FC<FundModalProps> = ({
         try {
             const result = await walletApi.depositCard({
                 amount: Number(amount),
-                currency: selectedCurrency
+                currency: selectedCurrency,
+                toCurrency: isPurchase ? targetCurrency : undefined,
+                toNetwork: isPurchase ? targetNetwork : undefined,
             });
             
             // Store reference for later status check
@@ -222,7 +229,9 @@ export const FundModal: React.FC<FundModalProps> = ({
         try {
             const result = await walletApi.depositTransfer({
                 amount: Number(amount),
-                currency: selectedCurrency
+                currency: selectedCurrency,
+                toCurrency: isPurchase ? targetCurrency : undefined,
+                toNetwork: isPurchase ? targetNetwork : undefined,
             });
             setBankDetails(result);
             toast.success('Bank transfer details generated!');
@@ -264,10 +273,14 @@ export const FundModal: React.FC<FundModalProps> = ({
                 <div className="bg-gray-800/50 rounded-xl p-4 mb-6 border border-gray-700/50">
                     <div className="flex justify-between items-center mb-1">
                         <span className="text-gray-400 text-xs uppercase tracking-wider">Product</span>
-                        <span className="text-white text-sm font-medium">Digital Assets Purchase</span>
+                        <span className="text-white text-sm font-medium">
+                            {isPurchase ? `Purchase ${targetCurrency}` : 'Digital Assets Funding'}
+                        </span>
                     </div>
                     <div className="flex justify-between items-end">
-                        <span className="text-gray-400 text-xs uppercase tracking-wider">Total Amount</span>
+                        <span className="text-gray-400 text-xs uppercase tracking-wider">
+                            {isPurchase ? 'Pay Amount' : 'Total Amount'}
+                        </span>
                         <div className="text-right">
                             <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">
                                 {amount || '0.00'}
@@ -276,6 +289,48 @@ export const FundModal: React.FC<FundModalProps> = ({
                         </div>
                     </div>
                 </div>
+
+                {/* Purchase Mode Toggle */}
+                {isFiat && (
+                    <div className="flex items-center justify-between mb-4 px-1">
+                        <span className="text-sm text-gray-400">Directly Buy Crypto?</span>
+                        <button 
+                            onClick={() => setIsPurchase(!isPurchase)}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${isPurchase ? 'bg-purple-600' : 'bg-gray-700'}`}
+                        >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isPurchase ? 'translate-x-6' : 'translate-x-1'}`} />
+                        </button>
+                    </div>
+                )}
+
+                {/* Target Crypto Selector */}
+                <AnimatePresence>
+                    {isPurchase && (
+                        <motion.div 
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="bg-purple-900/10 border border-purple-500/20 rounded-xl p-3 mb-4 space-y-2 overflow-hidden"
+                        >
+                            <label className="text-xs text-purple-400 font-medium ml-1">Receive Asset</label>
+                            <div className="flex gap-2 overflow-x-auto pb-1">
+                                {['BTC', 'ETH', 'USDT', 'USDC'].map(coin => (
+                                    <button
+                                        key={coin}
+                                        onClick={() => setTargetCurrency(coin)}
+                                        className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                                            targetCurrency === coin 
+                                            ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-500/20' 
+                                            : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'
+                                        }`}
+                                    >
+                                        {coin}
+                                    </button>
+                                ))}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 <div className="flex gap-2 mb-8 bg-gray-900/50 p-1 rounded-xl border border-gray-800">
                     {isFiat && (

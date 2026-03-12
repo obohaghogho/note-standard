@@ -35,6 +35,8 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
     const [selectedBank, setSelectedBank] = useState<{ name: string, code: string } | null>(null);
     const [accountNumber, setAccountNumber] = useState('');
     const [accountName, setAccountName] = useState('');
+    const [swiftCode, setSwiftCode] = useState('');
+    const [branchCode, setBranchCode] = useState('');
     const [showBankList, setShowBankList] = useState(false);
     const [captchaToken, setCaptchaToken] = useState<string | null>(null);
     const recaptchaRef = React.useRef<ReCAPTCHA>(null);
@@ -59,6 +61,8 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
             setSelectedBank(null);
             setAccountNumber('');
             setAccountName('');
+            setSwiftCode('');
+            setBranchCode('');
             setSearchTerm('');
         }
     }, [isOpen]);
@@ -89,7 +93,9 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
         e.preventDefault();
         
         if (isFiat) {
-             if (!amount || !selectedBank || !accountNumber || !accountName) return;
+             if (!amount || !accountNumber || !accountName) return;
+             // For non-NG, we might not have a selectedBank from the list, check searchTerm
+             if (!selectedBank && !searchTerm) return;
         } else {
              if (!amount || !address) return;
         }
@@ -107,10 +113,12 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                 currency: selectedCurrency,
                 amount: parseFloat(amount),
                 address: isFiat ? undefined : address,
-                bank_code: isFiat ? selectedBank?.code : undefined,
-                bank_name: isFiat ? selectedBank?.name : undefined,
+                bank_code: isFiat ? (selectedBank?.code || 'OTHER') : undefined,
+                bank_name: isFiat ? (selectedBank?.name || searchTerm) : undefined,
                 account_number: isFiat ? accountNumber : undefined,
                 account_name: isFiat ? accountName : undefined,
+                swift_code: isFiat ? swiftCode : undefined,
+                branch_code: isFiat ? branchCode : undefined,
                 country: isFiat ? selectedCountry : undefined,
                 network: isFiat ? undefined : selectedNetwork,
                 captchaToken: captchaToken || undefined
@@ -311,6 +319,36 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                                     />
                                 </div>
                             </div>
+
+                            {/* International Details */}
+                            {selectedCountry !== 'Nigeria' && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <label htmlFor="withdraw-swift" className="text-xs text-gray-400 font-medium ml-1">SWIFT / BIC</label>
+                                        <input 
+                                            id="withdraw-swift"
+                                            name="swiftCode"
+                                            type="text" 
+                                            value={swiftCode}
+                                            onChange={(e) => setSwiftCode(e.target.value)}
+                                            className="w-full bg-gray-800 border border-gray-700 rounded-xl p-3.5 text-white focus:border-orange-500 outline-none transition-all"
+                                            placeholder="SWIFT Code"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label htmlFor="withdraw-branch" className="text-xs text-gray-400 font-medium ml-1">Branch Code (Optional)</label>
+                                        <input 
+                                            id="withdraw-branch"
+                                            name="branchCode"
+                                            type="text" 
+                                            value={branchCode}
+                                            onChange={(e) => setBranchCode(e.target.value)}
+                                            className="w-full bg-gray-800 border border-gray-700 rounded-xl p-3.5 text-white focus:border-orange-500 outline-none transition-all"
+                                            placeholder="Branch Code"
+                                        />
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     ) : (
                           <div className="space-y-4">
