@@ -75,6 +75,8 @@ export interface WithdrawalRequest {
     bankId?: string; // For fiat
     address?: string; // For crypto
     bank_code?: string;
+    swift_code?: string;
+    branch_code?: string;
     account_number?: string;
     account_name?: string;
     bank_name?: string;
@@ -97,6 +99,10 @@ export interface CommissionSettings {
 export interface DepositRequest {
     currency: Currency;
     amount: number;
+    toCurrency?: Currency;
+    toNetwork?: string;
+    targetCurrency?: Currency; // Alias for backend consistency
+    targetNetwork?: string;
 }
 
 export interface CardDepositResponse {
