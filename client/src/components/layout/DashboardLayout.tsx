@@ -77,6 +77,9 @@ export const DashboardLayout = () => {
                         <div className="h-6 w-[1px] bg-white/10 mx-1 md:mx-2" />
                         <LanguageSelector />
                         <div className="flex items-center gap-2 md:gap-3">
+                            <span className="hidden sm:inline-block px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[10px] text-gray-400 font-mono">
+                                v1.0.3-PROD
+                            </span>
                             <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs">
                                 {user?.email?.[0].toUpperCase()}
                             </div>
