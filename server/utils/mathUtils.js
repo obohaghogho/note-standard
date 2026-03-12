@@ -85,6 +85,32 @@ function divide(a, b, decimals = CALCULATION_DECIMALS) {
 }
 
 /**
+ * Compare two numbers for equality safely
+ */
+function isEqual(a, b, decimals = CALCULATION_DECIMALS) {
+  try {
+    const bnA = parseSafe(a, decimals);
+    const bnB = parseSafe(b, decimals);
+    return bnA.eq(bnB);
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Check if a >= b safely
+ */
+function isGreaterOrEqual(a, b, decimals = CALCULATION_DECIMALS) {
+  try {
+    const bnA = parseSafe(a, decimals);
+    const bnB = parseSafe(b, decimals);
+    return bnA.gte(bnB);
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
  * Format final output to appropriate decimal places strictly as a String
  * This prevents float manipulation exploits downstream.
  */
@@ -100,6 +126,8 @@ module.exports = {
   formatSafe,
   multiply,
   divide,
+  isEqual,
+  isGreaterOrEqual,
   formatForCurrency,
   CRYPTO_DECIMALS,
   FIAT_DECIMALS,

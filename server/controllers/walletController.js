@@ -38,7 +38,7 @@ exports.depositCard = async (req, res) => {
       .createCardDeposit(
         req.user.id,
         currency,
-        parseFloat(amount),
+        amount,
         req.userProfile?.plan || "FREE",
       );
 
@@ -71,7 +71,7 @@ exports.depositTransfer = async (req, res) => {
       .createBankDeposit(
         req.user.id,
         currency,
-        parseFloat(amount),
+        amount,
         req.userProfile?.plan || "FREE",
       );
 

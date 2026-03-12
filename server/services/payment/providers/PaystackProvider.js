@@ -1,5 +1,6 @@
 const axios = require("axios");
 const crypto = require("crypto");
+const math = require("../../../utils/mathUtils");
 const BaseProvider = require("./BaseProvider");
 
 class PaystackProvider extends BaseProvider {
@@ -64,6 +65,45 @@ class PaystackProvider extends BaseProvider {
     }
   }
 
+  /**
+   * Request a dedicated virtual account for NGN bank transfers
+   */
+  async getDedicatedAccount(email, firstName, lastName, phone) {
+    try {
+      // 1. Ensure user is a Paystack customer
+      const customerResponse = await this.client.post("/customer", {
+        email,
+        first_name: firstName,
+        last_name: lastName,
+        phone,
+      });
+      const customerCode = customerResponse.data.data.customer_code;
+
+      // 2. Request dedicated virtual account
+      const response = await this.client.post("/dedicated_account", {
+        customer: customerCode,
+        preferred_bank: "titan-paystack", // Standard for virtual accounts
+      });
+
+      const entry = response.data.data;
+      return {
+        bankName: entry.bank.name,
+        accountNumber: entry.account_number,
+        accountName: entry.account_name,
+        currency: entry.currency,
+        provider: "paystack",
+      };
+    } catch (error) {
+      console.error(
+        "Paystack Dedicated Account Error:",
+        error.response?.data || error.message,
+      );
+      throw new Error(
+        error.response?.data?.message || "Failed to generate virtual account",
+      );
+    }
+  }
+
   async verify(reference) {
     try {
       const response = await this.client.get(
@@ -74,7 +114,7 @@ class PaystackProvider extends BaseProvider {
       return {
         success: status === "success",
         status: status, // success, abandoned, failed
-        amount: amount / 100,
+        amount: math.divide(amount, 100, math.getDecimals(currency)),
         currency: currency,
         reference: ref,
         provider: "paystack",
@@ -124,7 +164,7 @@ class PaystackProvider extends BaseProvider {
       display_label: "Digital Assets Purchase",
       reference: data.reference,
       status: status,
-      amount: data.amount / 100,
+      amount: math.divide(data.amount, 100, math.getDecimals(data.currency)),
       currency: data.currency,
       userId: data.metadata?.userId || data.metadata?.user_id,
       raw: payload,
