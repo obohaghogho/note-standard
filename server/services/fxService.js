@@ -140,7 +140,9 @@ class FXService {
    * For dashboard display
    */
   async getAllRates(base = "USD") {
-    const targets = ["BTC", "ETH", "USDT", "NGN", "USD", "EUR", "GBP", "JPY"];
+    const cryptoCurrencies = Object.keys(this.coinMapping);
+    const additionalFiatTargets = ["NGN", "EUR", "GBP", "JPY"];
+    const targets = [...new Set([...cryptoCurrencies, ...additionalFiatTargets, "USD"])];
     const cryptoTargets = targets.filter((t) => this.coinMapping[t]);
     const fiatTargets = targets.filter((t) =>
       !this.coinMapping[t] && t !== "USD"

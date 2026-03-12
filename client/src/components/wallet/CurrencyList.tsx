@@ -85,7 +85,9 @@ export const CurrencyList: React.FC<CurrencyListProps> = ({
                                             <div className="flex items-center gap-1.5 bg-black/20 px-2 py-0.5 rounded-full border border-white/10 backdrop-blur-md">
                                                 <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse shadow-[0_0_8px_rgba(74,222,128,0.6)]" />
                                                 <p className="text-[10px] font-black text-white whitespace-nowrap">
-                                                    {rate > 0 ? formatCurrency(rate, 'USD') : '...'}
+                                                    {rate > 0 
+                                                        ? (rate < 0.01 ? `$${rate.toFixed( rate < 0.0001 ? 6 : 4 )}` : formatCurrency(rate, 'USD')) 
+                                                        : '...'}
                                                 </p>
                                             </div>
                                         )}
