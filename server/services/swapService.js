@@ -2,6 +2,7 @@ const supabase = require("../config/database");
 const fxService = require("./fxService");
 const feeService = require("./feeService");
 const logger = require("../utils/logger");
+const math = require("../utils/mathUtils");
 
 /**
  * Swap Service
@@ -14,7 +15,7 @@ class SwapService {
   async calculateSwap(userId, fromCurrency, toCurrency, amount, slippage = 0.005) {
     const marketPrice = await fxService.getRate(fromCurrency, toCurrency);
     const fees = feeService.calculateFees(amount, fromCurrency);
-    const amountOut = fees.netAmount * marketPrice;
+    const amountOut = math.multiply(fees.netAmount, marketPrice);
 
     // Direct circular dependency fix if needed, but here we require within method
     const walletService = require("./walletService");
@@ -48,7 +49,7 @@ class SwapService {
       ...quote,
       lockId: quote.id,
       expiresAt: new Date(quote.expires_at).getTime(),
-      feePercentage: (fees.totalFee / amount) * 100,
+      feePercentage: math.multiply(math.divide(fees.totalFee, amount), 100),
       amountOut: amountOut,
     };
   }
@@ -74,8 +75,8 @@ class SwapService {
     // ledger transfers — debit source wallet, credit destination wallet,
     // distribute fees — all in a single atomic database transaction.
     const env = require("../config/env");
-    // Verifying current market rate for slippage protection
-    const currentRate = await fxService.getRate(quote.from_currency, quote.to_currency);
+    // Verifying current market rate for slippage protection (Active Cache Bypass)
+    const currentRate = await fxService.getRate(quote.from_currency, quote.to_currency, false);
 
     const { data: txId, error: txError } = await supabase.rpc(
       "execute_production_swap",

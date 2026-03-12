@@ -7,10 +7,24 @@ const ethers = require("ethers");
 
 const CRYPTO_DECIMALS = 8; // Enforce standard 8-decimal precision for Crypto (Satoshi standard)
 const FIAT_DECIMALS = 2;
+const FEE_DECIMALS = 4; // Standard for fee rates (e.g., 0.0450)
 
 // Used for high-precision internal calculations
 const CALCULATION_DECIMALS = 18;
 const ONE_UNIT = ethers.utils.parseUnits("1", CALCULATION_DECIMALS);
+
+// Standard Fee Constants (matching DB defaults in execute_production_swap)
+const ADMIN_FEE_RATE = "0.045";
+const PARTNER_FEE_RATE = "0.001";
+const REFERRAL_FEE_RATE = "0.001";
+const TOTAL_FEE_RATE = "0.047";
+
+// Standard Platform Fee Constants (for specific platforms)
+const PLATFORM_A_ADMIN_FEE_RATE = "0.03";
+const PLATFORM_A_PARTNER_FEE_RATE = "0.005";
+const PLATFORM_B_ADMIN_FEE_RATE = "0.025";
+const PLATFORM_B_PARTNER_FEE_RATE = "0.002";
+
 
 /**
  * Determines decimals based on currency code
@@ -89,4 +103,8 @@ module.exports = {
   formatForCurrency,
   CRYPTO_DECIMALS,
   FIAT_DECIMALS,
+  ADMIN_FEE_RATE,
+  PARTNER_FEE_RATE,
+  REFERRAL_FEE_RATE,
+  TOTAL_FEE_RATE,
 };

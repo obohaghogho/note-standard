@@ -17,7 +17,56 @@ class WalletService {
       .eq("user_id", userId);
 
     if (error) throw error;
-    return wallets || [];
+    if (!wallets) return [];
+
+    // Proactive Upgrade: If any wallet is a mock, try to upgrade it immediately
+    // and return the updated version to the user.
+    return Promise.all(
+      wallets.map(async (wallet) => {
+        return await this.upgradeIfMock(userId, wallet);
+      })
+    );
+  }
+
+  /**
+   * Helper to detect and upgrade mock addresses
+   */
+  async upgradeIfMock(userId, wallet, targetNetwork = null) {
+    const isCrypto = ["BTC", "ETH", "USDT", "USDC"].includes(wallet.currency);
+    const MOCK_KEYWORDS = ["-", "dummy", "test", "mock", "address", "123456", "example"];
+    const isMock = wallet.address && MOCK_KEYWORDS.some(kw => wallet.address.toLowerCase().includes(kw));
+    
+    // Also upgrade if the network doesn't match and it's not a native request
+    const networkMismatch = targetNetwork && targetNetwork !== "NATIVE" && wallet.network !== targetNetwork;
+
+    if (isCrypto && (isMock || networkMismatch)) {
+      try {
+        const nowpayments = require("./nowpaymentsService");
+        const upgradeNetwork = targetNetwork || wallet.network;
+        logger.info(
+          `[WalletService] Upgrading ${isMock ? "mock" : "mismatched"} address for ${wallet.currency} (${upgradeNetwork}) for user ${userId}`,
+        );
+        const real = await nowpayments.getOrCreateDepositAddress(
+          userId,
+          wallet.currency,
+          upgradeNetwork,
+          supabase,
+        );
+
+        await supabase.from("wallets_store").update({
+          address: real.address,
+          network: upgradeNetwork,
+          provider: "nowpayments",
+        }).eq("id", wallet.id);
+
+        return { ...wallet, address: real.address, network: upgradeNetwork, provider: "nowpayments" };
+      } catch (e) {
+        logger.error(
+          `[WalletService] Failed to upgrade address for ${wallet.currency}: ${e.message}`,
+        );
+      }
+    }
+    return wallet;
   }
 
   /**
@@ -54,43 +103,8 @@ class WalletService {
       .maybeSingle();
 
     if (existing) {
-      // If crypto wallet but address is still a UUID (mock), or network mismatch, try to upgrade it
-      const isCrypto = ["BTC", "ETH", "USDT", "USDC"].includes(upCurrency);
-      
-      const MOCK_KEYWORDS = ["-", "dummy", "test", "mock", "address", "123456", "example"];
-      const isMock = existing.address && MOCK_KEYWORDS.some(kw => existing.address.toLowerCase().includes(kw));
-      
-      const networkMismatch = upNetwork !== "NATIVE" &&
-        existing.network !== upNetwork;
-
-      if (isCrypto && (isMock || networkMismatch)) {
-        try {
-          const nowpayments = require("./nowpaymentsService");
-          logger.info(
-            `[WalletService] Upgrading mock address for ${upCurrency} (${upNetwork}) for user ${userId}`,
-          );
-          const real = await nowpayments.getOrCreateDepositAddress(
-            userId,
-            upCurrency,
-            upNetwork,
-            supabase,
-          );
-
-          await supabase.from("wallets_store").update({
-            address: real.address,
-            network: upNetwork,
-            provider: "nowpayments",
-          }).eq("id", existing.id);
-
-          return { ...existing, address: real.address, network: upNetwork };
-        } catch (e) {
-          logger.error(
-            `[WalletService] Failed to upgrade mock address for ${upCurrency}: ${e.message}`,
-            { stack: e.stack },
-          );
-        }
-      }
-      return existing;
+      // Use helper to handle upgrades
+      return await this.upgradeIfMock(userId, existing, upNetwork);
     }
 
     // New Wallet Creation

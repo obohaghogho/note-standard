@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useWallet } from '../hooks/useWallet';
+import { useSocket } from '../context/SocketContext';
 import walletApi from '../api/walletApi';
 import { WalletBalanceCard } from '../components/WalletBalance';
 import { ActionsGrid } from '../components/wallet/ActionsGrid';
@@ -22,6 +23,7 @@ const SUPPORTED_CURRENCIES = ['BTC', 'ETH', 'USD', 'NGN', 'EUR', 'GBP', 'JPY'];
 
 export const WalletPage: React.FC = () => {
     const { wallets, transactions, loading, refresh, createWallet } = useWallet();
+    const { socket } = useSocket();
     
     // Force-refresh wallet data on mount (ensures fresh data after payment redirect)
     useEffect(() => {
@@ -95,38 +97,51 @@ export const WalletPage: React.FC = () => {
 
     // Fetch Rates & Calculate Total
     useEffect(() => {
+        const processExchangeRates = (exchangeRates: Record<string, any>) => {
+            const usdRates: Record<string, number> = {};
+            
+            Object.keys(exchangeRates).forEach(curr => {
+                const val = exchangeRates[curr];
+                if (typeof val === 'number') {
+                    usdRates[curr] = val > 0 ? 1 / val : 0;
+                } else if (typeof val === 'object' && val !== null) {
+                    usdRates[curr] = val['USD'] || 0;
+                }
+            });
+
+            usdRates['USD'] = 1;
+            setRates(usdRates);
+            setRatesLoading(false);
+        };
+
         const fetchRates = async () => {
             setRatesLoading(true);
             try {
                 const exchangeRates = await walletApi.getExchangeRates();
-                
-                const usdRates: Record<string, number> = {};
-                
-                Object.keys(exchangeRates).forEach(curr => {
-                    const val = exchangeRates[curr];
-                    if (typeof val === 'number') {
-                        usdRates[curr] = val > 0 ? 1 / val : 0;
-                    } else if (typeof val === 'object' && val !== null) {
-                        usdRates[curr] = val['USD'] || 0;
-                    }
-                });
-
-                usdRates['USD'] = 1;
-                
-                setRates(usdRates);
+                processExchangeRates(exchangeRates);
             } catch (err) {
                 console.error('Failed to fetch rates', err);
-            } finally {
                 setRatesLoading(false);
             }
         };
 
+        // Initial fetch
         if (Array.isArray(wallets) && wallets.length > 0) {
             fetchRates();
-            const interval = setInterval(fetchRates, 30000); // 30s refresh (stable for production)
-            return () => clearInterval(interval);
         }
-    }, [wallets.length]);
+
+        // Socket.io Listener: Active Real-time Overwrite
+        if (socket) {
+            socket.on('rates_updated', (newRates: any) => {
+                console.log('[Socket] Rates updated in real-time');
+                processExchangeRates(newRates);
+            });
+
+            return () => {
+                socket.off('rates_updated');
+            };
+        }
+    }, [wallets.length, socket]);
 
     // Calculate Total Balance & Available Balance
     useEffect(() => {
