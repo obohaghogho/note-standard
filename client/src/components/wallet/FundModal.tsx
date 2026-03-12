@@ -7,7 +7,7 @@ import type { Currency } from '@/types/wallet';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { useWallet } from '../../hooks/useWallet';
-import { ChevronDown, Plus } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 
 interface FundModalProps {
     isOpen: boolean;
@@ -26,7 +26,7 @@ export const FundModal: React.FC<FundModalProps> = ({
     selectedNetwork = 'native',
     onSuccess: _onSuccess 
 }) => {
-    const { profile, subscription } = useAuth();
+    const { subscription } = useAuth();
     const { wallets } = useWallet();
     const [activeCurrency, setActiveCurrency] = useState<Currency>(selectedCurrency);
     const [activeNetwork, setActiveNetwork] = useState<string>(selectedNetwork);
@@ -52,7 +52,7 @@ export const FundModal: React.FC<FundModalProps> = ({
     // Direct Purchase State
     const [isPurchase, setIsPurchase] = useState(false);
     const [targetCurrency, setTargetCurrency] = useState<string>('USDT');
-    const [targetNetwork, setTargetNetwork] = useState<string>('native');
+    const [targetNetwork] = useState<string>('native');
 
     const DAILY_LIMITS = {
         FREE: 1000,

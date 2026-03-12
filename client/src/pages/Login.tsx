@@ -210,7 +210,7 @@ export const Login = () => {
                                 autoComplete="current-password"
                             />
                             <div className="flex items-center justify-between py-1">
-                                <label className="flex items-center gap-2 cursor-pointer group">
+                                <label htmlFor="remember-me" className="flex items-center gap-2 cursor-pointer group">
                                     <div className="relative flex items-center">
                                         <input
                                             id="remember-me"

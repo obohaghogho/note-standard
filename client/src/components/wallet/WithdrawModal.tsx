@@ -204,7 +204,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                         <div className="space-y-4">
                             {/* Country Selector */}
                             <div className="space-y-1">
-                                <label className="text-xs text-gray-400 font-medium ml-1">Country</label>
+                                <span className="text-xs text-gray-400 font-medium ml-1">Country</span>
                                 <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-800">
                                     {COUNTRIES.map(c => (
                                         <button
