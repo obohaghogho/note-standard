@@ -15,9 +15,22 @@ exports.getBalances = async (req, res) => {
 
 exports.deposit = async (req, res) => {
   try {
-    const result = await walletService.deposit(req.user.id, req.body);
+    const { amount, currency, provider } = req.body;
+
+    if (!amount || !currency) {
+      return res.status(400).json({ error: "Amount and currency are required" });
+    }
+
+    const depositService = require("../services/depositService");
+    const result = await depositService.initializeCryptoDeposit(
+      req.user.id,
+      currency,
+      amount,
+      req.userProfile?.plan || "FREE"
+    );
     res.json(result);
   } catch (err) {
+    console.error("[Deposit] Error:", err.message);
     res.status(500).json({ error: err.message });
   }
 };
