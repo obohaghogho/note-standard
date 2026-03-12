@@ -3,6 +3,7 @@ const nowpaymentsProvider = require("../providers/nowpaymentsProvider");
 const exchangeRateProvider = require("../providers/exchangeRateProvider");
 const logger = require("../utils/logger");
 const cache = require("../utils/cache");
+const math = require("../utils/mathUtils");
 
 /**
  * FX Service
@@ -10,7 +11,7 @@ const cache = require("../utils/cache");
  */
 class FXService {
   constructor() {
-    this.CRYPTO_CACHE_TTL = 60; // 60 seconds (safe for free tier)
+    this.CRYPTO_CACHE_TTL = 30; // 30 seconds (real-time enough for dashboard)
     this.coinMapping = {
       "BTC": "bitcoin",
       "ETH": "ethereum",
@@ -22,78 +23,79 @@ class FXService {
   /**
    * Get price of crypto in USD
    */
-  async getCryptoPrice(symbol) {
-    const prices = await this.getMultipleCryptoPrices([symbol]);
+  async getCryptoPrice(symbol, useCache = true) {
+    const prices = await this.getMultipleCryptoPrices([symbol], useCache);
     return prices[symbol.toUpperCase()] || null;
   }
 
   /**
    * Get multiple crypto prices in one batch
    */
-  async getMultipleCryptoPrices(symbols) {
+  async getMultipleCryptoPrices(symbols, useCache = true) {
     const keys = symbols.map((s) => s.toUpperCase());
     const cacheKey = `crypto_batch_${keys.sort().join("_")}`;
 
-    return cache.wrap(
-      cacheKey,
-      this.CRYPTO_CACHE_TTL,
-      async () => {
-        const coinIds = symbols
-          .map((s) => this.coinMapping[s.toUpperCase()])
-          .filter(Boolean);
+    const fetchValues = async () => {
+      const coinIds = symbols
+        .map((s) => this.coinMapping[s.toUpperCase()])
+        .filter(Boolean);
 
-        if (coinIds.length === 0) return {};
+      if (coinIds.length === 0) return {};
 
+      try {
+        const results = {};
         try {
-          const results = {};
-          try {
-            const prices = await coingeckoProvider.getPrices(coinIds);
-            symbols.forEach((s) => {
-              const id = this.coinMapping[s.toUpperCase()];
-              results[s.toUpperCase()] = prices[id] || null;
-            });
-          } catch (err) {
-            logger.warn(
-              `[FXService] CoinGecko Batch failed, seeking fallback: ${err.message}`,
-            );
-          }
+          const prices = await coingeckoProvider.getPrices(coinIds);
+          symbols.forEach((s) => {
+            const id = this.coinMapping[s.toUpperCase()];
+            results[s.toUpperCase()] = prices[id] || null;
+          });
+        } catch (err) {
+          logger.warn(
+            `[FXService] CoinGecko Batch failed, seeking fallback: ${err.message}`,
+          );
+        }
 
-          // Fallback for missing/failed assets using NowPayments
-          const missing = symbols.filter((s) => !results[s.toUpperCase()]);
-          if (missing.length > 0) {
-            logger.info(
-              `[FXService] Attempting NowPayments fallback for: ${
-                missing.join(", ")
-              }`,
-            );
-            for (const sym of missing) {
-              try {
-                // NowPayments estimate is usually quite reliable
-                const rate = await nowpaymentsProvider.getRate(sym, "USD");
-                if (rate) results[sym.toUpperCase()] = rate;
-              } catch (fallbackErr) {
-                logger.error(
-                  `[FXService] Fallback failed for ${sym}: ${fallbackErr.message}`,
-                );
-              }
+        // Fallback for missing/failed assets using NowPayments
+        const missing = symbols.filter((s) => !results[s.toUpperCase()]);
+        if (missing.length > 0) {
+          logger.info(
+            `[FXService] Attempting NowPayments fallback for: ${
+              missing.join(", ")
+            }`,
+          );
+          for (const sym of missing) {
+            try {
+              const rate = await nowpaymentsProvider.getRate(sym, "USD");
+              if (rate) results[sym.toUpperCase()] = rate;
+            } catch (fallbackErr) {
+              logger.error(
+                `[FXService] Fallback failed for ${sym}: ${fallbackErr.message}`,
+              );
             }
           }
-
-          return results;
-        } catch (err) {
-          logger.error(
-            `[FXService] All Crypto Providers failed: ${err.message}`,
-          );
-          return {};
         }
-      },
-    );
+
+        return results;
+      } catch (err) {
+        logger.error(
+          `[FXService] All Crypto Providers failed: ${err.message}`,
+        );
+        return {};
+      }
+    };
+
+    if (useCache === false) {
+      return await fetchValues();
+    }
+
+    return cache.wrap(cacheKey, this.CRYPTO_CACHE_TTL, fetchValues);
   }
 
   /**
    * Get exchange rate for any pair (Base -> USD -> Target)
    */
-  async getRate(from, to) {
+  async getRate(from, to, useCache = true) {
     const fromSym = from.toUpperCase();
     const toSym = to.toUpperCase();
     if (fromSym === toSym) return 1.0;
@@ -103,8 +105,9 @@ class FXService {
       let fromInUsd = 1.0;
       if (fromSym !== "USD") {
         if (this.coinMapping[fromSym]) {
-          fromInUsd = await this.getCryptoPrice(fromSym);
+          fromInUsd = await this.getCryptoPrice(fromSym, useCache);
         } else {
+          // Fiat rates always use provider's internal caching for now as they move slowly
           fromInUsd = await exchangeRateProvider.getFiatRate(fromSym, "USD");
         }
       }
@@ -113,18 +116,18 @@ class FXService {
       let usdInTo = 1.0;
       if (toSym !== "USD") {
         if (this.coinMapping[toSym]) {
-          const toPrice = await this.getCryptoPrice(toSym);
-          usdInTo = toPrice ? 1 / toPrice : null;
+          const toPrice = await this.getCryptoPrice(toSym, useCache);
+          usdInTo = toPrice ? math.divide(1, toPrice) : null;
         } else {
           usdInTo = await exchangeRateProvider.getFiatRate("USD", toSym);
         }
       }
 
-      if (fromInUsd === null || usdInTo === null) {
-        throw new Error(`Pricing unavailable for ${from}/${to}`);
-      }
-
-      return fromInUsd * usdInTo;
+        if (fromInUsd === null || usdInTo === null) {
+          throw new Error(`Pricing unavailable for ${from}/${to}`);
+        }
+  
+        return math.multiply(fromInUsd, usdInTo);
     } catch (err) {
       logger.error(
         `[FXService] GetRate Error for ${from}/${to}: ${err.message}`,
@@ -151,7 +154,7 @@ class FXService {
       Object.keys(cryptoPrices).forEach((sym) => {
         const price = cryptoPrices[sym];
         if (base === "USD") {
-          results[sym] = price ? 1 / price : 0;
+          results[sym] = price ? math.divide(1, price) : 0;
         } else {
           // Cross conversion handled via getRate if base isn't USD
           // but usually it's USD for dashboard
@@ -176,7 +179,7 @@ class FXService {
       if (base !== "USD") {
         const basePrice = results[base] || 1;
         Object.keys(results).forEach((k) => {
-          results[k] = results[k] / basePrice;
+          results[k] = math.divide(results[k], basePrice);
         });
       }
 

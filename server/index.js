@@ -7,6 +7,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 const supabase = require("./config/database");
 const { whitelist, isOriginAllowed } = require("./utils/cors");
+const fxService = require("./services/fxService");
 
 const server = http.createServer(app);
 
@@ -429,6 +430,21 @@ io.on("connection", async (socket) => {
     }
   });
 });
+
+// ─── Real-time Exchange Rate Broadcasting ───────────────────
+/**
+ * Active broadcasting ensures the UI is always in sync with backend pricing, 
+ * especially critical for swaps and balance displays.
+ */
+setInterval(async () => {
+  try {
+    const rates = await fxService.getAllRates();
+    io.emit("rates_updated", rates);
+  } catch (err) {
+    logger.error(`[Rates Broadcast] Error: ${err.message}`);
+  }
+}, 30000); // 30s broadcast matches the lowered cache TTL
+// ──────────────────────────────────────────────────────────────
 
 server.listen(PORT, "0.0.0.0", () => {
   logger.info(`Server running on port ${PORT}`);

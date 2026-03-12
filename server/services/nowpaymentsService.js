@@ -132,15 +132,22 @@ exports.getOrCreateDepositAddress = async (
     .maybeSingle();
 
   if (existing) {
-    logger.info(
-      `[NowPayments] Reusing active ${upAsset} address for user ${userId}`,
-    );
-    return {
-      address: existing.address,
-      currency: upAsset,
-      network: upNetwork,
-      payment_id: existing.payment_id,
-    };
+    const MOCK_KEYWORDS = ["-", "dummy", "test", "mock", "address", "123456", "example"];
+    const isMock = existing.address && MOCK_KEYWORDS.some(kw => existing.address.toLowerCase().includes(kw));
+
+    if (!isMock) {
+      logger.info(
+        `[NowPayments] Reusing active ${upAsset} address for user ${userId}`,
+      );
+      return {
+        address: existing.address,
+        currency: upAsset,
+        network: upNetwork,
+        payment_id: existing.payment_id,
+      };
+    } else {
+      logger.warn(`[NowPayments] Detected cached mock address for user ${userId}, requiring fresh generation.`);
+    }
   }
 
   // 2. No active address — request a new one from NOWPayments

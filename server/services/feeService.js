@@ -9,18 +9,22 @@ class FeeService {
    * Calculate inclusive fee breakdown
    */
   calculateFees(amount, currency) {
-    const gross = parseFloat(amount);
+    const gross = String(amount);
 
-    const adminRate = env.ADMIN_FEE_RATE;
-    const partnerRate = env.PARTNER_FEE_RATE;
-    const referrerRate = env.REFERRAL_FEE_RATE;
+    const adminRate = env.ADMIN_FEE_RATE || math.ADMIN_FEE_RATE;
+    const partnerRate = env.PARTNER_FEE_RATE || math.PARTNER_FEE_RATE;
+    const referrerRate = env.REFERRAL_FEE_RATE || math.REFERRAL_FEE_RATE;
 
-    const adminFee = gross * adminRate;
-    const partnerAward = gross * partnerRate;
-    const referrerFee = gross * referrerRate;
+    const adminFee = math.multiply(gross, adminRate);
+    const partnerAward = math.multiply(gross, partnerRate);
+    const referrerFee = math.multiply(gross, referrerRate);
 
-    const totalFee = adminFee + partnerAward + referrerFee;
-    const netAmount = gross - totalFee;
+    // Summing BigNumbers safely
+    const totalFeeBN = math.parseSafe(adminFee).add(math.parseSafe(partnerAward)).add(math.parseSafe(referrerFee));
+    const totalFee = math.formatSafe(totalFeeBN);
+
+    const netAmountBN = math.parseSafe(gross).sub(totalFeeBN);
+    const netAmount = math.formatSafe(netAmountBN);
 
     return {
       grossAmount: gross,
@@ -39,7 +43,7 @@ class FeeService {
         admin: adminRate,
         partner: partnerRate,
         referrer: referrerRate,
-        total: adminRate + partnerRate + referrerRate,
+        total: math.formatSafe(math.parseSafe(adminRate).add(math.parseSafe(partnerRate)).add(math.parseSafe(referrerRate))),
       },
     };
   }
