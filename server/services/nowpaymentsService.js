@@ -79,6 +79,7 @@ exports.getOrCreateDepositAddress = async (
   asset,
   network,
   supabase,
+  forceNew = false,
 ) => {
   const upAsset = asset.toUpperCase();
   const upNetwork = (network || "").toUpperCase();
@@ -120,18 +121,19 @@ exports.getOrCreateDepositAddress = async (
     );
   }
 
-  // 1. Try to reuse existing active address from cache table
-  const { data: existing, error: fetchError } = await supabase
-    .from("nowpayments_deposit_addresses")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("asset", upAsset)
-    .eq("status", "active")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // 1. Try to reuse existing active address from cache table (Skip if forceNew)
+  if (!forceNew) {
+    const { data: existing, error: fetchError } = await supabase
+      .from("nowpayments_deposit_addresses")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("asset", upAsset)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-  if (existing) {
+    if (existing) {
     const MOCK_KEYWORDS = ["-", "dummy", "test", "mock", "address", "123456", "example"];
     const isMock = existing.address && MOCK_KEYWORDS.some(kw => existing.address.toLowerCase().includes(kw));
 
@@ -148,6 +150,7 @@ exports.getOrCreateDepositAddress = async (
     } else {
       logger.warn(`[NowPayments] Detected cached mock address for user ${userId}, requiring fresh generation.`);
     }
+  }
   }
 
   // 2. No active address — request a new one from NOWPayments

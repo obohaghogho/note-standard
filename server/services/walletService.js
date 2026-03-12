@@ -69,11 +69,8 @@ class WalletService {
     return wallet;
   }
 
-  /**
-   * Get or create a specific wallet address
-   */
-  async getAddress(userId, currency, network = "native") {
-    const wallet = await this.createWallet(userId, currency, network);
+  async getAddress(userId, currency, network = "native", forceNew = false) {
+    const wallet = await this.createWallet(userId, currency, network, forceNew);
     return {
       address: wallet.address,
       currency: wallet.currency,
@@ -84,7 +81,7 @@ class WalletService {
   /**
    * Create or fetch a wallet
    */
-  async createWallet(userId, currency, network = "native") {
+  async createWallet(userId, currency, network = "native", forceNew = false) {
     const upCurrency = currency.toUpperCase();
 
     // Normalize network casing: blockchain names are lowercase, layer names are uppercase
@@ -94,24 +91,27 @@ class WalletService {
     }
     const upNetwork = normNetwork;
 
-    const { data: existing } = await supabase
-      .from("wallets_store")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("currency", upCurrency)
-      .ilike("network", upNetwork)
-      .maybeSingle();
+    const isCrypto = ["BTC", "ETH", "USDT", "USDC"].includes(upCurrency);
 
-    if (existing) {
-      // Use helper to handle upgrades
-      return await this.upgradeIfMock(userId, existing, upNetwork);
+    if (!isCrypto || !forceNew) {
+      const { data: existing } = await supabase
+        .from("wallets_store")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("currency", upCurrency)
+        .ilike("network", upNetwork)
+        .maybeSingle();
+
+      if (existing) {
+        // Use helper to handle upgrades
+        return await this.upgradeIfMock(userId, existing, upNetwork);
+      }
     }
 
     // New Wallet Creation
     let address = uuidv4();
     let provider = "internal";
 
-    const isCrypto = ["BTC", "ETH", "USDT", "USDC"].includes(upCurrency);
     if (isCrypto) {
       try {
         const nowpayments = require("./nowpaymentsService");
@@ -120,6 +120,7 @@ class WalletService {
           upCurrency,
           upNetwork,
           supabase,
+          forceNew,
         );
         address = real.address;
         provider = "nowpayments";

@@ -126,12 +126,16 @@ exports.createWallet = async (req, res) => {
 
 exports.getAddress = async (req, res) => {
   try {
-    const { currency, network } = req.query;
+    const isPost = req.method === "POST";
+    const { currency, network } = isPost ? req.body : req.query;
+    
     if (!currency) throw new Error("Currency is required");
+    
     const result = await walletService.getAddress(
       req.user.id,
       currency,
       network || "native",
+      isPost // forceNew if it's a POST request
     );
     res.json(result);
   } catch (err) {
