@@ -55,6 +55,8 @@ class PaymentService {
       currency,
       amount,
       provider: providerName,
+      isCrypto,
+      network
     });
 
     // 2. Find or create wallet for this currency
@@ -446,6 +448,9 @@ class PaymentService {
         };
       }
     }
+
+    // Define safeAmount for internal logic
+    const safeAmount = evAmount !== undefined && evAmount !== null ? evAmount : tx.amount;
 
     const isDeposit = ["DEPOSIT", "FUNDING", "Digital Assets Purchase"]
       .includes(tx.type?.toUpperCase() || tx.type);

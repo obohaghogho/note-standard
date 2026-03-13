@@ -131,6 +131,10 @@ async function createBankDeposit(
     .eq("id", userId)
     .single();
 
+  if (!profile || !profile.email) {
+    throw new Error("User profile or email not found. Please update your profile before depositing.");
+  }
+
   let selectedDetails = allBankDetails[upCurrency] || allBankDetails.USD;
 
   // 1a. Attempt Real-time Virtual Account Generation
