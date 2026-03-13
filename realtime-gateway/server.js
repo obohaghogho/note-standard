@@ -1,108 +1,162 @@
+/**
+ * Realtime Gateway — NoteStandard
+ * 
+ * Architecture:
+ *   - Socket.IO on port 5000 (chat, wallet, presence, call signaling)
+ *   - PeerJS on port 9000 (WebRTC peer discovery — MUST be isolated)
+ *
+ * Why separate ports?
+ *   PeerJS's `ExpressPeerServer` creates its own internal WebSocket server.
+ *   When attached to the same httpServer as Socket.IO, it hijacks the
+ *   HTTP `upgrade` event, corrupting Socket.IO's WebSocket frames 
+ *   ("Invalid frame header"). Separate ports is the only reliable fix.
+ */
+
 const express = require('express');
-const { createServer } = require('http');
+const http = require('http');
 const { Server } = require('socket.io');
+const { ExpressPeerServer } = require('peer');
 const { authMiddleware } = require('./auth');
-const redis = require('redis');
-const redisAdapter = require('socket.io-redis');
 require('dotenv').config();
 
+// ═══════════════════════════════════════════════════════════════
+//  1. SOCKET.IO SERVER (port 5000)
+// ═══════════════════════════════════════════════════════════════
 const app = express();
-const httpServer = createServer(app);
+const httpServer = http.createServer(app);
 
-// PeerJS Server setup
-const { ExpressPeerServer } = require('peer');
-const peerServer = ExpressPeerServer(httpServer, {
-  debug: true,
-  path: '/'
-});
-
-app.use('/peerjs', peerServer);
-
-// Socket.IO setup
 const io = new Server(httpServer, {
   cors: {
     origin: [
-      "https://notestandard.com",
-      "http://localhost:5173"
+      'https://notestandard.com',
+      'https://www.notestandard.com',
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'http://127.0.0.1:5173',
     ],
-    methods: ["GET", "POST"],
+    methods: ['GET', 'POST'],
     credentials: true,
   },
-  transports: ["websocket", "polling"],
-  allowEIO3: true,
+  // Start with polling (always works), then upgrade to websocket
+  transports: ['polling', 'websocket'],
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  // Do NOT compress — avoids "Invalid frame header" on some proxies
   perMessageDeflate: false,
+  httpCompression: false,
 });
 
-// Redis Adapter for scaling
-if (process.env.REDIS_URL) {
-  const pubClient = redis.createClient({ url: process.env.REDIS_URL });
-  const subClient = pubClient.duplicate();
-  
-  Promise.all([pubClient.connect(), subClient.connect()]).then(() => {
-    io.adapter(redisAdapter({ pubClient, subClient }));
-    console.log('[Gateway] Redis adapter enabled');
-
-    // Also listen for direct events from the main server
-    const eventSubscriber = pubClient.duplicate();
-    eventSubscriber.connect().then(() => {
-      eventSubscriber.subscribe('realtime:events', (message) => {
-        try {
-          const { event, data } = JSON.parse(message);
-          console.log(`[Gateway] Bridge event: ${event}`);
-
-          if (event === 'to_user') {
-            io.to(`user:${data.userId}`).emit(data.event, data.data);
-          } else if (event === 'to_conversation') {
-            io.to(data.conversationId).emit(data.event, data.data);
-          } else if (event === 'to_admin') {
-            io.to('admin_room').emit(data.event, data.data);
-          } else if (event === 'broadcast') {
-            io.emit(data.event, data.data);
-          }
-        } catch (err) {
-          console.error('[Gateway] Bridge error:', err.message);
-        }
-      });
-    });
-  });
-}
-
-// Authentication Middleware
+// Auth — verify Supabase JWT before connection
 io.use(authMiddleware);
 
-// Event Handlers
-const walletHandlers = require('./events/wallet');
+// Load event handlers
 const chatHandlers = require('./events/chat');
 const callHandlers = require('./events/call');
+const walletHandlers = require('./events/wallet');
 const notificationHandlers = require('./events/notifications');
 
 io.on('connection', (socket) => {
   const userId = socket.userId;
-  console.log(`[Gateway] New connection: ${socket.id} (User: ${userId})`);
+  const transport = socket.conn.transport.name;
+  console.log(`[Socket.IO] ✓ ${socket.id} connected (user: ${userId}, via: ${transport})`);
 
-  // Join personal room
+  // Auto-join personal room for targeted events
   socket.join(`user:${userId}`);
 
-  // Initialize modules
-  const wallet = walletHandlers(io, socket);
+  // Register event handlers
   chatHandlers(io, socket);
   callHandlers(io, socket);
-  const notifications = notificationHandlers(io, socket);
+  walletHandlers(io, socket);
+  notificationHandlers(io, socket);
 
-  // Handle cross-service events via Redis Pub/Sub (if needed) or simple io.to(...)
-  // Note: If the main server publishes to Redis, io.adapter handles broadcasting.
+  // Log transport upgrade
+  socket.conn.on('upgrade', (t) => {
+    console.log(`[Socket.IO] ↑ ${socket.id} upgraded to ${t.name}`);
+  });
 
   socket.on('disconnect', (reason) => {
-    console.log(`[Gateway] Disconnected: ${socket.id} (${reason})`);
+    console.log(`[Socket.IO] ✗ ${socket.id} disconnected (${reason})`);
   });
 });
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'realtime-gateway' });
+// ═══════════════════════════════════════════════════════════════
+//  2. PEERJS SIGNALING SERVER (port 9000)
+// ═══════════════════════════════════════════════════════════════
+const peerApp = express();
+const peerHttp = http.createServer(peerApp);
+
+// CORS for PeerJS XHR heartbeats
+peerApp.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  next();
 });
 
-const PORT = process.env.PORT || 5000;
-httpServer.listen(PORT, () => {
-  console.log(`[Gateway] Realtime server running on port ${PORT}`);
+const peerServer = ExpressPeerServer(peerHttp, {
+  debug: true,
+  path: '/',
+  allow_discovery: false,
+});
+
+peerApp.use('/peerjs', peerServer);
+
+// Log PeerJS events
+peerServer.on('connection', (client) => {
+  console.log(`[PeerJS] ✓ Peer connected: ${client.getId()}`);
+});
+peerServer.on('disconnect', (client) => {
+  console.log(`[PeerJS] ✗ Peer disconnected: ${client.getId()}`);
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  3. HTTP BRIDGE (dev fallback — when Redis is unavailable)
+// ═══════════════════════════════════════════════════════════════
+app.use(express.json());
+
+app.post('/internal/emit', (req, res) => {
+  const { event, data } = req.body;
+  if (!event || !data) return res.status(400).json({ error: 'Missing event or data' });
+
+  console.log(`[Bridge] ${event}`);
+
+  switch (event) {
+    case 'to_user':
+      io.to(`user:${data.userId}`).emit(data.event, data.data);
+      break;
+    case 'to_conversation':
+      io.to(data.conversationId).emit(data.event, data.data);
+      break;
+    case 'to_admin':
+      io.to('admin_room').emit(data.event, data.data);
+      break;
+    case 'broadcast':
+      io.emit(data.event, data.data);
+      break;
+  }
+
+  res.json({ ok: true });
+});
+
+// Health
+app.get('/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'realtime-gateway',
+    socketClients: io.engine.clientsCount,
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  4. START BOTH SERVERS
+// ═══════════════════════════════════════════════════════════════
+const SOCKET_PORT = process.env.PORT || 5000;
+const PEER_PORT = process.env.PEER_PORT || 9000;
+
+httpServer.listen(SOCKET_PORT, () => {
+  console.log(`[Gateway] Socket.IO  → http://localhost:${SOCKET_PORT}`);
+});
+
+peerHttp.listen(PEER_PORT, () => {
+  console.log(`[Gateway] PeerJS    → http://localhost:${PEER_PORT}/peerjs`);
 });

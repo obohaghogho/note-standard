@@ -1,12 +1,14 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import toast from 'react-hot-toast';
 
+// ─── Config ──────────────────────────────────────────────────────
 const SOCKET_URL = import.meta.env.DEV
-    ? "http://localhost:5000"
-    : "https://socket.notestandard.com";
+    ? 'http://localhost:5000'
+    : 'https://socket.notestandard.com';
 
+// ─── Types ───────────────────────────────────────────────────────
 interface SocketContextValue {
     socket: Socket | null;
     connected: boolean;
@@ -16,11 +18,12 @@ interface SocketContextValue {
 const SocketContext = createContext<SocketContextValue>({
     socket: null,
     connected: false,
-    error: null
+    error: null,
 });
 
 export const useSocket = () => useContext(SocketContext);
 
+// ─── Provider ────────────────────────────────────────────────────
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { session, authReady, user } = useAuth();
     const [connected, setConnected] = useState(false);
@@ -30,10 +33,11 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const MAX_RETRIES = 10;
 
     useEffect(() => {
-        // Only connect if auth is ready and we have a session
+        // ── Gate: wait until auth is fully ready ──────────────
         if (!authReady || !session?.access_token || !user) {
+            // Tear down existing socket if session is lost
             if (socketRef.current) {
-                console.log('[Socket] Disconnecting due to session loss');
+                console.log('[Socket] Auth lost — disconnecting');
                 socketRef.current.disconnect();
                 socketRef.current = null;
                 setConnected(false);
@@ -41,65 +45,68 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             return;
         }
 
-        // Enabled for Render (Supports WebSockets)
+        // ── Guard: prevent double creation ───────────────────
+        if (socketRef.current) return;
 
-        console.log('[Socket] Initializing connection to:', SOCKET_URL);
-        
+        console.log('[Socket] Connecting to', SOCKET_URL);
+
         const socket = io(SOCKET_URL, {
             auth: { token: session.access_token },
             withCredentials: true,
+            // IMPORTANT: start with polling, then upgrade.
+            // This avoids "WebSocket closed before established" errors.
+            transports: ['polling', 'websocket'],
             reconnection: true,
             reconnectionAttempts: MAX_RETRIES,
             reconnectionDelay: 2000,
             timeout: 20000,
-            transports: ['polling', 'websocket']
         });
 
         socket.on('connect', () => {
             const transport = socket.io.engine.transport.name;
-            console.log(`[Socket] Connected to server via ${transport}`);
+            console.log(`[Socket] ✓ Connected via ${transport}`);
             setConnected(true);
             setError(null);
             retryCount.current = 0;
-            
-            socket.io.engine.on('upgrade', (upTrans) => {
-                console.log(`[Socket] Transport upgraded to ${upTrans.name}`);
+
+            // Log the upgrade when it happens
+            socket.io.engine.on('upgrade', (t: any) => {
+                console.log(`[Socket] ↑ Upgraded to ${t.name}`);
             });
         });
 
         socket.on('disconnect', (reason) => {
             console.log('[Socket] Disconnected:', reason);
             setConnected(false);
+            // If the server kicked us, reconnect manually
             if (reason === 'io server disconnect') {
-                // The server has forcefully disconnected the socket, need to reconnect manually
                 socket.connect();
             }
         });
 
         socket.on('connect_error', (err) => {
             console.error('[Socket] Connection error:', err.message);
-            console.dir(err);
             setError(err.message);
             setConnected(false);
-            
+
             if (retryCount.current < MAX_RETRIES) {
                 retryCount.current++;
-                console.log(`[Socket] Retrying... (${retryCount.current}/${MAX_RETRIES})`);
+                console.log(`[Socket] Retrying (${retryCount.current}/${MAX_RETRIES})…`);
             } else {
-                console.error('[Socket] Max retries reached');
                 toast.error('Real-time connection failed. Please refresh.');
             }
         });
 
         socketRef.current = socket;
 
+        // ── Cleanup on unmount or dependency change ──────────
         return () => {
-            console.log('[Socket] Cleaning up connection...');
+            console.log('[Socket] Cleaning up…');
             socket.disconnect();
             socketRef.current = null;
             setConnected(false);
         };
-    }, [authReady, session?.access_token, user?.id, socketRef]);
+    }, [authReady, session?.access_token, user?.id]);
 
     return (
         <SocketContext.Provider value={{ socket: socketRef.current, connected, error }}>
