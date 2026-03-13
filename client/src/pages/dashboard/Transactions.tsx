@@ -326,7 +326,7 @@ export const Transactions: React.FC = () => {
                                         <td className="py-5 px-4 text-right">
                                             <div className="space-y-1">
                                                 {tx.exchange_rate ? (
-                                                    <p className="text-[11px] font-mono text-gray-400">{tx.exchange_rate.toFixed(4)}</p>
+                                                    <p className="text-[11px] font-mono text-gray-400">{tx.exchange_rate?.toFixed(4)}</p>
                                                 ) : <p className="text-[11px] text-gray-600">—</p>}
                                                 <p className="text-[10px] text-rose-500/80">{tx.fee > 0 ? `Fee: ${formatCurrency(tx.fee, tx.currency)}` : ''}</p>
                                             </div>
