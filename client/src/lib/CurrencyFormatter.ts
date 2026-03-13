@@ -3,18 +3,21 @@
  * Uses Intl.NumberFormat for production-grade localization
  */
 
-export const formatCurrency = (amount: number, currency: string) => {
+export const formatCurrency = (amount: number | null | undefined, currency: string) => {
   const supportedFiatCurrencies = ["USD", "EUR", "GBP", "NGN", "JPY"];
+  
+  // Guard against null/undefined amounts
+  const safeAmount = amount ?? 0;
 
   if (supportedFiatCurrencies.includes(currency)) {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency
-    }).format(amount);
+    }).format(safeAmount);
   }
 
   // For crypto like USDT, BTC, etc.
-  return `${amount.toFixed(getDecimalPlaces(currency))} ${currency.replace('_', ' ')}`;
+  return `${safeAmount.toFixed(getDecimalPlaces(currency))} ${currency.replace('_', ' ')}`;
 };
 
 /**
