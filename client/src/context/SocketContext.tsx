@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 // ─── Config ──────────────────────────────────────────────────────
 const SOCKET_URL = import.meta.env.DEV
     ? 'http://localhost:5000'
-    : 'https://socket.notestandard.com';
+    : (import.meta.env.VITE_SOCKET_URL || 'https://realtime-gateway-gsb5.onrender.com');
 
 // ─── Types ───────────────────────────────────────────────────────
 interface SocketContextValue {
