@@ -51,6 +51,7 @@ const io = new Server(server, {
     credentials: true,
   },
   transports: ["polling", "websocket"],
+  allowEIO3: true,
 });
 
 app.set("io", io);
