@@ -34,7 +34,11 @@ const isOriginAllowed = (origin) => {
     origin.startsWith("http://127.0.0.1") ||
     origin.includes("[::1]");
 
-  return isNoteStandard || isLocal;
+  const result = isNoteStandard || isLocal;
+  if (!result) {
+    console.warn(`[CORS Check] Origin NOT allowed: ${origin}`);
+  }
+  return result;
 };
 
 /**
@@ -46,7 +50,7 @@ const corsOptions = {
     if (isOriginAllowed(origin)) {
       return callback(null, true);
     }
-    console.warn(`CORS blocked for origin: ${origin}`);
+    console.warn(`[CORS Middleware] Blocked origin: ${origin}`);
     return callback(new Error("Not allowed by CORS"));
   },
   credentials: true,
