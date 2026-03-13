@@ -148,15 +148,22 @@ app.get('/health', (_req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-//  4. START BOTH SERVERS
+//  4. START SERVERS
 // ═══════════════════════════════════════════════════════════════
 const SOCKET_PORT = process.env.PORT || 5000;
 const PEER_PORT = process.env.PEER_PORT || 9000;
+const IS_PROD = process.env.NODE_ENV === 'production';
 
 httpServer.listen(SOCKET_PORT, () => {
   console.log(`[Gateway] Socket.IO  → http://localhost:${SOCKET_PORT}`);
 });
 
-peerHttp.listen(PEER_PORT, () => {
-  console.log(`[Gateway] PeerJS    → http://localhost:${PEER_PORT}/peerjs`);
-});
+// Since PROD uses the public PeerJS cloud now, we only need the local PeerJS server in DEV.
+// Starting it in PROD can confuse Render's port-binding logic.
+if (!IS_PROD) {
+  peerHttp.listen(PEER_PORT, () => {
+    console.log(`[Gateway] PeerJS    → http://localhost:${PEER_PORT}/peerjs`);
+  });
+} else {
+  console.log(`[Gateway] PeerJS server disabled in production (client uses public cloud)`);
+}
