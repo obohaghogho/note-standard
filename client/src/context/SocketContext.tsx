@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
-import { API_URL } from '../lib/api';
+import { SOCKET_URL } from '../lib/api';
 import toast from 'react-hot-toast';
 
 interface SocketContextValue {
@@ -42,7 +42,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         console.log('[Socket] Initializing centralized connection...');
         
-        const socket = io(API_URL, {
+        const socket = io(SOCKET_URL, {
             auth: { token: session.access_token },
             withCredentials: true,
             reconnection: true,

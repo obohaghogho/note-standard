@@ -5,6 +5,8 @@ const isProduction = import.meta.env.PROD;
 export const API_URL = import.meta.env.VITE_API_URL || 
     (isProduction ? 'https://api.notestandard.com' : 'http://localhost:5000');
 
+export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_URL;
+
 export const getAuthHeader = async () => {
     const { data } = await supabase.auth.getSession();
     return {
