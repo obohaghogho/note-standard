@@ -42,16 +42,18 @@ try {
 const io = new Server(server, {
   cors: {
     origin: (origin, callback) => {
-      if (isOriginAllowed(origin)) {
+      // If origin is missing, it's likely a same-origin request or a non-browser client
+      if (!origin || isOriginAllowed(origin)) {
         callback(null, true);
       } else {
+        console.warn(`[Socket.io CORS] Blocked: ${origin}`);
         callback(new Error("Not allowed by CORS"));
       }
     },
     methods: ["GET", "POST"],
     credentials: true,
   },
-  transports: ["polling", "websocket"], // Allow both, client will decide
+  transports: ["polling", "websocket"],
 });
 
 app.set("io", io);
