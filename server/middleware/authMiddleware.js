@@ -57,7 +57,12 @@ const requireAuth = async (req, res, next) => {
     const { data, error } = await getUserWithRetry(token);
 
     if (error) {
-      console.error("[Auth] Supabase error:", error);
+      console.error("[Auth] Supabase error details:", {
+        status: error.status,
+        message: error.message,
+        name: error.name,
+        code: error.code
+      });
       // Differentiate between invalid token and service failure
       if (error.status === 401 || error.message?.includes("invalid")) {
         return res.status(401).json({ error: "Invalid token" });
@@ -65,6 +70,7 @@ const requireAuth = async (req, res, next) => {
       // Network/service failure — return 503 (retryable) not 500
       return res.status(503).json({
         error: "Auth service temporarily unavailable. Please retry.",
+        details: error.message
       });
     }
 
