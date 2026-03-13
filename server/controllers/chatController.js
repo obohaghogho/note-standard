@@ -1,7 +1,6 @@
-const path = require("path");
-const supabase = require(path.join(__dirname, "..", "config", "supabase"));
 const { createNotification } = require("../services/notificationService");
 const { detectLanguage } = require("../services/translationService");
+const realtime = require("../services/realtimeService");
 
 // --- Conversations ---
 
@@ -156,27 +155,23 @@ exports.createConversation = async (req, res) => {
     if (memberError) throw memberError;
 
     // 5. Send notifications
-    const io = req.app.get("io");
-    if (io) {
-      const { data: creator } = await supabase.from("profiles").select(
-        "username",
-      ).eq("id", userId).single();
-      for (const p of profiles) {
-        await createNotification({
-          receiverId: p.id,
-          senderId: userId,
-          type: "chat_request",
-          title: "New Chat Request",
-          message: `${
-            creator?.username || "Someone"
-          } wants to start a chat with you`,
-          link: `/dashboard/chat?id=${conversationId}`,
-          io,
-        });
+    const { data: creator } = await supabase.from("profiles").select(
+      "username",
+    ).eq("id", userId).single();
+    for (const p of profiles) {
+      await createNotification({
+        receiverId: p.id,
+        senderId: userId,
+        type: "chat_request",
+        title: "New Chat Request",
+        message: `${
+          creator?.username || "Someone"
+        } wants to start a chat with you`,
+        link: `/dashboard/chat?id=${conversationId}`,
+      });
 
-        // CRITICAL: Emit new_conversation event so recipients join the room real-time
-        io.to(p.id).emit("new_conversation", convData);
-      }
+      // Notify recipient of new conversation
+      realtime.emitToUser(p.id, "new_conversation", convData);
     }
 
     res.json({
@@ -229,48 +224,44 @@ exports.acceptConversation = async (req, res) => {
     if (error) throw error;
 
     // Notify other members
-    const io = req.app.get("io");
-    if (io) {
-      const { data: members } = await supabase
-        .from("conversation_members")
-        .select("user_id")
-        .eq("conversation_id", conversationId)
-        .neq("user_id", userId);
+    const { data: members } = await supabase
+      .from("conversation_members")
+      .select("user_id")
+      .eq("conversation_id", conversationId)
+      .neq("user_id", userId);
 
-      const { data: accepter } = await supabase.from("profiles").select(
-        "username",
-      ).eq("id", userId).single();
+    const { data: accepter } = await supabase.from("profiles").select(
+      "username",
+    ).eq("id", userId).single();
 
-      if (members) {
-        for (const m of members) {
-          await createNotification({
-            receiverId: m.user_id,
-            senderId: userId,
-            type: "chat_accepted",
-            title: "Chat Request Accepted",
-            message: `${
-              accepter?.username || "A user"
-            } accepted your chat request`,
-            link: `/dashboard/chat?id=${conversationId}`,
-            io,
-          });
+    if (members) {
+      for (const m of members) {
+        await createNotification({
+          receiverId: m.user_id,
+          senderId: userId,
+          type: "chat_accepted",
+          title: "Chat Request Accepted",
+          message: `${
+            accepter?.username || "A user"
+          } accepted your chat request`,
+          link: `/dashboard/chat?id=${conversationId}`,
+        });
 
-          // Notify about the change in conversation status
-          io.to(m.user_id).emit("conversation_updated", {
-            conversationId,
-            userId,
-            status: "accepted",
-          });
-        }
+        // Notify about the change in conversation status
+        realtime.emitToUser(m.user_id, "conversation_updated", {
+          conversationId,
+          userId,
+          status: "accepted",
+        });
       }
-
-      // Also notify self across tabs
-      io.to(userId).emit("conversation_updated", {
-        conversationId,
-        userId,
-        status: "accepted",
-      });
     }
+
+    // Also notify self across tabs
+    realtime.emitToUser(userId, "conversation_updated", {
+      conversationId,
+      userId,
+      status: "accepted",
+    });
 
     res.json({ success: true, member: data });
   } catch (err) {
@@ -445,12 +436,15 @@ exports.markMessageRead = async (req, res) => {
         throw error;
       }
 
-      // Emit read receipt via socket
-      const io = req.app.get("io");
-      io.to(data.conversation_id).emit("message_read", {
-        messageId,
+      // Emit read receipt via gateway
+      realtime.emit("to_conversation", {
         conversationId: data.conversation_id,
-        userId,
+        event: "message_read",
+        data: {
+          messageId,
+          conversationId: data.conversation_id,
+          userId,
+        }
       });
 
       res.json({ success: true });
@@ -559,13 +553,19 @@ exports.sendMessage = async (req, res) => {
           .single();
 
         const msgToSend = (!fetchErr && fullMessage) ? fullMessage : data;
-        const io = req.app.get("io");
-        io.to(conversationId).emit("receive_message", msgToSend);
+        realtime.emit("to_conversation", {
+          conversationId,
+          event: "receive_message",
+          data: msgToSend
+        });
 
         res.json(msgToSend);
       } catch (err) {
-        const io = req.app.get("io");
-        io.to(conversationId).emit("receive_message", data);
+        realtime.emit("to_conversation", {
+          conversationId,
+          event: "receive_message",
+          data
+        });
         res.json(data);
       }
     }
@@ -603,7 +603,6 @@ exports.sendMessage = async (req, res) => {
               content.substring(0, 50)
             }${content.length > 50 ? "..." : ""}`,
             link: `/dashboard/chat?id=${conversationId}`,
-            io,
           });
         }
       }
@@ -634,7 +633,6 @@ exports.sendMessage = async (req, res) => {
                   content.substring(0, 50)
                 }..."`,
                 link: `/dashboard/chat?id=${conversationId}`,
-                io,
               });
             }
           }
@@ -688,7 +686,11 @@ exports.sendMessage = async (req, res) => {
               .single();
 
             if (!autoErr) {
-              io.to(conversationId).emit("receive_message", autoMsg);
+               realtime.emit("to_conversation", {
+                 conversationId,
+                 event: "receive_message",
+                 data: autoMsg
+               });
             }
           }
         }
@@ -761,9 +763,8 @@ exports.createSupportChat = async (req, res) => {
 
     if (memberError) throw memberError;
 
-    // Notify admins via Socket.IO
-    const io = req.app.get("io");
-    io.to("admin_room").emit("new_support_chat", {
+    // Notify admins via Gateway
+    realtime.emitToAdmin("new_support_chat", {
       ...convData,
       user: profile,
     });

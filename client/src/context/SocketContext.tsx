@@ -1,8 +1,11 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
-import { SOCKET_URL } from '../lib/api';
 import toast from 'react-hot-toast';
+
+const SOCKET_URL = import.meta.env.DEV
+    ? "http://localhost:5000"
+    : "https://socket.notestandard.com";
 
 interface SocketContextValue {
     socket: Socket | null;
@@ -40,7 +43,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         // Enabled for Render (Supports WebSockets)
 
-        console.log('[Socket] Initializing centralized connection...');
+        console.log('[Socket] Initializing connection to:', SOCKET_URL);
         
         const socket = io(SOCKET_URL, {
             auth: { token: session.access_token },
@@ -49,7 +52,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             reconnectionAttempts: MAX_RETRIES,
             reconnectionDelay: 2000,
             timeout: 20000,
-            transports: ['websocket', 'polling']
+            transports: ['polling', 'websocket']
         });
 
         socket.on('connect', () => {
@@ -75,11 +78,13 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         socket.on('connect_error', (err) => {
             console.error('[Socket] Connection error:', err.message);
+            console.dir(err);
             setError(err.message);
             setConnected(false);
             
             if (retryCount.current < MAX_RETRIES) {
                 retryCount.current++;
+                console.log(`[Socket] Retrying... (${retryCount.current}/${MAX_RETRIES})`);
             } else {
                 console.error('[Socket] Max retries reached');
                 toast.error('Real-time connection failed. Please refresh.');

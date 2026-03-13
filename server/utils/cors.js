@@ -35,6 +35,7 @@ const isOriginAllowed = (origin) => {
     origin.includes("[::1]");
 
   const result = isNoteStandard || isLocal;
+  console.log(`[CORS Check] ${origin || "Direct/Server"} -> ${result ? 'ALLOWED' : 'DENIED'}`);
   if (!result) {
     console.warn(`[CORS Check] Origin NOT allowed: ${origin}`);
   }

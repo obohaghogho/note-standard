@@ -1,17 +1,14 @@
-const supabase = require("../config/database");
 const { createNotification, broadcastNotification } = require(
   "../services/notificationService",
 );
-require("dotenv").config();
 const analyticsService = require("../services/analyticsService");
+const realtime = require("../services/realtimeService");
 
 async function broadcastTrendUpdate(app) {
   try {
-    const io = app.get("io");
-    if (!io) return;
     const stats = await analyticsService.getRealtimeStats();
     if (stats) {
-      io.emit("stats_updated", stats);
+      realtime.broadcast("stats_updated", stats);
     }
   } catch (err) {
     console.error("[Trends] Broadcast failed:", err.message);
@@ -54,7 +51,6 @@ const createNote = async (req, res) => {
 
     // --- Community Post Notification ---
     if (is_private === false) {
-      const io = req.app.get("io");
       try {
         const { data: author } = await supabase
           .from("profiles")
@@ -70,7 +66,6 @@ const createNote = async (req, res) => {
             author?.username || "Someone"
           } shared a new note: ${newNote.title}`,
           link: `/dashboard/feed`,
-          io,
         });
       } catch (communityErr) {
         console.error("Failed to send community notification:", communityErr);
@@ -114,7 +109,6 @@ const updateNote = async (req, res) => {
     res.json(updatedNote);
 
     // --- Notification Logic for Shared Note Edits ---
-    const io = req.app.get("io");
     try {
       // Find who this note is shared with
       const { data: shares } = await supabase
@@ -140,7 +134,6 @@ const updateNote = async (req, res) => {
               updatedNote.title || "Untitled"
             }`,
             link: `/notes/${noteId}`,
-            io,
           });
         }
       }
@@ -165,7 +158,6 @@ const updateNote = async (req, res) => {
             author?.username || "Someone"
           } shared a note with the community: ${updatedNote.title}`,
           link: `/dashboard/feed`,
-          io,
         });
       } catch (communityErr) {
         console.error("Failed to send community notification:", communityErr);
@@ -244,7 +236,6 @@ const shareNote = async (req, res) => {
     res.json({ message: "Note shared successfully" });
 
     // 4. Trigger Notification
-    const io = req.app.get("io");
     const { data: owner } = await supabase
       .from("profiles")
       .select("username")
@@ -260,7 +251,6 @@ const shareNote = async (req, res) => {
         owner?.username || "Someone"
       } shared a note with you: ${note.title}`,
       link: `/notes/${noteId}`,
-      io,
     });
   } catch (err) {
     console.error("Error sharing note:", err.message);

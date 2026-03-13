@@ -9,8 +9,10 @@ webpush.setVapidDetails(
   process.env.VAPID_PRIVATE_KEY,
 );
 
+const realtime = require("./realtimeService");
+
 /**
- * Creates a notification and emits it via Socket.IO
+ * Creates a notification and emits it via Gateway
  * @param {Object} params - Notification parameters
  * @param {string} params.receiverId - ID of the user receiving the notification
  * @param {string} [params.senderId] - ID of the user triggering the notification
@@ -18,7 +20,6 @@ webpush.setVapidDetails(
  * @param {string} params.title - Notification title
  * @param {string} [params.message] - Notification message
  * @param {string} [params.link] - Link to redirect the user
- * @param {Object} [params.io] - Socket.IO instance (optional if app.get('io') is used)
  */
 const createNotification = async ({
   receiverId,
@@ -27,7 +28,6 @@ const createNotification = async ({
   title,
   message,
   link,
-  io,
 }) => {
   try {
     // 1. Persist to Database
@@ -47,19 +47,17 @@ const createNotification = async ({
 
     if (error) throw error;
 
-    // 2. Real-time Delivery via Socket.IO
-    if (io) {
-      io.to(receiverId).emit("notification", {
-        id: data.id,
-        type,
-        title,
-        message,
-        link,
-        sender_id: senderId,
-        created_at: data.created_at,
-        is_read: false,
-      });
-    }
+    // 2. Real-time Delivery via Gateway
+    realtime.emitToUser(receiverId, "notification", {
+      id: data.id,
+      type,
+      title,
+      message,
+      link,
+      sender_id: senderId,
+      created_at: data.created_at,
+      is_read: false,
+    });
 
     // 3. Optional: Send Push Notification (PWA)
     await sendPushNotification(receiverId, { title, message, link, type });
@@ -121,7 +119,6 @@ const broadcastNotification = async ({
   title,
   message,
   link,
-  io,
 }) => {
   try {
     // 1. Get all user IDs (this might be heavy for many users, but for now it's okay)
@@ -149,18 +146,16 @@ const broadcastNotification = async ({
 
     if (error) throw error;
 
-    // 3. Real-time Delivery via Socket.IO Broadast
-    if (io) {
-      io.emit("notification", {
-        type,
-        title,
-        message,
-        link,
-        sender_id: senderId,
-        created_at: new Date().toISOString(),
-        is_read: false,
-      });
-    }
+    // 3. Real-time Delivery via Gateway Broadcast
+    realtime.broadcast("notification", {
+      type,
+      title,
+      message,
+      link,
+      sender_id: senderId,
+      created_at: new Date().toISOString(),
+      is_read: false,
+    });
 
     // 4. Send Push Notifications to everyone (This could be throttled for production)
     // For now, we'll do it for each profile
