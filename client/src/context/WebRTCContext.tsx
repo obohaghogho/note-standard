@@ -7,7 +7,6 @@ import { CallOverlay } from '../components/chat/CallOverlay';
 import toast from 'react-hot-toast';
 
 // ─── PeerJS signaling config ─────────────────────────────────────
-// Port 9000 in dev, proxied to 443 in production
 const PEER_HOST = import.meta.env.DEV ? 'localhost' : 'socket.notestandard.com';
 const PEER_PORT = import.meta.env.DEV ? 9000 : 443;
 const PEER_SECURE = !import.meta.env.DEV;
@@ -44,14 +43,11 @@ export const useWebRTC = () => {
     return context;
 };
 
-// ─── Helper: build a PeerJS-safe ID from a UUID ─────────────────
 function makePeerId(userId: string, suffix?: string): string {
     const base = `ns_${userId.replace(/-/g, '_')}`;
     return suffix ? `${base}_${suffix}` : base;
 }
 
-// ═════════════════════════════════════════════════════════════════
-//  Provider
 // ═════════════════════════════════════════════════════════════════
 export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { socket, connected: socketConnected } = useSocket();
@@ -73,10 +69,9 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const currentCallStatus = useRef<CallState['status']>('idle');
     const pendingCallRef = useRef<{ from: string; peerId: string; type: 'voice' | 'video' } | null>(null);
 
-    // Keep ref in sync
     useEffect(() => { currentCallStatus.current = callState.status; }, [callState.status]);
 
-    // ─── Cleanup helper ──────────────────────────────────────────
+    // ─── Cleanup ─────────────────────────────────────────────────
     const cleanup = useCallback(() => {
         if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
         if (mediaConnectionRef.current) { mediaConnectionRef.current.close(); mediaConnectionRef.current = null; }
@@ -92,15 +87,16 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // ─── PeerJS initialization ───────────────────────────────────
     useEffect(() => {
         if (!user?.id) return;
-        if (peerRef.current) return;               // prevent double-init
+        if (peerRef.current) return;
 
-        let destroyed = false;                       // track cleanup
+        let destroyed = false;
+        const MAX_RECONNECT = 3;
 
         function createPeer(suffix?: string) {
-            if (destroyed) return;                   // React strict-mode guard
+            if (destroyed) return;
 
             const peerId = makePeerId(user!.id, suffix);
-            console.log('[PeerJS] Creating peer:', peerId);
+            let reconnectAttempts = 0;
 
             const peer = new Peer(peerId, {
                 host: PEER_HOST,
@@ -118,39 +114,36 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             peer.on('open', (id) => {
                 console.log('[PeerJS] ✓ Connected:', id);
+                reconnectAttempts = 0;
             });
 
             peer.on('call', (call) => {
-                console.log('[PeerJS] Incoming call from:', call.peer);
                 mediaConnectionRef.current = call;
                 call.on('stream', (remote) => { setRemoteStream(remote); setCallState(p => ({ ...p, status: 'connected' })); });
                 call.on('close', cleanup);
-                call.on('error', (e) => { console.error('[PeerJS] Call error:', e); toast.error('Call error'); cleanup(); });
+                call.on('error', () => { toast.error('Call error'); cleanup(); });
             });
 
             peer.on('error', (err: any) => {
-                console.error('[PeerJS] Error:', err.type, err.message);
-
                 if (err.type === 'unavailable-id') {
-                    // ID clash — stale session on signaling server or HMR double-mount.
-                    // Destroy and retry with a unique timestamp suffix.
-                    console.warn('[PeerJS] ID taken — retrying with unique suffix…');
+                    console.warn('[PeerJS] ID taken — retrying…');
                     peer.destroy();
                     peerRef.current = null;
                     setTimeout(() => createPeer(Date.now().toString(36)), 500);
                     return;
                 }
-
                 if (err.type === 'network' || err.type === 'server-error') {
-                    console.warn('[PeerJS] Signaling server unreachable — will retry on next mount');
+                    console.warn('[PeerJS] Signaling server unreachable. Calls unavailable.');
                 }
             });
 
             peer.on('disconnected', () => {
-                // PeerJS lost connection to signaling server — try to reconnect
-                if (!destroyed && !peer.destroyed) {
-                    console.log('[PeerJS] Disconnected from signaling — reconnecting…');
+                if (!destroyed && !peer.destroyed && reconnectAttempts < MAX_RECONNECT) {
+                    reconnectAttempts++;
+                    console.log(`[PeerJS] Reconnecting (${reconnectAttempts}/${MAX_RECONNECT})…`);
                     peer.reconnect();
+                } else if (reconnectAttempts >= MAX_RECONNECT) {
+                    console.warn('[PeerJS] Max reconnects reached. Calls unavailable.');
                 }
             });
 
@@ -172,7 +165,6 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const startCall = async (otherUserId: string, conversationId: string, type: 'voice' | 'video', name?: string, avatar?: string) => {
         try {
             if (!peerRef.current) { toast.error('Connection not ready'); return; }
-
             setCallState({ type, status: 'calling', otherUser: otherUserId, otherUserName: name, otherUserAvatar: avatar, conversationId });
 
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === 'video' });
@@ -191,8 +183,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     cleanup();
                 }
             }, 45000);
-        } catch (err) {
-            console.error('[PeerJS] startCall failed:', err);
+        } catch {
             toast.error('Failed to access media');
             cleanup();
         }
@@ -202,7 +193,6 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const acceptCall = async () => {
         try {
             if (!peerRef.current || !pendingCallRef.current) { toast.error('Call data missing'); cleanup(); return; }
-
             const { type } = pendingCallRef.current;
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === 'video' });
             localStreamRef.current = stream;
@@ -212,10 +202,8 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 mediaConnectionRef.current.answer(stream);
                 setCallState(p => ({ ...p, status: 'connecting' }));
             }
-
             socket?.emit('call:ready', { to: callState.otherUser, peerId: peerRef.current.id });
-        } catch (err) {
-            console.error('[PeerJS] acceptCall failed:', err);
+        } catch {
             toast.error('Failed to join call');
             cleanup();
         }
@@ -235,7 +223,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setIsVideoEnabled(!isVideoEnabled);
     };
 
-    // ─── Socket.IO call signaling listeners ─────────────────────
+    // ─── Socket.IO call signaling ────────────────────────────────
     useEffect(() => {
         if (!socket || !socketConnected) return;
 
@@ -255,17 +243,15 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const onReady = (data: any) => {
             if (currentCallStatus.current === 'calling' && peerRef.current && localStreamRef.current) {
                 if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
-
                 const calleePeerId = data.peerId || makePeerId(data.from);
                 const call = peerRef.current.call(calleePeerId, localStreamRef.current);
                 if (!call) { toast.error('Failed to connect'); cleanup(); return; }
 
                 mediaConnectionRef.current = call;
                 setCallState(p => ({ ...p, status: 'connecting' }));
-
                 call.on('stream', (remote) => { setRemoteStream(remote); setCallState(p => ({ ...p, status: 'connected' })); });
                 call.on('close', cleanup);
-                call.on('error', (e) => { console.error('[PeerJS] Call error:', e); toast.error('Call failed'); cleanup(); });
+                call.on('error', () => { toast.error('Call failed'); cleanup(); });
             }
         };
 
@@ -282,7 +268,6 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         };
     }, [socket, socketConnected, cleanup]);
 
-    // ─── Render ──────────────────────────────────────────────────
     return (
         <WebRTCContext.Provider value={{
             callState, localStream, remoteStream,
