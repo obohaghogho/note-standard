@@ -199,8 +199,19 @@ setInterval(async () => {
 }, 6 * 60 * 60 * 1000);
 
 io.on("connection", async (socket) => {
-  const userId = socket.user.id;
-  logger.info(`[Socket] Connected: ${userId} ${socket.id}`);
+  const userId = socket.user?.id || 'anonymous';
+  const transport = socket.conn.transport.name;
+  console.log(`[Socket.io] New connection: ${socket.id} (user: ${userId}, transport: ${transport})`);
+
+  socket.conn.on("upgrade", (upTrans) => {
+    console.log(`[Socket.io] Socket ${socket.id} upgraded to ${upTrans.name}`);
+  });
+
+  if (userId === 'anonymous') {
+     console.warn(`[Socket.io] Anonymous connection established. Socket user object might be missing.`);
+     // Fallback if userId is missing but we want to allow the connection (or maybe disconnect?)
+  }
+
 
   // Track user sockets
   if (!userSockets.has(userId)) {
