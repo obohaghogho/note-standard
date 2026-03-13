@@ -7,9 +7,7 @@ import { CallOverlay } from '../components/chat/CallOverlay';
 import toast from 'react-hot-toast';
 
 // ─── PeerJS signaling config ─────────────────────────────────────
-const PEER_HOST = import.meta.env.DEV ? 'localhost' : 'socket.notestandard.com';
-const PEER_PORT = import.meta.env.DEV ? 9000 : 443;
-const PEER_SECURE = !import.meta.env.DEV;
+// Uses local server in DEV, public PeerJS cloud in PROD
 
 // ─── Types ───────────────────────────────────────────────────────
 interface CallState {
@@ -98,11 +96,12 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const peerId = makePeerId(user!.id, suffix);
             let reconnectAttempts = 0;
 
+            const peerConfig = import.meta.env.DEV 
+                ? { host: 'localhost', port: 9000, path: '/peerjs', secure: false }
+                : {}; // Emtpy object uses PeerJS public cloud for signaling
+
             const peer = new Peer(peerId, {
-                host: PEER_HOST,
-                port: PEER_PORT,
-                path: '/peerjs',
-                secure: PEER_SECURE,
+                ...peerConfig,
                 debug: import.meta.env.DEV ? 2 : 0,
                 config: {
                     iceServers: [
