@@ -312,9 +312,9 @@ export const Transactions: React.FC = () => {
                                         </td>
                                         <td className="py-5 px-4">
                                             <div className="flex items-center gap-2 text-xs font-medium text-gray-400">
-                                                <span className="bg-white/5 px-2 py-0.5 rounded uppercase">{tx.currency}</span>
+                                                <span className="bg-white/5 px-2 py-0.5 rounded uppercase">{tx.currency || 'USD'}</span>
                                                 <ArrowRight size={12} className="text-gray-600" />
-                                                <span className="bg-white/5 px-2 py-0.5 rounded uppercase italic">{tx.metadata?.to_currency || tx.currency}</span>
+                                                <span className="bg-white/5 px-2 py-0.5 rounded uppercase italic">{tx.metadata?.to_currency || tx.currency || 'USD'}</span>
                                             </div>
                                         </td>
                                         <td className={cn(
