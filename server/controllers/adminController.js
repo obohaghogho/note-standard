@@ -6,6 +6,7 @@ const { createNotification, broadcastNotification } = require(
   "../services/notificationService",
 );
 const { createClient } = require("@supabase/supabase-js");
+const realtime = require("../services/realtimeService");
 
 // Create a Supabase client with service role for admin operations
 const getServiceSupabase = () => {
@@ -376,9 +377,6 @@ exports.updateUserStatus = async (req, res) => {
     // Log the action
     await logAdminAction(req, "update_user_status", "user", id, { status });
 
-    // Notify user of status change
-    const io = req.app.get("io");
-    if (io) {
       await createNotification({
         receiverId: id,
         type: "account_status",
@@ -389,9 +387,7 @@ exports.updateUserStatus = async (req, res) => {
           ? "Your account has been reactivated. You can now access all features."
           : "Your account has been suspended by an administrator.",
         link: "/dashboard",
-        io,
       });
-    }
 
     res.json({ message: `User ${status} successfully` });
   } catch (err) {
@@ -533,27 +529,23 @@ exports.updateChatStatus = async (req, res) => {
 
     // Notify user if resolved
     if (support_status === "resolved") {
-      const io = req.app.get("io");
-      if (io) {
-        // Find the user in the conversation
-        const { data: member } = await serviceSupabase
-          .from("conversation_members")
-          .select("user_id")
-          .eq("conversation_id", id)
-          .neq("role", "admin")
-          .maybeSingle();
+      // Find the user in the conversation
+      const { data: member } = await serviceSupabase
+        .from("conversation_members")
+        .select("user_id")
+        .eq("conversation_id", id)
+        .neq("role", "admin")
+        .maybeSingle();
 
-        if (member) {
-          await createNotification({
-            receiverId: member.user_id,
-            type: "support_resolved",
-            title: "Support Session Resolved",
-            message:
-              "Your support session has been marked as resolved. We hope we could help!",
-            link: `/dashboard/chat?id=${id}`,
-            io,
-          });
-        }
+      if (member) {
+        await createNotification({
+          receiverId: member.user_id,
+          type: "support_resolved",
+          title: "Support Session Resolved",
+          message:
+            "Your support session has been marked as resolved. We hope we could help!",
+          link: `/dashboard/chat?id=${id}`,
+        });
       }
     }
 
@@ -607,31 +599,27 @@ exports.joinSupportChat = async (req, res) => {
     });
 
     // Notify user that admin joined
-    const io = req.app.get("io");
-    if (io) {
-      const { data: member } = await serviceSupabase
-        .from("conversation_members")
-        .select("user_id")
-        .eq("conversation_id", id)
-        .neq("user_id", adminId)
-        .maybeSingle();
+    const { data: member } = await serviceSupabase
+      .from("conversation_members")
+      .select("user_id")
+      .eq("conversation_id", id)
+      .neq("user_id", adminId)
+      .maybeSingle();
 
-      if (member) {
-        const { data: admin } = await serviceSupabase.from("profiles").select(
-          "username",
-        ).eq("id", adminId).single();
-        await createNotification({
-          receiverId: member.user_id,
-          senderId: adminId,
-          type: "support_joined",
-          title: "Support Agent Joined",
-          message: `Support agent ${
-            admin?.username || "assigned"
-          } has joined the chat to assist you.`,
-          link: `/dashboard/chat?id=${id}`,
-          io,
-        });
-      }
+    if (member) {
+      const { data: admin } = await serviceSupabase.from("profiles").select(
+        "username",
+      ).eq("id", adminId).single();
+      await createNotification({
+        receiverId: member.user_id,
+        senderId: adminId,
+        type: "support_joined",
+        title: "Support Agent Joined",
+        message: `Support agent ${
+          admin?.username || "assigned"
+        } has joined the chat to assist you.`,
+        link: `/dashboard/chat?id=${id}`,
+      });
     }
 
     res.json({ success: true, message: "Joined support chat" });

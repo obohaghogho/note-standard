@@ -186,20 +186,16 @@ router.patch("/:id/status", requireAdmin, async (req, res) => {
     if (error) throw error;
 
     // Notify user of status update
-    const io = req.app.get("io");
-    if (io) {
-      const { createNotification } = require("../services/notificationService");
-      await createNotification({
-        receiverId: data.user_id,
-        type: "ad_status",
-        title: status === "approved" ? "Ad Approved!" : "Ad Status Updated",
-        message: status === "approved"
-          ? `Your advertisement "${data.title}" has been approved and is now active.`
-          : `Your advertisement "${data.title}" status has been changed to ${status}.`,
-        link: "/dashboard/wallet", // Ad management is likely here or nearby
-        io,
-      });
-    }
+    const { createNotification } = require("../services/notificationService");
+    await createNotification({
+      receiverId: data.user_id,
+      type: "ad_status",
+      title: status === "approved" ? "Ad Approved!" : "Ad Status Updated",
+      message: status === "approved"
+        ? `Your advertisement "${data.title}" has been approved and is now active.`
+        : `Your advertisement "${data.title}" status has been changed to ${status}.`,
+      link: "/dashboard/wallet", // Ad management is likely here or nearby
+    });
 
     res.json(data);
   } catch (error) {

@@ -38,14 +38,13 @@ export const useWebRTC = () => {
     return context;
 };
 
-/**
- * Derive the PeerJS signaling server host from the API_URL.
- * In development this is typically localhost:5000.
- * In production this is the same host as the backend.
- */
+const GATEWAY_URL = import.meta.env.DEV
+    ? "http://localhost:5000"
+    : "https://socket.notestandard.com";
+
 function getPeerConfig() {
     try {
-        const url = new URL(API_URL);
+        const url = new URL(GATEWAY_URL);
         return {
             host: url.hostname,
             port: Number(url.port) || (url.protocol === 'https:' ? 443 : 80),
@@ -95,7 +94,8 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         const peer = new Peer(peerId, {
             ...config,
-            debug: import.meta.env.DEV ? 2 : 0,
+            debug: import.meta.env.DEV ? 2 : 1,
+            proxied: true, // Crucial for Render/Cloudflare
             config: {
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },

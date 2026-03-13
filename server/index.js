@@ -4,57 +4,16 @@ const env = require("./config/env");
 
 const app = require("./app");
 const http = require("http");
-const { Server } = require("socket.io");
 const supabase = require("./config/database");
-const { whitelist, isOriginAllowed } = require("./utils/cors");
 const fxService = require("./services/fxService");
+const realtime = require("./services/realtimeService");
 
 const server = http.createServer(app);
 
-// ─── PeerJS Signaling Server ──────────────────────────────────
-let peerServer;
-try {
-  const { ExpressPeerServer } = require("peer");
-  peerServer = ExpressPeerServer(server, {
-    path: "/",
-    allow_discovery: false,
-    proxied: true, // Required for Render/Cloudflare/Nginx proxies
-  });
-  app.use("/peerjs", peerServer);
-  logger.info("[WebRTC] PeerJS signaling server mounted on /peerjs");
-
-  peerServer.on("connection", (client) => {
-    logger.debug(`[WebRTC] Peer connected: ${client.getId()}`);
-  });
-
-  peerServer.on("disconnect", (client) => {
-    logger.debug(`[WebRTC] Peer disconnected: ${client.getId()}`);
-  });
-
-  peerServer.on("error", (err) => {
-    logger.error(`[WebRTC] PeerJS error: ${err.message}`);
-  });
-} catch (err) {
-  logger.error(`[WebRTC] Failed to initialize PeerJS server: ${err.message}`);
-}
+// ─── Realtime Gateway Transition ──────────────────────────────
+// This service now delegates all socket handling to the 
+// realtime-gateway service. Communication happens via Redis.
 // ──────────────────────────────────────────────────────────────
-
-const io = new Server(server, {
-  cors: {
-    origin: [
-      "https://notestandard.com",
-      "https://www.notestandard.com",
-      "http://localhost:5173",
-      "http://localhost:4173",
-    ],
-    methods: ["GET", "POST"],
-    credentials: true,
-  },
-  transports: ["websocket", "polling"],
-  allowEIO3: true,
-});
-
-app.set("io", io);
 
 // Global Error Handlers for Process Stability
 process.on("uncaughtException", (err) => {
@@ -69,96 +28,8 @@ process.on("unhandledRejection", (reason, promise) => {
 
 const PORT = env.PORT;
 
-// Socket.io Middleware for Authentication
-io.use(async (socket, next) => {
-  try {
-    const token = socket.handshake.auth.token ||
-      socket.handshake.headers.authorization?.split(" ")[1];
-    if (!token) {
-      console.warn("[Socket Auth] Missing token in handshake");
-      return next(new Error("Authentication error: Missing token"));
-    }
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser(
-      token,
-    );
-    if (authError || !user) {
-      console.error(
-        "[Socket Auth] Invalid token:",
-        authError?.message || "User not found",
-      );
-      return next(new Error("Authentication error: Invalid session"));
-    }
-
-    // Get user profile with role - but with timeout to avoid hanging handshake
-    const profilePromise = supabase
-      .from("profiles")
-      .select("role, status")
-      .eq("id", user.id)
-      .single();
-
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Profile fetch timeout")), 3000)
-    );
-
-    let profile = null;
-    try {
-      const { data } = await Promise.race([profilePromise, timeoutPromise]);
-      profile = data;
-    } catch (profileErr) {
-      console.warn(
-        "[Socket Auth] Profile fetch failed or timed out:",
-        profileErr.message,
-      );
-    }
-
-    socket.user = user;
-    socket.userProfile = profile;
-    next();
-  } catch (err) {
-    console.error("[Socket Auth] Unexpected error:", err.message);
-    next(new Error("Authentication error: Internal server error"));
-  }
-});
-
-// Track online users (handle multiple tabs)
-const userSockets = new Map(); // userId -> Set(socketIds)
-
-// Background cleanup job for "ghost" users (online but inactive)
-setInterval(async () => {
-  try {
-    const threshold = new Date(Date.now() - 60000).toISOString();
-
-    const { data: ghosts, error } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("is_online", true)
-      .lt("last_active_at", threshold);
-
-    if (error) throw error;
-
-    if (ghosts && ghosts.length > 0) {
-      const ghostIds = ghosts.map((g) => g.id);
-      logger.debug(`[Presence] Cleaning up ${ghostIds.length} ghost users`);
-
-      await supabase
-        .from("profiles")
-        .update({ is_online: false, last_seen: new Date().toISOString() })
-        .in("id", ghostIds);
-
-      ghostIds.forEach((id) => {
-        io.emit("user_online", {
-          userId: id,
-          online: false,
-          lastSeen: new Date().toISOString(),
-        });
-        userSockets.delete(id);
-      });
-    }
-  } catch (err) {
-    console.error("[Presence] Cleanup job error:", err.message);
-  }
-}, 60000);
+// Presence and legacy socket middleware removed in favor of 
+// centralized gateway handling.
 
 // Background job for real-time Trends
 const analyticsService = require("./services/analyticsService");
@@ -174,12 +45,12 @@ const analyticsService = require("./services/analyticsService");
   }
 })();
 
-// 2. Real-time broadcast (Every 60s)
+// 2. Real-time broadcast (Every 60s) via Gateway
 setInterval(async () => {
   try {
     const stats = await analyticsService.getRealtimeStats();
     if (stats) {
-      io.emit("stats_updated", stats);
+      realtime.broadcast("stats_updated", stats);
     }
   } catch (err) {
     console.error("[Trends] Interval broadcast failed:", err.message);
@@ -196,251 +67,7 @@ setInterval(async () => {
   }
 }, 6 * 60 * 60 * 1000);
 
-io.on("connection", async (socket) => {
-  const userId = socket.user?.id || 'anonymous';
-  const transport = socket.conn.transport.name;
-  console.log(`[Socket.io] New connection: ${socket.id} (user: ${userId}, transport: ${transport})`);
-
-  socket.conn.on("upgrade", (upTrans) => {
-    console.log(`[Socket.io] Socket ${socket.id} upgraded to ${upTrans.name}`);
-  });
-
-  if (userId === 'anonymous') {
-     console.warn(`[Socket.io] Anonymous connection established. Socket user object might be missing.`);
-     // Fallback if userId is missing but we want to allow the connection (or maybe disconnect?)
-  }
-
-
-  // Track user sockets
-  if (!userSockets.has(userId)) {
-    userSockets.set(userId, new Set());
-  }
-  userSockets.get(userId).add(socket.id);
-
-  // Mark online if first connection
-  if (userSockets.get(userId).size === 1) {
-    await supabase
-      .from("profiles")
-      .update({
-        is_online: true,
-        last_active_at: new Date().toISOString(),
-      })
-      .eq("id", userId);
-
-    io.emit("user_online", { userId, online: true });
-  }
-
-  // Send currently online users to the new client
-  const onlineUserIds = Array.from(userSockets.keys());
-  socket.emit("presence:initial", onlineUserIds);
-
-  socket.join(userId);
-
-  // Heartbeat from client
-  socket.on("presence:heartbeat", async () => {
-    await supabase
-      .from("profiles")
-      .update({ last_active_at: new Date().toISOString() })
-      .eq("id", userId);
-  });
-
-  // Explicit offline signal (tab close)
-  socket.on("presence:offline", async () => {
-    userSockets.get(userId)?.delete(socket.id);
-    if (!userSockets.get(userId) || userSockets.get(userId).size === 0) {
-      userSockets.delete(userId);
-      await supabase
-        .from("profiles")
-        .update({ is_online: false, last_seen: new Date().toISOString() })
-        .eq("id", userId);
-
-      io.emit("user_online", {
-        userId,
-        online: false,
-        lastSeen: new Date().toISOString(),
-      });
-    }
-  });
-
-  // If user is admin/support, join admin room for notifications
-  if (
-    socket.userProfile?.role === "admin" ||
-    socket.userProfile?.role === "support"
-  ) {
-    socket.join("admin_room");
-  }
-
-  // Join a conversation room
-  socket.on("join_room", async (conversationId) => {
-    try {
-      const { data: membership } = await supabase
-        .from("conversation_members")
-        .select("conversation_id")
-        .eq("conversation_id", conversationId)
-        .eq("user_id", userId)
-        .single();
-
-      if (membership) {
-        socket.join(conversationId);
-      } else if (
-        socket.userProfile?.role === "admin" ||
-        socket.userProfile?.role === "support"
-      ) {
-        const { data: conv } = await supabase
-          .from("conversations")
-          .select("chat_type")
-          .eq("id", conversationId)
-          .single();
-
-        if (conv?.chat_type === "support") {
-          socket.join(conversationId);
-        }
-      }
-    } catch (err) {
-      console.error("Error joining room:", err);
-    }
-  });
-
-  // Typing indicator
-  socket.on("typing", ({ conversationId, isTyping }) => {
-    socket.to(conversationId).emit("user_typing", {
-      conversationId,
-      userId,
-      isTyping,
-    });
-  });
-
-  // Read receipt
-  socket.on("mark_read", async ({ conversationId, messageId }) => {
-    socket.to(conversationId).emit("message_read", {
-      conversationId,
-      messageId,
-      readBy: userId,
-    });
-  });
-
-  // --- Admin Presence & Collaboration ---
-  socket.on("admin_viewing_chat", ({ conversationId, adminName }) => {
-    socket.currentChatId = conversationId;
-    socket.adminName = adminName;
-    socket.to(conversationId).emit("admin_presence_update", {
-      conversationId,
-      adminId: userId,
-      adminName,
-      status: "viewing",
-    });
-  });
-
-  socket.on("admin_leaving_chat", ({ conversationId }) => {
-    socket.to(conversationId).emit("admin_presence_update", {
-      conversationId,
-      adminId: userId,
-      status: "left",
-    });
-    socket.currentChatId = null;
-  });
-
-  // --- WebRTC Signaling ---
-
-  // Compatibility Aliases (as requested by user)
-  socket.on("call-user", (data) => {
-    logger.info(`[WebRTC] Legacy Call Init from ${userId} to ${data.userId}`);
-    const senderName = socket.user?.user_metadata?.full_name ||
-      socket.user?.user_metadata?.username || socket.user?.email || "User";
-    const senderAvatar = socket.user?.user_metadata?.avatar_url;
-
-    io.to(data.userId).emit("incoming-call", {
-      from: userId,
-      fromName: senderName,
-      fromAvatar: senderAvatar,
-      signal: data.signalData || data.signal,
-      type: data.type || "voice",
-      conversationId: data.conversationId,
-    });
-  });
-
-  socket.on("answer-call", (data) => {
-    logger.debug(`[WebRTC] Legacy Answer from ${userId} to ${data.to}`);
-    io.to(data.to).emit("call-accepted", data.signal);
-  });
-
-  // Standard Events (PeerJS + Socket.io signaling)
-  socket.on("call:init", ({ to, type, conversationId, peerId }) => {
-    logger.info(
-      `[WebRTC] Call Init from ${userId} to ${to} (${type}) peerId=${peerId}`,
-    );
-    const senderName = socket.user?.user_metadata?.full_name ||
-      socket.user?.user_metadata?.username || socket.user?.email || "User";
-    const senderAvatar = socket.user?.user_metadata?.avatar_url;
-
-    io.to(to).emit("call:incoming", {
-      from: userId,
-      fromName: senderName,
-      fromAvatar: senderAvatar,
-      type,
-      conversationId,
-      peerId,
-    });
-  });
-
-  socket.on("call:ready", ({ to, peerId }) => {
-    logger.debug(
-      `[WebRTC] Recipient ${userId} is ready for offer to ${to} peerId=${peerId}`,
-    );
-    io.to(to).emit("call:ready", { from: userId, peerId });
-  });
-
-  socket.on("call:offer", ({ to, offer }) => {
-    io.to(to).emit("call:offer", { from: userId, offer });
-  });
-
-  socket.on("call:answer", ({ to, answer }) => {
-    io.to(to).emit("call:answer", { from: userId, answer });
-  });
-
-  socket.on("call:ice", ({ to, candidate }) => {
-    io.to(to).emit("call:ice", { from: userId, candidate });
-  });
-
-  socket.on("call:end", ({ to, conversationId }) => {
-    io.to(to).emit("call:ended", { from: userId, conversationId });
-  });
-
-  // New support chat notification to admins
-  socket.on("new_support_chat", (conversation) => {
-    io.to("admin_room").emit("new_support_chat", conversation);
-  });
-
-  socket.on("disconnect", async () => {
-    logger.info(`[Socket] Disconnected: ${userId} ${socket.id}`);
-
-    userSockets.get(userId)?.delete(socket.id);
-
-    if (socket.currentChatId && socket.adminName) {
-      io.to(socket.currentChatId).emit("admin_presence_update", {
-        conversationId: socket.currentChatId,
-        adminId: userId,
-        status: "left",
-      });
-    }
-
-    // Only mark offline if NO other sockets remain
-    if (!userSockets.get(userId) || userSockets.get(userId).size === 0) {
-      userSockets.delete(userId);
-
-      await supabase
-        .from("profiles")
-        .update({ is_online: false, last_seen: new Date().toISOString() })
-        .eq("id", userId);
-
-      io.emit("user_online", {
-        userId,
-        online: false,
-        lastSeen: new Date().toISOString(),
-      });
-    }
-  });
-});
+// All frontend-facing socket connections are now handled by the gateway.
 
 // ─── Real-time Exchange Rate Broadcasting ───────────────────
 /**
@@ -450,11 +77,11 @@ io.on("connection", async (socket) => {
 setInterval(async () => {
   try {
     const rates = await fxService.getAllRates();
-    io.emit("rates_updated", rates);
+    realtime.broadcast("rates_updated", rates);
   } catch (err) {
     logger.error(`[Rates Broadcast] Error: ${err.message}`);
   }
-}, 30000); // 30s broadcast matches the lowered cache TTL
+}, 30000); 
 // ──────────────────────────────────────────────────────────────
 
 server.listen(PORT, "0.0.0.0", () => {
