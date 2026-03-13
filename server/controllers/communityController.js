@@ -15,15 +15,12 @@ const createCommunityPost = async (req, res) => {
       return res.status(400).json({ error: "Title and message are required" });
     }
 
-    const io = req.app.get("io");
-
     await broadcastNotification({
       senderId: userId,
       type: "community_post",
       title: title,
       message: message,
       link: link || "/dashboard/feed",
-      io,
     });
 
     res.json({ message: "Community post created and broadcasted" });
@@ -74,7 +71,6 @@ const addComment = async (req, res, next) => {
           .eq("id", userId)
           .single();
 
-        const io = req.app.get("io");
         await createNotification({
           receiverId: note.owner_id,
           senderId: userId,
@@ -86,7 +82,6 @@ const addComment = async (req, res, next) => {
             content.length > 50 ? "..." : ""
           }"`,
           link: `/dashboard/feed`, // Or link to the specific note view if exists
-          io,
         });
       }
     } catch (notifErr) {
@@ -152,7 +147,6 @@ const toggleLike = async (req, res, next) => {
             .eq("id", userId)
             .single();
 
-          const io = req.app.get("io");
           await createNotification({
             receiverId: note.owner_id,
             senderId: userId,
@@ -162,7 +156,6 @@ const toggleLike = async (req, res, next) => {
               liker?.username || "Someone"
             } liked your public note: ${note.title}`,
             link: `/dashboard/feed`,
-            io,
           });
         }
       } catch (notifErr) {

@@ -14,14 +14,25 @@ if (process.env.REDIS_URL) {
 /**
  * Emit an event to the realtime gateway via Redis Pub/Sub
  */
-const emit = (event, data) => {
-  if (publisher) {
-    // Socket.IO Redis adapter specifically listens for certain patterns
-    // but we can also use a custom channel. 
-    // For simplicity, we'll use a standard broadcast pattern that the gateway listens for.
-    publisher.publish('realtime:events', JSON.stringify({ event, data }));
+const emit = async (event, data) => {
+  if (publisher && publisher.isOpen) {
+    try {
+      await publisher.publish('realtime:events', JSON.stringify({ event, data }));
+    } catch (err) {
+      console.error('[RealtimeService] Redis publish failed:', err.message);
+    }
   } else {
-    console.warn('[RealtimeService] Redis not available, event dropped:', event);
+    // Dev Fallback: Direct HTTP call to gateway
+    try {
+      const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+      await fetch('http://localhost:5000/internal/emit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event, data })
+      });
+    } catch (err) {
+      // Silently fail or log if gateway is also down
+    }
   }
 };
 
@@ -44,6 +55,7 @@ const broadcast = (event, data) => {
 module.exports = {
   emit,
   emitToUser,
+  emitToConversation,
   emitToAdmin,
   broadcast
 };

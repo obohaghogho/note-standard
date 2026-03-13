@@ -1,3 +1,4 @@
+const supabase = require("../config/database");
 const { createNotification } = require("../services/notificationService");
 const { detectLanguage } = require("../services/translationService");
 const realtime = require("../services/realtimeService");
@@ -839,11 +840,8 @@ exports.deleteConversation = async (req, res) => {
 
     if (convDeleteError) throw convDeleteError;
 
-    // Notify participants via Socket.IO
-    const io = req.app.get("io");
-    if (io) {
-      io.to(conversationId).emit("conversation_deleted", { conversationId });
-    }
+    // Notify participants via Gateway
+    realtime.emitToConversation(conversationId, "conversation_deleted", { conversationId });
 
     res.json({ success: true, message: "Conversation deleted successfully" });
   } catch (err) {
@@ -922,14 +920,11 @@ exports.deleteMessage = async (req, res) => {
       throw error;
     }
 
-    // Notify via Socket.IO
-    const io = req.app.get("io");
-    if (io) {
-      io.to(data.conversation_id).emit("message_deleted", {
-        messageId,
-        conversationId: data.conversation_id,
-      });
-    }
+    // Notify via Gateway
+    realtime.emitToConversation(data.conversation_id, "message_deleted", {
+      messageId,
+      conversationId: data.conversation_id,
+    });
 
     res.json({ success: true, message: "Message deleted" });
   } catch (err) {

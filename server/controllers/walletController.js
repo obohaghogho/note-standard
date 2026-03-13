@@ -1,4 +1,5 @@
 const walletService = require("../services/walletService");
+const supabase = require("../config/database");
 
 /**
  * Wallet Controller
@@ -163,7 +164,7 @@ exports.getAddress = async (req, res) => {
 exports.getLedger = async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 10;
-    const { data, error } = await require("../config/database")
+    const { data, error } = await supabase
       .from("ledger_entries")
       .select("*")
       .order("created_at", { ascending: false })
@@ -195,7 +196,6 @@ exports.getDepositStatus = async (req, res) => {
 exports.getCommissions = async (req, res) => {
   try {
     const { type, currency } = req.query;
-    const supabase = require("../config/database");
 
     let query = supabase
       .from("commission_settings")
@@ -218,8 +218,6 @@ exports.getCommissions = async (req, res) => {
 
 exports.getMyAffiliateStats = async (req, res) => {
   try {
-    const supabase = require("../config/database");
-
     // 1. Fetch referrals where user is the referrer
     const { data: referrals, error } = await supabase
       .from("affiliate_referrals")
