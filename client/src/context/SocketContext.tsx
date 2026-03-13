@@ -24,7 +24,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [error, setError] = useState<string | null>(null);
     const socketRef = useRef<Socket | null>(null);
     const retryCount = useRef(0);
-    const MAX_RETRIES = 5;
+    const MAX_RETRIES = 10;
 
     useEffect(() => {
         // Only connect if auth is ready and we have a session
