@@ -31,6 +31,31 @@ app.use(express.json({
 app.use(morgan("dev"));
 
 // ─── Routes ──────────────────────────────────────────────────
+// Health check (with Supabase ping)
+app.get("/api/health", async (req, res) => {
+  try {
+    const { data, error } = await require("./config/database")
+      .from("profiles")
+      .select("id")
+      .limit(1);
+    
+    if (error) throw error;
+    
+    res.json({ 
+      status: "ok", 
+      supabase: "connected",
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    logger.error("[Health] Supabase connection failed:", err.message);
+    res.status(503).json({ 
+      status: "error", 
+      supabase: "disconnected",
+      details: err.message
+    });
+  }
+});
+
 app.get("/", (req, res) => {
   res.json({ message: "Note Standard API is running 🚀" });
 });
