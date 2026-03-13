@@ -303,8 +303,9 @@ export const FundModal: React.FC<FundModalProps> = ({
 
                 {/* Asset Selector */}
                 <div className="relative mb-6">
-                    <label className="text-xs text-gray-400 font-medium ml-1 mb-1 block">Funding Wallet</label>
+                    <label htmlFor="funding-wallet-selector" className="text-xs text-gray-400 font-medium ml-1 mb-1 block">Funding Wallet</label>
                     <button 
+                        id="funding-wallet-selector"
                         onClick={() => setShowAssetSelector(!showAssetSelector)}
                         className="w-full flex items-center justify-between bg-gray-800/80 border border-gray-700/50 rounded-xl px-4 py-3 hover:border-purple-500/50 transition-all group"
                     >
@@ -403,7 +404,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                             exit={{ opacity: 0, height: 0 }}
                             className="bg-purple-900/10 border border-purple-500/20 rounded-xl p-3 mb-4 space-y-2 overflow-hidden"
                         >
-                            <label className="text-xs text-purple-400 font-medium ml-1">Receive Asset</label>
+                            <span className="text-xs text-purple-400 font-medium ml-1 block">Receive Asset</span>
                             <div className="flex gap-2 overflow-x-auto pb-1">
                                 {['BTC', 'ETH', 'USDT', 'USDC'].map(coin => (
                                     <button
@@ -467,10 +468,10 @@ export const FundModal: React.FC<FundModalProps> = ({
                         <motion.div 
                             initial={{ opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
+                            exit={{ opacity: 0, height: 'auto' }}
                             className="bg-purple-900/10 border border-purple-500/20 rounded-xl p-3 mb-6 space-y-2 overflow-hidden"
                         >
-                            <label className="text-xs text-purple-400 font-medium ml-1">Pay With Fiat</label>
+                            <span className="text-xs text-purple-400 font-medium ml-1 block">Pay With Fiat</span>
                             <div className="flex gap-2 overflow-x-auto pb-1">
                                 {['USD', 'EUR', 'GBP', 'NGN'].map(fiat => (
                                     <button
