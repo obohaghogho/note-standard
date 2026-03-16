@@ -21,13 +21,13 @@ export const Hero = () => {
                     </div>
 
                     <h1 className="text-xl sm:text-5xl lg:text-7xl font-bold leading-tight mb-6">
-                        Notes for the <br />
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">Modern Team</span>
+                        Welcome to <br />
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">Note Standard</span>
                     </h1>
 
                     <p className="text-base sm:text-xl text-gray-400 mb-8 max-w-lg leading-relaxed">
-                        Secure, fast, and beautiful note-taking designed for high-performance teams.
-                        Experience the next evolution of productivity.
+                        Our platform provides users with software-based features that help them manage digital activities, interact with online services, and access technology-driven tools through secure web and mobile interfaces.
+                        We focus on building reliable and user-friendly software that improves how people interact with digital platforms and modern internet services.
                     </p>
 
                     <div className="flex flex-col sm:flex-row gap-4">
