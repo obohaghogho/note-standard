@@ -125,19 +125,39 @@ async function createBankDeposit(
       },
     };
 
-  // Fetch user profile for email/names (Using available columns: id, email, full_name)
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("email, full_name")
-    .eq("id", userId)
-    .single();
+  // Fetch user profile for email/names (Robust lookup with production fallbacks)
+  let profile = null;
+  let profileError = null;
+
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("email, full_name")
+      .eq("id", userId)
+      .single();
+    profile = data;
+    profileError = error;
+
+    // Fallback: If full_name column doesn't exist, retry with just email
+    if (profileError && profileError.code === "42703") {
+      logger.info("[DepositService] full_name missing on prod, falling back to email-only lookup");
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from("profiles")
+        .select("email")
+        .eq("id", userId)
+        .single();
+      profile = fallbackData;
+      profileError = fallbackError;
+    }
+  } catch (err) {
+    profileError = err;
+  }
 
   if (profileError || !profile || !profile.email) {
     logger.error("[DepositService] Profile lookup failed or email missing", {
       userId,
       error: profileError,
       hasProfile: !!profile,
-      hasEmail: !!profile?.email
     });
     throw new Error(`Profile not found or email missing for user ${userId}. Please update your profile before depositing.`);
   }

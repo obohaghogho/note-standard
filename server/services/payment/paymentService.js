@@ -59,15 +59,37 @@ class PaymentService {
       network
     });
 
-    // 2. Find or create wallet for this currency
+    // 2. Find or create wallet for this currency (Robust lookup for production schema differences)
     const lookupNetwork = network || "native";
-    let { data: wallet, error: lookupError } = await supabase
-      .from("wallets_store")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("currency", currency)
-      .or(`network.eq.${lookupNetwork},network.is.null`)
-      .maybeSingle();
+    let wallet = null;
+    let lookupError = null;
+
+    try {
+      const { data, error } = await supabase
+        .from("wallets_store")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("currency", currency)
+        .or(`network.eq.${lookupNetwork},network.is.null`)
+        .maybeSingle();
+      wallet = data;
+      lookupError = error;
+
+      // Fallback: If network column doesn't exist, retry with currency only
+      if (lookupError && lookupError.code === "42703") {
+        logger.info("[PaymentService] network column missing on prod, falling back to currency-only lookup");
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from("wallets_store")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("currency", currency)
+          .maybeSingle();
+        wallet = fallbackData;
+        lookupError = fallbackError;
+      }
+    } catch (err) {
+      lookupError = err;
+    }
 
     if (lookupError) {
       logger.error("[PaymentService] Wallet lookup failed", { userId, currency, network, lookupError });
@@ -75,16 +97,39 @@ class PaymentService {
 
     if (!wallet) {
       // IMPORTANT: Insert into wallets_store (the actual table), NOT wallets (which is a VIEW)
-      const { data: newWallet, error: createError } = await supabase
+      let createError;
+      let newWallet;
+
+      const walletPayload = {
+        user_id: userId,
+        currency,
+        address: `${currency}_${userId.substring(0, 8)}`,
+      };
+
+      // Only add network if it doesn't break prod
+      if (network) walletPayload.network = network;
+
+      const { data: inserted, error: initialError } = await supabase
         .from("wallets_store")
-        .insert({
-          user_id: userId,
-          currency,
-          network: network || null,
-          address: `${currency}_${userId.substring(0, 8)}`,
-        })
+        .insert(walletPayload)
         .select()
         .single();
+      
+      newWallet = inserted;
+      createError = initialError;
+
+      // Fallback: If network column doesn't exist, retry without it
+      if (createError && createError.code === "42703") {
+        logger.info("[PaymentService] network column missing on prod during insert, retrying without it");
+        delete walletPayload.network;
+        const { data: retryInserted, error: retryError } = await supabase
+          .from("wallets_store")
+          .insert(walletPayload)
+          .select()
+          .single();
+        newWallet = retryInserted;
+        createError = retryError;
+      }
 
       if (createError) {
         logger.error("Failed to create wallet for deposit", {
@@ -93,7 +138,7 @@ class PaymentService {
           currency,
           network,
         });
-        throw new Error(`Failed to initialize ${currency} wallet on ${network} network`);
+        throw new Error(`Failed to initialize ${currency} wallet`);
       }
       wallet = newWallet;
     }
@@ -130,39 +175,56 @@ class PaymentService {
     const targetCurrency = metadata.targetCurrency || currency;
     const targetNetwork = metadata.targetNetwork || network;
 
-    const { data: transaction, error: txError } = await supabase
+    const txPayload = {
+      user_id: userId,
+      wallet_id: wallet.id,
+      amount: math.formatForCurrency(amount, currency),
+      currency: currency,
+      amount_from: math.formatForCurrency(amount, currency),
+      amount_to: math.formatForCurrency(amount, currency),
+      from_currency: currency,
+      to_currency: targetCurrency,
+      status: "PENDING",
+      reference_id: reference,
+      idempotency_key: idempotencyKey,
+      provider: providerName,
+      display_label: metadata.display_label || (targetCurrency !== currency ? `Purchase ${targetCurrency}` : "Digital Assets Purchase"),
+      metadata: {
+        ...metadata,
+        userId,
+        email,
+        category: "digital_assets",
+        product_type: "digital_asset",
+        idempotencyKey,
+        targetCurrency,
+        targetNetwork,
+      },
+      type: isCrypto || targetCurrency !== currency
+        ? "Digital Assets Purchase"
+        : (metadata.type || "DEPOSIT"),
+    };
+
+    // Only add network if it doesn't break prod
+    if (targetNetwork) txPayload.network = targetNetwork;
+
+    let { data: transaction, error: txError } = await supabase
       .from("transactions")
-      .insert({
-        user_id: userId,
-        wallet_id: wallet.id,
-        amount: math.formatForCurrency(amount, currency),
-        currency: currency,
-        amount_from: math.formatForCurrency(amount, currency),
-        amount_to: math.formatForCurrency(amount, currency), // Will be recalculated on finalization for purchases
-        from_currency: currency,
-        to_currency: targetCurrency,
-        network: targetNetwork,
-        status: "PENDING",
-        reference_id: reference,
-        idempotency_key: idempotencyKey,
-        provider: providerName,
-        display_label: metadata.display_label || (targetCurrency !== currency ? `Purchase ${targetCurrency}` : "Digital Assets Purchase"),
-        metadata: {
-          ...metadata,
-          userId,
-          email,
-          category: "digital_assets",
-          product_type: "digital_asset",
-          idempotencyKey,
-          targetCurrency,
-          targetNetwork,
-        },
-        type: isCrypto || targetCurrency !== currency
-          ? "Digital Assets Purchase"
-          : (metadata.type || "DEPOSIT"),
-      })
+      .insert(txPayload)
       .select()
       .single();
+
+    // Fallback: If network column doesn't exist, retry without it
+    if (txError && txError.code === "42703") {
+      logger.info("[PaymentService] network column missing in transactions on prod during insert, retrying without it");
+      delete txPayload.network;
+      const { data: retryTx, error: retryTxError } = await supabase
+        .from("transactions")
+        .insert(txPayload)
+        .select()
+        .single();
+      transaction = retryTx;
+      txError = retryTxError;
+    }
 
     if (txError) {
       logger.error("DB Error creating transaction", {
