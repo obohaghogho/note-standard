@@ -256,7 +256,7 @@ export const WalletPage: React.FC = () => {
                         <h1 className="text-2xl sm:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
                             Dashboard
                         </h1>
-                        <p className="text-gray-400 text-sm mt-1">Manage your crypto and fiat assets</p>
+                        <p className="text-gray-400 text-sm mt-1">Manage your digital assets and technology tools</p>
                     </div>
                     <div className="flex gap-3">
                          <Button onClick={() => setShowCreateModal(true)} variant="outline" size="sm" className="hidden sm:flex border-gray-700 hover:border-purple-500">

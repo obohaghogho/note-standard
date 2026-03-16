@@ -175,7 +175,7 @@ export const Signup = () => {
                     <h1 className="text-4xl font-bold mb-3 tracking-tight bg-gradient-to-br from-white via-white to-gray-500 bg-clip-text text-transparent">
                         Create Your Account
                     </h1>
-                    <p className="text-gray-400 text-sm">Join the next generation of note-taking</p>
+                    <p className="text-gray-400 text-sm">Join the next generation of digital utility tools</p>
                 </div>
 
                 {/* Progress Bar */}
