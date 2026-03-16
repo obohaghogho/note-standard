@@ -296,10 +296,11 @@ export const FundModal: React.FC<FundModalProps> = ({
                 </button>
                 
                 <h2 className="modal-header text-2xl">Fund Digital Assets</h2>
-                <p className="text-gray-400 text-sm mb-4 flex items-center gap-2">
-                    <ShieldCheck size={16} className="text-green-500" />
-                    Secure Payment Protocol
-                </p>
+                <div className="modal-body">
+                    <p className="text-gray-400 text-sm mb-4 flex items-center gap-2">
+                        <ShieldCheck size={16} className="text-green-500" />
+                        Secure Payment Protocol
+                    </p>
 
                 {/* Asset Selector */}
                 <div className="relative mb-6">
@@ -402,15 +403,15 @@ export const FundModal: React.FC<FundModalProps> = ({
                             initial={{ opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: 'auto' }}
                             exit={{ opacity: 0, height: 0 }}
-                            className="bg-purple-900/10 border border-purple-500/20 rounded-xl p-3 mb-4 space-y-2 overflow-hidden"
+                            className="bg-purple-900/10 border border-purple-500/20 rounded-xl p-3 mb-4 space-y-2"
                         >
                             <span className="text-xs text-purple-400 font-medium ml-1 block">Receive Asset</span>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            <div className="flex flex-wrap gap-2 justify-start sm:justify-between">
                                 {['BTC', 'ETH', 'USDT', 'USDC'].map(coin => (
                                     <button
                                         key={coin}
                                         onClick={() => setTargetCurrency(coin)}
-                                        className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl text-xs font-bold border transition-all duration-300 ${
+                                        className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl min-w-[80px] flex-1 text-xs font-bold border transition-all duration-300 ${
                                             targetCurrency === coin 
                                             ? 'bg-purple-600 border-purple-400 text-white shadow-lg shadow-purple-500/40 scale-[1.02]' 
                                             : 'bg-gray-900/50 border-gray-800 text-gray-400 hover:text-gray-200 hover:bg-gray-800 hover:border-gray-700'
@@ -474,15 +475,15 @@ export const FundModal: React.FC<FundModalProps> = ({
                             initial={{ opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: 'auto' }}
                             exit={{ opacity: 0, height: 'auto' }}
-                            className="bg-purple-900/10 border border-purple-500/20 rounded-xl p-3 mb-6 space-y-2 overflow-hidden"
+                            className="bg-purple-900/10 border border-purple-500/20 rounded-xl p-3 mb-6 space-y-2"
                         >
                             <span className="text-xs text-purple-400 font-medium ml-1 block">Pay With Fiat</span>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            <div className="flex flex-wrap gap-2 justify-start sm:justify-between">
                                 {['USD', 'EUR', 'GBP', 'NGN'].map(fiat => (
                                     <button
                                         key={fiat}
                                         onClick={() => setPaymentFiat(fiat)}
-                                        className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl text-[10px] font-bold border transition-all duration-300 ${
+                                        className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl min-w-[80px] flex-1 text-[10px] font-bold border transition-all duration-300 ${
                                             paymentFiat === fiat 
                                             ? 'bg-purple-600 border-purple-400 text-white shadow-lg shadow-purple-500/40 scale-[1.02]' 
                                             : 'bg-gray-900/50 border-gray-800 text-gray-400 hover:text-gray-200 hover:bg-gray-800 hover:border-gray-700'
@@ -718,7 +719,8 @@ export const FundModal: React.FC<FundModalProps> = ({
                         256-bit Encryption
                     </div>
                 </div>
-            </motion.div>
-        </div>
+            </div>
+        </motion.div>
+    </div>
     );
 };
