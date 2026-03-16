@@ -5,16 +5,16 @@ const supabase = require("../config/database");
  * Wallet Controller
  * Handles user wallet operations.
  */
-exports.getBalances = async (req, res) => {
+exports.getBalances = async (req, res, next) => {
   try {
     const wallets = await walletService.getWallets(req.user.id);
     res.json(wallets);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
-exports.deposit = async (req, res) => {
+exports.deposit = async (req, res, next) => {
   try {
     const { amount, currency, provider } = req.body;
 
@@ -31,12 +31,11 @@ exports.deposit = async (req, res) => {
     );
     res.json(result);
   } catch (err) {
-    console.error("[Deposit] Error:", err.message);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
-exports.depositCard = async (req, res) => {
+exports.depositCard = async (req, res, next) => {
   try {
     let { amount, currency, toCurrency, toNetwork } = req.body;
 
