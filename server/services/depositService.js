@@ -182,7 +182,12 @@ async function createBankDeposit(
   const lastName = nameParts.slice(1).join(" ") || "Standard";
   const userPhone = ""; // phone column does not exist in profiles
 
-  let selectedDetails = allBankDetails[upCurrency] || allBankDetails.USD;
+  // Hardened selection: try currency, then USD fallback, then NGN absolute fallback
+  let selectedDetails = allBankDetails[upCurrency] || allBankDetails.USD || allBankDetails.NGN || {
+    bankName: "Manual Transfer",
+    accountNumber: "Contact Support",
+    accountName: "NoteStandard Admin",
+  };
 
   // 1a. Attempt Real-time Virtual Account Generation
   try {
@@ -250,7 +255,7 @@ async function createBankDeposit(
       }
     }
   } catch (err) {
-    logger.warn(`Failed to auto-generate ${upCurrency} virtual account, falling back to static details: ${err.message}`);
+    logger.warn(`[DepositService] Auto-generation error: ${err.message}`);
   }
 
   // Check Daily Limits

@@ -232,7 +232,7 @@ class PaymentService {
         userId,
         reference,
       });
-      throw new Error("Failed to create transaction record");
+      throw new Error(`DB Error: ${txError.message || "Failed to create transaction record"}`);
     }
 
     let initData = {};
