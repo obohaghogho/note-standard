@@ -28,15 +28,29 @@ async function createCardDeposit(
     throw new Error("BTC and ETH deposits are not supported via payment");
   }
 
-  // Fetch user profile for email
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("email")
-    .eq("id", userId)
-    .single();
+  // Fetch user profile for email (Robust lookup with production fallbacks)
+  let profile = null;
+  let profileError = null;
 
-  if (!profile || !profile.email) {
-    throw new Error("User profile or email not found");
+  try {
+    const { data: profileData, error } = await supabase
+      .from("profiles")
+      .select("email")
+      .eq("id", userId)
+      .single();
+    profile = profileData;
+    profileError = error;
+  } catch (err) {
+    profileError = err;
+  }
+
+  if (profileError || !profile || !profile.email) {
+    logger.error("[DepositService] Card Deposit profile lookup failed", {
+      userId,
+      error: profileError,
+      hasProfile: !!profile,
+    });
+    throw new Error(`Profile not found or email missing for user ${userId}. Please update your profile before depositing.`);
   }
 
   // 1. Check Internal Daily Limits
