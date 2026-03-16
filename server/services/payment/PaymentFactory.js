@@ -18,11 +18,18 @@ class PaymentFactory {
    * Get provider based on currency, region and options
    */
   static getProvider(currency, region = "NG", isCrypto = false) {
+    if (!currency) {
+      console.warn("[PaymentFactory] Missing currency, defaulting to NGN for provider selection");
+      return new PaystackProvider();
+    }
+    
+    const upCurrency = currency.toUpperCase();
+
     // 1. Crypto Logic
     if (
       isCrypto ||
       ["BTC", "USDT", "ETH", "USDC", "MATIC"].some((c) =>
-        currency.toString().toUpperCase().startsWith(c)
+        upCurrency.startsWith(c)
       )
     ) {
       const cryptoProvider = (process.env.CRYPTO_PROVIDER || "nowpayments")
@@ -45,7 +52,7 @@ class PaymentFactory {
     }
 
     // 2. Region & Currency logic for Fiat
-    if (currency === "NGN") {
+    if (upCurrency === "NGN") {
       return new PaystackProvider();
     }
 
@@ -64,7 +71,7 @@ class PaymentFactory {
         "XOF",
         "EGP",
         "CAD",
-      ].includes(currency)
+      ].includes(upCurrency)
     ) {
       return new FlutterwaveProvider();
     }

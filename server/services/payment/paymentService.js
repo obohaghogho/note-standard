@@ -60,12 +60,18 @@ class PaymentService {
     });
 
     // 2. Find or create wallet for this currency
-    let { data: wallet } = await supabase
-      .from("wallets")
+    const lookupNetwork = network || "native";
+    let { data: wallet, error: lookupError } = await supabase
+      .from("wallets_store")
       .select("id")
       .eq("user_id", userId)
       .eq("currency", currency)
-      .single();
+      .or(`network.eq.${lookupNetwork},network.is.null`)
+      .maybeSingle();
+
+    if (lookupError) {
+      logger.error("[PaymentService] Wallet lookup failed", { userId, currency, network, lookupError });
+    }
 
     if (!wallet) {
       // IMPORTANT: Insert into wallets_store (the actual table), NOT wallets (which is a VIEW)
@@ -85,10 +91,16 @@ class PaymentService {
           createError,
           userId,
           currency,
+          network,
         });
-        throw new Error("Failed to initialize wallet for payment");
+        throw new Error(`Failed to initialize ${currency} wallet on ${network} network`);
       }
       wallet = newWallet;
+    }
+
+    if (!wallet || !wallet.id) {
+      logger.error("[PaymentService] Critical: Wallet object is null after create/find", { userId, currency, network });
+      throw new Error(`Wallet identification failed for ${currency}. Please try again.`);
     }
 
     // 3. Create payment record (Source of Truth for Gateway)
