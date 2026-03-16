@@ -182,14 +182,25 @@ async function createBankDeposit(
   const lastName = nameParts.slice(1).join(" ") || "Standard";
   const userPhone = ""; // phone column does not exist in profiles
 
-  // Hardened selection: try currency, then USD fallback, then NGN absolute fallback
-  let selectedDetails = allBankDetails[upCurrency] || allBankDetails.USD || allBankDetails.NGN || {
-    bankName: "Manual Transfer",
-    accountNumber: "Contact Support",
-    accountName: "NoteStandard Admin",
+  // Hardened selection: ensure we never have null selectedDetails or null accountName
+  let rawDetails = allBankDetails[upCurrency] || allBankDetails.USD || allBankDetails.NGN;
+  if (!rawDetails || typeof rawDetails !== "object") {
+    rawDetails = {
+      bankName: "Manual Transfer",
+      accountNumber: "Contact Support",
+      accountName: "NoteStandard Admin",
+    };
+  }
+  
+  const selectedDetails = {
+    ...rawDetails,
+    accountName: rawDetails.accountName || "NoteStandard Admin",
+    bankName: rawDetails.bankName || "Manual Transfer",
+    accountNumber: rawDetails.accountNumber || "Contact Support",
   };
 
   // 1a. Attempt Real-time Virtual Account Generation
+  let liveDetails = { ...selectedDetails };
   try {
     if (upCurrency === "NGN") {
       try {
@@ -202,7 +213,7 @@ async function createBankDeposit(
           userPhone
         );
         
-        selectedDetails = {
+        liveDetails = {
           bankName: virtualAccount.bankName,
           accountNumber: virtualAccount.accountNumber,
           accountName: virtualAccount.accountName,
@@ -242,7 +253,7 @@ async function createBankDeposit(
         }
 
         if (virtualAccount) {
-          selectedDetails = {
+          liveDetails = {
             bankName: virtualAccount.bankName,
             accountNumber: virtualAccount.accountNumber,
             accountName: virtualAccount.accountName,
@@ -291,8 +302,8 @@ async function createBankDeposit(
     amount: math.formatForCurrency(amount, currency),
     currency,
     bankDetails: {
-      ...selectedDetails,
-      accountName: selectedDetails.accountName + (upCurrency !== "NGN" ? " / " + payment.reference : ""),
+      ...liveDetails,
+      accountName: liveDetails.accountName + (upCurrency !== "NGN" ? " / " + payment.reference : ""),
       reference: payment.reference,
     },
     expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),

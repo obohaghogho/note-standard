@@ -20,18 +20,23 @@ class PaymentService {
     const network = metadata.network || options.network || "native";
     const idempotencyKey = metadata.idempotencyKey;
     if (idempotencyKey) {
-      const { data: existing } = await supabase
-        .from("transactions")
-        .select("*")
-        .eq("idempotency_key", idempotencyKey)
-        .single();
+      try {
+        const { data: existing } = await supabase
+          .from("transactions")
+          .select("*")
+          .eq("idempotency_key", idempotencyKey)
+          .single();
 
-      if (existing) {
-        logger.info("Found existing transaction for idempotency key", {
-          idempotencyKey,
-        });
-        // Use existing reference if already initialized with provider
-        return this.verifyPaymentStatus(existing.reference_id);
+        if (existing) {
+          logger.info("Found existing transaction for idempotency key", {
+            idempotencyKey,
+          });
+          // Use existing reference if already initialized with provider
+          return this.verifyPaymentStatus(existing.reference_id || existing.reference || "");
+        }
+      } catch (idErr) {
+        // Fallback: If column missing or query fails, just proceed as a new transaction
+        logger.info(`[PaymentService] Idempotency check failed (possibly missing column): ${idErr.message}`);
       }
     }
 
@@ -109,26 +114,38 @@ class PaymentService {
       // Only add network if it doesn't break prod
       if (network) walletPayload.network = network;
 
-      const { data: inserted, error: initialError } = await supabase
-        .from("wallets_store")
-        .insert(walletPayload)
-        .select()
-        .single();
-      
-      newWallet = inserted;
-      createError = initialError;
+      let currentWalletPayload = { ...walletPayload };
+      let walletAttempts = 0;
 
-      // Fallback: If network column doesn't exist, retry without it
-      if (createError && createError.code === "42703") {
-        logger.info("[PaymentService] network column missing on prod during insert, retrying without it");
-        delete walletPayload.network;
-        const { data: retryInserted, error: retryError } = await supabase
+      // Robust Greedy Insertion: Automatically prune columns that don't exist in production
+      while (walletAttempts < 5) {
+        const { data: inserted, error: initialError } = await supabase
           .from("wallets_store")
-          .insert(walletPayload)
+          .insert(currentWalletPayload)
           .select()
           .single();
-        newWallet = retryInserted;
-        createError = retryError;
+        
+        if (!initialError) {
+          newWallet = inserted;
+          createError = null;
+          break;
+        }
+
+        // 42703 = Undefined Column
+        if (initialError.code === "42703") {
+          const match = initialError.message.match(/column "(.+)"/);
+          const columnName = match ? match[1] : null;
+
+          if (columnName && currentWalletPayload.hasOwnProperty(columnName)) {
+            logger.info(`[PaymentService] Pruning missing column '${columnName}' from wallets_store insert`);
+            delete currentWalletPayload[columnName];
+            walletAttempts++;
+            continue;
+          }
+        }
+
+        createError = initialError;
+        break;
       }
 
       if (createError) {
@@ -207,23 +224,41 @@ class PaymentService {
     // Only add network if it doesn't break prod
     if (targetNetwork) txPayload.network = targetNetwork;
 
-    let { data: transaction, error: txError } = await supabase
-      .from("transactions")
-      .insert(txPayload)
-      .select()
-      .single();
+    let transaction = null;
+    let txError = null;
+    let currentPayload = { ...txPayload };
+    let attempts = 0;
 
-    // Fallback: If network column doesn't exist, retry without it
-    if (txError && txError.code === "42703") {
-      logger.info("[PaymentService] network column missing in transactions on prod during insert, retrying without it");
-      delete txPayload.network;
-      const { data: retryTx, error: retryTxError } = await supabase
+    // Robust Greedy Insertion: Automatically prune columns that don't exist in production
+    while (attempts < 10) {
+      const { data, error } = await supabase
         .from("transactions")
-        .insert(txPayload)
+        .insert(currentPayload)
         .select()
         .single();
-      transaction = retryTx;
-      txError = retryTxError;
+      
+      if (!error) {
+        transaction = data;
+        txError = null;
+        break;
+      }
+
+      // 42703 = Undefined Column
+      if (error.code === "42703") {
+        // Extract column name from error message: "column \"XYZ\" of relation \"transactions\" does not exist"
+        const match = error.message.match(/column "(.+)"/);
+        const columnName = match ? match[1] : null;
+
+        if (columnName && currentPayload.hasOwnProperty(columnName)) {
+          logger.info(`[PaymentService] Pruning missing column '${columnName}' from transactions insert`);
+          delete currentPayload[columnName];
+          attempts++;
+          continue;
+        }
+      }
+
+      txError = error;
+      break;
     }
 
     if (txError) {
@@ -259,10 +294,14 @@ class PaymentService {
 
       // 4. Update transaction with provider reference if needed
       if (initData.providerReference) {
-        await supabase
-          .from("transactions")
-          .update({ provider_reference: initData.providerReference })
-          .eq("id", transaction.id);
+        try {
+          await supabase
+            .from("transactions")
+            .update({ provider_reference: initData.providerReference })
+            .eq("id", transaction.id);
+        } catch (updateErr) {
+          logger.warn(`[PaymentService] Failed to update provider_reference: ${updateErr.message}`);
+        }
       }
     } catch (error) {
       logger.warn(`[PaymentService] Provider initialization soft-failure for ${reference}: ${error.message}`);
