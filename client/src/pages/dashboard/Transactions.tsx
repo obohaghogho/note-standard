@@ -213,7 +213,7 @@ export const Transactions: React.FC = () => {
                         <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-3">
                              Transactions
                         </h1>
-                        <p className="text-gray-400 mt-1">Detailed history of all your financial activities</p>
+                        <p className="text-gray-400 mt-1">Detailed history of all your platform activities</p>
                     </div>
                     <Button onClick={refresh} className="bg-white/5 border-white/10 hover:bg-white/10" variant="outline">
                         Refresh
