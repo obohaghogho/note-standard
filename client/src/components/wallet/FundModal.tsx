@@ -405,17 +405,22 @@ export const FundModal: React.FC<FundModalProps> = ({
                             className="bg-purple-900/10 border border-purple-500/20 rounded-xl p-3 mb-4 space-y-2 overflow-hidden"
                         >
                             <span className="text-xs text-purple-400 font-medium ml-1 block">Receive Asset</span>
-                            <div className="flex gap-2 overflow-x-auto pb-1">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                 {['BTC', 'ETH', 'USDT', 'USDC'].map(coin => (
                                     <button
                                         key={coin}
                                         onClick={() => setTargetCurrency(coin)}
-                                        className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                                        className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl text-xs font-bold border transition-all duration-300 ${
                                             targetCurrency === coin 
-                                            ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-500/20' 
-                                            : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'
+                                            ? 'bg-purple-600 border-purple-400 text-white shadow-lg shadow-purple-500/40 scale-[1.02]' 
+                                            : 'bg-gray-900/50 border-gray-800 text-gray-400 hover:text-gray-200 hover:bg-gray-800 hover:border-gray-700'
                                         }`}
                                     >
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] ${
+                                            targetCurrency === coin ? 'bg-white/20' : 'bg-white/5'
+                                        }`}>
+                                            {coin[0]}
+                                        </div>
                                         {coin}
                                     </button>
                                 ))}
@@ -472,17 +477,22 @@ export const FundModal: React.FC<FundModalProps> = ({
                             className="bg-purple-900/10 border border-purple-500/20 rounded-xl p-3 mb-6 space-y-2 overflow-hidden"
                         >
                             <span className="text-xs text-purple-400 font-medium ml-1 block">Pay With Fiat</span>
-                            <div className="flex gap-2 overflow-x-auto pb-1">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                 {['USD', 'EUR', 'GBP', 'NGN'].map(fiat => (
                                     <button
                                         key={fiat}
                                         onClick={() => setPaymentFiat(fiat)}
-                                        className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                                        className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl text-[10px] font-bold border transition-all duration-300 ${
                                             paymentFiat === fiat 
-                                            ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-500/20' 
-                                            : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'
+                                            ? 'bg-purple-600 border-purple-400 text-white shadow-lg shadow-purple-500/40 scale-[1.02]' 
+                                            : 'bg-gray-900/50 border-gray-800 text-gray-400 hover:text-gray-200 hover:bg-gray-800 hover:border-gray-700'
                                         }`}
                                     >
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] ${
+                                            paymentFiat === fiat ? 'bg-white/20' : 'bg-white/5'
+                                        }`}>
+                                            {fiat === 'NGN' ? '₦' : (fiat === 'EUR' ? '€' : (fiat === 'GBP' ? '£' : '$'))}
+                                        </div>
                                         {fiat}
                                     </button>
                                 ))}
@@ -583,7 +593,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                                     <div className="flex justify-between items-center">
                                         <span className="text-gray-400">Reference</span>
                                         <div className="flex items-center gap-2">
-                                            <span className="font-mono text-purple-400">{bankDetails.bankDetails.reference}</span>
+                                            <span className="font-mono text-xs text-purple-400 break-all">{bankDetails.bankDetails.reference}</span>
                                             <button onClick={() => copyToClipboard(bankDetails.bankDetails.reference)}>
                                                 <Copy size={16} className="text-gray-400 hover:text-white" />
                                             </button>
