@@ -147,11 +147,18 @@ app.use((err, req, res, next) => {
   }
 
   // All other errors
-  logger.error("Unhandled error:", err.message);
+  logger.error("Unhandled error:", { 
+    message: err.message, 
+    stack: err.stack,
+    path: req.path,
+    method: req.method 
+  });
+  
   res.status(err.status || 500).json({
     error: process.env.NODE_ENV === "production"
       ? "Internal server error"
       : err.message,
+    details: process.env.NODE_ENV !== "production" ? err.stack : undefined
   });
 });
 

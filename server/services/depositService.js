@@ -1,4 +1,5 @@
 const supabase = require("../config/database");
+console.log("[DepositService] LOADED V3 - Checking for userId in profile lookup");
 const { v4: uuidv4 } = require("uuid");
 const fxService = require("./fxService");
 const commissionService = require("./commissionService");
@@ -124,56 +125,95 @@ async function createBankDeposit(
       },
     };
 
-  // Fetch user profile for email/names
-  const { data: profile } = await supabase
+  // Fetch user profile for email/names (Using available columns: id, email, full_name)
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("email, full_name, first_name, last_name, phone")
+    .select("email, full_name")
     .eq("id", userId)
     .single();
 
-  if (!profile || !profile.email) {
-    throw new Error("User profile or email not found. Please update your profile before depositing.");
+  if (profileError || !profile || !profile.email) {
+    logger.error("[DepositService] Profile lookup failed or email missing", {
+      userId,
+      error: profileError,
+      hasProfile: !!profile,
+      hasEmail: !!profile?.email
+    });
+    throw new Error(`Profile not found or email missing for user ${userId}. Please update your profile before depositing.`);
   }
+
+  // Handle name splitting safely
+  const nameParts = (profile.full_name || "User Standard").split(" ");
+  const firstName = nameParts[0] || "User";
+  const lastName = nameParts.slice(1).join(" ") || "Standard";
+  const userPhone = ""; // phone column does not exist in profiles
 
   let selectedDetails = allBankDetails[upCurrency] || allBankDetails.USD;
 
   // 1a. Attempt Real-time Virtual Account Generation
   try {
     if (upCurrency === "NGN") {
-      const PaystackProvider = require("./payment/providers/PaystackProvider");
-      const paystack = new PaystackProvider();
-      const virtualAccount = await paystack.getDedicatedAccount(
-        profile.email,
-        profile.first_name || profile.full_name?.split(" ")[0] || "User",
-        profile.last_name || profile.full_name?.split(" ").slice(1).join(" ") || "Standard",
-        profile.phone || ""
-      );
-      
-      selectedDetails = {
-        bankName: virtualAccount.bankName,
-        accountNumber: virtualAccount.accountNumber,
-        accountName: virtualAccount.accountName,
-        note: "Funds are credited instantly after transfer",
-      };
+      try {
+        const PaystackProvider = require("./payment/providers/PaystackProvider");
+        const paystack = new PaystackProvider();
+        const virtualAccount = await paystack.getDedicatedAccount(
+          profile.email,
+          firstName,
+          lastName,
+          userPhone
+        );
+        
+        selectedDetails = {
+          bankName: virtualAccount.bankName,
+          accountNumber: virtualAccount.accountNumber,
+          accountName: virtualAccount.accountName,
+          note: "Funds are credited instantly after transfer",
+        };
+      } catch (err) {
+        console.error("[DepositService] NGN Virtual account generation failed:", err.message);
+      }
     } else if (["USD", "EUR", "GBP"].includes(upCurrency)) {
-      // Try Fincra or Flutterwave for Global Accounts
-      const FincraProvider = require("./payment/providers/FincraProvider");
-      const fincra = new FincraProvider();
-      const virtualAccount = await fincra.createVirtualAccount({
-        currency: upCurrency,
-        email: profile.email,
-        firstName: profile.first_name || profile.full_name?.split(" ")[0] || "User",
-        lastName: profile.last_name || profile.full_name?.split(" ").slice(1).join(" ") || "Standard",
-        phone: profile.phone || "",
-      });
+      try {
+        // Fallback logic: Use Fincra if keys exist, otherwise try Flutterwave
+        const hasFincra = process.env.FINCRA_SECRET_KEY && process.env.FINCRA_PUBLIC_KEY;
+        const hasFlutterwave = process.env.FLUTTERWAVE_SECRET_KEY;
 
-      selectedDetails = {
-        bankName: virtualAccount.bankName,
-        accountNumber: virtualAccount.accountNumber,
-        accountName: virtualAccount.accountName,
-        routingNumber: virtualAccount.routingNumber || virtualAccount.swiftCode,
-        note: `Funds are credited after ${upCurrency} settlement (1-3 days)`,
-      };
+        let virtualAccount = null;
+
+        if (hasFincra) {
+          const FincraProvider = require("./payment/providers/FincraProvider");
+          const fincra = new FincraProvider();
+          virtualAccount = await fincra.createVirtualAccount({
+            currency: upCurrency,
+            email: profile.email,
+            firstName,
+            lastName,
+            phone: userPhone,
+          });
+        } else if (hasFlutterwave) {
+          const FlutterwaveProvider = require("./payment/providers/FlutterwaveProvider");
+          const flutterwave = new FlutterwaveProvider();
+          virtualAccount = await flutterwave.createVirtualAccount({
+            currency: upCurrency,
+            email: profile.email,
+            firstName,
+            lastName,
+            phone: userPhone,
+          });
+        }
+
+        if (virtualAccount) {
+          selectedDetails = {
+            bankName: virtualAccount.bankName,
+            accountNumber: virtualAccount.accountNumber,
+            accountName: virtualAccount.accountName,
+            routingNumber: virtualAccount.routingNumber || virtualAccount.swiftCode,
+            note: `Funds are credited after ${upCurrency} settlement (1-3 days)`,
+          };
+        }
+      } catch (err) {
+        console.error(`[DepositService] ${upCurrency} Virtual account generation failed:`, err.message);
+      }
     }
   } catch (err) {
     logger.warn(`Failed to auto-generate ${upCurrency} virtual account, falling back to static details: ${err.message}`);

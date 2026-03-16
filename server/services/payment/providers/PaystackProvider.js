@@ -71,13 +71,27 @@ class PaystackProvider extends BaseProvider {
   async getDedicatedAccount(email, firstName, lastName, phone) {
     try {
       // 1. Ensure user is a Paystack customer
-      const customerResponse = await this.client.post("/customer", {
-        email,
-        first_name: firstName,
-        last_name: lastName,
-        phone,
-      });
-      const customerCode = customerResponse.data.data.customer_code;
+      let customerCode;
+      try {
+        const customerResponse = await this.client.post("/customer", {
+          email,
+          first_name: firstName,
+          last_name: lastName,
+          phone,
+        });
+        customerCode = customerResponse.data.data.customer_code;
+      } catch (custError) {
+        // Handle "Customer already exists" or other registration errors
+        if (custError.response?.data?.message?.includes("already exists") || custError.response?.status === 400) {
+          // Try to fetch existing customer
+          const fetchResponse = await this.client.get(`/customer/${email}`);
+          customerCode = fetchResponse.data.data.customer_code;
+        } else {
+          throw custError;
+        }
+      }
+
+      if (!customerCode) throw new Error("Could not resolve Paystack customer code");
 
       // 2. Request dedicated virtual account
       const response = await this.client.post("/dedicated_account", {
@@ -92,6 +106,7 @@ class PaystackProvider extends BaseProvider {
         accountName: entry.account_name,
         currency: entry.currency,
         provider: "paystack",
+        customerCode: customerCode
       };
     } catch (error) {
       console.error(

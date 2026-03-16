@@ -71,7 +71,7 @@ exports.depositCard = async (req, res) => {
   }
 };
 
-exports.depositTransfer = async (req, res) => {
+exports.depositTransfer = async (req, res, next) => {
   try {
     let { amount, currency, toCurrency, toNetwork } = req.body;
 
@@ -95,14 +95,12 @@ exports.depositTransfer = async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    console.error(error);
     const isValidationError = error.message.includes("limit") ||
       error.message.includes("Maximum") ||
       error.message.includes("must not exceed");
-
-    res.status(isValidationError ? 400 : 500).json({
-      error: error.message || "Server error",
-    });
+    
+    if (isValidationError) error.status = 400;
+    next(error);
   }
 };
 
