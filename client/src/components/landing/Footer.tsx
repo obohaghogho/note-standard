@@ -11,7 +11,7 @@ export const Footer = () => {
                             <span className="font-bold text-lg">Note Standard</span>
                         </div>
                         <p className="text-gray-400 text-sm max-w-xs">
-                            The most secure and beautiful way to take notes. Designed for modern teams and individuals.
+                            Note Standard is a technology platform that develops and operates digital applications designed to support online interactions and digital utility tools.
                         </p>
                     </div>
 
@@ -28,10 +28,10 @@ export const Footer = () => {
                     <div>
                         <h4 className="font-bold mb-4">Company</h4>
                         <ul className="space-y-2 text-sm text-gray-400">
-                            <li><Link to="/" className="hover:text-white transition-colors">About</Link></li>
+                            <li><Link to="/about" className="hover:text-white transition-colors">About</Link></li>
                             <li><Link to="/" className="hover:text-white transition-colors">Blog</Link></li>
                             <li><Link to="/" className="hover:text-white transition-colors">Careers</Link></li>
-                            <li><Link to="/" className="hover:text-white transition-colors">Contact</Link></li>
+                            <li><Link to="/contact" className="hover:text-white transition-colors">Contact</Link></li>
                         </ul>
                     </div>
                 </div>

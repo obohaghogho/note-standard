@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Shield, Eye, Lock, Database, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Shield, Eye, Database, Activity, Lock, Settings, FileText, RefreshCw } from 'lucide-react';
 import { Card } from '../components/common/Card';
 
 export const PrivacyPage = () => {
@@ -35,35 +35,38 @@ export const PrivacyPage = () => {
                                 Our Privacy Philosophy
                             </h2>
                             <p className="leading-relaxed">
-                                At <strong>Note Standard</strong>, we believe user data is a liability to be protected, not an asset to be exploited. 
-                                Our monetization strategy balances revenue generation with uncompromising user privacy. We prioritize user agency, 
-                                transparency, and value exchange over traditional surveillance-based models.
-                            </p> section
+                                At Note Standard, we believe user data should be protected and handled responsibly. Our platform is designed to provide digital tools while maintaining transparency and strong privacy practices. We prioritize user control, security, and minimal data collection.
+                            </p>
                         </section>
 
                         <section>
-                            <h2 className="text-2xl font-semibold text-white mb-4">1. Data Collection & Usage</h2>
+                            <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
+                                <Database className="w-6 h-6 text-primary" />
+                                Information We Collect
+                            </h2>
                             <div className="space-y-4">
                                 <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-                                    <h3 className="text-white font-medium mb-2">A. Contextual Advertising (Not Behavioral)</h3>
+                                    <h3 className="text-white font-medium mb-2">A. Account Information</h3>
                                     <p className="text-sm">
-                                        We use <strong>Contextual Targeting</strong>. Instead of tracking you across the web, we serve ads based on the 
-                                        <em> content</em> of your current session (e.g., tags like "Coding"). No personal ID or behavioral history is 
-                                        ever shared with ad networks.
+                                        When users create an account on the Note Standard platform, we may collect basic information such as name, email address, and account preferences. This information is used only to maintain user accounts and provide access to platform features.
                                     </p>
                                 </div>
                                 <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-                                    <h3 className="text-white font-medium mb-2">B. Anonymized Insights</h3>
+                                    <h3 className="text-white font-medium mb-2">B. Platform Usage Data</h3>
                                     <p className="text-sm">
-                                        We aggregate high-level, non-personal usage patterns (e.g., "Peak focus hours for students") to generate 
-                                        productivity reports. This data is count-based and anonymized at the source using differential privacy methods.
+                                        We collect limited technical information related to how users interact with the platform. This may include device information, session activity, and general usage statistics. The information is used to improve the performance, stability, and usability of the platform.
                                     </p>
                                 </div>
                                 <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-                                    <h3 className="text-white font-medium mb-2">C. Financial Data</h3>
+                                    <h3 className="text-white font-medium mb-2">C. Contextual Content and Offers</h3>
                                     <p className="text-sm">
-                                        Wallet balances and transaction histories are stored with high-level encryption. We only access this data 
-                                        to process your requests (transfers, withdrawals, swaps) and for required anti-fraud monitoring.
+                                        Our platform may display contextual content or recommendations based on the activity within the current session. This process does not involve cross-site tracking or behavioral profiling.
+                                    </p>
+                                </div>
+                                <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                                    <h3 className="text-white font-medium mb-2">D. Security and System Integrity</h3>
+                                    <p className="text-sm">
+                                        Certain system logs and technical records may be maintained to protect the platform from abuse, maintain service reliability, and detect unusual or harmful activity.
                                     </p>
                                 </div>
                             </div>
@@ -71,48 +74,65 @@ export const PrivacyPage = () => {
 
                         <section>
                             <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
-                                <RefreshCw className="w-6 h-6 text-primary" />
-                                2. User Control & Opt-Outs
+                                <Activity className="w-6 h-6 text-primary" />
+                                How Information Is Used
                             </h2>
-                            <p className="mb-4">You have granular control over how your data is monetized. In your Dashboard Settings, you can:</p>
+                            <p className="mb-4">The information collected may be used for the following purposes:</p>
                             <ul className="list-disc list-inside space-y-2 ml-4">
-                                <li>Enable/Disable <strong>Anonymous Usage Analytics</strong>.</li>
-                                <li>Toggle <strong>Contextual Offers</strong> (available for Free plan).</li>
-                                <li>Manage <strong>Partner Recommendations</strong>.</li>
+                                <li>Maintaining and managing user accounts</li>
+                                <li>Improving platform functionality and user experience</li>
+                                <li>Ensuring system security and service stability</li>
+                                <li>Communicating important updates about the platform</li>
                             </ul>
                             <p className="mt-4 text-sm bg-primary/5 p-3 rounded border border-primary/10">
-                                <strong>Pro Users:</strong> Upgrading to a Pro plan automatically disables all third-party contextual ads and 
-                                grants access to private-only modes.
+                                We do not sell personal user information to third parties.
+                            </p>
+                        </section>
+
+                        <section>
+                            <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
+                                <Settings className="w-6 h-6 text-primary" />
+                                User Controls
+                            </h2>
+                            <p className="leading-relaxed">
+                                Users have the ability to manage certain preferences within their account settings. This may include controlling optional platform features or managing communication preferences.
                             </p>
                         </section>
 
                         <section>
                             <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
                                 <Lock className="w-6 h-6 text-primary" />
-                                3. Your Rights
+                                Data Protection
                             </h2>
-                            <div className="grid md:grid-cols-2 gap-4">
-                                <div className="flex gap-3">
-                                    <Database className="w-5 h-5 text-primary shrink-0" />
-                                    <div>
-                                        <h4 className="text-white font-medium">Data Portability</h4>
-                                        <p className="text-sm">Download a complete copy of your notes and profile in JSON format at any time.</p>
-                                    </div>
-                                </div>
-                                <div className="flex gap-3">
-                                    <Shield className="w-5 h-5 text-primary shrink-0" />
-                                    <div>
-                                        <h4 className="text-white font-medium">Right to Erasure</h4>
-                                        <p className="text-sm">Use the "Forget Me" button to permanently scrub all your data from our servers.</p>
-                                    </div>
-                                </div>
-                            </div>
+                            <p className="leading-relaxed">
+                                We implement appropriate technical and organizational measures to protect user information from unauthorized access, alteration, or misuse. Access to sensitive information is restricted and monitored.
+                            </p>
+                        </section>
+
+                        <section>
+                            <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
+                                <FileText className="w-6 h-6 text-primary" />
+                                Data Access and Removal
+                            </h2>
+                            <p className="leading-relaxed">
+                                Users may request access to their stored information or request deletion of their account. Requests can be made by contacting our support team using the contact details provided below.
+                            </p>
+                        </section>
+
+                        <section>
+                            <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
+                                <RefreshCw className="w-6 h-6 text-primary" />
+                                Updates to This Policy
+                            </h2>
+                            <p className="leading-relaxed">
+                                This Privacy Policy may be updated periodically to reflect changes to the platform or applicable requirements. The updated version will be published on this page with a revised date.
+                            </p>
                         </section>
 
                         <div className="pt-8 border-t border-white/10">
                             <p className="text-sm text-gray-500">
                                 Last updated: February 14, 2026<br />
-                                For inquiries: privacy@notestandard.com
+                                For privacy inquiries: <a href="mailto:privacy@notestandard.com" className="text-primary hover:underline">privacy@notestandard.com</a>
                             </p>
                         </div>
                     </div>

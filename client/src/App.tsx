@@ -24,6 +24,8 @@ const Login = lazyWithRetry(() => import('./pages/Login').then(m => m.Login), 'L
 const Signup = lazyWithRetry(() => import('./pages/Signup').then(m => m.Signup), 'Signup');
 const TermsPage = lazyWithRetry(() => import('./pages/TermsPage').then(m => m.TermsPage), 'TermsPage');
 const PrivacyPage = lazyWithRetry(() => import('./pages/PrivacyPage').then(m => m.PrivacyPage), 'PrivacyPage');
+const AboutPage = lazyWithRetry(() => import('./pages/AboutPage').then(m => m.AboutPage), 'AboutPage');
+const ContactPage = lazyWithRetry(() => import('./pages/ContactPage').then(m => m.ContactPage), 'ContactPage');
 const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword').then(m => m.ResetPassword), 'ResetPassword');
 const PaymentSuccess = lazyWithRetry(() => import('./pages/PaymentSuccess').then(m => m.PaymentSuccess), 'PaymentSuccess');
 const PaymentCancel = lazyWithRetry(() => import('./pages/PaymentCancel').then(m => m.PaymentCancel), 'PaymentCancel');
@@ -138,6 +140,8 @@ function App() {
                     <Route path="/signup" element={<Signup />} />
                     <Route path="/terms" element={<TermsPage />} />
                     <Route path="/privacy" element={<PrivacyPage />} />
+                    <Route path="/about" element={<AboutPage />} />
+                    <Route path="/contact" element={<ContactPage />} />
                     <Route path="/reset-password" element={<ResetPassword />} />
                     
                     {/* Legacy Chat Redirect */}
