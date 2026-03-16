@@ -89,12 +89,21 @@ class FincraProvider extends BaseProvider {
     const data = rawBody ||
       (typeof body === "string" ? body : JSON.stringify(body));
 
-    const hash = crypto
+    // User Instruction: Use sha256 for Fincra
+    const hash256 = crypto
+      .createHmac("sha256", webhookSecret)
+      .update(data)
+      .digest("hex");
+
+    if (hash256 === signature) return true;
+
+    // Fallback: Some Fincra events might still use sha512 depending on the API version/product
+    const hash512 = crypto
       .createHmac("sha512", webhookSecret)
       .update(data)
       .digest("hex");
 
-    return hash === signature;
+    return hash512 === signature;
   }
 
   /**
