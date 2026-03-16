@@ -235,6 +235,7 @@ class PaymentService {
       throw new Error("Failed to create transaction record");
     }
 
+    let initData = {};
     try {
       // 3. Initialize with provider
       const callbackUrl = options.callbackUrl ||
@@ -242,7 +243,7 @@ class PaymentService {
           process.env.CLIENT_URL || "https://notestandard.com"
         }/payment/success?reference=${reference}`;
 
-      const initData = await provider.initialize({
+      initData = await provider.initialize({
         email,
         amount,
         currency,
@@ -263,27 +264,32 @@ class PaymentService {
           .update({ provider_reference: initData.providerReference })
           .eq("id", transaction.id);
       }
-
-      return {
-        url: initData.checkoutUrl,
-        checkoutUrl: initData.checkoutUrl, // Client expects this name
-        paymentUrl: initData.paymentUrl || initData.checkoutUrl,
-        payAddress: initData.payAddress,
-        reference: reference,
-        provider: providerName,
-      };
     } catch (error) {
-      // Mark transaction as failed
-      await supabase
-        .from("transactions")
-        .update({
-          status: "FAILED",
-          metadata: { ...transaction.metadata, error: error.message },
-        })
-        .eq("id", transaction.id);
+      logger.warn(`[PaymentService] Provider initialization soft-failure for ${reference}: ${error.message}`);
+      
+      // If it's a bank transfer, we can proceed without a provider checkout URL
+      if (metadata.method !== "bank_transfer") {
+        // Mark transaction as failed for other methods
+        await supabase
+          .from("transactions")
+          .update({
+            status: "FAILED",
+            metadata: { ...transaction.metadata, error: error.message },
+          })
+          .eq("id", transaction.id);
 
-      throw error;
+        throw error;
+      }
     }
+
+    return {
+      url: initData.checkoutUrl || null,
+      checkoutUrl: initData.checkoutUrl || null,
+      paymentUrl: initData.paymentUrl || initData.checkoutUrl || null,
+      payAddress: initData.payAddress || null,
+      reference: reference,
+      provider: providerName,
+    };
   }
 
   /**
