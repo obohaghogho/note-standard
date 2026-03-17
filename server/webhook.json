@@ -1,0 +1,44 @@
+{
+  "data": {
+    "id": 78788,
+    "fee": 117,
+    "vat": 0,
+    "type": "card",
+    "amount": 4017,
+    "status": "success",
+    "message": "Card charged successfully",
+    "currency": "USD",
+    "customer": {
+      "name": "Oboh Aghogho Jossy",
+      "email": "onomejohn107@gmail.com",
+      "phoneNumber": null
+    },
+    "metadata": {
+      "type": "DEPOSIT",
+      "source": "note_standard_backend",
+      "userId": "5089c266-1ad6-4a83-b23f-064d65995345",
+      "userPlan": "FREE",
+      "customerName": "Oboh Aghogho Jossy",
+      "transactionId": "a04ba0a6-29c3-49a4-9453-5e45a4741381",
+      "idempotencyKey": null
+    },
+    "reference": "tx_489a90c7bf3b4e08bb92526cc430c374",
+    "auth_model": "3DS",
+    "description": "checkout",
+    "authorization": {
+      "mode": "3DS",
+      "formUrl": "https://sandbox-checkout.fincra.com/issuer-demo?reference=fcr-c-dfa8c46b0c6d0f8347a92",
+      "formData": {
+        "threeDSMethodData": "fcr-c-dfa8c46b0c6d0f8347a92"
+      },
+      "redirect": "https://sandbox-checkout.fincra.com/3ds?reference=fcr-c-dfa8c46b0c6d0f8347a92",
+      "canAuthorize": false,
+      "withCallback": true
+    },
+    "actionRequired": null,
+    "amountReceived": 4017,
+    "amountToSettle": 3900,
+    "chargeReference": "fcr-c-dfa8c46b0c6d0f8347a92"
+  },
+  "event": "charge.successful"
+}

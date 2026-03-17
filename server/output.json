@@ -1,0 +1,4 @@
+{
+  "error": "x-business-id must be provided in the header",
+  "stack": "Error: x-business-id must be provided in the header\n    at FincraProvider.verify (C:\\Users\\hp\\Desktop\\note-standard\\server\\services\\payment\\providers\\FincraProvider.js:117:13)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async run (C:\\Users\\hp\\Desktop\\note-standard\\server\\test-verification.js:11:20)"
+}

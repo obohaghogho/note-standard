@@ -22,6 +22,7 @@ class FincraProvider extends BaseProvider {
       headers: {
         "api-key": (this.secretKey || "").trim(),
         "x-pub-key": (this.publicKey || "").trim(),
+        "x-business-id": (process.env.FINCRA_BUSINESS_ID || "").trim(),
         "Content-Type": "application/json",
       },
     });
