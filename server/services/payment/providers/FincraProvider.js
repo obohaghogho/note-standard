@@ -21,14 +21,17 @@ class FincraProvider extends BaseProvider {
     const { email, amount, currency, reference, callbackUrl, metadata, name } = data;
 
     try {
-      console.log(`[Fincra] Initializing payment for ${email}, amount: ${amount} ${currency}`);
+      // Fincra uses smallest unit (cents for USD, kobo for NGN)
+      const amountInSmallestUnit = Math.round(amount * 100);
+      
+      console.log(`[Fincra] Initializing payment for ${email}, amount: ${amount} ${currency} (Smallest Unit: ${amountInSmallestUnit})`);
       // Fincra Checkout Redirect Flow
       const response = await this.client.post("/checkout/payments", {
         customer: {
           name: name || email.split("@")[0],
           email: email,
         },
-        amount: amount,
+        amount: amountInSmallestUnit,
         currency: currency,
         reference: reference,
         redirectUrl: callbackUrl,
