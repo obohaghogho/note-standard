@@ -52,7 +52,7 @@ class FincraProvider extends BaseProvider {
         currency: currency,
         reference: reference,
         redirectUrl: callbackUrl,
-        feeBearer: "customer",
+        feeBearer: "business",
         metadata: {
           ...metadata,
           source: "note_standard_backend",
