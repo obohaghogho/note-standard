@@ -36,10 +36,10 @@ class FincraProvider extends BaseProvider {
     const safeName = name || metadata.customerName || (safeEmail ? safeEmail.split("@")[0] : "Standard User") || "Standard User";
 
     try {
-      // Fincra uses smallest unit (cents for USD, kobo for NGN)
-      const amountInSmallestUnit = Math.round(Number(amount || 0) * 100);
+      // Fincra API uses standard unit (e.g. 20 for 20 USD), unlike Paystack which uses cents
+      const standardAmount = Number(amount || 0);
       
-      console.log(`[Fincra] Initializing payment for ${safeEmail}, amount: ${amount} ${currency} (Smallest Unit: ${amountInSmallestUnit})`);
+      console.log(`[Fincra] Initializing payment for ${safeEmail}, amount: ${standardAmount} ${currency}`);
       console.log(`[Fincra] Sending request to ${this.baseUrl}/checkout/payments (Key prefix: ${this.secretKey ? this.secretKey.substring(0, 4) + "..." : "MISSING"})`);
       
       // Fincra Checkout Redirect Flow
@@ -48,7 +48,7 @@ class FincraProvider extends BaseProvider {
           name: safeName,
           email: safeEmail,
         },
-        amount: amountInSmallestUnit,
+        amount: standardAmount,
         currency: currency,
         reference: reference,
         redirectUrl: callbackUrl,
@@ -101,8 +101,8 @@ class FincraProvider extends BaseProvider {
 
       console.log(`[Fincra Verify] ${reference} is ${status} -> mapped to ${normalizedStatus}`);
 
-      // Amount comes back in smallest unit (e.g. 3900 cents for $39), normalize it back to standard unit
-      const normalizedAmount = amount ? (Number(amount) / 100) : 0;
+      // Fincra API uses standard unit
+      const normalizedAmount = amount ? Number(amount) : 0;
 
       return {
         success: normalizedStatus === "success",
