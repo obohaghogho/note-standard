@@ -403,10 +403,11 @@ class PaymentService {
   async verifyPaymentStatus(reference, externalId = null) {
     let query = supabase.from("transactions").select("*");
 
-    if (reference) {
-      query = query.eq("reference_id", reference);
+    if (reference && externalId) {
+      query = query.or(`reference_id.eq.${reference},provider_reference.eq.${reference},provider_reference.eq.${externalId},reference_id.eq.${externalId}`);
+    } else if (reference) {
+      query = query.or(`reference_id.eq.${reference},provider_reference.eq.${reference}`);
     } else if (externalId) {
-      // If no internal reference provided, try to find by provider_reference
       query = query.eq("provider_reference", externalId);
     } else {
       return null;
@@ -415,10 +416,7 @@ class PaymentService {
     const { data: tx, error } = await query.maybeSingle();
 
     if (error || !tx) {
-      // If we still can't find it but we have an externalId,
-      // it might be a new transaction we haven't linked yet,
-      // or we need to verify with provider first to GET the reference.
-      // But for now, we expect the transaction to exist.
+      console.log(`[PaymentService] No transaction found for ref: ${reference}, ext: ${externalId}`);
       return null;
     }
 
@@ -432,13 +430,17 @@ class PaymentService {
 
       const verification = await provider.verify(queryRef);
 
+      let result;
       if (verification.status === "success") {
-        await this.finalizeTransaction(reference, verification);
+        result = await this.finalizeTransaction(reference, verification);
       } else if (verification.status === "failed") {
-        await this.failTransaction(reference, "Provider reported failure");
+        result = await this.failTransaction(reference, "Provider reported failure");
       }
 
-      // Fetch updated record
+      // If we finalized/failed, return that result (which contains the updated transaction)
+      if (result) return result;
+
+      // Otherwise fetch updated record for pending/other
       const { data: updatedTx } = await supabase
         .from("transactions")
         .select("*")
@@ -812,28 +814,47 @@ class PaymentService {
         );
     }
 
-    // 3. Send email receipt (Mock or call email service)
-    await this.sendReceipt(tx.user_id, tx);
+    // 3. Perform Post-Finalization Steps (Notify User)
+    // Fetch fresh transaction to get updated status, amounts, and metadata (especially after RPC/Conversion)
+    const { data: finalTx } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("id", tx.id)
+      .single();
+    
+    const notifyTx = finalTx || tx;
 
-    // 4. Send In-App Notification
+    // ── Send email receipt ──
+    await this.sendReceipt(notifyTx.user_id, notifyTx);
+
+    // ── Send In-App Notification ──
     try {
-      const { createNotification } = require("../notificationService"); // Use local path or service path
+      const { createNotification } = require("../notificationService");
+      
+      // Determine what to show in message based on type
+      let displayAmount = notifyTx.amount;
+      let displayCurrency = notifyTx.currency;
+      
+      if (notifyTx.amount_to && notifyTx.to_currency && notifyTx.amount_to !== notifyTx.amount) {
+        displayAmount = notifyTx.amount_to;
+        displayCurrency = notifyTx.to_currency;
+      }
+
       await createNotification({
-        receiverId: tx.user_id,
+        receiverId: notifyTx.user_id,
         senderId: null, // System notification
         type: "payment_success",
         title: "Payment Successful",
-        message: `Your payment of ${tx.amount} ${tx.currency} for ${
-          tx.display_label || "your deposit"
+        message: `Your payment of ${displayAmount} ${displayCurrency} for ${
+          notifyTx.display_label || "your deposit"
         } has been confirmed.`,
         link: `/dashboard/wallet`,
-        // io: // io is hard to pass here without refactoring, but createNotification handles persistence
       });
     } catch (notifErr) {
       logger.error("Failed to send payment notification:", notifErr.message);
     }
 
-    return { status: "success" };
+    return notifyTx;
   }
 
   async failTransaction(reference, reason) {
