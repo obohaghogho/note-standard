@@ -24,75 +24,84 @@ export const PaymentSuccess: React.FC = () => {
     const txRef = searchParams.get('tx_ref');
 
     useEffect(() => {
+        let finished = false;
+        
         const checkDepositStatus = async () => {
-            if (!reference && !txRef) {
+            // Priority: URL ?reference= > URL ?tx_ref= > localStorage fallback
+            const ref = reference || txRef;
+            let pollingRef = ref;
+
+            if (!pollingRef) {
                 const storedRef = localStorage.getItem('pendingDepositReference');
-                if (!storedRef) {
-                    setStatus('error');
-                    return;
+                const storedTime = localStorage.getItem('pendingDepositTime');
+                
+                // Only use stored ref if it's less than 30 minutes old
+                if (storedRef && storedTime && (Date.now() - parseInt(storedTime)) < 30 * 60 * 1000) {
+                    pollingRef = storedRef;
                 }
             }
 
-            const ref = reference || txRef || localStorage.getItem('pendingDepositReference');
-            if (!ref) {
+            if (!pollingRef) {
+                console.log("[PaymentSuccess] No reference found in URL or recent storage.");
                 setStatus('error');
                 return;
             }
 
-            const transactionId = searchParams.get('transaction_id') || searchParams.get('flw_ref');
+            const transId = searchParams.get('transaction_id') || searchParams.get('flw_ref');
 
             try {
-                // Poll using authenticated walletApi instead of raw fetch
                 let attempts = 0;
-                const maxAttempts = 24; // ~60 seconds total (2.5s intervals)
-                let finished = false;
+                const maxAttempts = 30; // ~75 seconds total (2.5s intervals)
 
                 while (attempts < maxAttempts && !finished) {
                     attempts++;
                     try {
-                        const data = await walletApi.proactiveVerifyPayment(ref, transactionId || undefined);
-                        setDeposit(data);
-
-                        const upperStatus = (data.status || '').toUpperCase();
-                        if (['COMPLETED', 'SUCCESS', 'SUCCESSFUL'].includes(upperStatus)) {
-                            setStatus('success');
-                            localStorage.removeItem('pendingDepositReference');
-                            toast.success('Deposit successful!');
-                            if (walletContext) {
-                                await walletContext.refresh();
-                            }
-                            finished = true;
-                            // Auto-navigate to wallet after 3 seconds
-                            setTimeout(() => navigate('/dashboard/wallet'), 3000);
-                        } else if (['FAILED', 'CANCELLED'].includes(upperStatus)) {
-                            setStatus('error');
-                            localStorage.removeItem('pendingDepositReference');
-                            finished = true;
-                        } else {
-                            // Still pending
-                            if (attempts < maxAttempts) {
-                                await new Promise(resolve => setTimeout(resolve, 2500));
-                            } else {
-                                setStatus('pending');
+                        const data = await walletApi.proactiveVerifyPayment(pollingRef, transId || undefined);
+                        
+                        if (data) {
+                            setDeposit(data);
+                            const upperStatus = (data.status || '').toUpperCase();
+                            
+                            if (['COMPLETED', 'SUCCESS', 'SUCCESSFUL'].includes(upperStatus)) {
+                                setStatus('success');
+                                localStorage.removeItem('pendingDepositReference');
+                                localStorage.removeItem('pendingDepositTime');
                                 finished = true;
+                                if (walletContext) await walletContext.refresh();
+                                setTimeout(() => navigate('/dashboard/wallet'), 3000);
+                                return;
+                            } else if (['FAILED', 'CANCELLED', 'REJECTED'].includes(upperStatus)) {
+                                setStatus('error');
+                                localStorage.removeItem('pendingDepositReference');
+                                localStorage.removeItem('pendingDepositTime');
+                                finished = true;
+                                return;
                             }
+                        }
+                        
+                        // Wait before next attempt
+                        if (!finished) {
+                            await new Promise(resolve => setTimeout(resolve, 2500));
                         }
                     } catch (pollErr) {
                         console.error('Poll attempt error:', pollErr);
-                        if (attempts >= maxAttempts) {
-                            throw pollErr;
-                        }
+                        if (attempts >= maxAttempts) throw pollErr;
                         await new Promise(resolve => setTimeout(resolve, 2500));
                     }
                 }
+                
+                if (!finished) {
+                    setStatus('pending'); // Timed out
+                }
             } catch (err) {
                 console.error('Status check error:', err);
-                setStatus('pending');
+                setStatus('error');
             }
         };
 
         checkDepositStatus();
-    }, [reference, txRef, searchParams]);
+        return () => { finished = true; };
+    }, [reference, txRef, searchParams, navigate, walletContext]);
 
     const handleGoToWallet = async () => {
         if (walletContext) {

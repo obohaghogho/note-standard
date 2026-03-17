@@ -127,13 +127,28 @@ class FincraProvider extends BaseProvider {
   verifyWebhookSignature(headers, body, rawBody = null) {
     const signature = headers["x-fincra-signature"];
     const webhookSecret = process.env.FINCRA_WEBHOOK_SECRET;
-    if (!signature || !webhookSecret) return false;
+    
+    if (!signature || !webhookSecret) {
+      logger.warn("[Fincra] Signature or Webhook Secret missing", { 
+        hasSignature: !!signature, 
+        hasSecret: !!webhookSecret 
+      });
+      return false;
+    }
 
     // Use rawBody if available for accurate HMAC verification
     const data = rawBody ||
       (typeof body === "string" ? body : JSON.stringify(body));
 
-    // User Instruction: Use sha256 for Fincra
+    // Fincra primary method is sha512
+    const hash512 = crypto
+      .createHmac("sha512", webhookSecret)
+      .update(data)
+      .digest("hex");
+
+    if (hash512 === signature) return true;
+
+    // Fallback: sha256
     const hash256 = crypto
       .createHmac("sha256", webhookSecret)
       .update(data)
@@ -141,13 +156,13 @@ class FincraProvider extends BaseProvider {
 
     if (hash256 === signature) return true;
 
-    // Fallback: Some Fincra events might still use sha512 depending on the API version/product
-    const hash512 = crypto
-      .createHmac("sha512", webhookSecret)
-      .update(data)
-      .digest("hex");
+    logger.error("[Fincra] Signature mismatch", {
+      received: signature?.substring(0, 10) + "...",
+      expected512: hash512?.substring(0, 10) + "...",
+      payloadLength: data?.length
+    });
 
-    return hash512 === signature;
+    return false;
   }
 
   /**
