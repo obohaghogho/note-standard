@@ -53,6 +53,8 @@ async function createCardDeposit(
     throw new Error(`Profile not found or email missing for user ${userId}. Please update your profile before depositing.`);
   }
 
+  logger.info(`[DEBUG] DepositService Step 1: Limits check for ${amount} ${currency}`);
+
   // 1. Check Internal Daily Limits
   const limit = await checkDailyLimit(userId, userPlan, amount);
   if (!limit.allowed) {
@@ -83,6 +85,8 @@ async function createCardDeposit(
       throw new Error("EUR amount too high for test mode");
     }
   }
+
+  logger.info(`[DEBUG] DepositService Step 2: Calling PaymentService.initializePayment`);
 
   // Initialize payment through unified service
   // This handles provider selection (Paystack/Flutterwave/Stripe) and DB records
