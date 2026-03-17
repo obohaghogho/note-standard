@@ -43,6 +43,7 @@ class PaymentService {
     const reference = `tx_${uuidv4().replace(/-/g, "")}`;
     const isCrypto = options.isCrypto || false;
 
+    logger.info(`[DEBUG] Step 1: Provider selection for ${currency} (${isCrypto ? 'Crypto' : 'Fiat'})`);
     // 1. Determine provider via Factory or explicit request
     const provider = options.provider
       ? PaymentFactory.getProviderByName(options.provider)
@@ -54,7 +55,7 @@ class PaymentService {
     const providerName = provider.constructor.name.replace("Provider", "")
       .toLowerCase();
 
-    logger.info(`Initializing ${providerName} payment`, {
+    logger.info(`[DEBUG] Step 2: Initializing ${providerName} payment`, {
       userId,
       reference,
       currency,
@@ -160,12 +161,13 @@ class PaymentService {
       wallet = newWallet;
     }
 
+    logger.info(`[DEBUG] Step 3: Wallet identification for ${currency}`);
     if (!wallet || !wallet.id) {
       logger.error("[PaymentService] Critical: Wallet object is null after create/find", { userId, currency, network });
       throw new Error(`Wallet identification failed for ${currency}. Please try again.`);
     }
 
-    // 3. Create payment record (Source of Truth for Gateway)
+    logger.info(`[DEBUG] Step 4: Creating payment record (${providerName})`);
     const payPayload = {
       user_id: userId,
       reference: reference,
@@ -208,7 +210,7 @@ class PaymentService {
     }
 
     if (pError) {
-      logger.error("DB Error creating payment record", {
+      logger.error("[DEBUG] Step 4 Failed: DB Error creating payment record", {
         error: pError,
         userId,
         reference,
@@ -216,6 +218,7 @@ class PaymentService {
       // throw new Error("Failed to create payment record");
     }
 
+    logger.info(`[DEBUG] Step 5: Creating transaction record`);
     // 4. Create transaction record in DB BEFORE initialization (Mandatory for Ledger)
     const targetCurrency = metadata.targetCurrency || currency;
     const targetNetwork = metadata.targetNetwork || network;
@@ -290,7 +293,7 @@ class PaymentService {
     }
 
     if (txError) {
-      logger.error("DB Error creating transaction", {
+      logger.error("[DEBUG] Step 5 Failed: DB Error creating transaction", {
         error: txError,
         userId,
         reference,
@@ -298,6 +301,7 @@ class PaymentService {
       throw new Error(`DB Error: ${txError.message || "Failed to create transaction record"}`);
     }
 
+    logger.info(`[DEBUG] Step 6: Initializing with provider ${providerName}`);
     let initData = {};
     try {
       // 3. Initialize with provider
