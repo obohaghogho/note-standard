@@ -220,6 +220,7 @@ export const FundModal: React.FC<FundModalProps> = ({
             
             // Store reference for later status check
             localStorage.setItem('pendingDepositReference', result.reference);
+            localStorage.setItem('pendingDepositTime', Date.now().toString());
             
             if (result.checkoutUrl) {
                 // Redirect to Stripe Checkout

@@ -401,21 +401,35 @@ class PaymentService {
    * Verify and update a single transaction status
    */
   async verifyPaymentStatus(reference, externalId = null) {
-    let query = supabase.from("transactions").select("*");
+    let query = supabase
+      .from("transactions")
+      .select("*")
+      .order("created_at", { ascending: false });
 
     if (reference && externalId) {
       query = query.or(`reference_id.eq.${reference},provider_reference.eq.${reference},provider_reference.eq.${externalId},reference_id.eq.${externalId}`);
     } else if (reference) {
       query = query.or(`reference_id.eq.${reference},provider_reference.eq.${reference}`);
     } else if (externalId) {
-      query = query.eq("provider_reference", externalId);
+      query = query.or(`provider_reference.eq.${externalId},reference_id.eq.${externalId}`);
     } else {
       return null;
     }
 
     const { data: tx, error } = await query.maybeSingle();
 
-    if (error || !tx) {
+    if (error && error.code !== "PGRST116") {
+       // If multiple rows returned, maybeSingle might error. Let's handle it by taking the first one manually if needed.
+       console.error("[PaymentService] Lookup error:", error.message);
+    }
+
+    // fallback: if multiple matches, take latest
+    if (!tx) {
+        const { data: multiple } = await query.limit(1);
+        if (multiple && multiple.length > 0) return multiple[0];
+    }
+
+    if (!tx) { // Changed from `if (error || !tx)`
       console.log(`[PaymentService] No transaction found for ref: ${reference}, ext: ${externalId}`);
       return null;
     }
@@ -846,10 +860,10 @@ class PaymentService {
         receiverId: notifyTx.user_id,
         senderId: null, // System notification
         type: "payment_success",
-        title: "Payment Successful",
+        title: `Payment Confirmed (${notifyTx.reference_id?.substring(3, 10)})`,
         message: `Your payment of ${displayAmount} ${displayCurrency} for ${
           notifyTx.display_label || "your deposit"
-        } has been confirmed.`,
+        } has been confirmed. (ID: ${notifyTx.id.substring(0, 5)})`,
         link: `/dashboard/wallet`,
       });
     } catch (notifErr) {
