@@ -91,16 +91,23 @@ class FincraProvider extends BaseProvider {
     try {
       // Fincra Verify Payment by Reference
       const response = await this.client.get(`/checkout/payments/merchant-reference/${reference}`);
-      const { status, amount, currency, reference: ref } = response.data.data;
+      const { status, amount, currency, reference: ref, customer, fee } = response.data.data;
 
-      // Status mapping: Fincra uses 'success', 'failed', 'pending'
+      // Status mapping: Fincra uses 'successful', 'failed', 'pending', 'expired'
+      let normalizedStatus = "pending";
+      if (status === "success" || status === "successful") normalizedStatus = "success";
+      else if (status === "failed") normalizedStatus = "failed";
+
+      console.log(`[Fincra Verify] ${reference} is ${status} -> mapped to ${normalizedStatus}`);
+
       return {
-        success: status === "success",
-        status: status,
+        success: normalizedStatus === "success",
+        status: normalizedStatus, // Must be 'success' or 'failed' for PaymentService
         amount: amount,
         currency: currency,
-        reference: ref,
+        reference: ref || reference,
         provider: "fincra",
+        raw: response.data.data,
       };
     } catch (error) {
       console.error(
