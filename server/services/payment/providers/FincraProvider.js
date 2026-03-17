@@ -7,7 +7,15 @@ class FincraProvider extends BaseProvider {
     super();
     this.secretKey = process.env.FINCRA_SECRET_KEY;
     this.publicKey = process.env.FINCRA_PUBLIC_KEY;
-    this.baseUrl = "https://api.fincra.com";
+    
+    // Dynamically set baseUrl based on key pattern (test vs live)
+    const isTest = (this.secretKey && (this.secretKey.startsWith("sk_test_") || this.secretKey.startsWith("pk_test_"))) ||
+                   (this.publicKey && this.publicKey.startsWith("pk_test_"));
+    
+    this.baseUrl = isTest ? "https://sandboxapi.fincra.com" : "https://api.fincra.com";
+    
+    console.log(`[FincraProvider] Environment: ${isTest ? 'SANDBOX' : 'PRODUCTION'} (${this.baseUrl})`);
+    
     this.client = axios.create({
       baseURL: this.baseUrl,
       headers: {
