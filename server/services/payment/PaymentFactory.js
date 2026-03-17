@@ -58,7 +58,6 @@ class PaymentFactory {
 
     if (
       [
-        "USD",
         "GBP",
         "EUR",
         "JPY",
@@ -73,6 +72,17 @@ class PaymentFactory {
         "CAD",
       ].includes(upCurrency)
     ) {
+      return new FlutterwaveProvider();
+    }
+
+    if (upCurrency === "USD") {
+      // Prefer Fincra for USD if secret key is provided
+      if (
+        process.env.FINCRA_SECRET_KEY &&
+        process.env.FINCRA_SECRET_KEY !== "your_fincra_secret_key"
+      ) {
+        return new FincraProvider();
+      }
       return new FlutterwaveProvider();
     }
 
