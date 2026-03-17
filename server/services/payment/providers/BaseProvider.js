@@ -83,8 +83,8 @@ class BaseProvider {
           try {
             event = this.parseWebhookEvent(req.body);
             reference = event.reference || req.body.order_id ||
-              req.body.payment_id || req.body.data?.reference ||
-              req.body.tx_ref;
+              req.body.payment_id || req.body.data?.merchantReference ||
+              req.body.data?.reference || req.body.tx_ref;
           } catch (err) {
             logger.warn(
               `[${providerName}] Could not parse webhook event cleanly.`,
