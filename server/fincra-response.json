@@ -1,11 +1,7 @@
 {
-  "success": true,
-  "status": "success",
-  "amount": 39,
-  "currency": "USD",
-  "reference": "tx_489a90c7bf3b4e08bb92526cc430c374",
-  "provider": "fincra",
-  "raw": {
+  "status": true,
+  "message": "Payment details fetched",
+  "data": {
     "id": 45127,
     "businessId": "69b1cb7a11160e0013db4274",
     "paymentLinkId": null,
