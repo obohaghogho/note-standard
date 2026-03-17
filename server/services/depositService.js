@@ -35,11 +35,23 @@ async function createCardDeposit(
   try {
     const { data: profileData, error } = await supabase
       .from("profiles")
-      .select("email")
+      .select("email, full_name, username")
       .eq("id", userId)
       .single();
     profile = profileData;
     profileError = error;
+
+    // Fallback: If full_name column doesn't exist in prod, retry with just email
+    if (profileError && profileError.code === "42703") {
+      logger.info("[DepositService] full_name/username missing on prod, falling back to email-only lookup");
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from("profiles")
+        .select("email")
+        .eq("id", userId)
+        .single();
+      profile = fallbackData;
+      profileError = fallbackError;
+    }
   } catch (err) {
     profileError = err;
   }
@@ -101,6 +113,7 @@ async function createCardDeposit(
       idempotencyKey,
       targetCurrency: toCurrency,
       targetNetwork: toNetwork,
+      customerName: profile.full_name || profile.username || profile.email.split("@")[0],
     },
     {
       isCrypto: false,

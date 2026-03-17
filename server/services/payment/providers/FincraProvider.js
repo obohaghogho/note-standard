@@ -32,7 +32,7 @@ class FincraProvider extends BaseProvider {
 
     // Safety checks to prevent 500s from undefined properties
     const safeEmail = email || metadata.email || "user@notestandard.com";
-    const safeName = name || (safeEmail ? safeEmail.split("@")[0] : "Standard User") || "Standard User";
+    const safeName = name || metadata.customerName || (safeEmail ? safeEmail.split("@")[0] : "Standard User") || "Standard User";
 
     try {
       // Fincra uses smallest unit (cents for USD, kobo for NGN)
