@@ -38,7 +38,7 @@ class FincraProvider extends BaseProvider {
       const amountInSmallestUnit = Math.round(Number(amount || 0) * 100);
       
       console.log(`[Fincra] Initializing payment for ${safeEmail}, amount: ${amount} ${currency} (Smallest Unit: ${amountInSmallestUnit})`);
-      console.log(`[Fincra] Sending request to ${this.baseUrl}/checkout/payments (Key: ${this.secretKey ? this.secretKey.substring(0, 8) + "..." : "MISSING"})`);
+      console.log(`[Fincra] Sending request to ${this.baseUrl}/checkout/payments (Key prefix: ${this.secretKey ? this.secretKey.substring(0, 4) + "..." : "MISSING"})`);
       
       // Fincra Checkout Redirect Flow
       const response = await this.client.post("/checkout/payments", {
