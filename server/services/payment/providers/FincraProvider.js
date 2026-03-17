@@ -176,20 +176,27 @@ class FincraProvider extends BaseProvider {
   }
 
   parseWebhookEvent(payload) {
-    // Fincra webhook payload structure: { event: "charge.success", data: { ... } }
+    // Fincra webhook payload structure: { event: "charge.successful", data: { ... } }
     const event = payload.event;
-    const data = payload.data;
+    const data = payload.data || {};
+
+    console.log(`[Fincra Webhook] Event: ${event}, Data keys: ${Object.keys(data).join(", ")}`);
 
     let status = "pending";
-    if (data.status === "success" || event === "charge.success") status = "success";
+    if (data.status === "success" || data.status === "successful" || event === "charge.successful") status = "success";
     else if (data.status === "failed" || event === "charge.failed") status = "failed";
+
+    // Fincra uses merchantReference for OUR reference, chargeReference for their own
+    const reference = data.merchantReference || data.reference || data.chargeReference;
+
+    console.log(`[Fincra Webhook] Parsed: status=${status}, reference=${reference}`);
 
     return {
       type: "DEPOSIT",
       display_label: "Fincra Payment",
-      reference: data.reference,
+      reference: reference,
       status: status,
-      amount: data.amount,
+      amount: data.amountToSettle || data.amount || data.chargeAmount,
       currency: data.currency,
       userId: data.metadata?.userId || data.metadata?.user_id,
       raw: payload,

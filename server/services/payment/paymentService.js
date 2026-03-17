@@ -544,6 +544,7 @@ class PaymentService {
       if (
         event.status === "success" ||
         body.event === "charge.completed" ||
+        body.event === "charge.successful" ||
         body.data?.status === "successful"
       ) {
         // RE-VERIFY with gateway API before finalizing (Industry Standard)
