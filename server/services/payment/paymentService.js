@@ -303,13 +303,14 @@ class PaymentService {
 
     logger.info(`[DEBUG] Step 6: Initializing with provider ${providerName}`);
     let initData = {};
-    try {
-      // 3. Initialize with provider
-      const callbackUrl = options.callbackUrl ||
-        `${
-          process.env.CLIENT_URL || "https://notestandard.com"
-        }/payment/success?reference=${reference}`;
+    
+    // 3. Initialize with provider
+    const callbackUrl = options.callbackUrl ||
+      `${
+        process.env.CLIENT_URL || "https://notestandard.com"
+      }/payment/success?reference=${reference}`;
 
+    try {
       initData = await provider.initialize({
         email,
         amount,
@@ -324,7 +325,6 @@ class PaymentService {
         },
       });
 
-      // 4. Update transaction with provider reference if needed
       if (initData.providerReference) {
         try {
           await supabase
@@ -336,21 +336,34 @@ class PaymentService {
         }
       }
     } catch (error) {
-      logger.warn(`[PaymentService] Provider initialization soft-failure for ${reference}: ${error.message}`);
-      
-      // If it's a bank transfer, we can proceed without a provider checkout URL
-      if (metadata.method !== "bank_transfer") {
-        // Mark transaction as failed for other methods
-        await supabase
-          .from("transactions")
-          .update({
-            status: "FAILED",
-            metadata: { ...transaction.metadata, error: error.message },
-          })
-          .eq("id", transaction.id);
+      logger.error(`[PaymentService] Provider initialization failure: ${error.message}`, {
+        reference,
+        error: error.response?.data || error,
+      });
 
-        throw error;
+      // Special handling for bank transfers vs other methods
+      if (metadata.method !== "bank_transfer") {
+        try {
+          await supabase
+            .from("transactions")
+            .update({
+              status: "FAILED",
+              metadata: { ...transaction.metadata, error: error.message },
+            })
+            .eq("id", transaction.id);
+        } catch (dbErr) {
+          logger.error(`[PaymentService] Failed to mark transaction as FAILED: ${dbErr.message}`);
+        }
+
+        const enrichedError = new Error(`Payment Initialization Failed: ${error.message}`);
+        enrichedError.details = error.response?.data || error;
+        enrichedError.location = "PaymentService.initializePayment";
+        throw enrichedError;
       }
+      
+      // For bank transfers, we might have partial success (e.g. virtual account created but checkout failed)
+      // but usually we want to throw to let the user know.
+      throw error;
     }
 
     return {
@@ -360,6 +373,7 @@ class PaymentService {
       payAddress: initData.payAddress || null,
       reference: reference,
       provider: providerName,
+      provider_reference: initData.providerReference || null
     };
   }
 
