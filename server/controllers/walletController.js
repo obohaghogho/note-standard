@@ -59,12 +59,22 @@ exports.depositCard = async (req, res, next) => {
 
     res.json(result);
   } catch (error) {
+    console.error("[WalletController] Card Deposit Error:", error);
     const isValidationError = error.message.includes("limit") ||
       error.message.includes("Maximum") ||
       error.message.includes("must not exceed");
 
-    if (isValidationError) error.status = 400;
-    next(error);
+    if (isValidationError) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    // DEBUG: Return full error details to identifying the 500 cause
+    res.status(500).json({
+      error: error.message || "Internal Server Error",
+      stack: process.env.NODE_ENV === "production" ? undefined : error.stack,
+      details: error.response?.data || error.details || error,
+      location: "walletController.depositCard"
+    });
   }
 };
 
@@ -92,12 +102,21 @@ exports.depositTransfer = async (req, res, next) => {
 
     res.json(result);
   } catch (error) {
+    console.error("[WalletController] Bank Transfer Error:", error);
     const isValidationError = error.message.includes("limit") ||
       error.message.includes("Maximum") ||
       error.message.includes("must not exceed");
-    
-    if (isValidationError) error.status = 400;
-    next(error);
+
+    if (isValidationError) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    // DEBUG: Return full error details
+    res.status(500).json({
+      error: error.message || "Internal Server Error",
+      details: error.response?.data || error.details || error,
+      location: "walletController.depositTransfer"
+    });
   }
 };
 
