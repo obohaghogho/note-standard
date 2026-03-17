@@ -21,6 +21,7 @@ class FincraProvider extends BaseProvider {
     const { email, amount, currency, reference, callbackUrl, metadata, name } = data;
 
     try {
+      console.log(`[Fincra] Initializing payment for ${email}, amount: ${amount} ${currency}`);
       // Fincra Checkout Redirect Flow
       const response = await this.client.post("/checkout/payments", {
         customer: {
@@ -134,10 +135,10 @@ class FincraProvider extends BaseProvider {
     } catch (error) {
       console.error(
         "Fincra Virtual Account Error:",
-        error.response?.data || error.message,
+        JSON.stringify(error.response?.data || error.message, null, 2),
       );
       throw new Error(
-        error.response?.data?.message || "Failed to generate virtual account",
+        error.response?.data?.message || error.response?.data?.error || "Failed to generate virtual account",
       );
     }
   }
