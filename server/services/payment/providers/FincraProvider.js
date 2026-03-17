@@ -59,11 +59,18 @@ class FincraProvider extends BaseProvider {
       });
 
       console.log(`[Fincra] Response success: ${response.status}`);
+      console.log(`[Fincra] Full response data:`, JSON.stringify(response.data, null, 2));
 
-      // Fincra returns checkoutUrl and transaction reference
+      // Fincra response structure may vary — try multiple paths
+      const respData = response.data?.data || response.data;
+      const checkoutUrl = respData?.checkoutUrl || respData?.checkout_url || respData?.link || respData?.payment_link || null;
+      const providerRef = respData?.reference || reference;
+
+      console.log(`[Fincra] Extracted checkoutUrl: ${checkoutUrl}`);
+
       return {
-        checkoutUrl: response.data.data.checkoutUrl,
-        providerReference: response.data.data.reference,
+        checkoutUrl: checkoutUrl,
+        providerReference: providerRef,
       };
     } catch (error) {
       console.error(
