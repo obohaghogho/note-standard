@@ -605,8 +605,9 @@ class PaymentService {
     console.log("STEP 2: Verification passed");
 
     // 2a. Validate Verification Amount & Currency (if provided by eventData)
-    const evAmount = rawData?.amount || eventData?.amount;
-    const evCurrency = rawData?.currency || eventData?.currency ||
+    // Always prioritize the normalized eventData amount over rawData
+    const evAmount = eventData?.amount !== undefined ? eventData.amount : rawData?.amount;
+    const evCurrency = eventData?.currency || rawData?.currency ||
       rawData?.currency_code || eventData?.payment_type;
 
     if (evAmount !== undefined && evAmount !== null) {

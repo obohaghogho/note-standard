@@ -1,4 +1,89 @@
 {
-  "error": "x-business-id must be provided in the header",
-  "stack": "Error: x-business-id must be provided in the header\n    at FincraProvider.verify (C:\\Users\\hp\\Desktop\\note-standard\\server\\services\\payment\\providers\\FincraProvider.js:117:13)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async run (C:\\Users\\hp\\Desktop\\note-standard\\server\\test-verification.js:11:20)"
+  "success": true,
+  "status": "success",
+  "amount": 39,
+  "currency": "USD",
+  "reference": "tx_489a90c7bf3b4e08bb92526cc430c374",
+  "provider": "fincra",
+  "raw": {
+    "id": 45127,
+    "businessId": "69b1cb7a11160e0013db4274",
+    "paymentLinkId": null,
+    "amount": 3900,
+    "currency": "USD",
+    "convertedAmount": 3900,
+    "amountReceived": 4017,
+    "convertedCurrency": "USD",
+    "paymentMethods": [
+      "card"
+    ],
+    "defaultPaymentMethod": "card",
+    "redirectUrl": "https://www.notestandard.com/payment/success?reference=tx_489a90c7bf3b4e08bb92526cc430c374",
+    "customUrl": null,
+    "successMessage": null,
+    "settlementDestination": "wallet",
+    "quoteReference": null,
+    "feeBearer": "customer",
+    "reference": "fcr-p-d939d66db0",
+    "merchantReference": "tx_489a90c7bf3b4e08bb92526cc430c374",
+    "isDisabled": false,
+    "metadata": {
+      "type": "DEPOSIT",
+      "source": "note_standard_backend",
+      "userId": "5089c266-1ad6-4a83-b23f-064d65995345",
+      "userPlan": "FREE",
+      "customerName": "Oboh Aghogho Jossy",
+      "transactionId": "a04ba0a6-29c3-49a4-9453-5e45a4741381",
+      "idempotencyKey": null
+    },
+    "status": "success",
+    "createdAt": "2026-03-17T22:02:05.572Z",
+    "updatedAt": "2026-03-17T22:04:19.000Z",
+    "customer": {
+      "name": "Oboh Aghogho Jossy",
+      "email": "onomejohn107@gmail.com",
+      "phoneNumber": null
+    },
+    "business": {
+      "settings": {
+        "feeBearer": "customer",
+        "settlementDestination": "wallet",
+        "enableWebhook": true,
+        "acceptMispayments": true,
+        "callbackURL": "https://note-standard-api.onrender.com/api/webhooks/fincra"
+      },
+      "emailSettings": {
+        "collectionNotification": false,
+        "topupNotification": false,
+        "settlementNotification": false,
+        "paymentReceiptNotification": false,
+        "disbursementNotification": false
+      },
+      "checkoutSettings": {
+        "useBrandLogo": false,
+        "buttonTextColor": null,
+        "buttonColor": null,
+        "fontColor": null,
+        "fontFamily": null,
+        "backgroundColor": null,
+        "backgroundTextColor": null
+      },
+      "status": "enabled",
+      "countryCallingCode": "+234",
+      "businessTag": 138594,
+      "settlementSettings": null,
+      "isKYCApproved": true,
+      "isBlocked": false,
+      "isPrincipalBVNWatchlisted": false,
+      "_id": "69b1cb7a11160e0013db4274",
+      "name": "Aghogho plyboard enterprise",
+      "businessType": "Fintech",
+      "email": "admin@notestandard.com",
+      "country": "NG",
+      "mobile": "07051824027",
+      "businessKey": "B-frTnjJs6mgom",
+      "createdAt": "2026-03-11T20:07:22.385Z",
+      "updatedAt": "2026-03-17T19:55:28.577Z"
+    }
+  }
 }

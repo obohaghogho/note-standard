@@ -92,7 +92,7 @@ class FincraProvider extends BaseProvider {
     try {
       // Fincra Verify Payment by Reference
       const response = await this.client.get(`/checkout/payments/merchant-reference/${reference}`);
-      const { status, amount, currency, reference: ref, customer, fee } = response.data.data;
+      const { status, amount, currency, merchantReference, reference: ref } = response.data.data;
 
       // Status mapping: Fincra uses 'successful', 'failed', 'pending', 'expired'
       let normalizedStatus = "pending";
@@ -101,12 +101,15 @@ class FincraProvider extends BaseProvider {
 
       console.log(`[Fincra Verify] ${reference} is ${status} -> mapped to ${normalizedStatus}`);
 
+      // Amount comes back in smallest unit (e.g. 3900 cents for $39), normalize it back to standard unit
+      const normalizedAmount = amount ? (Number(amount) / 100) : 0;
+
       return {
         success: normalizedStatus === "success",
         status: normalizedStatus, // Must be 'success' or 'failed' for PaymentService
-        amount: amount,
+        amount: normalizedAmount,
         currency: currency,
-        reference: ref || reference,
+        reference: merchantReference || ref || reference,
         provider: "fincra",
         raw: response.data.data,
       };
