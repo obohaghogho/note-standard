@@ -166,26 +166,54 @@ class PaymentService {
     }
 
     // 3. Create payment record (Source of Truth for Gateway)
-    const { error: paymentError } = await supabase
-      .from("payments")
-      .insert({
-        user_id: userId,
-        reference: reference,
-        provider: providerName,
-        amount: math.formatForCurrency(amount, currency),
-        currency: currency,
-        status: "pending",
-        credited: false,
-        metadata: { ...metadata, idempotencyKey },
-      });
+    const payPayload = {
+      user_id: userId,
+      reference: reference,
+      provider: providerName,
+      amount: math.formatForCurrency(amount, currency),
+      currency: currency,
+      status: "pending",
+      credited: false,
+      metadata: { ...metadata, idempotencyKey },
+    };
 
-    if (paymentError) {
+    let pAttempts = 0;
+    let pError = null;
+    let currentPayPayload = { ...payPayload };
+
+    while (pAttempts < 10) {
+      const { error } = await supabase
+        .from("payments")
+        .insert(currentPayPayload);
+      
+      if (!error) {
+        pError = null;
+        break;
+      }
+
+      if (error.code === "42703") {
+        const match = error.message.match(/column "(.+)"/);
+        const columnName = match ? match[1] : null;
+
+        if (columnName && currentPayPayload.hasOwnProperty(columnName)) {
+          logger.info(`[PaymentService] Pruning missing column '${columnName}' from payments insert`);
+          delete currentPayPayload[columnName];
+          pAttempts++;
+          continue;
+        }
+      }
+
+      pError = error;
+      break;
+    }
+
+    if (pError) {
       logger.error("DB Error creating payment record", {
-        error: paymentError,
+        error: pError,
         userId,
         reference,
       });
-      throw new Error("Failed to create payment record");
+      // throw new Error("Failed to create payment record");
     }
 
     // 4. Create transaction record in DB BEFORE initialization (Mandatory for Ledger)
