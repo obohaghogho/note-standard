@@ -18,8 +18,9 @@ class FincraProvider extends BaseProvider {
     
     this.client = axios.create({
       baseURL: this.baseUrl,
+      timeout: 15000, // 15s timeout
       headers: {
-        "api-key": this.secretKey,
+        "api-key": (this.secretKey || "").trim(),
         "Content-Type": "application/json",
       },
     });
@@ -28,25 +29,28 @@ class FincraProvider extends BaseProvider {
   async initialize(data) {
     const { email, amount, currency, reference, callbackUrl, metadata, name } = data;
 
+    // Safety checks to prevent 500s from undefined properties
+    const safeEmail = email || metadata.email || "user@notestandard.com";
+    const safeName = name || (safeEmail ? safeEmail.split("@")[0] : "Standard User") || "Standard User";
+
     try {
       // Fincra uses smallest unit (cents for USD, kobo for NGN)
-      const amountInSmallestUnit = Math.round(amount * 100);
+      const amountInSmallestUnit = Math.round(Number(amount || 0) * 100);
       
-      console.log(`[Fincra] Initializing payment for ${email}, amount: ${amount} ${currency} (Smallest Unit: ${amountInSmallestUnit})`);
-      console.log(`[Fincra] Sending request to ${this.baseUrl}/checkout/payments`);
-      console.log(`[Fincra] Headers: ${JSON.stringify({ ...this.client.defaults.headers, "api-key": this.secretKey ? this.secretKey.substring(0, 8) + "..." : "MISSING" })}`);
+      console.log(`[Fincra] Initializing payment for ${safeEmail}, amount: ${amount} ${currency} (Smallest Unit: ${amountInSmallestUnit})`);
+      console.log(`[Fincra] Sending request to ${this.baseUrl}/checkout/payments (Key: ${this.secretKey ? this.secretKey.substring(0, 8) + "..." : "MISSING"})`);
       
       // Fincra Checkout Redirect Flow
       const response = await this.client.post("/checkout/payments", {
         customer: {
-          name: name || email.split("@")[0],
-          email: email,
+          name: safeName,
+          email: safeEmail,
         },
         amount: amountInSmallestUnit,
         currency: currency,
         reference: reference,
         redirectUrl: callbackUrl,
-        feeBearer: "customer", // Default to customer bearing fee, can be customized
+        feeBearer: "customer",
         metadata: {
           ...metadata,
           source: "note_standard_backend",
