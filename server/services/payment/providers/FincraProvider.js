@@ -137,6 +137,7 @@ class FincraProvider extends BaseProvider {
     }
 
     // Use rawBody if available for accurate HMAC verification
+    // Fincra often sends exact JSON with specific spacing
     const data = rawBody ||
       (typeof body === "string" ? body : JSON.stringify(body));
 
@@ -146,7 +147,10 @@ class FincraProvider extends BaseProvider {
       .update(data)
       .digest("hex");
 
-    if (hash512 === signature) return true;
+    if (hash512 === signature) {
+      logger.info("[Fincra] Signature verified (sha512)");
+      return true;
+    }
 
     // Fallback: sha256
     const hash256 = crypto
@@ -154,12 +158,18 @@ class FincraProvider extends BaseProvider {
       .update(data)
       .digest("hex");
 
-    if (hash256 === signature) return true;
+    if (hash256 === signature) {
+      logger.info("[Fincra] Signature verified (sha256)");
+      return true;
+    }
 
-    logger.error("[Fincra] Signature mismatch", {
+    logger.error("[Fincra] Signature mismatch details", {
       received: signature?.substring(0, 10) + "...",
       expected512: hash512?.substring(0, 10) + "...",
-      payloadLength: data?.length
+      payloadLength: data?.length,
+      usingRawBody: !!rawBody,
+      secretPrefix: webhookSecret?.substring(0, 4) + "...",
+      firstChars: typeof data === 'string' ? data.substring(0, 20) : 'not_string'
     });
 
     return false;

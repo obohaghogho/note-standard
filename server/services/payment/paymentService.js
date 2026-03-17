@@ -70,6 +70,7 @@ class PaymentService {
     let wallet = null;
     let lookupError = null;
 
+    console.time(`[PaymentService] WalletLookup:${userId}`);
     try {
       const { data, error } = await supabase
         .from("wallets_store")
@@ -96,6 +97,7 @@ class PaymentService {
     } catch (err) {
       lookupError = err;
     }
+    console.timeEnd(`[PaymentService] WalletLookup:${userId}`);
 
     if (lookupError) {
       logger.error("[PaymentService] Wallet lookup failed", { userId, currency, network, lookupError });
@@ -203,6 +205,7 @@ class PaymentService {
     let pError = null;
     let currentPayPayload = { ...payPayload };
 
+    console.time(`[PaymentService] PaymentInsert:${reference}`);
     while (pAttempts < 10) {
       const { error } = await supabase
         .from("payments")
@@ -228,6 +231,7 @@ class PaymentService {
       pError = error;
       break;
     }
+    console.timeEnd(`[PaymentService] PaymentInsert:${reference}`);
 
     if (pError) {
       logger.error("[DEBUG] Step 4 Failed: DB Error creating payment record", {
@@ -281,6 +285,7 @@ class PaymentService {
     let attempts = 0;
 
     // Robust Greedy Insertion: Automatically prune columns that don't exist in production
+    console.time(`[PaymentService] TransactionInsert:${reference}`);
     while (attempts < 10) {
       const { data, error } = await supabase
         .from("transactions")
@@ -311,6 +316,7 @@ class PaymentService {
       txError = error;
       break;
     }
+    console.timeEnd(`[PaymentService] TransactionInsert:${reference}`);
 
     if (txError) {
       logger.error("[DEBUG] Step 5 Failed: DB Error creating transaction", {
@@ -330,6 +336,7 @@ class PaymentService {
         process.env.CLIENT_URL || "https://notestandard.com"
       }/payment/success?reference=${reference}`;
 
+    console.time(`[PaymentService] ProviderInit:${providerName}`);
     try {
       initData = await provider.initialize({
         email,
@@ -344,6 +351,7 @@ class PaymentService {
           userId,
         },
       });
+      console.timeEnd(`[PaymentService] ProviderInit:${providerName}`);
 
       if (initData.providerReference) {
         try {

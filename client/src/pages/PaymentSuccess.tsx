@@ -51,10 +51,17 @@ export const PaymentSuccess: React.FC = () => {
 
             try {
                 let attempts = 0;
-                const maxAttempts = 30; // ~75 seconds total (2.5s intervals)
+                const maxAttempts = 40; 
 
                 while (attempts < maxAttempts && !finished) {
                     attempts++;
+                    
+                    // Optimization: 1s delay for first 10 attempts to make it feel "instant"
+                    // Then 2.5s for next 10, then 5s for the rest.
+                    let delay = 2500;
+                    if (attempts <= 10) delay = 1000;
+                    else if (attempts > 20) delay = 5000;
+
                     try {
                         const data = await walletApi.proactiveVerifyPayment(pollingRef, transId || undefined);
                         
@@ -81,12 +88,12 @@ export const PaymentSuccess: React.FC = () => {
                         
                         // Wait before next attempt
                         if (!finished) {
-                            await new Promise(resolve => setTimeout(resolve, 2500));
+                            await new Promise(resolve => setTimeout(resolve, delay));
                         }
                     } catch (pollErr) {
                         console.error('Poll attempt error:', pollErr);
                         if (attempts >= maxAttempts) throw pollErr;
-                        await new Promise(resolve => setTimeout(resolve, 2500));
+                        await new Promise(resolve => setTimeout(resolve, delay));
                     }
                 }
                 
