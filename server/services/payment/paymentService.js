@@ -150,15 +150,35 @@ class PaymentService {
       }
 
       if (createError) {
+        // Handle race condition: Unique violation (23505)
+        if (createError.code === "23505") {
+          logger.info(`[PaymentService] Race condition: Wallet already created for ${userId} (${currency})`);
+          const { data: retry } = await supabase
+            .from("wallets_store")
+            .select("*")
+            .eq("user_id", userId)
+            .eq("currency", currency)
+            .maybeSingle();
+          if (retry) {
+            wallet = retry;
+            createError = null;
+          }
+        }
+      }
+
+      if (createError) {
         logger.error("Failed to create wallet for deposit", {
           createError,
           userId,
           currency,
           network,
         });
-        throw new Error(`Failed to initialize ${currency} wallet`);
+        const err = new Error(`Failed to initialize ${currency} wallet: ${createError.message || "Unknown DB Error"}`);
+        err.details = createError;
+        err.location = "PaymentService.walletInitialization";
+        throw err;
       }
-      wallet = newWallet;
+      if (!wallet) wallet = newWallet;
     }
 
     logger.info(`[DEBUG] Step 3: Wallet identification for ${currency}`);
