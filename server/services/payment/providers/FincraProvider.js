@@ -21,6 +21,7 @@ class FincraProvider extends BaseProvider {
       timeout: 15000, // 15s timeout
       headers: {
         "api-key": (this.secretKey || "").trim(),
+        "x-pub-key": (this.publicKey || "").trim(),
         "Content-Type": "application/json",
       },
     });
