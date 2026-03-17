@@ -575,11 +575,11 @@ class PaymentService {
 
     console.log("STEP 1: Found transaction");
 
-    // 1. Fetch transaction safely using unique reference_id
+    // 1. Fetch transaction safely using unique reference_id OR provider_reference
     const { data: tx, error: fetchError } = await supabase
       .from("transactions")
       .select("*")
-      .eq("reference_id", reference)
+      .or(`reference_id.eq.${reference},provider_reference.eq.${reference}`)
       .single();
 
     if (fetchError || !tx) {
@@ -587,8 +587,10 @@ class PaymentService {
         `[Finalize] Transaction not found for reference: ${reference}`,
         fetchError?.message,
       );
-      return { status: "verification_failed", error: "Transaction not found" };
+      return null; // Return null so verifyPaymentStatus can handle it
     }
+
+    console.log(`[Finalize] Found transaction ${tx.id} with status ${tx.status}`);
 
     // 2. IDEMPOTENCY CHECK (using both tables for safety)
     const { data: payRecord } = await supabase
@@ -711,10 +713,10 @@ class PaymentService {
           console.log(
             `[Finalize] Transaction ${reference} was completed concurrently inside RPC.`,
           );
-          return { status: "already_completed" };
+        } else {
+           // On other RPC errors, we still want to return the transaction object to the poll
+           // so it doesn't crash, it will just show PENDING until it works or fails permanently.
         }
-
-        return { status: "rpc_failed", error: rpcError.message };
       }
 
       // ── Update payments table status ──
