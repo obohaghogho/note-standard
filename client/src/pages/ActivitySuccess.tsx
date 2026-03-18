@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Loader2, ArrowRight } from 'lucide-react';
 import { Button } from '../components/common/Button';
-import toast from 'react-hot-toast';
 import walletApi from '../api/walletApi';
 import { WalletContext } from '../context/WalletContext';
 
@@ -13,7 +12,7 @@ interface DepositStatus {
     currency: string;
 }
 
-export const PaymentSuccess: React.FC = () => {
+export const ActivitySuccess: React.FC = () => {
     const navigate = useNavigate();
     const walletContext = React.useContext(WalletContext);
     const [searchParams] = useSearchParams();
@@ -75,7 +74,7 @@ export const PaymentSuccess: React.FC = () => {
                                 localStorage.removeItem('pendingDepositTime');
                                 finished = true;
                                 if (walletContext) await walletContext.refresh();
-                                setTimeout(() => navigate('/dashboard/wallet'), 3000);
+                                setTimeout(() => navigate('/dashboard/activity'), 3000);
                                 return;
                             } else if (['FAILED', 'CANCELLED', 'REJECTED'].includes(upperStatus)) {
                                 setStatus('error');
@@ -114,7 +113,7 @@ export const PaymentSuccess: React.FC = () => {
         if (walletContext) {
             await walletContext.refresh();
         }
-        navigate('/dashboard/wallet');
+        navigate('/dashboard/activity');
     };
 
     return (
@@ -123,8 +122,8 @@ export const PaymentSuccess: React.FC = () => {
                 {status === 'loading' && (
                     <>
                         <Loader2 className="w-16 h-16 text-purple-500 animate-spin mx-auto mb-4" />
-                        <h1 className="text-2xl font-bold text-white mb-2">Processing Payment</h1>
-                        <p className="text-gray-400">Please wait while we confirm your payment...</p>
+                        <h1 className="text-2xl font-bold text-white mb-2">Processing Interaction</h1>
+                        <p className="text-gray-400">Please wait while we confirm your activity...</p>
                     </>
                 )}
 
@@ -133,14 +132,14 @@ export const PaymentSuccess: React.FC = () => {
                         <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
                             <CheckCircle2 className="w-10 h-10 text-green-500" />
                         </div>
-                        <h1 className="text-2xl font-bold text-white mb-2">Payment Successful!</h1>
+                        <h1 className="text-2xl font-bold text-white mb-2">Request Successful!</h1>
                         {deposit && (
                             <p className="text-gray-400 mb-6">
-                                {deposit.amount} {deposit.currency} has been added to your wallet.
+                                {deposit.amount} {deposit.currency} has been allocated to your service account.
                             </p>
                         )}
                         <Button onClick={handleGoToWallet} className="w-full">
-                            Go to Wallet <ArrowRight className="ml-2" size={18} />
+                            Activity Overview <ArrowRight className="ml-2" size={18} />
                         </Button>
                     </>
                 )}
@@ -150,12 +149,12 @@ export const PaymentSuccess: React.FC = () => {
                         <div className="w-16 h-16 bg-yellow-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
                             <Loader2 className="w-10 h-10 text-yellow-500" />
                         </div>
-                        <h1 className="text-2xl font-bold text-white mb-2">Payment Processing</h1>
+                        <h1 className="text-2xl font-bold text-white mb-2">Request Processing</h1>
                         <p className="text-gray-400 mb-6">
-                            Your payment is being processed. Your wallet will be updated shortly.
+                            Your request is being processed. Your service account will be updated shortly.
                         </p>
                         <Button onClick={handleGoToWallet} variant="secondary" className="w-full">
-                            Go to Wallet <ArrowRight className="ml-2" size={18} />
+                            Activity Overview <ArrowRight className="ml-2" size={18} />
                         </Button>
                     </>
                 )}
@@ -167,10 +166,10 @@ export const PaymentSuccess: React.FC = () => {
                         </div>
                         <h1 className="text-2xl font-bold text-white mb-2">Something Went Wrong</h1>
                         <p className="text-gray-400 mb-6">
-                            We couldn't confirm your payment. If you were charged, please contact support.
+                            We couldn't confirm your request. If you were charged, please contact support.
                         </p>
                         <Button onClick={handleGoToWallet} variant="secondary" className="w-full">
-                            Back to Wallet
+                            Back to Activity
                         </Button>
                     </>
                 )}
@@ -179,4 +178,4 @@ export const PaymentSuccess: React.FC = () => {
     );
 };
 
-export default PaymentSuccess;
+export default ActivitySuccess;

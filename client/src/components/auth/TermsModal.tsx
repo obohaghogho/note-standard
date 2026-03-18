@@ -44,9 +44,7 @@ export const TermsModal: React.FC<TermsModalProps> = ({
                     <div className="prose prose-invert max-w-none">
                         
                         <div className="mb-6 text-gray-400 text-sm space-y-1">
-                            <p><strong>Effective Date:</strong> 04/03/2026</p>
-                            <p><strong>Company Name:</strong> Aghogho Plyboard Enterprise</p>
-                            <p><strong>App Name:</strong> Note Standard</p>
+                            <p><strong>Operated by:</strong> Jude Oboh</p>
                         </div>
 
                         <h3 className="text-xl font-semibold text-white mt-6 mb-2">1. Acceptance of Terms</h3>
@@ -64,7 +62,7 @@ export const TermsModal: React.FC<TermsModalProps> = ({
                         <div className="mt-8 p-4 bg-primary/10 border border-primary/20 rounded-lg">
                             <h3 className="text-lg font-semibold text-white mt-0 mb-2">5. Contact Information</h3>
                             <div className="space-y-1 text-sm text-gray-300">
-                                <p><strong>Company Name:</strong> Aghogho Plyboard Enterprise</p>
+                                <p><strong>Operated by:</strong> Jude Oboh</p>
                                 <p><strong>Email:</strong> admin@notestandard.com</p>
                                 <p><strong>Business Address:</strong> 12 udu road delta, Nigeria</p>
                             </div>

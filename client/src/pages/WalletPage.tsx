@@ -25,7 +25,7 @@ export const WalletPage: React.FC = () => {
     const { wallets, transactions, loading, refresh, createWallet } = useWallet();
     const { socket } = useSocket();
     
-    // Force-refresh wallet data on mount (ensures fresh data after payment redirect)
+    // Force-refresh service data on mount (ensures fresh data after activity redirect)
     useEffect(() => {
         refresh();
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -52,28 +52,28 @@ export const WalletPage: React.FC = () => {
         if (refToVerify && (statusParam || reference)) {
             let isActive = true;
             const verifyPayment = async () => {
-                const toastId = toast.loading('Verifying your payment...', { duration: 10000 });
+                const toastId = toast.loading('Verifying your request...', { duration: 10000 });
                 try {
                     const res = await walletApi.proactiveVerifyPayment(refToVerify, transactionId || undefined);
                     if (!isActive) return;
 
                     const upperStatus = (res.status || '').toUpperCase();
                     if (['COMPLETED', 'SUCCESS', 'SUCCESSFUL'].includes(upperStatus)) {
-                        toast.success('Payment verified successfully!', { id: toastId });
+                        toast.success('Request processed successfully!', { id: toastId });
                         setSearchParams({});
                         await refresh();
                         setRefreshKey(k => k + 1);
                     } else if (['FAILED', 'CANCELLED'].includes(upperStatus)) {
-                        toast.error('Payment failed or was cancelled.', { id: toastId });
+                        toast.error('Request failed or was cancelled.', { id: toastId });
                         setSearchParams({});
                     } else {
-                        toast.success('Payment is pending. Tracking your transaction...', { id: toastId });
+                        toast.success('Request is pending. Tracking your activity...', { id: toastId });
                         setSearchParams({});
                         await refresh();
                     }
                 } catch (err) {
                     if (isActive) {
-                        toast.error('Payment confirmation delayed. Balance will update shortly.', { id: toastId });
+                        toast.error('Confirmation delayed. Status will update shortly.', { id: toastId });
                         setSearchParams({});
                     }
                 }
@@ -215,7 +215,7 @@ export const WalletPage: React.FC = () => {
     const handleCreateWallet = async (currency: string) => {
         try {
             await createWallet(currency);
-            toast.success(`${currency} wallet created!`);
+            toast.success(`${currency} service activated!`);
             setShowCreateModal(false);
             refresh();
         } catch (err) {
@@ -254,13 +254,13 @@ export const WalletPage: React.FC = () => {
                 <div className="flex justify-between items-center">
                     <div>
                         <h1 className="text-2xl sm:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
-                            Dashboard
+                            Activity Overview
                         </h1>
-                        <p className="text-gray-400 text-sm mt-1">Manage your digital assets and technology tools</p>
+                        <p className="text-gray-400 text-sm mt-1">Manage your digital activities and technology tools</p>
                     </div>
                     <div className="flex gap-3">
                          <Button onClick={() => setShowCreateModal(true)} variant="outline" size="sm" className="hidden sm:flex border-gray-700 hover:border-purple-500">
-                            <Plus size={16} className="mr-2" /> Add Wallet
+                            <Plus size={16} className="mr-2" /> Add Service
                         </Button>
                         <Button onClick={handleRefresh} variant="ghost" size="sm" className="bg-gray-800 hover:bg-gray-700">
                             <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
@@ -299,7 +299,7 @@ export const WalletPage: React.FC = () => {
                          {/* Wallet List (Breakdown) */}
                          <div>
                             <div className="flex justify-between items-center gap-4 mb-4 flex-wrap">
-                                <h3 className="text-lg font-bold">Your Wallets</h3>
+                                <h3 className="text-lg font-bold">Your Services</h3>
                                 <button onClick={() => setShowCreateModal(true)} className="text-purple-400 text-sm hover:text-purple-300 sm:hidden">
                                     + Add New
                                 </button>
@@ -399,7 +399,7 @@ export const WalletPage: React.FC = () => {
                 />
             )}
 
-            {/* Create Wallet Modal */}
+            {/* Create Service Modal */}
              {showCreateModal && (
                 <div className="modal-overlay p-4">
                   <div className="modal-content w-full max-w-lg">
@@ -407,7 +407,7 @@ export const WalletPage: React.FC = () => {
                     <button className="modal-close" onClick={() => setShowCreateModal(false)}>
                       <X size={20} />
                     </button>
-                    <h2 className="text-xl font-bold mb-6">Add New Wallet</h2>
+                    <h2 className="text-xl font-bold mb-6">Add New Service</h2>
                     
                     <div className="grid grid-cols-2 gap-4">
                       {(SUPPORTED_CURRENCIES ?? []).map((curr) => {
@@ -426,7 +426,7 @@ export const WalletPage: React.FC = () => {
                         );
                       })}
                       {wallets.length === SUPPORTED_CURRENCIES.length && (
-                          <p className="col-span-2 text-center text-gray-500 py-4">All available wallets created.</p>
+                          <p className="col-span-2 text-center text-gray-500 py-4">All available services active.</p>
                       )}
                     </div>
                   </div>

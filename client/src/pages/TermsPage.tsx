@@ -28,11 +28,7 @@ export const TermsPage = () => {
                         <h1 className="text-4xl font-bold">Terms of Service</h1>
                     </div>
                     
-                    <div className="mb-10 p-4 bg-primary/5 border border-primary/20 rounded-xl text-gray-300">
-                        <p><strong>Effective Date:</strong> 04/03/2026</p>
-                        <p><strong>Company Name:</strong> Aghogho Plyboard Enterprise</p>
-                        <p><strong>App Name:</strong> Note Standard</p>
-                    </div>
+                        <p><strong>Operated by:</strong> Jude Oboh</p>
 
                     <div className="space-y-10 text-gray-300">
                         <section>
@@ -51,7 +47,7 @@ export const TermsPage = () => {
                                 2. Description of Service
                             </h2>
                             <p className="leading-relaxed">
-                                Note Standard provides software-based digital tools and applications designed to support online interactions and digital activities.
+                                NoteStandard provides software-based digital tools and applications designed to support online interactions and digital activities through a secure interface.
                             </p>
                         </section>
 
@@ -78,7 +74,7 @@ export const TermsPage = () => {
                         <div className="pt-8 border-t border-white/10">
                             <h2 className="text-2xl font-semibold text-white mb-4">5. Contact Information</h2>
                             <div className="space-y-2 text-sm text-gray-400">
-                                <p><strong>Company Name:</strong> Aghogho Plyboard Enterprise</p>
+                                <p><strong>Operated by:</strong> Jude Oboh</p>
                                 <p><strong>Email:</strong> <a href="mailto:admin@notestandard.com" className="text-primary hover:underline">admin@notestandard.com</a></p>
                                 <p><strong>Business Address:</strong> 12 udu road delta, Nigeria</p>
                             </div>

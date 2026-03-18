@@ -25,10 +25,10 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
 
     const filters: { label: string; value: FilterType }[] = [
         { label: 'All', value: 'all' },
-        { label: 'Deposits', value: 'deposits' },
-        { label: 'Withdrawals', value: 'withdrawals' },
-        { label: 'Swaps', value: 'swaps' },
-        { label: 'Transfers', value: 'transfers' },
+        { label: 'Received', value: 'deposits' },
+        { label: 'Moved Out', value: 'withdrawals' },
+        { label: 'Exchanges', value: 'swaps' },
+        { label: 'Interactions', value: 'transfers' },
     ];
 
     const matchesFilter = (tx: Transaction): boolean => {
@@ -110,8 +110,8 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
         <div className={`bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-xl ${className}`}>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                 <div>
-                    <h3 className="text-lg font-bold">Recent Activity</h3>
-                    <p className="text-xs text-gray-400 mt-1">Your latest financial movements</p>
+                    <h3 className="text-lg font-bold">Action Log</h3>
+                    <p className="text-xs text-gray-400 mt-1">Your latest activity logs</p>
                 </div>
 
                 {/* Search */}
@@ -178,7 +178,7 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
                         <table className="w-full text-left border-collapse min-w-[600px]">
                             <thead>
                                 <tr className="text-gray-500 text-[11px] uppercase tracking-[0.1em] border-b border-gray-800/50 font-bold">
-                                    <th className="pb-4 pl-2">Transaction Type</th>
+                                    <th className="pb-4 pl-2">Activity Type</th>
                                     <th className="pb-4">Timestamp</th>
                                     <th className="pb-4 text-right">Amount</th>
                                     <th className="pb-4 pr-2 text-right">Status</th>
@@ -258,10 +258,10 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
             {!loading && safeTransactions.length > 0 && (
                 <div className="mt-8 pt-6 border-t border-gray-800/50 flex justify-center">
                     <button 
-                        onClick={() => navigate('/transactions')}
+                        onClick={() => navigate('/dashboard/history')}
                         className="group flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-purple-400 transition-all bg-gray-800/50 px-4 py-2 rounded-full hover:bg-purple-500/10"
                     >
-                        View Full Transaction History
+                        View Full Activity History
                         <ArrowUpRight size={14} className="transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                     </button>
                 </div>

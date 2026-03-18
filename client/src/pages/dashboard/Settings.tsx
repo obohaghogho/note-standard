@@ -53,16 +53,16 @@ export const Settings = () => {
             toast.promise(
                 adService.syncAdPayment(sessionId),
                 {
-                    loading: 'Verifying payment...',
-                    success: 'Payment successful! Your ad is now in review.',
-                    error: 'Failed to verify payment.'
+                    loading: 'Verifying activity...',
+                    success: 'Activity confirmed! Your request is now in review.',
+                    error: 'Failed to verify activity.'
                 }
             ).then(() => {
                 // Clear params
                 navigate('/dashboard/settings?tab=ads', { replace: true });
             });
         } else if (adCanceled) {
-            toast.error('Payment canceled');
+            toast.error('Activity canceled');
             navigate('/dashboard/settings?tab=ads', { replace: true });
         }
     }, [initialTab, searchParams, navigate]);

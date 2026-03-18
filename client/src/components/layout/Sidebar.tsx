@@ -6,8 +6,8 @@ import {
     Share2,
     Users,
     Search,
-    Wallet,
-    Receipt,
+    Activity,
+    FileText,
     Settings,
     LogOut,
     Plus,
@@ -44,15 +44,15 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
         { icon: MessageSquare, label: t('nav.chat'), to: '/dashboard/chat' },
         { icon: Share2, label: t('nav.shared'), to: '/dashboard/shared' },
         { icon: Users, label: t('nav.teams'), to: '/dashboard/teams' },
-        { icon: Wallet, label: t('nav.wallet'), to: '/dashboard/wallet' },
-        { icon: Receipt, label: 'Transactions', to: '/dashboard/transactions' },
+        { icon: Activity, label: t('nav.wallet'), to: '/dashboard/activity' },
+        { icon: FileText, label: 'Activity Logs', to: '/dashboard/history' },
         { icon: TrendingUp, label: 'Affiliates', to: '/dashboard/affiliates' },
         { icon: Bell, label: t('common.notifications'), to: '/dashboard/notifications' },
         { icon: Search, label: t('nav.search_item'), to: '/dashboard/search' },
     ];
 
     const bottomNavItems = [
-        { icon: Receipt, label: t('nav.billing'), to: '/dashboard/billing' },
+        { icon: FileText, label: t('nav.billing'), to: '/dashboard/account' },
         { icon: Settings, label: t('common.settings'), to: '/dashboard/settings' },
     ];
 

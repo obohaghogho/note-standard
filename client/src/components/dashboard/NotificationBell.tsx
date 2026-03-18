@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { 
     Bell, Check, ExternalLink, MessageSquare, StickyNote, 
-    UserPlus, Globe, Edit3, Wallet, CreditCard, ArrowRightLeft, 
+    UserPlus, Globe, Edit3, CreditCard, ArrowRightLeft, ArrowUpRight,
     ShieldAlert, LifeBuoy, Megaphone 
 } from 'lucide-react';
 import { useNotifications } from '../../hooks/useNotifications';
@@ -56,10 +56,10 @@ export const NotificationBell = () => {
             case 'mention': return <UserPlus size={16} className="text-purple-400" />;
             case 'community_post': return <Globe size={16} className="text-primary" />;
             
-            // Wallet & Financials
+            // Service & Interactions
             case 'wallet_transfer': return <ArrowRightLeft size={16} className="text-blue-400" />;
             case 'wallet_deposit': return <CreditCard size={16} className="text-green-400" />;
-            case 'wallet_withdrawal': return <Wallet size={16} className="text-red-400" />;
+            case 'wallet_withdrawal': return <ArrowUpRight size={16} className="text-red-400" />;
             case 'wallet_swap': return <ArrowRightLeft size={16} className="text-purple-400" />;
             
             // Ads

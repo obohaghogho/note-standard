@@ -68,7 +68,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
     const availableBalance = fromWallet 
         ? (fromWallet.available_balance > 0 ? fromWallet.available_balance : fromWallet.balance) 
         : 0;
-    const isDesynced = fromWallet && (fromWallet.available_balance === 0 || fromWallet.available_balance === "0") && Number(fromWallet.balance) > 0;
+    const isDesynced = fromWallet && Number(fromWallet.available_balance) === 0 && Number(fromWallet.balance) > 0;
 
     // Auto-correct invalid default selections to match real wallets
     useEffect(() => {
@@ -220,7 +220,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-bold flex items-center gap-2">
                     <RefreshCcw size={20} className="text-purple-500" />
-                    Quick Swap
+                    Quick Exchange
                 </h2>
                 <div className="bg-purple-500/10 text-purple-400 px-2 py-1 rounded text-xs font-medium border border-purple-500/20">
                     Instant
@@ -437,7 +437,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                     {loading ? (
                         <Loader2 className="animate-spin" size={20} />
                     ) : (
-                        `Swap ${fromCurrency} → ${toCurrency}`
+                        `Exchange ${fromCurrency} → ${toCurrency}`
                     )}
                 </Button>
                 

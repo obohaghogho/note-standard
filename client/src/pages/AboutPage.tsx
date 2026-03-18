@@ -31,7 +31,7 @@ export const AboutPage = () => {
                     <div className="space-y-10 text-gray-300">
                         <section>
                             <p className="leading-relaxed text-lg">
-                                Note Standard is a technology-focused platform that develops and manages digital applications designed to provide useful tools for modern internet users.
+                                NoteStandard develops and operates web-based tools that help users interact with digital systems and manage their activities online.
                             </p>
                         </section>
 

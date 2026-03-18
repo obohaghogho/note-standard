@@ -27,7 +27,7 @@ export const Notifications = () => {
             case 'comment': return <MessageSquare size={size} className="text-primary" />;
             case 'like': return <Heart size={size} className="text-red-400" />;
             case 'transfer_receive': 
-            case 'payment_success': return <StickyNote size={size} className="text-green-400" />; // Or a dollar/wallet icon
+            case 'payment_success': return <StickyNote size={size} className="text-green-400" />; 
             case 'referral_signup': return <UserPlus size={size} className="text-primary" />;
             case 'support_resolved': 
             case 'support_joined': return <MessageSquare size={size} className="text-blue-400" />;
@@ -125,7 +125,7 @@ export const Notifications = () => {
                                                     onClick={(e) => e.stopPropagation()}
                                                 >
                                                     <ExternalLink size={14} />
-                                                    View Activity
+                                                    View Details
                                                 </Link>
                                             )}
                                             {!notif.is_read && (

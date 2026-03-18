@@ -224,7 +224,7 @@ export const FundModal: React.FC<FundModalProps> = ({
             
             if (result.checkoutUrl) {
                 // Redirect to Stripe Checkout
-                toast.loading('Redirecting to payment...', { duration: 2000 });
+                toast.loading('Redirecting to secure gateway...', { duration: 2000 });
                 window.location.href = result.checkoutUrl;
             } else {
                 toast.error('Payment initialization failed - no checkout URL received');
@@ -267,7 +267,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                 toNetwork: effectiveTargetNetwork,
             });
             setBankDetails(result);
-            toast.success('Bank transfer details generated!');
+            toast.success('Service allocation details generated!');
         } catch (err: any) {
             toast.error(err.response?.data?.error || err.message || 'Failed to generate bank details');
         } finally {
@@ -296,16 +296,16 @@ export const FundModal: React.FC<FundModalProps> = ({
                     <X size={20} />
                 </button>
                 
-                <h2 className="modal-header text-2xl">Fund Digital Assets</h2>
+                <h2 className="modal-header text-2xl">Activate Digital Services</h2>
                 <div className="modal-body">
                     <p className="text-gray-400 text-sm mb-4 flex items-center gap-2">
                         <ShieldCheck size={16} className="text-green-500" />
-                        Secure Payment Protocol
+                        Secure Activity Protocol
                     </p>
 
                 {/* Asset Selector */}
                 <div className="relative mb-6">
-                    <label htmlFor="funding-wallet-selector" className="text-xs text-gray-400 font-medium ml-1 mb-1 block">Funding Wallet</label>
+                    <label htmlFor="funding-wallet-selector" className="text-xs text-gray-400 font-medium ml-1 mb-1 block">Service Account</label>
                     <button 
                         id="funding-wallet-selector"
                         onClick={() => setShowAssetSelector(!showAssetSelector)}
@@ -368,12 +368,12 @@ export const FundModal: React.FC<FundModalProps> = ({
                     <div className="flex justify-between items-center mb-1">
                         <span className="text-gray-400 text-xs uppercase tracking-wider">Target Action</span>
                         <span className="text-white text-sm font-medium">
-                            {isEffectivelyPurchase ? `Purchase ${effectiveTargetCurrency}` : `Deposit to ${activeCurrency}`}
+                            {isEffectivelyPurchase ? `Access ${effectiveTargetCurrency}` : `Allocate to ${activeCurrency}`}
                         </span>
                     </div>
                     <div className="flex justify-between items-end">
                         <span className="text-gray-400 text-xs uppercase tracking-wider">
-                            {isEffectivelyPurchase ? 'Pay Amount' : 'Deposit Amount'}
+                            {isEffectivelyPurchase ? 'Allocation amount' : 'Allocation Amount'}
                         </span>
                         <div className="text-right">
                             <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">
@@ -387,7 +387,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                 {/* Purchase Mode Toggle (Only show if starting from Fiat wallet) */}
                 {isFiat && (
                     <div className="flex items-center justify-between mb-4 px-1">
-                        <span className="text-sm text-gray-400">Directly Buy Crypto?</span>
+                        <span className="text-sm text-gray-400">Access Digital Assets Directly?</span>
                         <button 
                             onClick={() => setIsPurchase(!isPurchase)}
                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${isPurchase ? 'bg-purple-600' : 'bg-gray-700'}`}
@@ -538,7 +538,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                                 </div>
                                 <Button onClick={handleCardDeposit} disabled={loading} className="w-full">
                                     {loading ? <Loader2 className="animate-spin mr-2" size={18} /> : <CreditCard className="mr-2" size={18} />}
-                                    Pay with Card
+                                    Continue with Card
                                 </Button>
                             </div>
                         )}
@@ -566,7 +566,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                                 </div>
                                 <Button onClick={handleBankDeposit} disabled={loading} className="w-full">
                                     {loading ? <Loader2 className="animate-spin mr-2" size={18} /> : <ArrowRight className="mr-2" size={18} />}
-                                    Get Bank Details
+                                    Get Service Details
                                 </Button>
                             </div>
                         )}
@@ -589,7 +589,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         </div>
                                     </div>
                                     <div className="flex justify-between items-center">
-                                        <span className="text-gray-400">Account Name</span>
+                                        <span className="text-gray-400">Account Reference</span>
                                         <span className="font-medium">{bankDetails.bankDetails.accountName}</span>
                                     </div>
                                     <div className="flex justify-between items-center">
@@ -603,7 +603,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                                     </div>
                                 </div>
                                 <p className="text-sm text-yellow-400 text-center">
-                                    Include the reference in your transfer description
+                                    Include the reference in your activity description
                                 </p>
                                 <Button onClick={onClose} variant="secondary" className="w-full">
                                     Done

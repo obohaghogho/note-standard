@@ -18,9 +18,11 @@
         "shared": "Compartido",
         "feed": "Feed",
         "favorites": "Favoritos",
-        "billing": "Facturación",
+        "billing": "Cuenta",
         "trends": "Tendencias",
-        "search_item": "Buscar"
+        "search_item": "Buscar",
+        "teams": "Equipos",
+        "wallet": "Actividad"
     },
     "auth": {
         "login": "Iniciar sesión",

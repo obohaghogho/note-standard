@@ -18,11 +18,11 @@
         "shared": "Shared",
         "feed": "Feed",
         "favorites": "Favorites",
-        "billing": "Billing",
+        "billing": "Account",
         "trends": "Trends",
         "search_item": "Search",
         "teams": "Teams",
-        "wallet": "Wallet"
+        "wallet": "Activity Overview"
     },
     "auth": {
         "login": "Sign In",

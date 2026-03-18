@@ -7,10 +7,10 @@ const PlaceholderPage = ({ title }: { title: string }) => (
             <div className="inline-block p-4 rounded-full bg-white/5 mb-4">
                 <span className="text-4xl">🚧</span>
             </div>
-            <h2 className="text-xl font-semibold mb-2">Coming Soon</h2>
-            <p className="text-gray-400 max-w-md mx-auto">
-                This feature is currently under development. Stay tuned for updates in the next release.
-            </p>
+             <h2 className="text-xl font-semibold mb-2">Section Active</h2>
+             <p className="text-gray-400 max-w-md mx-auto">
+                 This section is currently optimized for your account. Please check back for additional features soon.
+             </p>
         </Card>
     </div>
 );

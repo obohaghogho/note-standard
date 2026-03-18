@@ -18,9 +18,11 @@
         "shared": "已分享",
         "feed": "動態",
         "favorites": "收藏",
-        "billing": "帳單",
+        "billing": "帳戶",
         "trends": "趨勢",
-        "search_item": "搜尋"
+        "search_item": "搜尋",
+        "teams": "團隊",
+        "wallet": "活動"
     },
     "auth": {
         "login": "登入",

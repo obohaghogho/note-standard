@@ -40,8 +40,11 @@ export const Footer = () => {
                 <div className="pt-8 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-500">
                     <div className="text-center md:text-left space-y-1">
                         <p>© 2026 Note Standard</p>
-                        <p>Operated by Aghogho Plyboard Enterprise</p>
-                        <p>Contact: <a href="mailto:admin@notestandard.com" className="hover:text-white transition-colors">admin@notestandard.com</a></p>
+                        <p>NoteStandard is a technology platform operated by Jude Oboh.</p>
+                        <div className="flex flex-col gap-1">
+                            <p>Email: <a href="mailto:admin@notestandard.com" className="hover:text-white transition-colors">admin@notestandard.com</a></p>
+                            <p>Alt Email: <a href="mailto:obohaghogho107@gmail.com" className="hover:text-white transition-colors">obohaghogho107@gmail.com</a></p>
+                        </div>
                     </div>
                     <div className="flex gap-4">
                         <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
