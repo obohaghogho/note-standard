@@ -25,3 +25,4 @@ dist-ssr
 
 *.env
 *.txt
+!public/fincra-verification.txt
