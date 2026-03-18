@@ -200,7 +200,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
                             />
                             <User className="absolute left-3.5 top-3.5 text-gray-500" size={18} />
                         </div>
-                        <p className="text-xs text-gray-500 ml-1">Instant internal transfers, zero fees for email/ID.</p>
+                        <p className="text-xs text-gray-500 ml-1">Instant internal movements, zero fees for email/ID.</p>
                     </div>
                     
                     <div className="space-y-1">
@@ -245,7 +245,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
                                 className="bg-blue-900/10 border border-blue-500/20 p-4 rounded-xl text-sm space-y-2"
                             >
                                 <div className="flex justify-between text-gray-400">
-                                    <span>Digital Asset Access Fee</span>
+                                    <span>Service Processing Fee</span>
                                     <span>{formatCurrency(transferFee.fee, selectedCurrency)}</span>
                                 </div>
                                 <div className="flex justify-between font-bold text-white pt-2 border-t border-blue-500/20">
@@ -272,7 +272,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
                         </Button>
                         <Button type="submit" disabled={isSending}>
                             {isSending ? <Loader2 className="animate-spin mr-2" size={18} /> : <Send className="mr-2" size={18} />}
-                            {isSending ? 'Sending...' : 'Confirm Transfer'}
+                            {isSending ? 'Moving...' : 'Confirm Movement'}
                         </Button>
                     </div>
                 </form>

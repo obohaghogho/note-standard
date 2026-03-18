@@ -403,9 +403,9 @@ export const Billing = () => {
                     <CreditCard size={20} className="text-gray-300" />
                 </div>
                 <div>
-                    <h4 className="font-semibold text-white mb-1">Secure Payment</h4>
+                    <h4 className="font-semibold text-white mb-1">Secure Interaction</h4>
                     <p className="text-sm text-gray-400">
-                        All payments are processed securely by Paystack. We do not store your credit card information.
+                        All interactions are processed securely. We do not store your sensitive information.
                     </p>
                 </div>
             </div>

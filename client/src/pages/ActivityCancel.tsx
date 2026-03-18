@@ -3,20 +3,20 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { XCircle, ArrowLeft, RefreshCw } from 'lucide-react';
 import { Button } from '../components/common/Button';
 
-export const PaymentCancel: React.FC = () => {
+export const ActivityCancel: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const reference = searchParams.get('reference');
 
     const handleRetry = () => {
-        // Clear any stored reference and go back to wallet
+        // Clear any stored reference and go back to activity
         localStorage.removeItem('pendingDepositReference');
-        navigate('/wallet');
+        navigate('/dashboard/activity');
     };
 
     const handleGoBack = () => {
         localStorage.removeItem('pendingDepositReference');
-        navigate('/wallet');
+        navigate('/dashboard/activity');
     };
 
     return (
@@ -26,9 +26,9 @@ export const PaymentCancel: React.FC = () => {
                     <XCircle className="w-10 h-10 text-gray-400" />
                 </div>
                 
-                <h1 className="text-2xl font-bold text-white mb-2">Payment Cancelled</h1>
+                <h1 className="text-2xl font-bold text-white mb-2">Request Cancelled</h1>
                 <p className="text-gray-400 mb-6">
-                    Your payment was cancelled. No charges were made to your account.
+                    Your request was cancelled. No changes were made to your account.
                 </p>
 
                 <div className="space-y-3">
@@ -38,7 +38,7 @@ export const PaymentCancel: React.FC = () => {
                     </Button>
                     <Button onClick={handleGoBack} variant="ghost" className="w-full">
                         <ArrowLeft className="mr-2" size={18} />
-                        Back to Wallet
+                        Back to Activity
                     </Button>
                 </div>
 
@@ -52,4 +52,4 @@ export const PaymentCancel: React.FC = () => {
     );
 };
 
-export default PaymentCancel;
+export default ActivityCancel;

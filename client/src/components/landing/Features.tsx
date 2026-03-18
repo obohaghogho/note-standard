@@ -4,8 +4,8 @@ import { Lock, Cloud, Users, Zap, Search, Layout } from 'lucide-react';
 const features = [
     {
         icon: Lock,
-        title: 'Bank-Grade Security',
-        description: 'Your notes are encrypted at rest and in transit. Private means private.'
+        title: 'Modern Data Protection',
+        description: 'Your notes are protected with industry-standard encryption. Private means private.'
     },
     {
         icon: Cloud,

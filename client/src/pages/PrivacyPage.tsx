@@ -35,7 +35,7 @@ export const PrivacyPage = () => {
                                 Our Privacy Philosophy
                             </h2>
                             <p className="leading-relaxed">
-                                At Note Standard, we believe user data should be protected and handled responsibly. Our platform is designed to provide digital tools while maintaining transparency and strong privacy practices. We prioritize user control, security, and minimal data collection.
+                                At NoteStandard, we believe user data should be protected and handled responsibly. Our platform is designed to provide digital tools for managing activities while maintaining transparency and strong security practices.
                             </p>
                         </section>
 

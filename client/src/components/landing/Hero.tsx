@@ -26,8 +26,7 @@ export const Hero = () => {
                     </h1>
 
                     <p className="text-base sm:text-xl text-gray-400 mb-8 max-w-lg leading-relaxed">
-                        Our platform provides users with software-based features that help them manage digital activities, interact with online services, and access technology-driven tools through secure web and mobile interfaces.
-                        We focus on building reliable and user-friendly software that improves how people interact with digital platforms and modern internet services.
+                        NoteStandard is a technology platform that provides digital tools for users to manage activities, access features, and interact with online services through a secure web interface.
                     </p>
 
                     <div className="flex flex-col sm:flex-row gap-4">
@@ -106,11 +105,11 @@ export const Hero = () => {
                         className="absolute -top-10 -right-10 z-20 p-4 rounded-xl bg-[#1A1A1A] border border-white/10 shadow-xl"
                     >
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center text-green-400">
-                                $
+                            <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400">
+                                <Zap className="w-5 h-5" />
                             </div>
                             <div>
-                                <div className="text-sm font-bold text-white">Payment Rec'd</div>
+                                <div className="text-sm font-bold text-white">Task Completed</div>
                                 <div className="text-xs text-gray-400">Just now</div>
                             </div>
                         </div>

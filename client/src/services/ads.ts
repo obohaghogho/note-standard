@@ -10,7 +10,7 @@ export interface Ad {
     link_url?: string;
     destination_url?: string; // New: Target link
     media_url?: string; // New: Image/Video link
-    status: 'pending' | 'approved' | 'rejected' | 'paused' | 'pending_payment';
+    status: 'pending' | 'approved' | 'rejected' | 'paused' | 'pending_activation';
     tags?: string[];
     target_category?: string;
     views: number;
@@ -123,7 +123,7 @@ export const adService = {
         return await response.json();
     },
 
-    // Create Payment Session
+    // Create Activation Session
     async createAdCheckoutSession(adId: string) {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.access_token) throw new Error('Not authenticated');
@@ -139,13 +139,13 @@ export const adService = {
 
         if (!response.ok) {
             const error = await response.json();
-            throw new Error(error.error || 'Failed to create payment session');
+            throw new Error(error.error || 'Failed to create activation session');
         }
 
         return await response.json();
     },
 
-    // Sync Payment
+    // Sync Activation
     async syncAdPayment(sessionId: string) {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.access_token) throw new Error('Not authenticated');

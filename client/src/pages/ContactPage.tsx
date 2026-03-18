@@ -35,21 +35,40 @@ export const ContactPage = () => {
                                 <h2 className="text-xl font-semibold text-white">Company Name</h2>
                             </div>
                             <p className="text-lg mb-4 text-white font-medium">
-                                Aghogho Plyboard Enterprise
+                                Jude Oboh
                             </p>
                             
                             <div className="h-px bg-white/10 my-4" />
 
-                            <div className="flex items-center gap-3 mb-4">
-                                <Mail className="w-6 h-6 text-primary" />
-                                <h2 className="text-xl font-semibold text-white">Email Address</h2>
+                            <div className="space-y-6">
+                                <div>
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <Mail className="w-5 h-5 text-primary" />
+                                        <h3 className="text-lg font-semibold text-white">Email</h3>
+                                    </div>
+                                    <a 
+                                        href="mailto:admin@notestandard.com" 
+                                        className="text-lg text-primary hover:text-primary/80 hover:underline transition-colors block ml-8"
+                                    >
+                                        admin@notestandard.com
+                                    </a>
+                                </div>
+
+                                <div className="h-px bg-white/5 ml-8" />
+
+                                <div>
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <Mail className="w-5 h-5 text-primary/60" />
+                                        <h3 className="text-lg font-semibold text-white/80">Alternate Email</h3>
+                                    </div>
+                                    <a 
+                                        href="mailto:obohaghogho107@gmail.com" 
+                                        className="text-lg text-primary/80 hover:text-primary hover:underline transition-colors block ml-8"
+                                    >
+                                        obohaghogho107@gmail.com
+                                    </a>
+                                </div>
                             </div>
-                            <a 
-                                href="mailto:admin@notestandard.com" 
-                                className="text-lg text-primary hover:text-primary/80 hover:underline transition-colors block"
-                            >
-                                admin@notestandard.com
-                            </a>
                         </section>
 
                         <section className="flex gap-4 p-6 bg-primary/5 border border-primary/20 rounded-xl">

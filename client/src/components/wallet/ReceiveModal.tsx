@@ -101,9 +101,9 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
         const exists = wallets.find(w => w.currency === currency && w.network === network);
         if (!exists) {
             try {
-                toast.loading(`Creating ${currency} ${network !== 'native' ? `(${network})` : ''} wallet...`, { id: 'create-wallet' });
+                toast.loading(`Creating ${currency} ${network !== 'native' ? `(${network})` : ''} service...`, { id: 'create-wallet' });
                 await createWallet(currency, network);
-                toast.success(`${currency} wallet ready`, { id: 'create-wallet' });
+                toast.success(`${currency} service ready`, { id: 'create-wallet' });
             } catch (error) {
                 toast.error(`Failed to create ${currency} wallet`, { id: 'create-wallet' });
             }
@@ -126,7 +126,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
 
                 <h2 className="modal-header">
                     <QrCode className="text-purple-500" size={24} />
-                    Receive Assets
+                    Receive Interactions
                 </h2>
 
                 <div className="modal-body">
@@ -228,7 +228,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
                                         </p>
                                         <p className="text-xs opacity-80 leading-relaxed">
                                             {isCrypto 
-                                                ? `Sending any other asset to this address may result in the permanent loss of your funds. Ensure you are on the correct network.`
+                                                ? `Allocating any other asset to this address may result in the permanent loss of your funds. Ensure you are on the correct network.`
                                                 : `Provide your Email or User ID above to the sender. This ${selectedCurrency} will be credited to your account instantly once sent internally.`
                                             }
                                         </p>
@@ -247,17 +247,17 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
                                 </div>
                                 <div>
                                     <h3 className="text-lg font-bold text-white">
-                                        {walletLoading ? 'Creating Wallet...' : 'Wallet Not Found'}
+                                        {walletLoading ? 'Activating Service...' : 'Service Not Active'}
                                     </h3>
                                     <p className="text-gray-400 text-sm mt-1 max-w-xs mx-auto">
                                         {walletLoading 
-                                            ? `Setting up your secure ${selectedCurrency} address.` 
-                                            : `You don't have a ${selectedCurrency} wallet yet.`}
+                                            ? `Setting up your secure ${selectedCurrency} endpoint.` 
+                                            : `You don't have a ${selectedCurrency} service active yet.`}
                                     </p>
                                 </div>
                                 {!walletLoading && (
                                     <Button onClick={() => handleCurrencyChange(selectedCurrency, selectedNetwork)} className="bg-purple-600 hover:bg-purple-500">
-                                        Create {selectedCurrency} Wallet
+                                        Create {selectedCurrency} Service
                                     </Button>
                                 )}
                             </div>

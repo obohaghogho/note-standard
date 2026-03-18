@@ -92,7 +92,7 @@ export const CurrencyList: React.FC<CurrencyListProps> = ({
                                             </div>
                                         )}
                                     </div>
-                                    <p className="text-xs opacity-70">{wallet.provider === 'nowpayments' ? 'External Wallet' : 'Vault Wallet'}</p>
+                                    <p className="text-xs opacity-70">{wallet.provider === 'nowpayments' ? 'External Service' : 'Secure Storage'}</p>
                                 </div>
                             </div>
                             {wallet.is_frozen && (

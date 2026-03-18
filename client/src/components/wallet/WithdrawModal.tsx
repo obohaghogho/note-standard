@@ -196,7 +196,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
 
                 <h2 className="modal-header">
                     <ArrowUpRight size={20} className="text-orange-500" />
-                    Withdraw {selectedCurrency} {selectedNetwork !== 'native' ? `(${selectedNetwork})` : ''}
+                    Move Out {selectedCurrency} {selectedNetwork !== 'native' ? `(${selectedNetwork})` : ''}
                 </h2>
                 
                 <form onSubmit={handleWithdraw} className="modal-body flex flex-col gap-5">
@@ -367,7 +367,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                                 <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-3 space-y-1">
                                     <div className="flex items-center gap-2 text-gray-400 text-[10px] uppercase font-bold tracking-widest">
                                         <ShieldCheck size={12} />
-                                        <span>Min. Withdrawal</span>
+                                        <span>Min. Interaction</span>
                                     </div>
                                     <p className="text-sm font-medium text-white">0.001 {selectedCurrency}</p>
                                 </div>
@@ -448,7 +448,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                                 className="bg-orange-900/10 border border-orange-500/20 p-4 rounded-xl text-sm space-y-2"
                             >
                                 <div className="flex justify-between text-gray-400">
-                                    <span>Platform Service Fee</span>
+                                    <span>Activity Processing Fee</span>
                                     <span>{formatCurrency(withdrawFee.fee, selectedCurrency)}</span>
                                 </div>
                                 <div className="flex justify-between font-bold text-white pt-2 border-t border-orange-500/20">
@@ -475,7 +475,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                         </Button>
                         <Button type="submit" disabled={isWithdrawing} className="bg-orange-600 hover:bg-orange-500 text-white border-none">
                             {isWithdrawing ? <Loader2 className="animate-spin mr-2" size={18} /> : <ArrowUpRight className="mr-2" size={18} />}
-                            {isWithdrawing ? 'Processing...' : 'Confirm Withdrawal'}
+                            {isWithdrawing ? 'Processing...' : 'Confirm Move Out'}
                         </Button>
                     </div>
                 </form>

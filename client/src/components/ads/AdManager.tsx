@@ -16,8 +16,8 @@ const StatusBadge = ({ status }: { status: string }) => {
             return <div className="flex items-center gap-1 text-xs text-green-400 bg-green-400/10 px-2 py-1 rounded"><CheckCircle size={12} /> Live</div>;
         case 'pending':
             return <div className="flex items-center gap-1 text-xs text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded"><Clock size={12} /> In Review</div>;
-        case 'pending_payment':
-            return <div className="flex items-center gap-1 text-xs text-orange-400 bg-orange-400/10 px-2 py-1 rounded"><Clock size={12} /> Unpaid</div>;
+        case 'pending_activation':
+            return <div className="flex items-center gap-1 text-xs text-orange-400 bg-orange-400/10 px-2 py-1 rounded"><Clock size={12} /> Pending Activation</div>;
         case 'rejected':
             return <div className="flex items-center gap-1 text-xs text-red-400 bg-red-400/10 px-2 py-1 rounded"><XCircle size={12} /> Rejected</div>;
         default:
@@ -58,9 +58,9 @@ export const AdManager = () => {
         }
     };
 
-    const handlePayment = async (adId: string) => {
+    const handleRequest = async (adId: string) => {
         try {
-            toast.loading('Redirecting to payment...');
+            toast.loading('Redirecting to secure gateway...');
             const { url } = await adService.createAdCheckoutSession(adId);
             window.location.href = url;
         } catch (error: any) {
@@ -80,8 +80,8 @@ export const AdManager = () => {
                 tags: tagsArray
             });
 
-            // 2. Redirect to Payment
-            await handlePayment(result.id);
+            // 2. Redirect to Activation
+            await handleRequest(result.id);
 
         } catch (error: any) {
             toast.error(error.message || 'Failed to create ad');
@@ -164,7 +164,7 @@ export const AdManager = () => {
                         />
 
                         <div className="flex gap-3 pt-2 flex-wrap">
-                            <Button type="submit" loading={submitting}>Submit & Pay $5.00</Button>
+                            <Button type="submit" loading={submitting}>Submit & Activate $5.00</Button>
                             <Button type="button" variant="secondary" onClick={() => setCreateMode(false)}>Cancel</Button>
                         </div>
                     </form>
@@ -193,13 +193,13 @@ export const AdManager = () => {
                                     {new Date(ad.created_at).toLocaleDateString()}
                                 </span>
 
-                                {ad.status === 'pending_payment' && (
+                                {ad.status === 'pending_activation' && (
                                     <Button
                                         size="sm"
                                         className="h-7 text-xs bg-orange-500 hover:bg-orange-600 border-orange-400"
-                                        onClick={() => handlePayment(ad.id)}
+                                        onClick={() => handleRequest(ad.id)}
                                     >
-                                        Pay Now to Activate
+                                        Complete Activation
                                     </Button>
                                 )}
                             </div>

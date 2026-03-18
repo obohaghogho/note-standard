@@ -27,8 +27,8 @@ const PrivacyPage = lazyWithRetry(() => import('./pages/PrivacyPage').then(m => 
 const AboutPage = lazyWithRetry(() => import('./pages/AboutPage').then(m => m.AboutPage), 'AboutPage');
 const ContactPage = lazyWithRetry(() => import('./pages/ContactPage').then(m => m.ContactPage), 'ContactPage');
 const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword').then(m => m.ResetPassword), 'ResetPassword');
-const PaymentSuccess = lazyWithRetry(() => import('./pages/PaymentSuccess').then(m => m.PaymentSuccess), 'PaymentSuccess');
-const PaymentCancel = lazyWithRetry(() => import('./pages/PaymentCancel').then(m => m.PaymentCancel), 'PaymentCancel');
+const ActivitySuccess = lazyWithRetry(() => import('./pages/ActivitySuccess').then(m => m.ActivitySuccess), 'ActivitySuccess');
+const ActivityCancel = lazyWithRetry(() => import('./pages/ActivityCancel').then(m => m.ActivityCancel), 'ActivityCancel');
 
 // Dashboard pages
 const DashboardHome = lazyWithRetry(() => import('./pages/dashboard/DashboardHome').then(m => m.DashboardHome), 'DashboardHome');
@@ -147,11 +147,11 @@ function App() {
                     {/* Legacy Chat Redirect */}
                     <Route path="/chat/:id" element={<ChatRedirect />} />
 
-                    {/* Payment result pages - outside protected route as user returns from Stripe */}
-                    <Route path="/payment/success" element={<PaymentSuccess />} />
-                    <Route path="/payment/cancel" element={<PaymentCancel />} />
-                    {/* Alias for wallet path */}
-                    <Route path="/wallet" element={<WalletPage />} />
+                    {/* Activity result pages - outside protected route as user returns from external service */}
+                    <Route path="/activity/success" element={<ActivitySuccess />} />
+                    <Route path="/activity/cancel" element={<ActivityCancel />} />
+                    {/* Alias for activity path */}
+                    <Route path="/activity" element={<WalletPage />} />
 
                     <Route element={<ProtectedRoute />}>
                         {/* User Dashboard */}
@@ -163,9 +163,9 @@ function App() {
                         <Route path="feed" element={<Feed />} />
                         <Route path="favorites" element={<Notes />} />
                         <Route path="search" element={<Search />} />
-                        <Route path="billing" element={<Billing />} />
-                        <Route path="wallet" element={<WalletPage />} />
-                        <Route path="transactions" element={<Transactions />} />
+                        <Route path="account" element={<Billing />} />
+                        <Route path="activity" element={<WalletPage />} />
+                        <Route path="history" element={<Transactions />} />
                         <Route path="affiliates" element={<Affiliates />} />
                         <Route path="settings" element={<Settings />} />
 
