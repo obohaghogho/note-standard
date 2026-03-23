@@ -11,6 +11,7 @@ import { Search, Filter, Grid, List as ListIcon, Edit2, Share2, Trash2 } from 'l
 import { supabase, supabaseSafe } from '../../lib/supabaseSafe';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
+import { cn } from '../../utils/cn';
 
 interface Note {
     id: string;
@@ -26,6 +27,8 @@ export const Notes = () => {
     const [notes, setNotes] = useState<Note[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [sortBy, setSortBy] = useState<'latest' | 'oldest' | 'title'>('latest');
 
     // Modal States
     const [viewingNote, setViewingNote] = useState<Note | null>(null);
@@ -39,11 +42,14 @@ export const Notes = () => {
             const results = await supabaseSafe<Note[]>(
                 `notes-list-${user.id}-${searchTerm}`,
                 async () => {
-                    const query = supabase
+                    let query = supabase
                         .from('notes')
                         .select('*')
-                        .eq('owner_id', user.id)
-                        .order('updated_at', { ascending: false });
+                        .eq('owner_id', user.id);
+
+                    if (sortBy === 'latest') query = query.order('updated_at', { ascending: false });
+                    else if (sortBy === 'oldest') query = query.order('updated_at', { ascending: true });
+                    else if (sortBy === 'title') query = query.order('title', { ascending: true });
 
                     if (searchTerm) {
                         query.ilike('title', `%${searchTerm}%`);
@@ -68,7 +74,7 @@ export const Notes = () => {
         }, 300); // Debounce search
 
         return () => clearTimeout(timeoutId);
-    }, [user, searchTerm]);
+    }, [user, searchTerm, sortBy]);
 
     const handleDelete = (noteId: string) => {
         setDeletingNoteId(noteId);
@@ -112,14 +118,35 @@ export const Notes = () => {
                             aria-label="Search my notes"
                         />
                     </div>
-                    <Button variant="secondary" className="px-3">
-                        <Filter size={18} />
-                    </Button>
+                    <Dropdown
+                        trigger={
+                            <Button variant="secondary" className="px-3">
+                                <Filter size={18} />
+                            </Button>
+                        }
+                        items={[
+                            { label: 'Latest Modified', onClick: () => setSortBy('latest'), active: sortBy === 'latest' },
+                            { label: 'Oldest Modified', onClick: () => setSortBy('oldest'), active: sortBy === 'oldest' },
+                            { label: 'Title (A-Z)', onClick: () => setSortBy('title'), active: sortBy === 'title' },
+                        ]}
+                    />
                     <div className="bg-[#121212] p-1 rounded-lg border border-white/10 flex">
-                        <button className="p-2 rounded hover:bg-white/10 text-white bg-white/10">
+                        <button 
+                            onClick={() => setViewMode('grid')}
+                            className={cn(
+                                "p-2 rounded hover:bg-white/10 transition-colors",
+                                viewMode === 'grid' ? "text-white bg-white/10" : "text-gray-400"
+                            )}
+                        >
                             <Grid size={16} />
                         </button>
-                        <button className="p-2 rounded hover:bg-white/10 text-gray-400">
+                        <button 
+                            onClick={() => setViewMode('list')}
+                            className={cn(
+                                "p-2 rounded hover:bg-white/10 transition-colors",
+                                viewMode === 'list' ? "text-white bg-white/10" : "text-gray-400"
+                            )}
+                        >
                             <ListIcon size={16} />
                         </button>
                     </div>
@@ -133,16 +160,29 @@ export const Notes = () => {
                     {searchTerm ? 'No notes found matching your search.' : 'You have no notes yet.'}
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <div className={cn(
+                    viewMode === 'grid' 
+                        ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+                        : "flex flex-col gap-3"
+                )}>
                     {notes?.map((note) => (
                         <Card 
                             key={note.id} 
                             hoverEffect 
-                            className="p-5 cursor-pointer flex flex-col h-[200px] group"
+                            className={cn(
+                                "cursor-pointer group relative",
+                                viewMode === 'grid' ? "p-5 flex flex-col h-[200px]" : "p-4 flex items-center justify-between gap-4 h-auto"
+                            )}
                             onClick={() => setViewingNote(note)}
                         >
-                            <div className="flex items-start justify-between mb-3">
-                                <div className="flex items-center gap-2">
+                            <div className={cn(
+                                "flex flex-1 min-w-0",
+                                viewMode === 'grid' ? "flex-col" : "items-center gap-4"
+                            )}>
+                                <div className={cn(
+                                    "flex items-center gap-2",
+                                    viewMode === 'grid' ? "mb-3" : "w-32 shrink-0"
+                                )}>
                                     <div className="text-xs text-gray-400">
                                         {new Date(note.created_at).toLocaleDateString()}
                                     </div>
@@ -152,40 +192,83 @@ export const Notes = () => {
                                         </span>
                                     )}
                                 </div>
-                                <Dropdown
-                                    items={[
-                                        {
-                                            label: 'Edit',
-                                            icon: Edit2,
-                                            onClick: () => setEditingNote(note)
-                                        },
-                                        {
-                                            label: 'Share',
-                                            icon: Share2,
-                                            onClick: () => setSharingNoteId(note.id)
-                                        },
-                                        {
-                                            label: 'Delete',
-                                            icon: Trash2,
-                                            onClick: () => handleDelete(note.id),
-                                            variant: 'danger'
-                                        }
-                                    ]}
-                                />
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="font-semibold text-lg group-hover:text-primary transition-colors truncate">
+                                        {note.title || 'Untitled'}
+                                    </h3>
+                                    {viewMode === 'grid' && (
+                                        <p className="text-gray-400 text-sm line-clamp-3 mb-4 flex-1">
+                                            {note.content || 'No content...'}
+                                        </p>
+                                    )}
+                                </div>
+                                {viewMode === 'grid' && (
+                                    <div className="flex flex-wrap gap-2 overflow-hidden mt-auto">
+                                        {note.tags?.slice(0, 3).map(tag => (
+                                            <span key={tag} className="text-xs px-2 py-0.5 border border-white/10 text-gray-400 rounded-full">
+                                                {tag}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
-                            <h3 className="font-semibold text-lg mb-2 group-hover:text-primary transition-colors truncate">
-                                {note.title || 'Untitled'}
-                            </h3>
-                            <p className="text-gray-400 text-sm line-clamp-3 mb-4 flex-1">
-                                {note.content || 'No content...'}
-                            </p>
-                            <div className="flex flex-wrap gap-2 overflow-hidden mt-auto">
-                                {note.tags?.slice(0, 3).map(tag => (
-                                    <span key={tag} className="text-xs px-2 py-0.5 border border-white/10 text-gray-400 rounded-full">
-                                        {tag}
-                                    </span>
-                                ))}
-                            </div>
+
+                            {viewMode === 'list' && (
+                                <div className="flex items-center gap-4">
+                                     <div className="hidden sm:flex flex-wrap gap-2 overflow-hidden">
+                                        {note.tags?.slice(0, 2).map(tag => (
+                                            <span key={tag} className="text-[10px] px-2 py-0.5 border border-white/10 text-gray-400 rounded-full">
+                                                {tag}
+                                            </span>
+                                        ))}
+                                    </div>
+                                    <Dropdown
+                                        items={[
+                                            {
+                                                label: 'Edit',
+                                                icon: Edit2,
+                                                onClick: () => setEditingNote(note)
+                                            },
+                                            {
+                                                label: 'Share',
+                                                icon: Share2,
+                                                onClick: () => setSharingNoteId(note.id)
+                                            },
+                                            {
+                                                label: 'Delete',
+                                                icon: Trash2,
+                                                onClick: () => handleDelete(note.id),
+                                                variant: 'danger'
+                                            }
+                                        ]}
+                                    />
+                                </div>
+                            )}
+
+                            {viewMode === 'grid' && (
+                                <div className="absolute top-4 right-4">
+                                    <Dropdown
+                                        items={[
+                                            {
+                                                label: 'Edit',
+                                                icon: Edit2,
+                                                onClick: () => setEditingNote(note)
+                                            },
+                                            {
+                                                label: 'Share',
+                                                icon: Share2,
+                                                onClick: () => setSharingNoteId(note.id)
+                                            },
+                                            {
+                                                label: 'Delete',
+                                                icon: Trash2,
+                                                onClick: () => handleDelete(note.id),
+                                                variant: 'danger'
+                                            }
+                                        ]}
+                                    />
+                                </div>
+                            )}
                         </Card>
                     ))}
                 </div>

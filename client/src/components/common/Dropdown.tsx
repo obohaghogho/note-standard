@@ -7,6 +7,7 @@ interface DropdownItem {
     icon?: React.ElementType;
     onClick: () => void;
     variant?: 'default' | 'danger';
+    active?: boolean;
 }
 
 interface DropdownProps {
@@ -54,9 +55,8 @@ export const Dropdown = ({ items, trigger }: DropdownProps) => {
                                 }}
                                 className={cn(
                                     "w-full px-4 py-2.5 text-sm flex items-center gap-2 transition-colors",
-                                    item.variant === 'danger'
-                                        ? "text-red-400 hover:bg-red-500/10"
-                                        : "text-gray-200 hover:bg-white/5"
+                                    item.active ? "text-primary bg-primary/10" : "text-gray-200 hover:bg-white/5",
+                                    item.variant === 'danger' && "text-red-400 hover:bg-red-500/10"
                                 )}
                             >
                                 {item.icon && <item.icon size={16} />}
