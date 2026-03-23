@@ -76,9 +76,14 @@ exports.createCheckoutSession = async (req, res) => {
     // 5. Provider Specific Logic (e.g. Paystack Plans)
     let providerPlan = null;
     if (usedMethod === 'paystack') {
-      providerPlan = planType.toUpperCase() === "BUSINESS" 
+      const planId = planType.toUpperCase() === "BUSINESS" 
         ? process.env.PAYSTACK_PLAN_BUSINESS 
         : process.env.PAYSTACK_PLAN_PRO;
+      
+      // Only use the plan if it's not a placeholder
+      if (planId && !planId.includes("placeholder")) {
+        providerPlan = planId;
+      }
     }
 
     const checkoutData = {
@@ -215,6 +220,8 @@ exports.syncSubscription = async (req, res) => {
     }
   } catch (error) {
     console.error("Error syncing subscription:", error);
+    console.error(error.stack);
+    require("fs").writeFileSync("err_sync_stack.txt", error.stack || error.message);
     res.status(500).json({ error: "Sync failed", details: error.message });
   }
 };
