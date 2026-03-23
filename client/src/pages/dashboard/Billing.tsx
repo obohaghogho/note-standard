@@ -268,7 +268,7 @@ export const Billing = () => {
                             <Check size={16} className="text-green-500" /> Standard Fees
                         </li>
                         <li className="flex items-center gap-2 text-sm text-gray-500">
-                            <XComp size={16} /> Priority Support
+                            <X size={16} /> Priority Support
                         </li>
                     </ul>
 
@@ -470,25 +470,3 @@ export const Billing = () => {
         </div>
     );
 };
-
-const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('en-NG', { style: 'currency', currency }).format(amount);
-};
-
-const XComp = ({ size, className }: { size?: number, className?: string }) => (
-    <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width={size || 24}
-        height={size || 24}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className={className}
-    >
-        <path d="M18 6 6 18" />
-        <path d="m6 6 12 12" />
-    </svg>
-);
