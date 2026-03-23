@@ -16,6 +16,7 @@ import toast from 'react-hot-toast';
 import { MediaPreviewModal } from './MediaPreviewModal';
 
 import { ConfirmationModal } from '../common/ConfirmationModal';
+import { applyAutoCorrect } from '../../utils/textUtils';
 
 const ChatWindow: React.FC = () => {
     const { 
@@ -652,7 +653,20 @@ const ChatWindow: React.FC = () => {
                             <div className="flex items-center gap-2">
                                 <div className="flex-1 min-w-0 flex items-center gap-1 md:gap-2 bg-gray-800 border border-gray-700 rounded-2xl p-1 md:p-1.5 px-2 md:px-3 focus-within:border-blue-500 transition-all shadow-inner">
                                     <button type="button" onClick={() => setShowMediaUpload(!showMediaUpload)} className="p-2 text-gray-400 hover:text-blue-400 hover:bg-white/5 rounded-full transition-all flex-shrink-0"><Plus size={20} className="md:w-[22px] md:h-[22px]" /></button>
-                                    <input id="chat-window-input" name="message" type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder={isWaitingForOthers ? "Waiting..." : "Message"} disabled={isWaitingForOthers} autoComplete="off" className="w-0 flex-1 bg-transparent text-white py-2 md:py-3 px-1 md:px-2 focus:outline-none disabled:opacity-50 text-[16px] md:text-sm" />
+                                    <input 
+                                        id="chat-window-input" 
+                                        name="message" 
+                                        type="text" 
+                                        value={inputValue} 
+                                        onChange={(e) => setInputValue(applyAutoCorrect(e.target.value))} 
+                                        placeholder={isWaitingForOthers ? "Waiting..." : "Message"} 
+                                        disabled={isWaitingForOthers} 
+                                        autoComplete="on" 
+                                        spellCheck={true}
+                                        autoCapitalize="sentences"
+                                        autoCorrect="on"
+                                        className="w-0 flex-1 bg-transparent text-white py-2 md:py-3 px-1 md:px-2 focus:outline-none disabled:opacity-50 text-[16px] md:text-sm" 
+                                    />
                                     <div className="flex items-center flex-shrink-0">
                                         <button type="button" onClick={() => setIsVoiceRecording(true)} className="p-2 text-gray-400 hover:text-blue-400 hover:bg-white/5 rounded-full transition-all"><Mic size={18} className="md:w-5 md:h-5" /></button>
                                         <div className="relative">

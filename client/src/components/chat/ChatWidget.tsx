@@ -17,6 +17,7 @@ import type { Message } from '../../context/ChatContext';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { CallOverlay } from './CallOverlay';
 import { AudioPlayer } from './AudioPlayer';
+import { applyAutoCorrect } from '../../utils/textUtils';
 import toast from 'react-hot-toast';
 
 export const ChatWidget = () => {
@@ -388,11 +389,15 @@ export const ChatWidget = () => {
                                         placeholder="Type your message..."
                                         value={newMessage}
                                         onChange={(e) => {
-                                            setNewMessage(e.target.value);
+                                            setNewMessage(applyAutoCorrect(e.target.value));
                                             handleTyping();
                                         }}
                                         onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
                                         aria-label="Type your support message"
+                                        spellCheck={true}
+                                        autoCapitalize="sentences"
+                                        autoCorrect="on"
+                                        autoComplete="on"
                                     />
                                     <button onClick={sendMessage} disabled={!newMessage.trim()}>
                                         <Send size={18} />

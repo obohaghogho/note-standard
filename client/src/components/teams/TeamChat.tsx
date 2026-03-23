@@ -31,6 +31,7 @@ import { VoiceRecorder } from '../chat/VoiceRecorder';
 import { MediaPreviewModal } from '../chat/MediaPreviewModal';
 import { AnimatePresence } from 'framer-motion';
 import { ConfirmationModal } from '../common/ConfirmationModal';
+import { applyAutoCorrect } from '../../utils/textUtils';
 import './TeamChat.css';
 
 interface TeamChatProps {
@@ -488,12 +489,16 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
               name="message"
               ref={inputRef}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => setInput(applyAutoCorrect(e.target.value))}
               onKeyPress={handleKeyPress}
               placeholder="Type a message..."
               className="team-chat__input"
               rows={1}
               disabled={isSending || !connected}
+              spellCheck={true}
+              autoCapitalize="sentences"
+              autoCorrect="on"
+              autoComplete="on"
             />
         )}
         <div className="team-chat__input-actions">
