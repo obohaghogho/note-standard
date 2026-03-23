@@ -1,4 +1,6 @@
 const PaymentFactory = require("../services/payment/PaymentFactory");
+const fxService = require("../services/fxService");
+const supabase = require("../config/database");
 
 exports.createCheckoutSession = async (req, res) => {
   try {
