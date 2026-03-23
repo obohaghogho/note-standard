@@ -4,6 +4,7 @@ import SecureImage from '../../components/common/SecureImage';
 import { Heart, MessageCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
+import { UserBadge } from '../../components/common/UserBadge';
 
 import { API_URL, getAuthHeader } from '../../lib/api';
 
@@ -22,6 +23,8 @@ interface FeedNoteCardProps {
             username: string;
             email: string;
             avatar_url?: string;
+            plan_tier?: string;
+            is_verified?: boolean;
         };
     };
     onCommentClick: (note: any) => void;
@@ -87,8 +90,12 @@ export const FeedNoteCard = ({ note, onCommentClick }: FeedNoteCardProps) => {
                             )}
                         </div>
                         <div>
-                            <div className="text-sm font-semibold text-white">
+                            <div className="text-sm font-semibold text-white flex items-center gap-1">
                                 {note.owner?.username || 'Unknown User'}
+                                <UserBadge 
+                                    planTier={note.owner?.plan_tier as any}
+                                    isVerified={note.owner?.is_verified}
+                                />
                             </div>
                             <div className="text-[10px] text-gray-500">
                                 {new Date(note.created_at).toLocaleDateString()}

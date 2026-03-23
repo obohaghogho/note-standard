@@ -25,7 +25,7 @@ export const Feed = () => {
                     .from('notes')
                     .select(`
                         *,
-                        owner:profiles!owner_id (username, email, avatar_url)
+                        owner:profiles!owner_id (username, email, avatar_url, plan_tier, is_verified)
                     `)
                     .eq('is_private', false)
                     .order('created_at', { ascending: false });
