@@ -227,9 +227,15 @@ class FincraProvider extends BaseProvider {
 
     console.log(`[Fincra Webhook] Parsed: status=${status}, reference=${reference}`);
 
+    let type = (data.metadata?.type === "ad" || data.metadata?.type === "ads")
+      ? "AD_PAYMENT"
+      : (data.metadata?.type === "subscription"
+        ? "SUBSCRIPTION_PAYMENT"
+        : "DEPOSIT");
+
     return {
-      type: "DEPOSIT",
-      display_label: "Fincra Payment",
+      type: type,
+      display_label: type === "SUBSCRIPTION_PAYMENT" ? "Subscription Upgrade" : "Fincra Payment",
       reference: reference,
       status: status,
       amount: data.amountToSettle || data.amount || data.chargeAmount,

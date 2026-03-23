@@ -30,6 +30,7 @@ class PaystackProvider extends BaseProvider {
         currency,
         reference,
         callback_url: callbackUrl,
+        plan: data.plan,
         metadata: {
           ...metadata,
           category: "digital_assets",

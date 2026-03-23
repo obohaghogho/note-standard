@@ -17,6 +17,7 @@ export const Billing = () => {
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
     const [showDetails, setShowDetails] = useState(false);
+    const [paymentMethod, setPaymentMethod] = useState<'paystack' | 'fincra'>('paystack');
 
     const fetchingRef = useRef(false);
     const isMounted = useRef(true);
@@ -30,7 +31,8 @@ export const Billing = () => {
         // Paystack doesn't typically send 'success' param unless we add it, but it sends reference
         
         if (reference) {
-            syncSubscription(reference);
+            const method = (searchParams.get('method') as 'paystack' | 'fincra') || 'paystack';
+            syncSubscription(reference, method);
         }
         
         return () => { isMounted.current = false; };
@@ -69,7 +71,7 @@ export const Billing = () => {
         }
     };
 
-    const syncSubscription = async (reference: string) => {
+    const syncSubscription = async (reference: string, method: string = 'paystack') => {
         setProcessing(true);
         try {
             const { data } = await supabase.auth.getSession();
@@ -81,7 +83,7 @@ export const Billing = () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${resolvedToken}`
                 },
-                body: JSON.stringify({ reference })
+                body: JSON.stringify({ reference, method })
             });
 
             const dataRes = await response.json();
@@ -113,7 +115,7 @@ export const Billing = () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${resolvedToken}`
                 },
-                body: JSON.stringify({ planType })
+                body: JSON.stringify({ planType, paymentMethod })
             });
 
             const dataRes = await response.json();
@@ -178,6 +180,40 @@ export const Billing = () => {
             <div className="space-y-1">
                 <h1 className="text-3xl font-bold">Plan & Subscription</h1>
                 <p className="text-gray-400">Manage your subscription and billing details</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-md">
+                <button
+                    onClick={() => setPaymentMethod('paystack')}
+                    className={`p-4 rounded-xl border-2 transition-all flex items-center justify-between ${paymentMethod === 'paystack' ? 'border-primary bg-primary/10' : 'border-white/5 bg-white/5 hover:border-white/20'}`}
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400">
+                            <CreditCard size={20} />
+                        </div>
+                        <div className="text-left">
+                            <p className="font-bold">Paystack</p>
+                            <p className="text-xs text-gray-400">Cards, Transfer, USSD</p>
+                        </div>
+                    </div>
+                    {paymentMethod === 'paystack' && <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center"><Check size={12} /></div>}
+                </button>
+
+                <button
+                    onClick={() => setPaymentMethod('fincra')}
+                    className={`p-4 rounded-xl border-2 transition-all flex items-center justify-between ${paymentMethod === 'fincra' ? 'border-primary bg-primary/10' : 'border-white/5 bg-white/5 hover:border-white/20'}`}
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center text-green-400">
+                            <Zap size={20} />
+                        </div>
+                        <div className="text-left">
+                            <p className="font-bold">Fincra</p>
+                            <p className="text-xs text-gray-400">Fast Bank Transfers</p>
+                        </div>
+                    </div>
+                    {paymentMethod === 'fincra' && <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center"><Check size={12} /></div>}
+                </button>
             </div>
 
             {processing && (
