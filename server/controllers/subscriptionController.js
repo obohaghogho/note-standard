@@ -15,8 +15,6 @@ exports.createCheckoutSession = async (req, res) => {
 
     const upCurrency = currency.toUpperCase();
     let usdAmount = planType.toUpperCase() === "BUSINESS" ? 29.99 : 9.99;
-    let finalAmount = usdAmount;
-    let exchangeRate = 1;
 
     // 1. Fetch User Profile for Name
     const { data: profile } = await supabase
@@ -28,11 +26,25 @@ exports.createCheckoutSession = async (req, res) => {
     const customerName = profile?.full_name || email.split("@")[0] || "Standard User";
     const reference = uuidv4();
 
+    // Dynamically choose Fincra natively in PRODUCTION for USD/EUR/GBP
+    const isProduction = process.env.NODE_ENV === "production";
+    const useFincra = isProduction && upCurrency !== "NGN";
+
     // 2. Handle Currency Conversion
-    let processedCurrency = "NGN"; // Force Paystack NGN internally
-    const conversion = await fxService.convert(usdAmount, "USD", "NGN", true);
-    finalAmount = conversion.amount;
-    exchangeRate = conversion.rate;
+    let processedCurrency = useFincra ? upCurrency : "NGN"; // Force Paystack NGN locally, Fincra native in Prod
+    let finalAmount = usdAmount; // Will hold the target provider's amount
+    let exchangeRate = 1;
+
+    if (!useFincra) {
+      const conversion = await fxService.convert(usdAmount, "USD", "NGN", true);
+      finalAmount = conversion.amount;
+      exchangeRate = conversion.rate;
+    } else if (upCurrency !== "USD") {
+      // For Fincra, if not USD, convert from USD to Target (e.g. EUR)
+      const conversion = await fxService.convert(usdAmount, "USD", upCurrency, true);
+      finalAmount = conversion.amount;
+      exchangeRate = conversion.rate;
+    }
 
     // 3. Metadata for the transaction
     const metadata = {
@@ -49,12 +61,17 @@ exports.createCheckoutSession = async (req, res) => {
       reference: reference, // Store our internal ref in metadata too
     };
 
+    const usedMethod = useFincra ? "fincra" : "paystack";
+    const provider = PaymentFactory.getProviderByName(usedMethod);
+
     let callbackUrl = `${
       process.env.CLIENT_URL || "https://notestandard.com"
-    }/dashboard/billing?payment_callback=true&method=paystack&currency=${upCurrency}&reference=${reference}`;
+    }/dashboard/billing?payment_callback=true&method=${usedMethod}&currency=${upCurrency}&reference=${reference}`;
 
-    const provider = PaymentFactory.getProviderByName("paystack");
-    const usedMethod = "paystack";
+    // Fincra strictly rejects "localhost" in redirect URLs.
+    if (callbackUrl.includes("http://localhost")) {
+      callbackUrl = callbackUrl.replace("http://localhost", "http://127.0.0.1");
+    }
 
     // 5. Provider Specific Logic (e.g. Paystack Plans)
     let providerPlan = null;
