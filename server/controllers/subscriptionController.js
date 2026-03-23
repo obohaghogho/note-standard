@@ -146,7 +146,14 @@ exports.syncSubscription = async (req, res) => {
       return res.status(400).json({ error: "Reference required" });
     }
 
-    const provider = PaymentFactory.getProviderByName(method);
+    let usedMethod = method;
+    if (usedMethod === "auto") {
+      // If we got 'auto', fallback to a sensible default or try to detect
+      usedMethod = reference.startsWith("fcr") ? "fincra" : "paystack";
+      console.log(`[Sync] Method was auto, detected: ${usedMethod}`);
+    }
+
+    const provider = PaymentFactory.getProviderByName(usedMethod);
     const verification = await provider.verify(reference);
     
     console.log(`[Sync] Transaction verified: success=${verification.success}`);
@@ -183,7 +190,7 @@ exports.syncSubscription = async (req, res) => {
         charged_amount_ngn: chargedAmountNgn,
         exchange_rate: exchangeRate || 0,
         // Provider specific fields
-        ...(method === 'paystack' ? {
+        ...(usedMethod === 'paystack' ? {
           paystack_customer_code: verification.raw?.customer?.customer_code,
           paystack_subscription_code: verification.raw?.subscription_code,
           paystack_transaction_reference: reference
