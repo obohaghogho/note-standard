@@ -4,6 +4,7 @@ import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Dropdown } from '../../components/common/Dropdown';
 import { EditNoteModal } from '../../components/dashboard/EditNoteModal';
+import { ViewNoteModal } from '../../components/dashboard/ViewNoteModal';
 import { ShareNoteModal } from '../../components/dashboard/ShareNoteModal';
 import { DeleteNoteModal } from '../../components/dashboard/DeleteNoteModal';
 import { Search, Filter, Grid, List as ListIcon, Edit2, Share2, Trash2 } from 'lucide-react';
@@ -27,6 +28,7 @@ export const Notes = () => {
     const [searchTerm, setSearchTerm] = useState('');
 
     // Modal States
+    const [viewingNote, setViewingNote] = useState<Note | null>(null);
     const [editingNote, setEditingNote] = useState<Note | null>(null);
     const [sharingNoteId, setSharingNoteId] = useState<string | null>(null);
     const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
@@ -137,7 +139,7 @@ export const Notes = () => {
                             key={note.id} 
                             hoverEffect 
                             className="p-5 cursor-pointer flex flex-col h-[200px] group"
-                            onClick={() => setEditingNote(note)}
+                            onClick={() => setViewingNote(note)}
                         >
                             <div className="flex items-start justify-between mb-3">
                                 <div className="flex items-center gap-2">
@@ -190,6 +192,20 @@ export const Notes = () => {
             )}
 
             {/* Modals */}
+            <ViewNoteModal
+                isOpen={!!viewingNote}
+                onClose={() => setViewingNote(null)}
+                note={viewingNote}
+                onEdit={() => {
+                    setEditingNote(viewingNote);
+                    setViewingNote(null);
+                }}
+                onShare={() => {
+                    setSharingNoteId(viewingNote?.id || null);
+                    setViewingNote(null);
+                }}
+            />
+
             <EditNoteModal
                 isOpen={!!editingNote}
                 onClose={() => setEditingNote(null)}

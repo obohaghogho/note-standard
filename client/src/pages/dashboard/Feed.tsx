@@ -11,7 +11,7 @@ export const Feed = () => {
     const [notes, setNotes] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
+    const [activeNote, setActiveNote] = useState<any | null>(null);
 
     const fetchFeed = async () => {
         if (!user) return;
@@ -129,16 +129,16 @@ export const Feed = () => {
                         <FeedNoteCard
                             key={note.id}
                             note={note}
-                            onCommentClick={setActiveNoteId}
+                            onCommentClick={setActiveNote}
                         />
                     ))}
                 </div>
             )}
 
             <CommentModal
-                isOpen={!!activeNoteId}
-                onClose={() => setActiveNoteId(null)}
-                noteId={activeNoteId}
+                isOpen={!!activeNote}
+                onClose={() => setActiveNote(null)}
+                note={activeNote}
             />
         </div>
     );

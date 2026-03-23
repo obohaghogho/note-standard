@@ -23,15 +23,16 @@ interface Comment {
 interface CommentModalProps {
     isOpen: boolean;
     onClose: () => void;
-    noteId: string | null;
+    note: any | null;
 }
 
-export const CommentModal = ({ isOpen, onClose, noteId }: CommentModalProps) => {
+export const CommentModal = ({ isOpen, onClose, note }: CommentModalProps) => {
     const { user, session } = useAuth();
     const [comments, setComments] = useState<Comment[]>([]);
     const [newComment, setNewComment] = useState('');
     const [loading, setLoading] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const noteId = note?.id;
 
     useEffect(() => {
         if (isOpen && noteId) {
@@ -150,6 +151,25 @@ export const CommentModal = ({ isOpen, onClose, noteId }: CommentModalProps) => 
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    {note && (
+                        <div className="mb-6 pb-6 border-b border-white/10">
+                            <h2 className="text-xl font-bold text-white mb-2">{note.title || 'Untitled'}</h2>
+                            <p className="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed">
+                                {note.content || 'No content...'}
+                            </p>
+                            {note.tags && note.tags.length > 0 && (
+                                <div className="flex gap-2 mt-4 flex-wrap">
+                                    {note.tags.map((tag: string) => (
+                                        <span key={tag} className="text-[10px] px-2 py-0.5 bg-white/5 text-gray-400 rounded-full border border-white/5">
+                                            #{tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <h4 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Comments</h4>
                     {loading ? (
                         <div className="text-center text-gray-500 py-8">Loading comments...</div>
                     ) : comments.length === 0 ? (

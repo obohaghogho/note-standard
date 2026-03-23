@@ -181,15 +181,15 @@ class FincraProvider extends BaseProvider {
   async createVirtualAccount(data) {
     const { currency, email, firstName, lastName, phone } = data;
     try {
-      const response = await this.client.post("/virtual-accounts/individual", {
+      const response = await this.client.post("/profile/virtual-accounts/requests", {
         currency: currency,
         accountType: "individual",
-        customer: {
-          name: `${firstName} ${lastName}`,
+        KYCInformation: {
+          firstName: firstName,
+          lastName: lastName,
           email: email,
-          phoneNumber: phone,
         },
-        channel: currency === "NGN" ? "vanso" : "wema", // Just examples, Fincra API varies
+        channel: "wema", // Default for NGN/Others, Fincra handles FCY automatically if enabled
       });
 
       return {

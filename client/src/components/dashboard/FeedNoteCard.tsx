@@ -24,7 +24,7 @@ interface FeedNoteCardProps {
             avatar_url?: string;
         };
     };
-    onCommentClick: (noteId: string) => void;
+    onCommentClick: (note: any) => void;
 }
 
 export const FeedNoteCard = ({ note, onCommentClick }: FeedNoteCardProps) => {
@@ -98,15 +98,18 @@ export const FeedNoteCard = ({ note, onCommentClick }: FeedNoteCardProps) => {
                 </div>
 
                 <div
-                    onClick={() => onCommentClick(note.id)}
+                    onClick={() => onCommentClick(note)}
                     className="cursor-pointer"
                 >
                     <h3 className="font-bold text-xl mb-2 group-hover:text-primary transition-colors">
                         {note.title || 'Untitled'}
                     </h3>
-                    <p className="text-gray-400 text-sm line-clamp-3 mb-4 leading-relaxed">
+                    <p className="text-gray-400 text-sm line-clamp-6 mb-4 leading-relaxed group-hover:text-gray-300 transition-colors">
                         {note.content || 'No content...'}
                     </p>
+                    {note.content?.length > 300 && (
+                        <div className="text-primary text-xs font-semibold mb-4">Read more...</div>
+                    )}
 
                     <div className="flex gap-2 mb-4 flex-wrap">
                         {note.tags && note.tags.slice(0, 3).map(tag => (
@@ -127,7 +130,7 @@ export const FeedNoteCard = ({ note, onCommentClick }: FeedNoteCardProps) => {
                     </button>
 
                     <button
-                        onClick={() => onCommentClick(note.id)}
+                        onClick={() => onCommentClick(note)}
                         className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-primary transition-colors"
                     >
                         <MessageCircle size={18} />

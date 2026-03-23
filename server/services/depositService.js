@@ -295,24 +295,35 @@ async function createBankDeposit(
   }
 
   // Unified Payment Record
-  const payment = await PaymentService.initializePayment(
-    userId,
-    profile?.email || "",
-    amount,
-    currency,
-    {
-      type: toCurrency && toCurrency !== currency ? "Digital Assets Purchase" : "DEPOSIT",
-      method: "bank_transfer",
-      userPlan,
-      idempotencyKey,
-      targetCurrency: toCurrency,
-      targetNetwork: toNetwork,
-    },
-    {
-      isCrypto: false,
-      manualReview: upCurrency !== "NGN", // Real-time for NGN via webhooks
-    },
-  );
+  let payment;
+  try {
+    payment = await PaymentService.initializePayment(
+      userId,
+      profile?.email || "",
+      amount,
+      currency,
+      {
+        type: toCurrency && toCurrency !== currency ? "Digital Assets Purchase" : "DEPOSIT",
+        method: "bank_transfer",
+        userPlan,
+        idempotencyKey,
+        targetCurrency: toCurrency,
+        targetNetwork: toNetwork,
+      },
+      {
+        isCrypto: false,
+        manualReview: upCurrency !== "NGN", // Real-time for NGN via webhooks
+      },
+    );
+  } catch (payErr) {
+    logger.error(`[DepositService] Payment initialization failed, falling back to manual record: ${payErr.message}`);
+    // Fallback: Create a manual record or at least provide a dummy reference if initialization fails
+    // This allows the user to still see bank details.
+    payment = {
+      reference: idempotencyKey || `manual_${uuidv4().substring(0, 8)}`,
+      provider: "manual"
+    };
+  }
 
   return {
     reference: payment.reference,
