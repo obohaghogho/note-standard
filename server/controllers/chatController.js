@@ -172,7 +172,7 @@ exports.createConversation = async (req, res) => {
       });
 
       // Notify recipient of new conversation
-      realtime.emitToUser(p.id, "new_conversation", convData);
+      await realtime.emitToUser(p.id, "new_conversation", convData);
     }
 
     res.json({
@@ -249,7 +249,7 @@ exports.acceptConversation = async (req, res) => {
         });
 
         // Notify about the change in conversation status
-        realtime.emitToUser(m.user_id, "conversation_updated", {
+        await realtime.emitToUser(m.user_id, "conversation_updated", {
           conversationId,
           userId,
           status: "accepted",
@@ -258,7 +258,7 @@ exports.acceptConversation = async (req, res) => {
     }
 
     // Also notify self across tabs
-    realtime.emitToUser(userId, "conversation_updated", {
+    await realtime.emitToUser(userId, "conversation_updated", {
       conversationId,
       userId,
       status: "accepted",
@@ -438,7 +438,7 @@ exports.markMessageRead = async (req, res) => {
       }
 
       // Emit read receipt via gateway
-      realtime.emit("to_conversation", {
+      await realtime.emit("to_conversation", {
         conversationId: data.conversation_id,
         event: "message_read",
         data: {
@@ -554,7 +554,7 @@ exports.sendMessage = async (req, res) => {
           .single();
 
         const msgToSend = (!fetchErr && fullMessage) ? fullMessage : data;
-        realtime.emit("to_conversation", {
+        await realtime.emit("to_conversation", {
           conversationId,
           event: "receive_message",
           data: msgToSend
@@ -562,7 +562,7 @@ exports.sendMessage = async (req, res) => {
 
         res.json(msgToSend);
       } catch (err) {
-        realtime.emit("to_conversation", {
+        await realtime.emit("to_conversation", {
           conversationId,
           event: "receive_message",
           data
@@ -687,7 +687,7 @@ exports.sendMessage = async (req, res) => {
               .single();
 
             if (!autoErr) {
-               realtime.emit("to_conversation", {
+               await realtime.emit("to_conversation", {
                  conversationId,
                  event: "receive_message",
                  data: autoMsg
@@ -765,7 +765,7 @@ exports.createSupportChat = async (req, res) => {
     if (memberError) throw memberError;
 
     // Notify admins via Gateway
-    realtime.emitToAdmin("new_support_chat", {
+    await realtime.emitToAdmin("new_support_chat", {
       ...convData,
       user: profile,
     });

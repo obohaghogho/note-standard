@@ -137,6 +137,17 @@ class FXService {
   }
 
   /**
+   * Convert amount from one currency to another
+   */
+  async convert(amount, from, to, useCache = true) {
+    const rate = await this.getRate(from, to, useCache);
+    return {
+      amount: math.multiply(amount, rate),
+      rate,
+    };
+  }
+
+  /**
    * For dashboard display
    */
   async getAllRates(base = "USD") {

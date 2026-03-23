@@ -48,7 +48,7 @@ const createNotification = async ({
     if (error) throw error;
 
     // 2. Real-time Delivery via Gateway
-    realtime.emitToUser(receiverId, "notification", {
+    await realtime.emitToUser(receiverId, "notification", {
       id: data.id,
       type,
       title,
@@ -147,7 +147,7 @@ const broadcastNotification = async ({
     if (error) throw error;
 
     // 3. Real-time Delivery via Gateway Broadcast
-    realtime.broadcast("notification", {
+    await realtime.broadcast("notification", {
       type,
       title,
       message,

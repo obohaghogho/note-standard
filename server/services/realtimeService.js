@@ -11,45 +11,42 @@ if (process.env.REDIS_URL) {
   console.log('[RealtimeService] Redis publisher initialized');
 }
 
+const fetch = require('node-fetch');
+
 /**
  * Emit an event to the realtime gateway via Redis Pub/Sub
  */
 const emit = async (event, data) => {
-  if (publisher && publisher.isOpen) {
-    try {
+  try {
+    if (publisher && publisher.isOpen) {
       await publisher.publish('realtime:events', JSON.stringify({ event, data }));
-    } catch (err) {
-      console.error('[RealtimeService] Redis publish failed:', err.message);
-    }
-  } else {
-    // Dev Fallback: Direct HTTP call to gateway
-    try {
-      const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+    } else {
+      // Dev Fallback: Direct HTTP call to gateway
       await fetch('http://localhost:5000/internal/emit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ event, data })
       });
-    } catch (err) {
-      // Silently fail or log if gateway is also down
     }
+  } catch (err) {
+    console.error('[RealtimeService] Emit failed:', err.message);
   }
 };
 
-const emitToUser = (userId, event, data) => {
-  emit('to_user', { userId, event, data });
+const emitToUser = async (userId, event, data) => {
+  await emit('to_user', { userId, event, data });
 };
 
-const emitToConversation = (conversationId, event, data) => {
-  emit('to_conversation', { conversationId, event, data });
+const emitToConversation = async (conversationId, event, data) => {
+  await emit('to_conversation', { conversationId, event, data });
 };
 
-const emitToAdmin = (event, data) => {
-  emit('to_admin', { event, data });
+const emitToAdmin = async (event, data) => {
+  await emit('to_admin', { event, data });
 };
 
-const broadcast = (event, data) => {
-  emit('broadcast', { event, data });
+const broadcast = async (event, data) => {
+  await emit('broadcast', { event, data });
 };
 
 module.exports = {

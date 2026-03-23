@@ -42,6 +42,7 @@ exports.createCheckoutSession = async (req, res) => {
       amountInKobo,
       callbackUrl,
       metadata,
+      null, // reference
       paystackPlan,
     );
 
@@ -191,6 +192,7 @@ exports.createAdCheckoutSession = async (req, res) => {
       amountInKobo,
       callbackUrl,
       metadata,
+      null, // reference
     );
 
     res.json({ url: transaction.authorization_url });

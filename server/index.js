@@ -50,7 +50,7 @@ setInterval(async () => {
   try {
     const stats = await analyticsService.getRealtimeStats();
     if (stats) {
-      realtime.broadcast("stats_updated", stats);
+      await realtime.broadcast("stats_updated", stats);
     }
   } catch (err) {
     console.error("[Trends] Interval broadcast failed:", err.message);
@@ -77,7 +77,7 @@ setInterval(async () => {
 setInterval(async () => {
   try {
     const rates = await fxService.getAllRates();
-    realtime.broadcast("rates_updated", rates);
+    await realtime.broadcast("rates_updated", rates);
   } catch (err) {
     logger.error(`[Rates Broadcast] Error: ${err.message}`);
   }
