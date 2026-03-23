@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useNotifications } from '../../hooks/useNotifications';
 import { cn } from '../../utils/cn';
-import { formatDistanceToNow } from 'date-fns';
+import { safeFormatDistanceToNow } from '../../utils/dateUtils';
 import { Link } from 'react-router-dom';
 
 export const NotificationBell = () => {
@@ -96,7 +96,7 @@ export const NotificationBell = () => {
             </button>
 
             {isOpen && (
-                <div className="fixed sm:absolute left-4 right-4 sm:left-auto sm:right-0 top-16 sm:top-full mt-2 w-auto sm:w-80 md:w-96 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl z-[100] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="fixed sm:absolute left-4 right-4 sm:left-auto sm:right-0 top-[72px] sm:top-full mt-2 w-auto sm:w-80 md:w-96 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl z-[2000] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                     <div className="p-3 md:p-4 border-b border-white/10 flex items-center justify-between bg-white/5">
                         <h3 className="font-bold text-xs md:text-sm">Notifications</h3>
                         {unreadCount > 0 && (
@@ -149,7 +149,7 @@ export const NotificationBell = () => {
                                                 {notif.title}
                                             </p>
                                             <span className="text-[10px] text-gray-500 whitespace-nowrap">
-                                                {formatDistanceToNow(new Date(notif.created_at), { addSuffix: true })}
+                                                {safeFormatDistanceToNow(notif.created_at)}
                                             </span>
                                         </div>
                                         <p className="text-[11px] md:text-xs text-gray-400 line-clamp-2 leading-relaxed">

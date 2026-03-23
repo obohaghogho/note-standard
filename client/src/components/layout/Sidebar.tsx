@@ -21,6 +21,7 @@ import {
 import { cn } from '../../utils/cn';
 import { Button } from '../common/Button';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../hooks/useNotifications';
 import { AdDisplay } from '../ads/AdDisplay';
 
 // Items will be defined inside component to access translation
@@ -35,6 +36,7 @@ interface SidebarProps {
 export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps) => {
     const { t } = useTranslation();
     const { user, signOut, isPro, isAdmin } = useAuth();
+    const { unreadCount } = useNotifications();
 
     const navItems = [
         { icon: LayoutDashboard, label: t('nav.home'), to: '/dashboard' },
@@ -119,7 +121,12 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
                         )}
                     >
                         <item.icon size={18} />
-                        {item.label}
+                        <span className="flex-1">{item.label}</span>
+                        {item.to === '/dashboard/notifications' && unreadCount > 0 && (
+                            <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                                {unreadCount > 99 ? '99+' : unreadCount}
+                            </span>
+                        )}
                     </NavLink>
                 ))}
 

@@ -1,7 +1,7 @@
 import { Bell, Check, ExternalLink, MessageSquare, StickyNote, UserPlus, Globe, Edit3, Trash2, Heart } from 'lucide-react';
 import { useNotifications } from '../../hooks/useNotifications';
 import { cn } from '../../utils/cn';
-import { formatDistanceToNow } from 'date-fns';
+import { safeFormatDistanceToNow } from '../../utils/dateUtils';
 import { Link } from 'react-router-dom';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
@@ -109,7 +109,7 @@ export const Notifications = () => {
                                             {notif.title}
                                         </h3>
                                         <span className="text-[10px] md:text-xs text-gray-500 whitespace-nowrap">
-                                            {formatDistanceToNow(new Date(notif.created_at), { addSuffix: true })}
+                                            {safeFormatDistanceToNow(notif.created_at)}
                                         </span>
                                     </div>
                                     <p className="text-gray-400 text-sm leading-relaxed break-words">

@@ -20,9 +20,7 @@ export const DashboardLayout = () => {
     const { activeConversationId } = useChat();
     const location = useLocation();
 
-    const searchParams = new URLSearchParams(location.search);
-    const hasChatId = searchParams.get('id');
-    const isChatActiveOnMobile = location.pathname.startsWith('/dashboard/chat') && (activeConversationId || hasChatId);
+    const isChatActiveOnMobile = location.pathname.startsWith('/dashboard/chat') && activeConversationId;
 
     return (
         <div className="min-h-[100dvh] text-white flex relative overflow-hidden w-full max-w-full">
