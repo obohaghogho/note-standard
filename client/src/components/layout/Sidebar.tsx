@@ -54,7 +54,7 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
     ];
 
     const bottomNavItems = [
-        { icon: FileText, label: t('nav.billing'), to: '/dashboard/account' },
+        { icon: FileText, label: t('nav.billing'), to: '/dashboard/billing' },
         { icon: Settings, label: t('common.settings'), to: '/dashboard/settings' },
     ];
 

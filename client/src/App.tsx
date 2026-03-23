@@ -163,7 +163,7 @@ function App() {
                         <Route path="feed" element={<Feed />} />
                         <Route path="favorites" element={<Notes />} />
                         <Route path="search" element={<Search />} />
-                        <Route path="account" element={<Billing />} />
+                        <Route path="billing" element={<Billing />} />
                         <Route path="activity" element={<WalletPage />} />
                         <Route path="history" element={<Transactions />} />
                         <Route path="affiliates" element={<Affiliates />} />
