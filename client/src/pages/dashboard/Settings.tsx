@@ -13,9 +13,10 @@ import { AdManager } from '../../components/ads/AdManager';
 import { adService } from '../../services/ads';
 import { Toggle } from '../../components/common/Toggle';
 import { User, Camera, Save, Loader2, Megaphone, BadgeCheck, Shield, Lock, Download, Trash2, Activity as ActivityIcon, MessageSquare, Globe } from 'lucide-react';
+import { UserBadge } from '../../components/common/UserBadge';
 
 export const Settings = () => {
-    const { user, profile: authProfile, isPro, signOut } = useAuth();
+    const { user, profile: authProfile, isBusiness, signOut } = useAuth();
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
 
@@ -329,9 +330,17 @@ export const Settings = () => {
 
     return (
         <div className="space-y-6 max-w-4xl w-full min-w-0">
-            <div className="space-y-1">
-                <h1 className="text-3xl font-bold">Settings</h1>
-                <p className="text-gray-400">Manage your account settings and preferences</p>
+            <div className="space-y-1 flex justify-between items-start">
+                <div>
+                    <h1 className="text-3xl font-bold">Settings</h1>
+                    <p className="text-gray-400">Manage your account settings and preferences</p>
+                </div>
+                {isBusiness && (
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-full px-4 py-1 flex items-center gap-2">
+                        <UserBadge planTier="business" />
+                        <span className="text-blue-400 text-sm font-bold uppercase tracking-wider">Business Partner</span>
+                    </div>
+                )}
             </div>
 
             <div className="flex items-center gap-4 border-b border-white/5 overflow-x-auto no-scrollbar pb-px -mx-4 px-4 sm:mx-0 sm:px-0 scroll-smooth">
@@ -533,7 +542,7 @@ export const Settings = () => {
                                 <div className="flex-1 min-w-0 break-words">
                                     <h3 className="font-medium text-white flex items-center gap-2">
                                         Profile Picture
-                                        {isPro && <BadgeCheck size={16} className="text-blue-400 fill-blue-400/10" />}
+                                        <UserBadge planTier={authProfile?.plan_tier} isVerified={authProfile?.is_verified} />
                                     </h3>
                                     <p className="text-sm text-gray-400 mb-2">
                                         Click the camera icon to upload a new photo

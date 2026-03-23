@@ -12,6 +12,7 @@ interface AuthContextValue {
   loading: boolean;
   authReady: boolean;
   isPro: boolean;
+  isBusiness: boolean;
   isAdmin: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -39,9 +40,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchLockRef = useRef<string | null>(null);
   const isMounted = useRef(true);
 
-  // Compute isPro based on subscription status
+  // Compute isPro based on subscription status (any paid plan)
   const isPro = useMemo(() => {
-    return subscription?.status === 'active' && subscription?.plan_tier === 'pro';
+    return subscription?.status === 'active' && ['pro', 'team', 'business', 'enterprise'].includes(subscription?.plan_tier as string);
+  }, [subscription]);
+
+  // Compute isBusiness based on subscription status
+  const isBusiness = useMemo(() => {
+    return subscription?.status === 'active' && subscription?.plan_tier === 'business';
   }, [subscription]);
 
   // Compute isAdmin based on profile role
@@ -252,7 +258,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       subscription, 
       loading, 
       authReady, 
-      isPro, 
+      isPro,
+      isBusiness,
       isAdmin, 
       signOut,
       refreshProfile

@@ -15,6 +15,7 @@ export interface Profile {
     [key: string]: any;
   };
   is_verified?: boolean;
+  plan_tier?: 'free' | 'pro' | 'team' | 'business' | 'enterprise';
   updated_at?: string;
 }
 

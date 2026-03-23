@@ -17,6 +17,7 @@ import { MediaPreviewModal } from './MediaPreviewModal';
 
 import { ConfirmationModal } from '../common/ConfirmationModal';
 import { applyAutoCorrect } from '../../utils/textUtils';
+import { UserBadge } from '../common/UserBadge';
 
 const ChatWindow: React.FC = () => {
     const { 
@@ -383,8 +384,9 @@ const ChatWindow: React.FC = () => {
                             if (activeConversation?.type === 'direct') {
                                 otherM = activeConversation.members.find((m: any) => m.user_id !== user?.id);
                                 if (otherM && otherM.profile) {
-                                    displayName = otherM.profile.full_name || otherM.profile.username;
-                                    displayAvatar = otherM.profile.avatar_url;
+                                    const p = otherM.profile as any;
+                                    displayName = p.full_name || p.username;
+                                    displayAvatar = p.avatar_url;
                                 }
                             }
 
@@ -400,7 +402,15 @@ const ChatWindow: React.FC = () => {
                                         )}
                                     </div>
                                     <div className="min-w-0">
-                                        <h2 className="font-semibold truncate max-w-[60px] xs:max-w-[100px] sm:max-w-[150px] md:max-w-[300px] text-[10px] xs:text-xs md:text-base">{displayName || 'Chat'}</h2>
+                                        <h2 className="font-semibold truncate max-w-[60px] xs:max-w-[100px] sm:max-w-[150px] md:max-w-[300px] text-[10px] xs:text-xs md:text-base flex items-center gap-1">
+                                            {displayName || 'Chat'}
+                                            {activeConversation?.type === 'direct' && otherM && (
+                                                <UserBadge 
+                                                    planTier={(otherM as any).profile?.plan_tier}
+                                                    isVerified={(otherM as any).profile?.is_verified}
+                                                />
+                                            )}
+                                        </h2>
                                         {activeConversation?.type === 'direct' && otherM ? (
                                             isUserOnline(otherM.user_id) ? (
                                                 <p className="text-[8px] xs:text-[10px] text-green-400 hidden sm:flex items-center gap-1">

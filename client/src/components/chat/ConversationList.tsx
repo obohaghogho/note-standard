@@ -4,6 +4,7 @@ import { Check, CheckCheck } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { usePresence } from '../../context/PresenceContext';
 import SecureImage from '../common/SecureImage';
+import { UserBadge } from '../common/UserBadge';
 
 const ConversationList: React.FC = () => {
     const { conversations, activeConversationId, setActiveConversationId, loading } = useChat();
@@ -26,10 +27,11 @@ const ConversationList: React.FC = () => {
                 let isOnline = false;
                 
                 if (conv.type === 'direct') {
-                    const otherMember = conv.members.find((m: { user_id: string; profile?: any }) => m.user_id !== user?.id);
+                    const otherMember = conv.members.find((m: any) => m.user_id !== user?.id);
                     if (otherMember && otherMember.profile) {
-                        displayName = otherMember.profile.full_name || otherMember.profile.username || 'Unknown User';
-                        displayAvatar = otherMember.profile.avatar_url;
+                        const profile = otherMember.profile;
+                        displayName = profile.full_name || profile.username || 'Unknown User';
+                        displayAvatar = profile.avatar_url;
                         isOnline = isUserOnline(otherMember.user_id);
                     }
                 }
@@ -64,8 +66,14 @@ const ConversationList: React.FC = () => {
                         {/* Text Info */}
                         <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-baseline mb-1">
-                                <h3 className={`text-sm font-semibold truncate ${unreadCount > 0 ? 'text-white' : 'text-gray-300'}`}>
+                                <h3 className={`text-sm font-semibold truncate flex items-center gap-1 ${unreadCount > 0 ? 'text-white' : 'text-gray-300'}`}>
                                     {displayName || 'Untitled Chat'}
+                                    {conv.type === 'direct' && (
+                                        <UserBadge 
+                                            planTier={(conv.members as any).find((m: any) => m.user_id !== user?.id)?.profile?.plan_tier}
+                                            isVerified={(conv.members as any).find((m: any) => m.user_id !== user?.id)?.profile?.is_verified}
+                                        />
+                                    )}
                                 </h3>
                                 <span className="text-[10px] text-gray-500 font-medium">
                                     {conv.updated_at ? formatDistanceToNow(new Date(conv.updated_at), { addSuffix: false }).replace('about ', '') : ''}

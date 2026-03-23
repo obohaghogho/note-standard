@@ -808,10 +808,13 @@ class PaymentService {
             .single();
 
           const newPlan = metadata.plan || "PRO";
-          if (profile?.plan !== newPlan) {
+          if (profile?.plan_tier !== newPlan.toLowerCase()) {
             await supabase
               .from("profiles")
-              .update({ plan: newPlan })
+              .update({ 
+                plan: newPlan, // Keeping for backward compatibility if needed
+                plan_tier: newPlan.toLowerCase() 
+              })
               .eq("id", tx.user_id);
 
             // Record in subscription_transactions if possible

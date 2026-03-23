@@ -81,15 +81,31 @@ exports.syncSubscription = async (req, res) => {
     const { reference } = req.body;
     const userId = req.user.id;
 
+    console.log(`[Sync] Starting sync for user ${userId}, reference: ${reference}`);
+
     if (!reference) {
       return res.status(400).json({ error: "Reference required" });
     }
 
     const transaction = await paystackService.verifyTransaction(reference);
+    console.log(`[Sync] Transaction verified: status=${transaction.status}`);
 
     if (transaction.status === "success") {
-      const { exchangeRate, plan } = transaction.metadata || {};
+      // Paystack metadata might be a string if not automatically parsed by axios
+      let metadata = transaction.metadata;
+      if (typeof metadata === 'string') {
+        try {
+          metadata = JSON.parse(metadata);
+        } catch (e) {
+          console.error("[Sync] Failed to parse metadata string:", e);
+          metadata = {};
+        }
+      }
+      
+      const { exchangeRate, plan } = metadata || {};
       const chargedAmountNgn = transaction.amount / 100; // Convert kobo to NGN
+
+      console.log(`[Sync] Plan: ${plan}, Exchange Rate: ${exchangeRate}, Amount NGN: ${chargedAmountNgn}`);
 
       // 3. Upsert subscription manually (Check then Update/Insert)
 
@@ -100,7 +116,10 @@ exports.syncSubscription = async (req, res) => {
         .eq("user_id", userId)
         .maybeSingle();
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error("[Sync] Error fetching existing subscription:", fetchError);
+        throw fetchError;
+      }
 
       const subscriptionData = {
         paystack_customer_code: transaction.customer.customer_code,
@@ -112,12 +131,15 @@ exports.syncSubscription = async (req, res) => {
         plan_type: plan ? plan.toUpperCase() : "PRO",
         status: "active",
         charged_amount_ngn: chargedAmountNgn,
-        exchange_rate: exchangeRate,
+        exchange_rate: exchangeRate || 0, // Fallback to 0 if missing
       };
+
+      console.log("[Sync] Upserting subscription data:", JSON.stringify(subscriptionData, null, 2));
 
       let opError;
       if (existing) {
         // Update existing
+        console.log(`[Sync] Updating existing subscription ${existing.id}`);
         const { error: updateError } = await supabase
           .from("subscriptions")
           .update(subscriptionData)
@@ -125,6 +147,7 @@ exports.syncSubscription = async (req, res) => {
         opError = updateError;
       } else {
         // Insert new
+        console.log("[Sync] Creating new subscription");
         const { error: insertError } = await supabase
           .from("subscriptions")
           .insert({
@@ -134,15 +157,32 @@ exports.syncSubscription = async (req, res) => {
         opError = insertError;
       }
 
-      if (opError) throw opError;
+      if (opError) {
+        console.error("[Sync] Database operation error:", opError);
+        throw opError;
+      }
+
+      console.log("[Sync] Sync successful");
+
+      // SYNC TO PROFILES TABLE
+      try {
+        await supabase
+          .from("profiles")
+          .update({ plan_tier: plan || "pro" })
+          .eq("id", userId);
+        console.log(`[Sync] Updated profiles.plan_tier to ${plan || "pro"} for user ${userId}`);
+      } catch (profErr) {
+        console.error("[Sync] Failed to update profiles.plan_tier:", profErr);
+      }
 
       res.json({ success: true });
     } else {
+      console.log(`[Sync] Transaction not successful. Status: ${transaction.status}`);
       res.json({ success: false, message: "Payment not successful" });
     }
   } catch (error) {
     console.error("Error syncing subscription:", error);
-    res.status(500).json({ error: "Sync failed" });
+    res.status(500).json({ error: "Sync failed", details: error.message });
   }
 };
 
@@ -262,6 +302,12 @@ exports.cancelSubscription = async (req, res) => {
       .from("subscriptions")
       .update({ status: "canceled" })
       .eq("user_id", userId);
+
+    // SYNC TO PROFILES TABLE
+    await supabase
+      .from("profiles")
+      .update({ plan_tier: "free" })
+      .eq("id", userId);
 
     res.json({ success: true });
   } catch (error) {

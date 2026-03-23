@@ -27,7 +27,9 @@ exports.getConversations = async (req, res) => {
                         profile:profiles (
                             username,
                             full_name,
-                            avatar_url
+                            avatar_url,
+                            is_verified,
+                            plan_tier
                         )
                     )
                 )
