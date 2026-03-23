@@ -8,6 +8,7 @@ import { toast } from 'react-hot-toast';
 import { supabase } from '../../lib/supabase';
 import { supabaseSafe } from '../../lib/supabaseSafe';
 import { useAuth } from '../../context/AuthContext';
+import { formatCurrency, detectLocalCurrency } from '../../lib/CurrencyFormatter';
 
 // Removed local Subscription interface as it is now provided by useAuth
 
@@ -17,7 +18,8 @@ export const Billing = () => {
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
     const [showDetails, setShowDetails] = useState(false);
-    const [paymentMethod, setPaymentMethod] = useState<'paystack' | 'fincra'>('paystack');
+    const [paymentMethod, setPaymentMethod] = useState<'paystack' | 'fincra' | 'auto'>('auto');
+    const [currency, setCurrency] = useState<string>(detectLocalCurrency());
 
     const fetchingRef = useRef(false);
     const isMounted = useRef(true);
@@ -32,7 +34,8 @@ export const Billing = () => {
         
         if (reference) {
             const method = (searchParams.get('method') as 'paystack' | 'fincra') || 'paystack';
-            syncSubscription(reference, method);
+            const cur = searchParams.get('currency') || 'NGN';
+            syncSubscription(reference, method, cur);
         }
         
         return () => { isMounted.current = false; };
@@ -71,7 +74,7 @@ export const Billing = () => {
         }
     };
 
-    const syncSubscription = async (reference: string, method: string = 'paystack') => {
+    const syncSubscription = async (reference: string, method: string = 'paystack', cur: string = 'NGN') => {
         setProcessing(true);
         try {
             const { data } = await supabase.auth.getSession();
@@ -83,7 +86,7 @@ export const Billing = () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${resolvedToken}`
                 },
-                body: JSON.stringify({ reference, method })
+                body: JSON.stringify({ reference, method, currency: cur })
             });
 
             const dataRes = await response.json();
@@ -115,7 +118,11 @@ export const Billing = () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${resolvedToken}`
                 },
-                body: JSON.stringify({ planType, paymentMethod })
+                body: JSON.stringify({ 
+                    planType, 
+                    paymentMethod: paymentMethod === 'auto' ? null : paymentMethod,
+                    currency 
+                })
             });
 
             const dataRes = await response.json();
@@ -182,38 +189,53 @@ export const Billing = () => {
                 <p className="text-gray-400">Manage your subscription and billing details</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-md">
-                <button
-                    onClick={() => setPaymentMethod('paystack')}
-                    className={`p-4 rounded-xl border-2 transition-all flex items-center justify-between ${paymentMethod === 'paystack' ? 'border-primary bg-primary/10' : 'border-white/5 bg-white/5 hover:border-white/20'}`}
-                >
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400">
-                            <CreditCard size={20} />
-                        </div>
-                        <div className="text-left">
-                            <p className="font-bold">Paystack</p>
-                            <p className="text-xs text-gray-400">Cards, Transfer, USSD</p>
-                        </div>
+            <div className="flex flex-col md:flex-row gap-6">
+                <div className="flex-1 space-y-4">
+                    <label className="text-sm font-medium text-gray-400">Select Currency</label>
+                    <div className="flex flex-wrap gap-2">
+                        {['USD', 'GBP', 'EUR', 'NGN'].map(cur => (
+                            <button
+                                key={cur}
+                                onClick={() => {
+                                    setCurrency(cur);
+                                    if (cur !== 'NGN' && paymentMethod !== 'auto') setPaymentMethod('auto');
+                                }}
+                                className={`px-4 py-2 rounded-lg border transition-all ${currency === cur ? 'bg-primary border-primary text-white' : 'bg-white/5 border-white/10 text-gray-400 hover:border-white/30'}`}
+                            >
+                                {cur}
+                            </button>
+                        ))}
                     </div>
-                    {paymentMethod === 'paystack' && <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center"><Check size={12} /></div>}
-                </button>
+                </div>
 
-                <button
-                    onClick={() => setPaymentMethod('fincra')}
-                    className={`p-4 rounded-xl border-2 transition-all flex items-center justify-between ${paymentMethod === 'fincra' ? 'border-primary bg-primary/10' : 'border-white/5 bg-white/5 hover:border-white/20'}`}
-                >
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center text-green-400">
-                            <Zap size={20} />
-                        </div>
-                        <div className="text-left">
-                            <p className="font-bold">Fincra</p>
-                            <p className="text-xs text-gray-400">Fast Bank Transfers</p>
+                {currency === 'NGN' && (
+                    <div className="flex-1 space-y-4">
+                        <label className="text-sm font-medium text-gray-400">Payment Provider</label>
+                        <div className="grid grid-cols-2 gap-3">
+                            <button
+                                onClick={() => setPaymentMethod('paystack')}
+                                className={`p-3 rounded-lg border-2 transition-all flex items-center justify-between ${paymentMethod === 'paystack' ? 'border-primary bg-primary/10' : 'border-white/5 bg-white/5 hover:border-white/20'}`}
+                            >
+                                <div className="text-left">
+                                    <p className="font-bold text-sm">Paystack</p>
+                                    <p className="text-[10px] text-gray-400">Card/Transfer</p>
+                                </div>
+                                {paymentMethod === 'paystack' && <Check size={12} className="text-primary" />}
+                            </button>
+
+                            <button
+                                onClick={() => setPaymentMethod('fincra')}
+                                className={`p-3 rounded-lg border-2 transition-all flex items-center justify-between ${paymentMethod === 'fincra' ? 'border-primary bg-primary/10' : 'border-white/5 bg-white/5 hover:border-white/20'}`}
+                            >
+                                <div className="text-left">
+                                    <p className="font-bold text-sm">Fincra</p>
+                                    <p className="text-[10px] text-gray-400">Fast Bank Transfer</p>
+                                </div>
+                                {paymentMethod === 'fincra' && <Check size={12} className="text-primary" />}
+                            </button>
                         </div>
                     </div>
-                    {paymentMethod === 'fincra' && <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center"><Check size={12} /></div>}
-                </button>
+                )}
             </div>
 
             {processing && (
@@ -273,10 +295,10 @@ export const Billing = () => {
                             Pro Plan <Zap size={18} className="text-yellow-400 fill-yellow-400" />
                         </h3>
                         <div className="mb-4">
-                            <div className="text-3xl font-bold">$9.99 <span className="text-sm font-normal text-gray-400">/ month</span></div>
-                            {exchangeRate && (
+                            <div className="text-3xl font-bold">{formatCurrency(9.99, currency)} <span className="text-sm font-normal text-gray-400">/ month</span></div>
+                            {currency === 'NGN' && exchangeRate && (
                                 <div className="text-sm text-gray-400 mt-1">
-                                    Approx. {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(9.99 * exchangeRate)}
+                                    Approx. {formatCurrency(9.99 * exchangeRate, 'NGN')}
                                 </div>
                             )}
                         </div>
@@ -326,8 +348,8 @@ export const Billing = () => {
                             Business <BadgeCheck size={18} className="text-blue-400" />
                         </h3>
                         <div className="mb-4">
-                            <div className="text-3xl font-bold">$29.99 <span className="text-sm font-normal text-gray-400">/ month</span></div>
-                            {exchangeRate && (
+                            <div className="text-3xl font-bold">{formatCurrency(29.99, currency)} <span className="text-sm font-normal text-gray-400">/ month</span></div>
+                            {currency === 'NGN' && exchangeRate && (
                                 <div className="text-sm text-gray-400 mt-1">
                                     Approx. {formatCurrency(29.99 * exchangeRate, 'NGN')}
                                 </div>

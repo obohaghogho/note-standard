@@ -4,56 +4,76 @@ exports.createCheckoutSession = async (req, res) => {
   try {
     const userId = req.user.id;
     const { email } = req.user;
-    const { planType = "PRO", paymentMethod = "paystack" } = req.body;
+    const { 
+      planType = "PRO", 
+      paymentMethod = null, // Optional, can be null for auto-selection
+      currency = "NGN" 
+    } = req.body;
 
-    let usdAmount = 9.99;
-    if (planType.toUpperCase() === "BUSINESS") {
-      usdAmount = 29.99;
+    const upCurrency = currency.toUpperCase();
+    let usdAmount = planType.toUpperCase() === "BUSINESS" ? 29.99 : 9.99;
+    let finalAmount = usdAmount;
+    let exchangeRate = 1;
+
+    // 1. Handle Currency Conversion if needed
+    if (upCurrency === "NGN") {
+      const conversion = await fxService.convert(usdAmount, "USD", "NGN", true);
+      finalAmount = conversion.amount;
+      exchangeRate = conversion.rate;
+    } else if (upCurrency !== "USD") {
+      // For GBP, EUR etc., convert from USD
+      const conversion = await fxService.convert(usdAmount, "USD", upCurrency, true);
+      finalAmount = conversion.amount;
+      exchangeRate = conversion.rate;
     }
 
-    const { amount: ngnAmount, rate } = await fxService.convert(
-      usdAmount,
-      "USD",
-      "NGN",
-      true,
-    );
-
-    // Metadata for the transaction
+    // 2. Metadata for the transaction
     const metadata = {
       userId,
       email,
       type: "subscription",
       plan: planType.toLowerCase(),
       usdAmount,
-      exchangeRate: rate,
+      targetAmount: finalAmount,
+      targetCurrency: upCurrency,
+      exchangeRate: exchangeRate,
     };
 
     const callbackUrl = `${
       process.env.CLIENT_URL || "https://notestandard.com"
-    }/dashboard/billing?payment_callback=true&method=${paymentMethod}`;
+    }/dashboard/billing?payment_callback=true&method=${paymentMethod || 'auto'}&currency=${upCurrency}`;
 
-    const provider = PaymentFactory.getProviderByName(paymentMethod);
+    // 3. Provider Selection
+    const provider = paymentMethod 
+      ? PaymentFactory.getProviderByName(paymentMethod)
+      : PaymentFactory.getProvider(upCurrency);
     
-    // Paystack specific plan logic
-    const paystackPlan = planType.toUpperCase() === "BUSINESS" 
-      ? process.env.PAYSTACK_PLAN_BUSINESS 
-      : process.env.PAYSTACK_PLAN_PRO;
+    const usedMethod = paymentMethod || provider.constructor.name.replace("Provider", "").toLowerCase();
+
+    // 4. Provider Specific Logic (e.g. Paystack Plans)
+    let providerPlan = null;
+    if (usedMethod === 'paystack' && upCurrency === 'NGN') {
+      providerPlan = planType.toUpperCase() === "BUSINESS" 
+        ? process.env.PAYSTACK_PLAN_BUSINESS 
+        : process.env.PAYSTACK_PLAN_PRO;
+    }
 
     const checkoutData = {
       email,
-      amount: ngnAmount, // Most providers expect units (Fincra) or we handle kobo in provider (Paystack)
-      currency: "NGN",
+      amount: finalAmount,
+      currency: upCurrency,
       callbackUrl,
       metadata,
-      plan: paymentMethod === 'paystack' ? paystackPlan : null
+      plan: providerPlan
     };
 
-    // PaystackProvider.initialize handles amount in kobo internally if needed 
-    // but PaystackProvider usually expects amount in Units if it follows BaseProvider
-    // Let's check PaystackProvider.js
     const result = await provider.initialize(checkoutData);
 
-    res.json({ url: result.checkoutUrl || result.url });
+    res.json({ 
+      url: result.checkoutUrl || result.url,
+      method: usedMethod,
+      currency: upCurrency
+    });
   } catch (error) {
     console.error("Error creating subscription checkout:", error);
     res.status(500).json({ error: "Failed to create checkout session" });
