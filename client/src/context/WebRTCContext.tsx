@@ -93,16 +93,17 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         function createPeer(suffix?: string) {
             if (destroyed) return;
 
-            const peerId = makePeerId(user!.id, suffix);
+            const peerId = makePeerId(user!.id, suffix || Math.random().toString(36).substring(7));
             let reconnectAttempts = 0;
 
             const peerConfig = import.meta.env.DEV 
                 ? { host: 'localhost', port: 9000, path: '/peerjs', secure: false }
-                : {}; // Emtpy object uses PeerJS public cloud for signaling
+                : {}; 
 
             const peer = new Peer(peerId, {
                 ...peerConfig,
                 debug: import.meta.env.DEV ? 2 : 0,
+                pingInterval: 3000, // Heartbeat every 3s to keep signaling alive
                 config: {
                     iceServers: [
                         { urls: 'stun:stun.l.google.com:19302' },
@@ -126,9 +127,11 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             peer.on('error', (err: any) => {
                 if (err.type === 'unavailable-id') {
                     console.warn('[PeerJS] ID taken — retrying…');
-                    peer.destroy();
+                    if (peerRef.current && !peerRef.current.destroyed) {
+                        peerRef.current.destroy();
+                    }
                     peerRef.current = null;
-                    setTimeout(() => createPeer(Date.now().toString(36)), 500);
+                    setTimeout(() => createPeer(Date.now().toString(36)), 800);
                     return;
                 }
                 if (err.type === 'network' || err.type === 'server-error') {

@@ -1,6 +1,7 @@
 const PaymentFactory = require("../services/payment/PaymentFactory");
 const fxService = require("../services/fxService");
 const supabase = require("../config/database");
+const { v4: uuidv4 } = require("uuid");
 
 exports.createCheckoutSession = async (req, res) => {
   try {
@@ -17,44 +18,47 @@ exports.createCheckoutSession = async (req, res) => {
     let finalAmount = usdAmount;
     let exchangeRate = 1;
 
-    // 1. Handle Currency Conversion if needed
-    if (upCurrency === "NGN") {
-      const conversion = await fxService.convert(usdAmount, "USD", "NGN", true);
-      finalAmount = conversion.amount;
-      exchangeRate = conversion.rate;
-    } else if (upCurrency !== "USD") {
-      // For GBP, EUR etc., convert from USD
-      const conversion = await fxService.convert(usdAmount, "USD", upCurrency, true);
-      finalAmount = conversion.amount;
-      exchangeRate = conversion.rate;
-    }
+    // 1. Fetch User Profile for Name
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", userId)
+      .single();
 
-    // 2. Metadata for the transaction
+    const customerName = profile?.full_name || email.split("@")[0] || "Standard User";
+    const reference = uuidv4();
+
+    // 2. Handle Currency Conversion
+    let processedCurrency = "NGN"; // Force Paystack NGN internally
+    const conversion = await fxService.convert(usdAmount, "USD", "NGN", true);
+    finalAmount = conversion.amount;
+    exchangeRate = conversion.rate;
+
+    // 3. Metadata for the transaction
     const metadata = {
       userId,
       email,
+      customerName,
       type: "subscription",
       plan: planType.toLowerCase(),
       usdAmount,
       targetAmount: finalAmount,
-      targetCurrency: upCurrency,
+      targetCurrency: processedCurrency, 
+      displayCurrency: upCurrency, // What the user chose
       exchangeRate: exchangeRate,
+      reference: reference, // Store our internal ref in metadata too
     };
 
-    const callbackUrl = `${
+    let callbackUrl = `${
       process.env.CLIENT_URL || "https://notestandard.com"
-    }/dashboard/billing?payment_callback=true&method=${paymentMethod || 'auto'}&currency=${upCurrency}`;
+    }/dashboard/billing?payment_callback=true&method=paystack&currency=${upCurrency}&reference=${reference}`;
 
-    // 3. Provider Selection
-    const provider = paymentMethod 
-      ? PaymentFactory.getProviderByName(paymentMethod)
-      : PaymentFactory.getProvider(upCurrency);
-    
-    const usedMethod = paymentMethod || provider.constructor.name.replace("Provider", "").toLowerCase();
+    const provider = PaymentFactory.getProviderByName("paystack");
+    const usedMethod = "paystack";
 
-    // 4. Provider Specific Logic (e.g. Paystack Plans)
+    // 5. Provider Specific Logic (e.g. Paystack Plans)
     let providerPlan = null;
-    if (usedMethod === 'paystack' && upCurrency === 'NGN') {
+    if (usedMethod === 'paystack') {
       providerPlan = planType.toUpperCase() === "BUSINESS" 
         ? process.env.PAYSTACK_PLAN_BUSINESS 
         : process.env.PAYSTACK_PLAN_PRO;
@@ -62,8 +66,10 @@ exports.createCheckoutSession = async (req, res) => {
 
     const checkoutData = {
       email,
+      name: customerName,
       amount: finalAmount,
-      currency: upCurrency,
+      currency: processedCurrency,
+      reference: reference,
       callbackUrl,
       metadata,
       plan: providerPlan
@@ -78,6 +84,8 @@ exports.createCheckoutSession = async (req, res) => {
     });
   } catch (error) {
     console.error("Error creating subscription checkout:", error);
+    console.error(error.stack);
+    require("fs").writeFileSync("err_stack.txt", error.stack);
     res.status(500).json({ error: "Failed to create checkout session" });
   }
 };

@@ -2,9 +2,6 @@ const path = require("path");
 const PaystackProvider = require(
   path.join(__dirname, "providers", "PaystackProvider"),
 );
-const FlutterwaveProvider = require(
-  path.join(__dirname, "providers", "FlutterwaveProvider"),
-);
 const FincraProvider = require(
   path.join(__dirname, "providers", "FincraProvider"),
 );
@@ -70,20 +67,11 @@ class PaymentFactory {
         "XOF",
         "EGP",
         "CAD",
+        "USD",
       ].includes(upCurrency)
     ) {
-      return new FlutterwaveProvider();
-    }
-
-    if (upCurrency === "USD") {
-      // Prefer Fincra for USD if secret key is provided
-      if (
-        process.env.FINCRA_SECRET_KEY &&
-        process.env.FINCRA_SECRET_KEY !== "your_fincra_secret_key"
-      ) {
-        return new FincraProvider();
-      }
-      return new FlutterwaveProvider();
+      // Use Fincra for all cross-border fiat since Paystack test account rejects them
+      return new FincraProvider();
     }
 
     // 3. Fallback for other cross-border flows
@@ -99,8 +87,6 @@ class PaymentFactory {
     switch (name.toLowerCase()) {
       case "paystack":
         return new PaystackProvider();
-      case "flutterwave":
-        return new FlutterwaveProvider();
       case "fincra":
         return new FincraProvider();
       case "nowpayments":

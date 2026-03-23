@@ -33,7 +33,12 @@ class FincraProvider extends BaseProvider {
 
     // Safety checks to prevent 500s from undefined properties
     const safeEmail = email || metadata.email || "user@notestandard.com";
-    const safeName = name || metadata.customerName || (safeEmail ? safeEmail.split("@")[0] : "Standard User") || "Standard User";
+    let safeName = name || metadata.customerName || (safeEmail ? safeEmail.split("@")[0] : "Standard User") || "Standard User";
+    
+    // Fincra explicitly requires a 'full name' (first and last name separated by space)
+    if (!safeName.includes(" ")) {
+      safeName = `${safeName} User`;
+    }
 
     try {
       // Fincra API uses standard unit (e.g. 20 for 20 USD), unlike Paystack which uses cents

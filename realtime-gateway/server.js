@@ -97,6 +97,9 @@ const peerServer = ExpressPeerServer(peerHttp, {
   debug: true,
   path: '/',
   allow_discovery: false,
+  proxied: true, // Internal/Dev proxies
+  cleanup_out_msgs: 1000, // Faster cleanup of dead messages
+  generateClientId: () => `ns_${Math.random().toString(36).substr(2, 9)}`, // Fallback for clients without IDs
 });
 
 peerApp.use('/peerjs', peerServer);
