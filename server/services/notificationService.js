@@ -129,22 +129,29 @@ const broadcastNotification = async ({
 
     if (profileError) throw profileError;
 
-    // 2. Persist to Database for everyone
-    const notificationsPayload = profiles.map((p) => ({
-      receiver_id: p.id,
-      sender_id: senderId,
-      type,
-      title,
-      message,
-      link,
-      is_read: false,
-    }));
+    // 2. Persist to Database for everyone in safe chunks to avoid payload limits
+    const chunkSize = 500;
+    for (let i = 0; i < profiles.length; i += chunkSize) {
+      const chunk = profiles.slice(i, i + chunkSize);
+      const notificationsPayload = chunk.map((p) => ({
+        receiver_id: p.id,
+        sender_id: senderId,
+        type,
+        title,
+        message,
+        link,
+        is_read: false,
+      }));
 
-    const { error } = await supabase
-      .from("notifications")
-      .insert(notificationsPayload);
+      const { error } = await supabase
+        .from("notifications")
+        .insert(notificationsPayload);
 
-    if (error) throw error;
+      if (error) {
+        console.error("Batch insert error:", error);
+        // Continue processing other chunks even if one fails
+      }
+    }
 
     // 3. Real-time Delivery via Gateway Broadcast
     await realtime.broadcast("notification", {
@@ -157,8 +164,7 @@ const broadcastNotification = async ({
       is_read: false,
     });
 
-    // 4. Send Push Notifications to everyone (This could be throttled for production)
-    // For now, we'll do it for each profile
+    // 4. Send Push Notifications to everyone in safe chunks
     const pushPayload = JSON.stringify({
       title,
       body: message,
@@ -171,10 +177,15 @@ const broadcastNotification = async ({
       .from("push_subscriptions")
       .select("subscription");
 
-    if (allSubscriptions) {
-      allSubscriptions.map((sub) =>
-        webpush.sendNotification(sub.subscription, pushPayload).catch(() => {})
-      );
+    if (allSubscriptions && allSubscriptions.length > 0) {
+      for (let i = 0; i < allSubscriptions.length; i += chunkSize) {
+        const subChunk = allSubscriptions.slice(i, i + chunkSize);
+        await Promise.all(
+          subChunk.map((sub) =>
+            webpush.sendNotification(sub.subscription, pushPayload).catch(() => {})
+          )
+        );
+      }
     }
 
     return true;
