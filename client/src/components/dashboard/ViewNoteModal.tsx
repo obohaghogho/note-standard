@@ -1,6 +1,7 @@
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
-import { X, Edit2, Share2, Calendar, Lock, Globe } from 'lucide-react';
+import { X, Edit2, Share2, Calendar, Lock, Globe, User } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 interface Note {
     id: string;
@@ -8,19 +9,28 @@ interface Note {
     content: string;
     tags: string[];
     created_at: string;
+    owner_id?: string;
     is_private?: boolean;
+    owner?: {
+        username?: string;
+        email?: string;
+    };
 }
 
 interface ViewNoteModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onEdit: () => void;
-    onShare: () => void;
+    onEdit?: () => void;
+    onShare?: () => void;
     note: Note | null;
 }
 
 export const ViewNoteModal = ({ isOpen, onClose, onEdit, onShare, note }: ViewNoteModalProps) => {
+    const { user } = useAuth();
     if (!isOpen || !note) return null;
+
+    const isOwner = user?.id === note.owner_id;
+    const canEdit = isOwner; // We don't have explicit permission column on the note object yet, default to owner-only for now
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -45,6 +55,12 @@ export const ViewNoteModal = ({ isOpen, onClose, onEdit, onShare, note }: ViewNo
                                 }`}>
                                     {note.is_private ? 'Private' : 'Public'}
                                 </span>
+                                {!isOwner && note.owner && (
+                                    <span className="flex items-center gap-1 text-xs text-primary/80 ml-2">
+                                        <User size={12} />
+                                        Shared by {note.owner.username || note.owner.email || 'Someone'}
+                                    </span>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -75,18 +91,24 @@ export const ViewNoteModal = ({ isOpen, onClose, onEdit, onShare, note }: ViewNo
 
                 {/* Footer */}
                 <div className="p-4 border-t border-white/10 flex justify-between items-center bg-white/[0.02]">
-                    <Button variant="ghost" className="text-gray-400 hover:text-white" onClick={onShare}>
-                        <Share2 size={18} className="mr-2" />
-                        Share
-                    </Button>
+                    <div>
+                        {isOwner && onShare && (
+                            <Button variant="ghost" className="text-gray-400 hover:text-white" onClick={onShare}>
+                                <Share2 size={18} className="mr-2" />
+                                Share
+                            </Button>
+                        )}
+                    </div>
                     <div className="flex gap-3">
                         <Button variant="ghost" onClick={onClose}>
                             Close
                         </Button>
-                        <Button onClick={onEdit}>
-                            <Edit2 size={18} className="mr-2" />
-                            Edit Note
-                        </Button>
+                        {canEdit && onEdit && (
+                            <Button onClick={onEdit}>
+                                <Edit2 size={18} className="mr-2" />
+                                Edit Note
+                            </Button>
+                        )}
                     </div>
                 </div>
             </Card>

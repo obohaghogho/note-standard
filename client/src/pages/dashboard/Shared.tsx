@@ -5,6 +5,7 @@ import { Search, User } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
+import { ViewNoteModal } from '../../components/dashboard/ViewNoteModal';
 
 interface Note {
     id: string;
@@ -13,6 +14,7 @@ interface Note {
     created_at: string;
     tags: string[];
     owner_id: string;
+    is_private?: boolean;
     owner?: {
         email: string;
         username: string;
@@ -24,31 +26,45 @@ export const Shared = () => {
     const [notes, setNotes] = useState<Note[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [viewingNote, setViewingNote] = useState<Note | null>(null);
 
     useEffect(() => {
         const fetchSharedNotes = async () => {
             if (!user) return;
             try {
-                // Fetch notes where I am NOT the owner
-                // RLS will ensure I only see notes shared with me
-                // We also want to know WHO shared it, so we need to join with profiles manually or fetch owners
-                // Since notes table has owner_id, let's just fetch notes first
-                const query = supabase
-                    .from('notes')
-                    .select('*')
-                    .neq('owner_id', user.id)
-                    .order('updated_at', { ascending: false });
+                // Fetch explicitly shared notes via the shared_notes table
+                // This prevents accidentally querying every single public note on the platform
+                let query = supabase
+                    .from('shared_notes')
+                    .select(`
+                        note:notes!inner(
+                            id,
+                            title,
+                            content,
+                            created_at,
+                            updated_at,
+                            tags,
+                            owner_id,
+                            is_private
+                        )
+                    `)
+                    .neq('notes.owner_id', user.id)
+                    .order('shared_at', { ascending: false });
 
                 if (searchTerm) {
-                    query.ilike('title', `%${searchTerm}%`);
+                    query = query.ilike('notes.title', `%${searchTerm}%`) as any;
                 }
 
-                const { data: notesData, error } = await query;
+                const { data: sharedData, error } = await query;
                 if (error) throw error;
 
-                // Now fetch owner profiles for these notes
-                if (notesData && notesData.length > 0) {
-                    const ownerIds = [...new Set(notesData.map(n => n.owner_id))];
+                if (sharedData && sharedData.length > 0) {
+                    // Extract inner notes and deduplicate (if shared in multiple teams)
+                    const rawNotes = sharedData.map((d: any) => d.note).filter(Boolean);
+                    const uniqueNotes = Array.from(new Map(rawNotes.map(n => [n.id, n])).values());
+
+                    // Fetch profiles of original owners
+                    const ownerIds = [...new Set(uniqueNotes.map(n => n.owner_id))];
                     const { data: profiles } = await supabase
                         .from('profiles')
                         .select('id, email, username')
@@ -56,12 +72,12 @@ export const Shared = () => {
 
                     const profileMap = new Map(profiles?.map(p => [p.id, p]));
 
-                    const notesWithOwners = notesData.map(note => ({
+                    const notesWithOwners = uniqueNotes.map(note => ({
                         ...note,
                         owner: profileMap.get(note.owner_id)
                     }));
 
-                    setNotes(notesWithOwners);
+                    setNotes(notesWithOwners as Note[]);
                 } else {
                     setNotes([]);
                 }
@@ -84,9 +100,14 @@ export const Shared = () => {
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 flex-wrap">
-                <h1 className="text-3xl font-bold">Shared Notes</h1>
+                <div className="space-y-1">
+                    <h1 className="text-3xl font-bold">Shared With Me</h1>
+                    <p className="text-gray-400">Notes shared with you directly or via teams</p>
+                </div>
                 <div className="w-full md:w-64">
                     <Input
+                        id="shared-notes-search"
+                        name="search"
                         icon={Search}
                         placeholder="Search shared notes..."
                         className="bg-[#121212]"
@@ -105,7 +126,12 @@ export const Shared = () => {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {notes?.map((note) => (
-                        <Card key={note.id} hoverEffect className="p-5 cursor-pointer flex flex-col h-[200px] group">
+                        <Card 
+                            key={note.id} 
+                            hoverEffect 
+                            className="p-5 cursor-pointer flex flex-col h-[200px] group transition-all"
+                            onClick={() => setViewingNote(note)}
+                        >
                             <div className="flex items-start justify-between mb-3">
                                 <div className="flex items-center gap-2 text-xs text-primary bg-primary/10 px-2 py-1 rounded-full">
                                     <User size={12} />
@@ -125,6 +151,12 @@ export const Shared = () => {
                     ))}
                 </div>
             )}
+
+            <ViewNoteModal
+                isOpen={!!viewingNote}
+                onClose={() => setViewingNote(null)}
+                note={viewingNote}
+            />
         </div>
     );
 };

@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../../components/common/SecureImage';
+import { ViewNoteModal } from '../../components/dashboard/ViewNoteModal';
 
 interface UserResult {
     id: string;
@@ -20,6 +21,8 @@ interface NoteResult {
     title: string;
     content: string;
     created_at: string;
+    owner_id: string;
+    is_private: boolean;
     owner: {
         username: string;
         avatar_url?: string;
@@ -31,7 +34,6 @@ type TabType = 'all' | 'users' | 'notes';
 export const Search = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
-    // New: Read URL params
     const [searchParams] = useSearchParams();
     const initialQuery = searchParams.get('q') || '';
     
@@ -41,13 +43,14 @@ export const Search = () => {
     const [notes, setNotes] = useState<NoteResult[]>([]);
     const [loading, setLoading] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
+    const [viewingNote, setViewingNote] = useState<NoteResult | null>(null);
 
     // Initial search from URL
     useEffect(() => {
         if (initialQuery) {
             handleSearch(initialQuery);
         }
-    }, []); // Run once on mount
+    }, []);
 
     // Realtime search effect
     useEffect(() => {
@@ -55,7 +58,6 @@ export const Search = () => {
             if (searchTerm.trim()) {
                 handleSearch();
             } else {
-                // Clear results if search is empty
                 setUsers([]);
                 setNotes([]);
                 setHasSearched(false);
@@ -73,39 +75,26 @@ export const Search = () => {
         setHasSearched(true);
 
         try {
-            // Search users
+            // 1. Search users
             const { data: usersData, error: usersError } = await supabase
                 .from('profiles')
                 .select('id, username, email, avatar_url, full_name')
-                // Removed email from search to prevent email scraping
                 .or(`username.ilike.%${queryToUse}%,full_name.ilike.%${queryToUse}%`)
                 .limit(20);
 
             if (usersError) throw usersError;
             setUsers(usersData || []);
 
-            // Search notes (Public OR My Private Notes)
-            // Logic: (is_private = false OR (is_private = true AND owner_id = me))
-            // Supabase syntax: .or(is_private.eq.false,and(is_private.eq.true,owner_id.eq.me))
-            // Simplified: is_private.eq.false, owner_id.eq.me  -- checking simply if I can see it.
-            // But strict query:
-            
-            let notesQuery = supabase
+            // 2. Search notes (Relies on RLS to filter Owner + Public + Shared)
+            const notesQuery = supabase
                 .from('notes')
                 .select(`
-                    id, title, content, created_at,
+                    id, title, content, created_at, owner_id, is_private,
                     owner:profiles!owner_id (username, avatar_url)
                 `)
                 .or(`title.ilike.%${queryToUse}%,content.ilike.%${queryToUse}%`)
                 .order('created_at', { ascending: false })
                 .limit(20);
-
-            if (user) {
-                // Allow public notes OR own notes
-                notesQuery = notesQuery.or(`is_private.eq.false,owner_id.eq.${user.id}`);
-            } else {
-                notesQuery = notesQuery.eq('is_private', false);
-            }
 
             const { data: notesData, error: notesError } = await notesQuery;
 
@@ -114,7 +103,6 @@ export const Search = () => {
 
         } catch (error) {
             console.error('Search error:', error);
-            // toast.error('Search failed'); // Optional: suppress toast on typing
         } finally {
             setLoading(false);
         }
@@ -137,10 +125,9 @@ export const Search = () => {
         <div className="space-y-6 max-w-4xl mx-auto">
             <div className="space-y-1">
                 <h1 className="text-3xl font-bold">Search</h1>
-                <p className="text-gray-400">Find users and public notes</p>
+                <p className="text-gray-400">Find users and accessible notes (yours, public, or shared)</p>
             </div>
 
-            {/* Search Input */}
             <Card variant="glass" className="p-4">
                 <div className="flex gap-3">
                     <div className="flex-1">
@@ -152,7 +139,7 @@ export const Search = () => {
                             onChange={(e) => setSearchTerm(e.target.value)}
                             placeholder="Search for users or notes..."
                             className="bg-white/5"
-                            aria-label="Search for users or public notes"
+                            aria-label="Search for users or accessible notes"
                         />
                     </div>
                     {loading && (
@@ -163,7 +150,6 @@ export const Search = () => {
                 </div>
             </Card>
 
-            {/* Tabs */}
             {hasSearched && (
                 <div className="flex gap-2 border-b border-white/10 pb-2 flex-wrap">
                     {(['all', 'users', 'notes'] as TabType[]).map((tab) => (
@@ -183,14 +169,12 @@ export const Search = () => {
                 </div>
             )}
 
-            {/* Results */}
             {loading ? (
                 <div className="flex items-center justify-center py-20">
                     <Loader2 className="animate-spin text-primary" size={32} />
                 </div>
             ) : hasSearched ? (
                 <div className="space-y-6">
-                    {/* Users Section */}
                     {filteredUsers.length > 0 && (
                         <div>
                             <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
@@ -203,6 +187,7 @@ export const Search = () => {
                                         key={u.id}
                                         hoverEffect
                                         className="p-4 flex items-center gap-3 cursor-pointer"
+                                        onClick={() => navigate(`/dashboard/chat?email=${u.email}`)}
                                     >
                                         {u.avatar_url ? (
                                             <SecureImage
@@ -227,15 +212,17 @@ export const Search = () => {
                                     </Card>
                                 ))}
                             </div>
+                            {filteredUsers.length === 20 && (
+                                <p className="text-xs text-center text-gray-500 mt-2">Showing top 20 users</p>
+                            )}
                         </div>
                     )}
 
-                    {/* Notes Section */}
                     {filteredNotes.length > 0 && (
                         <div>
                             <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
                                 <FileText size={18} className="text-primary" />
-                                Public Notes
+                                Notes
                             </h2>
                             <div className="space-y-3">
                                 {filteredNotes?.map((note) => (
@@ -243,7 +230,7 @@ export const Search = () => {
                                         key={note.id}
                                         hoverEffect
                                         className="p-4 cursor-pointer"
-                                        onClick={() => navigate('/dashboard/feed')}
+                                        onClick={() => setViewingNote(note)}
                                     >
                                         <div className="flex items-start gap-3">
                                             {note.owner?.avatar_url ? (
@@ -266,8 +253,11 @@ export const Search = () => {
                                                     <span className="text-xs text-gray-500">
                                                         {new Date(note.created_at).toLocaleDateString()}
                                                     </span>
+                                                    {!note.is_private && (
+                                                        <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded border border-primary/20">Public</span>
+                                                    )}
                                                 </div>
-                                                <h3 className="font-semibold text-white mb-1">
+                                                <h3 className="font-semibold text-white mb-1 group-hover:text-primary transition-colors">
                                                     {note.title || 'Untitled'}
                                                 </h3>
                                                 <p className="text-sm text-gray-400 line-clamp-2">
@@ -281,7 +271,6 @@ export const Search = () => {
                         </div>
                     )}
 
-                    {/* No Results */}
                     {filteredUsers.length === 0 && filteredNotes.length === 0 && (
                         <div className="text-center py-20">
                             <div className="text-gray-500 mb-2">No results found for "{searchTerm}"</div>
@@ -292,9 +281,15 @@ export const Search = () => {
             ) : (
                 <div className="text-center py-20">
                     <SearchIcon size={48} className="mx-auto text-gray-600 mb-4" />
-                    <div className="text-gray-500">Enter a search term to find users and public notes</div>
+                    <div className="text-gray-500">Enter a search term to find users and notes</div>
                 </div>
             )}
+
+            <ViewNoteModal
+                isOpen={!!viewingNote}
+                onClose={() => setViewingNote(null)}
+                note={viewingNote as any}
+            />
         </div>
     );
 };
