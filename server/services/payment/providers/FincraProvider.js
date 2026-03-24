@@ -116,6 +116,7 @@ class FincraProvider extends BaseProvider {
         currency: currency,
         reference: merchantReference || ref || reference,
         provider: "fincra",
+        metadata: response.data.data?.metadata || {},
         raw: response.data.data,
       };
     } catch (error) {
@@ -246,6 +247,7 @@ class FincraProvider extends BaseProvider {
       amount: data.amountToSettle || data.amount || data.chargeAmount,
       currency: data.currency,
       userId: data.metadata?.userId || data.metadata?.user_id,
+      metadata: data.metadata || {},
       raw: payload,
     };
   }

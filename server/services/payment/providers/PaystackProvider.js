@@ -125,7 +125,8 @@ class PaystackProvider extends BaseProvider {
       const response = await this.client.get(
         `/transaction/verify/${reference}`,
       );
-      const { status, amount, currency, reference: ref } = response.data.data;
+      const data = response.data.data;
+      const { status, amount, currency, reference: ref, metadata } = data;
 
       return {
         success: status === "success",
@@ -134,6 +135,8 @@ class PaystackProvider extends BaseProvider {
         currency: currency,
         reference: ref,
         provider: "paystack",
+        metadata: metadata,
+        raw: data,
       };
     } catch (error) {
       console.error(
@@ -168,12 +171,15 @@ class PaystackProvider extends BaseProvider {
     let status = "pending";
     if (event === "charge.success") status = "success";
     else if (event === "charge.failed") status = "failed";
+    else if (event === "subscription.disable" || event === "subscription.not_renew") status = "cancelled";
 
     let type = (data.metadata?.type === "ad" || data.metadata?.type === "ads")
       ? "AD_PAYMENT"
       : (data.metadata?.type === "subscription"
         ? "SUBSCRIPTION_PAYMENT"
-        : "DEPOSIT");
+        : (event?.startsWith("subscription.") 
+          ? "SUBSCRIPTION_CANCELLATION"
+          : "DEPOSIT"));
 
     return {
       type: type,

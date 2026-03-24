@@ -563,6 +563,29 @@ class PaymentService {
       } else {
         result = { status: "success" };
       }
+    } else if (event.type === "SUBSCRIPTION_CANCELLATION") {
+      // Handle subscription cancellation from provider webhooks
+      const userId = event.userId || body.data?.metadata?.userId;
+      if (userId) {
+        logger.info(`[PaymentService] Processing subscription cancellation for user ${userId}`);
+        try {
+          await supabase
+            .from("subscriptions")
+            .update({ status: "canceled", plan_tier: "free", plan_type: "FREE" })
+            .eq("user_id", userId);
+          await supabase
+            .from("profiles")
+            .update({ plan_tier: "free" })
+            .eq("id", userId);
+          result = { status: "cancelled" };
+        } catch (cancelErr) {
+          logger.error("[PaymentService] Failed to process subscription cancellation", { error: cancelErr.message });
+          result = { error: cancelErr.message };
+        }
+      } else {
+        logger.warn("[PaymentService] SUBSCRIPTION_CANCELLATION received but no userId found in event or metadata");
+        result = { status: "ignored", reason: "no userId" };
+      }
     } else {
       // Default to Deposit Finalization
       if (
@@ -801,23 +824,47 @@ class PaymentService {
       case "SUBSCRIPTION":
         // Handle subscription activation (plan tiers, expiration, etc.)
         try {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("plan")
-            .eq("id", tx.user_id)
-            .single();
-
           const newPlan = metadata.plan || "PRO";
-          if (profile?.plan_tier !== newPlan.toLowerCase()) {
-            await supabase
-              .from("profiles")
-              .update({ 
-                plan: newPlan, // Keeping for backward compatibility if needed
-                plan_tier: newPlan.toLowerCase() 
-              })
-              .eq("id", tx.user_id);
+          const planTier = newPlan.toLowerCase();
+          const now = new Date();
+          const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
-            // Record in subscription_transactions if possible
+          // 1. Upsert subscriptions table (this is what the frontend reads)
+          const { data: existingSub } = await supabase
+            .from("subscriptions")
+            .select("id")
+            .eq("user_id", tx.user_id)
+            .maybeSingle();
+
+          const subData = {
+            plan_tier: planTier,
+            plan_type: newPlan.toUpperCase(),
+            status: "active",
+            start_date: now.toISOString(),
+            end_date: endDate.toISOString(),
+            charged_amount_ngn: tx.amount,
+            exchange_rate: metadata.exchangeRate || 0,
+          };
+
+          if (existingSub) {
+            await supabase
+              .from("subscriptions")
+              .update(subData)
+              .eq("user_id", tx.user_id);
+          } else {
+            await supabase
+              .from("subscriptions")
+              .insert({ user_id: tx.user_id, ...subData });
+          }
+
+          // 2. Sync to profiles table for backward compatibility
+          await supabase
+            .from("profiles")
+            .update({ plan_tier: planTier })
+            .eq("id", tx.user_id);
+
+          // 3. Record in subscription_transactions if table exists
+          try {
             await supabase.from("subscription_transactions").insert({
               user_id: tx.user_id,
               transaction_id: tx.id,
@@ -825,10 +872,16 @@ class PaymentService {
               plan_to: newPlan,
               status: "completed",
             });
+          } catch (stErr) {
+            // Table may not exist, non-critical
+            logger.warn("[PaymentService] subscription_transactions insert failed (non-critical)", { error: stErr.message });
           }
+
+          logger.info(`[PaymentService] Subscription activated for user ${tx.user_id}: plan=${planTier}, ends=${endDate.toISOString()}`);
         } catch (subErr) {
           logger.error("Failed to update user subscription plan", {
             error: subErr.message,
+            stack: subErr.stack,
           });
         }
         break;

@@ -229,13 +229,13 @@ router.post("/", requireAuth, async (req, res) => {
       .eq("user_id", userId)
       .maybeSingle();
 
-    // Allow if plan is pro and status is active
-    const isPro = subscription && subscription.plan_tier === "pro" &&
+    // Allow if plan is a paid tier and status is active
+    const isPaidPlan = subscription && ['pro', 'team', 'business', 'enterprise'].includes(subscription.plan_tier) &&
       subscription.status === "active";
 
-    if (!isPro) {
+    if (!isPaidPlan) {
       return res.status(403).json({
-        error: "Only Pro users can create advertisements.",
+        error: "Only Pro or Business users can create advertisements.",
       });
     }
 

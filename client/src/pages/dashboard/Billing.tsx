@@ -191,7 +191,7 @@ export const Billing = () => {
 
             <div className="flex flex-col md:flex-row gap-6">
                 <div className="flex-1 space-y-4">
-                    <label className="text-sm font-medium text-gray-400">Select Currency</label>
+                    <h3 className="text-sm font-medium text-gray-400">Select Currency</h3>
                     <div className="flex flex-wrap gap-2">
                         {['USD', 'GBP', 'EUR', 'NGN'].map(cur => (
                             <button
@@ -210,7 +210,7 @@ export const Billing = () => {
 
                 {currency === 'NGN' && (
                     <div className="flex-1 space-y-4">
-                        <label className="text-sm font-medium text-gray-400">Payment Provider</label>
+                        <h3 className="text-sm font-medium text-gray-400">Payment Provider</h3>
                         <div className="grid grid-cols-2 gap-3">
                             <button
                                 onClick={() => setPaymentMethod('paystack')}

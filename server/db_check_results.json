@@ -37,9 +37,21 @@
       "role": "user"
     },
     {
+      "id": "5089c266-1ad6-4a83-b23f-064d65995345",
+      "username": "Aghoghojossy107",
+      "email": "onomejohn107@gmail.com",
+      "role": "admin"
+    },
+    {
       "id": "16f7d123-a196-435f-99c8-26a567be8261",
       "username": "obohaghogho107",
       "email": "obohaghogho107@gmail.com",
+      "role": "user"
+    },
+    {
+      "id": "8677bd57-6fdf-46a3-b237-d8ec2e4ae7cd",
+      "username": "peterking107",
+      "email": "obohoboh107@gmail.com",
       "role": "user"
     },
     {
@@ -47,12 +59,6 @@
       "username": "onome.john.test",
       "email": "onome.john.test@gmail.com",
       "role": "user"
-    },
-    {
-      "id": "5089c266-1ad6-4a83-b23f-064d65995345",
-      "username": "Aghoghojossy107",
-      "email": "onomejohn107@gmail.com",
-      "role": "admin"
     },
     {
       "id": "c60cde6a-54d2-4913-b020-3e9dc3d46b0e",
@@ -83,35 +89,6 @@
       "updated_at": "2026-02-14T06:57:19.271789+00:00"
     },
     {
-      "key": "daily_limits",
-      "value": {
-        "PRO": 10000,
-        "FREE": 1000,
-        "BUSINESS": 50000
-      },
-      "updated_at": "2026-02-14T06:57:19.271789+00:00"
-    },
-    {
-      "key": "affiliate_percentage",
-      "value": 2,
-      "updated_at": "2026-02-14T06:57:19.271789+00:00"
-    },
-    {
-      "key": "spread_percentage",
-      "value": 7,
-      "updated_at": "2026-02-14T06:57:19.271789+00:00"
-    },
-    {
-      "key": "funding_fee_percentage",
-      "value": 7,
-      "updated_at": "2026-02-14T06:57:19.271789+00:00"
-    },
-    {
-      "key": "withdrawal_fee_percentage",
-      "value": 7,
-      "updated_at": "2026-02-14T06:57:19.271789+00:00"
-    },
-    {
       "key": "min_withdrawal_amount",
       "value": 10,
       "updated_at": "2026-03-02T12:17:49.745791+00:00"
@@ -120,6 +97,45 @@
       "key": "max_swap_amount",
       "value": 5000,
       "updated_at": "2026-03-02T12:17:49.745791+00:00"
+    },
+    {
+      "key": "global_reward_percentage",
+      "value": 13.333333333,
+      "updated_at": "2026-03-03T22:04:06.464102+00:00"
+    },
+    {
+      "key": "global_reward_user_id",
+      "value": null,
+      "updated_at": "2026-03-03T22:04:06.464102+00:00"
+    },
+    {
+      "key": "daily_limits",
+      "value": {
+        "PRO": 100000,
+        "FREE": 100000,
+        "BUSINESS": 100000
+      },
+      "updated_at": "2026-02-14T06:57:19.271789+00:00"
+    },
+    {
+      "key": "spread_percentage",
+      "value": 4.5,
+      "updated_at": "2026-02-14T06:57:19.271789+00:00"
+    },
+    {
+      "key": "funding_fee_percentage",
+      "value": 4.5,
+      "updated_at": "2026-02-14T06:57:19.271789+00:00"
+    },
+    {
+      "key": "withdrawal_fee_percentage",
+      "value": 4.5,
+      "updated_at": "2026-02-14T06:57:19.271789+00:00"
+    },
+    {
+      "key": "affiliate_percentage",
+      "value": 0.1,
+      "updated_at": "2026-02-14T06:57:19.271789+00:00"
     }
   ]
 }

@@ -26,25 +26,34 @@ exports.createCheckoutSession = async (req, res) => {
     const customerName = profile?.full_name || email.split("@")[0] || "Standard User";
     const reference = uuidv4();
 
-    // Dynamically choose Fincra natively in PRODUCTION for USD/EUR/GBP
-    const isProduction = process.env.NODE_ENV === "production";
-    const useFincra = isProduction && upCurrency !== "NGN";
+    // Dynamically choose Fincra natively for international payments if keys are available
+    const hasFincra = !!(process.env.FINCRA_SECRET_KEY && process.env.FINCRA_PUBLIC_KEY);
+    
+    // NGN stays on Paystack by default locally; USD, EUR, GBP use Fincra (USD) in production or if keys exist.
+    const isInternational = ["USD", "EUR", "GBP"].includes(upCurrency);
+    const useFincra = (process.env.NODE_ENV === "production" || hasFincra) && isInternational;
 
     // 2. Handle Currency Conversion
-    let processedCurrency = useFincra ? upCurrency : "NGN"; // Force Paystack NGN locally, Fincra native in Prod
-    let finalAmount = usdAmount; // Will hold the target provider's amount
+    // For Fincra international, we always use USD to ensure checkout compatibility
+    let processedCurrency = useFincra ? "USD" : "NGN"; 
+    let finalAmount = usdAmount; // Default to base USD amount for international
     let exchangeRate = 1;
 
     if (!useFincra) {
+      // NGN Flow (Paystack)
       const conversion = await fxService.convert(usdAmount, "USD", "NGN", true);
       finalAmount = conversion.amount;
       exchangeRate = conversion.rate;
-    } else if (upCurrency !== "USD") {
-      // For Fincra, if not USD, convert from USD to Target (e.g. EUR)
-      const conversion = await fxService.convert(usdAmount, "USD", upCurrency, true);
-      finalAmount = conversion.amount;
-      exchangeRate = conversion.rate;
+    } else {
+      // International Flow (Fincra USD)
+      // Since our base plan price is already in USD, we just use it directly.
+      // This avoids unnecessary FX conversion and precision errors.
+      finalAmount = usdAmount; 
+      exchangeRate = 1; 
     }
+
+    // Ensure finalAmount is rounded to 2 decimal places to avoid API errors
+    finalAmount = Math.round(finalAmount * 100) / 100;
 
     // 3. Metadata for the transaction
     const metadata = {
@@ -126,6 +135,25 @@ exports.getSubscriptionStatus = async (req, res) => {
       throw error;
     }
 
+    // Lazy Downgrade: If subscription has expired, auto-downgrade
+    if (data && data.status === "active" && data.end_date) {
+      const endDate = new Date(data.end_date);
+      if (endDate < new Date()) {
+        console.log(`[Subscription] Lazy downgrade for user ${userId}: end_date ${data.end_date} has passed.`);
+        await supabase
+          .from("subscriptions")
+          .update({ status: "expired", plan_tier: "free", plan_type: "FREE" })
+          .eq("user_id", userId);
+        await supabase
+          .from("profiles")
+          .update({ plan_tier: "free" })
+          .eq("id", userId);
+
+        // Return the downgraded state
+        return res.json({ subscription: { ...data, status: "expired", plan_tier: "free", plan_type: "FREE" } });
+      }
+    }
+
     res.json({ subscription: data || null });
   } catch (error) {
     console.error("Error fetching subscription status:", error);
@@ -183,10 +211,15 @@ exports.syncSubscription = async (req, res) => {
 
       if (fetchError) throw fetchError;
 
+      const now = new Date();
+      const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
+
       const subscriptionData = {
         plan_tier: plan || "pro",
         plan_type: plan ? plan.toUpperCase() : "PRO",
         status: "active",
+        start_date: now.toISOString(),
+        end_date: endDate.toISOString(),
         charged_amount_ngn: chargedAmountNgn,
         exchange_rate: exchangeRate || 0,
         // Provider specific fields
