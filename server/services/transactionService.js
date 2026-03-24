@@ -9,7 +9,7 @@ class TransactionService {
   /**
    * Get paginated transaction history for a user
    */
-  async getHistory(userId, { page = 1, limit = 20, type = null } = {}) {
+  async getHistory(userId, { page = 1, limit = 20, type = null, currency = null, status = null, search = null } = {}) {
     try {
       const pageNum = parseInt(page) || 1;
       const limitNum = parseInt(limit) || 20;
@@ -19,12 +19,24 @@ class TransactionService {
       let query = supabase
         .from("transactions")
         .select(`*`, { count: "exact" })
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false });
+        .eq("user_id", userId);
 
-      if (type) {
-        query = query.eq("type", type);
+      if (type && type !== 'ALL') query = query.ilike("type", `%${type}%`);
+      
+      if (currency && currency !== 'ALL') {
+          // Check both from_currency and currency for swaps and basic txs
+          query = query.or(`currency.eq.${currency},from_currency.eq.${currency},to_currency.eq.${currency}`);
       }
+      
+      if (status && status !== 'ALL') {
+          query = query.ilike("status", status);
+      }
+      
+      if (search) {
+          query = query.or(`id.ilike.%${search}%,txn_reference.ilike.%${search}%,display_label.ilike.%${search}%`);
+      }
+
+      query = query.order("created_at", { ascending: false });
 
       const { data: txs, error: txError, count: totalCount } = await query
         .range(

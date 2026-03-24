@@ -35,6 +35,7 @@ router.post(
 router.post("/deposit", transactionLimiter, walletController.deposit);
 router.get("/deposit/status", walletController.getDepositStatus);
 router.get("/transactions", transactionController.getHistory);
+router.get("/transactions/:id/receipt", transactionController.downloadReceipt);
 router.post(
   "/transfer",
   transactionLimiter,

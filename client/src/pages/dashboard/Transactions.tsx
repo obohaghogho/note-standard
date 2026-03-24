@@ -134,7 +134,13 @@ export const Transactions: React.FC = () => {
     const fetchTransactions = async (page: number) => {
         setLoading(true);
         try {
-            const data = await walletApi.getTransactions({ page, limit: itemsPerPage });
+            const params: any = { page, limit: itemsPerPage };
+            if (currencyFilter !== 'ALL') params.currency = currencyFilter;
+            if (statusFilter !== 'ALL') params.status = statusFilter;
+            if (typeFilter !== 'ALL') params.type = typeFilter;
+            if (searchTerm) params.search = searchTerm;
+            
+            const data = await walletApi.getTransactions(params);
             setTransactions(data?.transactions || []);
             setTotalCount(data?.pagination?.totalCount || data?.total || 0);
             setHasMore(data?.pagination?.hasMore || false);
@@ -146,48 +152,22 @@ export const Transactions: React.FC = () => {
         }
     };
 
+    // Re-fetch when page or any filter changes
     useEffect(() => {
         fetchTransactions(currentPage);
-    }, [currentPage]);
+    }, [currentPage, currencyFilter, statusFilter, typeFilter, searchTerm]);
 
     const safeTransactions = Array.isArray(transactions) ? transactions : [];
-    const currencies = ['ALL', ...Array.from(new Set(safeTransactions.map(tx => tx.currency || tx.from_currency)))];
+    
+    // Currencies extracted from real data plus common defaults for the dropdown
+    const currencies = ['ALL', 'USD', 'NGN', 'EUR', 'GBP', 'BTC', 'ETH', 'USDT'];
     const statuses = ['ALL', 'COMPLETED', 'PENDING', 'FAILED'];
     const types = ['ALL', 'DEPOSIT', 'WITHDRAWAL', 'TRANSFER', 'SWAP'];
 
     const totalPages = Math.ceil(totalCount / itemsPerPage);
 
-    const safeTransactions_filtered = Array.isArray(transactions) ? transactions : [];
-    const filteredTransactions = safeTransactions_filtered.filter(tx => {
-        // Currency Filter
-        if (currencyFilter !== 'ALL') {
-            const txCurr = tx.currency || tx.from_currency;
-            if (txCurr !== currencyFilter) return false;
-        }
-
-        // Status Filter
-        if (statusFilter !== 'ALL') {
-            if (tx.status.toUpperCase() !== statusFilter.toUpperCase()) return false;
-        }
-
-        // Type Filter
-        if (typeFilter !== 'ALL') {
-            const t = tx.type.toUpperCase();
-            if (!t.includes(typeFilter.toUpperCase())) return false;
-        }
-
-        // Search Term
-        if (searchTerm) {
-            const q = searchTerm.toLowerCase();
-            const matches = 
-                tx.id.toLowerCase().includes(q) || 
-                (tx.txn_reference || '').toLowerCase().includes(q) ||
-                (tx.display_label || '').toLowerCase().includes(q);
-            if (!matches) return false;
-        }
-
-        return true;
-    });
+    // We no longer filter locally, the backend handles it.
+    const filteredTransactions = safeTransactions;
 
     const getStatusStyles = (status: string) => {
         const s = status.toUpperCase();
