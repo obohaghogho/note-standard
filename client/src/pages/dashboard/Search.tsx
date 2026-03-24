@@ -77,7 +77,8 @@ export const Search = () => {
             const { data: usersData, error: usersError } = await supabase
                 .from('profiles')
                 .select('id, username, email, avatar_url, full_name')
-                .or(`username.ilike.%${queryToUse}%,email.ilike.%${queryToUse}%,full_name.ilike.%${queryToUse}%`)
+                // Removed email from search to prevent email scraping
+                .or(`username.ilike.%${queryToUse}%,full_name.ilike.%${queryToUse}%`)
                 .limit(20);
 
             if (usersError) throw usersError;
@@ -123,9 +124,10 @@ export const Search = () => {
     const filteredNotes = activeTab === 'users' ? [] : notes;
 
     const getInitials = (name: string) => {
+        if (!name) return 'U';
         return name
             .split(' ')
-            .map(n => n[0])
+            .map(n => n?.[0] || '')
             .join('')
             .substring(0, 2)
             .toUpperCase();
