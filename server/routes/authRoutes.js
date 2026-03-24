@@ -136,6 +136,7 @@ router.delete("/delete-account", async (req, res) => {
     await Promise.all([
       supabase.from("notes").delete().eq("owner_id", user.id),
       supabase.from("subscriptions").delete().eq("user_id", user.id),
+      supabase.from("ads").delete().eq("user_id", user.id),
       supabase.from("profiles").delete().eq("id", user.id),
     ]);
 

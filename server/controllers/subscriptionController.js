@@ -293,11 +293,12 @@ exports.createAdCheckoutSession = async (req, res) => {
       "NGN",
       true,
     );
-    const amountInKobo = Math.round(ngnAmount * 100);
+    const finalAmount = Math.round(ngnAmount * 100) / 100;
+    const reference = require("uuid").v4();
 
     const callbackUrl = `${
       process.env.CLIENT_URL || "https://notestandard.com"
-    }/dashboard/settings?ad_success=true&adId=${adId}`;
+    }/dashboard/settings?ad_success=true&adId=${adId}&reference=${reference}`;
 
     const metadata = {
       userId,
@@ -307,15 +308,17 @@ exports.createAdCheckoutSession = async (req, res) => {
       exchangeRate: rate,
     };
 
-    const transaction = await paystackService.initializeTransaction(
+    const provider = PaymentFactory.getProviderByName("paystack");
+    const result = await provider.initialize({
       email,
-      amountInKobo,
+      amount: finalAmount,
+      currency: "NGN",
+      reference,
       callbackUrl,
       metadata,
-      null, // reference
-    );
+    });
 
-    res.json({ url: transaction.authorization_url });
+    res.json({ url: result.checkoutUrl || result.url });
   } catch (error) {
     console.error("Error creating ad checkout session:", error);
     res.status(500).json({ error: "Failed to create ad checkout session" });
@@ -330,13 +333,14 @@ exports.syncAdPayment = async (req, res) => {
       return res.status(400).json({ error: "Reference required" });
     }
 
-    const transaction = await paystackService.verifyTransaction(reference);
+    const provider = PaymentFactory.getProviderByName("paystack");
+    const verification = await provider.verify(reference);
 
     if (
-      transaction.status === "success" &&
-      transaction.metadata?.type === "ad_payment"
+      verification.success &&
+      verification.metadata?.type === "ad_payment"
     ) {
-      const adId = transaction.metadata.adId;
+      const adId = verification.metadata.adId;
 
       const { error } = await supabase
         .from("ads")
@@ -363,24 +367,42 @@ exports.cancelSubscription = async (req, res) => {
 
     const { data: subscription } = await supabase
       .from("subscriptions")
-      .select("paystack_subscription_code, paystack_email_token") // identifying tokens
+      .select("paystack_subscription_code, paystack_email_token, fincra_reference")
       .eq("user_id", userId)
       .single();
 
-    if (!subscription || !subscription.paystack_subscription_code) {
+    if (!subscription) {
       return res.status(400).json({ error: "No active subscription found" });
     }
 
-    // Call Paystack disable subscription
-    await paystackService.disableSubscription(
-      subscription.paystack_subscription_code,
-      subscription.paystack_email_token,
-    );
+    // Try to cancel on Paystack if we have a subscription code
+    if (subscription.paystack_subscription_code) {
+      try {
+        const axios = require("axios");
+        await axios.post(
+          "https://api.paystack.co/subscription/disable",
+          {
+            code: subscription.paystack_subscription_code,
+            token: subscription.paystack_email_token,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        console.log(`[Subscription] Paystack subscription disabled for user ${userId}`);
+      } catch (paystackErr) {
+        // Non-fatal: Paystack cancel may fail if it was a one-time payment, not a recurring sub
+        console.warn(`[Subscription] Paystack disable failed (non-fatal):`, paystackErr.response?.data || paystackErr.message);
+      }
+    }
 
-    // Update DB
+    // Always update local DB regardless of provider
     await supabase
       .from("subscriptions")
-      .update({ status: "canceled" })
+      .update({ status: "canceled", plan_tier: "free", plan_type: "FREE" })
       .eq("user_id", userId);
 
     // SYNC TO PROFILES TABLE
