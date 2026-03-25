@@ -8,13 +8,7 @@ import { toast } from 'react-hot-toast';
 import { AdDisplay } from '../ads/AdDisplay';
 import { useAuth } from '../../context/AuthContext';
 
-interface Note {
-    id: string;
-    title: string;
-    content: string;
-    tags: string[];
-    is_private?: boolean;
-}
+import type { Note } from '../../types/note';
 
 interface EditNoteModalProps {
     isOpen: boolean;

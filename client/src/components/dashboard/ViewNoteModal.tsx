@@ -3,19 +3,7 @@ import { Card } from '../../components/common/Card';
 import { X, Edit2, Share2, Calendar, Lock, Globe, User } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
-interface Note {
-    id: string;
-    title: string;
-    content: string;
-    tags: string[];
-    created_at: string;
-    owner_id?: string;
-    is_private?: boolean;
-    owner?: {
-        username?: string;
-        email?: string;
-    };
-}
+import type { Note } from '../../types/note';
 
 interface ViewNoteModalProps {
     isOpen: boolean;

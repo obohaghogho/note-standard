@@ -8,24 +8,17 @@ import { ViewNoteModal } from '../../components/dashboard/ViewNoteModal';
 import { ShareNoteModal } from '../../components/dashboard/ShareNoteModal';
 import { DeleteNoteModal } from '../../components/dashboard/DeleteNoteModal';
 import { Search, Filter, Grid, List as ListIcon, Edit2, Share2, Trash2 } from 'lucide-react';
-import { supabase, supabaseSafe } from '../../lib/supabaseSafe';
+import { supabase } from '../../lib/supabaseSafe';
 import { useAuth } from '../../context/AuthContext';
+import { useNotes } from '../../context/NotesContext';
 import { toast } from 'react-hot-toast';
 import { cn } from '../../utils/cn';
 
-interface Note {
-    id: string;
-    title: string;
-    content: string;
-    created_at: string;
-    tags: string[];
-    is_private: boolean;
-}
+import type { Note } from '../../types/note';
 
 export const Notes = () => {
     const { user } = useAuth();
-    const [notes, setNotes] = useState<Note[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { notes, loading, refreshNotes } = useNotes();
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [sortBy, setSortBy] = useState<'latest' | 'oldest' | 'title'>('latest');
@@ -37,45 +30,15 @@ export const Notes = () => {
     const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    const fetchNotes = async () => {
-        if (!user) return;
-        try {
-            const results = await supabaseSafe<Note[]>(
-                `notes-list-${user.id}-${searchTerm}`,
-                async () => {
-                    let query = supabase
-                        .from('notes')
-                        .select('*')
-                        .eq('owner_id', user.id);
-
-                    if (sortBy === 'latest') query = query.order('updated_at', { ascending: false });
-                    else if (sortBy === 'oldest') query = query.order('updated_at', { ascending: true });
-                    else if (sortBy === 'title') query = query.order('title', { ascending: true });
-
-                    if (searchTerm) {
-                        query.ilike('title', `%${searchTerm}%`);
-                    }
-                    return query;
-                },
-                { fallback: [] }
-            );
-            
-            setNotes(results || []);
-        } catch (error) {
-            console.error('Error loading notes:', error);
-            toast.error('Failed to load notes');
-        } finally {
-            setLoading(false);
-        }
-    };
-
+    // fetchNotes is now handled by NotesContext.refreshNotes
+    // We only call it when filters change
     useEffect(() => {
         const timeoutId = setTimeout(() => {
-            fetchNotes();
+            refreshNotes(searchTerm, sortBy);
         }, 300); // Debounce search
 
         return () => clearTimeout(timeoutId);
-    }, [user, searchTerm, sortBy]);
+    }, [user, searchTerm, sortBy, refreshNotes]);
 
     const handleDelete = (noteId: string) => {
         setDeletingNoteId(noteId);
@@ -93,9 +56,8 @@ export const Notes = () => {
                 .eq('owner_id', user.id);
 
             if (error) throw error;
-
             toast.success('Note deleted');
-            setNotes(prev => prev.filter(n => n.id !== deletingNoteId));
+            // Success: state will be updated via Realtime automatically in NotesContext
         } catch (error) {
             console.error('Error deleting note:', error);
             toast.error('Failed to delete note');
@@ -297,7 +259,7 @@ export const Notes = () => {
                 isOpen={!!editingNote}
                 onClose={() => setEditingNote(null)}
                 note={editingNote}
-                onNoteUpdated={fetchNotes}
+                onNoteUpdated={() => refreshNotes(searchTerm, sortBy)}
             />
 
             <ShareNoteModal

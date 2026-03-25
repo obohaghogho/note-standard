@@ -1,87 +1,27 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Clock, Plus, FileText, Star } from 'lucide-react';
-import { supabase, safeDashboardStats } from '../../lib/supabaseSafe';
 import { useAuth } from '../../context/AuthContext';
+import { useNotes } from '../../context/NotesContext';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-
-import type { Note } from '../../types/note';
 
 interface DashboardContext {
     openCreateNoteModal: () => void;
 }
 
 export const DashboardHome = () => {
-    const { user, authReady } = useAuth();
+    const { user } = useAuth();
     const navigate = useNavigate();
     const { openCreateNoteModal } = useOutletContext<DashboardContext>();
-    const [stats, setStats] = useState({ totalBy: 0, favorites: 0 });
-    const [recentNotes, setRecentNotes] = useState<Note[]>([]);
-    const [loading, setLoading] = useState(true);
-
-    const isMounted = useRef(true);
-    const fetchLock = useRef(false);
-
-    const fetchData = async () => {
-        if (!user || !authReady || fetchLock.current) return;
-        
-        fetchLock.current = true;
-        try {
-            console.log('[Dashboard] Fetching stats for user:', user.id);
-            const results = await safeDashboardStats(user.id);
-
-            if (isMounted.current && results) {
-                setStats(results.stats);
-                setRecentNotes(results.recentNotes);
-                setLoading(false);
-            }
-        } finally {
-            fetchLock.current = false;
-        }
-    };
-
-    useEffect(() => {
-        isMounted.current = true;
-        
-        if (authReady) {
-            if (user) {
-                setLoading(true);
-                fetchData();
-            } else {
-                setLoading(false);
-            }
-        }
-
-        // Realtime Subscription
-        let channel: any = null;
-        
-        if (user && authReady) {
-            channel = supabase.channel(`dashboard_home:${user.id}`)
-                .on(
-                    'postgres_changes',
-                    {
-                        event: '*',
-                        schema: 'public',
-                        table: 'notes',
-                        filter: `owner_id=eq.${user.id}`
-                    },
-                    () => {
-                        // Refresh stats on any change to user's notes
-                        fetchData();
-                    }
-                )
-                .subscribe();
-        }
-
-        return () => {
-            isMounted.current = false;
-            if (channel) supabase.removeChannel(channel);
-        };
-    }, [user, authReady]);
-
+    const { notes, stats, loading: notesLoading } = useNotes();
     const [greeting, setGreeting] = useState('');
+    
+    // Recent notes are just the first 3
+    const recentNotes = notes.slice(0, 3);
+    const loading = notesLoading;
 
+    // Greeting logic
     useEffect(() => {
         const updateGreeting = () => {
             const hour = new Date().getHours();

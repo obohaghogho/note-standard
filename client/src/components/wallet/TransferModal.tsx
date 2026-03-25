@@ -6,6 +6,7 @@ import { formatCurrency } from '../../lib/CurrencyFormatter';
 import type { Currency } from '@/types/wallet';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReCAPTCHA from 'react-google-recaptcha';
+import toast from 'react-hot-toast';
 
 interface TransferModalProps {
     isOpen: boolean;
@@ -79,7 +80,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
         
         // reCAPTCHA check
         if (!captchaToken && import.meta.env.PROD) {
-            // toast handles the error if needed
+            toast.error('Please complete the security verification first');
             return;
         }
 

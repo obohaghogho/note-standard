@@ -374,7 +374,6 @@ export const WalletPage: React.FC = () => {
                     selectedNetwork={selectedAsset.network}
                     onSuccess={() => {
                         handleRefresh();
-                        toast.success('Transfer successful');
                     }}
                 />
             )}

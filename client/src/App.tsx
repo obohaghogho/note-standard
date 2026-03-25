@@ -13,6 +13,7 @@ import { NotificationProvider } from './context/NotificationContext';
 import { WalletProvider } from './context/WalletContext';
 import { WebRTCProvider } from './context/WebRTCContext';
 import { PresenceProvider } from './context/PresenceContext';
+import { NotesProvider } from './context/NotesContext';
 import { ChatWidget } from './components/chat/ChatWidget';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { lazyWithRetry } from './utils/lazyWithRetry';
@@ -134,6 +135,7 @@ function App() {
                 <ChatProvider>
                 <WebRTCProvider>
                 <WalletProvider>
+                <NotesProvider>
                     <Routes>
                     <Route path="/" element={<LandingPage />} />
                     <Route path="/login" element={<Login />} />
@@ -193,6 +195,7 @@ function App() {
 
                     {/* Global Chat Widget - visible on all authenticated pages */}
                     <ChatWidget />
+                </NotesProvider>
                 </WalletProvider>
                 </WebRTCProvider>
                 </ChatProvider>
