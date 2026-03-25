@@ -71,12 +71,19 @@ export const Feed = () => {
         }, 500);
 
         // Setup Realtime Subscriptions for counts
+        // Use debounce to prevent excessive refetching from global events
+        let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+        const debouncedRefetch = () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => fetchFeed(), 2000);
+        };
+
         const commentChannel = supabase
             .channel('public-comments')
             .on(
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'comments' },
-                () => fetchFeed() // Simply refetch to get updated counts and user status
+                () => debouncedRefetch()
             )
             .subscribe();
 
@@ -85,12 +92,13 @@ export const Feed = () => {
             .on(
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'likes' },
-                () => fetchFeed()
+                () => debouncedRefetch()
             )
             .subscribe();
 
         return () => {
             clearTimeout(timeoutId);
+            if (debounceTimer) clearTimeout(debounceTimer);
             supabase.removeChannel(commentChannel);
             supabase.removeChannel(likeChannel);
         };
@@ -105,6 +113,8 @@ export const Feed = () => {
                 </div>
                 <div className="w-full md:w-72">
                     <Input
+                        id="feed-search"
+                        name="feedSearch"
                         icon={Search}
                         placeholder="Search public notes..."
                         className="bg-[#121212]"

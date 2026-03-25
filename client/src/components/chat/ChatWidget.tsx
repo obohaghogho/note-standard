@@ -30,6 +30,9 @@ export const ChatWidget = () => {
     } = useWebRTC();
 
     const [isOpen, setIsOpen] = useState(false);
+    useEffect(() => {
+        if (isOpen) console.log('[ChatWidget] Widget opened');
+    }, [isOpen]);
     const [isMinimized, setIsMinimized] = useState(false);
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');

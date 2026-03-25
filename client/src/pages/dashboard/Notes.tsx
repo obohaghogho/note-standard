@@ -35,6 +35,7 @@ export const Notes = () => {
     const [editingNote, setEditingNote] = useState<Note | null>(null);
     const [sharingNoteId, setSharingNoteId] = useState<string | null>(null);
     const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const fetchNotes = async () => {
         if (!user) return;
@@ -81,13 +82,15 @@ export const Notes = () => {
     };
 
     const confirmDelete = async () => {
-        if (!deletingNoteId) return;
+        if (!deletingNoteId || !user) return;
+        setIsDeleting(true);
 
         try {
             const { error } = await supabase
                 .from('notes')
                 .delete()
-                .eq('id', deletingNoteId);
+                .eq('id', deletingNoteId)
+                .eq('owner_id', user.id);
 
             if (error) throw error;
 
@@ -97,6 +100,7 @@ export const Notes = () => {
             console.error('Error deleting note:', error);
             toast.error('Failed to delete note');
         } finally {
+            setIsDeleting(false);
             setDeletingNoteId(null);
         }
     };
@@ -304,8 +308,9 @@ export const Notes = () => {
 
             <DeleteNoteModal
                 isOpen={!!deletingNoteId}
-                onClose={() => setDeletingNoteId(null)}
+                onClose={() => !isDeleting && setDeletingNoteId(null)}
                 onConfirm={confirmDelete}
+                loading={isDeleting}
             />
         </div>
     );

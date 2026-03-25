@@ -2,6 +2,7 @@ import React from 'react';
 import { formatCurrency } from '../../lib/CurrencyFormatter';
 import { motion } from 'framer-motion';
 import type { Wallet } from '@/types/wallet';
+import toast from 'react-hot-toast';
 
 interface CurrencyListProps {
     wallets: Wallet[];
@@ -131,7 +132,7 @@ export const CurrencyList: React.FC<CurrencyListProps> = ({
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 navigator.clipboard.writeText(wallet.address);
-                                                alert(`${wallet.currency} address copied!`);
+                                                toast.success(`${wallet.currency} address copied!`);
                                             }}
                                             className="text-[10px] text-white/20 hover:text-white/60 transition-colors"
                                             title="Copy Full Address"

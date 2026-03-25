@@ -67,6 +67,10 @@ export const Trends = () => {
     const fetchStats = async () => {
         try {
             const response = await fetch(`${API_URL}/api/analytics`);
+            if (!response.ok) {
+                console.error('Analytics API returned', response.status);
+                return;
+            }
             const data = await response.json();
             // Sort by date ascending for charts
             if (Array.isArray(data)) {
@@ -81,6 +85,27 @@ export const Trends = () => {
 
     if (loading) {
         return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" size={32} /></div>;
+    }
+
+    if (stats.length === 0) {
+        return (
+            <div className="space-y-6 max-w-6xl mx-auto">
+                <div>
+                    <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-3">
+                        <TrendingUp className="text-primary" />
+                        Community Trends
+                    </h1>
+                    <p className="text-gray-400 mt-1">Anonymous insights from the Note Standard community.</p>
+                </div>
+                <Card variant="glass" className="p-12 text-center">
+                    <TrendingUp size={48} className="text-gray-600 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-gray-300 mb-2">No Trend Data Yet</h3>
+                    <p className="text-gray-500 text-sm max-w-md mx-auto">
+                        Community trends will appear here as users contribute and opt-in to Anonymous Analytics via Settings &gt; Privacy.
+                    </p>
+                </Card>
+            </div>
+        );
     }
 
     // Prepare Chart Data
@@ -183,15 +208,17 @@ export const Trends = () => {
                                 responsive: true,
                                 maintainAspectRatio: false,
                                 plugins: {
-                                    legend: { position: 'bottom' }
+                                    legend: { position: 'bottom', labels: { color: '#9ca3af' } }
                                 },
                                 scales: {
                                     y: {
                                         beginAtZero: true,
-                                        grid: { color: 'rgba(255,255,255,0.05)' }
+                                        grid: { color: 'rgba(255,255,255,0.05)' },
+                                        ticks: { color: '#9ca3af' }
                                     },
                                     x: {
-                                        grid: { color: 'rgba(255,255,255,0.05)' }
+                                        grid: { color: 'rgba(255,255,255,0.05)' },
+                                        ticks: { color: '#9ca3af' }
                                     }
                                 }
                             }}
@@ -211,15 +238,17 @@ export const Trends = () => {
                                 responsive: true,
                                 maintainAspectRatio: false,
                                 plugins: {
-                                    legend: { position: 'bottom' }
+                                    legend: { position: 'bottom', labels: { color: '#9ca3af' } }
                                 },
                                 scales: {
                                     y: {
                                         beginAtZero: true,
-                                        grid: { color: 'rgba(255,255,255,0.05)' }
+                                        grid: { color: 'rgba(255,255,255,0.05)' },
+                                        ticks: { color: '#9ca3af' }
                                     },
                                     x: {
-                                        grid: { color: 'rgba(255,255,255,0.05)' }
+                                        grid: { color: 'rgba(255,255,255,0.05)' },
+                                        ticks: { color: '#9ca3af' }
                                     }
                                 }
                             }}
@@ -242,10 +271,12 @@ export const Trends = () => {
                             scales: {
                                 y: {
                                     beginAtZero: true,
-                                    grid: { color: 'rgba(255,255,255,0.05)' }
+                                    grid: { color: 'rgba(255,255,255,0.05)' },
+                                    ticks: { color: '#9ca3af' }
                                 },
                                 x: {
-                                    grid: { display: false }
+                                    grid: { display: false },
+                                    ticks: { color: '#9ca3af' }
                                 }
                             }
                         }}

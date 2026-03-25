@@ -120,11 +120,13 @@ export const CommentModal = ({ isOpen, onClose, note }: CommentModalProps) => {
     };
 
     const handleDelete = async (commentId: string) => {
+        if (!user) return;
         try {
             const { error } = await supabase
                 .from('comments')
                 .delete()
-                .eq('id', commentId);
+                .eq('id', commentId)
+                .eq('user_id', user.id);
 
             if (error) throw error;
 

@@ -181,7 +181,12 @@ export const DashboardHome = () => {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {recentNotes?.map((note) => (
-                            <Card key={note.id} hoverEffect className="p-6 cursor-pointer group">
+                            <Card 
+                                key={note.id} 
+                                hoverEffect 
+                                className="p-6 cursor-pointer group"
+                                onClick={() => navigate('/dashboard/notes')}
+                            >
                                 <div className="flex items-start justify-between mb-4">
                                     <div className="p-2 bg-white/5 rounded-lg group-hover:bg-primary/20 transition-colors">
                                         <FileText size={18} className="text-gray-400 group-hover:text-primary transition-colors" />

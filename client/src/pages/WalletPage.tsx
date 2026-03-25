@@ -291,7 +291,7 @@ export const WalletPage: React.FC = () => {
                             onBuy={() => handleAction('buy')}
                             disabledActions={
                                 ['BTC', 'ETH', 'USDT', 'USDC'].some(c => selectedAsset.currency?.startsWith(c)) 
-                                ? ['Deposit'] 
+                                ? ['Move In'] 
                                 : []
                             }
                         />

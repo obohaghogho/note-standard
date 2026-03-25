@@ -6,6 +6,7 @@ import { X, Save, FileText, Tag } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { AdDisplay } from '../ads/AdDisplay';
+import { useAuth } from '../../context/AuthContext';
 
 interface Note {
     id: string;
@@ -23,6 +24,7 @@ interface EditNoteModalProps {
 }
 
 export const EditNoteModal = ({ isOpen, onClose, onNoteUpdated, note }: EditNoteModalProps) => {
+    const { user } = useAuth();
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [tags, setTags] = useState('');
@@ -56,7 +58,8 @@ export const EditNoteModal = ({ isOpen, onClose, onNoteUpdated, note }: EditNote
                     is_private: isPrivate,
                     updated_at: new Date().toISOString()
                 })
-                .eq('id', note.id);
+                .eq('id', note.id)
+                .eq('owner_id', user?.id);
 
             if (error) throw error;
 

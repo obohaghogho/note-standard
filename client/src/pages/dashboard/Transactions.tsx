@@ -268,7 +268,20 @@ export const Transactions: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
-                                {filteredTransactions.map((tx) => (
+                                {loading ? (
+                                    // Loading skeleton rows
+                                    Array.from({ length: 5 }).map((_, i) => (
+                                        <tr key={`skeleton-${i}`} className="animate-pulse">
+                                            <td className="py-5 px-6"><div className="flex items-center gap-4"><div className="w-10 h-10 rounded-full bg-white/5" /><div className="space-y-2"><div className="h-3 w-24 bg-white/5 rounded" /><div className="h-2 w-16 bg-white/5 rounded" /></div></div></td>
+                                            <td className="py-5 px-4"><div className="h-3 w-20 bg-white/5 rounded" /></td>
+                                            <td className="py-5 px-4 text-right"><div className="h-3 w-16 bg-white/5 rounded ml-auto" /></td>
+                                            <td className="py-5 px-4 text-right"><div className="h-3 w-12 bg-white/5 rounded ml-auto" /></td>
+                                            <td className="py-5 px-4 text-center"><div className="h-5 w-20 bg-white/5 rounded-full mx-auto" /></td>
+                                            <td className="py-5 px-6 text-right"><div className="h-3 w-16 bg-white/5 rounded ml-auto" /></td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    filteredTransactions.map((tx) => (
                                     <tr 
                                         key={tx.id} 
                                         className="hover:bg-white/[0.02] cursor-pointer transition-colors group"
@@ -327,7 +340,8 @@ export const Transactions: React.FC = () => {
                                             </div>
                                         </td>
                                     </tr>
-                                ))}
+                                    ))
+                                )}
                             </tbody>
                         </table>
                     </div>

@@ -14,6 +14,7 @@ import { API_URL } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
 import { MediaPreviewModal } from './MediaPreviewModal';
+import { MentionSuggestions } from './MentionSuggestions';
 
 import { ConfirmationModal } from '../common/ConfirmationModal';
 import { applyAutoCorrect } from '../../utils/textUtils';
@@ -68,6 +69,11 @@ const ChatWindow: React.FC = () => {
     const [isSearching, setIsSearching] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [isAccepting, setIsAccepting] = useState(false);
+    
+    // Mentions state
+    const [mentionSearch, setMentionSearch] = useState('');
+    const [mentionParticipants, setMentionParticipants] = useState<any[]>([]);
+    const [showMentions, setShowMentions] = useState(false);
     
     const emojis = ['😀', '😂', '😍', '🙌', '🔥', '👍', '🙏', '💯', '✨', '❤️', '🎉', '😊', '✅', '🚀', '👀', '💡'];
 
@@ -144,6 +150,36 @@ const ChatWindow: React.FC = () => {
         translateNewMessages();
     }, [currentMessages, activeConversationId, preferredLanguage, user, session?.access_token]);
 
+    const handleManualTranslate = async (msgId: string, content: string, sourceLang?: string) => {
+        if (!preferredLanguage || !session?.access_token) return;
+        
+        try {
+            setTranslations(prev => ({ ...prev, [msgId]: 'translating...' }));
+            const response = await fetch(`${API_URL}/api/chat/translate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`
+                },
+                body: JSON.stringify({
+                    text: content,
+                    targetLang: preferredLanguage,
+                    sourceLang: sourceLang
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                setTranslations(prev => ({ ...prev, [msgId]: data.translation }));
+                setShowOriginal(prev => ({ ...prev, [msgId]: false }));
+            } else {
+                setTranslations(prev => ({ ...prev, [msgId]: '[Translation Failed]' }));
+            }
+        } catch (e) {
+            setTranslations(prev => ({ ...prev, [msgId]: '[Translation Error]' }));
+        }
+    };
+
     const handleReport = async (msgId: string, original: string, translated: string) => {
         try {
             await fetch(`${API_URL}/api/chat/report-translation`, {
@@ -216,6 +252,7 @@ const ChatWindow: React.FC = () => {
         try {
             await sendMessage(inputValue);
             setInputValue('');
+            setShowMentions(false);
         } catch (err) {
             toast.error('Failed to send message');
         }
@@ -346,6 +383,47 @@ const ChatWindow: React.FC = () => {
             .catch(() => {
                 toast.error('Failed to start call. Check camera/mic permissions.');
             });
+    };
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = applyAutoCorrect(e.target.value);
+        setInputValue(val);
+
+        // Mention detection
+        const lastAtPos = val.lastIndexOf('@');
+        if (lastAtPos !== -1) {
+            const query = val.substring(lastAtPos + 1).split(' ')[0];
+            const beforeAt = val.substring(0, lastAtPos);
+            // Show only if @ is at start or preceded by space
+            if (lastAtPos === 0 || beforeAt.endsWith(' ')) {
+                setMentionSearch(query);
+                setShowMentions(true);
+                
+                // Filter current conversation members
+                if (activeConversation?.members) {
+                    const filtered = activeConversation.members
+                        .filter((m: any) => m.user_id !== user?.id && m.profile)
+                        .map((m: any) => m.profile)
+                        .filter((p: any) => 
+                            p.username.toLowerCase().includes(query.toLowerCase()) || 
+                            p.full_name?.toLowerCase().includes(query.toLowerCase())
+                        );
+                    setMentionParticipants(filtered);
+                }
+            } else {
+                setShowMentions(false);
+            }
+        } else {
+            setShowMentions(false);
+        }
+    };
+
+    const handleSelectMention = (mentionedUser: any) => {
+        const lastAtPos = inputValue.lastIndexOf('@');
+        const beforeAt = inputValue.substring(0, lastAtPos);
+        const afterMention = inputValue.substring(lastAtPos + mentionSearch.length + 1);
+        setInputValue(`${beforeAt}@${mentionedUser.username} ${afterMention}`);
+        setShowMentions(false);
     };
 
     if (!activeConversationId) {
@@ -602,13 +680,25 @@ const ChatWindow: React.FC = () => {
                                             </div>
                                         ) : (
                                             <div>
-                                                {msg.sender_id !== user?.id && msg.original_language && msg.original_language !== preferredLanguage && (
-                                                    <div className="flex items-center gap-1.5 text-[10px] text-gray-400 mb-1">
-                                                        <span>Original ({msg.original_language})</span>
-                                                        <button onClick={() => setShowOriginal(prev => ({ ...prev, [msg.id]: false }))} className="underline hover:text-white ml-1">Translate</button>
-                                                    </div>
-                                                )}
-                                                <p className="break-words text-sm leading-relaxed">{msg.content}</p>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    {msg.sender_id !== user?.id && (
+                                                        <button 
+                                                            onClick={() => handleManualTranslate(msg.id, msg.content, msg.original_language)}
+                                                            className="text-[10px] text-blue-300 hover:text-blue-200 transition-colors flex items-center gap-1"
+                                                        >
+                                                            <Languages size={10} />
+                                                            {translations[msg.id] ? (showOriginal[msg.id] ? "Show Translation" : "Show Original") : "Translate"}
+                                                        </button>
+                                                    )}
+                                                    {msg.sender_id !== user?.id && msg.original_language && (
+                                                        <span className="text-[8px] text-gray-500 lowercase opacity-50">Detected: {msg.original_language}</span>
+                                                    )}
+                                                </div>
+                                                <p className="break-words text-sm leading-relaxed">
+                                                    {translations[msg.id] && !showOriginal[msg.id] && translations[msg.id] !== 'translating...' 
+                                                        ? translations[msg.id] 
+                                                        : msg.content}
+                                                </p>
                                             </div>
                                         )}
                                         <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
@@ -626,8 +716,8 @@ const ChatWindow: React.FC = () => {
                         <div className="w-16 h-16 rounded-full bg-blue-600/20 flex items-center justify-center mb-4 text-blue-400"><MoreHorizontal size={32} /></div>
                         <p className="text-gray-200 mb-6 text-center font-medium">{otherMember ? `${otherMember.profile?.full_name || otherMember.profile?.username} wants to start a conversation with you.` : 'You have been invited to this chat.'}</p>
                         <div className="flex gap-4">
-                            <button onClick={handleAccept} disabled={isAccepting} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-xl font-semibold transition-all shadow-lg shadow-blue-900/40 disabled:opacity-50">{isAccepting ? 'Accepting...' : 'Accept Request'}</button>
-                            <button className="px-6 py-2.5 text-gray-400 hover:text-white transition-colors">Decline</button>
+                            <button onClick={handleAccept} disabled={isAccepting} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg shadow-blue-900/40 disabled:opacity-50 active:scale-95">{isAccepting ? 'Accepting...' : 'Accept Chat Request'}</button>
+                            <button className="px-6 py-3 text-gray-400 hover:text-white hover:bg-white/5 rounded-xl transition-all font-medium">Decline</button>
                         </div>
                     </div>
                 )}
@@ -663,20 +753,25 @@ const ChatWindow: React.FC = () => {
                             <div className="flex items-center gap-2">
                                 <div className="flex-1 min-w-0 flex items-center gap-1 md:gap-2 bg-gray-800 border border-gray-700 rounded-2xl p-1 md:p-1.5 px-2 md:px-3 focus-within:border-blue-500 transition-all shadow-inner">
                                     <button type="button" onClick={() => setShowMediaUpload(!showMediaUpload)} className="p-2 text-gray-400 hover:text-blue-400 hover:bg-white/5 rounded-full transition-all flex-shrink-0"><Plus size={20} className="md:w-[22px] md:h-[22px]" /></button>
-                                    <input 
-                                        id="chat-window-input" 
-                                        name="message" 
-                                        type="text" 
-                                        value={inputValue} 
-                                        onChange={(e) => setInputValue(applyAutoCorrect(e.target.value))} 
-                                        placeholder={isWaitingForOthers ? "Waiting..." : "Message"} 
-                                        disabled={isWaitingForOthers} 
-                                        autoComplete="on" 
-                                        spellCheck={true}
-                                        autoCapitalize="sentences"
-                                        autoCorrect="on"
-                                        className="w-0 flex-1 bg-transparent text-white py-2 md:py-3 px-1 md:px-2 focus:outline-none disabled:opacity-50 text-[16px] md:text-sm" 
-                                    />
+                                    <div className="flex-1 relative min-w-0">
+                                        {showMentions && mentionParticipants.length > 0 && (
+                                            <MentionSuggestions users={mentionParticipants} onSelect={handleSelectMention} />
+                                        )}
+                                        <input 
+                                            id="chat-window-input" 
+                                            name="message" 
+                                            type="text" 
+                                            value={inputValue} 
+                                            onChange={handleInputChange} 
+                                            placeholder={isWaitingForOthers ? "Waiting..." : "Message"} 
+                                            disabled={isWaitingForOthers} 
+                                            autoComplete="off" 
+                                            spellCheck={true}
+                                            autoCapitalize="sentences"
+                                            autoCorrect="on"
+                                            className="w-full bg-transparent text-white py-2 md:py-3 px-1 md:px-2 focus:outline-none disabled:opacity-50 text-[16px] md:text-sm" 
+                                        />
+                                    </div>
                                     <div className="flex items-center flex-shrink-0">
                                         <button type="button" onClick={() => setIsVoiceRecording(true)} className="p-2 text-gray-400 hover:text-blue-400 hover:bg-white/5 rounded-full transition-all"><Mic size={18} className="md:w-5 md:h-5" /></button>
                                         <div className="relative">
