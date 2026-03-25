@@ -8,8 +8,8 @@ const logger = require("../utils/logger");
  * Only enforces in production or if RECAPTCHA_SECRET_KEY is present.
  */
 const requireRecaptcha = async (req, res, next) => {
-  // Skip if not production and no key set
-  if (env.NODE_ENV !== "production" && !env.RECAPTCHA_SECRET_KEY) {
+  // Skip if not production
+  if (env.NODE_ENV !== "production") {
     return next();
   }
 

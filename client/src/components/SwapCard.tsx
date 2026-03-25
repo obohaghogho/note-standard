@@ -35,14 +35,16 @@ export const SwapCard: React.FC<SwapCardProps> = ({
     const [captchaToken, setCaptchaToken] = useState<string | null>(null);
     const recaptchaRef = React.useRef<ReCAPTCHA>(null);
     
-    const [preview, setPreview] = useState<{
+    interface Preview {
         rate: number;
         fee: number;
         feePercentage: number;
         amountOut: number;
         lockId: string;
         expiresAt: number;
-    } | null>(null);
+        metadata?: any;
+    }
+    const [preview, setPreview] = useState<Preview | null>(null);
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
     // Countdown logic for rate lock
@@ -126,7 +128,8 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                 feePercentage: Number(result.feePercentage ?? 0),
                 amountOut: Number(result.amountOut ?? 0),
                 lockId: result.lockId,
-                expiresAt: result.expiresAt
+                expiresAt: result.expiresAt,
+                metadata: result.metadata
             });
         } catch (err) {
             console.error('Preview error:', err);
@@ -336,18 +339,24 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                                 <span className="text-purple-300">1 {fromCurrency} ≈ {formatCurrency(Number(preview.rate || 0), toCurrency)}</span>
                             </div>
                             <div className="flex justify-between text-gray-400">
-                                <span>Transaction Processing Fee (4.7%)</span>
+                                <span>Transaction Processing Fee ({((Number(preview.metadata?.fee_breakdown?.rates?.total) || 0.047) * 100).toFixed(1)}%)</span>
                                 <span>{formatCurrency(Number(preview.fee || 0), fromCurrency)}</span>
                             </div>
                             
                             {/* Detailed breakdown */}
                             <div className="grid grid-cols-2 gap-y-0.5 text-[9px] text-gray-500 pt-1 border-t border-purple-500/5">
-                                <span>Platform (4.5%)</span>
-                                <span className="text-right">{formatCurrency(numericAmount * 0.045, fromCurrency)}</span>
-                                <span>Referrer (0.1%)</span>
-                                <span className="text-right">{formatCurrency(numericAmount * 0.001, fromCurrency)}</span>
-                                <span>Reward (0.1%)</span>
-                                <span className="text-right">{formatCurrency(numericAmount * 0.001, fromCurrency)}</span>
+                                <span>Platform ({(Number(preview.metadata?.fee_breakdown?.rates?.admin || 0.045) * 100).toFixed(1)}%)</span>
+                                <span className="text-right">{formatCurrency(Number(preview.metadata?.fee_breakdown?.breakdown?.admin_fee || 0), fromCurrency)}</span>
+                                
+                                {Number(preview.metadata?.fee_breakdown?.rates?.referrer || 0) > 0 && (
+                                    <>
+                                        <span>Referrer ({(Number(preview.metadata?.fee_breakdown?.rates?.referrer) * 100).toFixed(1)}%)</span>
+                                        <span className="text-right">{formatCurrency(Number(preview.metadata?.fee_breakdown?.breakdown?.referrer || 0), fromCurrency)}</span>
+                                    </>
+                                )}
+                                
+                                <span>Reward ({(Number(preview.metadata?.fee_breakdown?.rates?.partner || 0.001) * 100).toFixed(1)}%)</span>
+                                <span className="text-right">{formatCurrency(Number(preview.metadata?.fee_breakdown?.breakdown?.partner_reward || 0), fromCurrency)}</span>
                             </div>
 
                             <div className="flex justify-between text-xs text-gray-500 pt-1">
@@ -431,7 +440,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
 
                 <Button
                     onClick={handleExecuteSwap}
-                    disabled={loading || !preview || isInsufficient}
+                    disabled={loading || !preview || (!captchaToken && import.meta.env.PROD) || timeLeft <= 0}
                     className="w-full h-12 text-base font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 border-none shadow-lg shadow-purple-500/20"
                 >
                     {loading ? (

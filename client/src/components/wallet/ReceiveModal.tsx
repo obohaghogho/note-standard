@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Copy, Share2, AlertTriangle, CheckCircle2, QrCode, Loader2 } from 'lucide-react';
 import { Button } from '../common/Button';
 import { useWallet } from '../../hooks/useWallet';
+import { useAuth } from '../../context/AuthContext';
 import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import walletApi from '../../api/walletApi';
@@ -16,6 +17,7 @@ interface ReceiveModalProps {
 
 export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, initialCurrency = 'BTC', initialNetwork = 'native' }) => {
     const { wallets, createWallet, loading: walletLoading } = useWallet();
+    const { user } = useAuth();
     const [selectedCurrency, setSelectedCurrency] = useState(initialCurrency);
     const [selectedNetwork, setSelectedNetwork] = useState(initialNetwork);
     const [copied, setCopied] = useState(false);
@@ -24,7 +26,10 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
 
     const isCrypto = ['BTC', 'ETH', 'USDT', 'USDC'].includes(selectedCurrency);
     const currentWallet = wallets.find(w => w.currency === selectedCurrency && w.network === selectedNetwork);
-    const displayAddress = hdAddress || currentWallet?.address || '';
+    // For fiat currencies, show user's email (what senders use) instead of internal wallet UUID
+    const displayAddress = isCrypto
+        ? (hdAddress || currentWallet?.address || '')
+        : (user?.email || currentWallet?.address || '');
 
     useEffect(() => {
         if (isOpen) {

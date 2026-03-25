@@ -9,12 +9,12 @@ class FeeService {
   /**
    * Calculate inclusive fee breakdown
    */
-  calculateFees(amount, currency) {
+  calculateFees(amount, currency, hasReferrer = false) {
     const gross = String(amount);
 
     const adminRate = env.ADMIN_FEE_RATE || math.ADMIN_FEE_RATE;
     const partnerRate = env.PARTNER_FEE_RATE || math.PARTNER_FEE_RATE;
-    const referrerRate = env.REFERRAL_FEE_RATE || math.REFERRAL_FEE_RATE;
+    const referrerRate = hasReferrer ? (env.REFERRAL_FEE_RATE || math.REFERRAL_FEE_RATE) : "0";
 
     const adminFee = math.multiply(gross, adminRate);
     const partnerAward = math.multiply(gross, partnerRate);

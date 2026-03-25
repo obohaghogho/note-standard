@@ -181,6 +181,7 @@ exports.getLedger = async (req, res) => {
     const { data, error } = await supabase
       .from("ledger_entries")
       .select("*")
+      .eq("user_id", req.user.id)
       .order("created_at", { ascending: false })
       .limit(limit);
 

@@ -245,7 +245,7 @@ class WalletService {
     );
 
     const wallet = await this.createWallet(userId, currency, network);
-    const totalDebit = math.formatSafe(math.parseSafe(amount).add(math.parseSafe(commission.fee)), math.getDecimals(currency));
+    const totalDebit = math.formatSafe(math.parseSafe(amount).add(math.parseSafe(commission.fee)));
     
     if (!math.isGreaterOrEqual(wallet.balance, totalDebit)) {
       throw new Error(
@@ -435,7 +435,7 @@ class WalletService {
     const senderWallet = await this.createWallet(userId, upCurrency, upNetwork);
 
     if (!senderWallet) throw new Error("Sender wallet not found");
-    const totalDebit = math.formatSafe(math.parseSafe(transferAmount).add(math.parseSafe(commission.fee)), math.getDecimals(upCurrency));
+    const totalDebit = math.formatSafe(math.parseSafe(transferAmount).add(math.parseSafe(commission.fee)));
 
     if (!math.isGreaterOrEqual(senderWallet.balance, totalDebit)) {
       throw new Error(

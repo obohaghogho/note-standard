@@ -14,7 +14,16 @@ class SwapService {
    */
   async calculateSwap(userId, fromCurrency, toCurrency, amount, slippage = 0.005) {
     const marketPrice = await fxService.getRate(fromCurrency, toCurrency);
-    const fees = feeService.calculateFees(amount, fromCurrency);
+    
+    // Check if user has a referrer for conditional fee calculation
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("referrer_id")
+      .eq("id", userId)
+      .single();
+    const hasReferrer = !!profile?.referrer_id;
+
+    const fees = feeService.calculateFees(amount, fromCurrency, hasReferrer);
     const amountOut = math.multiply(fees.netAmount, marketPrice);
 
     // Direct circular dependency fix if needed, but here we require within method
