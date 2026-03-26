@@ -4,10 +4,6 @@
 const whitelist = [
   process.env.CLIENT_URL || "https://notestandard.com",
   "https://www.notestandard.com",
-];
-
-// Allow localhost/local network origins regardless of environment
-whitelist.push(
   "http://localhost:5173",
   "http://localhost:4173",
   "http://localhost:3000",
@@ -15,7 +11,10 @@ whitelist.push(
   "http://127.0.0.1:5173",
   "http://127.0.0.1:4173",
   "http://127.0.0.1:3000",
-);
+  "http://127.0.0.1:5001",
+  "http://localhost:5001",
+  "http://[::1]:5173",
+];
 
 /**
  * Express cors() middleware options.

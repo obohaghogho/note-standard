@@ -22,7 +22,28 @@ app.use(helmet({
   crossOriginResourcePolicy: false,
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
+  noSniff: false,
 }));
+
+// Additional CORS/CORB Fix: Force headers for local dev
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  const isLocal = origin && (
+    origin.includes('localhost') || 
+    origin.includes('127.0.0.1') || 
+    origin.includes('[::1]') ||
+    origin.includes('::1')
+  );
+
+  if (isLocal) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Vary', 'Origin');
+    // Force allow sniffing for local dev to prevent CORB on JSON/Source maps
+    res.removeHeader('X-Content-Type-Options');
+  }
+  next();
+});
 
 // Body parsers
 app.use(express.json({
