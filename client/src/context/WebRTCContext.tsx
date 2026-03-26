@@ -73,9 +73,9 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     useEffect(() => {
         // Initialize audio objects
-        ringingRef.current = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-phone-ringing-bell-590.mp3');
+        ringingRef.current = new Audio('/sounds/ringing.wav');
         ringingRef.current.loop = true;
-        ringtoneRef.current = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-ringtone-for-telephone-2748.mp3');
+        ringtoneRef.current = new Audio('/sounds/ringtone.wav');
         ringtoneRef.current.loop = true;
 
         return () => {
