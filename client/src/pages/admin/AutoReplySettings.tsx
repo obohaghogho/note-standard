@@ -52,7 +52,10 @@ export const AutoReplySettings = () => {
         setLoading(true);
         try {
             const res = await fetch(`${API_URL}/api/admin/auto-reply`, {
-                headers: { 'Authorization': `Bearer ${session.access_token}` }
+                headers: { 
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Accept': 'application/json'
+                }
             });
             if (res.ok) {
                 const data = await res.json();
@@ -80,7 +83,8 @@ export const AutoReplySettings = () => {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.access_token}`
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Accept': 'application/json'
                 },
                 body: JSON.stringify(settings)
             });
