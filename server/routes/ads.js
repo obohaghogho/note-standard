@@ -126,6 +126,9 @@ router.get("/admin", requireAdmin, async (req, res) => {
 
     if (status) {
       query = query.eq("status", status);
+    } else {
+      // Default view: Everything except possibly draft or deleted
+      query = query.in("status", ["pending", "pending_payment", "approved", "rejected", "paused"]);
     }
 
     const { data: ads, error: adsError } = await query;

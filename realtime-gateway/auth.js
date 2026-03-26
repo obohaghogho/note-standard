@@ -24,8 +24,18 @@ const authMiddleware = async (socket, next) => {
     // Attach user info to socket
     socket.userId = user.id;
     socket.userEmail = user.email;
+
+    // Fetch profile info for UI (calls, etc.)
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name, username, avatar_url')
+      .eq('id', user.id)
+      .single();
+
+    socket.userName = profile?.full_name || profile?.username || user.email.split('@')[0];
+    socket.userAvatar = profile?.avatar_url || null;
     
-    console.log(`[Auth] User authenticated: ${user.id}`);
+    console.log(`[Auth] User authenticated: ${user.id} (${socket.userName})`);
     next();
   } catch (err) {
     console.error('[Auth] Internal error:', err.message);

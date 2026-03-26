@@ -67,13 +67,55 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const currentCallStatus = useRef<CallState['status']>('idle');
     const pendingCallRef = useRef<{ from: string; peerId: string; type: 'voice' | 'video' } | null>(null);
 
+    // Audio Refs for ringtones
+    const ringingRef = useRef<HTMLAudioElement | null>(null);
+    const ringtoneRef = useRef<HTMLAudioElement | null>(null);
+
+    useEffect(() => {
+        // Initialize audio objects
+        ringingRef.current = new Audio('https://www.soundjay.com/phone/phone-calling-1.mp3');
+        ringingRef.current.loop = true;
+        ringtoneRef.current = new Audio('https://www.soundjay.com/phone/telephone-ring-03a.mp3');
+        ringtoneRef.current.loop = true;
+
+        return () => {
+            if (ringingRef.current) { ringingRef.current.pause(); ringingRef.current = null; }
+            if (ringtoneRef.current) { ringtoneRef.current.pause(); ringtoneRef.current = null; }
+        };
+    }, []);
+
     useEffect(() => { currentCallStatus.current = callState.status; }, [callState.status]);
+
+    // Handle audio playback based on status
+    useEffect(() => {
+        const stopAll = () => {
+            ringingRef.current?.pause();
+            if (ringingRef.current) ringingRef.current.currentTime = 0;
+            ringtoneRef.current?.pause();
+            if (ringtoneRef.current) ringtoneRef.current.currentTime = 0;
+        };
+
+        if (callState.status === 'calling') {
+            stopAll();
+            ringingRef.current?.play().catch(() => console.warn('Audio play failed (waiting for user interaction)'));
+        } else if (callState.status === 'incoming') {
+            stopAll();
+            ringtoneRef.current?.play().catch(() => console.warn('Audio play failed (waiting for user interaction)'));
+        } else {
+            stopAll();
+        }
+    }, [callState.status]);
 
     // ─── Cleanup ─────────────────────────────────────────────────
     const cleanup = useCallback(() => {
         if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
         if (mediaConnectionRef.current) { mediaConnectionRef.current.close(); mediaConnectionRef.current = null; }
         if (localStreamRef.current) { localStreamRef.current.getTracks().forEach(t => t.stop()); localStreamRef.current = null; }
+        
+        // Stop audio
+        ringingRef.current?.pause();
+        ringtoneRef.current?.pause();
+
         setLocalStream(null);
         setRemoteStream(null);
         pendingCallRef.current = null;

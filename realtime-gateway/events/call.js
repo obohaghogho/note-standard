@@ -2,11 +2,12 @@ module.exports = (io, socket) => {
   // WebRTC Signalling through Socket.IO
   socket.on('call:init', (data) => {
     const { to, type, conversationId, peerId } = data;
-    console.log(`[Call] Init from ${socket.userId} to ${to}`);
+    console.log(`[Call] Init from ${socket.userId} (${socket.userName}) to ${to}`);
     
     io.to(`user:${to}`).emit('call:incoming', {
       from: socket.userId,
-      fromName: socket.userEmail, // Fallback to email if name not cached
+      fromName: socket.userName,
+      fromAvatar: socket.userAvatar,
       type,
       conversationId,
       peerId
@@ -26,14 +27,6 @@ module.exports = (io, socket) => {
     io.to(`user:${to}`).emit('call:ended', {
       from: socket.userId,
       conversationId
-    });
-  });
-
-  socket.on('call:ice-candidate', (data) => {
-    const { to, candidate } = data;
-    io.to(`user:${to}`).emit('call:ice-candidate', {
-      from: socket.userId,
-      candidate
     });
   });
 };

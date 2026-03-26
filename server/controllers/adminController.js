@@ -91,72 +91,11 @@ exports.getStats = async (req, res) => {
       .select("*", { count: "exact", head: true })
       .or(`is_online.eq.true,last_seen.gte.${twentyFourHoursAgo}`);
 
-    // --- NEW: Top Creators (Real Data) ---
-    // Fetch all note owner_ids to aggregate (scalable enough for MVP)
-    const { data: allNotes } = await serviceSupabase.from("notes").select(
-      "owner_id",
-    );
-    const noteCounts = {};
-    allNotes.forEach((n) => {
-      noteCounts[n.owner_id] = (noteCounts[n.owner_id] || 0) + 1;
-    });
+    // --- NEW: Top Creators (SQL Optimized) ---
+    const { data: topCreators } = await serviceSupabase.rpc('get_top_creators', { limit_count: 3 });
 
-    const topCreatorIds = Object.entries(noteCounts)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 3)
-      .map(([id]) => id);
-
-    let topCreators = [];
-    if (topCreatorIds.length > 0) {
-      const { data: creators } = await serviceSupabase
-        .from("profiles")
-        .select("id, username, avatar_url")
-        .in("id", topCreatorIds);
-
-      topCreators = topCreatorIds.map((id) => {
-        const profile = creators.find((c) => c.id === id);
-        return {
-          id,
-          name: profile?.username || "Unknown",
-          avatar: profile?.avatar_url,
-          count: noteCounts[id],
-        };
-      });
-    }
-
-    // --- NEW: Usage Trends (Last 7 Days) ---
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
-    sevenDaysAgo.setHours(0, 0, 0, 0);
-
-    const { data: recentNotes } = await serviceSupabase
-      .from("notes")
-      .select("created_at")
-      .gte("created_at", sevenDaysAgo.toISOString());
-
-    const { data: recentUsers } = await serviceSupabase
-      .from("profiles")
-      .select("created_at")
-      .gte("created_at", sevenDaysAgo.toISOString());
-
-    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const usageTrends = [];
-
-    for (let i = 0; i < 7; i++) {
-      const date = new Date();
-      date.setDate(date.getDate() - (6 - i)); // Go back from today
-      const dayName = days[date.getDay()];
-      const dateStr = date.toISOString().split("T")[0];
-
-      const notesCount = recentNotes.filter((n) =>
-        n.created_at.startsWith(dateStr)
-      ).length;
-      const usersCount = recentUsers.filter((u) =>
-        u.created_at.startsWith(dateStr)
-      ).length;
-
-      usageTrends.push({ day: dayName, notes: notesCount, users: usersCount });
-    }
+    // --- NEW: Usage Trends (SQL Optimized) ---
+    const { data: usageTrends } = await serviceSupabase.rpc('get_usage_trends', { days_limit: 7 });
 
     // --- NEW: System Load ---
     const cpuLoad = os.loadavg()[0]; // 1 min avg
@@ -175,8 +114,8 @@ exports.getStats = async (req, res) => {
       pendingChats: pendingChats || 0,
       onlineUsers: onlineUsers || 0,
       serverStatus: "healthy",
-      topCreators,
-      usageTrends,
+      topCreators: topCreators || [],
+      usageTrends: usageTrends || [],
       systemLoad: {
         cpu: cpuPercent,
         memory: memPercent,
@@ -251,8 +190,8 @@ exports.getStats = async (req, res) => {
         : 0) + "%";
     } catch (e) {
       console.error("Growth stats error:", e);
-      // Non-blocking, metrics will be missing
     }
+
 
     res.json(responseData);
   } catch (err) {
@@ -275,7 +214,7 @@ exports.getUsers = async (req, res) => {
     let query = serviceSupabase
       .from("profiles")
       .select(
-        "id, username, email, full_name, avatar_url, role, status, is_online, last_seen, created_at",
+        "id, username, email, full_name, avatar_url, role, status, is_online, last_seen, created_at, notesCount:notes(count)",
         { count: "exact" },
       );
 
@@ -300,25 +239,10 @@ exports.getUsers = async (req, res) => {
 
     if (error) throw error;
 
-    // Get notes count per user
-    const userIds = users.map((u) => u.id);
-    const { data: noteCounts } = await serviceSupabase
-      .from("notes")
-      .select("owner_id")
-      .in("owner_id", userIds);
-
-    // Count notes per user
-    const noteCountMap = {};
-    if (noteCounts) {
-      noteCounts.forEach((note) => {
-        noteCountMap[note.owner_id] = (noteCountMap[note.owner_id] || 0) + 1;
-      });
-    }
-
-    // Attach note counts to users
-    const usersWithNotes = users.map((user) => ({
-      ...user,
-      notesCount: noteCountMap[user.id] || 0,
+    // notesCount comes as an array with current Supabase syntax for count
+    const usersWithNotes = users.map(user => ({
+        ...user,
+        notesCount: user.notesCount?.[0]?.count || 0
     }));
 
     res.json({
@@ -457,7 +381,8 @@ exports.getSupportChats = async (req, res) => {
                         avatar_url,
                         is_online
                     )
-                )
+                ),
+                lastMessage:messages(content, created_at, sender_id)
             `)
       .eq("chat_type", "support")
       .order("updated_at", { ascending: false });
@@ -470,29 +395,16 @@ exports.getSupportChats = async (req, res) => {
 
     if (error) throw error;
 
-    // Get last message for each chat
-    const chatIds = chats.map((c) => c.id);
-    const { data: lastMessages } = await serviceSupabase
-      .from("messages")
-      .select("conversation_id, content, created_at, sender_id")
-      .in("conversation_id", chatIds)
-      .order("created_at", { ascending: false });
-
-    // Group last messages by conversation
-    const lastMessageMap = {};
-    if (lastMessages) {
-      lastMessages.forEach((msg) => {
-        if (!lastMessageMap[msg.conversation_id]) {
-          lastMessageMap[msg.conversation_id] = msg;
-        }
-      });
-    }
-
-    // Attach last message to chats
-    const chatsWithLastMessage = chats.map((chat) => ({
-      ...chat,
-      lastMessage: lastMessageMap[chat.id] || null,
-    }));
+    // messages will be an array, we only want the most recent one
+    const chatsWithLastMessage = chats.map((chat) => {
+        const sortedMsgs = (chat.lastMessage || []).sort((a, b) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        return {
+            ...chat,
+            lastMessage: sortedMsgs[0] || null,
+        };
+    });
 
     res.json(chatsWithLastMessage);
   } catch (err) {
