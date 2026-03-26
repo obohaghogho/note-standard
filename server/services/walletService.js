@@ -266,7 +266,7 @@ class WalletService {
       );
     } else {
       const finalBankCode = bankCode || bankId || "044"; // Fallback to 044 only for NGN if nothing else provided
-      payoutResult = await payoutService.createFlutterwaveTransfer(
+      payoutResult = await payoutService.createFincraTransfer(
         finalBankCode,
         bankId,
         math.formatForCurrency(amount, currency),
@@ -277,6 +277,7 @@ class WalletService {
           country: country || (currency === "NGN" ? "NG" : "US"),
           branchCode: branchCode || swiftCode,
           swiftCode: swiftCode,
+          accountName: bankName || "Account Holder",
         },
       );
     }

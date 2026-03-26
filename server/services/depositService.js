@@ -75,7 +75,7 @@ async function createCardDeposit(
     );
   }
 
-  // 2. Check Provider/Test Mode Limits (Flutterwave test mode cap)
+  // 2. Check Provider/Test Mode Limits (safety cap)
   // We use a safe margin of $5,000 USD equivalent.
   const MAX_USD_EQUIVALENT = 5000;
   try {
@@ -241,9 +241,8 @@ async function createBankDeposit(
       }
     } else if (["USD", "EUR", "GBP"].includes(upCurrency)) {
       try {
-        // Fallback logic: Use Fincra if keys exist, otherwise try Flutterwave
+        // Fallback logic: Use Fincra for USD/EUR/GBP virtual accounts
         const hasFincra = process.env.FINCRA_SECRET_KEY && process.env.FINCRA_PUBLIC_KEY;
-        const hasFlutterwave = process.env.FLUTTERWAVE_SECRET_KEY;
 
         let virtualAccount = null;
 
@@ -251,16 +250,6 @@ async function createBankDeposit(
           const FincraProvider = require("./payment/providers/FincraProvider");
           const fincra = new FincraProvider();
           virtualAccount = await fincra.createVirtualAccount({
-            currency: upCurrency,
-            email: profile.email,
-            firstName,
-            lastName,
-            phone: userPhone,
-          });
-        } else if (hasFlutterwave) {
-          const FlutterwaveProvider = require("./payment/providers/FlutterwaveProvider");
-          const flutterwave = new FlutterwaveProvider();
-          virtualAccount = await flutterwave.createVirtualAccount({
             currency: upCurrency,
             email: profile.email,
             firstName,

@@ -122,7 +122,40 @@ exports.depositTransfer = async (req, res, next) => {
 
 exports.withdraw = async (req, res) => {
   try {
-    const result = await walletService.withdraw(req.user.id, req.body);
+    const {
+      currency,
+      amount,
+      address,
+      bank_code,
+      bank_name,
+      account_number,
+      account_name,
+      swift_code,
+      branch_code,
+      country,
+      network,
+      idempotencyKey,
+    } = req.body;
+
+    const isCrypto = ["BTC", "ETH", "USDT", "USDC", "TRX", "POLYGON"].includes(String(currency).toUpperCase());
+
+    const mappedData = {
+      type: isCrypto ? "crypto" : "fiat",
+      currency,
+      amount,
+      network: network || "native",
+      destination: address || account_number,
+      bankId: account_number, 
+      bankCode: bank_code,
+      bankName: bank_name,
+      accountName: account_name,
+      country,
+      branchCode: branch_code,
+      swiftCode: swift_code,
+      idempotencyKey
+    };
+
+    const result = await walletService.withdraw(req.user.id, mappedData);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -11,8 +11,10 @@ exports.handlePaystack = async (req, res) => {
   return provider.processWebhook(req, res);
 };
 
+// Legacy: Flutterwave webhook handler (deprecated, redirects to Fincra)
 exports.handleFlutterwave = async (req, res) => {
-  const provider = PaymentFactory.getProviderByName("flutterwave");
+  logger.warn("[Webhook] Received Flutterwave webhook on deprecated endpoint. Routing to Fincra handler.");
+  const provider = PaymentFactory.getProviderByName("fincra");
   return provider.processWebhook(req, res);
 };
 

@@ -2,7 +2,8 @@ const axios = require("axios");
 const crypto = require("crypto");
 const logger = require("../../utils/logger");
 
-const FLUTTERWAVE_SECRET_KEY = process.env.FLUTTERWAVE_SECRET_KEY;
+const FINCRA_SECRET_KEY = process.env.FINCRA_SECRET_KEY;
+const FINCRA_BUSINESS_ID = process.env.FINCRA_BUSINESS_ID;
 const NOWPAYMENTS_API_KEY = process.env.NOWPAYMENTS_API_KEY;
 const NOWPAYMENTS_API_URL = process.env.NOWPAYMENTS_API_URL ||
   "https://api.nowpayments.io/v1";
@@ -13,55 +14,79 @@ const api = axios.create({
   timeout: API_TIMEOUT,
 });
 
+// Dynamically set Fincra base URL based on key pattern
+const FINCRA_BASE_URL = (FINCRA_SECRET_KEY && FINCRA_SECRET_KEY.length < 40)
+  ? "https://sandboxapi.fincra.com"
+  : "https://api.fincra.com";
+
 class PayoutService {
   /**
-   * Initiate a fiat payout via Flutterwave
-   * https://developer.flutterwave.com/reference/endpoints/transfers/
+   * Initiate a fiat payout via Fincra Disbursement API
+   * https://docs.fincra.com/docs/payouts
    */
-  async createFlutterwaveTransfer(
+  async createFincraTransfer(
+    bankCode,
+    accountNumber,
+    amount,
+    currency,
     reference,
     narration = "Withdrawal",
     options = {},
   ) {
-    if (!FLUTTERWAVE_SECRET_KEY) {
-      throw new Error("Flutterwave configuration missing");
+    if (!FINCRA_SECRET_KEY || !FINCRA_BUSINESS_ID) {
+      throw new Error("Fincra configuration missing (secret key or business ID)");
     }
 
     try {
+      const accountName = options.accountName || "Account Holder";
+      const country = options.country || (currency === "NGN" ? "NG" : "US");
+
       const response = await api.post(
-        "https://api.flutterwave.com/v3/transfers",
+        `${FINCRA_BASE_URL}/disbursements/payouts`,
         {
-          account_bank: bankCode,
-          account_number: accountNumber,
-          amount: amount,
-          currency: currency,
-          narration: narration,
-          reference: reference, 
-          callback_url: `${process.env.SERVER_URL}/api/webhooks/flutterwave`,
-          destination_branch_code: options.branchCode || options.swiftCode,
-          beneficiary_country: options.country || "NG",
+          sourceCurrency: currency,
+          destinationCurrency: currency,
+          amount: parseFloat(amount),
+          business: FINCRA_BUSINESS_ID,
+          description: narration,
+          customerReference: reference,
+          beneficiary: {
+            firstName: accountName.split(" ")[0] || "Account",
+            lastName: accountName.split(" ").slice(1).join(" ") || "Holder",
+            email: options.email || "user@notestandard.com",
+            type: "individual",
+            accountHolderName: accountName,
+            accountNumber: accountNumber,
+            bankCode: bankCode,
+            country: country,
+            sortCode: options.branchCode || options.swiftCode || undefined,
+          },
+          paymentDestination: "bank_account",
         },
         {
           headers: {
-            Authorization: `Bearer ${FLUTTERWAVE_SECRET_KEY}`,
+            "api-key": FINCRA_SECRET_KEY,
+            "x-business-id": FINCRA_BUSINESS_ID,
             "Content-Type": "application/json",
           },
         },
       );
 
+      const respData = response.data?.data || response.data || {};
+
       return {
         success: true,
-        payoutId: response.data.data.id,
-        status: response.data.data.status, // e.g., 'NEW', 'PENDING'
-        provider: "FLUTTERWAVE",
+        payoutId: respData.id || respData.reference || reference,
+        status: respData.status || "PROCESSING",
+        provider: "FINCRA",
       };
     } catch (error) {
       logger.error(
-        "[PayoutService] Flutterwave Transfer Error:",
+        "[PayoutService] Fincra Transfer Error:",
         error.response?.data || error.message,
       );
       throw new Error(
-        `Flutterwave payout failed: ${
+        `Fincra payout failed: ${
           error.response?.data?.message || error.message
         }`,
       );
