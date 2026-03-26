@@ -714,16 +714,13 @@ exports.getAutoReplySettings = async (req, res) => {
       .single();
 
     if (error && error.code !== "PGRST116") throw error;
-    res.json(
-      data ||
-        {
-          enabled: false,
-          message: "",
-          start_hour: "18:00",
-          end_hour: "09:00",
-          timezone: "UTC",
-        },
-    );
+    res.json(data || {
+      enabled: false,
+      message: "Our support team is currently offline. We will get back to you during business hours.",
+      start_hour: "18:00",
+      end_hour: "09:00",
+      timezone: "UTC"
+    });
   } catch (err) {
     console.error("Error fetching auto-reply settings:", err.message);
     res.status(500).json({ error: "Server Error" });
@@ -735,12 +732,12 @@ exports.getAutoReplySettings = async (req, res) => {
  */
 exports.updateAutoReplySettings = async (req, res) => {
   try {
-    const { id, enabled, message, start_hour, end_hour, timezone } = req.body;
+    const { enabled, message, start_hour, end_hour, timezone } = req.body;
 
     const { data, error } = await supabase
       .from("auto_reply_settings")
       .upsert([{
-        id: id || "00000000-0000-0000-0000-000000000000", // Single row
+        id: "00000000-0000-0000-0000-000000000000", // Enforce single canonical row
         enabled,
         message,
         start_hour,

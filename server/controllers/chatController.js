@@ -665,8 +665,16 @@ exports.sendMessage = async (req, res) => {
           // 3. Check offline hours
           const now = new Date();
           const hours = now.getUTCHours(); // Simple UTC check for now
-          const start = parseInt(settings.start_hour.split(":")[0]);
-          const end = parseInt(settings.end_hour.split(":")[0]);
+          
+          const parseHour = (h) => {
+            if (typeof h === 'string' && h.includes(':')) {
+              return parseInt(h.split(':')[0]);
+            }
+            return parseInt(h);
+          };
+
+          const start = parseHour(settings.start_hour);
+          const end = parseHour(settings.end_hour);
 
           let isOffline = false;
           if (start > end) { // Overnights (e.g., 18:00 to 09:00)
