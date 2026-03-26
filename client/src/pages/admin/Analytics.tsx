@@ -40,8 +40,11 @@ export const Analytics = () => {
         if (!session?.access_token) return;
         setLoading(true);
         try {
-            const res = await fetch(`${API_URL}/api/admin/stats?timeframe=${timeframe}`, {
-                headers: { 'Authorization': `Bearer ${session.access_token}` }
+            const res = await fetch(`${API_URL}/api/admin/analytics/detailed`, {
+                headers: { 
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Accept': 'application/json'
+                }
             });
             const data = await res.json();
 

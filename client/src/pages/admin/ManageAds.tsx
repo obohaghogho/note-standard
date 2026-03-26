@@ -1,26 +1,43 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'react-hot-toast';
+import { useAuth } from '../../context/AuthContext';
+import { API_URL } from '../../lib/api';
 import { adService, type Ad } from '../../services/ads';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Check, X, ExternalLink, Loader2, Megaphone } from 'lucide-react';
-import { toast } from 'react-hot-toast';
 import SecureImage from '../../components/common/SecureImage';
 
 export const ManageAds = () => {
+    const { session } = useAuth();
     const [ads, setAds] = useState<Ad[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'all'>('pending');
 
     useEffect(() => {
         fetchAds();
-    }, [activeTab]);
+    }, [activeTab, session]);
 
     const fetchAds = async () => {
+        if (!session?.access_token) return;
         setLoading(true);
         try {
-            const status = activeTab === 'all' ? undefined : activeTab;
-            const data = await adService.getAdminAds(status);
-            setAds(data);
+            const statusFilter = activeTab === 'all' ? undefined : activeTab;
+            const params = new URLSearchParams();
+            if (statusFilter) params.append('status', statusFilter);
+
+            const res = await fetch(`${API_URL}/api/ads/moderation?${params}`, {
+                headers: { 
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Accept': 'application/json'
+                }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setAds(data);
+            } else {
+                throw new Error(`HTTP error! status: ${res.status}`);
+            }
         } catch (error) {
             console.error('Failed to fetch ads:', error);
             toast.error('Failed to load ads');

@@ -67,7 +67,10 @@ export const AdminDashboard = () => {
 
         try {
             const res = await fetch(`${API_URL}/api/admin/stats`, {
-                headers: { 'Authorization': `Bearer ${session.access_token}` }
+                headers: { 
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Accept': 'application/json'
+                }
             });
 
             if (!res.ok) throw new Error('Failed to fetch stats');

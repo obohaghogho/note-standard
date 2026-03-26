@@ -42,7 +42,10 @@ export const AdminSettings = () => {
         setLoading(true);
         try {
             const res = await fetch(`${API_URL}/api/admin/settings`, {
-                headers: { 'Authorization': `Bearer ${session.access_token}` }
+                headers: { 
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Accept': 'application/json'
+                }
             });
             if (res.ok) {
                 const data = await res.json();

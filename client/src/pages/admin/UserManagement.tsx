@@ -77,7 +77,10 @@ export const UserManagement = () => {
             });
 
             const res = await fetch(`${API_URL}/api/admin/users?${params}`, {
-                headers: { 'Authorization': `Bearer ${session.access_token}` }
+                headers: { 
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Accept': 'application/json'
+                }
             });
 
             if (!res.ok) throw new Error('Failed to fetch users');
@@ -106,7 +109,8 @@ export const UserManagement = () => {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.access_token}`
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Accept': 'application/json'
                 },
                 body: JSON.stringify({ status: newStatus })
             });

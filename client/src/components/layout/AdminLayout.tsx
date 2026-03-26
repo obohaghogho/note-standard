@@ -47,7 +47,10 @@ export const AdminLayout = () => {
 
         try {
             const res = await fetch(`${API_URL}/api/admin/me`, {
-                headers: { 'Authorization': `Bearer ${session.access_token}` }
+                headers: { 
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Accept': 'application/json'
+                }
             });
 
             if (res.status === 403) {

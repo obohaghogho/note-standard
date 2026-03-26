@@ -44,7 +44,10 @@ export const BroadcastManager = () => {
         if (!session?.access_token) return;
         try {
             const res = await fetch(`${API_URL}/api/admin/broadcasts`, {
-                headers: { 'Authorization': `Bearer ${session.access_token} ` }
+                headers: { 
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Accept': 'application/json'
+                }
             });
             const data = await res.json();
             setBroadcasts(data);

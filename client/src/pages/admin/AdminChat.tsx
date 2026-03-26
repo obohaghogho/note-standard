@@ -143,7 +143,10 @@ export const AdminChat = () => {
                 if (statusFilter) params.append('status', statusFilter);
 
                 const res = await fetch(`${API_URL}/api/admin/support-chats?${params}`, {
-                    headers: { 'Authorization': `Bearer ${session.access_token}` }
+                    headers: { 
+                        'Authorization': `Bearer ${session.access_token}`,
+                        'Accept': 'application/json'
+                    }
                 });
 
                 if (res.ok) {

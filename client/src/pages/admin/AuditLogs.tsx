@@ -64,7 +64,10 @@ export const AuditLogs = () => {
             });
 
             const res = await fetch(`${API_URL}/api/admin/audit-logs?${params}`, {
-                headers: { 'Authorization': `Bearer ${session.access_token}` }
+                headers: { 
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Accept': 'application/json'
+                }
             });
 
             if (!res.ok) throw new Error('Failed to fetch audit logs');
