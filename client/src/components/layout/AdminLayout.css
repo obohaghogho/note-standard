@@ -332,19 +332,24 @@
 
 /* Responsive */
 @media (max-width: 1024px) {
-    .admin-sidebar.open {
+    .admin-sidebar.collapsed {
         width: 72px;
     }
     
+    .admin-sidebar.collapsed .sidebar-nav .nav-item span,
+    .admin-sidebar.collapsed .sidebar-footer .logout-btn span,
+    .admin-sidebar.collapsed .logo span {
+        display: none;
+    }
+
     .admin-main {
+        margin-left: 260px;
+        width: calc(100% - 260px);
+    }
+
+    .admin-sidebar.collapsed ~ .admin-main {
         margin-left: 72px;
         width: calc(100% - 72px);
-    }
-    
-    .sidebar-nav .nav-item span,
-    .sidebar-footer .logout-btn span,
-    .logo span {
-        display: none;
     }
 }
 
@@ -379,11 +384,13 @@
         padding: 0.5rem;
     }
 
-    .admin-profile {
-        padding: 0.25rem 0.5rem;
+    .profile-info {
+        display: flex;
     }
 
-    .profile-info {
-        display: none;
+    .sidebar-nav .nav-item span,
+    .sidebar-footer .logout-btn span,
+    .logo span {
+        display: inline;
     }
 }
