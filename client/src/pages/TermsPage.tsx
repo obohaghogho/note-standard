@@ -28,7 +28,7 @@ export const TermsPage = () => {
                         <h1 className="text-4xl font-bold">Terms of Service</h1>
                     </div>
                     
-                        <p><strong>Operated by:</strong> Jude Oboh</p>
+                        <p><strong>Operated by:</strong> Aghogho Plyboard Enterprise</p>
 
                     <div className="space-y-10 text-gray-300">
                         <section>
@@ -74,9 +74,9 @@ export const TermsPage = () => {
                         <div className="pt-8 border-t border-white/10">
                             <h2 className="text-2xl font-semibold text-white mb-4">5. Contact Information</h2>
                             <div className="space-y-2 text-sm text-gray-400">
-                                <p><strong>Operated by:</strong> Jude Oboh</p>
+                                <p><strong>Operated by:</strong> Aghogho Plyboard Enterprise</p>
                                 <p><strong>Email:</strong> <a href="mailto:admin@notestandard.com" className="text-primary hover:underline">admin@notestandard.com</a></p>
-                                <p><strong>Business Address:</strong> 12 udu road delta, Nigeria</p>
+                                <p><strong>Business Address:</strong> 12 Udu Road, Warri, Delta, Nigeria</p>
                             </div>
                         </div>
                     </div>

@@ -30,8 +30,11 @@ export const AboutPage = () => {
 
                     <div className="space-y-10 text-gray-300">
                         <section>
-                            <p className="leading-relaxed text-lg">
-                                NoteStandard develops and operates web-based tools that help users interact with digital systems and manage their activities online.
+                            <p className="leading-relaxed text-lg mb-4">
+                                Aghogho Plyboard Enterprise develops mobile applications for public use, providing digital solutions that are accessible and user-friendly for businesses and consumers.
+                            </p>
+                            <p className="leading-relaxed text-gray-400">
+                                Our team develops mobile apps for public use, focusing on utility, accessibility, and seamless user experience. We design applications that serve businesses and individuals across Nigeria and beyond.
                             </p>
                         </section>
 

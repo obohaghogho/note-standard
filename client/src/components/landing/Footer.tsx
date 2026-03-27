@@ -11,7 +11,7 @@ export const Footer = () => {
                             <span className="font-bold text-lg">Note Standard</span>
                         </div>
                         <p className="text-gray-400 text-sm max-w-xs">
-                            Note Standard is a technology platform that develops and operates digital applications designed to support online interactions and digital utility tools.
+                            Aghogho Plyboard Enterprise develops mobile applications for public use, providing digital solutions that are accessible and user-friendly for businesses and consumers.
                         </p>
                     </div>
 
@@ -40,8 +40,9 @@ export const Footer = () => {
                 <div className="pt-8 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-500">
                     <div className="text-center md:text-left space-y-1">
                         <p>© 2026 Note Standard</p>
-                        <p>NoteStandard is a technology platform operated by Jude Oboh.</p>
+                        <p>NoteStandard is a technology platform operated by Aghogho Plyboard Enterprise.</p>
                         <div className="flex flex-col gap-1">
+                            <p>Address: 12 Udu Road, Warri, Delta, Nigeria</p>
                             <p>Email: <a href="mailto:admin@notestandard.com" className="hover:text-white transition-colors">admin@notestandard.com</a></p>
                             <p>Alt Email: <a href="mailto:obohaghogho107@gmail.com" className="hover:text-white transition-colors">obohaghogho107@gmail.com</a></p>
                         </div>

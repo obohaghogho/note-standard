@@ -35,7 +35,7 @@ export const ContactPage = () => {
                                 <h2 className="text-xl font-semibold text-white">Company Name</h2>
                             </div>
                             <p className="text-lg mb-4 text-white font-medium">
-                                Jude Oboh
+                                Aghogho Plyboard Enterprise
                             </p>
                             
                             <div className="h-px bg-white/10 my-4" />

@@ -20,13 +20,14 @@ export const Hero = () => {
                         <span className="text-gray-400">v2.0 is now live</span>
                     </div>
 
-                    <h1 className="text-xl sm:text-5xl lg:text-7xl font-bold leading-tight mb-6">
-                        Welcome to <br />
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">Note Standard</span>
+                    <h1 className="text-xl sm:text-4xl lg:text-5xl font-bold leading-tight mb-6">
+                        Creating Mobile Apps <br />
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">for Public Use</span> <br />
+                        <span className="text-lg sm:text-2xl text-gray-400 font-medium">– Powered by Note Standard</span>
                     </h1>
 
                     <p className="text-base sm:text-xl text-gray-400 mb-8 max-w-lg leading-relaxed">
-                        NoteStandard is a technology platform that provides digital tools for users to manage activities, access features, and interact with online services through a secure web interface.
+                        Aghogho Plyboard Enterprise develops mobile applications for public use, providing digital solutions that are accessible and user-friendly for businesses and consumers.
                     </p>
 
                     <div className="flex flex-col sm:flex-row gap-4">
