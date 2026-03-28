@@ -656,6 +656,17 @@ exports.sendMessage = async (req, res) => {
 
       if (conv?.chat_type === "support" && conv?.support_status !== "escalated" && conv?.support_status !== "resolved") {
         
+        // Dynamically fetch a valid Admin user to satisfy foreign key constraints
+        let botSenderId = "00000000-0000-0000-0000-000000000000";
+        try {
+           const { data: adminUser } = await supabase.from('profiles').select('id').eq('plan_tier', 'admin').limit(1).single();
+           if (adminUser) {
+              botSenderId = adminUser.id;
+           } else {
+              botSenderId = userId; // Fallback to prevent crash
+           }
+        } catch(e) { botSenderId = userId; }
+
         const aiSupportService = require("../services/aiSupportService");
         
         if (aiSupportService.isConfigured()) {
@@ -668,7 +679,7 @@ exports.sendMessage = async (req, res) => {
               .from("messages")
               .insert([{
                 conversation_id: conversationId,
-                sender_id: "00000000-0000-0000-0000-000000000000", // System/Bot ID
+                sender_id: botSenderId, // Valid System/Bot ID
                 content: aiResponse.text,
                 type: "text",
               }])
@@ -727,7 +738,7 @@ exports.sendMessage = async (req, res) => {
                 .from("messages")
                 .insert([{
                   conversation_id: conversationId,
-                  sender_id: "00000000-0000-0000-0000-000000000000", // System/Bot ID
+                  sender_id: botSenderId, // Valid System/Bot ID
                   content: settings.message,
                   type: "text",
                 }])
