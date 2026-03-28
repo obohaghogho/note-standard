@@ -262,7 +262,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                                  </option>
                              ))}
                         </select>
-                        <div className="flex-1 relative flex items-center">
+                        <div className="flex-1 relative flex items-center group/input">
                             <input
                                 id="swap-card-amount-in"
                                 name="amountIn"
@@ -270,11 +270,11 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                                 value={amount}
                                 onChange={(e) => setAmount(e.target.value)}
                                 placeholder="0.00"
-                                className="w-full bg-transparent text-right text-2xl font-bold text-white placeholder-gray-600 focus:outline-none pr-12"
+                                className="w-full bg-transparent text-right text-2xl font-bold text-white placeholder-gray-600 focus:outline-none pr-16 transition-all"
                             />
                             <button
                                 onClick={handleMaxAmount}
-                                className="absolute right-0 text-[10px] text-purple-400 uppercase tracking-wide font-bold hover:text-purple-300 transition-colors bg-gray-800/80 px-1.5 py-0.5 rounded border border-purple-500/20"
+                                className="absolute right-0 px-2 py-1 text-[10px] text-purple-400 uppercase tracking-widest font-black hover:text-white hover:bg-purple-600 transition-all bg-purple-500/10 rounded-md border border-purple-500/30 hover:shadow-[0_0_15px_rgba(147,51,234,0.3)] active:scale-95"
                             >
                                 Max
                             </button>
@@ -308,7 +308,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                                 setToCurrency(c);
                                 setToNetwork(n);
                             }}
-                            className="bg-transparent text-xl font-bold text-white focus:outline-none cursor-pointer hover:text-purple-400 transition-colors"
+                            className="bg-transparent text-xl font-bold text-white focus:outline-none cursor-pointer hover:text-purple-400 transition-colors py-1"
                         >
                              {safeWallets.filter(w => w.currency !== fromCurrency || w.network !== fromNetwork).map(w => (
                                  <option key={`${w.currency}_${w.network}`} value={`${w.currency}_${w.network}`} className="bg-gray-800 text-base">
@@ -324,7 +324,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                                 value={preview ? Number(preview.amountOut || 0).toFixed(6) : ''}
                                 readOnly
                                 placeholder="0.00"
-                                className="w-full bg-transparent text-right text-2xl font-bold text-gray-300 placeholder-gray-600 focus:outline-none"
+                                className="w-full bg-transparent text-right text-2xl font-bold text-gray-300 placeholder-gray-600 focus:outline-none pr-2"
                             />
                         </div>
                     </div>
