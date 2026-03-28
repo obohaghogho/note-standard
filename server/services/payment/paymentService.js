@@ -331,10 +331,12 @@ class PaymentService {
     let initData = {};
     
     // 3. Initialize with provider
-    const callbackUrl = options.callbackUrl ||
-      `${
-        process.env.CLIENT_URL || "https://notestandard.com"
-      }/payment/success?reference=${reference}`;
+    let baseUrl = (process.env.CLIENT_URL || "https://notestandard.com").trim();
+    // Fincra's API strictly validates the redirectUrl and rejects 'localhost' even in sandbox mode.
+    if (providerName === 'fincra' && baseUrl.includes('localhost')) {
+       baseUrl = 'https://notestandard.com';
+    }
+    const callbackUrl = options.callbackUrl || `${baseUrl}/payment/success?reference=${reference}`;
 
     console.time(`[PaymentService] ProviderInit:${providerName}`);
     try {
