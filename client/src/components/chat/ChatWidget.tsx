@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { supabase } from '../../lib/supabaseSafe';
 import './ChatWidget.css';
 import { API_URL } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
@@ -31,9 +32,6 @@ export const ChatWidget = () => {
     } = useWebRTC();
 
     const [isOpen, setIsOpen] = useState(false);
-    useEffect(() => {
-        if (isOpen) console.log('[ChatWidget] Widget opened');
-    }, [isOpen]);
     const [isMinimized, setIsMinimized] = useState(false);
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
@@ -106,10 +104,27 @@ export const ChatWidget = () => {
         const onMessageRead = ({ messageId }: any) => {
             setMessages(prev => prev.map(m => m.id === messageId ? { ...m, read_at: new Date().toISOString() } : m));
         };
-
+        
         socket.on('receive_message', onReceiveMessage);
         socket.on('user_typing', onTyping);
         socket.on('message_read', onMessageRead);
+
+        // Also listen via Supabase for direct DB updates to support_status
+        const convChannel = supabase
+            .channel(`support_conv_${supportChat?.id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'conversations',
+                    filter: `id=eq.${supportChat?.id}`
+                },
+                (payload: any) => {
+                    setSupportChat((prev: any) => ({ ...prev, ...payload.new }));
+                }
+            )
+            .subscribe();
 
         if (supportChat) {
             socket.emit('join_room', supportChat.id);
@@ -119,6 +134,7 @@ export const ChatWidget = () => {
             socket.off('receive_message', onReceiveMessage);
             socket.off('user_typing', onTyping);
             socket.off('message_read', onMessageRead);
+            supabase.removeChannel(convChannel);
         };
     }, [socket, connected, isOpen, supportChat?.id, user?.id]);
 
@@ -292,7 +308,15 @@ export const ChatWidget = () => {
                             <div>
                                 <h4>Support Chat</h4>
                                 <span className="status">
-                                    {supportChat?.support_status === 'pending' ? 'Admin is responding' : 'We typically reply within minutes'}
+                                    {supportChat?.support_status === 'resolved' ? (
+                                        <span className="text-green-300">Issue Resolved</span>
+                                    ) : supportChat?.support_status === 'escalated' ? (
+                                        <span className="text-amber-300 animate-pulse">Connecting to a Live Agent...</span>
+                                    ) : supportChat?.id ? (
+                                        'AI Assistant is listening'
+                                    ) : (
+                                        'Support Team'
+                                    )}
                                 </span>
                             </div>
                         </div>
@@ -346,7 +370,12 @@ export const ChatWidget = () => {
                                                     key={msg.id}
                                                     className={`chat-message ${msg.sender_id === user?.id ? 'own' : 'other'}`}
                                                 >
-                                                    <div className="message-bubble">
+                                                    <div className="message-bubble relative">
+                                                        {msg.sender_id !== user?.id && (
+                                                            <span className="text-[9px] uppercase tracking-tighter opacity-50 absolute -top-4 left-1 font-bold">
+                                                                Support Specialist
+                                                            </span>
+                                                        )}
                                                         {msg.type === 'audio' ? (
                                                             <div className="flex flex-col gap-2 min-w-[200px]">
                                                                 <AudioPlayer 

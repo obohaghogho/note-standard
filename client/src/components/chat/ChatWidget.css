@@ -252,6 +252,10 @@
     font-size: 0.9rem;
 }
 
+.chat-message.other .message-bubble {
+    margin-top: 1rem; /* Space for the absolute label */
+}
+
 .msg-time {
     font-size: 0.7rem;
     opacity: 0.7;
