@@ -654,43 +654,22 @@ exports.sendMessage = async (req, res) => {
         .eq("id", conversationId)
         .single();
 
-      if (conv?.chat_type === "support") {
-        // 2. Fetch auto-reply settings
-        const { data: settings } = await supabase
-          .from("auto_reply_settings")
-          .select("*")
-          .single();
-
-        if (settings?.enabled) {
-          // 3. Check offline hours
-          const now = new Date();
-          const hours = now.getUTCHours(); // Simple UTC check for now
+      if (conv?.chat_type === "support" && conv?.support_status !== "escalated" && conv?.support_status !== "resolved") {
+        
+        const aiSupportService = require("../services/aiSupportService");
+        
+        if (aiSupportService.isConfigured()) {
+          // AI Support Agent Logic
+          const aiResponse = await aiSupportService.processSupportMessage(conversationId, content, userId);
           
-          const parseHour = (h) => {
-            if (typeof h === 'string' && h.includes(':')) {
-              return parseInt(h.split(':')[0]);
-            }
-            return parseInt(h);
-          };
-
-          const start = parseHour(settings.start_hour);
-          const end = parseHour(settings.end_hour);
-
-          let isOffline = false;
-          if (start > end) { // Overnights (e.g., 18:00 to 09:00)
-            isOffline = hours >= start || hours < end;
-          } else {
-            isOffline = hours >= start && hours < end;
-          }
-
-          if (isOffline) {
-            // 4. Send auto-reply message
+          if (aiResponse && aiResponse.text) {
+            // Insert AI message
             const { data: autoMsg, error: autoErr } = await supabase
               .from("messages")
               .insert([{
                 conversation_id: conversationId,
                 sender_id: "00000000-0000-0000-0000-000000000000", // System/Bot ID
-                content: settings.message,
+                content: aiResponse.text,
                 type: "text",
               }])
               .select()
@@ -702,6 +681,66 @@ exports.sendMessage = async (req, res) => {
                  event: "receive_message",
                  data: autoMsg
                });
+            }
+            
+            // If escalated, update status
+            if (aiResponse.isEscalated) {
+               await supabase
+                .from("conversations")
+                .update({ support_status: "escalated" })
+                .eq("id", conversationId);
+            }
+          }
+        } else {
+          // Original Offline Hours Fallback Logic
+          // 2. Fetch auto-reply settings
+          const { data: settings } = await supabase
+            .from("auto_reply_settings")
+            .select("*")
+            .single();
+
+          if (settings?.enabled) {
+            // 3. Check offline hours
+            const now = new Date();
+            const hours = now.getUTCHours(); // Simple UTC check for now
+            
+            const parseHour = (h) => {
+              if (typeof h === 'string' && h.includes(':')) {
+                return parseInt(h.split(':')[0]);
+              }
+              return parseInt(h);
+            };
+
+            const start = parseHour(settings.start_hour);
+            const end = parseHour(settings.end_hour);
+
+            let isOffline = false;
+            if (start > end) { // Overnights (e.g., 18:00 to 09:00)
+              isOffline = hours >= start || hours < end;
+            } else {
+              isOffline = hours >= start && hours < end;
+            }
+
+            if (isOffline) {
+              // 4. Send auto-reply message
+              const { data: autoMsg, error: autoErr } = await supabase
+                .from("messages")
+                .insert([{
+                  conversation_id: conversationId,
+                  sender_id: "00000000-0000-0000-0000-000000000000", // System/Bot ID
+                  content: settings.message,
+                  type: "text",
+                }])
+                .select()
+                .single();
+
+              if (!autoErr) {
+                 await realtime.emit("to_conversation", {
+                   conversationId,
+                   event: "receive_message",
+                   data: autoMsg
+                 });
+              }
             }
           }
         }

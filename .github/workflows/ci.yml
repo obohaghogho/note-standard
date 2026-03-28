@@ -20,9 +20,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: |
-          npm install
-          cd client && npm install
+        run: npm install
 
       - name: Typecheck and Build Client
         run: |
@@ -39,9 +37,7 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - name: Install dependencies
-        run: |
-          npm install
-          cd server && npm install
+        run: npm install
       - name: Check Server Start
         run: |
           cd server

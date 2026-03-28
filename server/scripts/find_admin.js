@@ -6,16 +6,18 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-async function listUsers() {
-  const { data, error } = await supabase.auth.admin.listUsers();
+async function findAdmin() {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('email, id, role')
+    .eq('role', 'admin');
+
   if (error) {
     console.error('Error:', error.message);
     return;
   }
-  console.log('--- Users List ---');
-  data.users.forEach(u => {
-    console.log(`Email: ${u.email}, ID: ${u.id}`);
-  });
+  console.log('--- Existing Admins ---');
+  console.log(JSON.stringify(data, null, 2));
 }
 
-listUsers();
+findAdmin();

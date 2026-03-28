@@ -345,15 +345,15 @@ export const Signup = () => {
                                                     </span>
                                                 </label>
                                                 
-                                                {/* Bot Protection */}
-                                                <div className="mt-4 flex justify-center scale-90 origin-center sm:scale-100">
+                                                {/* Bot Protection disabled for audit */}
+                                                {/* <div className="mt-4 flex justify-center scale-90 origin-center sm:scale-100">
                                                     <ReCAPTCHA
                                                         ref={recaptchaRef}
                                                         sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI'}
                                                         theme="dark"
                                                         onChange={(token: string | null) => setCaptchaToken(token)}
                                                     />
-                                                </div>
+                                                </div> */}
                                             </div>
                                         </div>
                                     )}
@@ -380,7 +380,7 @@ export const Signup = () => {
                                     fullWidth 
                                     className="h-12 text-sm font-bold rounded-xl active:scale-95 transition-all shadow-lg shadow-primary/20"
                                     loading={loading}
-                                    disabled={loading || (step === 'security' && !captchaToken) || (step === 'security' && !termsAccepted) || step === 'success'}
+                                    disabled={loading || (step === 'security' && !termsAccepted) || step === 'success'}
                                 >
                                     {loading ? (
                                         <div className="flex items-center gap-2">
