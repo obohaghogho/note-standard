@@ -92,6 +92,10 @@ export const ChatWidget = () => {
         const onReceiveMessage = (msg: Message) => {
             if (msg.conversation_id === supportChat?.id) {
                 setMessages(prev => [...prev, msg]);
+                // Auto-clear typing indicator when we receive a response
+                if (msg.sender_id !== user?.id) {
+                    setAdminTyping(false);
+                }
             }
         };
 
@@ -313,7 +317,7 @@ export const ChatWidget = () => {
                                     ) : supportChat?.support_status === 'escalated' ? (
                                         <span className="text-amber-300 animate-pulse">Connecting to a Live Agent...</span>
                                     ) : supportChat?.id ? (
-                                        'AI Assistant is listening'
+                                        'AI Assistant Online ✅'
                                     ) : (
                                         'Support Team'
                                     )}
@@ -405,7 +409,7 @@ export const ChatWidget = () => {
                                         {adminTyping && (
                                             <div className="typing-indicator">
                                                 <span></span><span></span><span></span>
-                                                Admin is typing...
+                                                Support Agent is typing...
                                             </div>
                                         )}
                                         <div ref={messagesEndRef} />

@@ -667,53 +667,128 @@ exports.sendMessage = async (req, res) => {
            }
         } catch(e) { botSenderId = userId; }
 
+        // === IMMEDIATELY emit typing indicator so user sees feedback ===
+        await realtime.emit("to_conversation", {
+          conversationId,
+          event: "user_typing",
+          data: { conversationId, userId: botSenderId, isTyping: true }
+        });
+
         const aiSupportService = require("../services/aiSupportService");
         
         if (aiSupportService.isConfigured()) {
-          // AI Support Agent Logic
-          const aiResponse = await aiSupportService.processSupportMessage(conversationId, content, userId);
-          
-          if (aiResponse && aiResponse.text) {
-            // Insert AI message
-            const { data: autoMsg, error: autoErr } = await supabase
-              .from("messages")
-              .insert([{
-                conversation_id: conversationId,
-                sender_id: botSenderId, // Valid System/Bot ID
-                content: aiResponse.text,
-                type: "text",
-              }])
-              .select()
-              .single();
-
-            if (!autoErr) {
-               await realtime.emit("to_conversation", {
-                 conversationId,
-                 event: "receive_message",
-                 data: autoMsg
-               });
-            }
+          try {
+            // AI Support Agent Logic — pass botSenderId for correct context
+            const aiResponse = await aiSupportService.processSupportMessage(conversationId, content, userId, botSenderId);
             
-            // If escalated, update status
-            if (aiResponse.isEscalated) {
-               await supabase
-                .from("conversations")
-                .update({ support_status: "escalated" })
-                .eq("id", conversationId);
+            // Clear typing indicator
+            await realtime.emit("to_conversation", {
+              conversationId,
+              event: "user_typing",
+              data: { conversationId, userId: botSenderId, isTyping: false }
+            });
+
+            if (aiResponse && aiResponse.text) {
+              // Insert AI message
+              const { data: autoMsg, error: autoErr } = await supabase
+                .from("messages")
+                .insert([{
+                  conversation_id: conversationId,
+                  sender_id: botSenderId,
+                  content: aiResponse.text,
+                  type: "text",
+                }])
+                .select()
+                .single();
+
+              if (!autoErr) {
+                 await realtime.emit("to_conversation", {
+                   conversationId,
+                   event: "receive_message",
+                   data: autoMsg
+                 });
+              }
+              
+              // If escalated, update status
+              if (aiResponse.isEscalated) {
+                 await supabase
+                  .from("conversations")
+                  .update({ support_status: "escalated" })
+                  .eq("id", conversationId);
+              }
+            } else {
+              // AI returned no response — send a fallback so the user isn't left hanging
+              const fallbackMsg = "Hi there! 👋 Thanks for reaching out. Our team has been notified and will get back to you shortly. – Note Standard Support Team";
+              const { data: fallbackData, error: fallbackErr } = await supabase
+                .from("messages")
+                .insert([{
+                  conversation_id: conversationId,
+                  sender_id: botSenderId,
+                  content: fallbackMsg,
+                  type: "text",
+                }])
+                .select()
+                .single();
+              
+              if (!fallbackErr) {
+                await realtime.emit("to_conversation", {
+                  conversationId,
+                  event: "receive_message",
+                  data: fallbackData
+                });
+              }
+            }
+          } catch (aiErr) {
+            console.error("[AI Support] Processing error:", aiErr.message);
+            // Clear typing indicator on error
+            await realtime.emit("to_conversation", {
+              conversationId,
+              event: "user_typing",
+              data: { conversationId, userId: botSenderId, isTyping: false }
+            });
+
+            // Send fallback message so user always gets a response
+            const errorFallbackMsg = "Hi there! 👋 Thanks for your message. Our support team has been notified and will respond shortly. – Note Standard Support Team";
+            try {
+              const { data: errMsg, error: errMsgErr } = await supabase
+                .from("messages")
+                .insert([{
+                  conversation_id: conversationId,
+                  sender_id: botSenderId,
+                  content: errorFallbackMsg,
+                  type: "text",
+                }])
+                .select()
+                .single();
+              
+              if (!errMsgErr) {
+                await realtime.emit("to_conversation", {
+                  conversationId,
+                  event: "receive_message",
+                  data: errMsg
+                });
+              }
+            } catch (fallbackInsertErr) {
+              console.error("[AI Support] Even fallback message failed:", fallbackInsertErr.message);
             }
           }
         } else {
+          // AI not configured — clear typing indicator
+          await realtime.emit("to_conversation", {
+            conversationId,
+            event: "user_typing",
+            data: { conversationId, userId: botSenderId, isTyping: false }
+          });
+
           // Original Offline Hours Fallback Logic
-          // 2. Fetch auto-reply settings
           const { data: settings } = await supabase
             .from("auto_reply_settings")
             .select("*")
             .single();
 
           if (settings?.enabled) {
-            // 3. Check offline hours
             const now = new Date();
-            const hours = now.getUTCHours(); // Simple UTC check for now
+            const hours = now.getUTCHours();
             
             const parseHour = (h) => {
               if (typeof h === 'string' && h.includes(':')) {
@@ -726,19 +801,18 @@ exports.sendMessage = async (req, res) => {
             const end = parseHour(settings.end_hour);
 
             let isOffline = false;
-            if (start > end) { // Overnights (e.g., 18:00 to 09:00)
+            if (start > end) {
               isOffline = hours >= start || hours < end;
             } else {
               isOffline = hours >= start && hours < end;
             }
 
             if (isOffline) {
-              // 4. Send auto-reply message
               const { data: autoMsg, error: autoErr } = await supabase
                 .from("messages")
                 .insert([{
                   conversation_id: conversationId,
-                  sender_id: botSenderId, // Valid System/Bot ID
+                  sender_id: botSenderId,
                   content: settings.message,
                   type: "text",
                 }])

@@ -57,7 +57,7 @@ Automatically identify the type of inquiry and respond appropriately:
     return this.openai !== null;
   }
 
-  async processSupportMessage(conversationId, userMessage, userId) {
+  async processSupportMessage(conversationId, userMessage, userId, botSenderId) {
     if (!this.isConfigured()) return null;
 
     try {
@@ -80,9 +80,9 @@ Automatically identify the type of inquiry and respond appropriately:
 
       let chatHistory = [];
       if (!error && recentMessages) {
-        // Reverse to get chronological order
+        // Reverse to get chronological order – use the actual botSenderId to identify AI messages
         chatHistory = recentMessages.reverse().map(msg => ({
-          role: msg.sender_id === "00000000-0000-0000-0000-000000000000" ? "assistant" : "user",
+          role: msg.sender_id === botSenderId ? "assistant" : "user",
           content: msg.content
         }));
       }
@@ -98,25 +98,40 @@ Automatically identify the type of inquiry and respond appropriately:
         ...chatHistory
       ];
 
-      // 3. Call Groq API endpoint
-      const completion = await this.openai.chat.completions.create({
-        model: "llama-3.3-70b-versatile",
-        messages: messagesPayload,
-        max_tokens: 300,
-        temperature: 0.7,
-      });
+      // 3. Call Groq API with a timeout to prevent hanging
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
-      const aiResponseText = completion.choices[0]?.message?.content?.trim();
+      try {
+        const completion = await this.openai.chat.completions.create({
+          model: "llama-3.3-70b-versatile",
+          messages: messagesPayload,
+          max_tokens: 300,
+          temperature: 0.7,
+        }, { signal: controller.signal });
 
-      if (!aiResponseText) return null;
+        clearTimeout(timeout);
 
-      // 4. Determine if AI escalated the chat
-      const isEscalated = aiResponseText.toLowerCase().includes("escalated") || aiResponseText.toLowerCase().includes("escalating");
+        const aiResponseText = completion.choices[0]?.message?.content?.trim();
 
-      return {
-        text: aiResponseText,
-        isEscalated
-      };
+        if (!aiResponseText) return null;
+
+        // 4. Determine if AI escalated the chat
+        const isEscalated = aiResponseText.toLowerCase().includes("escalated") || aiResponseText.toLowerCase().includes("escalating");
+
+        return {
+          text: aiResponseText,
+          isEscalated
+        };
+      } catch (apiErr) {
+        clearTimeout(timeout);
+        if (apiErr.name === 'AbortError') {
+          console.error("[AI Support] Groq API timed out after 15s");
+        } else {
+          throw apiErr;
+        }
+        return null;
+      }
       
     } catch (err) {
       console.error("[AI Support] Error processing message:", err.message);
