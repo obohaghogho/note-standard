@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { API_URL } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
@@ -19,6 +19,10 @@ import { AudioPlayer } from '../../components/chat/AudioPlayer';
 import toast from 'react-hot-toast';
 import SecureImage from '../../components/common/SecureImage';
 import './AdminChat.css';
+
+const getUserFromChat = (chat: Conversation) => {
+    return chat.members.find(m => m.role !== 'admin');
+};
 
 export const AdminChat = () => {
     const { session, user, isAdmin } = useAuth();
@@ -266,10 +270,6 @@ export const AdminChat = () => {
         return null;
     };
 
-    const getUserFromChat = (chat: Conversation) => {
-        return chat.members.find(m => m.role !== 'admin');
-    };
-
     const handleCall = (type: 'voice' | 'video') => {
         if (!activeChat || !session?.access_token) return;
         const otherUser = getUserFromChat(activeChat);
@@ -300,15 +300,15 @@ export const AdminChat = () => {
         }
     };
 
-    const filteredChats = chats.filter(chat => {
+    const filteredChats = useMemo(() => chats.filter(chat => {
         if (!searchTerm) return true;
         const chatMember = getUserFromChat(chat);
         const userProfile = chatMember?.profile;
         return (
-            chat.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            chat.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             userProfile?.username?.toLowerCase().includes(searchTerm.toLowerCase())
         );
-    });
+    }), [chats, searchTerm]);
 
     if (!isAdmin) return <div className="p-8">Access Denied</div>;
 
@@ -450,19 +450,21 @@ export const AdminChat = () => {
                         </div>
 
                         {activeAdmins[activeChat.id]?.length > 0 && (
-                            <div className="admin-presence">
-                                <span className="pulse" />
-                                <span>{activeAdmins[activeChat.id].join(', ')} also viewing</span>
+                            <div className="collaboration-banner">
+                                <div className="admin-status">
+                                    <span className="pulse-dot" />
+                                    <span>{activeAdmins[activeChat.id].join(', ')} also viewing</span>
+                                </div>
                             </div>
                         )}
 
-                        <div className="messages-area">
+                        <div className="chat-messages">
                             {messages?.map(msg => (
                                 <div
                                     key={msg.id}
-                                    className={`message-row ${msg.sender_id === user?.id ? 'own' : 'other'}`}
+                                    className={`message ${msg.sender_id === user?.id ? 'own' : 'other'}`}
                                 >
-                                    <div className={`bubble ${msg.sentiment?.label || ''}`}>
+                                    <div className={`message-content ${msg.sentiment?.label || ''}`}>
                                         {msg.type === 'audio' ? (
                                             <div className="flex flex-col gap-2 min-w-[200px]">
                                                 <AudioPlayer 
@@ -473,13 +475,13 @@ export const AdminChat = () => {
                                         ) : (
                                             <p>{msg.content}</p>
                                         )}
-                                        <div className="meta">
+                                        <div className="message-meta">
                                             {msg.sentiment && (
-                                                <span className="sentiment" title={msg.sentiment.label}>
+                                                <span className="sentiment-tag" title={msg.sentiment.label}>
                                                     {getSentimentEmoji(msg.sentiment.label)}
                                                 </span>
                                             )}
-                                            <span className="time">{formatTime(msg.created_at)}</span>
+                                            <span className="message-time">{formatTime(msg.created_at)}</span>
                                             {msg.sender_id === user?.id && (
                                                 <span className="status ml-1 scale-90 inline-block">
                                                     {msg.read_at ? (
@@ -496,7 +498,7 @@ export const AdminChat = () => {
                             <div ref={messagesEndRef} />
                         </div>
 
-                        <div className="input-area">
+                        <div className="chat-input">
                             <input
                                 type="text"
                                 placeholder="Type a response..."
