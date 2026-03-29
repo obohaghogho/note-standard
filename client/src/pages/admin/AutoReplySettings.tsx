@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Bot, Save, Clock, Globe, ShieldAlert } from 'lucide-react';
+import { Bot, Save, Clock, Globe, ShieldAlert, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { toast } from 'react-hot-toast';
 import { API_URL } from '../../lib/api';
 import './AutoReplySettings.css';
 
@@ -13,7 +14,6 @@ interface Settings {
     timezone: string;
 }
 
-// Helper to ensure time is HH:mm format
 // Helper to ensure time is HH:mm format
 const normalizeTime = (time: string | number | undefined | null) => {
     if (time === undefined || time === null || time === '') return '00:00';
@@ -67,6 +67,7 @@ export const AutoReplySettings = () => {
             }
         } catch (err) {
             console.error('Failed to fetch settings:', err);
+            toast.error('Failed to load auto-reply settings');
         } finally {
             setLoading(false);
         }
@@ -93,17 +94,25 @@ export const AutoReplySettings = () => {
                 const data = await res.json();
                 setSettings(data);
                 setStatus({ type: 'success', msg: 'Settings updated successfully' });
+                toast.success('Settings saved');
             } else {
                 throw new Error('Failed to update');
             }
         } catch (err) {
             setStatus({ type: 'error', msg: 'Failed to save settings' });
+            toast.error('Failed to save settings');
         } finally {
             setSaving(false);
         }
     };
 
-    if (loading) return <div className="loading-state">Loading settings...</div>;
+    if (loading) {
+        return (
+            <div className="loading-state">
+                <Loader2 size={32} className="animate-spin text-primary" />
+            </div>
+        );
+    }
 
     return (
         <div className="autoreply-settings">
@@ -127,13 +136,14 @@ export const AutoReplySettings = () => {
                     <div className="form-group toggle">
                         <label className="toggle-label" htmlFor="enableAutoReply">
                             <span>Enable Auto-Reply</span>
-                            <div className="toggle-switch">
+                            <div className={`switch ${settings.enabled ? 'on' : ''}`}>
                                 <input 
                                     type="checkbox" 
                                     id="enableAutoReply" 
                                     name="enabled"
                                     checked={settings.enabled}
                                     onChange={(e) => setSettings(prev => ({ ...prev, enabled: e.target.checked }))}
+                                    style={{ opacity: 0, position: 'absolute', width: '100%', height: '100%', cursor: 'pointer', zIndex: 10, margin: 0, left: 0, top: 0 }}
                                 />
                                 <div className="slider" />
                             </div>
@@ -213,7 +223,7 @@ export const AutoReplySettings = () => {
                 )}
 
                 <button type="submit" className="save-btn" disabled={saving}>
-                    <Save size={18} />
+                    {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
                     {saving ? 'Saving...' : 'Save Settings'}
                 </button>
             </form>
