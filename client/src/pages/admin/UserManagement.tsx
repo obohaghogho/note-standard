@@ -8,7 +8,8 @@ import {
     ChevronLeft,
     ChevronRight,
     FileText,
-    Filter
+    Filter,
+    Loader2
 } from 'lucide-react';
 import { API_URL } from '../../lib/api';
 import SecureImage from '../../components/common/SecureImage';
@@ -95,6 +96,7 @@ export const UserManagement = () => {
             });
         } catch (err) {
             console.error('Failed to fetch users:', err);
+            toast.error('Failed to load users');
         } finally {
             setLoading(false);
         }
@@ -256,7 +258,7 @@ export const UserManagement = () => {
                                                         disabled={actionLoading === user.id}
                                                         title="Suspend user"
                                                     >
-                                                        <UserX size={16} />
+                                                        {actionLoading === user.id ? <Loader2 size={16} className="animate-spin" /> : <UserX size={16} />}
                                                     </button>
                                                 ) : (
                                                     <button
@@ -265,7 +267,7 @@ export const UserManagement = () => {
                                                         disabled={actionLoading === user.id}
                                                         title="Reactivate user"
                                                     >
-                                                        <UserCheck size={16} />
+                                                        {actionLoading === user.id ? <Loader2 size={16} className="animate-spin" /> : <UserCheck size={16} />}
                                                     </button>
                                                 )}
                                             </>
