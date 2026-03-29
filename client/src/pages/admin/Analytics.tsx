@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { toast } from 'react-hot-toast';
 import {
     Users,
     Activity as ActivityIcon,
@@ -52,6 +53,7 @@ export const Analytics = () => {
             setStats(data);
         } catch (err) {
             console.error('Failed to fetch analytics:', err);
+            toast.error('Failed to load real-time analytics');
         } finally {
             setLoading(false);
         }
@@ -67,16 +69,21 @@ export const Analytics = () => {
     }
 
     // Calc max for chart scaling
-    const maxTrendValue = stats?.usageTrends
-        ? Math.max(...stats.usageTrends.map(d => Math.max(d.notes, d.users)), 10)
-        : 10;
+    const maxTrendValue = useMemo(() => {
+        return stats?.usageTrends
+            ? Math.max(...stats.usageTrends.map(d => Math.max(d.notes, d.users)), 10)
+            : 10;
+    }, [stats?.usageTrends]);
 
     return (
         <div className="analytics-page">
             <div className="analytics-header">
-                <div className="header-info">
-                    <h2>Advanced Analytics</h2>
-                    <p>Real-time system usage and growth metrics</p>
+                <div className="header-title">
+                    <ActivityIcon className="header-icon" />
+                    <div className="header-info">
+                        <h2>Advanced Analytics</h2>
+                        <p>Real-time system usage and growth metrics</p>
+                    </div>
                 </div>
                 <div className="timeframe-selector">
                     <Calendar size={18} />
@@ -161,8 +168,8 @@ export const Analytics = () => {
                     </div>
 
                     <div className="flex-1 flex items-end justify-between gap-4 h-64 px-2 pb-2">
-                        {stats?.usageTrends?.map((trend, i) => (
-                            <div key={i} className="flex flex-col items-center gap-2 w-full h-full justify-end group relative">
+                        {stats?.usageTrends?.map((trend) => (
+                            <div key={trend.day} className="flex flex-col items-center gap-2 w-full h-full justify-end group relative">
                                 <div className="w-full flex gap-1 items-end justify-center h-full">
                                     {/* Users Bar */}
                                     <div
