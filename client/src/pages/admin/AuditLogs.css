@@ -216,16 +216,16 @@
 
 .audit-logs .details-cell pre {
     margin: 0;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     color: rgba(var(--accent-rgb), 0.7);
     background: rgba(0, 0, 0, 0.2);
     padding: 0.5rem;
     border-radius: 6px;
-    max-width: 200px;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    max-width: 250px;
+    max-height: 80px;
+    overflow-y: auto;
     white-space: pre-wrap;
-    word-break: break-all;
+    word-break: break-word;
 }
 
 .audit-logs .pagination {

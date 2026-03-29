@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { toast } from 'react-hot-toast';
 import {
     History as HistoryIcon,
     Filter,
@@ -82,6 +83,7 @@ export const AuditLogs = () => {
             });
         } catch (err) {
             console.error('Failed to fetch audit logs:', err);
+            toast.error('Failed to load audit logs');
         } finally {
             setLoading(false);
         }
