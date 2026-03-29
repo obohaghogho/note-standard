@@ -92,8 +92,6 @@ export const Billing = () => {
             const dataRes = await response.json();
             if (dataRes.success) {
                 toast.success('Successfully upgraded to Pro!');
-                // Remove query params to clean URL
-                window.history.replaceState({}, '', '/dashboard/billing');
                 refreshProfile(); // Refresh global auth state
             } else {
                 toast.error('Verification failed. Please contact support.');
@@ -102,6 +100,8 @@ export const Billing = () => {
             console.error('Sync error:', error);
             toast.error('Failed to verify subscription');
         } finally {
+            // ALWAYS clean URL parameters to prevent infinite looping on page reload
+            window.history.replaceState({}, '', '/dashboard/billing');
             setProcessing(false);
         }
     };

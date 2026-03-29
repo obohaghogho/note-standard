@@ -205,11 +205,12 @@ const ChatWindow: React.FC = () => {
     useEffect(() => {
         if (!searchQuery.trim() || !isSearchOpen) {
             setSearchResults([]);
+            setIsSearching(false);
             return;
         }
 
+        setIsSearching(true);
         const delayDebounce = setTimeout(async () => {
-            setIsSearching(true);
             try {
                 const res = await fetch(`${API_URL}/api/chat/conversations/${activeConversationId}/search?q=${encodeURIComponent(searchQuery)}`, {
                     headers: { 'Authorization': `Bearer ${session?.access_token}` }
@@ -593,8 +594,8 @@ const ChatWindow: React.FC = () => {
                         ))}
                     </div>
                 ) : (
-                    currentMessages.map((msg) => (
-                        <div key={msg.id || Math.random()} className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                    currentMessages.map((msg, index) => (
+                        <div key={msg.id || `msg-temp-${index}`} className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                             <div className={`max-w-[92%] md:max-w-[70%] rounded-2xl p-3 shadow-md border ${msg.sender_id === user?.id ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-br-sm border-blue-500/50' : 'bg-gray-800 text-gray-200 rounded-bl-sm border-gray-700'} relative group`}>
                                 {msg.sender_id === user?.id && (
                                     <button 
