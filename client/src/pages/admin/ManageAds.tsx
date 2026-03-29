@@ -5,13 +5,14 @@ import { API_URL } from '../../lib/api';
 import { adService, type Ad } from '../../services/ads';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
-import { Check, X, ExternalLink, Loader2, Megaphone } from 'lucide-react';
+import { Check, X, ExternalLink, Loader2, Target } from 'lucide-react';
 import SecureImage from '../../components/common/SecureImage';
 
 export const ManageAds = () => {
     const { session } = useAuth();
     const [ads, setAds] = useState<Ad[]>([]);
     const [loading, setLoading] = useState(true);
+    const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'all'>('pending');
 
     useEffect(() => {
@@ -47,15 +48,18 @@ export const ManageAds = () => {
     };
 
     const handleAction = async (id: string, action: 'approved' | 'rejected') => {
+        setActionLoading(id);
         try {
             await adService.updateAdStatus(id, action);
             toast.success(`Ad ${action} successfully`);
 
             // Optimistic update
-            setAds(ads.filter(ad => ad.id !== id));
+            setAds(prev => prev.filter(ad => ad.id !== id));
         } catch (error) {
             console.error(error);
             toast.error('Failed to update status');
+        } finally {
+            setActionLoading(null);
         }
     };
 
@@ -73,7 +77,7 @@ export const ManageAds = () => {
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold flex items-center gap-2">
-                        <Megaphone className="text-primary" />
+                        <Target className="text-primary" />
                         Ad Moderation
                     </h1>
                     <p className="text-gray-400">Review and manage user-created advertisements</p>
@@ -109,7 +113,7 @@ export const ManageAds = () => {
                 <div className="grid gap-6">
                     {ads.length === 0 ? (
                         <div className="text-center py-20 text-gray-500">
-                            <Megaphone size={48} className="mx-auto mb-4 opacity-20" />
+                            <Target size={48} className="mx-auto mb-4 opacity-20" />
                             <p>No advertisements found in this category.</p>
                         </div>
                     ) : (
@@ -150,15 +154,17 @@ export const ManageAds = () => {
                                                         size="sm"
                                                         className="bg-green-500/20 text-green-400 hover:bg-green-500/30 border-green-500/50 flex-1 sm:flex-none"
                                                         onClick={() => handleAction(ad.id, 'approved')}
+                                                        disabled={actionLoading === ad.id}
                                                     >
-                                                        <Check size={16} className="mr-1" /> Approve
+                                                        {actionLoading === ad.id ? <Loader2 size={16} className="animate-spin mr-1" /> : <Check size={16} className="mr-1" />} Approve
                                                     </Button>
                                                     <Button
                                                         size="sm"
                                                         className="bg-red-500/20 text-red-400 hover:bg-red-500/30 border-red-500/50 flex-1 sm:flex-none"
                                                         onClick={() => handleAction(ad.id, 'rejected')}
+                                                        disabled={actionLoading === ad.id}
                                                     >
-                                                        <X size={16} className="mr-1" /> Reject
+                                                        {actionLoading === ad.id ? <Loader2 size={16} className="animate-spin mr-1" /> : <X size={16} className="mr-1" />} Reject
                                                     </Button>
                                                 </div>
                                             )}
@@ -167,8 +173,9 @@ export const ManageAds = () => {
                                                     size="sm"
                                                     className="bg-red-500/20 text-red-400 hover:bg-red-500/30 border-red-500/50 w-full sm:w-auto"
                                                     onClick={() => handleAction(ad.id, 'rejected')}
+                                                    disabled={actionLoading === ad.id}
                                                 >
-                                                    Revoke
+                                                    {actionLoading === ad.id ? <Loader2 size={16} className="animate-spin mr-2" /> : null} Revoke
                                                 </Button>
                                             )}
                                         </div>
