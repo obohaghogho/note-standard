@@ -4,11 +4,13 @@ import {
     Megaphone,
     Plus,
     Trash2,
-    Clock
+    Clock,
+    Loader2
 } from 'lucide-react';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import DOMPurify from 'dompurify';
+import { toast } from 'react-hot-toast';
 import { API_URL } from '../../lib/api';
 import './BroadcastManager.css';
 
@@ -28,6 +30,8 @@ export const BroadcastManager = () => {
     const { session } = useAuth();
     const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isDeleting, setIsDeleting] = useState<string | null>(null);
     const [showModal, setShowModal] = useState(false);
     const [newBroadcast, setNewBroadcast] = useState({
         title: '',
@@ -53,6 +57,7 @@ export const BroadcastManager = () => {
             setBroadcasts(data);
         } catch (err) {
             console.error('Failed to fetch broadcasts:', err);
+            toast.error('Failed to load broadcasts');
         } finally {
             setLoading(false);
         }
@@ -62,6 +67,7 @@ export const BroadcastManager = () => {
         e.preventDefault();
         if (!session?.access_token) return;
 
+        setIsSubmitting(true);
         try {
             const expiresAt = new Date();
             expiresAt.setHours(expiresAt.getHours() + parseInt(newBroadcast.expires_in_hours));
@@ -70,7 +76,7 @@ export const BroadcastManager = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.access_token} `
+                    'Authorization': `Bearer ${session.access_token}`
                 },
                 body: JSON.stringify({
                     ...newBroadcast,
@@ -83,9 +89,15 @@ export const BroadcastManager = () => {
                 setBroadcasts(prev => [created, ...prev]);
                 setShowModal(false);
                 setNewBroadcast({ title: '', content: '', target_audience: 'all', expires_in_hours: '24' });
+                toast.success('Broadcast sent successfully');
+            } else {
+                toast.error('Failed to send broadcast');
             }
         } catch (err) {
             console.error('Failed to create broadcast:', err);
+            toast.error('An error occurred');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -93,6 +105,7 @@ export const BroadcastManager = () => {
         if (!window.confirm('Are you sure you want to delete this broadcast?')) return;
         if (!session?.access_token) return;
 
+        setIsDeleting(id);
         try {
             const res = await fetch(`${API_URL}/api/admin/broadcasts/${id}`, {
                 method: 'DELETE',
@@ -101,9 +114,15 @@ export const BroadcastManager = () => {
 
             if (res.ok) {
                 setBroadcasts(prev => prev.filter(b => b.id !== id));
+                toast.success('Broadcast deleted');
+            } else {
+                toast.error('Failed to delete broadcast');
             }
         } catch (err) {
             console.error('Failed to delete broadcast:', err);
+            toast.error('An error occurred while deleting');
+        } finally {
+            setIsDeleting(null);
         }
     };
 
@@ -124,7 +143,9 @@ export const BroadcastManager = () => {
 
             <div className="broadcast-grid">
                 {loading ? (
-                    <div>Loading...</div>
+                    <div className="col-span-full flex justify-center py-20">
+                        <Loader2 className="animate-spin text-primary" size={32} />
+                    </div>
                 ) : broadcasts.length === 0 ? (
                     <div className="empty-state">
                         <Megaphone size={48} />
@@ -136,8 +157,12 @@ export const BroadcastManager = () => {
                         <div key={b.id} className="broadcast-card">
                             <div className="card-header">
                                 <span className="audience-tag">{b.target_audience}</span>
-                                <button className="delete-btn" onClick={() => handleDelete(b.id)}>
-                                    <Trash2 size={16} />
+                                <button 
+                                    className="delete-btn" 
+                                    onClick={() => handleDelete(b.id)}
+                                    disabled={isDeleting === b.id}
+                                >
+                                    {isDeleting === b.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                                 </button>
                             </div>
                             <h3>{b.title}</h3>
@@ -216,7 +241,12 @@ export const BroadcastManager = () => {
                             </div>
                             <div className="modal-actions">
                                 <button type="button" className="cancel-btn" onClick={() => setShowModal(false)}>Cancel</button>
-                                <button type="submit" className="submit-btn" disabled={!newBroadcast.title || !newBroadcast.content || newBroadcast.content === '<p><br></p>'}>
+                                <button 
+                                    type="submit" 
+                                    className="submit-btn flex items-center justify-center gap-2" 
+                                    disabled={!newBroadcast.title || !newBroadcast.content || newBroadcast.content === '<p><br></p>' || isSubmitting}
+                                >
+                                    {isSubmitting && <Loader2 size={16} className="animate-spin" />}
                                     Send Broadcast
                                 </button>
                             </div>
