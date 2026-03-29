@@ -7,7 +7,7 @@ import {
     Database,
     Lock,
     Save,
-    RefreshCcw,
+    Loader2,
     ExternalLink
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -58,6 +58,7 @@ export const AdminSettings = () => {
             }
         } catch (err) {
             console.error('Failed to fetch settings:', err);
+            toast.error('Failed to load system settings');
         } finally {
             setLoading(false);
         }
@@ -90,22 +91,25 @@ export const AdminSettings = () => {
     };
 
     if (loading) {
-        return <div className="flex justify-center py-20"><RefreshCcw className="animate-spin text-primary" /></div>;
+        return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" size={32} /></div>;
     }
 
     return (
         <div className="admin-settings-page">
             <div className="settings-header">
-                <div className="header-info">
-                    <h2>System Settings</h2>
-                    <p>Global configuration and security controls</p>
+                <div className="header-title">
+                    <Settings className="header-icon" />
+                    <div className="header-info">
+                        <h2>System Settings</h2>
+                        <p>Global configuration and security controls</p>
+                    </div>
                 </div>
                 <button
                     className={`save-btn ${saving ? 'saving' : ''}`}
                     onClick={handleSave}
                     disabled={saving}
                 >
-                    {saving ? <RefreshCcw className="spinner" size={18} /> : <Save size={18} />}
+                    {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
                     {saving ? 'Saving...' : 'Save Changes'}
                 </button>
             </div>

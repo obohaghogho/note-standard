@@ -35,6 +35,30 @@
     }
 }
 
+.header-title {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.header-icon {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    padding: 8px;
+    background: rgba(99, 102, 241, 0.1);
+    color: #6366f1;
+    border-radius: 10px;
+}
+
+@media (min-width: 768px) {
+    .header-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+    }
+}
+
 .header-info h2 {
     font-size: 1.75rem;
     font-weight: 600;
