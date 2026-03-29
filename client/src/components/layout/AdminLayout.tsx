@@ -16,7 +16,8 @@ import {
     History as HistoryIcon,
     Megaphone,
     Bot,
-    Monitor
+    Target,
+    Home
 } from 'lucide-react';
 import { LanguageSelector } from '../common/LanguageSelector';
 import SecureImage from '../common/SecureImage';
@@ -78,7 +79,7 @@ export const AdminLayout = () => {
         { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
         { to: '/admin/users', icon: Users, label: 'Users' },
         { to: '/admin/chats', icon: MessageSquare, label: 'Support Chats', badge: newChatsCount },
-        { to: '/admin/ads', icon: Monitor, label: 'Manage Ads' },
+        { to: '/admin/ads', icon: Target, label: 'Manage Ads' },
         { to: '/admin/audit-logs', icon: HistoryIcon, label: 'Audit Logs' },
         { to: '/admin/broadcasts', icon: Megaphone, label: 'Broadcasts' },
         { to: '/admin/auto-reply', icon: Bot, label: 'Auto-Reply' },
@@ -114,7 +115,7 @@ export const AdminLayout = () => {
                             border: '1px solid rgba(56, 189, 248, 0.2)' 
                         }}
                     >
-                        <Monitor size={20} />
+                        <Home size={20} />
                         {sidebarOpen && <span>User Dashboard</span>}
                     </NavLink>
 

@@ -12,7 +12,8 @@ import {
     AlertCircle,
     Cpu,
     Database,
-    Trophy
+    Trophy,
+    Wifi
 } from 'lucide-react';
 import { API_URL } from '../../lib/api';
 import { Card } from '../../components/common/Card';
@@ -110,22 +111,19 @@ export const AdminDashboard = () => {
             label: 'Total Users',
             value: stats?.totalUsers || 0,
             icon: Users,
-            color: 'blue',
-            trend: '+12%'
+            color: 'blue'
         },
         {
             label: 'Active Users (24h)',
             value: stats?.activeUsers || 0,
             icon: ActivityIcon,
-            color: 'green',
-            trend: '+5%'
+            color: 'green'
         },
         {
             label: 'Total Notes',
             value: stats?.totalNotes || 0,
             icon: FileText,
-            color: 'purple',
-            trend: '+23%'
+            color: 'purple'
         },
         {
             label: 'Open Chats',
@@ -143,7 +141,7 @@ export const AdminDashboard = () => {
         {
             label: 'Online Now',
             value: stats?.onlineUsers || 0,
-            icon: TrendingUp,
+            icon: Wifi,
             color: 'cyan',
             live: true
         },
@@ -167,8 +165,8 @@ export const AdminDashboard = () => {
             </div>
 
             <div className="stats-grid">
-                {statCards.map((card, index) => (
-                    <div key={index} className={`stat-card ${card.color}`}>
+                {statCards.map((card) => (
+                    <div key={card.label} className={`stat-card ${card.color}`}>
                         <div className="stat-icon">
                             <card.icon size={24} />
                         </div>
@@ -210,8 +208,8 @@ export const AdminDashboard = () => {
                     </div>
 
                     <div className="flex-1 flex items-end justify-between gap-4 h-48 px-2">
-                        {stats?.usageTrends?.map((trend, i) => (
-                            <div key={i} className="flex flex-col items-center gap-2 w-full h-full justify-end group">
+                        {stats?.usageTrends?.map((trend) => (
+                            <div key={trend.day} className="flex flex-col items-center gap-2 w-full h-full justify-end group">
                                 <div className="w-full flex gap-1 items-end justify-center h-full">
                                     {/* Users Bar */}
                                     <div
