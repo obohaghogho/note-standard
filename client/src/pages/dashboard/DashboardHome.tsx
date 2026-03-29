@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
-import { Clock, Plus, FileText, Star } from 'lucide-react';
+import { Clock, Plus, FileText, Star, ArrowDownLeft, ArrowUpRight, Activity } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNotes } from '../../context/NotesContext';
+import { useWallet } from '../../hooks/useWallet';
 import { useNavigate, useOutletContext } from 'react-router-dom';
+import { formatCurrency } from '../../lib/CurrencyFormatter';
 
 interface DashboardContext {
     openCreateNoteModal: () => void;
@@ -15,11 +17,35 @@ export const DashboardHome = () => {
     const navigate = useNavigate();
     const { openCreateNoteModal } = useOutletContext<DashboardContext>();
     const { notes, stats, loading: notesLoading } = useNotes();
+    const { transactions, loading: walletLoading } = useWallet();
     const [greeting, setGreeting] = useState('');
     
-    // Recent notes are just the first 3
-    const recentNotes = notes.slice(0, 3);
-    const loading = notesLoading;
+    // Combined Activity Feed Logic
+    const recentNotes = notes.slice(0, 5).map(n => ({
+        id: n.id,
+        type: 'NOTE',
+        title: n.title || 'New Note',
+        date: new Date(n.updated_at || n.created_at),
+        icon: <FileText size={16} />,
+        color: 'text-blue-400',
+        content: n.content
+    }));
+
+    const recentTxs = transactions.slice(0, 5).map(t => ({
+        id: t.id,
+        type: 'TX',
+        title: t.display_label || (t.type === 'DEPOSIT' ? 'Deposit' : 'Transfer'),
+        date: new Date(t.created_at),
+        icon: t.type === 'DEPOSIT' ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />,
+        color: t.status === 'COMPLETED' ? 'text-green-400' : 'text-amber-400',
+        amount: formatCurrency(t.amount, t.currency)
+    }));
+
+    const combinedActivity = [...recentNotes, ...recentTxs]
+        .sort((a, b) => b.date.getTime() - a.date.getTime())
+        .slice(0, 5);
+
+    const loading = notesLoading || walletLoading;
 
     // Greeting logic
     useEffect(() => {
@@ -37,12 +63,12 @@ export const DashboardHome = () => {
 
     const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
 
-    // Calculate Recent Activity
+    // Calculate Recent Activity (Now uses combined multi-module feed)
     const getLastActivity = () => {
         if (loading) return '-';
-        if (recentNotes.length === 0 || !recentNotes[0]) return 'No activity';
+        if (combinedActivity.length === 0 || !combinedActivity[0]) return 'No activity';
         
-        const lastDate = new Date(recentNotes[0].updated_at || recentNotes[0].created_at || new Date());
+        const lastDate = combinedActivity[0].date;
         if (isNaN(lastDate.getTime())) return 'No activity';
 
         const now = new Date();
@@ -107,49 +133,93 @@ export const DashboardHome = () => {
                 </Card>
             </div>
 
-            {/* Recent Notes */}
-            <div>
-                <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
-                    <h2 className="text-xl font-bold">Recent Notes</h2>
-                    <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/notes')}>View All</Button>
+            {/* Live Activity Feed & Recent Notes */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Unified Activity Timeline */}
+                <div className="lg:col-span-1 space-y-4">
+                    <div className="flex items-center justify-between mb-2">
+                        <h2 className="text-xl font-bold flex items-center gap-2">
+                            <Activity size={20} className="text-primary" />
+                            Live Activity
+                        </h2>
+                    </div>
+                    
+                    <Card variant="glass" className="p-4 space-y-4">
+                        {loading ? (
+                            <div className="text-gray-500 text-sm animate-pulse">Syncing platform activity...</div>
+                        ) : combinedActivity.length === 0 ? (
+                            <div className="text-gray-400 text-sm py-4">No recent activity detected.</div>
+                        ) : (
+                            combinedActivity.map((act) => (
+                                <div key={act.id} className="flex items-start gap-4 group cursor-pointer" onClick={() => navigate(act.type === 'NOTE' ? '/dashboard/notes' : '/dashboard/wallet/transactions')}>
+                                    <div className={`p-2 rounded-lg bg-white/5 ${act.color} group-hover:scale-110 transition-transform`}>
+                                        {act.icon}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex justify-between items-start">
+                                            <p className="text-sm font-semibold truncate group-hover:text-primary transition-colors">{act.title}</p>
+                                            {act.type === 'TX' && (act as any).amount && <span className="text-xs font-bold text-white ml-2">{(act as any).amount}</span>}
+                                        </div>
+                                        <p className="text-[10px] text-gray-500">
+                                            {act.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {act.type === 'NOTE' ? 'Workspace' : 'Finance'}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                        <Button 
+                            variant="ghost" 
+                            fullWidth 
+                            size="sm" 
+                            className="mt-2 text-xs text-gray-400 hover:text-white border-t border-white/5 pt-3 rounded-none"
+                            onClick={() => navigate('/dashboard/wallet/transactions')}
+                        >
+                            View All Transactions
+                        </Button>
+                    </Card>
                 </div>
 
-                {loading ? (
-                    <div className="text-gray-400">Loading notes...</div>
-                ) : recentNotes.length === 0 ? (
-                    <div className="text-gray-400">No notes yet. Create one to get started!</div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {recentNotes?.map((note) => (
-                            <Card 
-                                key={note.id} 
-                                hoverEffect 
-                                className="p-6 cursor-pointer group"
-                                onClick={() => navigate('/dashboard/notes')}
-                            >
-                                <div className="flex items-start justify-between mb-4">
-                                    <div className="p-2 bg-white/5 rounded-lg group-hover:bg-primary/20 transition-colors">
-                                        <FileText size={18} className="text-gray-400 group-hover:text-primary transition-colors" />
-                                    </div>
-                                    <span className="text-xs text-gray-500">
-                                        {new Date(note.created_at).toLocaleDateString()}
-                                    </span>
-                                </div>
-                                <h3 className="font-semibold text-lg mb-2 group-hover:text-primary transition-colors">
-                                    {note.title || 'Untitled Note'}
-                                </h3>
-                                <p className="text-gray-400 text-sm line-clamp-3">
-                                    {note.content || 'No content...'}
-                                </p>
-                                <div className="mt-4 flex flex-wrap gap-2">
-                                    {note.tags?.map(tag => (
-                                        <span key={tag} className="text-xs px-2 py-1 bg-white/5 rounded-md text-gray-400">{tag}</span>
-                                    ))}
-                                </div>
-                            </Card>
-                        ))}
+                {/* Recent Workspace Notes */}
+                <div className="lg:col-span-2">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl font-bold">Recent Notes</h2>
+                        <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/notes')}>View All</Button>
                     </div>
-                )}
+
+                    {loading ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {[1, 2].map(i => <div key={i} className="h-40 bg-white/5 rounded-2xl animate-pulse" />)}
+                        </div>
+                    ) : notes.length === 0 ? (
+                        <div className="text-gray-400 bg-white/5 p-8 rounded-2xl text-center">No notes yet. Create one to get started!</div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {notes.slice(0, 4).map((note) => (
+                                <Card 
+                                    key={note.id} 
+                                    hoverEffect 
+                                    className="p-5 cursor-pointer group"
+                                    onClick={() => navigate('/dashboard/notes')}
+                                >
+                                    <div className="flex items-start justify-between mb-3">
+                                        <div className="p-2 bg-white/5 rounded-lg group-hover:bg-primary/20 transition-colors">
+                                            <FileText size={16} className="text-gray-400 group-hover:text-primary transition-colors" />
+                                        </div>
+                                        <span className="text-[10px] text-gray-500">
+                                            {new Date(note.created_at).toLocaleDateString()}
+                                        </span>
+                                    </div>
+                                    <h3 className="font-bold text-base mb-1 truncate group-hover:text-primary transition-colors">
+                                        {note.title || 'Untitled Note'}
+                                    </h3>
+                                    <p className="text-gray-400 text-xs line-clamp-2">
+                                        {note.content || 'No content...'}
+                                    </p>
+                                </Card>
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

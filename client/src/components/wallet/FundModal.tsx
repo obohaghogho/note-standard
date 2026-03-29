@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, CreditCard, Building2, Bitcoin, Copy, ArrowRight, Loader2, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { X, CreditCard, Bitcoin, Copy, Loader2, ShieldCheck, CheckCircle2, Landmark, Zap, Lock } from 'lucide-react';
 import { Button } from '../common/Button';
 import walletApi from '../../api/walletApi';
 import toast from 'react-hot-toast';
@@ -299,7 +299,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                 <h2 className="modal-header text-2xl">Activate Digital Services</h2>
                 <div className="modal-body">
                     <p className="text-gray-400 text-sm mb-4 flex items-center gap-2">
-                        <ShieldCheck size={16} className="text-green-500" />
+                        <ShieldCheck size={16} className="text-primary" />
                         Secure Activity Protocol
                     </p>
 
@@ -451,8 +451,8 @@ export const FundModal: React.FC<FundModalProps> = ({
                                 : 'text-gray-400 hover:text-white hover:bg-gray-800'
                         }`}
                     >
-                        <Building2 size={18} />
-                        <span className="text-sm font-medium">Bank</span>
+                        <Landmark size={18} />
+                        <span className="text-sm font-medium">Transfer</span>
                     </button>
                     {isCrypto && (
                         <button
@@ -536,9 +536,9 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         <span className="text-[10px] text-gray-500">Transaction Max: {MAX_PER_TRANSACTION} {effectivePayCurrency}</span>
                                     </div>
                                 </div>
-                                <Button onClick={handleCardDeposit} disabled={loading} className="w-full">
-                                    {loading ? <Loader2 className="animate-spin mr-2" size={18} /> : <CreditCard className="mr-2" size={18} />}
-                                    Continue with Card
+                                <Button onClick={handleCardDeposit} disabled={loading} className="w-full h-12 text-base font-bold">
+                                    {loading ? <Loader2 className="animate-spin mr-2" size={20} /> : <Zap className="mr-2" size={20} />}
+                                    Proceed to Checkout
                                 </Button>
                             </div>
                         )}
@@ -564,9 +564,9 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         </span>
                                     </div>
                                 </div>
-                                <Button onClick={handleBankDeposit} disabled={loading} className="w-full">
-                                    {loading ? <Loader2 className="animate-spin mr-2" size={18} /> : <ArrowRight className="mr-2" size={18} />}
-                                    Get Service Details
+                                <Button onClick={handleBankDeposit} disabled={loading} className="w-full h-12 text-base font-bold">
+                                    {loading ? <Loader2 className="animate-spin mr-2" size={20} /> : <Landmark className="mr-2" size={20} />}
+                                    Generate Transfer Details
                                 </Button>
                             </div>
                         )}
@@ -710,14 +710,18 @@ export const FundModal: React.FC<FundModalProps> = ({
                     </motion.div>
                 </AnimatePresence>
 
-                <div className="mt-8 pt-6 border-t border-gray-800/50 flex items-center justify-center gap-4 text-[10px] text-gray-500">
-                    <div className="flex items-center gap-1">
-                        <CheckCircle2 size={12} className="text-purple-500" />
-                        PCI-DSS Compliant
+                <div className="mt-8 pt-6 border-t border-gray-800/50 flex flex-wrap items-center justify-center gap-6 text-[10px] text-gray-500">
+                    <div className="flex items-center gap-2">
+                        <Lock size={12} className="text-primary" />
+                        PCI-DSS COMPLIANT
                     </div>
-                    <div className="flex items-center gap-1">
-                        <CheckCircle2 size={12} className="text-purple-500" />
-                        256-bit Encryption
+                    <div className="flex items-center gap-2">
+                        <ShieldCheck size={12} className="text-primary" />
+                        256-BIT ENCRYPTION
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <CheckCircle2 size={12} className="text-primary" />
+                        SECURE PROTOCOL
                     </div>
                 </div>
             </div>
