@@ -18,7 +18,12 @@ router.get("/me", adminController.getAdminProfile);
 // User Management
 router.get("/users", adminController.getUsers);
 router.put("/users/:id/status", adminController.updateUserStatus);
+router.put("/users/:id/limit", adminController.updateUserLimit);
 router.get("/users/:id/notes", adminController.getUserNotes);
+
+// Limit Increase Requests
+router.get("/limit-requests", adminController.getLimitRequests);
+router.put("/limit-requests/:id", adminController.updateLimitRequest);
 
 // Support Chats
 router.get("/support-chats", adminController.getSupportChats);

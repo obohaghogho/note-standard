@@ -16,6 +16,7 @@ export interface Profile {
   };
   is_verified?: boolean;
   plan_tier?: 'free' | 'pro' | 'team' | 'business' | 'enterprise';
+  daily_deposit_limit?: number | null;
   updated_at?: string;
 }
 
@@ -25,6 +26,7 @@ export interface Subscription {
   status: 'active' | 'canceled' | 'past_due' | 'trialing' | 'incomplete';
   plan: string;
   plan_tier: 'free' | 'pro' | 'team' | 'business' | 'enterprise';
+  daily_deposit_limit?: number | null;
   current_period_end: string;
   stripe_customer_id?: string;
   created_at?: string;

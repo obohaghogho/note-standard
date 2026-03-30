@@ -17,7 +17,8 @@ import {
     Megaphone,
     Bot,
     Target,
-    Home
+    Home,
+    Zap
 } from 'lucide-react';
 import { LanguageSelector } from '../common/LanguageSelector';
 import SecureImage from '../common/SecureImage';
@@ -82,6 +83,7 @@ export const AdminLayout = () => {
         { to: '/admin/ads', icon: Target, label: 'Manage Ads' },
         { to: '/admin/audit-logs', icon: HistoryIcon, label: 'Audit Logs' },
         { to: '/admin/broadcasts', icon: Megaphone, label: 'Broadcasts' },
+        { to: '/admin/limit-requests', icon: Zap, label: 'Limit Requests' },
         { to: '/admin/auto-reply', icon: Bot, label: 'Auto-Reply' },
         { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
         { to: '/admin/settings', icon: Settings, label: 'Settings' },

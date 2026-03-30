@@ -1212,3 +1212,138 @@ exports.debugSimulateWebhook = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+/**
+ * PUT /api/admin/users/:id/limit - Update a user's daily deposit limit
+ */
+exports.updateUserLimit = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    const { id } = req.params;
+    const { daily_limit } = req.body;
+
+    if (isNaN(daily_limit) || daily_limit < 0) {
+      return res.status(400).json({ error: "Invalid limit value" });
+    }
+
+    const { data, error } = await serviceSupabase
+      .from("profiles")
+      .update({ daily_deposit_limit: daily_limit })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    await logAdminAction(req, "update_user_limit", "user", id, { daily_limit });
+
+    await createNotification({
+      receiverId: id,
+      type: "limit_update",
+      title: "Transaction Limit Updated",
+      message: `Your daily transaction limit has been updated to $${daily_limit.toLocaleString()}.`,
+      link: "/dashboard/billing",
+    });
+
+    res.json({ success: true, user: data });
+  } catch (err) {
+    console.error("Error updating user limit:", err);
+    res.status(500).json({ error: "Failed to update user limit" });
+  }
+};
+
+/**
+ * GET /api/admin/limit-requests - List all limit increase requests
+ */
+exports.getLimitRequests = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    const { status = "pending" } = req.query;
+
+    const { data, error } = await serviceSupabase
+      .from("limit_requests")
+      .select(`
+        *,
+        user:profiles!user_id (username, email, full_name, plan_tier, daily_deposit_limit)
+      `)
+      .eq("status", status)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      // If table doesn't exist yet, return empty array instead of error
+      if (error.code === "PGRST116" || error.message.includes("does not exist")) {
+        return res.json([]);
+      }
+      throw error;
+    }
+
+    res.json(data);
+  } catch (err) {
+    console.error("Error fetching limit requests:", err);
+    res.status(500).json({ error: "Failed to fetch limit requests" });
+  }
+};
+
+/**
+ * PUT /api/admin/limit-requests/:id - Approve or reject a limit request
+ */
+exports.updateLimitRequest = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    const { id } = req.params;
+    const { status, admin_note } = req.body; // 'approved' or 'rejected'
+
+    if (!["approved", "rejected"].includes(status)) {
+      return res.status(400).json({ error: "Invalid status" });
+    }
+
+    // 1. Fetch request to get user_id and requested_limit
+    const { data: request, error: fetchErr } = await serviceSupabase
+      .from("limit_requests")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (fetchErr || !request) throw new Error("Request not found");
+
+    // 2. Update request status
+    const { error: updateErr } = await serviceSupabase
+      .from("limit_requests")
+      .update({ 
+        status, 
+        admin_note,
+        updated_at: new Date().toISOString() 
+      })
+      .eq("id", id);
+
+    if (updateErr) throw updateErr;
+
+    // 3. If approved, update user's profile
+    if (status === "approved") {
+      const { error: profileErr } = await serviceSupabase
+        .from("profiles")
+        .update({ daily_deposit_limit: request.requested_limit })
+        .eq("id", request.user_id);
+      
+      if (profileErr) throw profileErr;
+    }
+
+    // 4. Notify user
+    await createNotification({
+      receiverId: request.user_id,
+      type: "limit_request_update",
+      title: status === "approved" ? "Limit Increase Approved" : "Limit Increase Rejected",
+      message: status === "approved" 
+        ? `Your request for a $${request.requested_limit.toLocaleString()} limit has been approved.`
+        : `Your limit increase request was rejected. Note: ${admin_note || "No reason provided."}`,
+      link: "/dashboard/billing",
+    });
+
+    await logAdminAction(req, "process_limit_request", "limit_request", id, { status });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error processing limit request:", err);
+    res.status(500).json({ error: "Failed to process limit request" });
+  }
+};

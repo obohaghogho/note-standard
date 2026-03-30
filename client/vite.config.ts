@@ -21,6 +21,9 @@ export default defineConfig({
     target: 'esnext',
     minify: 'esbuild',
   },
+  esbuild: {
+    pure: ['console.log'],
+  },
   preview: {
     host: '0.0.0.0',
     port: parseInt(process.env.PORT || '4173'),

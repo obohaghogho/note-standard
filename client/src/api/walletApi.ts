@@ -163,6 +163,12 @@ export const walletApi = {
       link.click();
       window.URL.revokeObjectURL(url);
       link.remove();
+  },
+
+  // Request a limit increase
+  async createLimitRequest(data: { requested_limit: number, reason: string }): Promise<any> {
+    const response = await api.post('/wallet/limit-request', data);
+    return response.data;
   }
 };
 

@@ -20,9 +20,20 @@ app.set("trust proxy", 1);
 // Security headers
 app.use(helmet({
   crossOriginResourcePolicy: false,
-  contentSecurityPolicy: false,
+  contentSecurityPolicy: process.env.NODE_ENV === "production" ? {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://www.google.com/recaptcha/", "https://www.gstatic.com/recaptcha/"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      imgSrc: ["'self'", "data:", "https://*.supabase.co", "https://res.cloudinary.com", "https://api.dicebear.com"],
+      connectSrc: ["'self'", "https://*.supabase.co", "wss://*.supabase.co", "https://api.fincra.com", "https://api.paystack.co", "https://api.nowpayments.io"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'", "https://res.cloudinary.com", "https://*.supabase.co"],
+      frameSrc: ["'self'", "https://www.google.com/recaptcha/", "https://checkout.paystack.com", "https://checkout.fincra.com"],
+    }
+  } : false,
   crossOriginEmbedderPolicy: false,
-  noSniff: false,
 }));
 
 // Additional CORS/CORB Fix: Force headers for local dev
@@ -51,7 +62,12 @@ app.use(express.json({
     req.rawBody = buf;
   },
 }));
-app.use(morgan("dev"));
+
+if (process.env.NODE_ENV === "production") {
+  app.use(morgan("combined"));
+} else {
+  app.use(morgan("dev"));
+}
 
 // ─── Routes ──────────────────────────────────────────────────
 // Health check (with Supabase ping)

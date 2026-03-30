@@ -57,6 +57,7 @@ const AutoReplySettings = lazyWithRetry(() => import('./pages/admin/AutoReplySet
 const Analytics = lazyWithRetry(() => import('./pages/admin/Analytics').then(m => m.Analytics), 'Analytics');
 const AdminSettings = lazyWithRetry(() => import('./pages/admin/AdminSettings').then(m => m.AdminSettings), 'AdminSettings');
 const ManageAds = lazyWithRetry(() => import('./pages/admin/ManageAds').then(m => m.ManageAds), 'ManageAds');
+const LimitRequestsPage = lazyWithRetry(() => import('./pages/admin/LimitRequestsPage').then(m => m.LimitRequestsPage), 'LimitRequestsPage');
 
 const ChatRedirect = () => {
   const { id } = useParams();
@@ -188,6 +189,7 @@ function App() {
                         <Route path="auto-reply" element={<AutoReplySettings />} />
                         <Route path="analytics" element={<Analytics />} />
                         <Route path="ads" element={<ManageAds />} />
+                        <Route path="limit-requests" element={<LimitRequestsPage />} />
                         <Route path="settings" element={<AdminSettings />} />
                         </Route>
                     </Route>

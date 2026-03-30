@@ -296,3 +296,54 @@ exports.getMyAffiliateStats = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+/**
+ * POST /api/wallet/limit-request - Allow a user to request a limit increase
+ */
+exports.createLimitRequest = async (req, res) => {
+  try {
+    const { requested_limit, reason } = req.body;
+
+    if (!requested_limit || isNaN(requested_limit) || requested_limit <= 0) {
+      return res.status(400).json({ error: "Please enter a valid requested limit." });
+    }
+
+    // 1. Check if there's already a pending request
+    const { data: existing, error: checkErr } = await supabase
+      .from("limit_requests")
+      .select("id")
+      .eq("user_id", req.user.id)
+      .eq("status", "pending")
+      .maybeSingle();
+
+    if (checkErr && checkErr.code !== "PGRST116" && !checkErr.message.includes("does not exist")) {
+       console.error("[WalletController] limit_requests table check failed:", checkErr.message);
+       throw checkErr;
+    }
+
+    if (existing) {
+      return res.status(400).json({ error: "You already have a pending limit increase request." });
+    }
+
+    // 2. Create the request
+    const { error: insertErr } = await supabase
+      .from("limit_requests")
+      .insert([{
+        user_id: req.user.id,
+        requested_limit: parseFloat(requested_limit),
+        reason: reason || "Standard transaction limit increase",
+        status: "pending",
+        created_at: new Date().toISOString()
+      }]);
+
+    if (insertErr) {
+      console.error("[WalletController] insert limit_request error:", insertErr);
+      throw new Error("Failed to submit request. Please try again later or contact support.");
+    }
+
+    res.json({ success: true, message: "Your limit increase request has been submitted for review." });
+  } catch (err) {
+    console.error("[WalletController] createLimitRequest error:", err);
+    res.status(500).json({ error: err.message || "Internal server error" });
+  }
+};

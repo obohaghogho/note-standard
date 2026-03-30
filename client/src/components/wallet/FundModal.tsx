@@ -53,6 +53,9 @@ export const FundModal: React.FC<FundModalProps> = ({
 
     // Direct Purchase State
     const [isPurchase, setIsPurchase] = useState(initialIsPurchase);
+    const [isRequestingLimit, setIsRequestingLimit] = useState(false);
+    const [requestedLimit, setRequestedLimit] = useState('');
+    const [requestReason, setRequestReason] = useState('');
     
     useEffect(() => {
         if (isOpen) {
@@ -74,7 +77,7 @@ export const FundModal: React.FC<FundModalProps> = ({
     const MAX_PER_TRANSACTION = 4000;
 
     const userPlan = (subscription?.plan_tier || 'FREE').toUpperCase() as keyof typeof DAILY_LIMITS;
-    const dailyLimit = DAILY_LIMITS[userPlan] || DAILY_LIMITS.FREE;
+    const dailyLimit = subscription?.daily_deposit_limit || DAILY_LIMITS[userPlan] || DAILY_LIMITS.FREE;
 
     const isCrypto = activeCurrency === 'BTC' || activeCurrency === 'ETH' || activeCurrency.startsWith('USDT') || activeCurrency.startsWith('USDC');
     const isFiat = !isCrypto; 
@@ -96,6 +99,7 @@ export const FundModal: React.FC<FundModalProps> = ({
             setCryptoStatus('PENDING');
             setMethod(isCrypto ? 'crypto' : 'card');
             setIsPurchase(false);
+            setIsRequestingLimit(false);
         }
     }, [isOpen, activeCurrency, isCrypto]);
 
@@ -270,6 +274,29 @@ export const FundModal: React.FC<FundModalProps> = ({
             toast.success('Service allocation details generated!');
         } catch (err: any) {
             toast.error(err.response?.data?.error || err.message || 'Failed to generate bank details');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleRequestLimitIncrease = async () => {
+        if (!requestedLimit || parseFloat(requestedLimit) <= dailyLimit) {
+            toast.error('Please enter a limit higher than your current one');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            await walletApi.createLimitRequest({
+                requested_limit: parseFloat(requestedLimit),
+                reason: requestReason
+            });
+            toast.success('Limit increase request submitted!');
+            setIsRequestingLimit(false);
+            setRequestedLimit('');
+            setRequestReason('');
+        } catch (err: any) {
+            toast.error(err.response?.data?.error || err.message || 'Failed to submit request');
         } finally {
             setLoading(false);
         }
@@ -531,9 +558,17 @@ export const FundModal: React.FC<FundModalProps> = ({
                                             {effectivePayCurrency}
                                         </span>
                                     </div>
-                                    <div className="flex justify-between mt-2 px-1">
-                                        <span className="text-[10px] text-gray-500">Daily Limit: {dailyLimit} {effectivePayCurrency}</span>
-                                        <span className="text-[10px] text-gray-500">Transaction Max: {MAX_PER_TRANSACTION} {effectivePayCurrency}</span>
+                                    <div className="flex justify-between items-center mt-2 px-1">
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] text-gray-500">Daily Limit: {dailyLimit.toLocaleString()} {effectivePayCurrency}</span>
+                                            <span className="text-[10px] text-gray-500">Transaction Max: {MAX_PER_TRANSACTION.toLocaleString()} {effectivePayCurrency}</span>
+                                        </div>
+                                        <button 
+                                            onClick={() => setIsRequestingLimit(true)}
+                                            className="text-[10px] text-primary hover:text-primary-dark font-bold underline"
+                                        >
+                                            Request Increase
+                                        </button>
                                     </div>
                                 </div>
                                 <Button onClick={handleCardDeposit} disabled={loading} className="w-full h-12 text-base font-bold">
@@ -562,6 +597,15 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         <span className="absolute right-4 top-3 text-gray-400 font-bold">
                                             {effectivePayCurrency}
                                         </span>
+                                    </div>
+                                    <div className="flex justify-between items-center mt-2 px-1">
+                                        <span className="text-[10px] text-gray-500">Daily Limit: {dailyLimit.toLocaleString()} {effectivePayCurrency}</span>
+                                        <button 
+                                            onClick={() => setIsRequestingLimit(true)}
+                                            className="text-[10px] text-primary hover:text-primary-dark font-bold underline"
+                                        >
+                                            Request Increase
+                                        </button>
                                     </div>
                                 </div>
                                 <Button onClick={handleBankDeposit} disabled={loading} className="w-full h-12 text-base font-bold">
@@ -708,6 +752,63 @@ export const FundModal: React.FC<FundModalProps> = ({
                             </div>
                         )}
                     </motion.div>
+                </AnimatePresence>
+
+                {/* Limit Request Overlay */}
+                <AnimatePresence>
+                    {isRequestingLimit && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 20 }}
+                            className="absolute inset-0 bg-gray-900/95 z-[60] p-6 flex flex-col justify-center"
+                        >
+                            <div className="text-center mb-6">
+                                <Zap className="mx-auto text-primary mb-2" size={32} />
+                                <h3 className="text-xl font-bold">Request Limit Increase</h3>
+                                <p className="text-gray-400 text-xs mt-1">Submit a request to increase your daily ${dailyLimit.toLocaleString()} limit.</p>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-[10px] uppercase text-gray-500 mb-1 ml-1">Requested Daily Limit (USD)</label>
+                                    <input 
+                                        type="number"
+                                        value={requestedLimit}
+                                        onChange={e => setRequestedLimit(e.target.value)}
+                                        placeholder="e.g. 5000"
+                                        className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-primary outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] uppercase text-gray-500 mb-1 ml-1">Reason (Optional)</label>
+                                    <textarea 
+                                        value={requestReason}
+                                        onChange={e => setRequestReason(e.target.value)}
+                                        placeholder="Why do you need an increase?"
+                                        className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-primary outline-none h-20 resize-none"
+                                    />
+                                </div>
+                                <div className="flex gap-2 pt-2">
+                                    <Button 
+                                        onClick={() => setIsRequestingLimit(false)}
+                                        variant="secondary"
+                                        className="flex-1"
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button 
+                                        onClick={handleRequestLimitIncrease}
+                                        disabled={loading || !requestedLimit}
+                                        className="flex-1"
+                                    >
+                                        {loading ? <Loader2 className="animate-spin" size={20} /> : 'Submit Request'}
+                                    </Button>
+                                </div>
+                                <p className="text-[10px] text-gray-500 text-center mt-4 italic">Requests are usually processed within 24 hours.</p>
+                            </div>
+                        </motion.div>
+                    )}
                 </AnimatePresence>
 
                 <div className="mt-8 pt-6 border-t border-gray-800/50 flex flex-wrap items-center justify-center gap-6 text-[10px] text-gray-500">

@@ -11,10 +11,6 @@ console.log("ENV CHECK:", import.meta.env);
 window.onerror = function(msg, url, line, col, _error) {
   const errorMsg = "GLOBAL ERROR: " + msg + "\nAt: " + url + ":" + line + ":" + col;
   console.error(errorMsg);
-  // Alert as a last resort to see errors on mobile/production if console is messy
-  if (!window.location.hostname.includes('localhost')) {
-     alert(errorMsg);
-  }
   return false;
 };
 
