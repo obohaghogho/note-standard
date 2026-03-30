@@ -33,6 +33,8 @@ export const SwapCard: React.FC<SwapCardProps> = ({
     const [slippage, setSlippage] = useState<number>(0.5); // Default 0.5%
     const [showSlippageSettings, setShowSlippageSettings] = useState(false);
     const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+    const [rates, setRates] = useState<Record<string, any>>({});
+    const [isTouched, setIsTouched] = useState(false);
     const recaptchaRef = React.useRef<ReCAPTCHA>(null);
     
     interface Preview {
@@ -102,8 +104,20 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         }
     }, [wallets, fromCurrency, fromNetwork, toCurrency, toNetwork]);
 
+    // Fetch global rates once on mount for instant fiat estimates
+    useEffect(() => {
+        const fetchRates = async () => {
+            try {
+                const result = await walletApi.getExchangeRates();
+                setRates(result);
+            } catch (err) {
+                console.error('Failed to fetch exchange rates:', err);
+            }
+        };
+        fetchRates();
+    }, []);
 
-    // Auto-preview when amount changes
+    // Auto-correct invalid default selections to match real wallets
     useEffect(() => {
         const timeoutId = setTimeout(() => {
             const numericAmount = Number(amount || 0);
@@ -157,6 +171,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         // Floor to 8 decimals to avoid rounding up and triggering insufficiency
         const floored = Math.floor(balance * 100000000) / 100000000;
         setAmount(floored.toString());
+        setIsTouched(true); // Ensure error state is updated
     };
 
     const handleExecuteSwap = async () => {
@@ -213,6 +228,11 @@ export const SwapCard: React.FC<SwapCardProps> = ({
 
     const numericAmount = Number(amount || 0);
     const isInsufficient = numericAmount > (Number(availableBalance || 0) + 0.0000000001) && numericAmount > 0;
+    const isError = isTouched && (numericAmount <= 0 || amount === '');
+
+    // Instant USD equivalent calculation
+    const fromUsdRate = rates[fromCurrency]?.['USD'] || 0;
+    const fiatEquivalent = numericAmount * fromUsdRate;
 
     return (
         <motion.div 
@@ -232,8 +252,12 @@ export const SwapCard: React.FC<SwapCardProps> = ({
 
             <div className="space-y-4">
                 {/* From Section */}
-                <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 transition-colors focus-within:border-purple-500/50">
-                    <div className="flex justify-between items-center mb-2">
+                <div className={`bg-gray-800/50 border rounded-xl p-4 transition-all duration-200 focus-within:ring-2 focus-within:bg-gray-800/80 ${
+                    isError 
+                        ? 'border-red-500/50 focus-within:border-red-500 ring-red-500/10' 
+                        : 'border-gray-700/80 focus-within:border-purple-500/50 focus-within:ring-purple-500/10'
+                }`}>
+                    <div className="flex justify-between items-center mb-1">
                         <label htmlFor="swap-card-from-currency" className="text-xs text-gray-400 font-medium uppercase tracking-wider">From</label>
                         <span className={`text-xs font-medium ${isDesynced ? 'text-amber-400' : 'text-gray-400'}`}>
                             Balance: {formatCurrency(Number(availableBalance || 0), fromCurrency)}
@@ -244,40 +268,64 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                             )}
                         </span>
                     </div>
-                    <div className="flex gap-3 items-center">
-                        <select
-                            id="swap-card-from-currency"
-                            name="fromCurrency"
-                            value={`${fromCurrency}_${fromNetwork}`}
-                            onChange={(e) => {
-                                const [c, n] = e.target.value.split('_');
-                                setFromCurrency(c);
-                                setFromNetwork(n);
-                            }}
-                            className="bg-transparent text-xl font-bold text-white focus:outline-none cursor-pointer hover:text-purple-400 transition-colors"
-                        >
-                             {safeWallets.map(w => (
-                                 <option key={`${w.currency}_${w.network}`} value={`${w.currency}_${w.network}`} className="bg-gray-800 text-base">
-                                     {w.currency} {w.network !== 'native' ? `(${w.network})` : ''}
-                                 </option>
-                             ))}
-                        </select>
-                        <div className="flex-1 relative flex items-center group/input">
-                            <input
-                                id="swap-card-amount-in"
-                                name="amountIn"
-                                type="number"
-                                value={amount}
-                                onChange={(e) => setAmount(e.target.value)}
-                                placeholder="0.00"
-                                className="w-full bg-transparent text-right text-2xl font-bold text-white placeholder-gray-600 focus:outline-none pr-16 transition-all"
-                            />
-                            <button
-                                onClick={handleMaxAmount}
-                                className="absolute right-0 px-2 py-1 text-[10px] text-purple-400 uppercase tracking-widest font-black hover:text-white hover:bg-purple-600 transition-all bg-purple-500/10 rounded-md border border-purple-500/30 hover:shadow-[0_0_15px_rgba(147,51,234,0.3)] active:scale-95"
+                    <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                        <div className="flex w-full sm:w-auto items-center">
+                            <select
+                                id="swap-card-from-currency"
+                                name="fromCurrency"
+                                value={`${fromCurrency}_${fromNetwork}`}
+                                onChange={(e) => {
+                                    const [c, n] = e.target.value.split('_');
+                                    setFromCurrency(c);
+                                    setFromNetwork(n);
+                                }}
+                                className="bg-transparent text-xl font-bold text-white focus:outline-none cursor-pointer hover:text-purple-400 transition-colors w-full"
                             >
-                                Max
-                            </button>
+                                 {safeWallets.map(w => (
+                                     <option key={`${w.currency}_${w.network}`} value={`${w.currency}_${w.network}`} className="bg-gray-800 text-base">
+                                         {w.currency} {w.network !== 'native' ? `(${w.network})` : ''}
+                                     </option>
+                                 ))}
+                            </select>
+                        </div>
+                        <div className="flex-1 w-full relative flex flex-col group/input min-w-0">
+                            <div className="relative flex items-center">
+                                <input
+                                    id="swap-card-amount-in"
+                                    name="amountIn"
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={amount}
+                                    onBlur={() => setIsTouched(true)}
+                                    onChange={(e) => {
+                                        const val = e.target.value.replace(/[^0-9.]/g, '');
+                                        // Ensure only one decimal point
+                                        const parts = val.split('.');
+                                        if (parts.length <= 2) {
+                                            setAmount(val);
+                                        }
+                                    }}
+                                    placeholder="0.00"
+                                    className="w-full bg-transparent text-left sm:text-right text-2xl font-bold text-white placeholder-gray-600 focus:outline-none pr-12 transition-all caret-purple-500"
+                                    autoComplete="off"
+                                />
+                                <button
+                                    onClick={handleMaxAmount}
+                                    className="absolute right-0 px-2 py-1 text-[10px] text-purple-400 uppercase tracking-widest font-black hover:text-white hover:bg-purple-600 transition-all bg-purple-500/10 rounded-md border border-purple-500/30 hover:shadow-[0_0_15px_rgba(147,51,234,0.3)] active:scale-95 z-10"
+                                >
+                                    Max
+                                </button>
+                            </div>
+                            {/* Instant USD equivalent */}
+                            {numericAmount > 0 && fromUsdRate > 0 && (
+                                <motion.div 
+                                    initial={{ opacity: 0, x: 10 }}
+                                    animate={{ opacity: 0.6, x: 0 }}
+                                    className="text-[10px] text-gray-400 text-left sm:text-right mt-0.5"
+                                >
+                                    ≈ {formatCurrency(fiatEquivalent, 'USD')}
+                                </motion.div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -316,7 +364,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                                  </option>
                              ))}
                         </select>
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                             <input
                                 id="swap-card-amount-out"
                                 name="amountOut"
@@ -324,7 +372,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                                 value={preview ? Number(preview.amountOut || 0).toFixed(6) : ''}
                                 readOnly
                                 placeholder="0.00"
-                                className="w-full bg-transparent text-right text-2xl font-bold text-gray-300 placeholder-gray-600 focus:outline-none pr-2"
+                                className="w-full bg-transparent text-right text-2xl font-bold text-gray-300 placeholder-gray-600 focus:outline-none pr-2 caret-purple-500"
                             />
                         </div>
                     </div>
@@ -440,7 +488,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
 
                 <Button
                     onClick={handleExecuteSwap}
-                    disabled={loading || !preview || (!captchaToken && import.meta.env.PROD) || timeLeft <= 0}
+                    disabled={loading || !preview || (!captchaToken && import.meta.env.PROD) || (timeLeft !== null && timeLeft <= 0)}
                     className="w-full h-12 text-base font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 border-none shadow-lg shadow-purple-500/20"
                 >
                     {loading ? (
@@ -452,6 +500,9 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                 
                 {isInsufficient && (
                     <p className="text-red-400 text-xs text-center font-medium animate-pulse">Insufficient {fromCurrency} balance</p>
+                )}
+                {isError && (
+                    <p className="text-red-400 text-[10px] text-center font-medium">Please enter a valid amount greater than 0</p>
                 )}
             </div>
         </motion.div>
