@@ -3,11 +3,13 @@ import { ArrowRightLeft, Loader2, RefreshCcw, Info, Clock } from 'lucide-react';
 import { Button } from './common/Button';
 import walletApi from '../api/walletApi';
 import { useWallet } from '../hooks/useWallet';
+import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import type { Currency } from '@/types/wallet';
 import { formatCurrency } from '../lib/CurrencyFormatter';
 import { motion } from 'framer-motion';
 import ReCAPTCHA from 'react-google-recaptcha';
+import { Zap, ShieldCheck } from 'lucide-react';
 
 interface SwapCardProps {
     initialFromCurrency?: Currency;
@@ -23,6 +25,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
     onSuccess 
 }) => {
     const { wallets, refresh } = useWallet();
+    const { isPro, isBusiness } = useAuth();
     const [fromCurrency, setFromCurrency] = useState<Currency>(initialFromCurrency);
     const [fromNetwork, setFromNetwork] = useState<string>(initialFromNetwork);
     const [toCurrency, setToCurrency] = useState<Currency>('USD');
@@ -387,7 +390,20 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                                 <span className="text-purple-300">1 {fromCurrency} ≈ {formatCurrency(Number(preview.rate || 0), toCurrency)}</span>
                             </div>
                             <div className="flex justify-between text-gray-400">
-                                <span>Transaction Processing Fee ({((Number(preview.metadata?.fee_breakdown?.rates?.total) || 0.047) * 100).toFixed(1)}%)</span>
+                                <div className="flex items-center gap-1.5">
+                                    <span>Processing Fee ({((Number(preview.metadata?.fee_breakdown?.rates?.total) || 0.047) * 100).toFixed(1)}%)</span>
+                                    {isBusiness ? (
+                                        <span className="bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded-[4px] border border-blue-500/20 text-[9px] font-bold flex items-center gap-0.5">
+                                            <ShieldCheck size={8} />
+                                            50% Business Discount
+                                        </span>
+                                    ) : isPro ? (
+                                        <span className="bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded-[4px] border border-purple-500/20 text-[9px] font-bold flex items-center gap-0.5">
+                                            <Zap size={8} />
+                                            20% Pro Discount
+                                        </span>
+                                    ) : null}
+                                </div>
                                 <span>{formatCurrency(Number(preview.fee || 0), fromCurrency)}</span>
                             </div>
                             

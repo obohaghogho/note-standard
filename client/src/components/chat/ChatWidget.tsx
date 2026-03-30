@@ -13,7 +13,9 @@ import {
     Check,
     Headphones,
     Phone,
-    Video
+    Video,
+    Zap,
+    ShieldCheck
 } from 'lucide-react';
 import type { Message } from '../../context/ChatContext';
 import { useWebRTC } from '../../context/WebRTCContext';
@@ -23,7 +25,7 @@ import { applyAutoCorrect } from '../../utils/textUtils';
 import toast from 'react-hot-toast';
 
 export const ChatWidget = () => {
-    const { session, user } = useAuth();
+    const { session, user, isPro, isBusiness } = useAuth();
     const { socket, connected } = useSocket();
     const { 
         startCall, callState, acceptCall, rejectCall, endCall, 
@@ -311,17 +313,30 @@ export const ChatWidget = () => {
                             <Headphones size={20} />
                             <div>
                                 <h4>Support Chat</h4>
-                                <span className="status">
-                                    {supportChat?.support_status === 'resolved' ? (
-                                        <span className="text-green-300">Issue Resolved</span>
-                                    ) : supportChat?.support_status === 'escalated' ? (
-                                        <span className="text-amber-300 animate-pulse">Connecting to a Live Agent...</span>
-                                    ) : supportChat?.id ? (
-                                        'AI Assistant Online ✅'
-                                    ) : (
-                                        'Support Team'
-                                    )}
-                                </span>
+                                <div className="flex items-center gap-2">
+                                    <span className="status">
+                                        {supportChat?.support_status === 'resolved' ? (
+                                            <span className="text-green-300">Issue Resolved</span>
+                                        ) : supportChat?.support_status === 'escalated' ? (
+                                            <span className="text-amber-300 animate-pulse">Connecting to a Live Agent...</span>
+                                        ) : supportChat?.id ? (
+                                            'AI Assistant Online ✅'
+                                        ) : (
+                                            'Support Team'
+                                        )}
+                                    </span>
+                                    {isBusiness ? (
+                                        <span className="bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded text-[9px] font-bold border border-blue-500/30 flex items-center gap-0.5">
+                                            <ShieldCheck size={8} />
+                                            PRIORITY
+                                        </span>
+                                    ) : isPro ? (
+                                        <span className="bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded text-[9px] font-bold border border-purple-500/30 flex items-center gap-0.5">
+                                            <Zap size={8} />
+                                            PRIORITY
+                                        </span>
+                                    ) : null}
+                                </div>
                             </div>
                         </div>
                         <div className="header-actions">

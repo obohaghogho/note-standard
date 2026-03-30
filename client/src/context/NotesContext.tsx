@@ -7,16 +7,19 @@ interface NotesContextType {
     notes: Note[];
     stats: { totalBy: number; favorites: number };
     loading: boolean;
+    canCreateNote: boolean;
     refreshNotes: (searchTerm?: string, sortBy?: string) => Promise<void>;
 }
 
 const NotesContext = createContext<NotesContextType | undefined>(undefined);
 
 export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { user } = useAuth();
+    const { user, isPro } = useAuth();
     const [notes, setNotes] = useState<Note[]>([]);
     const [stats, setStats] = useState({ totalBy: 0, favorites: 0 });
     const [loading, setLoading] = useState(true);
+
+    const canCreateNote = isPro || stats.totalBy < 100;
 
     /**
      * Fetch notes from the database with caching and rate-limiting.
@@ -147,7 +150,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, [user, fetchNotes]);
 
     return (
-        <NotesContext.Provider value={{ notes, stats, loading, refreshNotes: fetchNotes }}>
+        <NotesContext.Provider value={{ notes, stats, loading, canCreateNote, refreshNotes: fetchNotes }}>
             {children}
         </NotesContext.Provider>
     );

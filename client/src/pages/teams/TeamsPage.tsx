@@ -37,6 +37,9 @@ import {
 import toast from 'react-hot-toast';
 import SecureImage from '../../components/common/SecureImage';
 import { ConfirmationModal } from '../../components/common/ConfirmationModal';
+import { useAuth } from '../../context/AuthContext';
+import { ArrowRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import './TeamsPage.css';
 
 // ====================================
@@ -251,12 +254,15 @@ const TeamContent: React.FC<{
 // ====================================
 
 export const TeamsPage: React.FC = () => {
+  const { isBusiness } = useAuth();
+  const navigate = useNavigate();
   // State
   const [teams, setTeams] = useState<TeamWithUnreadCount[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
 
   // Form state
@@ -297,6 +303,14 @@ export const TeamsPage: React.FC = () => {
   // ====================================
   // CREATE TEAM
   // ====================================
+  
+  const handleNewTeamClick = () => {
+    if (!isBusiness) {
+      setShowUpgradeModal(true);
+    } else {
+      setShowCreateModal(true);
+    }
+  };
 
   const handleCreateTeam = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -327,6 +341,14 @@ export const TeamsPage: React.FC = () => {
   // ====================================
   // INVITE MEMBER
   // ====================================
+
+  const handleInviteClick = () => {
+    if (!isBusiness) {
+      setShowUpgradeModal(true);
+    } else {
+      setShowInviteModal(true);
+    }
+  };
 
   const handleInviteMember = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -426,7 +448,7 @@ export const TeamsPage: React.FC = () => {
       <div className="teams-page__sidebar">
         <div className="teams-page__sidebar-header">
           <h2>My Teams</h2>
-          <Button size="sm" onClick={() => setShowCreateModal(true)}>
+          <Button size="sm" onClick={handleNewTeamClick}>
             <Plus size={16} />
             New
           </Button>
@@ -438,7 +460,7 @@ export const TeamsPage: React.FC = () => {
               <Users size={48} />
               <h3>No teams yet</h3>
               <p>Create a team to start collaborating</p>
-              <Button onClick={() => setShowCreateModal(true)}>
+              <Button onClick={handleNewTeamClick}>
                 <Plus size={16} />
                 Create Team
               </Button>
@@ -490,7 +512,7 @@ export const TeamsPage: React.FC = () => {
              selectedTeam={selectedTeam} 
              myRole={myRole}
              onLeave={() => setConfirmModal({ isOpen: true, type: 'leave' })}
-             onInvite={() => setShowInviteModal(true)}
+             onInvite={handleInviteClick}
              onBack={() => setMobileView('list')}
              onTeamUpdate={() => loadTeams()}
              onDelete={() => setConfirmModal({ isOpen: true, type: 'delete' })}
@@ -608,6 +630,40 @@ export const TeamsPage: React.FC = () => {
         confirmText={confirmModal.type === 'leave' ? 'Leave Team' : 'Delete Everything'}
         variant="danger"
       />
+
+      {/* Upgrade to Business Modal */}
+      {showUpgradeModal && (
+        <div className="teams-page__modal-overlay" onClick={() => setShowUpgradeModal(false)}>
+           <Card className="teams-page__modal max-w-md text-center p-8 space-y-6" onClick={(e) => e.stopPropagation()}>
+              <div className="w-20 h-20 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto border border-blue-500/20">
+                  <Plus size={40} className="text-blue-500" />
+              </div>
+              <div className="space-y-2">
+                  <h2 className="text-2xl font-bold">Business Feature</h2>
+                  <p className="text-gray-400">
+                      Team creation and management is a **Business Tier** feature. Upgrade now to collaborate with unlimited team members.
+                  </p>
+              </div>
+              <div className="space-y-3 pt-2">
+                  <Button 
+                    fullWidth 
+                    className="bg-blue-600 hover:bg-blue-700 h-12 text-base shadow-lg shadow-blue-900/20"
+                    onClick={() => navigate('/dashboard/billing')}
+                  >
+                      Upgrade to Business
+                      <ArrowRight size={18} />
+                  </Button>
+                  <Button 
+                    fullWidth 
+                    variant="ghost" 
+                    onClick={() => setShowUpgradeModal(false)}
+                  >
+                      Maybe Later
+                  </Button>
+              </div>
+           </Card>
+        </div>
+      )}
     </div>
   );
 };
