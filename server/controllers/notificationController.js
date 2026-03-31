@@ -17,6 +17,22 @@ const getNotifications = async (req, res, next) => {
   }
 };
 
+const getUnreadCount = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { count, error } = await supabase
+      .from("notifications")
+      .select("*", { count: "exact", head: true })
+      .eq("receiver_id", userId)
+      .eq("is_read", false);
+
+    if (error) throw error;
+    res.json({ count: count || 0 });
+  } catch (err) {
+    next(err);
+  }
+};
+
 const markAsRead = async (req, res, next) => {
   try {
     const userId = req.user.id;
@@ -123,6 +139,7 @@ const deleteAllNotifications = async (req, res, next) => {
 
 module.exports = {
   getNotifications,
+  getUnreadCount,
   markAsRead,
   markAllAsRead,
   subscribeToNotifications,

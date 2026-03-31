@@ -24,6 +24,7 @@ import {
   LogOut,
   Edit3,
   Trash2,
+  MoreVertical,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { uploadTeamImage, uploadTeamAudio } from '../../lib/teamsApi';
@@ -58,17 +59,27 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
   const [isSending, setIsSending] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [showRecorder, setShowRecorder] = useState(false);
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
   // Layout Offset Management
   useEffect(() => {
     document.documentElement.style.setProperty('--floating-ui-offset', '110px');
     document.documentElement.style.setProperty('--chat-input-height', '130px');
     
+    // Close menu on click outside
+    const handleClickOutside = (e: MouseEvent) => {
+      if (activeMenu && !(e.target as Element).closest('.team-chat__message-actions')) {
+        setActiveMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    
     return () => {
       document.documentElement.style.setProperty('--floating-ui-offset', '0px');
       document.documentElement.style.setProperty('--chat-input-height', '0px');
+      document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, []);
+  }, [activeMenu]);
   
   // Confirmation state
   const [confirmDelete, setConfirmDelete] = useState<{
@@ -357,15 +368,6 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
           msg.isOptimistic ? 'team-chat__message--optimistic' : ''
         } ${msg.failed ? 'team-chat__message--failed' : ''} group relative`}
       >
-        {canDelete && !msg.isOptimistic && (
-          <button
-            onClick={() => setConfirmDelete({ isOpen: true, type: 'message', messageId: msg.id })}
-            className={`absolute top-1/2 -translate-y-1/2 ${isOwn ? '-left-8' : '-right-8'} p-1.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all z-10`}
-            title="Delete message"
-          >
-            <Trash2 size={14} />
-          </button>
-        )}
         {!isOwn && showAvatar && (
           <div className="team-chat__message-avatar">
             {senderAvatar ? (
@@ -413,6 +415,48 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
             </div>
           </div>
         </div>
+
+        {/* Message Actions Menu */}
+        {canDelete && !msg.isOptimistic && (
+          <div className="team-chat__message-actions relative">
+            <button
+              onClick={() => setActiveMenu(activeMenu === msg.id ? null : msg.id)}
+              className={`team-chat__message-action-trigger ${activeMenu === msg.id ? 'opacity-100 bg-white/10' : 'opacity-0 group-hover:opacity-100'} p-1.5 text-gray-400 hover:text-white transition-all rounded-full`}
+              title="Message options"
+            >
+              <MoreVertical size={16} />
+            </button>
+            <AnimatePresence>
+              {activeMenu === msg.id && (
+                <div className={`team-chat__message-menu absolute ${isOwn ? 'right-0' : 'left-0'} top-full mt-1 z-50`}>
+                  <button
+                    onClick={() => {
+                      setConfirmDelete({ isOpen: true, type: 'message', messageId: msg.id });
+                      setActiveMenu(null);
+                    }}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-100 hover:bg-red-400/20 transition-colors whitespace-nowrap"
+                  >
+                    <Trash2 size={14} className="text-red-400" />
+                    <span>Delete Message</span>
+                  </button>
+                  {/* Future feature: Edit Message */}
+                  {isOwn && (
+                    <button
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-300 hover:bg-white/5 transition-colors whitespace-nowrap"
+                      onClick={() => {
+                        toast('Edit feature coming soon!');
+                        setActiveMenu(null);
+                      }}
+                    >
+                      <Edit3 size={14} />
+                      <span>Edit Message</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
       </div>
     );
   };

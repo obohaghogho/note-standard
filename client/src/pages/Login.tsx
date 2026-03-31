@@ -11,6 +11,7 @@ import { toast } from 'react-hot-toast';
 export const Login = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = React.useState(false);
+    const [isAddingAccount, setIsAddingAccount] = React.useState(false);
     const [email, setEmail] = React.useState('');
     const [password, setPassword] = React.useState('');
     const [error, setError] = React.useState('');
@@ -23,6 +24,16 @@ export const Login = () => {
 
     React.useEffect(() => {
         mountedRef.current = true;
+        
+        // Handle "Add Account" flow
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('add_account') === 'true') {
+            setIsAddingAccount(true);
+            // Clear local session only so the login form shows
+            supabase.auth.signOut({ scope: 'local' }).then(() => {
+                console.log('[Login] Local session cleared for adding new account');
+            });
+        }
         
         return () => {
             mountedRef.current = false;
@@ -143,9 +154,14 @@ export const Login = () => {
                 </Link>
 
                 <div className="text-center mb-8">
-                    <h1 className="text-3xl font-bold mb-2">Welcome back</h1>
-                    <p className="text-gray-400">Enter your credentials to access your workspace</p>
-
+                    <h1 className="text-3xl font-bold mb-2">
+                        {isAddingAccount ? 'Add new account' : 'Welcome back'}
+                    </h1>
+                    <p className="text-gray-400">
+                        {isAddingAccount 
+                            ? 'Enter credentials for your other account' 
+                            : 'Enter your credentials to access your workspace'}
+                    </p>
                 </div>
 
                 <Card variant="glass" className="p-8">

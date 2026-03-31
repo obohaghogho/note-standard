@@ -3,6 +3,7 @@ import type { User, Session } from "@supabase/supabase-js";
 import { safeProfile, safeSubscription, supabase, resetRateLimiters, ensureProfile } from "../lib/supabaseSafe";
 import type { Profile, Subscription } from "../types/auth";
 import toast from "react-hot-toast";
+import * as accountManager from "../utils/accountManager";
 
 interface AuthContextValue {
   user: User | null;
@@ -15,6 +16,8 @@ interface AuthContextValue {
   isBusiness: boolean;
   isAdmin: boolean;
   signOut: () => Promise<void>;
+  switchAccount: (userId: string) => Promise<void>;
+  addAccount: () => void;
   refreshProfile: () => Promise<void>;
 }
 
@@ -78,10 +81,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (isMounted.current && fetchLockRef.current === userId) {
         // Only update state if we didn't get a terminal ERROR
-        // If we got 'ERROR', we keep the previous state (or null if initial)
-        // to avoid wiping out UI data during a transient network blip.
         if (profileResult !== 'ERROR') {
-          setProfile(profileResult as Profile | null);
+          const prof = profileResult as Profile;
+          setProfile(prof);
+          
+          // Save to multi-account list if we have a session
+          supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+            if (currentSession?.user?.id === userId) {
+              accountManager.saveAccount(currentSession, prof);
+            }
+          });
         }
         
         if (subResult !== 'ERROR') {
@@ -109,6 +118,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
       
       // State cleanup
+      if (user?.id) {
+        accountManager.removeAccount(user.id);
+      }
+      
       setSession(null);
       setUser(null);
       setProfile(null);
@@ -120,6 +133,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: any) {
       console.error('Error signing out:', error);
       toast.error('Failed to sign out');
+    }
+  };
+
+  const addAccount = () => {
+    // We just need to prompt for a new login
+    // The current session will be saved by syncUserData if it hasn't been already
+    window.location.href = '/auth/login?add_account=true';
+  };
+
+  const switchAccount = async (userId: string) => {
+    const target = accountManager.getAccount(userId);
+    if (!target) {
+      toast.error('Account not found. Please log in again.');
+      return;
+    }
+
+    const toastId = toast.loading('Switching account...');
+    try {
+      const { error } = await supabase.auth.setSession({
+        access_token: target.session.access_token,
+        refresh_token: target.session.refresh_token
+      });
+      if (error) throw error;
+      
+      // Page reload to ensure all contexts are reset
+      window.location.reload();
+    } catch (err) {
+      console.error('[Auth] Switch failed:', err);
+      toast.error('Failed to switch account', { id: toastId });
     }
   };
 
@@ -262,6 +304,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isBusiness,
       isAdmin, 
       signOut,
+      switchAccount,
+      addAccount,
       refreshProfile
     }}>
       {children}

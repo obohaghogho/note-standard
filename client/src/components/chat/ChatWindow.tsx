@@ -5,7 +5,7 @@ import { usePresence } from '../../context/PresenceContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../common/SecureImage';
-import { Send, Languages, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Maximize, Trash2 } from 'lucide-react';
+import { Send, Languages, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, MoreVertical, Check, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Maximize, Trash2 } from 'lucide-react';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { MediaUpload } from './MediaUpload';
 import { VoiceRecorder } from './VoiceRecorder';
@@ -31,13 +31,25 @@ const ChatWindow: React.FC = () => {
     const { user, profile, session } = useAuth();
     const { startCall } = useWebRTC();
 
+    const [activeMessageMenu, setActiveMessageMenu] = useState<string | null>(null);
+
     // Layout Offset Management
     useEffect(() => {
         // Safe spacing managed by fixed positioning and static padding
+        
+        // Close menu on click outside
+        const handleClickOutside = (e: MouseEvent) => {
+            if (activeMessageMenu && !(e.target as Element).closest('.chat-message-actions')) {
+                setActiveMessageMenu(null);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        
         return () => {
             // Cleanup if needed
+            document.removeEventListener('mousedown', handleClickOutside);
         };
-    }, []);
+    }, [activeMessageMenu]);
     
     const [inputValue, setInputValue] = useState('');
     const [showMediaUpload, setShowMediaUpload] = useState(false);
@@ -643,13 +655,31 @@ const ChatWindow: React.FC = () => {
                                 <div key={msg.id || `msg-temp-${index}`} className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'} ${isGrouped ? '-mt-2 md:-mt-3' : 'mt-4'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                                     <div className={`max-w-[92%] md:max-w-[70%] ${isGrouped ? 'rounded-2xl' : (msg.sender_id === user?.id ? 'rounded-2xl rounded-br-sm' : 'rounded-2xl rounded-bl-sm')} p-3 shadow-md border ${msg.sender_id === user?.id ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-blue-500/50' : 'bg-gray-800 text-gray-200 border-gray-700'} relative group`}>
                                         {msg.sender_id === user?.id && (
-                                            <button 
-                                                onClick={() => setConfirmModal({ isOpen: true, type: 'message', messageId: msg.id })}
-                                                className="absolute -left-8 top-1/2 -translate-y-1/2 p-1.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
-                                                title="Delete message"
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
+                                            <div className="chat-message-actions absolute -left-8 top-1/2 -translate-y-1/2">
+                                                <button 
+                                                    onClick={() => setActiveMessageMenu(activeMessageMenu === msg.id ? null : msg.id)}
+                                                    className={`p-1.5 text-gray-500 hover:text-white transition-all rounded-full ${activeMessageMenu === msg.id ? 'bg-gray-700 opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                                    title="Message options"
+                                                >
+                                                    <MoreVertical size={14} />
+                                                </button>
+                                                <AnimatePresence>
+                                                    {activeMessageMenu === msg.id && (
+                                                        <div className="absolute right-full mr-1 top-0 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden min-w-[140px] animate-in slide-in-from-right-2 duration-200">
+                                                            <button 
+                                                                onClick={() => {
+                                                                    setConfirmModal({ isOpen: true, type: 'message', messageId: msg.id });
+                                                                    setActiveMessageMenu(null);
+                                                                }}
+                                                                className="flex items-center gap-2 w-full px-3 py-2 text-xs text-red-400 hover:bg-red-400/10 transition-colors text-left"
+                                                            >
+                                                                <Trash2 size={12} />
+                                                                <span>Delete Message</span>
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </AnimatePresence>
+                                            </div>
                                         )}
                                         {msg.attachment && msg.type !== 'audio' && (
                                             <div className="mb-2 rounded-lg overflow-hidden border border-black/20 bg-black/10">
