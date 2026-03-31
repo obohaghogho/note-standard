@@ -44,6 +44,23 @@ export const ChatWidget = () => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const typingTimeoutRef = useRef<any>(null);
     const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+    const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+    // Keyboard Visibility Detection
+    useEffect(() => {
+        if (!window.visualViewport) return;
+        
+        const handleResize = () => {
+            const viewport = window.visualViewport;
+            if (!viewport) return;
+            // If viewport height is significantly less than window innerHeight, keyboard is likely open
+            const isVisible = viewport.height < window.innerHeight * 0.85;
+            setIsKeyboardVisible(isVisible);
+        };
+
+        window.visualViewport.addEventListener('resize', handleResize);
+        return () => window.visualViewport?.removeEventListener('resize', handleResize);
+    }, []);
 
     const fetchMessages = useCallback(async (chatId: string) => {
         if (!session?.access_token) return;
@@ -295,10 +312,10 @@ export const ChatWidget = () => {
         });
     };
 
-    if (!user) return null;
+    if (!user || isKeyboardVisible) return null;
 
     return (
-        <div className={`chat-widget ${isOpen ? 'open' : ''} ${isMinimized ? 'minimized' : ''}`}>
+        <div className={`chat-widget ${isOpen ? 'open' : ''} ${isMinimized ? 'minimized' : ''}`} style={{ display: isKeyboardVisible ? 'none' : 'block' }}>
             {!isOpen && (
                 <button className="chat-widget-button" onClick={() => setIsOpen(true)}>
                     <MessageCircle size={24} />

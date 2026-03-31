@@ -33,12 +33,9 @@ const ChatWindow: React.FC = () => {
 
     // Layout Offset Management
     useEffect(() => {
-        document.documentElement.style.setProperty('--floating-ui-offset', '110px');
-        document.documentElement.style.setProperty('--chat-input-height', '130px');
-        
+        // Safe spacing managed by fixed positioning and static padding
         return () => {
-            document.documentElement.style.setProperty('--floating-ui-offset', '0px');
-            document.documentElement.style.setProperty('--chat-input-height', '0px');
+            // Cleanup if needed
         };
     }, []);
     
@@ -614,7 +611,7 @@ const ChatWindow: React.FC = () => {
                 className="flex-1 overflow-y-auto p-2 md:p-4 space-y-3 md:space-y-4 scroll-smooth overscroll-contain transition-all"
                 style={{ 
                     WebkitOverflowScrolling: 'touch',
-                    paddingBottom: 'var(--chat-input-height, 16px)'
+                    paddingBottom: '100px'
                 }}
                 ref={scrollContainerRef}
                 onScroll={handleScroll}
@@ -803,8 +800,8 @@ const ChatWindow: React.FC = () => {
             {!isAtBottom && (
                 <button 
                     onClick={scrollToBottom} 
-                    className="fixed right-8 bg-blue-600 text-white p-3 rounded-full shadow-2xl hover:bg-blue-700 transition-all animate-in zoom-in-0 duration-200 z-50 hover:scale-110 active:scale-95"
-                    style={{ bottom: 'calc(110px + var(--floating-ui-offset, 0px))' }}
+                    className="fixed right-8 bg-blue-600 text-white p-3 rounded-full shadow-2xl hover:bg-blue-700 transition-all animate-in zoom-in-0 duration-200 z-[1100] hover:scale-110 active:scale-95"
+                    style={{ bottom: '120px' }}
                 >
                     <ArrowDown size={20} />
                 </button>
@@ -819,106 +816,110 @@ const ChatWindow: React.FC = () => {
 
 
             {!isPending ? (
-                <div className="p-3 md:p-6 border-t border-gray-800 bg-gray-900/95 backdrop-blur-2xl pb-[max(env(safe-area-inset-bottom,16px),16px)] flex-shrink-0 relative z-40 shadow-[0_-15px_40px_rgba(0,0,0,0.4)]">
-                    <form onSubmit={handleSend} className="flex flex-col gap-2 md:gap-3 max-w-full">
-                        {isVoiceRecording ? (
-                            <div className="flex justify-center p-3 bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700/50 animate-in slide-in-from-bottom-4 duration-300">
-                                <VoiceRecorder onSend={handleVoiceMessage} onCancel={() => setIsVoiceRecording(false)} />
-                            </div>
-                        ) : (
-                            <div className="flex items-center gap-2 md:gap-3">
-                                <div className="flex-1 min-w-0 flex items-center gap-1 md:gap-2 bg-white/[0.03] hover:bg-white/[0.05] border border-white/[0.08] focus-within:border-blue-500/50 focus-within:bg-white/[0.06] rounded-[22px] p-1.5 px-3 md:px-4 transition-all duration-300 shadow-inner group/input">
-                                    <button 
-                                        type="button" 
-                                        onClick={() => setShowMediaUpload(!showMediaUpload)} 
-                                        className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-full transition-all flex-shrink-0 active:scale-90"
-                                    >
-                                        <Plus size={22} className={`transition-transform duration-300 ${showMediaUpload ? 'rotate-45 text-blue-400' : ''}`} />
-                                    </button>
-                                    
-                                    <div className="flex-1 relative min-w-0">
-                                        {showMentions && mentionParticipants.length > 0 && (
-                                            <div className="absolute bottom-full left-0 mb-4 w-full max-w-[300px] animate-in slide-in-from-bottom-2 duration-200">
-                                                <MentionSuggestions users={mentionParticipants} onSelect={handleSelectMention} />
-                                            </div>
-                                        )}
-                                        <input 
-                                            id="chat-window-input" 
-                                            name="message" 
-                                            type="text" 
-                                            value={inputValue} 
-                                            onChange={handleInputChange} 
-                                            placeholder={isWaitingForOthers ? "Waiting for acceptance..." : "Type a message..."} 
-                                            disabled={isWaitingForOthers} 
-                                            autoComplete="off" 
-                                            spellCheck={true}
-                                            autoCapitalize="sentences"
-                                            autoCorrect="on"
-                                            className="w-full bg-transparent text-white py-2.5 md:py-3.5 px-1 md:px-2 focus:outline-none disabled:opacity-50 text-[16px] md:text-sm placeholder:text-gray-500 font-medium" 
-                                        />
-                                    </div>
-
-                                    <div className="flex items-center gap-0.5 md:gap-1 flex-shrink-0">
+                <div className="fixed bottom-0 left-0 right-0 w-full z-[1000] bg-gray-900 shadow-[0_-15px_40px_rgba(0,0,0,0.4)]">
+                    <div className="max-w-[1100px] mx-auto p-3 md:p-6 border-t border-gray-800 bg-gray-900/95 backdrop-blur-2xl pb-[max(env(safe-area-inset-bottom,16px),16px)]">
+                        <form onSubmit={handleSend} className="flex flex-col gap-2 md:gap-3 max-w-full">
+                            {isVoiceRecording ? (
+                                <div className="flex justify-center p-3 bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700/50 animate-in slide-in-from-bottom-4 duration-300">
+                                    <VoiceRecorder onSend={handleVoiceMessage} onCancel={() => setIsVoiceRecording(false)} />
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2 md:gap-3">
+                                    <div className="flex-1 min-w-0 flex items-center gap-1 md:gap-2 bg-white/[0.03] hover:bg-white/[0.05] border border-white/[0.08] focus-within:border-blue-500/50 focus-within:bg-white/[0.06] rounded-[22px] p-1.5 px-3 md:px-4 transition-all duration-300 shadow-inner group/input">
                                         <button 
                                             type="button" 
-                                            onClick={() => setIsVoiceRecording(true)} 
-                                            className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-full transition-all active:scale-90"
-                                            title="Voice message"
+                                            onClick={() => setShowMediaUpload(!showMediaUpload)} 
+                                            className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-full transition-all flex-shrink-0 active:scale-90"
                                         >
-                                            <Mic size={20} />
+                                            <Plus size={22} className={`transition-transform duration-300 ${showMediaUpload ? 'rotate-45 text-blue-400' : ''}`} />
                                         </button>
                                         
-                                        <div className="relative md:block hidden">
-                                            <button 
-                                                type="button" 
-                                                onClick={() => setShowEmojiPicker(!showEmojiPicker)} 
-                                                className={`p-2 rounded-full transition-all active:scale-90 ${showEmojiPicker ? 'text-yellow-400 bg-yellow-400/10' : 'text-gray-400 hover:text-yellow-400 hover:bg-yellow-400/10'}`}
-                                            >
-                                                <Smile size={20} />
-                                            </button>
-                                            {showEmojiPicker && (
-                                                <div className="absolute bottom-full right-0 mb-4 p-3 bg-gray-800/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-30 grid grid-cols-4 gap-2 animate-in zoom-in-95 duration-200 origin-bottom-right">
-                                                    {emojis.map(emoji => (
-                                                        <button 
-                                                            key={emoji} 
-                                                            type="button" 
-                                                            onClick={() => { setInputValue(prev => prev + emoji); setShowEmojiPicker(false); handleInputChange({ target: { value: inputValue + emoji } } as any); }} 
-                                                            className="text-xl hover:bg-white/10 p-2 rounded-xl transition-all hover:scale-110 active:scale-90"
-                                                        >
-                                                            {emoji}
-                                                        </button>
-                                                    ))}
+                                        <div className="flex-1 relative min-w-0">
+                                            {showMentions && mentionParticipants.length > 0 && (
+                                                <div className="absolute bottom-full left-0 mb-4 w-full max-w-[300px] animate-in slide-in-from-bottom-2 duration-200">
+                                                    <MentionSuggestions users={mentionParticipants} onSelect={handleSelectMention} />
                                                 </div>
                                             )}
+                                            <input 
+                                                id="chat-window-input" 
+                                                name="message" 
+                                                type="text" 
+                                                value={inputValue} 
+                                                onChange={handleInputChange} 
+                                                placeholder={isWaitingForOthers ? "Waiting for acceptance..." : "Type a message..."} 
+                                                disabled={isWaitingForOthers} 
+                                                autoComplete="off" 
+                                                spellCheck={true}
+                                                autoCapitalize="sentences"
+                                                autoCorrect="on"
+                                                className="w-full bg-transparent text-white py-2.5 md:py-3.5 px-1 md:px-2 focus:outline-none disabled:opacity-50 text-[16px] md:text-sm placeholder:text-gray-500 font-medium" 
+                                            />
+                                        </div>
+
+                                        <div className="flex items-center gap-0.5 md:gap-1 flex-shrink-0">
+                                            <button 
+                                                type="button" 
+                                                onClick={() => setIsVoiceRecording(true)} 
+                                                className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-full transition-all active:scale-90"
+                                                title="Voice message"
+                                            >
+                                                <Mic size={20} />
+                                            </button>
+                                            
+                                            <div className="relative md:block hidden">
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => setShowEmojiPicker(!showEmojiPicker)} 
+                                                    className={`p-2 rounded-full transition-all active:scale-90 ${showEmojiPicker ? 'text-yellow-400 bg-yellow-400/10' : 'text-gray-400 hover:text-yellow-400 hover:bg-yellow-400/10'}`}
+                                                >
+                                                    <Smile size={20} />
+                                                </button>
+                                                {showEmojiPicker && (
+                                                    <div className="absolute bottom-full right-0 mb-4 p-3 bg-gray-800/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-30 grid grid-cols-4 gap-2 animate-in zoom-in-95 duration-200 origin-bottom-right">
+                                                        {emojis.map(emoji => (
+                                                            <button 
+                                                                key={emoji} 
+                                                                type="button" 
+                                                                onClick={() => { setInputValue(prev => prev + emoji); setShowEmojiPicker(false); handleInputChange({ target: { value: inputValue + emoji } } as any); }} 
+                                                                className="text-xl hover:bg-white/10 p-2 rounded-xl transition-all hover:scale-110 active:scale-90"
+                                                            >
+                                                                {emoji}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
+                                    
+                                    <button 
+                                        type="submit" 
+                                        disabled={!inputValue.trim() || isWaitingForOthers} 
+                                        className={`w-11 h-11 md:w-12 md:h-12 flex items-center justify-center rounded-full transition-all duration-300 shadow-xl active:scale-90 flex-shrink-0 ${
+                                            inputValue.trim() && !isWaitingForOthers 
+                                            ? 'bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500 hover:-translate-y-0.5' 
+                                            : 'bg-gray-800 text-gray-500 opacity-50 cursor-not-allowed'
+                                        }`}
+                                    >
+                                        <Send size={18} className={`transition-transform duration-300 ${inputValue.trim() ? 'translate-x-0.5 -translate-y-0.5' : ''}`} />
+                                    </button>
                                 </div>
-                                
-                                <button 
-                                    type="submit" 
-                                    disabled={!inputValue.trim() || isWaitingForOthers} 
-                                    className={`w-11 h-11 md:w-12 md:h-12 flex items-center justify-center rounded-full transition-all duration-300 shadow-xl active:scale-90 flex-shrink-0 ${
-                                        inputValue.trim() && !isWaitingForOthers 
-                                        ? 'bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500 hover:-translate-y-0.5' 
-                                        : 'bg-gray-800 text-gray-500 opacity-50 cursor-not-allowed'
-                                    }`}
-                                >
-                                    <Send size={18} className={`transition-transform duration-300 ${inputValue.trim() ? 'translate-x-0.5 -translate-y-0.5' : ''}`} />
-                                </button>
-                            </div>
-                        )}
-                        <div className="hidden md:flex justify-between items-center px-4">
-                            <p className="text-[10px] text-gray-500 font-medium flex items-center gap-1.5 opacity-60">
-                                <CheckCheck size={12} className="text-blue-500/70" /> End-to-end encrypted
-                            </p>
-                            {inputValue.length > 0 && (
-                                <p className="text-[10px] text-gray-600 font-bold">{inputValue.length} characters</p>
                             )}
-                        </div>
-                    </form>
+                            <div className="hidden md:flex justify-between items-center px-4">
+                                <p className="text-[10px] text-gray-500 font-medium flex items-center gap-1.5 opacity-60">
+                                    <CheckCheck size={12} className="text-blue-500/70" /> End-to-end encrypted
+                                </p>
+                                {inputValue.length > 0 && (
+                                    <p className="text-[10px] text-gray-600 font-bold">{inputValue.length} characters</p>
+                                )}
+                            </div>
+                        </form>
+                    </div>
                 </div>
             ) : (
-                <div className="p-8 border-t border-gray-800 bg-gray-900/80 text-center text-gray-400 text-sm font-medium">Please accept the message request to start chatting.</div>
+                <div className="fixed bottom-0 left-0 right-0 w-full z-[1000] bg-gray-900 border-t border-gray-800">
+                    <div className="max-w-[1100px] mx-auto p-8 text-center text-gray-400 text-sm font-medium">Please accept the message request to start chatting.</div>
+                </div>
             )}
 
             <MediaPreviewModal isOpen={previewMedia.isOpen} onClose={() => setPreviewMedia(prev => ({ ...prev, isOpen: false }))} mediaUrl={previewMedia.url} mediaType={previewMedia.type} fileName={previewMedia.fileName} isSender={previewMedia.isSender} />
