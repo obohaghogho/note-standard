@@ -38,6 +38,6 @@
     "realtime-gateway"
   ],
   "engines": {
-    "node": ">=20.0.0"
+    "node": "22.x"
   }
 }
