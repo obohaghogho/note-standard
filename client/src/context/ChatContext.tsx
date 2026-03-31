@@ -14,6 +14,8 @@ export interface Message {
     isOwn?: boolean;
     original_language?: string;
     read_at?: string;
+    is_edited?: boolean;
+    updated_at?: string;
     sentiment?: {
         label: 'positive' | 'negative' | 'neutral';
         score: number;
@@ -70,11 +72,13 @@ export interface ChatContextValue {
     acceptConversation: (id: string) => Promise<void>;
     deleteConversation: (id: string) => Promise<void>;
     deleteMessage: (messageId: string) => Promise<void>;
+    editMessage: (messageId: string, content: string) => Promise<void>;
     muteConversation: (id: string, isMuted: boolean) => Promise<void>;
     clearChatHistory: (id: string) => Promise<void>;
     sendTypingStatus: (isTyping: boolean) => void;
     typingUsers: Record<string, string[]>;
     hasMore: Record<string, boolean>;
+    sendMessageToConversation: (conversationId: string, content: string, type?: string, attachmentId?: string) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -268,13 +272,41 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             // Update conversation last message if the deleted message was the preview
             setConversations(prev => prev.map(conv => {
                 if (conv.id === conversationId && conv.lastMessage && (conv.lastMessage as any).id === messageId) {
-                    // We need to find the new last message. 
-                    // Since we just updated messages state, we can't easily access it here without closure issues,
-                    // but we can compute what it *should* be from the previous messages state.
                     return {
                         ...conv,
-                        lastMessage: undefined // Simplest fix is to clear it, or we could find the next one
+                        lastMessage: undefined
                     };
+                }
+                return conv;
+            }));
+        });
+
+        socket.on('message_edited', (editedMsg: Message) => {
+            if (!editedMsg || !editedMsg.id) return;
+            const conversationId = editedMsg.conversation_id;
+            
+            setMessages(prev => {
+                const convMessages = prev[conversationId] || [];
+                return {
+                    ...prev,
+                    [conversationId]: convMessages.map(m => m.id === editedMsg.id ? { ...m, content: editedMsg.content, is_edited: true, updated_at: editedMsg.updated_at } : m)
+                };
+            });
+
+            // Update conversation lastMessage preview if it was edited
+            setConversations(prev => prev.map(conv => {
+                if (conv.id === conversationId && conv.lastMessage && (conv.lastMessage as any).sender_id === editedMsg.sender_id) {
+                    // It's tricky to know if it's the absolute last message without searching messages state
+                    // We'll just optimistically update it if the created_at matches
+                    if (conv.lastMessage.created_at === editedMsg.created_at) {
+                        return {
+                            ...conv,
+                            lastMessage: {
+                                ...conv.lastMessage,
+                                content: editedMsg.content
+                            }
+                        };
+                    }
                 }
                 return conv;
             }));
@@ -317,13 +349,18 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, [socket, connected, conversations, user?.id, loadConversations, activeConversationId]);
 
     const sendMessage = async (content: string, type: string = 'text', attachmentId?: string) => {
-        if (!session || !activeConversationId || !user) throw new Error('Cannot send message');
+        if (!activeConversationId) throw new Error('No active conversation');
+        return sendMessageToConversation(activeConversationId, content, type, attachmentId);
+    };
+
+    const sendMessageToConversation = async (conversationId: string, content: string, type: string = 'text', attachmentId?: string) => {
+        if (!session || !user) throw new Error('Cannot send message');
         
         // ── Optimistic Update ────────────────────────────────────
         const tempId = `temp-${Date.now()}`;
         const optimisticMessage: Message = {
             id: tempId,
-            conversation_id: activeConversationId,
+            conversation_id: conversationId,
             sender_id: user.id,
             content,
             created_at: new Date().toISOString(),
@@ -334,11 +371,26 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         setMessages(prev => ({
             ...prev,
-            [activeConversationId]: [...(prev[activeConversationId] || []), optimisticMessage]
+            [conversationId]: [...(prev[conversationId] || []), optimisticMessage]
+        }));
+
+        // Update conversation last message preview
+        setConversations(prev => prev.map(conv => {
+            if (conv.id === conversationId) {
+                return {
+                    ...conv,
+                    lastMessage: {
+                        content,
+                        sender_id: user.id,
+                        created_at: optimisticMessage.created_at
+                    }
+                };
+            }
+            return conv;
         }));
 
         try {
-            const res = await fetch(`${API_URL}/api/chat/conversations/${activeConversationId}/messages`, {
+            const res = await fetch(`${API_URL}/api/chat/conversations/${conversationId}/messages`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -356,10 +408,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             
             // Replace optimistic message with real one
             setMessages(prev => {
-                const current = prev[activeConversationId] || [];
+                const current = prev[conversationId] || [];
                 return {
                     ...prev,
-                    [activeConversationId]: current.map(m => m.id === tempId ? {
+                    [conversationId]: current.map(m => m.id === tempId ? {
                         ...m,
                         id: data.id,
                         created_at: data.created_at,
@@ -373,7 +425,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             // Rollback on failure
             setMessages(prev => ({
                 ...prev,
-                [activeConversationId]: (prev[activeConversationId] || []).filter(m => m.id !== tempId)
+                [conversationId]: (prev[conversationId] || []).filter(m => m.id !== tempId)
             }));
             throw err;
         }
@@ -548,6 +600,61 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     };
 
+    const editMessage = async (messageId: string, content: string) => {
+        if (!session || !activeConversationId) throw new Error('No session or active chat');
+
+        // Optimistic update
+        let oldMessageContent = '';
+        setMessages(prev => {
+            const current = prev[activeConversationId] || [];
+            const msg = current.find(m => m.id === messageId);
+            if (msg) oldMessageContent = msg.content;
+            
+            return {
+                ...prev,
+                [activeConversationId]: current.map(m => m.id === messageId ? { ...m, content, is_edited: true } : m)
+            };
+        });
+
+        // Update conversation last message optimistically
+        setConversations(prev => prev.map(conv => {
+            if (conv.id === activeConversationId && conv.lastMessage && (conv.lastMessage as any).id === messageId) {
+                 // Or by checking created_at
+                 return { ...conv, lastMessage: { ...conv.lastMessage, content } };
+            }
+            return conv;
+        }));
+
+        try {
+            const res = await fetch(`${API_URL}/api/chat/messages/${messageId}`, {
+                method: 'PATCH',
+                headers: { 
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ content })
+            });
+
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.error || 'Failed to edit message');
+            }
+        } catch (err) {
+            // Rollback
+            if (oldMessageContent) {
+                setMessages(prev => {
+                    const current = prev[activeConversationId] || [];
+                    return {
+                        ...prev,
+                        [activeConversationId]: current.map(m => m.id === messageId ? { ...m, content: oldMessageContent, is_edited: false } : m)
+                    };
+                });
+            }
+            console.error('[Chat] Failed to edit message:', err);
+            throw err;
+        }
+    };
+
     const muteConversation = async (conversationId: string, isMuted: boolean) => {
         if (!session) throw new Error('No session');
 
@@ -652,8 +759,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             acceptConversation, 
             deleteConversation,
             deleteMessage,
+            editMessage,
             muteConversation,
             clearChatHistory,
+            sendMessageToConversation,
             loading, 
             activeConversationId, 
             setActiveConversationId,

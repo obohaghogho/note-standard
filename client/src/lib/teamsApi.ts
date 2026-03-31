@@ -714,6 +714,42 @@ export async function deleteTeamMessage(teamId: string, messageId: string): Prom
 }
 
 /**
+ * Edit a specific team message
+ */
+export async function editTeamMessage(teamId: string, messageId: string, newContent: string): Promise<boolean> {
+  const result = await safeCall<boolean>(`edit-team-message-${messageId}`, async () => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) throw new Error('Not authenticated');
+
+    const { error } = await supabase
+      .from('team_messages')
+      .update({ content: newContent, is_edited: true })
+      .eq('id', messageId)
+      // RLS handles the permission check (must be sender)
+      .eq('team_id', teamId)
+      .eq('is_deleted', false);
+
+    if (error) {
+       if (error.code === "42703" || error.code === "PGRST204") {
+         console.warn("[Teams API] is_edited column missing, retrying without it");
+         const { error: retryErr } = await supabase
+           .from('team_messages')
+           .update({ content: newContent })
+           .eq('id', messageId)
+           .eq('team_id', teamId)
+           .eq('is_deleted', false);
+         if (retryErr) throw retryErr;
+         return true;
+       }
+       throw error;
+    }
+    return true;
+  });
+
+  return result ?? false;
+}
+
+/**
  * Clear all messages in a team (Owner only, soft or hard)
  */
 export async function clearTeamChatHistory(teamId: string): Promise<boolean> {
@@ -756,6 +792,9 @@ export default {
   uploadTeamImage,
   uploadTeamAudio,
   markMessagesRead,
+  deleteTeamMessage,
+  clearTeamChatHistory,
+  editTeamMessage,
 
   // Shared Notes
   shareNote,

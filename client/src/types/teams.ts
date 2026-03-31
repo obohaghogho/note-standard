@@ -64,6 +64,7 @@ export interface TeamMessage {
   isOwn?: boolean;
   isOptimistic?: boolean;
   failed?: boolean;
+  is_edited?: boolean;
 }
 
 export interface SharedNote {

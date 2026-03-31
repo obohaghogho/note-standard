@@ -603,3 +603,22 @@
   width: 100%;
 }
 /* Removed old audio filters since we use premium AudioPlayer component now */
+
+/* ====================================
+   MESSAGE SELECTION STATE
+   (WhatsApp-style long-press selection)
+   ==================================== */
+
+.team-chat__message--selected {
+  background: rgba(59, 130, 246, 0.08);
+  border-radius: 12px;
+  margin-left: -8px;
+  margin-right: -8px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.team-chat__message--selected .team-chat__message-bubble {
+  background: rgba(59, 130, 246, 0.15) !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}

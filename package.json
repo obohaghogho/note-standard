@@ -10,8 +10,8 @@
     "client": "npm run dev -w client",
     "server": "npm run dev -w server",
     "build:client": "npm run build -w client",
-    "lint": "npm run lint --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "typecheck": "npm run typecheck -w client",
     "prepare": "echo 'Skipping husky in production'"
   },
   "dependencies": {
@@ -21,12 +21,21 @@
     "husky": "^9.1.7"
   },
   "devDependencies": {
+    "@eslint/js": "^9.14.0",
     "concurrently": "^8.2.2",
-    "is-ci": "^4.1.0"
+    "eslint": "^9.14.0",
+    "eslint-import-resolver-typescript": "^3.6.3",
+    "eslint-plugin-import-x": "^4.4.2",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.14",
+    "globals": "^15.11.0",
+    "is-ci": "^4.1.0",
+    "typescript-eslint": "^8.12.1"
   },
   "workspaces": [
     "client",
-    "server"
+    "server",
+    "realtime-gateway"
   ],
   "engines": {
     "node": ">=20.0.0"

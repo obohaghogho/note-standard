@@ -38,6 +38,7 @@ interface TeamChatContextValue {
   loadMoreMessages: () => Promise<void>;
   hasMore: boolean;
   deleteMessage: (messageId: string) => Promise<void>;
+  editMessage: (messageId: string, content: string) => Promise<void>;
   clearChatHistory: () => Promise<void>;
   sendTypingStatus: (isTyping: boolean) => void;
   typingUsers: string[];
@@ -55,6 +56,7 @@ const TeamChatContext = createContext<TeamChatContextValue>({
   loadMoreMessages: async () => {},
   hasMore: false,
   deleteMessage: async () => {},
+  editMessage: async () => {},
   clearChatHistory: async () => {},
   sendTypingStatus: () => {},
   typingUsers: [],
@@ -206,6 +208,33 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
     } catch (err) {
       console.error('[TeamChat] Failed to delete message:', err);
       toast.error('Failed to delete message');
+    }
+  }, [teamId]);
+
+  const editMessage = useCallback(async (messageId: string, newContent: string) => {
+    if (!teamId) return;
+    
+    // Optimistic update
+    let oldContent = '';
+    setMessages(prev => {
+      const msg = prev.find(m => m.id === messageId);
+      if (msg) oldContent = msg.content || '';
+      return prev.map(m => m.id === messageId ? { ...m, content: newContent, is_edited: true, updated_at: new Date().toISOString() } : m);
+    });
+
+    try {
+      const { editTeamMessage } = await import('../lib/teamsApi');
+      const success = await editTeamMessage(teamId, messageId, newContent);
+      if (!success) {
+        throw new Error('Failed to edit team message');
+      }
+    } catch (err) {
+      console.error('[TeamChat] Editing message failed:', err);
+      // Rollback
+      if (oldContent) {
+        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: oldContent, is_edited: false } : m));
+      }
+      toast.error('Failed to edit message');
     }
   }, [teamId]);
 
@@ -441,6 +470,11 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
           const updatedMsg = payload.new;
           if (updatedMsg.is_deleted) {
              setMessages(prev => prev.filter(m => m.id !== updatedMsg.id));
+          } else if (updatedMsg.is_edited) {
+             setMessages(prev => prev.map(m => m.id === updatedMsg.id ? { ...m, content: updatedMsg.content, is_edited: true, updated_at: updatedMsg.updated_at } : m));
+          } else if (updatedMsg.content) {
+             // Catch-all for other updates that change content
+             setMessages(prev => prev.map(m => m.id === updatedMsg.id ? { ...m, content: updatedMsg.content, updated_at: updatedMsg.updated_at, is_edited: updatedMsg.is_edited } : m));
           }
         }
       );
@@ -573,6 +607,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
     loadMoreMessages,
     hasMore,
     deleteMessage,
+    editMessage,
     clearChatHistory,
     sendTypingStatus,
     typingUsers,

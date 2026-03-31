@@ -5,7 +5,7 @@ import { usePresence } from '../../context/PresenceContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../common/SecureImage';
-import { Send, Languages, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Maximize, Trash2 } from 'lucide-react';
+import { Send, Languages, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Maximize, Trash2, Share2, X } from 'lucide-react';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { MediaUpload } from './MediaUpload';
 import { VoiceRecorder } from './VoiceRecorder';
@@ -15,6 +15,7 @@ import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
 import { MediaPreviewModal } from './MediaPreviewModal';
 import { MentionSuggestions } from './MentionSuggestions';
+import { ForwardMessageModal } from './ForwardMessageModal';
 
 import { ConfirmationModal } from '../common/ConfirmationModal';
 import { applyAutoCorrect } from '../../utils/textUtils';
@@ -23,33 +24,78 @@ import { UserBadge } from '../common/UserBadge';
 const ChatWindow: React.FC = () => {
     const { 
         activeConversationId, setActiveConversationId, messages, sendMessage, loading, 
-        conversations, acceptConversation, deleteConversation, deleteMessage,
+        conversations, acceptConversation, deleteConversation, deleteMessage, editMessage,
         muteConversation, clearChatHistory, loadMoreMessages, hasMore,
-        sendTypingStatus, typingUsers 
+        sendTypingStatus, typingUsers, sendMessageToConversation 
     } = useChat();
     const { isUserOnline, getUserLastSeen } = usePresence();
     const { user, profile, session } = useAuth();
     const { startCall } = useWebRTC();
 
-    const [activeMessageMenu, setActiveMessageMenu] = useState<string | null>(null);
+    // ── WhatsApp-Style Selection System ──────────────────────
+    const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
+    const longPressTimerRef = useRef<any>(null);
+    const longPressTriggeredRef = useRef(false);
+    const isSelectionMode = selectedMessages.size > 0;
 
-    // Layout Offset Management
-    useEffect(() => {
-        // Safe spacing managed by fixed positioning and static padding
-        
-        // Close menu on click outside
-        const handleClickOutside = (e: MouseEvent) => {
-            if (activeMessageMenu && !(e.target as Element).closest('.chat-message-actions')) {
-                setActiveMessageMenu(null);
+    // Forward modal state
+    const [forwardModal, setForwardModal] = useState<{
+        isOpen: boolean;
+        messages: { id: string; content: string; type: string }[];
+    }>({ isOpen: false, messages: [] });
+
+    // Editing state
+    const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+
+    const toggleMessageSelection = (msgId: string) => {
+        setSelectedMessages(prev => {
+            const next = new Set(prev);
+            if (next.has(msgId)) {
+                next.delete(msgId);
+            } else {
+                next.add(msgId);
             }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        
+            return next;
+        });
+    };
+
+    const clearSelection = () => {
+        setSelectedMessages(new Set());
+    };
+
+    const handleLongPressStart = (msgId: string) => {
+        longPressTriggeredRef.current = false;
+        longPressTimerRef.current = setTimeout(() => {
+            longPressTriggeredRef.current = true;
+            // Haptic feedback for mobile
+            if (navigator.vibrate) navigator.vibrate(30);
+            toggleMessageSelection(msgId);
+        }, 350);
+    };
+
+    const handleLongPressEnd = () => {
+        if (longPressTimerRef.current) {
+            clearTimeout(longPressTimerRef.current);
+            longPressTimerRef.current = null;
+        }
+    };
+
+    const handleMessageClick = (msgId: string) => {
+        if (longPressTriggeredRef.current) {
+            longPressTriggeredRef.current = false;
+            return; // was a long press, don't toggle
+        }
+        if (isSelectionMode) {
+            toggleMessageSelection(msgId);
+        }
+    };
+
+    // Cleanup long press timer on unmount
+    useEffect(() => {
         return () => {
-            // Cleanup if needed
-            document.removeEventListener('mousedown', handleClickOutside);
+            if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
         };
-    }, [activeMessageMenu]);
+    }, []);
     
     const [inputValue, setInputValue] = useState('');
     const [showMediaUpload, setShowMediaUpload] = useState(false);
@@ -272,11 +318,16 @@ const ChatWindow: React.FC = () => {
         if (!inputValue.trim() || !activeConversationId) return;
 
         try {
-            await sendMessage(inputValue);
+            if (editingMessageId) {
+                await editMessage(editingMessageId, inputValue);
+                setEditingMessageId(null);
+            } else {
+                await sendMessage(inputValue);
+            }
             setInputValue('');
             setShowMentions(false);
         } catch (err) {
-            toast.error('Failed to send message');
+            toast.error(editingMessageId ? 'Failed to edit message' : 'Failed to send message');
         }
     };
 
@@ -489,6 +540,70 @@ const ChatWindow: React.FC = () => {
 
     return (
         <div className="flex-1 flex flex-col h-full min-h-0 bg-gray-900 text-white overflow-hidden relative max-w-[1100px] mx-auto w-full shadow-2xl border-x border-gray-800">
+            {/* ── Selection Action Bar (WhatsApp-style) ── */}
+            {isSelectionMode ? (
+                <div className="pt-safe flex-shrink-0 border-b border-blue-500/30 bg-blue-600/10 backdrop-blur-md sticky top-0 z-10 animate-in slide-in-from-top-2 duration-200">
+                    <div className="p-2 md:p-4 flex items-center justify-between gap-4 w-full">
+                        <div className="flex items-center gap-3">
+                            <button 
+                                onClick={clearSelection}
+                                className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded-full transition-all active:scale-90"
+                                aria-label="Cancel selection"
+                            >
+                                <X size={22} />
+                            </button>
+                            <span className="text-white font-bold text-base">
+                                {selectedMessages.size} selected
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-1 md:gap-2">
+                            <button 
+                                onClick={() => {
+                                    const selectedMsgs = currentMessages
+                                        .filter(m => selectedMessages.has(m.id))
+                                        .map(m => ({ id: m.id, content: m.content, type: m.type }));
+                                    setForwardModal({ isOpen: true, messages: selectedMsgs });
+                                }}
+                                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-blue-300 hover:text-blue-200 hover:bg-blue-500/15 rounded-xl transition-all active:scale-95"
+                            >
+                                <Share2 size={18} />
+                                <span className="hidden sm:inline">Forward</span>
+                            </button>
+                            {selectedMessages.size === 1 && (
+                                (() => {
+                                    const msgId = Array.from(selectedMessages)[0];
+                                    const msg = currentMessages.find(m => m.id === msgId);
+                                    if (msg && msg.isOwn && msg.type === 'text') {
+                                        return (
+                                            <button 
+                                                onClick={() => {
+                                                    setEditingMessageId(msg.id);
+                                                    setInputValue(msg.content || '');
+                                                    clearSelection();
+                                                }}
+                                                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-green-400 hover:text-green-300 hover:bg-green-500/15 rounded-xl transition-all active:scale-95"
+                                            >
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                                <span className="hidden sm:inline">Edit</span>
+                                            </button>
+                                        );
+                                    }
+                                    return null;
+                                })()
+                            )}
+                            <button 
+                                onClick={() => {
+                                    setConfirmModal({ isOpen: true, type: 'message', messageId: Array.from(selectedMessages)[0] });
+                                }}
+                                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/15 rounded-xl transition-all active:scale-95"
+                            >
+                                <Trash2 size={18} />
+                                <span className="hidden sm:inline">Delete</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : (
             <div className="pt-safe flex-shrink-0 border-b border-gray-800 bg-gray-900/50 backdrop-blur-md sticky top-0 z-10">
                 <div className="p-2 md:p-4 flex items-center justify-between gap-4 w-full">
                     <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
@@ -612,6 +727,7 @@ const ChatWindow: React.FC = () => {
                     </div>
                 </div>
             </div>
+            )}
 
             {hasMore[activeConversationId] && (
                 <div className="flex justify-center py-2 bg-gray-900">
@@ -651,50 +767,39 @@ const ChatWindow: React.FC = () => {
                     <>
                         {currentMessages.map((msg, index) => {
                             const isGrouped = isSameSender(index);
+                            const isSelected = selectedMessages.has(msg.id);
                             return (
-                                <div key={msg.id || `msg-temp-${index}`} className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'} ${isGrouped ? '-mt-2 md:-mt-3' : 'mt-4'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-                                    <div className={`max-w-[92%] md:max-w-[70%] ${isGrouped ? 'rounded-2xl' : (msg.sender_id === user?.id ? 'rounded-2xl rounded-br-sm' : 'rounded-2xl rounded-bl-sm')} p-3 shadow-md border ${msg.sender_id === user?.id ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-blue-500/50' : 'bg-gray-800 text-gray-200 border-gray-700'} relative group`}>
-                                        {msg.sender_id === user?.id && (
-                                            <div className="chat-message-actions absolute -left-10 top-1/2 -translate-y-1/2 md:opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                                                <button 
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setActiveMessageMenu(activeMessageMenu === msg.id ? null : msg.id);
-                                                    }}
-                                                    className={`p-2 text-gray-400 hover:text-white transition-all rounded-full bg-gray-900/40 hover:bg-gray-800 border border-white/5 ${activeMessageMenu === msg.id ? 'opacity-100 scale-110' : ''}`}
-                                                    title="Message options"
-                                                >
-                                                    <MoreHorizontal size={14} />
-                                                </button>
-                                                <AnimatePresence>
-                                                    {activeMessageMenu === msg.id && (
-                                                        <div className="absolute right-full mr-2 top-0 bg-gray-800 border border-gray-700/50 rounded-xl shadow-2xl z-50 overflow-hidden min-w-[160px] backdrop-blur-xl animate-in slide-in-from-right-2 fade-in duration-200">
-                                                            <div className="p-1">
-                                                                <button 
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setConfirmModal({ isOpen: true, type: 'message', messageId: msg.id });
-                                                                        setActiveMessageMenu(null);
-                                                                    }}
-                                                                    className="flex items-center gap-2.5 w-full px-3 py-2.5 text-xs font-semibold text-red-400 hover:bg-red-400/10 transition-colors text-left rounded-lg"
-                                                                >
-                                                                    <Trash2 size={14} />
-                                                                    <span>Delete for everyone</span>
-                                                                </button>
-                                                                
-                                                                <button 
-                                                                    onClick={(e) => { e.stopPropagation(); setActiveMessageMenu(null); }}
-                                                                    className="flex items-center gap-2.5 w-full px-3 py-2.5 text-xs font-semibold text-gray-400 hover:bg-white/5 transition-colors text-left rounded-lg"
-                                                                >
-                                                                    <Plus size={14} className="rotate-45" />
-                                                                    <span>Cancel</span>
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </AnimatePresence>
+                                <div 
+                                    key={msg.id || `msg-temp-${index}`} 
+                                    className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'} ${isGrouped ? '-mt-2 md:-mt-3' : 'mt-4'} animate-in fade-in slide-in-from-bottom-2 duration-300`}
+                                    onTouchStart={() => handleLongPressStart(msg.id)}
+                                    onTouchEnd={handleLongPressEnd}
+                                    onTouchCancel={handleLongPressEnd}
+                                    onMouseDown={() => handleLongPressStart(msg.id)}
+                                    onMouseUp={handleLongPressEnd}
+                                    onMouseLeave={handleLongPressEnd}
+                                    onClick={() => handleMessageClick(msg.id)}
+                                    style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+                                >
+                                    {/* Selection checkbox indicator */}
+                                    {isSelectionMode && (
+                                        <div className={`flex items-center mr-2 flex-shrink-0 self-center transition-all duration-200 ${msg.sender_id === user?.id ? 'order-2 ml-2 mr-0' : ''}`}>
+                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
+                                                isSelected 
+                                                    ? 'bg-blue-500 border-blue-500 scale-110' 
+                                                    : 'border-gray-500 bg-transparent hover:border-gray-400'
+                                            }`}>
+                                                {isSelected && (
+                                                    <Check size={12} className="text-white animate-in zoom-in-0 duration-150" />
+                                                )}
                                             </div>
-                                        )}
+                                        </div>
+                                    )}
+                                    <div className={`max-w-[92%] md:max-w-[70%] ${isGrouped ? 'rounded-2xl' : (msg.sender_id === user?.id ? 'rounded-2xl rounded-br-sm' : 'rounded-2xl rounded-bl-sm')} p-3 shadow-md border ${
+                                        isSelected
+                                            ? 'bg-blue-600/30 border-blue-400/50 ring-1 ring-blue-500/30'
+                                            : (msg.sender_id === user?.id ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-blue-500/50' : 'bg-gray-800 text-gray-200 border-gray-700')
+                                    } relative group transition-all duration-200 ${isSelectionMode ? 'cursor-pointer' : ''}`}>
                                         {msg.attachment && msg.type !== 'audio' && (
                                             <div className="mb-2 rounded-lg overflow-hidden border border-black/20 bg-black/10">
                                                 {msg.type === 'image' ? (
@@ -796,7 +901,12 @@ const ChatWindow: React.FC = () => {
                                                     </div>
                                                 )}
                                                 <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
-                                                    {!isGrouped && <span className="text-[10px]">{msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}</span>}
+                                                    {!isGrouped && (
+                                                        <span className="text-[10px] flex items-center gap-1">
+                                                            {msg.is_edited && <span className="italic opacity-70">(edited)</span>}
+                                                            {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}
+                                                        </span>
+                                                    )}
                                                     {msg.sender_id === user?.id && (<div className="text-white/80 scale-75 origin-right">{msg.read_at ? <CheckCheck size={14} className="text-blue-300" /> : <Check size={14} />}</div>)}
                                                 </div>
                                             </>
@@ -878,7 +988,22 @@ const ChatWindow: React.FC = () => {
                                             <Plus size={22} className={`transition-transform duration-300 ${showMediaUpload ? 'rotate-45 text-blue-400' : ''}`} />
                                         </button>
                                         
-                                        <div className="flex-1 relative min-w-0">
+                                        <div className="flex-1 relative min-w-0 flex flex-col justify-end">
+                                            {editingMessageId && (
+                                                <div className="absolute bottom-full left-0 mb-2 w-full flex items-center justify-between bg-blue-900/30 text-blue-200 text-xs px-3 py-1.5 rounded-lg border border-blue-500/20 backdrop-blur-md animate-in slide-in-from-bottom-2">
+                                                    <span className="font-medium flex items-center gap-1.5 px-1 py-0.5">
+                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                                        Editing Message
+                                                    </span>
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => { setEditingMessageId(null); setInputValue(''); }}
+                                                        className="hover:bg-blue-500/20 p-1 rounded-full transition-colors"
+                                                    >
+                                                        <X size={14} />
+                                                    </button>
+                                                </div>
+                                            )}
                                             {showMentions && mentionParticipants.length > 0 && (
                                                 <div className="absolute bottom-full left-0 mb-4 w-full max-w-[300px] animate-in slide-in-from-bottom-2 duration-200">
                                                     <MentionSuggestions users={mentionParticipants} onSelect={handleSelectMention} />
@@ -972,15 +1097,25 @@ const ChatWindow: React.FC = () => {
                 isOpen={confirmModal.isOpen}
                 onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
                 onConfirm={async () => {
-                    const { type, messageId } = confirmModal;
+                    const { type } = confirmModal;
                     setConfirmModal(prev => ({ ...prev, isOpen: false }));
                     
-                    if (type === 'message' && messageId) {
+                    if (type === 'message' && selectedMessages.size > 0) {
+                        const toDelete = Array.from(selectedMessages);
+                        const loadingToast = toDelete.length > 1 
+                            ? toast.loading(`Deleting ${toDelete.length} messages...`) 
+                            : undefined;
                         try {
-                            await deleteMessage(messageId);
-                            toast.success('Message deleted');
+                            for (const msgId of toDelete) {
+                                await deleteMessage(msgId);
+                            }
+                            toast.success(
+                                toDelete.length > 1 ? `${toDelete.length} messages deleted` : 'Message deleted',
+                                loadingToast ? { id: loadingToast } : undefined
+                            );
+                            clearSelection();
                         } catch (err) {
-                            toast.error('Failed to delete message');
+                            toast.error('Failed to delete message(s)', loadingToast ? { id: loadingToast } : undefined);
                         }
                     } else if (type === 'clear' && activeConversationId) {
                         const loadingToast = toast.loading('Clearing history...');
@@ -1001,19 +1136,43 @@ const ChatWindow: React.FC = () => {
                     }
                 }}
                 title={
-                    confirmModal.type === 'message' ? 'Delete Message' : 
-                    confirmModal.type === 'clear' ? 'Clear History' : 'Delete Chat'
+                    confirmModal.type === 'message' 
+                        ? (selectedMessages.size > 1 ? `Delete ${selectedMessages.size} Messages` : 'Delete Message')
+                        : confirmModal.type === 'clear' ? 'Clear History' : 'Delete Chat'
                 }
                 message={
-                    confirmModal.type === 'message' ? 'Are you sure you want to delete this message? This action cannot be undone.' :
-                    confirmModal.type === 'clear' ? 'Are you sure you want to clear all messages in this chat? This only affects your view.' :
-                    'Are you sure you want to delete this conversation forever? All history will be lost.'
+                    confirmModal.type === 'message' 
+                        ? (selectedMessages.size > 1 
+                            ? `Are you sure you want to delete ${selectedMessages.size} selected messages? This action cannot be undone.`
+                            : 'Are you sure you want to delete this message? This action cannot be undone.')
+                        : confirmModal.type === 'clear' ? 'Are you sure you want to clear all messages in this chat? This only affects your view.'
+                        : 'Are you sure you want to delete this conversation forever? All history will be lost.'
                 }
                 confirmText={
                     confirmModal.type === 'message' ? 'Delete' : 
                     confirmModal.type === 'clear' ? 'Clear' : 'Delete'
                 }
                 variant="danger"
+            />
+
+            {/* Forward Message Modal */}
+            <ForwardMessageModal
+                isOpen={forwardModal.isOpen}
+                onClose={() => { setForwardModal({ isOpen: false, messages: [] }); clearSelection(); }}
+                messageContent={forwardModal.messages.map(m => m.content).join('\n')}
+                messageType={forwardModal.messages.length === 1 ? forwardModal.messages[0]?.type : undefined}
+                onForward={async (targetConversationId: string) => {
+                    try {
+                        for (const msg of forwardModal.messages) {
+                            const prefix = '↪️ Forwarded: ';
+                            await sendMessageToConversation(targetConversationId, prefix + msg.content);
+                        }
+                        toast.success(`Message${forwardModal.messages.length > 1 ? 's' : ''} forwarded`);
+                        clearSelection();
+                    } catch (err) {
+                        toast.error('Failed to forward message');
+                    }
+                }}
             />
         </div>
     );

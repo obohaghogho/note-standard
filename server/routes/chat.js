@@ -51,5 +51,6 @@ router.delete(
 );
 router.put("/messages/:messageId/read", chatController.markMessageRead);
 router.delete("/messages/:messageId", chatController.deleteMessage);
+router.patch("/messages/:messageId", chatController.editMessage);
 
 module.exports = router;

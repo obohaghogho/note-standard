@@ -24,7 +24,9 @@ import {
   LogOut,
   Edit3,
   Trash2,
-  MoreVertical,
+  X,
+  Share2,
+  Check,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { uploadTeamImage, uploadTeamAudio } from '../../lib/teamsApi';
@@ -48,7 +50,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { 
     messages, members, loading, connected, sendMessage, loadMoreMessages, 
-    hasMore, deleteMessage, clearChatHistory, error, typingUsers, sendTypingStatus 
+    hasMore, deleteMessage, editMessage, clearChatHistory, error, typingUsers, sendTypingStatus 
   } = useTeamChat();
 
   const myMember = members.find(m => m.user_id === user?.id);
@@ -59,27 +61,67 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
   const [isSending, setIsSending] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [showRecorder, setShowRecorder] = useState(false);
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+
+  // ── WhatsApp-Style Selection System ──────────────────────
+  const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
+  const longPressTimerRef = useRef<any>(null);
+  const longPressTriggeredRef = useRef(false);
+  const isSelectionMode = selectedMessages.size > 0;
+
+  const toggleMessageSelection = (msgId: string) => {
+    setSelectedMessages(prev => {
+      const next = new Set(prev);
+      if (next.has(msgId)) {
+        next.delete(msgId);
+      } else {
+        next.add(msgId);
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedMessages(new Set());
+  };
+
+  const handleLongPressStart = (msgId: string) => {
+    longPressTriggeredRef.current = false;
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      if (navigator.vibrate) navigator.vibrate(30);
+      toggleMessageSelection(msgId);
+    }, 500);
+  };
+
+  const handleLongPressEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const handleMessageClick = (msgId: string) => {
+    if (longPressTriggeredRef.current) {
+      longPressTriggeredRef.current = false;
+      return;
+    }
+    if (isSelectionMode) {
+      toggleMessageSelection(msgId);
+    }
+  };
 
   // Layout Offset Management
   useEffect(() => {
     document.documentElement.style.setProperty('--floating-ui-offset', '110px');
     document.documentElement.style.setProperty('--chat-input-height', '130px');
     
-    // Close menu on click outside
-    const handleClickOutside = (e: MouseEvent) => {
-      if (activeMenu && !(e.target as Element).closest('.team-chat__message-actions')) {
-        setActiveMenu(null);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    
     return () => {
       document.documentElement.style.setProperty('--floating-ui-offset', '0px');
       document.documentElement.style.setProperty('--chat-input-height', '0px');
-      document.removeEventListener('mousedown', handleClickOutside);
+      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
     };
-  }, [activeMenu]);
+  }, []);
   
   // Confirmation state
   const [confirmDelete, setConfirmDelete] = useState<{
@@ -153,12 +195,17 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
     setIsSending(true);
 
     try {
-      await sendMessage(input.trim());
+      if (editingMessageId) {
+        await editMessage(editingMessageId, input.trim());
+        setEditingMessageId(null);
+      } else {
+        await sendMessage(input.trim());
+      }
       setInput('');
       sendTypingStatus(false);
       inputRef.current?.focus();
     } catch (err: any) {
-      toast.error('Failed to send message');
+      toast.error(editingMessageId ? 'Failed to edit message' : 'Failed to send message');
     } finally {
       setIsSending(false);
     }
@@ -359,6 +406,8 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
     }
 
     // Regular text or image message
+    const isSelected = selectedMessages.has(msg.id);
+
     return (
       <div
         key={msg.id}
@@ -366,8 +415,32 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
           isGrouped ? 'team-chat__message--grouped' : ''
         } ${
           msg.isOptimistic ? 'team-chat__message--optimistic' : ''
-        } ${msg.failed ? 'team-chat__message--failed' : ''} group relative`}
+        } ${msg.failed ? 'team-chat__message--failed' : ''} ${
+          isSelected ? 'team-chat__message--selected' : ''
+        } group relative`}
+        onTouchStart={() => handleLongPressStart(msg.id)}
+        onTouchEnd={handleLongPressEnd}
+        onTouchCancel={handleLongPressEnd}
+        onMouseDown={() => handleLongPressStart(msg.id)}
+        onMouseUp={handleLongPressEnd}
+        onMouseLeave={handleLongPressEnd}
+        onClick={() => handleMessageClick(msg.id)}
+        style={{ userSelect: 'none', WebkitUserSelect: 'none' } as React.CSSProperties}
       >
+        {/* Selection checkbox */}
+        {isSelectionMode && (
+          <div className={`flex items-center flex-shrink-0 self-center transition-all duration-200 ${isOwn ? 'order-2 ml-2' : 'mr-2'}`}>
+            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
+              isSelected 
+                ? 'bg-blue-500 border-blue-500 scale-110' 
+                : 'border-gray-500 bg-transparent hover:border-gray-400'
+            }`}>
+              {isSelected && (
+                <Check size={12} className="text-white" style={{ animation: 'fadeIn 0.15s ease' }} />
+              )}
+            </div>
+          </div>
+        )}
         {!isOwn && showAvatar && (
           <div className="team-chat__message-avatar">
             {senderAvatar ? (
@@ -381,16 +454,16 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
         )}
         <div className="team-chat__message-content">
           {showName && !isOwn && <div className="team-chat__message-name">{senderName}</div>}
-          <div className="team-chat__message-bubble">
+          <div className={`team-chat__message-bubble ${isSelected ? 'ring-1 ring-blue-500/40 bg-blue-600/15' : ''}`}>
             {msg.message_type === 'image' && msg.metadata?.image_url && (
               <div 
                 className="team-chat__message-image-container cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => setPreviewMedia({
+                onClick={(e) => { if (!isSelectionMode) { e.stopPropagation(); setPreviewMedia({
                   isOpen: true,
                   url: msg.metadata!.image_url!,
                   type: 'image',
                   isSender: isOwn
-                })}
+                }); } }}
               >
                 <SecureImage 
                   src={msg.metadata.image_url} 
@@ -403,7 +476,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
               <div className="team-chat__message-audio-container mt-1 mb-2">
                 <AudioPlayer 
                   path={msg.metadata.audio_url} 
-                  fetchUrl={async (p) => p} // Team audio URLs are usually public or already signed
+                  fetchUrl={async (p) => p}
                 />
               </div>
             )}
@@ -411,52 +484,11 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
             <div className="team-chat__message-time">
               {msg.isOptimistic && <Loader2 size={12} className="animate-spin mr-1" />}
               {msg.failed && <AlertCircle size={12} className="text-red-400 mr-1" />}
+              {msg.is_edited && <span className="italic mr-1">(edited)</span>}
               {formatTime(msg.created_at)}
             </div>
           </div>
         </div>
-
-        {/* Message Actions Menu */}
-        {canDelete && !msg.isOptimistic && (
-          <div className="team-chat__message-actions relative">
-            <button
-              onClick={() => setActiveMenu(activeMenu === msg.id ? null : msg.id)}
-              className={`team-chat__message-action-trigger ${activeMenu === msg.id ? 'opacity-100 bg-white/10' : 'opacity-0 group-hover:opacity-100'} p-1.5 text-gray-400 hover:text-white transition-all rounded-full`}
-              title="Message options"
-            >
-              <MoreVertical size={16} />
-            </button>
-            <AnimatePresence>
-              {activeMenu === msg.id && (
-                <div className={`team-chat__message-menu absolute ${isOwn ? 'right-0' : 'left-0'} top-full mt-1 z-50`}>
-                  <button
-                    onClick={() => {
-                      setConfirmDelete({ isOpen: true, type: 'message', messageId: msg.id });
-                      setActiveMenu(null);
-                    }}
-                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-100 hover:bg-red-400/20 transition-colors whitespace-nowrap"
-                  >
-                    <Trash2 size={14} className="text-red-400" />
-                    <span>Delete Message</span>
-                  </button>
-                  {/* Future feature: Edit Message */}
-                  {isOwn && (
-                    <button
-                      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-300 hover:bg-white/5 transition-colors whitespace-nowrap"
-                      onClick={() => {
-                        toast('Edit feature coming soon!');
-                        setActiveMenu(null);
-                      }}
-                    >
-                      <Edit3 size={14} />
-                      <span>Edit Message</span>
-                    </button>
-                  )}
-                </div>
-              )}
-            </AnimatePresence>
-          </div>
-        )}
       </div>
     );
   };
@@ -490,41 +522,107 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
         accept="image/*"
         style={{ display: 'none' }}
       />
-      {/* Header */}
-      <div className="team-chat__header">
-        <div className="team-chat__header-title">
-          <h2>Team Chat</h2>
-          <div className="team-chat__header-status">
-            {connected ? (
-              <>
-                <Wifi size={14} className="text-green-400" />
-                <span className="text-green-400">Live</span>
-              </>
-            ) : (
-              <>
-                <WifiOff size={14} className="text-yellow-400" />
-                <span className="text-yellow-400">Reconnecting...</span>
-              </>
+      {/* Header - Selection Action Bar or Normal Header */}
+      {isSelectionMode ? (
+        <div className="team-chat__header" style={{ background: 'linear-gradient(90deg, rgba(59, 130, 246, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%)', borderColor: 'rgba(59, 130, 246, 0.3)' }}>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={clearSelection}
+              className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded-full transition-all"
+            >
+              <X size={20} />
+            </button>
+            <span className="text-white font-bold text-base">
+              {selectedMessages.size} selected
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button 
+              onClick={() => {
+                const selectedMsgs = messages
+                  .filter(m => selectedMessages.has(m.id))
+                  .map(m => m.content);
+                const text = selectedMsgs.join('\n');
+                if (navigator.clipboard) {
+                  navigator.clipboard.writeText(text);
+                  toast.success('Copied to clipboard');
+                }
+                clearSelection();
+              }}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-blue-300 hover:text-blue-200 hover:bg-blue-500/15 rounded-xl transition-all"
+            >
+              <Share2 size={16} />
+              <span className="hidden sm:inline">Copy</span>
+            </button>
+            {selectedMessages.size === 1 && (
+              (() => {
+                const msgId = Array.from(selectedMessages)[0];
+                const msg = messages.find(m => m.id === msgId);
+                if (msg && msg.isOwn && msg.message_type === 'text') {
+                  return (
+                    <button 
+                      onClick={() => {
+                        setEditingMessageId(msg.id);
+                        setInput(msg.content || '');
+                        clearSelection();
+                      }}
+                      className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-green-400 hover:text-green-300 hover:bg-green-500/15 rounded-xl transition-all"
+                    >
+                      <Edit3 size={16} />
+                      <span className="hidden sm:inline">Edit</span>
+                    </button>
+                  );
+                }
+                return null;
+              })()
+            )}
+            <button 
+              onClick={() => {
+                setConfirmDelete({ isOpen: true, type: 'message', messageId: Array.from(selectedMessages)[0] });
+              }}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/15 rounded-xl transition-all"
+            >
+              <Trash2 size={16} />
+              <span className="hidden sm:inline">Delete</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="team-chat__header">
+          <div className="team-chat__header-title">
+            <h2>Team Chat</h2>
+            <div className="team-chat__header-status">
+              {connected ? (
+                <>
+                  <Wifi size={14} className="text-green-400" />
+                  <span className="text-green-400">Live</span>
+                </>
+              ) : (
+                <>
+                  <WifiOff size={14} className="text-yellow-400" />
+                  <span className="text-yellow-400">Reconnecting...</span>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="team-chat__header-members">
+              <Users size={16} />
+              <span>{members.length} members</span>
+            </div>
+            {myRole === 'owner' && (
+              <Button 
+                size="sm" 
+                variant="ghost" 
+                className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
+                onClick={() => setConfirmDelete({ isOpen: true, type: 'history' })}
+              >
+                <Trash2 size={16} />
+              </Button>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="team-chat__header-members">
-            <Users size={16} />
-            <span>{members.length} members</span>
-          </div>
-          {myRole === 'owner' && (
-            <Button 
-              size="sm" 
-              variant="ghost" 
-              className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
-              onClick={() => setConfirmDelete({ isOpen: true, type: 'history' })}
-            >
-              <Trash2 size={16} />
-            </Button>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* Messages Container */}
       <div
@@ -588,6 +686,21 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
 
       {/* Input Area */}
       <div className="team-chat__input-container z-40 shadow-[0_-15px_40px_rgba(0,0,0,0.4)]">
+        {editingMessageId && (
+            <div className="absolute bottom-[calc(100%+0.5rem)] left-0 right-0 flex items-center justify-between bg-blue-900/40 text-blue-200 text-xs px-3 py-2 rounded-lg border border-blue-500/20 backdrop-blur-md animate-in slide-in-from-bottom-2 mx-4">
+                <span className="font-medium flex items-center gap-1.5 flex-1">
+                    <Edit3 size={14} />
+                    Editing Message
+                </span>
+                <button 
+                    type="button" 
+                    onClick={() => { setEditingMessageId(null); setInput(''); }}
+                    className="hover:bg-blue-500/20 p-1.5 rounded-full transition-colors active:scale-95 text-blue-300 hover:text-white"
+                >
+                    <X size={14} />
+                </button>
+            </div>
+        )}
         {showRecorder ? (
             <div className="flex-1">
                 <VoiceRecorder 
@@ -659,15 +772,24 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
         onClose={() => setConfirmDelete({ isOpen: false, type: 'message' })}
         onConfirm={async () => {
           const type = confirmDelete.type;
-          const msgId = confirmDelete.messageId;
           setConfirmDelete(prev => ({ ...prev, isOpen: false }));
           
-          if (type === 'message' && msgId) {
+          if (type === 'message' && selectedMessages.size > 0) {
+            const toDelete = Array.from(selectedMessages);
+            const loadingToast = toDelete.length > 1 
+              ? toast.loading(`Deleting ${toDelete.length} messages...`) 
+              : undefined;
             try {
-              await deleteMessage(msgId);
-              toast.success('Message deleted');
+              for (const msgId of toDelete) {
+                await deleteMessage(msgId);
+              }
+              toast.success(
+                toDelete.length > 1 ? `${toDelete.length} messages deleted` : 'Message deleted',
+                loadingToast ? { id: loadingToast } : undefined
+              );
+              clearSelection();
             } catch (err) {
-              toast.error('Failed to delete message');
+              toast.error('Failed to delete message(s)', loadingToast ? { id: loadingToast } : undefined);
             }
           } else if (type === 'history') {
             const toastId = toast.loading('Clearing chat history...');
@@ -679,10 +801,16 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
             }
           }
         }}
-        title={confirmDelete.type === 'message' ? 'Delete Message' : 'Wipe Chat History'}
+        title={
+          confirmDelete.type === 'message' 
+            ? (selectedMessages.size > 1 ? `Delete ${selectedMessages.size} Messages` : 'Delete Message')
+            : 'Wipe Chat History'
+        }
         message={
           confirmDelete.type === 'message' 
-            ? 'Are you sure you want to delete this message? This action cannot be undone.' 
+            ? (selectedMessages.size > 1 
+              ? `Are you sure you want to delete ${selectedMessages.size} selected messages? This action cannot be undone.`
+              : 'Are you sure you want to delete this message? This action cannot be undone.')
             : 'Are you sure you want to wipe ALL messages in this team chat? This will clear the chat for everyone and cannot be recovered.'
         }
         confirmText={confirmDelete.type === 'message' ? 'Delete' : 'Wipe Everything'}

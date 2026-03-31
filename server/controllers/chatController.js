@@ -1046,7 +1046,8 @@ exports.deleteMessage = async (req, res) => {
       .single();
 
     if (error) {
-      if (error.code === "PGRST116") {
+      // Check for 'No rows found' equivalent in supabase or missing permissions
+      if (error.code === "PGRST116" || error.details?.includes('0 rows')) {
         return res.status(404).json({
           error: "Message not found or you don't have permission to delete it",
         });
@@ -1055,14 +1056,86 @@ exports.deleteMessage = async (req, res) => {
     }
 
     // Notify via Gateway
-    realtime.emitToConversation(data.conversation_id, "message_deleted", {
-      messageId,
+    realtime.emit("to_conversation", {
       conversationId: data.conversation_id,
+      event: "message_deleted",
+      data: {
+        messageId,
+        conversationId: data.conversation_id,
+      }
     });
 
     res.json({ success: true, message: "Message deleted" });
   } catch (err) {
     console.error("Error deleting message:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+// Edit a specific message
+exports.editMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { content } = req.body;
+    const userId = req.user.id;
+
+    if (!content) {
+       return res.status(400).json({ error: "Content is required" });
+    }
+
+    // Verify ownership and update the message
+    const { data, error } = await supabase
+      .from("messages")
+      .update({
+        content: content,
+        is_edited: true,
+        // we can set updated_at if it exists, otherwise omit it. Usually supabase updates this.
+      })
+      .eq("id", messageId)
+      .eq("sender_id", userId) // Force ownership
+      .eq("is_deleted", false) // Cannot edit deleted messages
+      .select("*, attachment:media_attachments(*)")
+      .single();
+
+    if (error) {
+      if (error.code === "PGRST116" || error.details?.includes('0 rows')) {
+        return res.status(404).json({
+          error: "Message not found or you don't have permission to edit it",
+        });
+      }
+      // if column is_edited doesn't exist yet, we attempt a fallback without it
+      if (error.code === "42703" || error.code === "PGRST204") {
+         console.warn("[Chat Controller] is_edited column missing, retrying without it");
+         const { data: retryData, error: retryErr } = await supabase
+           .from("messages")
+           .update({ content: content })
+           .eq("id", messageId)
+           .eq("sender_id", userId)
+           .eq("is_deleted", false)
+           .select("*, attachment:media_attachments(*)")
+           .single();
+         if (retryErr) throw retryErr;
+         
+         realtime.emit("to_conversation", {
+            conversationId: retryData.conversation_id,
+            event: "message_edited",
+            data: retryData
+         });
+         return res.json(retryData);
+      }
+      throw error;
+    }
+
+    // Notify via Gateway
+    realtime.emit("to_conversation", {
+      conversationId: data.conversation_id,
+      event: "message_edited",
+      data: data
+    });
+
+    res.json(data);
+  } catch (err) {
+    console.error("Error editing message:", err.message);
     res.status(500).json({ error: "Server Error" });
   }
 };
