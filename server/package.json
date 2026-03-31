@@ -8,7 +8,8 @@
     "build": "npm install",
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "dev:safe": "node scripts/fix_start.js"
+    "dev:safe": "node scripts/fix_start.js",
+    "lint": "eslint ."
   },
   "keywords": [],
   "author": "",

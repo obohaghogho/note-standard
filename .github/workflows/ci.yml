@@ -7,9 +7,31 @@ on:
     branches: [ main, master, develop ]
 
 jobs:
+  quality:
+    name: Lint and Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Typecheck
+        run: npm run typecheck --if-present
+
   build-client:
+    name: Build Client
+    needs: quality
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -20,25 +42,32 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Typecheck and Build Client
+      - name: Create dummy .env
         run: |
-          cd client
-          npm run build
+          if [ -f client/.env.example ]; then
+            cp client/.env.example client/.env
+          fi
 
-  build-server:
+      - name: Build Client
+        run: npm run build -w client
+
+  verify-server:
+    name: Verify Server
+    needs: quality
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
+
       - name: Install dependencies
-        run: npm install
-      - name: Check Server Start
-        run: |
-          cd server
-          node --check index.js
+        run: npm ci
+
+      - name: Check Server Syntax
+        run: node --check server/index.js

@@ -5,7 +5,7 @@ import { usePresence } from '../../context/PresenceContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../common/SecureImage';
-import { Send, Languages, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, MoreVertical, Check, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Maximize, Trash2 } from 'lucide-react';
+import { Send, Languages, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Maximize, Trash2 } from 'lucide-react';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { MediaUpload } from './MediaUpload';
 import { VoiceRecorder } from './VoiceRecorder';
@@ -655,27 +655,41 @@ const ChatWindow: React.FC = () => {
                                 <div key={msg.id || `msg-temp-${index}`} className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'} ${isGrouped ? '-mt-2 md:-mt-3' : 'mt-4'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                                     <div className={`max-w-[92%] md:max-w-[70%] ${isGrouped ? 'rounded-2xl' : (msg.sender_id === user?.id ? 'rounded-2xl rounded-br-sm' : 'rounded-2xl rounded-bl-sm')} p-3 shadow-md border ${msg.sender_id === user?.id ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-blue-500/50' : 'bg-gray-800 text-gray-200 border-gray-700'} relative group`}>
                                         {msg.sender_id === user?.id && (
-                                            <div className="chat-message-actions absolute -left-8 top-1/2 -translate-y-1/2">
+                                            <div className="chat-message-actions absolute -left-10 top-1/2 -translate-y-1/2 md:opacity-0 group-hover:opacity-100 transition-opacity z-20">
                                                 <button 
-                                                    onClick={() => setActiveMessageMenu(activeMessageMenu === msg.id ? null : msg.id)}
-                                                    className={`p-1.5 text-gray-500 hover:text-white transition-all rounded-full ${activeMessageMenu === msg.id ? 'bg-gray-700 opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setActiveMessageMenu(activeMessageMenu === msg.id ? null : msg.id);
+                                                    }}
+                                                    className={`p-2 text-gray-400 hover:text-white transition-all rounded-full bg-gray-900/40 hover:bg-gray-800 border border-white/5 ${activeMessageMenu === msg.id ? 'opacity-100 scale-110' : ''}`}
                                                     title="Message options"
                                                 >
-                                                    <MoreVertical size={14} />
+                                                    <MoreHorizontal size={14} />
                                                 </button>
                                                 <AnimatePresence>
                                                     {activeMessageMenu === msg.id && (
-                                                        <div className="absolute right-full mr-1 top-0 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden min-w-[140px] animate-in slide-in-from-right-2 duration-200">
-                                                            <button 
-                                                                onClick={() => {
-                                                                    setConfirmModal({ isOpen: true, type: 'message', messageId: msg.id });
-                                                                    setActiveMessageMenu(null);
-                                                                }}
-                                                                className="flex items-center gap-2 w-full px-3 py-2 text-xs text-red-400 hover:bg-red-400/10 transition-colors text-left"
-                                                            >
-                                                                <Trash2 size={12} />
-                                                                <span>Delete Message</span>
-                                                            </button>
+                                                        <div className="absolute right-full mr-2 top-0 bg-gray-800 border border-gray-700/50 rounded-xl shadow-2xl z-50 overflow-hidden min-w-[160px] backdrop-blur-xl animate-in slide-in-from-right-2 fade-in duration-200">
+                                                            <div className="p-1">
+                                                                <button 
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setConfirmModal({ isOpen: true, type: 'message', messageId: msg.id });
+                                                                        setActiveMessageMenu(null);
+                                                                    }}
+                                                                    className="flex items-center gap-2.5 w-full px-3 py-2.5 text-xs font-semibold text-red-400 hover:bg-red-400/10 transition-colors text-left rounded-lg"
+                                                                >
+                                                                    <Trash2 size={14} />
+                                                                    <span>Delete for everyone</span>
+                                                                </button>
+                                                                
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); setActiveMessageMenu(null); }}
+                                                                    className="flex items-center gap-2.5 w-full px-3 py-2.5 text-xs font-semibold text-gray-400 hover:bg-white/5 transition-colors text-left rounded-lg"
+                                                                >
+                                                                    <Plus size={14} className="rotate-45" />
+                                                                    <span>Cancel</span>
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </AnimatePresence>

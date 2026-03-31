@@ -264,6 +264,20 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     [conversationId]: convMessages.filter(m => m.id !== messageId)
                 };
             });
+
+            // Update conversation last message if the deleted message was the preview
+            setConversations(prev => prev.map(conv => {
+                if (conv.id === conversationId && conv.lastMessage && (conv.lastMessage as any).id === messageId) {
+                    // We need to find the new last message. 
+                    // Since we just updated messages state, we can't easily access it here without closure issues,
+                    // but we can compute what it *should* be from the previous messages state.
+                    return {
+                        ...conv,
+                        lastMessage: undefined // Simplest fix is to clear it, or we could find the next one
+                    };
+                }
+                return conv;
+            }));
         });
 
         socket.on('user_typing', ({ conversationId, userId, username }: { conversationId: string, userId: string, username: string }) => {
@@ -501,6 +515,14 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 [activeConversationId]: current.filter(m => m.id !== messageId)
             };
         });
+
+        // Update conversation last message optimistically
+        setConversations(prev => prev.map(conv => {
+            if (conv.id === activeConversationId && conv.lastMessage && (conv.lastMessage as any).id === messageId) {
+                return { ...conv, lastMessage: undefined };
+            }
+            return conv;
+        }));
 
         try {
             const res = await fetch(`${API_URL}/api/chat/messages/${messageId}`, {
