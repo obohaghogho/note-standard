@@ -7,7 +7,7 @@ import SecureImage from '../common/SecureImage';
 import { UserBadge } from '../common/UserBadge';
 
 const ConversationList: React.FC = () => {
-    const { conversations, activeConversationId, setActiveConversationId, loading } = useChat();
+    const { conversations, activeConversationId, setActiveConversationId, loading, typingUsers } = useChat();
     const { user } = useAuth();
     const { isUserOnline } = usePresence();
 
@@ -81,13 +81,19 @@ const ConversationList: React.FC = () => {
                             </div>
 
                             <div className="flex items-center justify-between gap-2">
-                                <p className={`text-xs truncate flex-1 ${unreadCount > 0 ? 'text-gray-200 font-medium' : 'text-gray-500'}`}>
-                                    {lastMsg ? (
+                                <p className={`text-xs truncate flex-1 ${unreadCount > 0 ? 'text-white font-semibold' : 'text-gray-500'}`}>
+                                    {typingUsers[conv.id]?.length > 0 ? (
+                                        <span className="text-blue-400 animate-pulse font-medium italic">
+                                            {typingUsers[conv.id].length > 1 ? 'People are typing...' : `${typingUsers[conv.id][0]} is typing...`}
+                                        </span>
+                                    ) : lastMsg ? (
                                         <>
-                                            {lastMsg.sender_id === user?.id && <span className="mr-1 text-blue-500">You:</span>}
-                                            {lastMsg.content}
+                                            {lastMsg.sender_id === user?.id && <span className="mr-1 text-blue-500 font-medium">You:</span>}
+                                            <span className={unreadCount > 0 ? 'text-gray-100' : ''}>{lastMsg.content}</span>
                                         </>
-                                    ) : 'No messages yet'}
+                                    ) : (
+                                        <span className="italic opacity-60">No messages yet</span>
+                                    )}
                                 </p>
                                 
                                 {unreadCount > 0 && (

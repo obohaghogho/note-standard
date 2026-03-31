@@ -39,6 +39,8 @@ interface TeamChatContextValue {
   hasMore: boolean;
   deleteMessage: (messageId: string) => Promise<void>;
   clearChatHistory: () => Promise<void>;
+  sendTypingStatus: (isTyping: boolean) => void;
+  typingUsers: string[];
   teamStats: TeamStats | null;
   error: string | null;
 }
@@ -54,6 +56,8 @@ const TeamChatContext = createContext<TeamChatContextValue>({
   hasMore: false,
   deleteMessage: async () => {},
   clearChatHistory: async () => {},
+  sendTypingStatus: () => {},
+  typingUsers: [],
   teamStats: null,
   error: null,
 });
@@ -90,6 +94,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [teamStats, setTeamStats] = useState<TeamStats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -320,6 +325,49 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
     },
     [teamId]
   );
+  
+  // ====================================
+  // TYPING INDICATORS (BROADCAST)
+  // ====================================
+  
+  const typingTimersRef = useRef<Record<string, any>>({});
+
+  const sendTypingStatus = useCallback((isTyping: boolean) => {
+    if (!channelRef.current || !user || !profile) return;
+    
+    channelRef.current.send({
+      type: 'broadcast',
+      event: 'user_typing',
+      payload: { 
+        userId: user.id, 
+        userName: profile.full_name || profile.username || 'Someone',
+        isTyping 
+      }
+    });
+  }, [user, profile]);
+
+  // Handler for typing events
+  const handleTypingEvent = useCallback((payload: any) => {
+    const { userId, userName, isTyping } = payload;
+    if (userId === user?.id) return;
+
+    if (isTyping) {
+      setTypingUsers(prev => prev.includes(userName) ? prev : [...prev, userName]);
+      
+      // Auto-clear after 5 seconds if no 'stop' received
+      if (typingTimersRef.current[userId]) {
+        clearTimeout(typingTimersRef.current[userId]);
+      }
+      typingTimersRef.current[userId] = setTimeout(() => {
+        setTypingUsers(prev => prev.filter(u => u !== userName));
+      }, 5000);
+    } else {
+      if (typingTimersRef.current[userId]) {
+        clearTimeout(typingTimersRef.current[userId]);
+      }
+      setTypingUsers(prev => prev.filter(u => u !== userName));
+    }
+  }, [user?.id]);
 
   // ====================================
   // REALTIME SUBSCRIPTION (WITH SAFETY)
@@ -433,6 +481,11 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
           }
         });
 
+      // Listen for typing broadcast
+      channel.on('broadcast', { event: 'user_typing' }, ({ payload }) => {
+        handleTypingEvent(payload);
+      });
+
       channelRef.current = channel;
     } catch (err) {
       console.error('[TeamChat] Failed to setup realtime:', err);
@@ -521,6 +574,8 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
     hasMore,
     deleteMessage,
     clearChatHistory,
+    sendTypingStatus,
+    typingUsers,
     teamStats,
     error,
   };

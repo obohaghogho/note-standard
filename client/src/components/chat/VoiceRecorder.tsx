@@ -26,6 +26,12 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
                     echoCancellation: true,
                     noiseSuppression: true,
                     autoGainControl: true,
+                    // @ts-ignore
+                    googEchoCancellation: true,
+                    googAutoGainControl: true,
+                    googNoiseSuppression: true,
+                    googHighpassFilter: true,
+                    googTypingNoiseDetection: true,
                     sampleRate: 48000,
                     channelCount: 1
                 }

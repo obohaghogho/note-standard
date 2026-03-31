@@ -4,10 +4,12 @@
 // ====================================
 
 import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTeamChat } from '../../context/TeamChatContext';
 import { useAuth } from '../../context/AuthContext';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
+import { AudioPlayer } from '../chat/AudioPlayer';
 import {
   Send,
   Loader2,
@@ -41,9 +43,12 @@ interface TeamChatProps {
 
 export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { messages, members, loading, connected, sendMessage, loadMoreMessages, hasMore, deleteMessage, clearChatHistory, error } =
-    useTeamChat();
+  const { 
+    messages, members, loading, connected, sendMessage, loadMoreMessages, 
+    hasMore, deleteMessage, clearChatHistory, error, typingUsers, sendTypingStatus 
+  } = useTeamChat();
 
   const myMember = members.find(m => m.user_id === user?.id);
   const myRole = myMember?.role || 'member';
@@ -128,12 +133,26 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
     try {
       await sendMessage(input.trim());
       setInput('');
+      sendTypingStatus(false);
       inputRef.current?.focus();
     } catch (err: any) {
       toast.error('Failed to send message');
     } finally {
       setIsSending(false);
     }
+  };
+
+  const typingTimeoutRef = useRef<any>(null);
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = applyAutoCorrect(e.target.value);
+    setInput(val);
+    
+    // Typing indicator logic
+    sendTypingStatus(true);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      sendTypingStatus(false);
+    }, 3000);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -220,10 +239,21 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
   // RENDER MESSAGE
   // ====================================
 
+  const isSameSender = (index: number) => {
+    if (index === 0) return false;
+    const current = messages[index];
+    const previous = messages[index - 1];
+    if (!current || !previous || current.message_type === 'system' || previous.message_type === 'system') return false;
+    
+    const timeDiff = new Date(current.created_at).getTime() - new Date(previous.created_at).getTime();
+    return current.sender_id === previous.sender_id && timeDiff < 60000;
+  };
+
   const renderMessage = (msg: TeamMessage, index: number) => {
     const isOwn = msg.isOwn;
     const canDelete = isOwn || isAdminOrOwner;
-    const showAvatar = index === 0 || messages[index - 1].sender_id !== msg.sender_id;
+    const isGrouped = isSameSender(index);
+    const showAvatar = !isGrouped && !isOwn && msg.message_type !== 'system';
     const showName = showAvatar;
 
     // Get sender info
@@ -292,7 +322,12 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
                 <span>•</span>
                 <span>{formatTime(msg.created_at)}</span>
               </div>
-              <Button size="sm" variant="ghost" className="mt-2">
+              <Button 
+                size="sm" 
+                variant="ghost" 
+                className="mt-2 text-blue-400 hover:text-blue-300 hover:bg-blue-400/10"
+                onClick={() => navigate(`/dashboard/notes?id=${msg.metadata?.note_id}`)}
+              >
                 Open Note
               </Button>
             </div>
@@ -306,6 +341,8 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
       <div
         key={msg.id}
         className={`team-chat__message ${isOwn ? 'team-chat__message--own' : ''} ${
+          isGrouped ? 'team-chat__message--grouped' : ''
+        } ${
           msg.isOptimistic ? 'team-chat__message--optimistic' : ''
         } ${msg.failed ? 'team-chat__message--failed' : ''} group relative`}
       >
@@ -351,10 +388,9 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
             )}
             {msg.message_type === 'audio' && msg.metadata?.audio_url && (
               <div className="team-chat__message-audio-container mt-1 mb-2">
-                <audio 
-                  controls 
-                  src={msg.metadata.audio_url} 
-                  className={`max-w-[200px] sm:max-w-[250px] h-10 ${isOwn ? 'invert brightness-0 contrast-200 sepia-0 hue-rotate-180 drop-shadow-md' : 'drop-shadow-sm'}`} 
+                <AudioPlayer 
+                  path={msg.metadata.audio_url} 
+                  fetchUrl={async (p) => p} // Team audio URLs are usually public or already signed
                 />
               </div>
             )}
@@ -462,6 +498,22 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
               </div>
             )}
             {messages.map((msg, i) => renderMessage(msg, i))}
+            
+            {/* Typing Indicator */}
+            <AnimatePresence>
+              {typingUsers.length > 0 && (
+                <div className="flex justify-start items-center gap-2 mt-2 ml-10 animate-in fade-in slide-in-from-left-2">
+                  <div className="bg-gray-800/50 backdrop-blur rounded-2xl p-2.5 flex gap-1 border border-white/5 shadow-lg">
+                    <div className="w-1 h-1 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                    <div className="w-1 h-1 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                    <div className="w-1 h-1 bg-blue-400 rounded-full animate-bounce"></div>
+                  </div>
+                  <span className="text-[10px] text-gray-500 font-medium italic">
+                    {typingUsers.join(', ')} {typingUsers.length > 1 ? 'are' : 'is'} typing...
+                  </span>
+                </div>
+              )}
+            </AnimatePresence>
             <div ref={messagesEndRef} />
           </>
         )}
@@ -489,7 +541,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
               name="message"
               ref={inputRef}
               value={input}
-              onChange={(e) => setInput(applyAutoCorrect(e.target.value))}
+              onChange={handleInputChange}
               onKeyPress={handleKeyPress}
               placeholder="Type a message..."
               className="team-chat__input"

@@ -6,7 +6,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { TeamChatProvider, useTeamChat } from '../../context/TeamChatContext';
 import { TeamChat } from '../../components/teams/TeamChat';
-import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import {
   getMyTeams,
@@ -176,64 +175,72 @@ const TeamContent: React.FC<{
 
         {/* Stats */}
         {teamStats ? (
-          <div className="teams-page__info-content">
-            <Card className="teams-page__stats-card">
-              <div className="teams-page__stat">
-                <MessageSquare size={20} />
+          <div className="teams-page__info-content animate-in fade-in slide-in-from-right-4 duration-500">
+            <div className="grid grid-cols-1 gap-4">
+              <div className="teams-page__stat bg-white/5 backdrop-blur-sm border border-white/10 p-4 rounded-2xl hover:bg-white/10 transition-all transition-transform hover:scale-[1.02] group">
+                <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+                  <MessageSquare size={20} />
+                </div>
                 <div>
-                  <p className="teams-page__stat-value">{teamStats.total_messages.toLocaleString()}</p>
-                  <p className="teams-page__stat-label">Messages Sent</p>
+                  <p className="teams-page__stat-value text-xl font-bold">{teamStats.total_messages.toLocaleString()}</p>
+                  <p className="teams-page__stat-label text-[10px] uppercase tracking-wider text-gray-500 font-bold">Messages</p>
                 </div>
               </div>
-              <div className="teams-page__stat">
-                <Users size={20} />
+              <div className="teams-page__stat bg-white/5 backdrop-blur-sm border border-white/10 p-4 rounded-2xl hover:bg-white/10 transition-all transition-transform hover:scale-[1.02] group">
+                <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center text-green-400 group-hover:scale-110 transition-transform">
+                  <Users size={20} />
+                </div>
                 <div>
-                  <p className="teams-page__stat-value">{teamStats.total_members.toLocaleString()}</p>
-                  <p className="teams-page__stat-label">Active Members</p>
+                  <p className="teams-page__stat-value text-xl font-bold">{teamStats.total_members.toLocaleString()}</p>
+                  <p className="teams-page__stat-label text-[10px] uppercase tracking-wider text-gray-500 font-bold">Members</p>
                 </div>
               </div>
-              <div className="teams-page__stat">
-                <FileText size={20} />
+              <div className="teams-page__stat bg-white/5 backdrop-blur-sm border border-white/10 p-4 rounded-2xl hover:bg-white/10 transition-all transition-transform hover:scale-[1.02] group">
+                <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform">
+                  <FileText size={20} />
+                </div>
                 <div>
-                  <p className="teams-page__stat-value">{teamStats.shared_notes.toLocaleString()}</p>
-                  <p className="teams-page__stat-label">Notes Shared</p>
+                  <p className="teams-page__stat-value text-xl font-bold">{teamStats.shared_notes.toLocaleString()}</p>
+                  <p className="teams-page__stat-label text-[10px] uppercase tracking-wider text-gray-500 font-bold">Notes</p>
                 </div>
               </div>
-              <div className="teams-page__stat">
-                <Calendar size={20} />
+              <div className="teams-page__stat bg-white/5 backdrop-blur-sm border border-white/10 p-4 rounded-2xl hover:bg-white/10 transition-all transition-transform hover:scale-[1.02] group">
+                <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-400 group-hover:scale-110 transition-transform">
+                  <Calendar size={20} />
+                </div>
                 <div>
-                  <p className="teams-page__stat-value">
+                  <p className="teams-page__stat-value text-sm font-bold">
                     {new Date(teamStats.created_at).toLocaleDateString(undefined, { 
                       month: 'short', day: 'numeric', year: 'numeric' 
                     })}
                   </p>
-                  <p className="teams-page__stat-label">Team Since</p>
+                  <p className="teams-page__stat-label text-[10px] uppercase tracking-wider text-gray-500 font-bold">Since</p>
                 </div>
               </div>
-            </Card>
+            </div>
           </div>
         ) : (
-          <div className="p-4 text-center text-gray-500">
-            {loading ? <Loader2 className="animate-spin mx-auto" /> : 'No stats available'}
+          <div className="p-10 text-center text-gray-500 bg-white/5 rounded-2xl border border-dashed border-white/10">
+            {loading ? <Loader2 className="animate-spin mx-auto text-blue-500" /> : 'No stats available'}
           </div>
         )}
 
         {/* Members Preview */}
-        <div className="teams-page__members-preview">
-          <h4>Members ({members.length})</h4>
-          <div className="teams-page__members-list">
+        <div className="teams-page__members-preview mt-8">
+          <h4 className="text-sm font-bold uppercase tracking-widest text-gray-400 mb-4 px-1">Members ({members.length})</h4>
+          <div className="teams-page__members-list space-y-2">
             {members.slice(0, 10).map((member) => (
-              <div key={member.id} className="teams-page__member-item">
-                <div className="teams-page__member-avatar">
+              <div key={member.id} className="teams-page__member-item flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-all group">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center overflow-hidden border border-white/10 group-hover:scale-110 transition-transform">
                   {member.profile?.avatar_url ? (
-                    <SecureImage src={member.profile.avatar_url} alt="" fallbackType="profile" />
+                    <SecureImage src={member.profile.avatar_url} alt="" fallbackType="profile" className="w-full h-full object-cover" />
                   ) : (
-                    member.profile?.full_name?.charAt(0) || 'U'
+                    <span className="text-xs font-bold text-gray-300">{member.profile?.full_name?.charAt(0) || 'U'}</span>
                   )}
                 </div>
-                <div className="teams-page__member-info">
-                  <span>{member.profile?.full_name || member.profile?.email}</span>
-                  <span className="teams-page__member-role">
+                <div className="teams-page__member-info flex-1 min-w-0">
+                  <span className="block text-xs font-semibold text-gray-200 truncate">{member.profile?.full_name || member.profile?.email}</span>
+                  <span className="teams-page__member-role flex items-center gap-1 text-[10px] text-gray-500 font-bold">
                     {getRoleIcon(member.role)} {member.role}
                   </span>
                 </div>
@@ -241,7 +248,7 @@ const TeamContent: React.FC<{
             ))}
           </div>
           {members.length > 10 && (
-            <p className="text-xs text-center text-gray-500 mt-2">Plus {members.length - 10} more members</p>
+            <p className="text-[10px] text-center text-gray-600 font-bold mt-4 uppercase tracking-tighter">+{members.length - 10} others</p>
           )}
         </div>
       </div>
@@ -467,40 +474,43 @@ export const TeamsPage: React.FC = () => {
             </div>
           ) : (
             teams.map((team) => (
-              <Card
+              <div
                 key={team.id}
-                className={`teams-page__team-card ${
-                  selectedTeamId === team.id ? 'teams-page__team-card--active' : ''
+                className={`flex flex-col gap-3 p-4 cursor-pointer rounded-2xl transition-all duration-300 border border-white/5 relative group ${
+                  selectedTeamId === team.id 
+                  ? 'bg-gradient-to-br from-blue-600/20 to-purple-600/20 border-blue-500/50 shadow-lg shadow-blue-900/20' 
+                  : 'hover:bg-white/5 hover:border-white/10'
                 }`}
                 onClick={() => { setSelectedTeamId(team.id); setMobileView('chat'); }}
               >
-                <div className="teams-page__team-header">
-                  <div className="teams-page__team-avatar">
+                <div className="flex items-center gap-3">
+                  <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center overflow-hidden shadow-lg group-hover:scale-105 transition-transform ${selectedTeamId === team.id ? 'ring-2 ring-white/20 ring-offset-2 ring-offset-black/50' : ''}`}>
                     {team.avatar_url ? (
-                      <SecureImage src={team.avatar_url} alt={team.name} fallbackType="default" />
+                      <SecureImage src={team.avatar_url} alt={team.name} fallbackType="default" className="w-full h-full object-cover" />
                     ) : (
-                      team.name.charAt(0).toUpperCase()
+                      <span className="text-white font-bold text-xl">{team.name.charAt(0).toUpperCase()}</span>
                     )}
                   </div>
-                  <div className="teams-page__team-info">
-                    <h3>{team.name}</h3>
-                    <div className="teams-page__team-meta">
-                      {getRoleIcon(team.my_role || 'member')}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-bold truncate text-white mb-1">{team.name}</h3>
+                    <div className="flex items-center gap-2 text-[10px] text-gray-400 font-bold uppercase tracking-tight">
+                      <span className="flex items-center gap-1">{getRoleIcon(team.my_role || 'member')} {team.my_role}</span>
+                      <span className="w-1 h-1 bg-gray-600 rounded-full"></span>
                       <span>{team.member_count} members</span>
                     </div>
                   </div>
                   {team.unread_count > 0 && (
-                    <div className="teams-page__unread-badge">{team.unread_count}</div>
+                    <div className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-lg animate-pulse">{team.unread_count}</div>
                   )}
                 </div>
                 {team.last_message && (
-                  <p className="teams-page__last-message">
+                  <p className="text-[11px] text-gray-500 line-clamp-1 italic px-1 opacity-70 group-hover:opacity-100 transition-opacity">
                     {team.last_message.content ? 
                       (team.last_message.content.length > 40 ? team.last_message.content.substring(0, 40) + '...' : team.last_message.content) : 
-                      'Shared an item'}
+                      '📎 Shared an item'}
                   </p>
                 )}
-              </Card>
+              </div>
             ))
           )}
         </div>
@@ -530,88 +540,106 @@ export const TeamsPage: React.FC = () => {
 
       {/* Create Team Modal */}
       {showCreateModal && (
-        <div className="teams-page__modal-overlay" onClick={() => setShowCreateModal(false)}>
-          <Card
-            className="teams-page__modal"
+        <div className="teams-page__modal-overlay backdrop-blur-md bg-black/60 flex items-center justify-center z-50 animate-in fade-in duration-300" onClick={() => setShowCreateModal(false)}>
+          <div 
+            className="bg-[#0f172a]/90 backdrop-blur-xl border border-white/10 p-8 rounded-3xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-300"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2>Create New Team</h2>
-            <form onSubmit={handleCreateTeam} className="teams-page__form">
-              <div className="teams-page__form-group">
-                <label htmlFor="new-team-name">Team name</label>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400">
+                <Plus size={24} />
+              </div>
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">Create New Team</h2>
+            </div>
+            <form onSubmit={handleCreateTeam} className="space-y-6">
+              <div className="space-y-2">
+                <label htmlFor="new-team-name" className="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">Team Name</label>
                 <input
                   id="new-team-name"
                   name="teamName"
                   type="text"
                   value={newTeamName}
                   onChange={(e) => setNewTeamName(e.target.value)}
-                  placeholder="e.g., Design Team"
+                  placeholder="e.g., Creative Engineering"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium"
                   required
                 />
               </div>
-              <div className="teams-page__form-group">
-                <label htmlFor="new-team-desc">Description</label>
+              <div className="space-y-2">
+                <label htmlFor="new-team-desc" className="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">Description</label>
                 <textarea
                   id="new-team-desc"
                   name="description"
                   value={newTeamDescription}
                   onChange={(e) => setNewTeamDescription(e.target.value)}
-                  placeholder="Optional description"
+                  placeholder="What's this team about?"
                   rows={3}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium resize-none"
                 />
               </div>
-              <div className="teams-page__form-actions">
-                <Button type="button" variant="ghost" onClick={() => setShowCreateModal(false)}>
+              <div className="flex gap-3 pt-2">
+                <Button type="button" variant="ghost" fullWidth onClick={() => setShowCreateModal(false)} className="h-12 rounded-xl">
                   Cancel
                 </Button>
-                <Button type="submit">Create Team</Button>
+                <Button type="submit" fullWidth className="h-12 rounded-xl bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-900/20">
+                  Create Team
+                </Button>
               </div>
             </form>
-          </Card>
+          </div>
         </div>
       )}
 
       {/* Invite Member Modal */}
       {showInviteModal && (
-        <div className="teams-page__modal-overlay" onClick={() => setShowInviteModal(false)}>
-          <Card
-            className="teams-page__modal"
+        <div className="teams-page__modal-overlay backdrop-blur-md bg-black/60 flex items-center justify-center z-50 animate-in fade-in duration-300" onClick={() => setShowInviteModal(false)}>
+          <div 
+            className="bg-[#0f172a]/90 backdrop-blur-xl border border-white/10 p-8 rounded-3xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-300"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2>Invite Member</h2>
-            <form onSubmit={handleInviteMember} className="teams-page__form">
-              <div className="teams-page__form-group">
-                <label htmlFor="invite-email">Email or Username</label>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center text-purple-400">
+                <UserPlus size={24} />
+              </div>
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">Invite Member</h2>
+            </div>
+            <form onSubmit={handleInviteMember} className="space-y-6">
+              <div className="space-y-2">
+                <label htmlFor="invite-email" className="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">Email or Username</label>
                 <input
                   id="invite-email"
                   name="email"
                   type="text"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="user@example.com or username"
+                  placeholder="collaborator@example.com"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all font-medium"
                   required
                 />
               </div>
-              <div className="teams-page__form-group">
-                <label htmlFor="invite-role">Role</label>
+              <div className="space-y-2">
+                <label htmlFor="invite-role" className="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">Role</label>
                 <select
                   id="invite-role"
                   name="role"
                   value={inviteRole}
                   onChange={(e) => setInviteRole(e.target.value as 'member' | 'admin')}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all font-medium appearance-none cursor-pointer"
                 >
-                  <option value="member">Member</option>
-                  <option value="admin">Admin</option>
+                  <option value="member">Member (Read & Write)</option>
+                  <option value="admin">Admin (Full Control)</option>
                 </select>
               </div>
-              <div className="teams-page__form-actions">
-                <Button type="button" variant="ghost" onClick={() => setShowInviteModal(false)}>
+              <div className="flex gap-3 pt-2">
+                <Button type="button" variant="ghost" fullWidth onClick={() => setShowInviteModal(false)} className="h-12 rounded-xl">
                   Cancel
                 </Button>
-                <Button type="submit">Send Invite</Button>
+                <Button type="submit" fullWidth className="h-12 rounded-xl bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-900/20">
+                  Send Invite
+                </Button>
               </div>
             </form>
-          </Card>
+          </div>
         </div>
       )}
 
@@ -633,35 +661,49 @@ export const TeamsPage: React.FC = () => {
 
       {/* Upgrade to Business Modal */}
       {showUpgradeModal && (
-        <div className="teams-page__modal-overlay" onClick={() => setShowUpgradeModal(false)}>
-           <Card className="teams-page__modal max-w-md text-center p-8 space-y-6" onClick={(e) => e.stopPropagation()}>
-              <div className="w-20 h-20 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto border border-blue-500/20">
-                  <Plus size={40} className="text-blue-500" />
+        <div className="teams-page__modal-overlay backdrop-blur-md bg-black/60 flex items-center justify-center z-50 animate-in fade-in duration-300" onClick={() => setShowUpgradeModal(false)}>
+           <div 
+             className="bg-[#0f172a]/95 backdrop-blur-2xl border border-blue-500/20 p-10 rounded-[2rem] w-full max-w-md shadow-2xl shadow-blue-900/40 text-center space-y-8 animate-in zoom-in-95 duration-300 relative overflow-hidden"
+             onClick={(e) => e.stopPropagation()}
+           >
+              {/* Decorative Background Elements */}
+              <div className="absolute -top-10 -right-10 w-32 h-32 bg-blue-500/10 blur-3xl rounded-full"></div>
+              <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-purple-500/10 blur-3xl rounded-full"></div>
+              
+              <div className="relative">
+                <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-3xl flex items-center justify-center mx-auto shadow-xl rotate-12 group-hover:rotate-0 transition-transform duration-500">
+                    <Shield size={48} className="text-white -rotate-12" />
+                </div>
+                <div className="absolute -bottom-2 -right-2 bg-yellow-500 text-black font-black text-[10px] px-2 py-1 rounded-lg shadow-lg rotate-12">
+                  PREMIUM
+                </div>
               </div>
-              <div className="space-y-2">
-                  <h2 className="text-2xl font-bold">Business Feature</h2>
-                  <p className="text-gray-400">
-                      Team creation and management is a **Business Tier** feature. Upgrade now to collaborate with unlimited team members.
+
+              <div className="space-y-3">
+                  <h2 className="text-3xl font-black tracking-tight text-white">Business Tier</h2>
+                  <p className="text-gray-400 text-sm leading-relaxed px-4">
+                    Unlock <span className="text-white font-bold">Team Management</span> and collaborate seamlessly with your organization. 
+                    Upgrade now to access advanced shared features.
                   </p>
               </div>
-              <div className="space-y-3 pt-2">
+
+              <div className="space-y-4 pt-4">
                   <Button 
                     fullWidth 
-                    className="bg-blue-600 hover:bg-blue-700 h-12 text-base shadow-lg shadow-blue-900/20"
+                    className="bg-blue-600 hover:bg-blue-500 h-14 text-lg font-bold rounded-2xl shadow-xl shadow-blue-900/30 transition-all active:scale-95 flex items-center justify-center gap-2 group"
                     onClick={() => navigate('/dashboard/billing')}
                   >
-                      Upgrade to Business
-                      <ArrowRight size={18} />
+                      Upgrade My Workspace
+                      <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                   </Button>
-                  <Button 
-                    fullWidth 
-                    variant="ghost" 
+                  <button 
+                    className="w-full text-xs font-bold text-gray-500 hover:text-white transition-colors uppercase tracking-widest py-2"
                     onClick={() => setShowUpgradeModal(false)}
                   >
-                      Maybe Later
-                  </Button>
+                      Stay on Free Tier
+                  </button>
               </div>
-           </Card>
+           </div>
         </div>
       )}
     </div>

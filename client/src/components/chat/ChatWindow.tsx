@@ -24,7 +24,8 @@ const ChatWindow: React.FC = () => {
     const { 
         activeConversationId, setActiveConversationId, messages, sendMessage, loading, 
         conversations, acceptConversation, deleteConversation, deleteMessage,
-        muteConversation, clearChatHistory, loadMoreMessages, hasMore 
+        muteConversation, clearChatHistory, loadMoreMessages, hasMore,
+        sendTypingStatus, typingUsers 
     } = useChat();
     const { isUserOnline, getUserLastSeen } = usePresence();
     const { user, profile, session } = useAuth();
@@ -386,12 +387,23 @@ const ChatWindow: React.FC = () => {
             });
     };
 
+    // Typing Status Debounce
+    const typingTimeoutRef = useRef<any>(null);
+
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = applyAutoCorrect(e.target.value);
         setInputValue(val);
 
+        // Emit typing status
+        sendTypingStatus(true);
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => {
+            sendTypingStatus(false);
+        }, 3000);
+
         // Mention detection
         const lastAtPos = val.lastIndexOf('@');
+        // ... (rest of the logic)
         if (lastAtPos !== -1) {
             const query = val.substring(lastAtPos + 1).split(' ')[0];
             const beforeAt = val.substring(0, lastAtPos);
@@ -425,6 +437,18 @@ const ChatWindow: React.FC = () => {
         const afterMention = inputValue.substring(lastAtPos + mentionSearch.length + 1);
         setInputValue(`${beforeAt}@${mentionedUser.username} ${afterMention}`);
         setShowMentions(false);
+        sendTypingStatus(true); // Re-trigger typing
+    };
+
+    // Message Grouping Helper
+    const isSameSender = (index: number) => {
+        if (index === 0) return false;
+        const current = currentMessages[index];
+        const previous = currentMessages[index - 1];
+        if (!current || !previous) return false;
+        
+        const timeDiff = new Date(current.created_at).getTime() - new Date(previous.created_at).getTime();
+        return current.sender_id === previous.sender_id && timeDiff < 60000; // Group if within 1 minute
     };
 
     if (!activeConversationId) {
@@ -601,124 +625,148 @@ const ChatWindow: React.FC = () => {
                         ))}
                     </div>
                 ) : (
-                    currentMessages.map((msg, index) => (
-                        <div key={msg.id || `msg-temp-${index}`} className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-                            <div className={`max-w-[92%] md:max-w-[70%] rounded-2xl p-3 shadow-md border ${msg.sender_id === user?.id ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-br-sm border-blue-500/50' : 'bg-gray-800 text-gray-200 rounded-bl-sm border-gray-700'} relative group`}>
-                                {msg.sender_id === user?.id && (
-                                    <button 
-                                        onClick={() => setConfirmModal({ isOpen: true, type: 'message', messageId: msg.id })}
-                                        className="absolute -left-8 top-1/2 -translate-y-1/2 p-1.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
-                                        title="Delete message"
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
-                                )}
-                                {msg.attachment && msg.type !== 'audio' && (
-                                    <div className="mb-2 rounded-lg overflow-hidden border border-black/20 bg-black/10">
-                                        {msg.type === 'image' ? (
-                                            <ImageWithSignedUrl 
-                                                path={msg.attachment.storage_path} 
-                                                fetchUrl={fetchSignedUrl} 
-                                                onPreview={(url) => setPreviewMedia({ isOpen: true, url, type: 'image', fileName: msg.attachment?.file_name, isSender: msg.sender_id === user?.id })}
-                                            />
-                                        ) : msg.type === 'video' ? (
-                                            <VideoWithSignedUrl 
-                                                path={msg.attachment.storage_path} 
-                                                fetchUrl={fetchSignedUrl} 
-                                                onPreview={(url) => setPreviewMedia({ isOpen: true, url, type: 'video', fileName: msg.attachment?.file_name, isSender: msg.sender_id === user?.id })}
-                                            />
-                                        ) : (
-                                            <div className="p-3 flex items-center gap-3">
-                                                <Paperclip size={20} className="text-blue-400" />
-                                                <div className="min-w-0">
-                                                    <p className="text-sm font-medium truncate">{msg.attachment.file_name}</p>
-                                                    <p className="text-[10px] opacity-60">{(msg.attachment.file_size / 1024).toFixed(1)} KB</p>
-                                                </div>
-                                            </div>
+                    <>
+                        {currentMessages.map((msg, index) => {
+                            const isGrouped = isSameSender(index);
+                            return (
+                                <div key={msg.id || `msg-temp-${index}`} className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'} ${isGrouped ? '-mt-2 md:-mt-3' : 'mt-4'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                                    <div className={`max-w-[92%] md:max-w-[70%] ${isGrouped ? 'rounded-2xl' : (msg.sender_id === user?.id ? 'rounded-2xl rounded-br-sm' : 'rounded-2xl rounded-bl-sm')} p-3 shadow-md border ${msg.sender_id === user?.id ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-blue-500/50' : 'bg-gray-800 text-gray-200 border-gray-700'} relative group`}>
+                                        {msg.sender_id === user?.id && (
+                                            <button 
+                                                onClick={() => setConfirmModal({ isOpen: true, type: 'message', messageId: msg.id })}
+                                                className="absolute -left-8 top-1/2 -translate-y-1/2 p-1.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                                                title="Delete message"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
                                         )}
-                                    </div>
-                                )}
-                                
-                                {msg.type === 'call' && (
-                                    <div className="flex items-center gap-2 py-1 px-1 opacity-90">
-                                        <div className={`p-1.5 rounded-full ${msg.content.includes('Missed') ? 'bg-red-500/20 text-red-100' : 'bg-green-500/20 text-green-100'}`}>
-                                            {msg.content.includes('video') ? <Video size={14} /> : <Phone size={14} />}
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-xs font-medium">{msg.content}</span>
-                                            <span className="text-[10px] opacity-70">
-                                                {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                                            </span>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {msg.type === 'audio' && (
-                                    <div className="flex flex-col gap-2 min-w-[200px]">
-                                        <AudioPlayer 
-                                            path={msg.attachment?.storage_path || ''} 
-                                            fetchUrl={fetchSignedUrl} 
-                                        />
-                                        <div className="flex items-center justify-end gap-1 opacity-70">
-                                            <span className="text-[10px]">
-                                                {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}
-                                            </span>
-                                            {msg.sender_id === user?.id && (
-                                                <div className="text-white/80 scale-75 origin-right">
-                                                    {msg.read_at ? <CheckCheck size={14} className="text-blue-300" /> : <Check size={14} />}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {!['call', 'audio'].includes(msg.type) && (
-                                    <>
-                                        {!msg.isOwn && translations[msg.id] && translations[msg.id] !== 'translating...' && !showOriginal[msg.id] ? (
-                                            <div>
-                                                <div className="flex items-center justify-between mb-1">
-                                                    <div className="flex items-center gap-1.5 text-[10px] text-blue-300">
-                                                        <Languages size={10} />
-                                                        <span>Translated • {msg.original_language || 'detected'}</span>
-                                                        <button onClick={() => setShowOriginal(prev => ({ ...prev, [msg.id]: true }))} className="underline hover:text-blue-200 ml-1">Original</button>
+                                        {msg.attachment && msg.type !== 'audio' && (
+                                            <div className="mb-2 rounded-lg overflow-hidden border border-black/20 bg-black/10">
+                                                {msg.type === 'image' ? (
+                                                    <ImageWithSignedUrl 
+                                                        path={msg.attachment.storage_path} 
+                                                        fetchUrl={fetchSignedUrl} 
+                                                        onPreview={(url) => setPreviewMedia({ isOpen: true, url, type: 'image', fileName: msg.attachment?.file_name, isSender: msg.sender_id === user?.id })}
+                                                    />
+                                                ) : msg.type === 'video' ? (
+                                                    <VideoWithSignedUrl 
+                                                        path={msg.attachment.storage_path} 
+                                                        fetchUrl={fetchSignedUrl} 
+                                                        onPreview={(url) => setPreviewMedia({ isOpen: true, url, type: 'video', fileName: msg.attachment?.file_name, isSender: msg.sender_id === user?.id })}
+                                                    />
+                                                ) : (
+                                                    <div className="p-3 flex items-center gap-3">
+                                                        <Paperclip size={20} className="text-blue-400" />
+                                                        <div className="min-w-0">
+                                                            <p className="text-sm font-medium truncate">{msg.attachment.file_name}</p>
+                                                            <p className="text-[10px] opacity-60">{(msg.attachment.file_size / 1024).toFixed(1)} KB</p>
+                                                        </div>
                                                     </div>
-                                                    <button onClick={() => handleReport(msg.id, msg.content, translations[msg.id])} className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-gray-500 hover:text-red-400 flex items-center gap-1"><Flag size={8} /> Report</button>
-                                                </div>
-                                                <p className="break-words text-sm leading-relaxed">{translations[msg.id]}</p>
-                                            </div>
-                                        ) : (
-                                            <div>
-                                                <div className="flex items-center justify-between mb-1">
-                                                    {msg.sender_id !== user?.id && (
-                                                        <button 
-                                                            onClick={() => handleManualTranslate(msg.id, msg.content, msg.original_language)}
-                                                            className="text-[10px] text-blue-300 hover:text-blue-200 transition-colors flex items-center gap-1"
-                                                        >
-                                                            <Languages size={10} />
-                                                            {translations[msg.id] ? (showOriginal[msg.id] ? "Show Translation" : "Show Original") : "Translate"}
-                                                        </button>
-                                                    )}
-                                                    {msg.sender_id !== user?.id && msg.original_language && (
-                                                        <span className="text-[8px] text-gray-500 lowercase opacity-50">Detected: {msg.original_language}</span>
-                                                    )}
-                                                </div>
-                                                <p className="break-words text-sm leading-relaxed">
-                                                    {translations[msg.id] && !showOriginal[msg.id] && translations[msg.id] !== 'translating...' 
-                                                        ? translations[msg.id] 
-                                                        : msg.content}
-                                                </p>
+                                                )}
                                             </div>
                                         )}
-                                        <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
-                                            <span className="text-[10px]">{msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}</span>
-                                            {msg.sender_id === user?.id && (<div className="text-white/80 scale-75 origin-right">{msg.read_at ? <CheckCheck size={14} className="text-blue-300" /> : <Check size={14} />}</div>)}
-                                        </div>
-                                    </>
-                                )}
+                                        
+                                        {msg.type === 'call' && (
+                                            <div className="flex items-center gap-2 py-1 px-1 opacity-90">
+                                                <div className={`p-1.5 rounded-full ${msg.content.includes('Missed') ? 'bg-red-500/20 text-red-100' : 'bg-green-500/20 text-green-100'}`}>
+                                                    {msg.content.includes('video') ? <Video size={14} /> : <Phone size={14} />}
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-medium">{msg.content}</span>
+                                                    {!isGrouped && (
+                                                        <span className="text-[10px] opacity-70">
+                                                            {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {msg.type === 'audio' && (
+                                            <div className="flex flex-col gap-2 min-w-[200px]">
+                                                <AudioPlayer 
+                                                    path={msg.attachment?.storage_path || ''} 
+                                                    fetchUrl={fetchSignedUrl} 
+                                                />
+                                                <div className="flex items-center justify-end gap-1 opacity-70">
+                                                    {!isGrouped && (
+                                                        <span className="text-[10px]">
+                                                            {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}
+                                                        </span>
+                                                    )}
+                                                    {msg.sender_id === user?.id && (
+                                                        <div className="text-white/80 scale-75 origin-right">
+                                                            {msg.read_at ? <CheckCheck size={14} className="text-blue-300" /> : <Check size={14} />}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {!['call', 'audio'].includes(msg.type) && (
+                                            <>
+                                                {!msg.isOwn && translations[msg.id] && translations[msg.id] !== 'translating...' && !showOriginal[msg.id] ? (
+                                                    <div>
+                                                        <div className="flex items-center justify-between mb-1">
+                                                            <div className="flex items-center gap-1.5 text-[10px] text-blue-300">
+                                                                <Languages size={10} />
+                                                                <span>Translated • {msg.original_language || 'detected'}</span>
+                                                                <button onClick={() => setShowOriginal(prev => ({ ...prev, [msg.id]: true }))} className="underline hover:text-blue-200 ml-1">Original</button>
+                                                            </div>
+                                                            <button onClick={() => handleReport(msg.id, msg.content, translations[msg.id])} className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-gray-500 hover:text-red-400 flex items-center gap-1"><Flag size={8} /> Report</button>
+                                                        </div>
+                                                        <p className="break-words text-sm leading-relaxed">{translations[msg.id]}</p>
+                                                    </div>
+                                                ) : (
+                                                    <div>
+                                                        {!isGrouped && msg.sender_id !== user?.id && (
+                                                            <div className="flex items-center justify-between mb-1">
+                                                                <button 
+                                                                    onClick={() => handleManualTranslate(msg.id, msg.content, msg.original_language)}
+                                                                    className="text-[10px] text-blue-300 hover:text-blue-200 transition-colors flex items-center gap-1"
+                                                                >
+                                                                    <Languages size={10} />
+                                                                    {translations[msg.id] ? (showOriginal[msg.id] ? "Show Translation" : "Show Original") : "Translate"}
+                                                                </button>
+                                                                {msg.original_language && (
+                                                                    <span className="text-[8px] text-gray-500 lowercase opacity-50">Detected: {msg.original_language}</span>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        <p className="break-words text-sm leading-relaxed">
+                                                            {translations[msg.id] && !showOriginal[msg.id] && translations[msg.id] !== 'translating...' 
+                                                                ? translations[msg.id] 
+                                                                : msg.content}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
+                                                    {!isGrouped && <span className="text-[10px]">{msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}</span>}
+                                                    {msg.sender_id === user?.id && (<div className="text-white/80 scale-75 origin-right">{msg.read_at ? <CheckCheck size={14} className="text-blue-300" /> : <Check size={14} />}</div>)}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        
+                        {/* Typing Indicator */}
+                        {activeConversationId && typingUsers[activeConversationId]?.length > 0 && (
+                            <div className="flex justify-start items-center gap-2 mt-2 animate-in fade-in slide-in-from-left-2">
+                                <div className="bg-gray-800 rounded-2xl p-3 flex gap-1 border border-gray-700 shadow-lg">
+                                    <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                                    <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                                    <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></div>
+                                </div>
+                                <span className="text-[10px] text-gray-500 font-medium italic">
+                                    {typingUsers[activeConversationId].join(', ')} {typingUsers[activeConversationId].length > 1 ? 'are' : 'is'} typing...
+                                </span>
                             </div>
-                        </div>
-                    ))
+                        )}
+                    </>
                 )}
+
                 {isPending && (
                     <div className="flex flex-col items-center justify-center p-8 bg-gray-800/50 backdrop-blur rounded-2xl my-6 border border-gray-700 shadow-xl">
                         <div className="w-16 h-16 rounded-full bg-blue-600/20 flex items-center justify-center mb-4 text-blue-400"><MoreHorizontal size={32} /></div>
@@ -751,19 +799,28 @@ const ChatWindow: React.FC = () => {
 
 
             {!isPending ? (
-                <div className="p-2 md:p-6 border-t border-gray-800 bg-gray-900/80 backdrop-blur-md pb-[max(env(safe-area-inset-bottom,12px),12px)] flex-shrink-0 relative z-10">
+                <div className="p-3 md:p-6 border-t border-gray-800 bg-gray-900/90 backdrop-blur-xl pb-[max(env(safe-area-inset-bottom,16px),16px)] flex-shrink-0 relative z-10 shadow-[0_-8px_30px_rgba(0,0,0,0.3)]">
                     <form onSubmit={handleSend} className="flex flex-col gap-2 md:gap-3 max-w-full">
                         {isVoiceRecording ? (
-                            <div className="flex justify-center p-2 bg-gray-800 rounded-2xl border border-gray-700 animate-in slide-in-from-bottom-2">
+                            <div className="flex justify-center p-3 bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700/50 animate-in slide-in-from-bottom-4 duration-300">
                                 <VoiceRecorder onSend={handleVoiceMessage} onCancel={() => setIsVoiceRecording(false)} />
                             </div>
                         ) : (
-                            <div className="flex items-center gap-2">
-                                <div className="flex-1 min-w-0 flex items-center gap-1 md:gap-2 bg-gray-800 border border-gray-700 rounded-2xl p-1 md:p-1.5 px-2 md:px-3 focus-within:border-blue-500 transition-all shadow-inner">
-                                    <button type="button" onClick={() => setShowMediaUpload(!showMediaUpload)} className="p-2 text-gray-400 hover:text-blue-400 hover:bg-white/5 rounded-full transition-all flex-shrink-0"><Plus size={20} className="md:w-[22px] md:h-[22px]" /></button>
+                            <div className="flex items-center gap-2 md:gap-3">
+                                <div className="flex-1 min-w-0 flex items-center gap-1 md:gap-2 bg-white/[0.03] hover:bg-white/[0.05] border border-white/[0.08] focus-within:border-blue-500/50 focus-within:bg-white/[0.06] rounded-[22px] p-1.5 px-3 md:px-4 transition-all duration-300 shadow-inner group/input">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setShowMediaUpload(!showMediaUpload)} 
+                                        className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-full transition-all flex-shrink-0 active:scale-90"
+                                    >
+                                        <Plus size={22} className={`transition-transform duration-300 ${showMediaUpload ? 'rotate-45 text-blue-400' : ''}`} />
+                                    </button>
+                                    
                                     <div className="flex-1 relative min-w-0">
                                         {showMentions && mentionParticipants.length > 0 && (
-                                            <MentionSuggestions users={mentionParticipants} onSelect={handleSelectMention} />
+                                            <div className="absolute bottom-full left-0 mb-4 w-full max-w-[300px] animate-in slide-in-from-bottom-2 duration-200">
+                                                <MentionSuggestions users={mentionParticipants} onSelect={handleSelectMention} />
+                                            </div>
                                         )}
                                         <input 
                                             id="chat-window-input" 
@@ -771,33 +828,73 @@ const ChatWindow: React.FC = () => {
                                             type="text" 
                                             value={inputValue} 
                                             onChange={handleInputChange} 
-                                            placeholder={isWaitingForOthers ? "Waiting..." : "Message"} 
+                                            placeholder={isWaitingForOthers ? "Waiting for acceptance..." : "Type a message..."} 
                                             disabled={isWaitingForOthers} 
                                             autoComplete="off" 
                                             spellCheck={true}
                                             autoCapitalize="sentences"
                                             autoCorrect="on"
-                                            className="w-full bg-transparent text-white py-2 md:py-3 px-1 md:px-2 focus:outline-none disabled:opacity-50 text-[16px] md:text-sm" 
+                                            className="w-full bg-transparent text-white py-2.5 md:py-3.5 px-1 md:px-2 focus:outline-none disabled:opacity-50 text-[16px] md:text-sm placeholder:text-gray-500 font-medium" 
                                         />
                                     </div>
-                                    <div className="flex items-center flex-shrink-0">
-                                        <button type="button" onClick={() => setIsVoiceRecording(true)} className="p-2 text-gray-400 hover:text-blue-400 hover:bg-white/5 rounded-full transition-all"><Mic size={18} className="md:w-5 md:h-5" /></button>
-                                        <div className="relative">
-                                            <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="p-1.5 md:p-2 text-gray-400 hover:text-yellow-400 hover:bg-white/5 rounded-full transition-all md:flex hidden"><Smile size={18} className="md:w-5 md:h-5" /></button>
+
+                                    <div className="flex items-center gap-0.5 md:gap-1 flex-shrink-0">
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setIsVoiceRecording(true)} 
+                                            className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-full transition-all active:scale-90"
+                                            title="Voice message"
+                                        >
+                                            <Mic size={20} />
+                                        </button>
+                                        
+                                        <div className="relative md:block hidden">
+                                            <button 
+                                                type="button" 
+                                                onClick={() => setShowEmojiPicker(!showEmojiPicker)} 
+                                                className={`p-2 rounded-full transition-all active:scale-90 ${showEmojiPicker ? 'text-yellow-400 bg-yellow-400/10' : 'text-gray-400 hover:text-yellow-400 hover:bg-yellow-400/10'}`}
+                                            >
+                                                <Smile size={20} />
+                                            </button>
                                             {showEmojiPicker && (
-                                                <div className="absolute bottom-full right-0 mb-4 p-3 bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl z-30 grid grid-cols-4 gap-2 animate-in zoom-in-95 duration-200">
+                                                <div className="absolute bottom-full right-0 mb-4 p-3 bg-gray-800/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-30 grid grid-cols-4 gap-2 animate-in zoom-in-95 duration-200 origin-bottom-right">
                                                     {emojis.map(emoji => (
-                                                        <button key={emoji} type="button" onClick={() => { setInputValue(prev => prev + emoji); setShowEmojiPicker(false); }} className="text-xl hover:bg-white/10 p-1 rounded transition-colors">{emoji}</button>
+                                                        <button 
+                                                            key={emoji} 
+                                                            type="button" 
+                                                            onClick={() => { setInputValue(prev => prev + emoji); setShowEmojiPicker(false); handleInputChange({ target: { value: inputValue + emoji } } as any); }} 
+                                                            className="text-xl hover:bg-white/10 p-2 rounded-xl transition-all hover:scale-110 active:scale-90"
+                                                        >
+                                                            {emoji}
+                                                        </button>
                                                     ))}
                                                 </div>
                                             )}
                                         </div>
                                     </div>
                                 </div>
-                                <button type="submit" disabled={!inputValue.trim() || isWaitingForOthers} className="bg-blue-600 hover:bg-blue-500 text-white w-9 h-9 md:w-11 md:h-11 flex items-center justify-center rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-500/20 active:scale-95 flex-shrink-0 ml-1 md:ml-2"><Send size={16} className="md:w-[20px] md:h-[20px]" /></button>
+                                
+                                <button 
+                                    type="submit" 
+                                    disabled={!inputValue.trim() || isWaitingForOthers} 
+                                    className={`w-11 h-11 md:w-12 md:h-12 flex items-center justify-center rounded-full transition-all duration-300 shadow-xl active:scale-90 flex-shrink-0 ${
+                                        inputValue.trim() && !isWaitingForOthers 
+                                        ? 'bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500 hover:-translate-y-0.5' 
+                                        : 'bg-gray-800 text-gray-500 opacity-50 cursor-not-allowed'
+                                    }`}
+                                >
+                                    <Send size={18} className={`transition-transform duration-300 ${inputValue.trim() ? 'translate-x-0.5 -translate-y-0.5' : ''}`} />
+                                </button>
                             </div>
                         )}
-                        <div className="hidden md:flex justify-between px-2"><p className="text-[10px] text-gray-500 flex items-center gap-1"><CheckCheck size={10} /> End-to-end encrypted</p></div>
+                        <div className="hidden md:flex justify-between items-center px-4">
+                            <p className="text-[10px] text-gray-500 font-medium flex items-center gap-1.5 opacity-60">
+                                <CheckCheck size={12} className="text-blue-500/70" /> End-to-end encrypted
+                            </p>
+                            {inputValue.length > 0 && (
+                                <p className="text-[10px] text-gray-600 font-bold">{inputValue.length} characters</p>
+                            )}
+                        </div>
                     </form>
                 </div>
             ) : (

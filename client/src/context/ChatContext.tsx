@@ -72,6 +72,8 @@ export interface ChatContextValue {
     deleteMessage: (messageId: string) => Promise<void>;
     muteConversation: (id: string, isMuted: boolean) => Promise<void>;
     clearChatHistory: (id: string) => Promise<void>;
+    sendTypingStatus: (isTyping: boolean) => void;
+    typingUsers: Record<string, string[]>;
     hasMore: Record<string, boolean>;
 }
 
@@ -84,13 +86,14 @@ export const useChat = () => {
 };
 
 export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
-    const { user, session, authReady } = useAuth();
+    const { user, profile, session, authReady } = useAuth();
     const { socket, connected } = useSocket();
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [messages, setMessages] = useState<Record<string, Message[]>>({});
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [hasMore, setHasMore] = useState<Record<string, boolean>>({});
+    const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
 
     const isMounted = useRef(true);
     const conversationsFetchRef = useRef(false);
@@ -263,6 +266,23 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             });
         });
 
+        socket.on('user_typing', ({ conversationId, userId, username }: { conversationId: string, userId: string, username: string }) => {
+            if (userId === user?.id) return;
+            setTypingUsers(prev => {
+                const current = prev[conversationId] || [];
+                if (current.includes(username)) return prev;
+                return { ...prev, [conversationId]: [...current, username] };
+            });
+        });
+
+        socket.on('user_stop_typing', ({ conversationId, userId, username }: { conversationId: string, userId: string, username: string }) => {
+            if (userId === user?.id) return;
+            setTypingUsers(prev => {
+                const current = prev[conversationId] || [];
+                return { ...prev, [conversationId]: current.filter(u => u !== username) };
+            });
+        });
+
         // Aggressively join rooms on connect/reconnect
         const joinAllRooms = () => {
             console.log('[Chat] Joining rooms for', conversations.length, 'conversations');
@@ -283,45 +303,77 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, [socket, connected, conversations, user?.id, loadConversations, activeConversationId]);
 
     const sendMessage = async (content: string, type: string = 'text', attachmentId?: string) => {
-        if (!session || !activeConversationId) throw new Error('Cannot send message');
+        if (!session || !activeConversationId || !user) throw new Error('Cannot send message');
         
-        const res = await fetch(`${API_URL}/api/chat/conversations/${activeConversationId}/messages`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session.access_token}`
-            },
-            body: JSON.stringify({ content, type, attachmentId })
-        });
-
-        if (!res.ok) {
-            const error = await res.json().catch(() => ({ error: 'Failed to send message' }));
-            throw new Error(error.error || 'Failed to send message');
-        }
-
-        const data = await res.json();
-        const newMessage: Message = {
-            id: data.id,
-            conversation_id: data.conversation_id,
-            sender_id: data.sender_id,
-            content: data.content,
-            created_at: data.created_at,
-            type: data.type,
+        // ── Optimistic Update ────────────────────────────────────
+        const tempId = `temp-${Date.now()}`;
+        const optimisticMessage: Message = {
+            id: tempId,
+            conversation_id: activeConversationId,
+            sender_id: user.id,
+            content,
+            created_at: new Date().toISOString(),
+            type: type as any,
             isOwn: true,
-            original_language: data.original_language,
-            attachment: data.attachment,
-            read_at: data.read_at
+            attachment: attachmentId ? { id: attachmentId, file_name: 'File', file_type: '', file_size: 0, storage_path: '', metadata: {} } : undefined
         };
 
-        setMessages(prev => {
-            const current = prev[activeConversationId] || [];
-            if (current.some(m => m.id === data.id)) return prev;
-            return {
+        setMessages(prev => ({
+            ...prev,
+            [activeConversationId]: [...(prev[activeConversationId] || []), optimisticMessage]
+        }));
+
+        try {
+            const res = await fetch(`${API_URL}/api/chat/conversations/${activeConversationId}/messages`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`
+                },
+                body: JSON.stringify({ content, type, attachmentId })
+            });
+
+            if (!res.ok) {
+                const error = await res.json().catch(() => ({ error: 'Failed to send message' }));
+                throw new Error(error.error || 'Failed to send message');
+            }
+
+            const data = await res.json();
+            
+            // Replace optimistic message with real one
+            setMessages(prev => {
+                const current = prev[activeConversationId] || [];
+                return {
+                    ...prev,
+                    [activeConversationId]: current.map(m => m.id === tempId ? {
+                        ...m,
+                        id: data.id,
+                        created_at: data.created_at,
+                        original_language: data.original_language,
+                        attachment: data.attachment,
+                        read_at: data.read_at
+                    } : m)
+                };
+            });
+        } catch (err) {
+            // Rollback on failure
+            setMessages(prev => ({
                 ...prev,
-                [activeConversationId]: [...current, newMessage]
-            };
-        });
+                [activeConversationId]: (prev[activeConversationId] || []).filter(m => m.id !== tempId)
+            }));
+            throw err;
+        }
     };
+
+    const sendTypingStatus = useCallback((isTyping: boolean) => {
+        if (!socket || !connected || !activeConversationId || !user) return;
+        const event = isTyping ? 'typing' : 'stop_typing';
+        socket.emit(event, { 
+            conversationId: activeConversationId, 
+            userId: user.id,
+            username: profile?.username || 'User'
+        });
+    }, [socket, connected, activeConversationId, user, profile?.username]);
 
     const loadMoreMessages = async (conversationId: string) => {
         const currentM = messages[conversationId] || [];
@@ -439,23 +491,36 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const deleteMessage = async (messageId: string) => {
         if (!session || !activeConversationId) throw new Error('No session or active chat');
 
+        // Optimistic update
+        let deletedMessage: Message | undefined;
+        setMessages(prev => {
+            const current = prev[activeConversationId] || [];
+            deletedMessage = current.find(m => m.id === messageId);
+            return {
+                ...prev,
+                [activeConversationId]: current.filter(m => m.id !== messageId)
+            };
+        });
+
         try {
             const res = await fetch(`${API_URL}/api/chat/messages/${messageId}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${session.access_token}` }
             });
 
-            if (res.ok) {
-                // Local state will be updated by socket or proactively
-                setMessages(prev => ({
-                    ...prev,
-                    [activeConversationId]: (prev[activeConversationId] || []).filter(m => m.id !== messageId)
-                }));
-            } else {
+            if (!res.ok) {
                 const data = await res.json();
                 throw new Error(data.error || 'Failed to delete message');
             }
         } catch (err) {
+            // Rollback
+            if (deletedMessage) {
+                setMessages(prev => ({
+                    ...prev,
+                    [activeConversationId]: [...(prev[activeConversationId] || []), deletedMessage!]
+                        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                }));
+            }
             console.error('[Chat] Failed to delete message:', err);
             throw err;
         }
@@ -573,6 +638,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             connected,
             loadMoreMessages,
             markMessageRead,
+            sendTypingStatus,
+            typingUsers,
             hasMore
         }}>
             {children}

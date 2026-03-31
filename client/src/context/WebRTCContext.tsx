@@ -250,8 +250,24 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             setCallState({ type, status: 'calling', otherUser: otherUserId, otherUserName: name, otherUserAvatar: avatar, conversationId });
 
             const stream = await navigator.mediaDevices.getUserMedia({
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-                video: type === 'video',
+                audio: { 
+                    echoCancellation: true, 
+                    noiseSuppression: true, 
+                    autoGainControl: true,
+                    // Advanced constraints (supported in Chromium)
+                    // @ts-ignore
+                    googEchoCancellation: true,
+                    googAutoGainControl: true,
+                    googNoiseSuppression: true,
+                    googHighpassFilter: true,
+                    googTypingNoiseDetection: true,
+                    googAudioMirroring: false,
+                },
+                video: type === 'video' ? {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    frameRate: { ideal: 30 }
+                } : false,
             });
             localStreamRef.current = stream;
             setLocalStream(stream);
@@ -280,8 +296,23 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             if (!peerRef.current || !pendingCallRef.current) { toast.error('Call data missing'); cleanup(); return; }
             const { type } = pendingCallRef.current;
             const stream = await navigator.mediaDevices.getUserMedia({
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-                video: type === 'video',
+                audio: { 
+                    echoCancellation: true, 
+                    noiseSuppression: true, 
+                    autoGainControl: true,
+                    // @ts-ignore
+                    googEchoCancellation: true,
+                    googAutoGainControl: true,
+                    googNoiseSuppression: true,
+                    googHighpassFilter: true,
+                    googTypingNoiseDetection: true,
+                    googAudioMirroring: false,
+                },
+                video: type === 'video' ? {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    frameRate: { ideal: 30 }
+                } : false,
             });
             localStreamRef.current = stream;
             setLocalStream(stream);
@@ -332,7 +363,13 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             if (currentCallStatus.current === 'calling' && peerRef.current && localStreamRef.current) {
                 if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
                 const calleePeerId = data.peerId || makePeerId(data.from);
-                const call = peerRef.current.call(calleePeerId, localStreamRef.current);
+                const call = peerRef.current.call(calleePeerId, localStreamRef.current, {
+                    // Set bandwidth to ensure high quality audio
+                    // @ts-ignore
+                    sdpTransform: (sdp: string) => {
+                        return sdp.replace(/AS:([0-9]+)/g, 'AS:16384'); // Boost bandwidth
+                    }
+                });
                 if (!call) { toast.error('Failed to connect'); cleanup(); return; }
 
                 mediaConnectionRef.current = call;
