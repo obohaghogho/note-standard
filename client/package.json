@@ -6,7 +6,7 @@
   "scripts": {
     "start": "vite preview",
     "dev": "vite --host",
-    "build": "tsc --noEmit && cross-env NODE_OPTIONS=--max-old-space-size=4096 vite build",
+    "build": "tsc --noEmit && NODE_OPTIONS=--max-old-space-size=4096 vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "preview": "vite preview"
