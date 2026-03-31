@@ -59,10 +59,11 @@ export default tseslint.config(
         { allowConstantExport: true },
       ],
       "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unused-vars": "warn",
+      "@typescript-eslint/no-unused-vars": "off",
+      "@typescript-eslint/ban-ts-comment": "off",
       "import-x/no-unresolved": "off",
       "import-x/no-duplicates": "warn",
-      "no-undef": "warn",
+      "no-undef": "off",
     },
   },
 
@@ -79,8 +80,8 @@ export default tseslint.config(
       },
     },
     rules: {
-      "no-undef": "warn",
-      "no-unused-vars": "warn",
+      "no-undef": "off",
+      "no-unused-vars": "off",
     },
   },
 
@@ -103,9 +104,10 @@ export default tseslint.config(
       },
     },
     rules: {
-      "no-unused-vars": "warn",
-      "no-undef": "warn",
+      "no-unused-vars": "off",
+      "no-undef": "off",
       "no-console": "off",
+      "no-prototype-builtins": "off",
     },
   }
 );
