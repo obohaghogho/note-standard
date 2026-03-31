@@ -377,7 +377,7 @@ const ChatWindow: React.FC = () => {
             return;
         }
         if (!isUserOnline(otherMember.user_id)) {
-            toast.error(`${otherUserTitle} is offline. They might not receive your call.`);
+            toast(`${otherUserTitle} may be away. Call will still be attempted.`, { icon: 'ℹ️', duration: 3000 });
         }
         toast.loading(`Starting ${type} call...`, { duration: 2000, id: 'call-start' });
         startCall(otherMember.user_id, activeConversationId, type, otherUserTitle, otherUserAvatar || undefined)

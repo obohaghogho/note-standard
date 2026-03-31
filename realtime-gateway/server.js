@@ -54,6 +54,7 @@ const chatHandlers = require('./events/chat');
 const callHandlers = require('./events/call');
 const walletHandlers = require('./events/wallet');
 const notificationHandlers = require('./events/notifications');
+const presenceHandlers = require('./events/presence');
 
 io.on('connection', (socket) => {
   const userId = socket.userId;
@@ -63,7 +64,8 @@ io.on('connection', (socket) => {
   // Auto-join personal room for targeted events
   socket.join(`user:${userId}`);
 
-  // Register event handlers
+  // Register event handlers (presence FIRST — it emits initial state on connect)
+  presenceHandlers(io, socket);
   chatHandlers(io, socket);
   callHandlers(io, socket);
   walletHandlers(io, socket);

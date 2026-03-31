@@ -68,43 +68,75 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const pendingCallRef = useRef<{ from: string; peerId: string; type: 'voice' | 'video' } | null>(null);
 
     // Audio Refs for ringtones
-    const ringingRef = useRef<HTMLAudioElement | null>(null);
-    const ringtoneRef = useRef<HTMLAudioElement | null>(null);
+    // dialToneRef = calm ring-ring sound the CALLER hears while waiting
+    // incomingRingtoneRef = attention-grabbing sound the CALLEE hears for incoming call
+    const dialToneRef = useRef<HTMLAudioElement | null>(null);
+    const incomingRingtoneRef = useRef<HTMLAudioElement | null>(null);
 
     useEffect(() => {
         // Initialize audio objects
-        ringingRef.current = new Audio('/sounds/ringing.wav');
-        ringingRef.current.loop = true;
-        ringtoneRef.current = new Audio('/sounds/ringtone.wav');
-        ringtoneRef.current.loop = true;
+        // ringtone.wav = calm dial tone for caller
+        // ringing.wav = attention-grabbing ringtone for callee
+        dialToneRef.current = new Audio('/sounds/ringtone.wav');
+        dialToneRef.current.loop = true;
+        dialToneRef.current.volume = 0.5;
+        incomingRingtoneRef.current = new Audio('/sounds/ringing.wav');
+        incomingRingtoneRef.current.loop = true;
+        incomingRingtoneRef.current.volume = 0.8;
 
         return () => {
-            if (ringingRef.current) { ringingRef.current.pause(); ringingRef.current = null; }
-            if (ringtoneRef.current) { ringtoneRef.current.pause(); ringtoneRef.current = null; }
+            if (dialToneRef.current) { dialToneRef.current.pause(); dialToneRef.current = null; }
+            if (incomingRingtoneRef.current) { incomingRingtoneRef.current.pause(); incomingRingtoneRef.current = null; }
         };
     }, []);
 
     useEffect(() => { currentCallStatus.current = callState.status; }, [callState.status]);
 
+    // Robust audio playback — handles browser autoplay restrictions
+    const playAudio = useCallback((audio: HTMLAudioElement | null, label: string) => {
+        if (!audio) return;
+        const playPromise = audio.play();
+        if (playPromise) {
+            playPromise.catch((err) => {
+                console.warn(`[Audio] ${label} play blocked:`, err.message);
+                // Show a toast so user knows to interact to enable sound
+                toast(`🔇 Tap anywhere to enable ${label}`, {
+                    duration: 3000,
+                    id: `audio-unlock-${label}`,
+                });
+                // One-time click listener to retry audio
+                const unlockAudio = () => {
+                    audio.play().catch(() => {});
+                    document.removeEventListener('click', unlockAudio);
+                    document.removeEventListener('touchstart', unlockAudio);
+                };
+                document.addEventListener('click', unlockAudio, { once: true });
+                document.addEventListener('touchstart', unlockAudio, { once: true });
+            });
+        }
+    }, []);
+
     // Handle audio playback based on status
     useEffect(() => {
         const stopAll = () => {
-            ringingRef.current?.pause();
-            if (ringingRef.current) ringingRef.current.currentTime = 0;
-            ringtoneRef.current?.pause();
-            if (ringtoneRef.current) ringtoneRef.current.currentTime = 0;
+            dialToneRef.current?.pause();
+            if (dialToneRef.current) dialToneRef.current.currentTime = 0;
+            incomingRingtoneRef.current?.pause();
+            if (incomingRingtoneRef.current) incomingRingtoneRef.current.currentTime = 0;
         };
 
         if (callState.status === 'calling') {
+            // I am the CALLER — play calm dial tone
             stopAll();
-            ringingRef.current?.play().catch(() => console.warn('Audio play failed (waiting for user interaction)'));
+            playAudio(dialToneRef.current, 'dial tone');
         } else if (callState.status === 'incoming') {
+            // I am the CALLEE — play attention-grabbing ringtone
             stopAll();
-            ringtoneRef.current?.play().catch(() => console.warn('Audio play failed (waiting for user interaction)'));
+            playAudio(incomingRingtoneRef.current, 'ringtone');
         } else {
             stopAll();
         }
-    }, [callState.status]);
+    }, [callState.status, playAudio]);
 
     // ─── Cleanup ─────────────────────────────────────────────────
     const cleanup = useCallback(() => {
@@ -113,8 +145,10 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (localStreamRef.current) { localStreamRef.current.getTracks().forEach(t => t.stop()); localStreamRef.current = null; }
         
         // Stop audio
-        ringingRef.current?.pause();
-        ringtoneRef.current?.pause();
+        dialToneRef.current?.pause();
+        if (dialToneRef.current) dialToneRef.current.currentTime = 0;
+        incomingRingtoneRef.current?.pause();
+        if (incomingRingtoneRef.current) incomingRingtoneRef.current.currentTime = 0;
 
         setLocalStream(null);
         setRemoteStream(null);
@@ -150,6 +184,10 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     iceServers: [
                         { urls: 'stun:stun.l.google.com:19302' },
                         { urls: 'stun:stun1.l.google.com:19302' },
+                        // TURN servers for NAT traversal (ensures calls work behind firewalls)
+                        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+                        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+                        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
                     ],
                 },
             });
@@ -211,7 +249,10 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             if (!peerRef.current) { toast.error('Connection not ready'); return; }
             setCallState({ type, status: 'calling', otherUser: otherUserId, otherUserName: name, otherUserAvatar: avatar, conversationId });
 
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === 'video' });
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+                video: type === 'video',
+            });
             localStreamRef.current = stream;
             setLocalStream(stream);
 
@@ -238,7 +279,10 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         try {
             if (!peerRef.current || !pendingCallRef.current) { toast.error('Call data missing'); cleanup(); return; }
             const { type } = pendingCallRef.current;
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === 'video' });
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+                video: type === 'video',
+            });
             localStreamRef.current = stream;
             setLocalStream(stream);
 
