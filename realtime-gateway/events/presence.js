@@ -1,35 +1,26 @@
 /**
  * Presence Event Handler — Realtime Gateway
  * 
- * Tracks which users are online via an in-memory Map.
- * Each user can have multiple sockets (multiple tabs/devices).
- * A user is "online" as long as they have at least one connected socket.
- * 
- * Events Handled:
- *   presence:heartbeat  — client pings every 30s to stay "online"
- *   presence:offline     — client explicitly goes offline (beforeunload)
- *   disconnect           — socket disconnects (cleanup)
- * 
- * Events Emitted:
- *   presence:initial     — list of all online user IDs (sent to newly connected socket)
- *   user_online          — { userId, online, lastSeen } broadcast on status change
+ * Tracks users online status via Memory AND Supabase Database.
  */
+const { createClient } = require('@supabase/supabase-js');
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-// ── Shared state ─────────────────────────────────────────────────
 // Map<userId, Set<socketId>>
 const onlineUsers = new Map();
-
-// Map<userId, ISO timestamp> — last seen time for offline users
+// Map<userId, boolean> tracking if the user wants their online status broadcasted
+const userVisibility = new Map();
 const lastSeenMap = new Map();
 
-// ── Helpers ──────────────────────────────────────────────────────
 function getOnlineUserIds() {
   return Array.from(onlineUsers.keys());
 }
 
 function isUserOnline(userId) {
   const sockets = onlineUsers.get(userId);
-  return sockets && sockets.size > 0;
+  return sockets && sockets.size > 0 && userVisibility.get(userId) !== false;
 }
 
 function markUserOnline(userId, socketId) {
@@ -45,6 +36,7 @@ function removeSocket(userId, socketId) {
     sockets.delete(socketId);
     if (sockets.size === 0) {
       onlineUsers.delete(userId);
+      userVisibility.delete(userId);
       const now = new Date().toISOString();
       lastSeenMap.set(userId, now);
       return { wentOffline: true, lastSeen: now };
@@ -53,71 +45,96 @@ function removeSocket(userId, socketId) {
   return { wentOffline: false };
 }
 
-// ── Event Handler ────────────────────────────────────────────────
 module.exports = (io, socket) => {
   const userId = socket.userId;
 
-  // 1. On connect: send the new socket the list of currently online users
-  const onlineIds = getOnlineUserIds();
-  socket.emit('presence:initial', onlineIds);
+  // 1. On connect: Fetch all online users + DB state
+  const initPresence = async () => {
+    try {
+      // First tell the user who we currently think is online (from memory)
+      const onlineIds = getOnlineUserIds().filter(id => userVisibility.get(id) !== false);
+      socket.emit('presence:initial', onlineIds);
 
-  // 2. Mark this user online immediately
-  const wasAlreadyOnline = isUserOnline(userId);
-  markUserOnline(userId, socket.id);
+      // Fetch this connected user's visibility setting
+      const { data } = await supabase
+        .from('profiles')
+        .select('show_online_status, last_seen')
+        .eq('id', userId)
+        .single();
 
-  // Broadcast to everyone that this user came online (only if they weren't already)
-  if (!wasAlreadyOnline) {
-    console.log(`[Presence] ✓ ${userId} is now ONLINE`);
-    socket.broadcast.emit('user_online', {
-      userId,
-      online: true,
-      lastSeen: null
-    });
-  }
+      const isVisible = data?.show_online_status ?? true;
+      userVisibility.set(userId, isVisible);
 
-  // 3. Heartbeat — keep the user online, re-broadcast if needed
+      const wasAlreadyOnline = onlineUsers.has(userId) && onlineUsers.get(userId).size > 0;
+      markUserOnline(userId, socket.id);
+
+      // If they are visible and just came online, broadcast
+      if (isVisible && !wasAlreadyOnline) {
+        console.log(`[Presence] ✓ ${userId} is now ONLINE (Visible: true)`);
+        socket.broadcast.emit('user_online', {
+          userId,
+          online: true,
+          lastSeen: null
+        });
+        
+        // Update DB last_seen to now since they just logged in
+        await supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', userId);
+      } else if (!isVisible) {
+        console.log(`[Presence] ✓ ${userId} connected but is HIDDEN`);
+      }
+    } catch (err) {
+      console.error('[Presence] DB Init Error:', err.message);
+      markUserOnline(userId, socket.id);
+    }
+  };
+
+  initPresence();
+
+  // 3. Heartbeat
   socket.on('presence:heartbeat', () => {
-    const wasOnline = isUserOnline(userId);
+    const isVisible = userVisibility.get(userId) !== false;
+    const wasOnline = onlineUsers.has(userId) && onlineUsers.get(userId).size > 0;
     markUserOnline(userId, socket.id);
 
-    // If they were somehow removed (e.g., stale cleanup), re-broadcast
-    if (!wasOnline) {
+    if (!wasOnline && isVisible) {
       console.log(`[Presence] ↑ ${userId} heartbeat — back ONLINE`);
-      socket.broadcast.emit('user_online', {
-        userId,
-        online: true,
-        lastSeen: null
-      });
+      socket.broadcast.emit('user_online', { userId, online: true, lastSeen: null });
     }
   });
 
-  // 4. Explicit offline (beforeunload on client)
-  socket.on('presence:offline', () => {
-    const { wentOffline, lastSeen } = removeSocket(userId, socket.id);
-    if (wentOffline) {
-      console.log(`[Presence] ✗ ${userId} explicitly went OFFLINE`);
-      io.emit('user_online', {
-        userId,
-        online: false,
-        lastSeen
-      });
-    }
+  // Client sent an event that their settings changed
+  socket.on('presence:settings_changed', ({ show_online_status }) => {
+    userVisibility.set(userId, show_online_status);
+    console.log(`[Presence] ⚙️ ${userId} visibility changed to ${show_online_status}`);
+    
+    // Broadcast immediately so clients update without waiting for disconnect
+    io.emit('user_online', {
+      userId,
+      online: show_online_status,
+      lastSeen: new Date().toISOString() // Show them as offline starting now
+    });
   });
 
-  // 5. Socket disconnect — cleanup
-  socket.on('disconnect', () => {
+  const handleOffline = async (reason) => {
     const { wentOffline, lastSeen } = removeSocket(userId, socket.id);
     if (wentOffline) {
-      console.log(`[Presence] ✗ ${userId} disconnected — now OFFLINE`);
-      io.emit('user_online', {
-        userId,
-        online: false,
-        lastSeen
-      });
+      console.log(`[Presence] ✗ ${userId} ${reason} — now OFFLINE`);
+      
+      // Update DB with the exact disconnect time
+      supabase.from('profiles')
+        .update({ last_seen: lastSeen })
+        .eq('id', userId)
+        .then(() => console.log(`[Presence] DB updated last_seen for ${userId}`))
+        .catch(err => console.error('[Presence] DB Update Error:', err.message));
+
+      // Broadcast offline
+      io.emit('user_online', { userId, online: false, lastSeen });
     }
-  });
+  };
+
+  socket.on('presence:offline', () => handleOffline('explicitly went offline'));
+  socket.on('disconnect', () => handleOffline('disconnected'));
 };
 
-// Export helpers for use by other modules (e.g., call.js)
 module.exports.isUserOnline = isUserOnline;
 module.exports.getOnlineUserIds = getOnlineUserIds;

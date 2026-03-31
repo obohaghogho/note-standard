@@ -498,7 +498,14 @@ const ChatWindow: React.FC = () => {
                                             ) : (
                                                 <p className="text-[10px] text-gray-400 hidden sm:flex items-center gap-1">
                                                     <span className="w-1.5 h-1.5 rounded-full bg-gray-500"></span> 
-                                                    Last seen {getUserLastSeen(otherM.user_id) ? formatDistanceToNow(new Date(getUserLastSeen(otherM.user_id)!), { addSuffix: true }) : 'offline'}
+                                                    {(otherM.profile as any)?.show_online_status === false ? (
+                                                        'offline'
+                                                    ) : (
+                                                        (() => {
+                                                            const ts = getUserLastSeen(otherM.user_id) || (otherM.profile as any)?.last_seen;
+                                                            return ts ? `Last seen ${formatDistanceToNow(new Date(ts), { addSuffix: true })}` : 'offline';
+                                                        })()
+                                                    )}
                                                 </p>
                                             )
                                         ) : (

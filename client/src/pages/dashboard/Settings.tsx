@@ -412,6 +412,33 @@ export const Settings = () => {
                                     checked={privacySettings.partners}
                                     onChange={(c) => setPrivacySettings(prev => ({ ...prev, partners: c }))}
                                 />
+                                <div className="h-px bg-white/5" />
+                                <Toggle
+                                    label="Show Active Status"
+                                    description="Let others see when you are online in chat. If turned off, you will always appear offline."
+                                    checked={profile?.show_online_status ?? true}
+                                    onChange={async (c) => {
+                                        // Opt for instant save for this toggle specifically for better UX
+                                        try {
+                                            const { error } = await supabase
+                                                .from('profiles')
+                                                .update({ show_online_status: c })
+                                                .eq('id', user?.id);
+                                            if (error) throw error;
+                                            
+                                            // Update local profile state
+                                            if (profile) setProfile({ ...profile, show_online_status: c });
+                                            
+                                            // Tell socket to broadcast change immediately
+                                            const event = new CustomEvent('presence:settings_changed', { detail: { show_online_status: c } });
+                                            window.dispatchEvent(event);
+                                            
+                                            toast.success('Active status setting updated');
+                                        } catch (err) {
+                                            toast.error('Failed to change active status');
+                                        }
+                                    }}
+                                />
                             </div>
                             <div className="mt-6 pt-4 border-t border-white/10 flex justify-end flex-wrap">
                                 <Button onClick={handleSavePrivacy} loading={saving} disabled={!user} className="w-full sm:w-auto">

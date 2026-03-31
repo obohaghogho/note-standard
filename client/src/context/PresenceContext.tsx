@@ -49,9 +49,18 @@ export function PresenceProvider({ children }: { children: React.ReactNode }) {
         };
         window.addEventListener('beforeunload', handleBeforeUnload);
 
+        // Listen for new Privacy toggle changes from the UI
+        const handleSettingsChange = (e: any) => {
+            if (e.detail && 'show_online_status' in e.detail) {
+                socket.emit('presence:settings_changed', { show_online_status: e.detail.show_online_status });
+            }
+        };
+        window.addEventListener('presence:settings_changed', handleSettingsChange);
+
         return () => {
             if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
             window.removeEventListener('beforeunload', handleBeforeUnload);
+            window.removeEventListener('presence:settings_changed', handleSettingsChange);
         };
     }, [connected, socket, user]);
 
