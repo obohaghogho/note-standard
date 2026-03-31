@@ -18,6 +18,7 @@ interface AuthContextValue {
   signOut: () => Promise<void>;
   switchAccount: (userId: string) => Promise<void>;
   addAccount: () => void;
+  removeAccount: (userId: string) => void;
   refreshProfile: () => Promise<void>;
 }
 
@@ -137,9 +138,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addAccount = () => {
-    // We just need to prompt for a new login
-    // The current session will be saved by syncUserData if it hasn't been already
-    window.location.href = '/auth/login?add_account=true';
+    // Explicitly save current account if it exists before navigating
+    if (session && profile) {
+      accountManager.saveAccount(session, profile);
+    }
+    // Correct URL path
+    window.location.href = '/login?add_account=true';
+  };
+
+  const removeAccount = (userId: string) => {
+    // Cannot remove current account via this method (use signOut instead)
+    if (userId === user?.id) return;
+    
+    accountManager.removeAccount(userId);
+    // Page reload or state update to refresh UI
+    window.location.reload();
   };
 
   const switchAccount = async (userId: string) => {
@@ -306,6 +319,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       signOut,
       switchAccount,
       addAccount,
+      removeAccount,
       refreshProfile
     }}>
       {children}

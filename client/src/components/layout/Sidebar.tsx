@@ -16,7 +16,8 @@ import {
     Bell,
     Shield,
     BadgeCheck,
-    TrendingUp
+    TrendingUp,
+    X
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { Button } from '../common/Button';
@@ -38,7 +39,7 @@ interface SidebarProps {
 
 export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps) => {
     const { t } = useTranslation();
-    const { user, signOut, switchAccount, addAccount, isPro, isAdmin } = useAuth();
+    const { user, signOut, switchAccount, removeAccount, addAccount, isPro, isAdmin } = useAuth();
     const { unreadCount } = useNotifications();
     
     // Accounts for switcher
@@ -168,70 +169,96 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
             {/* Footer */}
             <div className="p-4 border-t border-white/10">
                 {/* Account Switcher Row */}
-                {allAccounts.length > 0 && (
-                    <div className="flex items-center gap-2 mb-4 px-2 overflow-x-auto no-scrollbar">
-                        {allAccounts.map((acc) => {
+                {/* Account Switcher Row - Always show at least the current account and + button */}
+                <div className="flex items-center gap-2 mb-4 px-2 overflow-x-auto no-scrollbar">
+                    {allAccounts.length > 0 ? (
+                        allAccounts.map((acc) => {
                             const isActive = acc.id === user?.id;
                             const unread = isActive ? unreadCount : (backgroundUnreadCounts[acc.id] || 0);
                             
                             const initials = acc.full_name
-                                .split(' ')
-                                .map((n: string) => n[0])
-                                .join('')
-                                .substring(0, 2)
-                                .toUpperCase();
+                                ? acc.full_name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()
+                                : (acc.email?.substring(0, 2).toUpperCase() || '??');
 
                             return (
-                                <button
-                                    key={acc.id}
-                                    onClick={() => !isActive && switchAccount(acc.id)}
-                                    className={cn(
-                                        "relative w-8 h-8 rounded-full flex-shrink-0 transition-all duration-300",
-                                        isActive 
-                                            ? "ring-2 ring-primary ring-offset-2 ring-offset-black scale-110 z-10" 
-                                            : "opacity-60 hover:opacity-100 hover:scale-105"
-                                    )}
-                                    title={acc.full_name}
-                                >
-                                    {acc.avatar_url ? (
-                                        <SecureImage 
-                                            src={acc.avatar_url} 
-                                            alt={acc.full_name} 
-                                            className="w-full h-full rounded-full object-cover"
-                                            fallbackType="profile"
-                                        />
-                                    ) : (
-                                        <div className="w-full h-full rounded-full bg-gradient-to-tr from-gray-700 to-gray-600 flex items-center justify-center text-[10px] font-bold text-white border border-white/10">
-                                            {initials}
-                                        </div>
-                                    )}
-                                    
-                                    {/* Unread Badge */}
-                                    {unread > 0 && (
-                                        <div className="absolute -top-1 -right-1 min-w-[14px] h-[14px] bg-red-500 rounded-full border border-black flex items-center justify-center px-0.5 z-20 shadow-sm animate-pulse">
-                                            <span className="text-[8px] font-bold text-white leading-none">
-                                                {unread > 9 ? '9+' : unread}
-                                            </span>
-                                        </div>
-                                    )}
+                                <div key={acc.id} className="relative group/acc">
+                                    <button
+                                        onClick={() => !isActive && switchAccount(acc.id)}
+                                        className={cn(
+                                            "relative w-8 h-8 rounded-full flex-shrink-0 transition-all duration-300",
+                                            isActive 
+                                                ? "ring-2 ring-primary ring-offset-2 ring-offset-black scale-110 z-10" 
+                                                : "opacity-60 hover:opacity-100 hover:scale-105"
+                                        )}
+                                        title={acc.full_name}
+                                    >
+                                        {acc.avatar_url ? (
+                                            <SecureImage 
+                                                src={acc.avatar_url} 
+                                                alt={acc.full_name} 
+                                                className="w-full h-full rounded-full object-cover"
+                                                fallbackType="profile"
+                                            />
+                                        ) : (
+                                            <div className="w-full h-full rounded-full bg-gradient-to-tr from-gray-700 to-gray-600 flex items-center justify-center text-[10px] font-bold text-white border border-white/10">
+                                                {initials}
+                                            </div>
+                                        )}
+                                        
+                                        {/* Unread Badge */}
+                                        {unread > 0 && (
+                                            <div className="absolute -top-1 -right-1 min-w-[14px] h-[14px] bg-red-500 rounded-full border border-black flex items-center justify-center px-0.5 z-20 shadow-sm animate-pulse">
+                                                <span className="text-[8px] font-bold text-white leading-none">
+                                                    {unread > 9 ? '9+' : unread}
+                                                </span>
+                                            </div>
+                                        )}
 
-                                    {isActive && (
-                                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 border-2 border-black rounded-full" />
+                                        {isActive && (
+                                            <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 border-2 border-black rounded-full" />
+                                        )}
+                                    </button>
+
+                                    {/* Remove Account Button */}
+                                    {!isActive && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (window.confirm(`Forget account ${acc.email} on this device?`)) {
+                                                    removeAccount(acc.id);
+                                                }
+                                            }}
+                                            className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-white opacity-0 group-hover/acc:opacity-100 transition-opacity hover:bg-red-600 z-30 shadow-lg"
+                                            title="Forget account"
+                                        >
+                                            <X size={10} strokeWidth={3} />
+                                        </button>
                                     )}
-                                </button>
+                                </div>
                             );
-                        })}
-                        
-                        {/* Add Account Button */}
-                        <button 
-                            onClick={addAccount}
-                            className="w-8 h-8 rounded-full border border-dashed border-white/20 flex items-center justify-center text-gray-400 hover:text-white hover:border-white/40 transition-all flex-shrink-0"
-                            title="Add Account"
+                        })
+                    ) : user && (
+                        // Fallback if local storage hasn't updated yet but we have an active user
+                        <button
+                            className="relative w-8 h-8 rounded-full ring-2 ring-primary ring-offset-2 ring-offset-black scale-110 z-10 flex-shrink-0"
+                            title={fullName}
                         >
-                            <Plus size={14} />
+                            <div className="w-full h-full rounded-full bg-gray-700 flex items-center justify-center text-[10px] font-bold text-white border border-white/10">
+                                {initials}
+                            </div>
+                            <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 border-2 border-black rounded-full" />
                         </button>
-                    </div>
-                )}
+                    )}
+                    
+                    {/* Add Account Button - Always visible */}
+                    <button 
+                        onClick={addAccount}
+                        className="w-8 h-8 rounded-full border border-dashed border-white/20 flex items-center justify-center text-gray-400 hover:text-white hover:border-white/40 transition-all flex-shrink-0"
+                        title="Add Account"
+                    >
+                        <Plus size={14} />
+                    </button>
+                </div>
 
                 <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer mb-2">
                     <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-xs font-bold text-white">
