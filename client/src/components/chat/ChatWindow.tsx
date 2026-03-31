@@ -970,8 +970,8 @@ const ChatWindow: React.FC = () => {
 
 
             {!isPending ? (
-                <div className="fixed bottom-0 left-0 right-0 w-full z-[1000] bg-gray-900 shadow-[0_-15px_40px_rgba(0,0,0,0.4)]">
-                    <div className="max-w-[1100px] mx-auto p-3 md:p-6 border-t border-gray-800 bg-gray-900/95 backdrop-blur-2xl pb-[max(env(safe-area-inset-bottom,16px),16px)]">
+                <div className="fixed bottom-0 left-0 md:left-64 right-0 z-[1000] bg-gray-900 shadow-[0_-15px_40px_rgba(0,0,0,0.4)]">
+                    <div className="max-w-[800px] mx-auto p-3 md:p-6 border-t border-gray-800 bg-gray-900/95 backdrop-blur-2xl pb-[max(env(safe-area-inset-bottom,16px),16px)]">
                         <form onSubmit={handleSend} className="flex flex-col gap-2 md:gap-3 max-w-full">
                             {isVoiceRecording ? (
                                 <div className="flex justify-center p-3 bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700/50 animate-in slide-in-from-bottom-4 duration-300">
@@ -1086,8 +1086,8 @@ const ChatWindow: React.FC = () => {
                     </div>
                 </div>
             ) : (
-                <div className="fixed bottom-0 left-0 right-0 w-full z-[1000] bg-gray-900 border-t border-gray-800">
-                    <div className="max-w-[1100px] mx-auto p-8 text-center text-gray-400 text-sm font-medium">Please accept the message request to start chatting.</div>
+                <div className="fixed bottom-0 left-0 md:left-64 right-0 z-[1000] bg-gray-900 border-t border-gray-800">
+                    <div className="max-w-[800px] mx-auto p-8 text-center text-gray-400 text-sm font-medium">Please accept the message request to start chatting.</div>
                 </div>
             )}
 
