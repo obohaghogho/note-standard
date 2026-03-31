@@ -38,7 +38,7 @@
     "realtime-gateway"
   ],
   "engines": {
-    "node": "22.x"
+    "node": "18.x"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "4.24.0",
