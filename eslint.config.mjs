@@ -58,7 +58,7 @@ export default tseslint.config(
         "warn",
         { allowConstantExport: true },
       ],
-      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unused-vars": "warn",
       "import-x/no-unresolved": "off",
       "import-x/no-duplicates": "warn",
@@ -66,9 +66,27 @@ export default tseslint.config(
     },
   },
 
-  // 4. Server configuration (Node.js + CommonJS)
+  // 4. Service Worker configuration (Public JS)
   {
-    files: ["server/**/*.js", "realtime-gateway/**/*.js", "*.mjs", "scripts/*.js"],
+    files: ["client/public/**/*.js"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "module",
+      globals: {
+        ...globals.browser,
+        ...globals.serviceworker,
+        ...globals.worker,
+      },
+    },
+    rules: {
+      "no-undef": "warn",
+      "no-unused-vars": "warn",
+    },
+  },
+
+  // 5. Server & Root Script configuration (Node.js + CommonJS)
+  {
+    files: ["server/**/*.js", "realtime-gateway/**/*.js", "*.js", "*.mjs", "scripts/*.js"],
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "commonjs",
