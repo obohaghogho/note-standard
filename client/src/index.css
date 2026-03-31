@@ -6,6 +6,8 @@
   :root {
     --background: 0 0% 4%;
     --foreground: 0 0% 93%;
+    --floating-ui-offset: 0px;
+    --chat-input-height: 0px;
   }
 
   * {

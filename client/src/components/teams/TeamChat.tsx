@@ -58,6 +58,17 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
   const [isSending, setIsSending] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [showRecorder, setShowRecorder] = useState(false);
+
+  // Layout Offset Management
+  useEffect(() => {
+    document.documentElement.style.setProperty('--floating-ui-offset', '110px');
+    document.documentElement.style.setProperty('--chat-input-height', '130px');
+    
+    return () => {
+      document.documentElement.style.setProperty('--floating-ui-offset', '0px');
+      document.documentElement.style.setProperty('--chat-input-height', '0px');
+    };
+  }, []);
   
   // Confirmation state
   const [confirmDelete, setConfirmDelete] = useState<{
@@ -474,8 +485,9 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
       {/* Messages Container */}
       <div
         ref={messagesContainerRef}
-        className="team-chat__messages"
+        className="team-chat__messages transition-all"
         onScroll={handleScroll}
+        style={{ paddingBottom: 'var(--chat-input-height, 24px)' }}
       >
         {loading && messages.length === 0 ? (
           <div className="team-chat__loading">
@@ -521,13 +533,17 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
 
       {/* Scroll to Bottom Button */}
       {showScrollButton && (
-        <button className="team-chat__scroll-button" onClick={() => scrollToBottom()}>
+        <button 
+          className="team-chat__scroll-button hover:scale-110 active:scale-95 z-50" 
+          onClick={() => scrollToBottom()}
+          style={{ bottom: 'calc(110px + var(--floating-ui-offset, 0px))' }}
+        >
           <ChevronDown size={20} />
         </button>
       )}
 
       {/* Input Area */}
-      <div className="team-chat__input-container">
+      <div className="team-chat__input-container z-40 shadow-[0_-15px_40px_rgba(0,0,0,0.4)]">
         {showRecorder ? (
             <div className="flex-1">
                 <VoiceRecorder 

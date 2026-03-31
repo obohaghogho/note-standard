@@ -30,6 +30,17 @@ const ChatWindow: React.FC = () => {
     const { isUserOnline, getUserLastSeen } = usePresence();
     const { user, profile, session } = useAuth();
     const { startCall } = useWebRTC();
+
+    // Layout Offset Management
+    useEffect(() => {
+        document.documentElement.style.setProperty('--floating-ui-offset', '110px');
+        document.documentElement.style.setProperty('--chat-input-height', '130px');
+        
+        return () => {
+            document.documentElement.style.setProperty('--floating-ui-offset', '0px');
+            document.documentElement.style.setProperty('--chat-input-height', '0px');
+        };
+    }, []);
     
     const [inputValue, setInputValue] = useState('');
     const [showMediaUpload, setShowMediaUpload] = useState(false);
@@ -600,8 +611,11 @@ const ChatWindow: React.FC = () => {
             )}
 
             <div 
-                className="flex-1 overflow-y-auto p-2 md:p-4 space-y-3 md:space-y-4 scroll-smooth overscroll-contain"
-                style={{ WebkitOverflowScrolling: 'touch' }}
+                className="flex-1 overflow-y-auto p-2 md:p-4 space-y-3 md:space-y-4 scroll-smooth overscroll-contain transition-all"
+                style={{ 
+                    WebkitOverflowScrolling: 'touch',
+                    paddingBottom: 'var(--chat-input-height, 16px)'
+                }}
                 ref={scrollContainerRef}
                 onScroll={handleScroll}
             >
@@ -787,7 +801,13 @@ const ChatWindow: React.FC = () => {
             </div>
 
             {!isAtBottom && (
-                <button onClick={scrollToBottom} className="fixed bottom-24 right-8 bg-blue-600 text-white p-3 rounded-full shadow-2xl hover:bg-blue-700 transition-all animate-in zoom-in-0 duration-200 z-10"><ArrowDown size={20} /></button>
+                <button 
+                    onClick={scrollToBottom} 
+                    className="fixed right-8 bg-blue-600 text-white p-3 rounded-full shadow-2xl hover:bg-blue-700 transition-all animate-in zoom-in-0 duration-200 z-50 hover:scale-110 active:scale-95"
+                    style={{ bottom: 'calc(110px + var(--floating-ui-offset, 0px))' }}
+                >
+                    <ArrowDown size={20} />
+                </button>
             )}
 
             <AnimatePresence>
@@ -799,7 +819,7 @@ const ChatWindow: React.FC = () => {
 
 
             {!isPending ? (
-                <div className="p-3 md:p-6 border-t border-gray-800 bg-gray-900/90 backdrop-blur-xl pb-[max(env(safe-area-inset-bottom,16px),16px)] flex-shrink-0 relative z-10 shadow-[0_-8px_30px_rgba(0,0,0,0.3)]">
+                <div className="p-3 md:p-6 border-t border-gray-800 bg-gray-900/95 backdrop-blur-2xl pb-[max(env(safe-area-inset-bottom,16px),16px)] flex-shrink-0 relative z-40 shadow-[0_-15px_40px_rgba(0,0,0,0.4)]">
                     <form onSubmit={handleSend} className="flex flex-col gap-2 md:gap-3 max-w-full">
                         {isVoiceRecording ? (
                             <div className="flex justify-center p-3 bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700/50 animate-in slide-in-from-bottom-4 duration-300">

@@ -2,10 +2,11 @@
 
 .chat-widget {
     position: fixed;
-    bottom: 24px;
+    bottom: calc(24px + var(--floating-ui-offset, 0px));
     right: 24px;
-    z-index: 40;
+    z-index: 50;
     font-family: inherit;
+    transition: bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Floating Button */
