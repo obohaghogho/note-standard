@@ -22,7 +22,7 @@ const emit = async (event, data) => {
       await publisher.publish('realtime:events', JSON.stringify({ event, data }));
     } else {
       // Dev Fallback: Direct HTTP call to gateway
-      await fetch('http://localhost:5000/internal/emit', {
+      await fetch(`${process.env.API_URL}/internal/emit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ event, data })
