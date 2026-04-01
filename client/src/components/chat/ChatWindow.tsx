@@ -5,7 +5,7 @@ import { usePresence } from '../../context/PresenceContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../common/SecureImage';
-import { Send, Languages, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Maximize, Trash2, Share2, X } from 'lucide-react';
+import { Send, Languages, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Maximize, Trash2, Share2, X, Copy } from 'lucide-react';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { MediaUpload } from './MediaUpload';
 import { VoiceRecorder } from './VoiceRecorder';
@@ -87,6 +87,24 @@ const ChatWindow: React.FC = () => {
         }
         if (isSelectionMode) {
             toggleMessageSelection(msgId);
+        }
+    };
+
+    // Copy to clipboard
+    const handleCopy = async () => {
+        if (selectedMessages.size === 0) return;
+        const selectedMsgs = currentMessages
+            .filter(m => selectedMessages.has(m.id))
+            .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+            .map(m => m.content)
+            .join('\n');
+        
+        try {
+            await navigator.clipboard.writeText(selectedMsgs);
+            toast.success(selectedMessages.size > 1 ? 'Messages copied' : 'Message copied');
+            clearSelection();
+        } catch (err) {
+            toast.error('Failed to copy to clipboard');
         }
     };
 
@@ -592,6 +610,13 @@ const ChatWindow: React.FC = () => {
                                 })()
                             )}
                             <button 
+                                onClick={handleCopy}
+                                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-gray-300 hover:text-white hover:bg-white/10 rounded-xl transition-all active:scale-95"
+                            >
+                                <Copy size={18} />
+                                <span className="hidden sm:inline">Copy</span>
+                            </button>
+                            <button 
                                 onClick={() => {
                                     setConfirmModal({ isOpen: true, type: 'message', messageId: Array.from(selectedMessages)[0] });
                                 }}
@@ -779,7 +804,7 @@ const ChatWindow: React.FC = () => {
                                     onMouseUp={handleLongPressEnd}
                                     onMouseLeave={handleLongPressEnd}
                                     onClick={() => handleMessageClick(msg.id)}
-                                    style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+                                    style={{ userSelect: 'text', WebkitUserSelect: 'text' }}
                                 >
                                     {/* Selection checkbox indicator */}
                                     {isSelectionMode && (
