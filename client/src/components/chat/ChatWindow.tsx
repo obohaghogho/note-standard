@@ -674,9 +674,18 @@ const ChatWindow: React.FC = () => {
                                                 />
                                             )}
                                         </h2>
-                                        {activeConversation?.type === 'direct' && otherM ? (
+                                        {activeConversationId && typingUsers[activeConversationId]?.length > 0 ? (
+                                            <p className="text-[10px] text-blue-400 animate-pulse font-medium flex items-center gap-1">
+                                                <span className="flex gap-0.5">
+                                                    <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></span>
+                                                    <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                                                    <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+                                                </span>
+                                                Typing...
+                                            </p>
+                                        ) : activeConversation?.type === 'direct' && otherM ? (
                                             isUserOnline(otherM.user_id) ? (
-                                                <p className="text-[8px] xs:text-[10px] text-green-400 hidden sm:flex items-center gap-1">
+                                                <p className="text-[8px] xs:text-[10px] text-green-400 flex items-center gap-1">
                                                     <span className="w-1.5 h-1.5 rounded-full bg-green-400"></span> Online
                                                 </p>
                                             ) : (
@@ -932,7 +941,15 @@ const ChatWindow: React.FC = () => {
                                                             {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}
                                                         </span>
                                                     )}
-                                                    {msg.sender_id === user?.id && (<div className="text-white/80 scale-75 origin-right">{msg.read_at ? <CheckCheck size={14} className="text-blue-300" /> : <Check size={14} />}</div>)}
+                                                    {msg.sender_id === user?.id && (
+                                                        <div className="text-white/80 scale-75 origin-right">
+                                                            {msg.read_at ? (
+                                                                <CheckCheck size={14} className="text-blue-300 animate-in zoom-in-50 duration-300" />
+                                                            ) : (
+                                                                <Check size={14} className="animate-in fade-in duration-300" />
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </>
                                         )}

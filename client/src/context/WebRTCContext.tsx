@@ -17,6 +17,7 @@ interface CallState {
     otherUserName?: string;
     otherUserAvatar?: string;
     conversationId: string | null;
+    connectedAt?: number | null;
 }
 
 interface WebRTCContextValue {
@@ -53,7 +54,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const { sendMessage } = useChat();
 
     const [callState, setCallState] = useState<CallState>({
-        type: null, status: 'idle', otherUser: null, conversationId: null,
+        type: null, status: 'idle', otherUser: null, conversationId: null, connectedAt: null,
     });
     const [localStream, setLocalStream] = useState<MediaStream | null>(null);
     const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -153,7 +154,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setLocalStream(null);
         setRemoteStream(null);
         pendingCallRef.current = null;
-        setCallState({ type: null, status: 'idle', otherUser: null, conversationId: null });
+        setCallState({ type: null, status: 'idle', otherUser: null, conversationId: null, connectedAt: null });
         setIsMuted(false);
         setIsVideoEnabled(true);
     }, []);
@@ -199,7 +200,10 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             peer.on('call', (call) => {
                 mediaConnectionRef.current = call;
-                call.on('stream', (remote) => { setRemoteStream(remote); setCallState(p => ({ ...p, status: 'connected' })); });
+                call.on('stream', (remote) => { 
+                    setRemoteStream(remote); 
+                    setCallState(p => ({ ...p, status: 'connected', connectedAt: p.connectedAt || Date.now() })); 
+                });
                 call.on('close', cleanup);
                 call.on('error', () => { toast.error('Call error'); cleanup(); });
             });
@@ -247,7 +251,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const startCall = async (otherUserId: string, conversationId: string, type: 'voice' | 'video', name?: string, avatar?: string) => {
         try {
             if (!peerRef.current) { toast.error('Connection not ready'); return; }
-            setCallState({ type, status: 'calling', otherUser: otherUserId, otherUserName: name, otherUserAvatar: avatar, conversationId });
+            setCallState({ type, status: 'calling', otherUser: otherUserId, otherUserName: name, otherUserAvatar: avatar, conversationId, connectedAt: null });
 
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: { 
@@ -356,6 +360,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 type: data.type, status: 'incoming', otherUser: data.from,
                 otherUserName: data.fromName, otherUserAvatar: data.fromAvatar,
                 conversationId: data.conversationId,
+                connectedAt: null,
             });
         };
 
@@ -367,14 +372,35 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     // Set bandwidth to ensure high quality audio
                     // @ts-ignore
                     sdpTransform: (sdp: string) => {
-                        return sdp.replace(/AS:([0-9]+)/g, 'AS:16384'); // Boost bandwidth
+                        // 1. Lower Application Specific (AS) bandwidth to prevent jitter
+                        // Using 2000 (2Mbps) for video, and remove for voice
+                        let newSdp = sdp;
+                        if (callState.type === 'video') {
+                            newSdp = sdp.replace(/AS:([0-9]+)/g, 'AS:2000');
+                        } else {
+                            newSdp = sdp.replace(/b=AS:([0-9]+).*\r\n/g, '');
+                        }
+
+                        // 2. Optimize OPUS audio quality (payload type 111)
+                        // This adds stereo support and boosts the bit rate for high fidelity
+                        if (newSdp.includes('a=fmtp:111')) {
+                            newSdp = newSdp.replace(
+                                /a=fmtp:111 .*/,
+                                'a=fmtp:111 minptime=10;stereo=1;useinbandfec=1;maxaveragebitrate=128000;sprop-stereo=1'
+                            );
+                        }
+                        
+                        return newSdp;
                     }
                 });
                 if (!call) { toast.error('Failed to connect'); cleanup(); return; }
 
                 mediaConnectionRef.current = call;
                 setCallState(p => ({ ...p, status: 'connecting' }));
-                call.on('stream', (remote) => { setRemoteStream(remote); setCallState(p => ({ ...p, status: 'connected' })); });
+                call.on('stream', (remote) => { 
+                    setRemoteStream(remote); 
+                    setCallState(p => ({ ...p, status: 'connected', connectedAt: p.connectedAt || Date.now() })); 
+                });
                 call.on('close', cleanup);
                 call.on('error', () => { toast.error('Call failed'); cleanup(); });
             }

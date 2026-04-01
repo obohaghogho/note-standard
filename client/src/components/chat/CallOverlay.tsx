@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Phone, Video, Mic, MicOff, VideoOff } from 'lucide-react';
 import SecureImage from '../common/SecureImage';
 
@@ -6,6 +6,7 @@ interface CallOverlayProps {
     callState: {
         type: 'voice' | 'video' | null;
         status: 'idle' | 'calling' | 'incoming' | 'connecting' | 'connected';
+        connectedAt?: number | null;
     };
     acceptCall: () => void;
     rejectCall: () => void;
@@ -25,6 +26,24 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
     localStream, remoteStream, toggleMute, toggleVideo, 
     isMuted, isVideoEnabled, otherUserName, otherUserAvatar 
 }) => {
+    const [timer, setTimer] = useState('00:00');
+
+    useEffect(() => {
+        if (callState.status !== 'connected' || !callState.connectedAt) {
+            setTimer('00:00');
+            return;
+        }
+
+        const interval = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - (callState.connectedAt || 0)) / 1000);
+            const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const secs = (elapsed % 60).toString().padStart(2, '0');
+            setTimer(`${mins}:${secs}`);
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [callState.status, callState.connectedAt]);
+
     return (
         <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center backdrop-blur-xl animate-in fade-in duration-300">
             <div className="relative w-full h-full md:w-[90vw] md:h-[80vh] bg-gray-900 md:rounded-3xl overflow-hidden shadow-2xl border border-white/5">
@@ -51,6 +70,11 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
                             </div>
                             <div className="text-center">
                                 <h3 className="text-2xl font-bold text-white mb-2">{otherUserName}</h3>
+                                {callState.status === 'connected' && (
+                                    <div className="text-blue-400 font-mono text-lg mb-2 tabular-nums">
+                                        {timer}
+                                    </div>
+                                )}
                                 <p className="text-blue-400 font-medium animate-pulse">
                                     {callState.status === 'connected' && !remoteStream ? (callState.type === 'voice' ? 'In Call (Connected)' : 'Handshaking...') :
                                      callState.status === 'connecting' ? 'Joining Chat...' :

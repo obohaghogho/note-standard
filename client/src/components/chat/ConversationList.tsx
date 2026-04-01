@@ -74,6 +74,13 @@ const ConversationList: React.FC = () => {
                                             isVerified={(conv.members as any).find((m: any) => m.user_id !== user?.id)?.profile?.is_verified}
                                         />
                                     )}
+                                    {typingUsers[conv.id]?.length > 0 && (
+                                        <span className="flex gap-0.5 ml-1">
+                                            <span className="w-1 h-1 bg-blue-400 rounded-full animate-bounce"></span>
+                                            <span className="w-1 h-1 bg-blue-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                                            <span className="w-1 h-1 bg-blue-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+                                        </span>
+                                    )}
                                 </h3>
                                 <span className="text-[10px] text-gray-500 font-medium">
                                     {conv.updated_at ? formatDistanceToNow(new Date(conv.updated_at), { addSuffix: false }).replace('about ', '') : ''}

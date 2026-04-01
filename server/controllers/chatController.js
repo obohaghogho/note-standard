@@ -504,6 +504,8 @@ exports.sendMessage = async (req, res) => {
 
     // Add optional columns only if they likely exist (based on logic or we can try/catch)
     // For production safety, we'll try a fail-safe insert pattern
+    const selectQuery = "*, attachment:media_attachments(*)";
+
     try {
       const { data, error } = await supabase
         .from("messages")
@@ -512,19 +514,19 @@ exports.sendMessage = async (req, res) => {
           sentiment: sentiment,
           attachment_id: req.body.attachmentId || null,
         }])
-        .select()
+        .select(selectQuery)
         .single();
 
       if (error) {
-        // If it's a "column does not exist" error (42703 for Postgres, PGRST204 for PostgREST cache)
-        if (error.code === "42703" || error.code === "PGRST204") {
+        // If it's a "column does not exist" error (42703 for Postgres)
+        if (error.code === "42703") {
           console.warn(
             "[Chat Controller] Column missing, retrying basic insert",
           );
           const { data: retryData, error: retryErr } = await supabase
             .from("messages")
             .insert([insertPayload])
-            .select()
+            .select(selectQuery)
             .single();
 
           if (retryErr) throw retryErr;
@@ -537,40 +539,27 @@ exports.sendMessage = async (req, res) => {
       }
     } catch (msgErr) {
       console.error("[Chat Controller] Send message error:", msgErr.message);
-      return res.status(500).json({ error: "Failed to send message" });
+      if (!res.headersSent) {
+        return res.status(500).json({ error: "Failed to send message" });
+      }
     }
 
-    async function processAfterMsg(data) {
-      // Update conversation timestamp (non-blocking)
+    async function processAfterMsg(msgToSend) {
+      // 1. Respond to sender immediately to minimize perceived latency
+      res.json(msgToSend);
+
+      // 2. Broadcast to other members immediately
+      await realtime.emit("to_conversation", {
+        conversationId,
+        event: "receive_message",
+        data: msgToSend
+      });
+
+      // 3. Background tasks (non-blocking)
       supabase.from("conversations").update({ updated_at: new Date() }).eq(
         "id",
         conversationId,
       ).then();
-
-      // Fetch with attachment details for real-time recipients
-      try {
-        const { data: fullMessage, error: fetchErr } = await supabase
-          .from("messages")
-          .select("*, attachment:media_attachments(*)")
-          .eq("id", data.id)
-          .single();
-
-        const msgToSend = (!fetchErr && fullMessage) ? fullMessage : data;
-        await realtime.emit("to_conversation", {
-          conversationId,
-          event: "receive_message",
-          data: msgToSend
-        });
-
-        res.json(msgToSend);
-      } catch (err) {
-        await realtime.emit("to_conversation", {
-          conversationId,
-          event: "receive_message",
-          data
-        });
-        res.json(data);
-      }
     }
 
     // --- Notification Logic ---
