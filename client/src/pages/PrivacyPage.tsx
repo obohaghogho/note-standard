@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Shield, Eye, Database, Activity, Lock, Settings, FileText, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Shield, Eye, Database, Activity, Lock } from 'lucide-react';
 import { Card } from '../components/common/Card';
 
 export const PrivacyPage = () => {
@@ -20,120 +20,91 @@ export const PrivacyPage = () => {
                     Back
                 </button>
 
-                <Card variant="glass" className="p-8 md:p-12">
-                    <div className="flex items-center gap-4 mb-8">
-                        <div className="p-3 bg-primary/10 rounded-xl">
-                            <Shield className="w-8 h-8 text-primary" />
+                <Card variant="glass" className="p-8 md:p-12 overflow-hidden">
+                    <div className="flex flex-col mb-10">
+                        <div className="flex items-center gap-4 mb-2">
+                            <div className="p-3 bg-primary/10 rounded-xl border border-primary/20">
+                                <Shield className="w-8 h-8 text-primary" />
+                            </div>
+                            <h1 className="text-4xl md:text-5xl font-bold text-white tracking-tight">Privacy Policy</h1>
                         </div>
-                        <h1 className="text-4xl font-bold">Privacy Policy</h1>
+                        <p className="text-xl text-primary/80 font-medium ml-[68px]">Aghogho Plyboard Enterprise</p>
                     </div>
 
-                    <div className="space-y-10 text-gray-300">
-                        <section>
-                            <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
+                    <div className="space-y-12 text-gray-300">
+                        <section className="relative">
+                            <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-3">
                                 <Eye className="w-6 h-6 text-primary" />
-                                Our Privacy Philosophy
+                                Our Commitment
                             </h2>
-                            <p className="leading-relaxed">
-                                At NoteStandard, we believe user data should be protected and handled responsibly. Our platform is designed to provide digital tools for managing activities while maintaining transparency and strong security practices.
+                            <p className="leading-relaxed text-lg ml-9">
+                                We value your privacy and are committed to protecting your personal information.
                             </p>
                         </section>
 
-                        <section>
-                            <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
+                        <section className="relative">
+                            <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-3">
                                 <Database className="w-6 h-6 text-primary" />
                                 Information We Collect
                             </h2>
-                            <div className="space-y-4">
-                                <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-                                    <h3 className="text-white font-medium mb-2">A. Account Information</h3>
-                                    <p className="text-sm">
-                                        When users create an account on the Note Standard platform, we may collect basic information such as name, email address, and account preferences. This information is used only to maintain user accounts and provide access to platform features.
-                                    </p>
-                                </div>
-                                <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-                                    <h3 className="text-white font-medium mb-2">B. Platform Usage Data</h3>
-                                    <p className="text-sm">
-                                        We collect limited technical information related to how users interact with the platform. This may include device information, session activity, and general usage statistics. The information is used to improve the performance, stability, and usability of the platform.
-                                    </p>
-                                </div>
-                                <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-                                    <h3 className="text-white font-medium mb-2">C. Contextual Content and Offers</h3>
-                                    <p className="text-sm">
-                                        Our platform may display contextual content or recommendations based on the activity within the current session. This process does not involve cross-site tracking or behavioral profiling.
-                                    </p>
-                                </div>
-                                <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-                                    <h3 className="text-white font-medium mb-2">D. Security and System Integrity</h3>
-                                    <p className="text-sm">
-                                        Certain system logs and technical records may be maintained to protect the platform from abuse, maintain service reliability, and detect unusual or harmful activity.
-                                    </p>
-                                </div>
-                            </div>
+                            <p className="leading-relaxed text-lg ml-9">
+                                We may collect basic information such as your name, email address, and payment details when you interact with our business.
+                            </p>
                         </section>
 
-                        <section>
-                            <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
+                        <section className="relative">
+                            <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-3">
                                 <Activity className="w-6 h-6 text-primary" />
                                 How Information Is Used
                             </h2>
-                            <p className="mb-4">The information collected may be used for the following purposes:</p>
-                            <ul className="list-disc list-inside space-y-2 ml-4">
-                                <li>Maintaining and managing user accounts</li>
-                                <li>Improving platform functionality and user experience</li>
-                                <li>Ensuring system security and service stability</li>
-                                <li>Communicating important updates about the platform</li>
-                            </ul>
-                            <p className="mt-4 text-sm bg-primary/5 p-3 rounded border border-primary/10">
-                                We do not sell personal user information to third parties.
-                            </p>
+                            <div className="ml-9">
+                                <p className="mb-5 text-lg">This information is used solely for the following purposes:</p>
+                                <ul className="list-none space-y-3">
+                                    <li className="flex items-center gap-4 bg-white/[0.03] p-4 rounded-xl border border-white/5 transition-all hover:bg-white/[0.06] hover:border-white/10 hover:shadow-lg hover:shadow-primary/5">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_10px_rgba(168,85,247,0.8)] ring-4 ring-primary/20"></div>
+                                        <span className="text-lg font-medium">Processing transactions</span>
+                                    </li>
+                                    <li className="flex items-center gap-4 bg-white/[0.03] p-4 rounded-xl border border-white/5 transition-all hover:bg-white/[0.06] hover:border-white/10 hover:shadow-lg hover:shadow-primary/5">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_10px_rgba(168,85,247,0.8)] ring-4 ring-primary/20"></div>
+                                        <span className="text-lg font-medium">Providing customer support</span>
+                                    </li>
+                                    <li className="flex items-center gap-4 bg-white/[0.03] p-4 rounded-xl border border-white/5 transition-all hover:bg-white/[0.06] hover:border-white/10 hover:shadow-lg hover:shadow-primary/5">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_10px_rgba(168,85,247,0.8)] ring-4 ring-primary/20"></div>
+                                        <span className="text-lg font-medium">Improving our services</span>
+                                    </li>
+                                </ul>
+                            </div>
                         </section>
 
-                        <section>
-                            <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
-                                <Settings className="w-6 h-6 text-primary" />
-                                User Controls
-                            </h2>
-                            <p className="leading-relaxed">
-                                Users have the ability to manage certain preferences within their account settings. This may include controlling optional platform features or managing communication preferences.
-                            </p>
-                        </section>
-
-                        <section>
-                            <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
+                        <section className="relative">
+                            <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-3">
                                 <Lock className="w-6 h-6 text-primary" />
-                                Data Protection
+                                Data Protection & Sharing
                             </h2>
-                            <p className="leading-relaxed">
-                                We implement appropriate technical and organizational measures to protect user information from unauthorized access, alteration, or misuse. Access to sensitive information is restricted and monitored.
-                            </p>
+                            <div className="ml-9 space-y-4">
+                                <p className="leading-relaxed text-lg">
+                                    We do not sell, trade, or share your personal information with third parties, except where required by law or necessary to provide our services.
+                                </p>
+                                <p className="leading-relaxed text-lg">
+                                    We take reasonable steps to ensure your information is secure and protected.
+                                </p>
+                            </div>
                         </section>
 
-                        <section>
-                            <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
-                                <FileText className="w-6 h-6 text-primary" />
-                                Data Access and Removal
-                            </h2>
-                            <p className="leading-relaxed">
-                                Users may request access to their stored information or request deletion of their account. Requests can be made by contacting our support team using the contact details provided below.
-                            </p>
-                        </section>
-
-                        <section>
-                            <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
-                                <RefreshCw className="w-6 h-6 text-primary" />
-                                Updates to This Policy
-                            </h2>
-                            <p className="leading-relaxed">
-                                This Privacy Policy may be updated periodically to reflect changes to the platform or applicable requirements. The updated version will be published on this page with a revised date.
-                            </p>
-                        </section>
-
-                        <div className="pt-8 border-t border-white/10">
-                            <p className="text-sm text-gray-500">
-                                Last updated: February 14, 2026<br />
-                                For privacy inquiries: <a href="mailto:privacy@notestandard.com" className="text-primary hover:underline">privacy@notestandard.com</a>
-                            </p>
+                        <div className="mt-12 pt-8 border-t border-white/5 bg-gradient-to-b from-transparent to-white/[0.02] -mx-8 -mb-8 px-8 pb-8 md:-mx-12 md:-mb-12 md:px-12 md:pb-12">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 pt-2">
+                                <div className="space-y-1">
+                                    <p className="text-sm text-gray-400 font-medium uppercase tracking-wider">Contact Us</p>
+                                    <p className="text-gray-300">If you have any questions, please contact us at:</p>
+                                    <a href="mailto:admin@notestandard.com" className="inline-block text-xl text-primary hover:text-white font-semibold transition-colors mt-1">
+                                        admin@notestandard.com
+                                    </a>
+                                </div>
+                                <div className="text-left sm:text-right space-y-1">
+                                    <p className="text-sm text-gray-400 font-medium uppercase tracking-wider">Last Updated</p>
+                                    <p className="text-white text-lg font-medium">01 April 2026</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </Card>

@@ -47,9 +47,10 @@ export const Footer = () => {
                             <p>Alt Email: <a href="mailto:obohaghogho107@gmail.com" className="hover:text-white transition-colors">obohaghogho107@gmail.com</a></p>
                         </div>
                     </div>
-                    <div className="flex gap-4">
+                    <div className="flex flex-wrap gap-4 justify-center md:justify-end">
                         <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
                         <Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
+                        <Link to="/refund" className="hover:text-white transition-colors">Refund Policy</Link>
                     </div>
                 </div>
             </div>
