@@ -11,7 +11,7 @@ const FEE_DECIMALS = 4; // Standard for fee rates (e.g., 0.0450)
 
 // Used for high-precision internal calculations
 const CALCULATION_DECIMALS = 18;
-const ONE_UNIT = ethers.utils.parseUnits("1", CALCULATION_DECIMALS);
+const ONE_UNIT = ethers.parseUnits("1", CALCULATION_DECIMALS);
 
 // Standard Fee Constants (matching DB defaults in execute_production_swap)
 const ADMIN_FEE_RATE = "0.045";
@@ -47,14 +47,14 @@ function parseSafe(amount, decimals = CALCULATION_DECIMALS) {
       maximumFractionDigits: decimals,
     })
     : String(amount);
-  return ethers.utils.parseUnits(strAmount, decimals);
+  return ethers.parseUnits(strAmount, decimals);
 }
 
 /**
- * Safely formats a BigNumber back to a float number string
+ * Safely formats a BigInt back to a float number string
  */
 function formatSafe(bn, decimals = CALCULATION_DECIMALS) {
-  return ethers.utils.formatUnits(bn, decimals);
+  return ethers.formatUnits(bn, decimals);
 }
 
 /**
@@ -65,7 +65,7 @@ function multiply(a, b, decimals = CALCULATION_DECIMALS) {
   const bnB = parseSafe(b, decimals);
   // When multiplying two numbers with X decimals, the result has 2X decimals.
   // We divide by ONE_UNIT (which has X decimals) to bring it back to X decimals.
-  const result = bnA.mul(bnB).div(ethers.utils.parseUnits("1", decimals));
+  const result = (bnA * bnB) / ethers.parseUnits("1", decimals);
   return formatSafe(result, decimals);
 }
 
@@ -76,11 +76,11 @@ function divide(a, b, decimals = CALCULATION_DECIMALS) {
   const bnA = parseSafe(a, decimals);
   const bnB = parseSafe(b, decimals);
 
-  if (bnB.isZero()) throw new Error("Division by zero");
+  if (bnB === 0n) throw new Error("Division by zero");
 
   // Scale up numerator by ONE_UNIT before dividing to maintain precision
-  const expandedA = bnA.mul(ethers.utils.parseUnits("1", decimals));
-  const result = expandedA.div(bnB);
+  const expandedA = bnA * ethers.parseUnits("1", decimals);
+  const result = expandedA / bnB;
   return formatSafe(result, decimals);
 }
 
@@ -91,7 +91,7 @@ function isEqual(a, b, decimals = CALCULATION_DECIMALS) {
   try {
     const bnA = parseSafe(a, decimals);
     const bnB = parseSafe(b, decimals);
-    return bnA.eq(bnB);
+    return bnA === bnB;
   } catch (e) {
     return false;
   }
@@ -104,7 +104,7 @@ function isGreaterOrEqual(a, b, decimals = CALCULATION_DECIMALS) {
   try {
     const bnA = parseSafe(a, decimals);
     const bnB = parseSafe(b, decimals);
-    return bnA.gte(bnB);
+    return bnA >= bnB;
   } catch (e) {
     return false;
   }
