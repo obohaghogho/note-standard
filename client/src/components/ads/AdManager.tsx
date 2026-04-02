@@ -63,9 +63,9 @@ export const AdManager = () => {
             toast.loading('Redirecting to secure gateway...');
             const { url } = await adService.createAdCheckoutSession(adId);
             window.location.href = url;
-        } catch (error: any) {
+        } catch (error: unknown) {
             toast.dismiss();
-            toast.error(error.message || 'Payment initiation failed');
+            toast.error((error as Error).message || 'Payment initiation failed');
         }
     };
 
@@ -83,8 +83,8 @@ export const AdManager = () => {
             // 2. Redirect to Activation
             await handleRequest(result.id);
 
-        } catch (error: any) {
-            toast.error(error.message || 'Failed to create ad');
+        } catch (error: unknown) {
+            toast.error((error as Error).message || 'Failed to create ad');
             setSubmitting(false);
         }
     };

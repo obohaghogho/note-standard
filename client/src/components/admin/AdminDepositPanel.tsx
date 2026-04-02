@@ -21,7 +21,7 @@ const AdminDepositPanel: React.FC = () => {
     try {
       const data = await depositApi.getAdminPending();
       setDeposits(data);
-    } catch (err) {
+    } catch {
       toast.error("Failed to load pending deposits.");
     } finally {
       setLoading(false);
@@ -36,8 +36,10 @@ const AdminDepositPanel: React.FC = () => {
       await depositApi.approve(id, adminNotes[id]);
       toast.success("Deposit approved successfully!");
       setDeposits(deposits.filter(d => d.id !== id));
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || "Failed to approve deposit.");
+    } catch (err: unknown) {
+      const errorResponse = (err as Record<string, unknown>)?.response as Record<string, unknown>;
+      const data = errorResponse?.data as Record<string, unknown>;
+      toast.error(typeof data?.error === 'string' ? data.error : "Failed to approve deposit.");
     } finally {
       setProcessingId(null);
     }
@@ -56,8 +58,10 @@ const AdminDepositPanel: React.FC = () => {
       await depositApi.reject(id, reason);
       toast.success("Deposit rejected.");
       setDeposits(deposits.filter(d => d.id !== id));
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || "Failed to reject deposit.");
+    } catch (err: unknown) {
+      const errorResponse = (err as Record<string, unknown>)?.response as Record<string, unknown>;
+      const data = errorResponse?.data as Record<string, unknown>;
+      toast.error(typeof data?.error === 'string' ? data.error : "Failed to reject deposit.");
     } finally {
       setProcessingId(null);
     }

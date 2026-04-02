@@ -18,7 +18,7 @@ const DepositHistory: React.FC = () => {
     try {
       const data = await depositApi.getUserHistory();
       setDeposits(data);
-    } catch (err) {
+    } catch {
       toast.error("Failed to load deposit history.");
     } finally {
       setLoading(false);

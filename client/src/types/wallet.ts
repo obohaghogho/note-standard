@@ -152,6 +152,9 @@ export interface SwapPreview {
     feePercentage: number;
     amountOut: number;
     netAmount: number;
+    lockId: string;
+    expiresAt: number;
+    metadata?: Record<string, unknown>;
 }
 
 export interface SwapResult {

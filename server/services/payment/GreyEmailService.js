@@ -159,9 +159,9 @@ class GreyEmailService {
       // Our internal tx_ format
       /(tx_[a-fA-F0-9]{20,40})/i,
       // Generic narration/memo/reference with value
-      /(?:narration|memo|reference|description|remark|remark|ref)\s*[:\-]?\s*([A-Za-z0-9_\-]{6,40})/i,
+      /(?:narration|memo|reference|description|remark|remark|ref)\s*[:-]?\s*([A-Za-z0-9_-]{6,40})/i,
       // Reference ID pattern
-      /(?:reference\s+id|ref\s*no|ref\s*#)\s*[:\-]?\s*([A-Za-z0-9_\-]+)/i,
+      /(?:reference\s+id|ref\s*no|ref\s*#)\s*[:-]?\s*([A-Za-z0-9_-]+)/i,
     ];
 
     let reference = null;
@@ -176,9 +176,9 @@ class GreyEmailService {
 
     // 5. Sender Extraction
     const senderPatterns = [
-      /(?:sender|from|payer|originator)\s*[:\-]?\s*([^,.\n\r]{3,60}?)(?:\s+(?:at|on|via|sent)|\.|,|$)/i,
+      /(?:sender|from|payer|originator)\s*[:-]?\s*([^,.\n\r]{3,60}?)(?:\s+(?:at|on|via|sent)|\.|,|$)/i,
       /(?:received|transfer)\s+from\s+([^,.\n\r]{3,60}?)(?:\s+(?:at|on|via)|\.|,|$)/i,
-      /(?:account\s+name|name)\s*[:\-]?\s*([^,.\n\r]{3,60}?)(?:\s+(?:at|on)|\.|,|$)/i,
+      /(?:account\s+name|name)\s*[:-]?\s*([^,.\n\r]{3,60}?)(?:\s+(?:at|on)|\.|,|$)/i,
     ];
 
     let sender = "Unknown Sender";
@@ -193,9 +193,9 @@ class GreyEmailService {
 
     // 6. Transaction ID (provider's unique ID, used as idempotency key)
     const txIdPatterns = [
-      /(?:transaction|transfer|payment)\s*(?:id|no|number|ref)\s*[:\-]?\s*([A-Za-z0-9_\-]{6,40})/i,
-      /(?:trace|confirmation)\s*(?:no|number|id)\s*[:\-]?\s*([A-Za-z0-9_\-]+)/i,
-      /(?:session\s+id|trx\s+id)\s*[:\-]?\s*([A-Za-z0-9_\-]+)/i,
+      /(?:transaction|transfer|payment)\s*(?:id|no|number|ref)\s*[:-]?\s*([A-Za-z0-9_-]{6,40})/i,
+      /(?:trace|confirmation)\s*(?:no|number|id)\s*[:-]?\s*([A-Za-z0-9_-]+)/i,
+      /(?:session\s+id|trx\s+id)\s*[:-]?\s*([A-Za-z0-9_-]+)/i,
     ];
 
     let transactionId = null;
@@ -256,7 +256,7 @@ class GreyEmailService {
     if (!field) return null;
     return String(field)
       .substring(0, maxLen)
-      .replace(/[^\w\s\-@.]/gi, "")
+      .replace(/[^\w\s-@.]/gi, "")
       .trim();
   }
 

@@ -5,7 +5,7 @@ import walletApi from '../api/walletApi';
 import { useWallet } from '../hooks/useWallet';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
-import type { Currency } from '@/types/wallet';
+import type { Currency, ExchangeRates } from '@/types/wallet';
 import { formatCurrency } from '../lib/CurrencyFormatter';
 import { motion } from 'framer-motion';
 import ReCAPTCHA from 'react-google-recaptcha';
@@ -34,7 +34,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
     const [slippage, setSlippage] = useState<number>(0.5); // Default 0.5%
     const [showSlippageSettings, setShowSlippageSettings] = useState(false);
     const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-    const [rates, setRates] = useState<Record<string, any>>({});
+    const [rates, setRates] = useState<ExchangeRates>({});
     const [isTouched, setIsTouched] = useState(false);
     const recaptchaRef = React.useRef<ReCAPTCHA>(null);
     
@@ -45,7 +45,12 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         amountOut: number;
         lockId: string;
         expiresAt: number;
-        metadata?: any;
+        metadata?: {
+            fee_breakdown?: {
+                rates?: { total?: number; admin?: number; referrer?: number; partner?: number; };
+                breakdown?: { admin_fee?: number; referrer?: number; partner_reward?: number; };
+            };
+        } | null;
     }
     const [preview, setPreview] = useState<Preview | null>(null);
     const [timeLeft, setTimeLeft] = useState<number | null>(null);

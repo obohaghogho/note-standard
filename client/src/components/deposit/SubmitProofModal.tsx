@@ -47,7 +47,7 @@ const SubmitProofModal: React.FC<SubmitProofModalProps> = ({
       });
       setProofUrl(res.data.url);
       return res.data.url;
-    } catch (err) {
+    } catch {
       toast.error("Failed to upload proof. Please try again.");
       return null;
     } finally {
@@ -75,8 +75,10 @@ const SubmitProofModal: React.FC<SubmitProofModalProps> = ({
       toast.success("Deposit submitted successfully!");
       onSuccess();
       onClose();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || "Failed to submit deposit.");
+    } catch (err: unknown) {
+      const errorResponse = (err as Record<string, unknown>)?.response as Record<string, unknown>;
+      const data = errorResponse?.data as Record<string, unknown>;
+      toast.error(typeof data?.error === 'string' ? data.error : "Failed to submit deposit.");
     } finally {
       setSubmitting(false);
     }

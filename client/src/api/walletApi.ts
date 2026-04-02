@@ -88,7 +88,7 @@ export const walletApi = {
   },
 
   // Check deposit/payment status
-  async checkPaymentStatus(reference: string): Promise<{ status: string; amount: number; currency: string; [key: string]: any }> {
+  async checkPaymentStatus(reference: string): Promise<{ status: string; amount: number; currency: string; [key: string]: unknown }> {
       const response = await api.get('/wallet/deposit/status', {
           params: { reference }
       });
@@ -96,7 +96,7 @@ export const walletApi = {
   },
 
   // Proactively verify payment status with external providers (Webhook trigger substitute)
-  async proactiveVerifyPayment(reference: string, transactionId?: string): Promise<{ success: boolean; status: string; data?: any }> {
+  async proactiveVerifyPayment(reference: string, transactionId?: string): Promise<{ success: boolean; status: string; data?: unknown }> {
       const response = await api.get(`/webhooks/status/${reference}`, {
           params: { transaction_id: transactionId }
       });
@@ -122,7 +122,7 @@ export const walletApi = {
       network?: string,
       toCurrency?: string,
       toNetwork?: string
-  }): Promise<{ reference: string, bankDetails: any }> {
+  }): Promise<{ reference: string, bankDetails: Record<string, unknown> }> {
       const response = await api.post('/wallet/deposit/transfer', data);
       return response.data;
   },
@@ -166,7 +166,7 @@ export const walletApi = {
   },
 
   // Request a limit increase
-  async createLimitRequest(data: { requested_limit: number, reason: string }): Promise<{ success: boolean; message: string; request?: any }> {
+  async createLimitRequest(data: { requested_limit: number, reason: string }): Promise<{ success: boolean; message: string; request?: Record<string, unknown> }> {
     const response = await api.post('/wallet/limit-request', data);
     return response.data;
   }

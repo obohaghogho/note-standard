@@ -94,7 +94,7 @@ export const AdDisplay = ({ className = '', currentTags = [] }: AdDisplayProps) 
                     table: 'ads',
                     filter: 'status=eq.approved'
                 },
-                (payload: any) => {
+                (payload: Record<string, unknown>) => {
                     console.log('Realtime ad update received:', payload);
                     fetchRelevantAd(true);
                 }
