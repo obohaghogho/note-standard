@@ -32,6 +32,11 @@ router.post("/support-chats/:id/join", adminController.joinSupportChat);
 
 // Audit Logs
 router.get("/audit-logs", adminController.getAuditLogs);
+router.get("/payment-audit-logs", adminController.getPaymentAuditLogs);
+
+// Bank Payment Management
+router.get("/unmatched-payments", adminController.getUnmatchedPayments);
+router.post("/resolve-unmatched", adminController.resolveUnmatchedPayment);
 
 // Broadcasts
 router.get("/broadcasts", adminController.getBroadcasts);

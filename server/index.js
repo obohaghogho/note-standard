@@ -33,6 +33,8 @@ const PORT = env.PORT;
 
 // Background job for real-time Trends
 const analyticsService = require("./services/analyticsService");
+const paymentWorker = require("./workers/paymentWorker");
+const paymentService = require("./services/payment/paymentService");
 
 // 1. Immediate aggregation on startup
 (async () => {
@@ -84,6 +86,15 @@ setInterval(async () => {
 }, 30000); 
 // ──────────────────────────────────────────────────────────────
 
+// ─── Payment Expiry Worker ───────────────────────────────────
+// Automatically expires pending Grey payments after their window closes
+// and sends notification emails to affected users.
+const paymentExpiry = require("./workers/paymentExpiry");
+// ──────────────────────────────────────────────────────────────
+
 server.listen(PORT, "0.0.0.0", () => {
   logger.info(`Server running on port ${PORT}`);
+
+  // Start the payment expiry worker after server is listening
+  paymentExpiry.start();
 });

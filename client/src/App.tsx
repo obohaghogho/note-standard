@@ -59,6 +59,8 @@ const Analytics = lazyWithRetry(() => import('./pages/admin/Analytics').then(m =
 const AdminSettings = lazyWithRetry(() => import('./pages/admin/AdminSettings').then(m => m.AdminSettings), 'AdminSettings');
 const ManageAds = lazyWithRetry(() => import('./pages/admin/ManageAds').then(m => m.ManageAds), 'ManageAds');
 const LimitRequestsPage = lazyWithRetry(() => import('./pages/admin/LimitRequestsPage').then(m => m.LimitRequestsPage), 'LimitRequestsPage');
+const DepositPage = lazyWithRetry(() => import('./pages/dashboard/DepositPage'), 'DepositPage');
+const ManualDeposits = lazyWithRetry(() => import('./pages/admin/ManualDeposits').then(m => m.ManualDeposits), 'ManualDeposits');
 
 const ChatRedirect = () => {
   const { id } = useParams();
@@ -172,6 +174,7 @@ function App() {
                         <Route path="activity" element={<WalletPage />} />
                         <Route path="history" element={<Transactions />} />
                         <Route path="affiliates" element={<Affiliates />} />
+                        <Route path="deposit" element={<DepositPage />} />
                         <Route path="settings" element={<Settings />} />
 
                         <Route path="notifications" element={<Notifications />} />
@@ -191,6 +194,7 @@ function App() {
                         <Route path="auto-reply" element={<AutoReplySettings />} />
                         <Route path="analytics" element={<Analytics />} />
                         <Route path="ads" element={<ManageAds />} />
+                        <Route path="deposits" element={<ManualDeposits />} />
                         <Route path="limit-requests" element={<LimitRequestsPage />} />
                         <Route path="settings" element={<AdminSettings />} />
                         </Route>

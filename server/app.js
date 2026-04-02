@@ -112,10 +112,12 @@ const communityRoutes = require("./routes/community");
 const adsRoutes = require("./routes/ads");
 const broadcastsRoutes = require("./routes/broadcasts");
 const analyticsRoutes = require("./routes/analytics");
+const manualDepositRoutes = require("./routes/manualDepositRoutes");
 
 // API Mounts
 app.use("/api/auth", authRoutes);
 app.use("/api/wallet", walletRoutes);
+app.use("/api/deposit", manualDepositRoutes);
 app.use("/api/notes", notesRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/upload", uploadRoutes);

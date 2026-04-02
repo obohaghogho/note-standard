@@ -8,6 +8,9 @@ const FincraProvider = require(
 const NowPaymentsProvider = require(
   path.join(__dirname, "providers", "NowPaymentsProvider"),
 );
+const GreyProvider = require(
+  path.join(__dirname, "providers", "GreyProvider"),
+);
 const logger = require("../../utils/logger");
 
 class PaymentFactory {
@@ -92,6 +95,9 @@ class PaymentFactory {
       case "nowpayments":
       case "crypto": // Legacy alias
         return new NowPaymentsProvider();
+      case "grey":
+      case "manual":
+        return new GreyProvider();
 
       default:
         throw new Error(`Unknown provider: ${name}`);

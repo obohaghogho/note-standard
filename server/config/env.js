@@ -13,6 +13,7 @@ module.exports = {
   NODE_ENV: process.env.NODE_ENV || "development",
   SUPABASE_URL: process.env.SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  REDIS_URL: process.env.REDIS_URL || "redis://localhost:6379",
   CLOUDINARY_URL: process.env.CLOUDINARY_URL,
   CLIENT_URL: process.env.CLIENT_URL || "http://localhost:3000",
   CG_API_KEY: process.env.CG_API_KEY,

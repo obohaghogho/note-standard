@@ -1347,3 +1347,148 @@ exports.updateLimitRequest = async (req, res) => {
     res.status(500).json({ error: "Failed to process limit request" });
   }
 };
+
+/**
+ * Get Unmatched Payments
+ * GET /api/admin/unmatched-payments
+ */
+exports.getUnmatchedPayments = async (req, res) => {
+  try {
+    const { page = 1, limit = 20, is_resolved = false } = req.query;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    const { data, error, count } = await supabase
+      .from("unmatched_payments")
+      .select("*", { count: "exact" })
+      .eq("is_resolved", is_resolved === "true")
+      .order("created_at", { ascending: false })
+      .range(from, to);
+
+    if (error) throw error;
+
+    res.json({
+      payments: data,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: count,
+        totalPages: Math.ceil(count / limit),
+      },
+    });
+  } catch (err) {
+    console.error("Error fetching unmatched payments:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+/**
+ * Resolve Unmatched Payment
+ * POST /api/admin/resolve-unmatched
+ */
+exports.resolveUnmatchedPayment = async (req, res) => {
+  try {
+    const { unmatchedId, reference, resolutionType } = req.body;
+    const adminId = req.user.id;
+
+    if (!unmatchedId || !resolutionType) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    // 1. Fetch raw unmatched record
+    const { data: unmatched, error: fetchErr } = await supabase
+      .from("unmatched_payments")
+      .select("*")
+      .eq("id", unmatchedId)
+      .single();
+
+    if (fetchErr || !unmatched) throw new Error("Record not found");
+    if (unmatched.is_resolved) throw new Error("Already resolved");
+
+    // 2. Business Logic based on Resolution Type
+    let result;
+    if (resolutionType === "linked") {
+      if (!reference) return res.status(400).json({ error: "Reference required for linking" });
+      
+      const paymentService = require("../services/payment/paymentService");
+      const event = {
+        type: "deposit",
+        reference,
+        status: "success",
+        amount: unmatched.amount,
+        currency: unmatched.currency,
+        raw: { source: "admin_resolution", unmatched_id: unmatchedId, ...unmatched.metadata }
+      };
+
+      result = await paymentService.executeWebhookAction(event, event.raw, "grey");
+      if (result?.error) throw new Error(result.error);
+    }
+
+    // 3. Mark as resolved
+    await supabase.from("unmatched_payments").update({
+      is_resolved: true,
+      resolved_by: adminId,
+      resolution_type: resolutionType,
+      resolution_reference: reference || null,
+      resolved_at: new Date().toISOString()
+    }).eq("id", unmatchedId);
+
+    // 4. Audit Log
+    await supabase.from("payment_audit_logs").insert({
+      admin_id: adminId,
+      payment_reference: reference || "N/A",
+      action: resolutionType === "linked" ? "LINK_UNMATCHED" : `RESOLVE_${resolutionType.toUpperCase()}`,
+      new_status: "SUCCESS",
+      reason: `Manual resolution of unmatched payment ID: ${unmatchedId}`,
+      metadata: { unmatched_id: unmatchedId, resolution_type: resolutionType }
+    });
+
+    // 5. Admin General Audit Log
+    await logAdminAction(req, "resolve_unmatched", "payment", unmatchedId, { resolutionType, reference });
+
+    res.json({ success: true, result });
+  } catch (err) {
+    console.error("Error resolving unmatched payment:", err.message);
+    res.status(500).json({ error: err.message || "Failed to resolve" });
+  }
+};
+
+/**
+ * Get Payment Audit Logs
+ * GET /api/admin/payment-audit-logs
+ */
+exports.getPaymentAuditLogs = async (req, res) => {
+  try {
+    const { reference, page = 1, limit = 20 } = req.query;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    let query = supabase
+      .from("payment_audit_logs")
+      .select(`
+        *,
+        admin:profiles!admin_id (username, full_name)
+      `, { count: "exact" });
+
+    if (reference) query = query.eq("payment_reference", reference);
+
+    const { data, error, count } = await query
+      .order("created_at", { ascending: false })
+      .range(from, to);
+
+    if (error) throw error;
+
+    res.json({
+      logs: data,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: count,
+        totalPages: Math.ceil(count / limit),
+      },
+    });
+  } catch (err) {
+    console.error("Error fetching payment audit logs:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};

@@ -1,6 +1,11 @@
 /**
  * Webhook Routes
- * Handles Paystack webhooks
+ *
+ * Central routing for all payment provider webhooks.
+ * Each endpoint follows stability rules:
+ * - Always returns 200 OK (to prevent provider retries)
+ * - Logs every request for audit trail
+ * - Processes asynchronously via queue
  */
 
 const express = require("express");
@@ -9,36 +14,73 @@ const webhookController = require("../controllers/payment/webhookController");
 const depositService = require("../services/depositService");
 const paymentService = require("../services/payment/paymentService");
 const supabase = require("../config/database");
+const rateLimit = require("express-rate-limit");
+
+// Rate limiter for webhook endpoints (generous but protective)
+const webhookLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200, // Limit each IP to 200 requests per window
+  message: {
+    error:
+      "Too many webhook requests from this IP, please try again after 15 minutes",
+  },
+});
+
+// ─── Provider Webhooks ────────────────────────────────────────
 
 /**
- * Legacy/Existing Paystack Webhook (Refactored to use controller or kept for compatibility)
+ * POST /webhooks/paystack
+ * Primary payment gateway webhook
  */
 router.post("/paystack", webhookController.handlePaystack);
 
 /**
- * Flutterwave Webhook
+ * POST /webhooks/brevo
+ * Brevo Inbound Parse - receives Grey email notifications
+ * This is the PRIMARY automated Grey payment verification path
+ */
+router.post("/brevo", webhookLimiter, webhookController.handleBrevo);
+
+/**
+ * POST /webhooks/grey
+ * Direct Grey webhook (for future API support)
+ */
+router.post("/grey", webhookLimiter, webhookController.handleGrey);
+
+/**
+ * POST /webhooks/email
+ * Legacy email webhook (routes to Brevo handler)
+ */
+router.post("/email", webhookLimiter, webhookController.handleEmail);
+
+/**
+ * POST /webhooks/flutterwave
+ * Flutterwave webhook (deprecated, routes to Fincra)
  */
 router.post("/flutterwave", webhookController.handleFlutterwave);
-router.get(
-  "/flutterwave",
-  (req, res) =>
-    res.status(200).send("Webhook endpoint only accepts POST requests"),
+router.get("/flutterwave", (req, res) =>
+  res.status(200).send("Webhook endpoint only accepts POST requests")
 );
 
 /**
- * Fincra Webhook
+ * POST /webhooks/fincra
+ * Fincra virtual account webhook
  */
 router.post("/fincra", webhookController.handleFincra);
 
 /**
- * Crypto Webhook (NowPayments)
+ * POST /webhooks/nowpayments
+ * POST /webhooks/crypto
+ * Crypto payment webhooks
  */
 router.post("/nowpayments", webhookController.handleNowPayments);
 router.post("/crypto", webhookController.handleCrypto);
 
+// ─── Admin Endpoints ──────────────────────────────────────────
+
 /**
  * POST /webhooks/manual-confirm
- * Manual confirmation endpoint for testing/admin use
+ * Admin-only: Manually confirm a Grey/manual payment
  */
 router.post("/manual-confirm", async (req, res) => {
   const { reference, externalHash } = req.body;
@@ -47,6 +89,7 @@ router.post("/manual-confirm", async (req, res) => {
     return res.status(400).json({ error: "Reference is required" });
   }
 
+  // Require admin key in production
   const adminKey = req.headers["x-admin-key"];
   if (
     process.env.NODE_ENV === "production" &&
@@ -56,6 +99,25 @@ router.post("/manual-confirm", async (req, res) => {
   }
 
   try {
+    // Record audit log
+    try {
+      await supabase.from("payment_audit_logs").insert({
+        admin_id: req.user?.id || "00000000-0000-0000-0000-000000000000",
+        payment_reference: reference,
+        action: "MANUAL_CONFIRM",
+        previous_status: "pending",
+        new_status: "success",
+        reason: req.body.reason || "Admin manual confirmation",
+        metadata: {
+          ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress,
+          externalHash,
+        },
+      });
+    } catch (auditErr) {
+      // Non-critical - don't block the confirmation
+      console.error("[Webhook] Audit log failed:", auditErr.message);
+    }
+
     const result = await depositService.confirmDeposit(reference, externalHash);
     res.json(result);
   } catch (err) {
@@ -64,19 +126,20 @@ router.post("/manual-confirm", async (req, res) => {
   }
 });
 
+// ─── Status Check ─────────────────────────────────────────────
+
 /**
  * GET /webhooks/status/:reference
- * Check deposit status
+ * Check payment/deposit status (used for frontend polling)
  */
 router.get("/status/:reference", async (req, res) => {
   const { reference } = req.params;
 
   try {
     const { transaction_id } = req.query;
-    // Proactively verify with provider if pending
     const status = await paymentService.verifyPaymentStatus(
       reference,
-      transaction_id,
+      transaction_id
     );
 
     if (!status) {
