@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
-const manualDepositController = require("../../controllers/deposit/manualDepositController");
-const { requireAuth, requireAdmin } = require("../../middleware/auth");
+const manualDepositController = require("../controllers/deposit/manualDepositController");
+const { requireAuth, requireAdmin } = require("../middleware/auth");
 
 /**
  * Manual Deposit Routes
