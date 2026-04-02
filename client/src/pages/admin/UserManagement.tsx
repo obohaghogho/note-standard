@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -57,22 +57,7 @@ export const UserManagement = () => {
     const [isLimitModalOpen, setIsLimitModalOpen] = useState(false);
     const [newLimit, setNewLimit] = useState<string>('');
 
-    useEffect(() => {
-        fetchUsers();
-    }, [session, pagination.page, statusFilter]);
-
-    useEffect(() => {
-        const debounce = setTimeout(() => {
-            if (pagination.page === 1) {
-                fetchUsers();
-            } else {
-                setPagination(prev => ({ ...prev, page: 1 }));
-            }
-        }, 300);
-        return () => clearTimeout(debounce);
-    }, [search]);
-
-    const fetchUsers = async () => {
+    const fetchUsers = useCallback(async () => {
         if (!session?.access_token) return;
         setLoading(true);
 
@@ -107,7 +92,20 @@ export const UserManagement = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [session?.access_token, pagination.page, pagination.limit, search, statusFilter]);
+
+    useEffect(() => {
+        fetchUsers();
+    }, [fetchUsers]);
+
+    useEffect(() => {
+        const debounce = setTimeout(() => {
+            if (pagination.page !== 1 && search) {
+                setPagination(prev => ({ ...prev, page: 1 }));
+            }
+        }, 300);
+        return () => clearTimeout(debounce);
+    }, [search, pagination.page]);
 
     const updateUserStatus = async (userId: string, newStatus: 'active' | 'suspended') => {
         if (!session?.access_token) return;
@@ -162,7 +160,7 @@ export const UserManagement = () => {
             ));
             toast.success('Limit updated successfully');
             setIsLimitModalOpen(false);
-        } catch (err) {
+        } catch {
             toast.error('Failed to update limit');
         } finally {
             setActionLoading(null);

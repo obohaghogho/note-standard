@@ -159,7 +159,7 @@ export const ChatWidget = () => {
             socket.off('message_read', onMessageRead);
             supabase.removeChannel(convChannel);
         };
-    }, [socket, connected, isOpen, supportChat?.id, user?.id]);
+    }, [socket, connected, isOpen, supportChat, supportChat?.id, user?.id]);
 
     // Scroll to bottom
     useEffect(() => {

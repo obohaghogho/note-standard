@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { getStoredAccounts } from '../utils/accountManager';
 import { API_URL } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -9,7 +9,7 @@ export const useMultiAccountNotifications = () => {
   const accounts = getStoredAccounts();
   const intervalRef = useRef<any>(null);
 
-  const fetchUnreadCounts = async () => {
+  const fetchUnreadCounts = useCallback(async () => {
     const updatedCounts: Record<string, number> = { ...unreadCounts };
     
     // Only poll for accounts that are NOT the current active user
@@ -37,7 +37,7 @@ export const useMultiAccountNotifications = () => {
     }
     
     setUnreadCounts(updatedCounts);
-  };
+  }, [accounts, unreadCounts, user?.id]);
 
   useEffect(() => {
     // Initial fetch
@@ -49,7 +49,7 @@ export const useMultiAccountNotifications = () => {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [user?.id, accounts.length]);
+  }, [fetchUnreadCounts, user?.id, accounts.length]);
 
   return { unreadCounts };
 };

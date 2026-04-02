@@ -103,7 +103,7 @@ const ChatWindow: React.FC = () => {
             await navigator.clipboard.writeText(selectedMsgs);
             toast.success(selectedMessages.size > 1 ? 'Messages copied' : 'Message copied');
             clearSelection();
-        } catch (err) {
+        } catch {
             toast.error('Failed to copy to clipboard');
         }
     };
@@ -173,7 +173,7 @@ const ChatWindow: React.FC = () => {
     const otherMember = useMemo(() => {
         if (!activeConversation?.members || !user) return null;
         return activeConversation.members.find((m: any) => m.user_id !== user.id) || null;
-    }, [activeConversation?.members, user?.id]);
+    }, [activeConversation?.members, user]);
 
     const isWaitingForOthers = myMember?.status === 'accepted' && otherMember?.status === 'pending';
 
@@ -226,13 +226,14 @@ const ChatWindow: React.FC = () => {
                     } else {
                         setTranslations(prev => ({ ...prev, [msg.id]: '[Translation Failed]' }));
                     }
-                } catch (e) {
+                } catch {
                     setTranslations(prev => ({ ...prev, [msg.id]: '[Translation Error]' }));
                 }
             }
         };
 
         translateNewMessages();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentMessages, activeConversationId, preferredLanguage, user, session?.access_token]);
 
     const handleManualTranslate = async (msgId: string, content: string, sourceLang?: string) => {
@@ -260,7 +261,7 @@ const ChatWindow: React.FC = () => {
             } else {
                 setTranslations(prev => ({ ...prev, [msgId]: '[Translation Failed]' }));
             }
-        } catch (e) {
+        } catch {
             setTranslations(prev => ({ ...prev, [msgId]: '[Translation Error]' }));
         }
     };
@@ -282,7 +283,7 @@ const ChatWindow: React.FC = () => {
                 })
             });
             toast.success('Report sent. Thanks for the feedback!');
-        } catch (e) {
+        } catch {
             toast.error('Failed to send report');
         }
     };
@@ -344,7 +345,7 @@ const ChatWindow: React.FC = () => {
             }
             setInputValue('');
             setShowMentions(false);
-        } catch (err) {
+        } catch {
             toast.error(editingMessageId ? 'Failed to edit message' : 'Failed to send message');
         }
     };
@@ -353,7 +354,7 @@ const ChatWindow: React.FC = () => {
         try {
             await sendMessage(`Shared a ${type}: ${fileName}`, type, attachmentId);
             setShowMediaUpload(false);
-        } catch (err) {
+        } catch {
             toast.error('Failed to send media message');
         }
     };
@@ -386,7 +387,7 @@ const ChatWindow: React.FC = () => {
         try {
             await muteConversation(activeConversationId, nextMuteStatus);
             toast.success(nextMuteStatus ? 'Chat muted' : 'Chat unmuted');
-        } catch (err) {
+        } catch {
             toast.error('Failed to update mute status');
         }
     };
@@ -1156,7 +1157,7 @@ const ChatWindow: React.FC = () => {
                                 loadingToast ? { id: loadingToast } : undefined
                             );
                             clearSelection();
-                        } catch (err) {
+                        } catch {
                             toast.error('Failed to delete message(s)', loadingToast ? { id: loadingToast } : undefined);
                         }
                     } else if (type === 'clear' && activeConversationId) {
@@ -1164,7 +1165,7 @@ const ChatWindow: React.FC = () => {
                         try {
                             await clearChatHistory(activeConversationId);
                             toast.success('Chat cleared', { id: loadingToast });
-                        } catch (err) {
+                        } catch {
                             toast.error('Failed to clear chat', { id: loadingToast });
                         }
                     } else if (type === 'delete_chat' && activeConversationId) {
@@ -1172,7 +1173,7 @@ const ChatWindow: React.FC = () => {
                         try {
                             await deleteConversation(activeConversationId);
                             toast.success('Chat deleted', { id: loadingToast });
-                        } catch (err) {
+                        } catch {
                             toast.error('Failed to delete chat', { id: loadingToast });
                         }
                     }
@@ -1211,7 +1212,7 @@ const ChatWindow: React.FC = () => {
                         }
                         toast.success(`Message${forwardModal.messages.length > 1 ? 's' : ''} forwarded`);
                         clearSelection();
-                    } catch (err) {
+                    } catch {
                         toast.error('Failed to forward message');
                     }
                 }}

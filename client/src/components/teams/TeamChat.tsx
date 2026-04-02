@@ -47,7 +47,6 @@ interface TeamChatProps {
 export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { 
     messages, members, loading, connected, sendMessage, loadMoreMessages, 
     hasMore, deleteMessage, editMessage, clearChatHistory, error, typingUsers, sendTypingStatus 
@@ -55,7 +54,6 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
 
   const myMember = members.find(m => m.user_id === user?.id);
   const myRole = myMember?.role || 'member';
-  const isAdminOrOwner = myRole === 'admin' || myRole === 'owner';
 
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -204,7 +202,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
       setInput('');
       sendTypingStatus(false);
       inputRef.current?.focus();
-    } catch (err: any) {
+    } catch {
       toast.error(editingMessageId ? 'Failed to edit message' : 'Failed to send message');
     } finally {
       setIsSending(false);
@@ -320,7 +318,6 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
 
   const renderMessage = (msg: TeamMessage, index: number) => {
     const isOwn = msg.isOwn;
-    const canDelete = isOwn || isAdminOrOwner;
     const isGrouped = isSameSender(index);
     const showAvatar = !isGrouped && !isOwn && msg.message_type !== 'system';
     const showName = showAvatar;
@@ -788,7 +785,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
                 loadingToast ? { id: loadingToast } : undefined
               );
               clearSelection();
-            } catch (err) {
+            } catch {
               toast.error('Failed to delete message(s)', loadingToast ? { id: loadingToast } : undefined);
             }
           } else if (type === 'history') {
@@ -796,7 +793,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
             try {
               await clearChatHistory();
               toast.success('Chat history cleared', { id: toastId });
-            } catch (err) {
+            } catch {
               toast.error('Failed to clear chat', { id: toastId });
             }
           }

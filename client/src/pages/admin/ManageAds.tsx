@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import { API_URL } from '../../lib/api';
@@ -15,11 +15,7 @@ export const ManageAds = () => {
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'all'>('pending');
 
-    useEffect(() => {
-        fetchAds();
-    }, [activeTab, session]);
-
-    const fetchAds = async () => {
+    const fetchAds = useCallback(async () => {
         if (!session?.access_token) return;
         setLoading(true);
         try {
@@ -45,7 +41,11 @@ export const ManageAds = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [activeTab, session?.access_token]);
+
+    useEffect(() => {
+        fetchAds();
+    }, [fetchAds]);
 
     const handleAction = async (id: string, action: 'approved' | 'rejected') => {
         setActionLoading(id);

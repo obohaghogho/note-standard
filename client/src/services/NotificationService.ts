@@ -33,7 +33,7 @@ export class NotificationService {
             body: content,
             tag: conversationId, // Group notifications by conversation
             renotify: true
-        } as any);
+        });
     }
 
     static notifyNewSupportChat(userName: string) {

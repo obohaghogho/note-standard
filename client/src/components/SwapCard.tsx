@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowRightLeft, Loader2, RefreshCcw, Info, Clock } from 'lucide-react';
+import { ArrowRightLeft, Loader2, RefreshCcw, Info, Clock, Zap, ShieldCheck } from 'lucide-react';
 import { Button } from './common/Button';
 import walletApi from '../api/walletApi';
 import { useWallet } from '../hooks/useWallet';
@@ -9,8 +9,6 @@ import type { Currency } from '@/types/wallet';
 import { formatCurrency } from '../lib/CurrencyFormatter';
 import { motion } from 'framer-motion';
 import ReCAPTCHA from 'react-google-recaptcha';
-import { Zap, ShieldCheck } from 'lucide-react';
-
 interface SwapCardProps {
     initialFromCurrency?: Currency;
     initialFromNetwork?: string;
@@ -69,7 +67,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         return () => clearInterval(intervalId);
     }, [preview]);
 
-    const safeWallets = Array.isArray(wallets) ? wallets : [];
+    const safeWallets = React.useMemo(() => Array.isArray(wallets) ? wallets : [], [wallets]);
     const fromWallet = safeWallets.find(w => w.currency === fromCurrency && w.network === fromNetwork);
     // Robust balance check: detect desync (available=0 but balance>0)
     const availableBalance = fromWallet 
@@ -105,7 +103,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                 }
             }
         }
-    }, [wallets, fromCurrency, fromNetwork, toCurrency, toNetwork]);
+    }, [safeWallets, fromCurrency, fromNetwork, toCurrency, toNetwork]);
 
     // Fetch global rates once on mount for instant fiat estimates
     useEffect(() => {
@@ -120,21 +118,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         fetchRates();
     }, []);
 
-    // Auto-correct invalid default selections to match real wallets
-    useEffect(() => {
-        const timeoutId = setTimeout(() => {
-            const numericAmount = Number(amount || 0);
-            if (numericAmount > 0 && fromCurrency !== toCurrency) {
-                fetchPreview();
-            } else {
-                setPreview(null);
-            }
-        }, 800); // Increased debounce to prevent rapid API calls
-
-        return () => clearTimeout(timeoutId);
-    }, [amount, fromCurrency, fromNetwork, toCurrency, toNetwork]);
-
-    const fetchPreview = async () => {
+    const fetchPreview = React.useCallback(async () => {
         setPreviewLoading(true);
         try {
             const slippageDecimal = slippage / 100;
@@ -154,7 +138,21 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         } finally {
             setPreviewLoading(false);
         }
-    };
+    }, [fromCurrency, toCurrency, amount, slippage, fromNetwork, toNetwork]);
+
+    // Auto-correct invalid default selections to match real wallets
+    useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            const numericAmount = Number(amount || 0);
+            if (numericAmount > 0 && fromCurrency !== toCurrency) {
+                fetchPreview();
+            } else {
+                setPreview(null);
+            }
+        }, 800); // Increased debounce to prevent rapid API calls
+
+        return () => clearTimeout(timeoutId);
+    }, [amount, fromCurrency, toCurrency, fetchPreview]);
 
     const handleSwapCurrencies = () => {
         const tempCurr = fromCurrency;

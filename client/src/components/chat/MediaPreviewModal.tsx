@@ -108,7 +108,7 @@ export const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({
         touchStartRef.current = null;
     };
 
-    const handleDoubleTap = (e: React.MouseEvent | React.TouchEvent) => {
+    const handleDoubleTap = () => {
         const now = Date.now();
         if (now - lastTapRef.current < 300) {
             setZoom(prev => prev === 1 ? 2 : 1);

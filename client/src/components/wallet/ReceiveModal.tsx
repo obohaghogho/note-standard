@@ -109,7 +109,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
                 toast.loading(`Creating ${currency} ${network !== 'native' ? `(${network})` : ''} service...`, { id: 'create-wallet' });
                 await createWallet(currency, network);
                 toast.success(`${currency} service ready`, { id: 'create-wallet' });
-            } catch (error) {
+            } catch {
                 toast.error(`Failed to create ${currency} wallet`, { id: 'create-wallet' });
             }
         }

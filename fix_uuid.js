@@ -23,7 +23,7 @@ const safeguard = `    const upNetwork = normNetwork;
 
 if (content.includes('UUID_REGEX')) {
   // Clean previous attempt first
-  content = content.replace(/    \/\/ SAFEGUARD:.*?\n.*?\n.*?UUID_REGEX.*?\n.*?if.*?\n.*?recipientId.*?\n.*?recipientAddress.*?\n.*?\}\n/s, '');
+  content = content.replace(/ {4}\/\/ SAFEGUARD:.*?\n.*?\n.*?UUID_REGEX.*?\n.*?if.*?\n.*?recipientId.*?\n.*?recipientAddress.*?\n.*?\}\n/s, '');
 }
 
 content = content.replace(target, safeguard);

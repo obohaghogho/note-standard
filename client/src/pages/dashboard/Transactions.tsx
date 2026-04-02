@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useWallet } from '../../hooks/useWallet';
 import { 
     ArrowDownLeft, 
@@ -131,7 +131,7 @@ export const Transactions: React.FC = () => {
     const [selectedTx, setSelectedTx] = useState<any>(null);
     const itemsPerPage = 20;
 
-    const fetchTransactions = async (page: number) => {
+    const fetchTransactions = useCallback(async (page: number) => {
         setLoading(true);
         try {
             const params: any = { page, limit: itemsPerPage };
@@ -150,12 +150,12 @@ export const Transactions: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [currencyFilter, statusFilter, typeFilter, searchTerm]);
 
     // Re-fetch when page or any filter changes
     useEffect(() => {
         fetchTransactions(currentPage);
-    }, [currentPage, currencyFilter, statusFilter, typeFilter, searchTerm]);
+    }, [currentPage, fetchTransactions]);
 
     const safeTransactions = Array.isArray(transactions) ? transactions : [];
     

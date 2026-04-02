@@ -442,7 +442,7 @@ async function confirmDeposit(reference, externalHash = null) {
         `Your deposit of ${tx.amount} ${tx.currency} (after fees) has been confirmed.`,
       link: "/dashboard/wallet",
     });
-  } catch (nErr) {}
+  } catch (nErr) { /* ignore notification error */ }
 
   return {
     success: true,

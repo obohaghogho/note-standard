@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { CreateNoteModal } from '../dashboard/CreateNoteModal';
 import { BroadcastBanner } from '../chat/BroadcastBanner';
@@ -9,7 +9,6 @@ import { Search, Menu } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { LanguageSelector } from '../common/LanguageSelector';
 import { useChat } from '../../context/ChatContext';
-import { useLocation } from 'react-router-dom';
 
 export const DashboardLayout = () => {
     const { t } = useTranslation();

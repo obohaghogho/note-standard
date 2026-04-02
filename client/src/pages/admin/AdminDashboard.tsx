@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import {
     Users,
@@ -56,14 +56,7 @@ export const AdminDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        fetchStats();
-        // Refresh stats every 30 seconds
-        const interval = setInterval(fetchStats, 30000);
-        return () => clearInterval(interval);
-    }, [session]);
-
-    const fetchStats = async () => {
+    const fetchStats = useCallback(async () => {
         if (!session?.access_token) return;
 
         try {
@@ -85,7 +78,14 @@ export const AdminDashboard = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [session?.access_token]);
+
+    useEffect(() => {
+        fetchStats();
+        // Refresh stats every 30 seconds
+        const interval = setInterval(fetchStats, 30000);
+        return () => clearInterval(interval);
+    }, [fetchStats]);
 
     if (loading) {
         return (
@@ -177,9 +177,6 @@ export const AdminDashboard = () => {
                             </span>
                             <span className="stat-label">{card.label}</span>
                         </div>
-                        {card.trend && (
-                            <span className="stat-trend positive">{card.trend}</span>
-                        )}
                         {card.urgent && card.value > 0 && (
                             <span className="stat-urgent">Needs attention</span>
                         )}

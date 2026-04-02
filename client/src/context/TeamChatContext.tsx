@@ -51,14 +51,14 @@ const TeamChatContext = createContext<TeamChatContextValue>({
   members: [],
   loading: true,
   connected: false,
-  sendMessage: async () => {},
-  shareNote: async () => {},
-  loadMoreMessages: async () => {},
+  sendMessage: async () => { /* Default placeholder */ },
+  shareNote: async () => { /* Default placeholder */ },
+  loadMoreMessages: async () => { /* Default placeholder */ },
   hasMore: false,
-  deleteMessage: async () => {},
-  editMessage: async () => {},
-  clearChatHistory: async () => {},
-  sendTypingStatus: () => {},
+  deleteMessage: async () => { /* Default placeholder */ },
+  editMessage: async () => { /* Default placeholder */ },
+  clearChatHistory: async () => { /* Default placeholder */ },
+  sendTypingStatus: () => { /* Default placeholder */ },
   typingUsers: [],
   teamStats: null,
   error: null,
@@ -526,6 +526,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
       setConnected(false);
       handleReconnect();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId, user, profile, authReady]);
 
   // ====================================
@@ -591,6 +592,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
         clearTimeout(retryTimeoutRef.current);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, teamId, user, setupRealtime]);
 
   // ====================================

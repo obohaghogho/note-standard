@@ -132,6 +132,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         } finally {
             conversationsFetchRef.current = false;
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [session?.access_token]);
 
     // Initial load
@@ -145,6 +146,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }
         }
         return () => { isMounted.current = false; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [authReady, session?.access_token, loadConversations]);
 
     // Socket listeners
@@ -346,6 +348,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         socket.off('message_read', onMessageRead);
         socket.off('conversation_deleted', onConversationDeleted);
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [socket, connected, conversations, user?.id, loadConversations, activeConversationId]);
 
     const sendMessage = async (content: string, type: string = 'text', attachmentId?: string) => {
@@ -748,6 +751,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         };
 
         fetchMessages();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeConversationId, session?.access_token, user?.id]);
 
     return (

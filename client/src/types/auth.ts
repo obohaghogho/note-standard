@@ -17,6 +17,7 @@ export interface Profile {
   is_verified?: boolean;
   plan_tier?: 'free' | 'pro' | 'team' | 'business' | 'enterprise';
   daily_deposit_limit?: number | null;
+  show_online_status?: boolean;
   updated_at?: string;
 }
 

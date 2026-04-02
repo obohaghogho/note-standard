@@ -8,7 +8,7 @@ import App from './App.tsx'
 console.log('🚀 NoteStandard Client Version 1.0.5 - reCAPTCHA Timeout Fix');
 console.log("ENV CHECK:", import.meta.env);
 
-window.onerror = function(msg, url, line, col, _error) {
+window.onerror = function(msg, url, line, col) {
   const errorMsg = "GLOBAL ERROR: " + msg + "\nAt: " + url + ":" + line + ":" + col;
   console.error(errorMsg);
   return false;

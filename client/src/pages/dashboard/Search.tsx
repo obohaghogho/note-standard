@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card } from '../../components/common/Card';
 import { Input } from '../../components/common/Input';
 import { Search as SearchIcon, User, FileText, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../../components/common/SecureImage';
 import { ViewNoteModal } from '../../components/dashboard/ViewNoteModal';
 
@@ -32,7 +31,6 @@ interface NoteResult {
 type TabType = 'all' | 'users' | 'notes';
 
 export const Search = () => {
-    const { user } = useAuth();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const initialQuery = searchParams.get('q') || '';
@@ -45,29 +43,7 @@ export const Search = () => {
     const [hasSearched, setHasSearched] = useState(false);
     const [viewingNote, setViewingNote] = useState<NoteResult | null>(null);
 
-    // Initial search from URL
-    useEffect(() => {
-        if (initialQuery) {
-            handleSearch(initialQuery);
-        }
-    }, []);
-
-    // Realtime search effect
-    useEffect(() => {
-        const timeoutId = setTimeout(() => {
-            if (searchTerm.trim()) {
-                handleSearch();
-            } else {
-                setUsers([]);
-                setNotes([]);
-                setHasSearched(false);
-            }
-        }, 500);
-
-        return () => clearTimeout(timeoutId);
-    }, [searchTerm, activeTab]);
-
-    const handleSearch = async (explicitQuery?: string) => {
+    const handleSearch = useCallback(async (explicitQuery?: string) => {
         const queryToUse = explicitQuery || searchTerm;
         if (!queryToUse.trim()) return;
 
@@ -106,7 +82,29 @@ export const Search = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [searchTerm]);
+
+    // Initial search from URL
+    useEffect(() => {
+        if (initialQuery) {
+            handleSearch(initialQuery);
+        }
+    }, [initialQuery, handleSearch]);
+
+    // Realtime search effect
+    useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            if (searchTerm.trim()) {
+                handleSearch();
+            } else {
+                setUsers([]);
+                setNotes([]);
+                setHasSearched(false);
+            }
+        }, 500);
+
+        return () => clearTimeout(timeoutId);
+    }, [searchTerm, handleSearch]);
 
     const filteredUsers = activeTab === 'notes' ? [] : users;
     const filteredNotes = activeTab === 'users' ? [] : notes;

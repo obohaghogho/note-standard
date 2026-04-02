@@ -32,12 +32,13 @@ import {
   ArrowLeft,
   Camera,
   Trash2,
+  ArrowRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import SecureImage from '../../components/common/SecureImage';
 import { ConfirmationModal } from '../../components/common/ConfirmationModal';
 import { useAuth } from '../../context/AuthContext';
-import { ArrowRight } from 'lucide-react';
+
 import { useNavigate } from 'react-router-dom';
 import './TeamsPage.css';
 
@@ -71,7 +72,7 @@ const TeamContent: React.FC<{
         toast.success('Team avatar updated!', { id: toastId });
         onTeamUpdate();
       }
-    } catch (err) {
+    } catch {
       toast.error('Failed to update avatar', { id: toastId });
     } finally {
       setIsUploading(false);
@@ -420,7 +421,7 @@ export const TeamsPage: React.FC = () => {
       } else {
         toast.error('Failed to delete team', { id: toastId });
       }
-    } catch (err) {
+    } catch {
       toast.error('Error deleting team', { id: toastId });
     } finally {
       setIsDeleting(false);

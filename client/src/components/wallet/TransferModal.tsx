@@ -100,7 +100,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
             });
             onSuccess();
             onClose();
-        } catch (err) {
+        } catch {
             setCaptchaToken(null);
             recaptchaRef.current?.reset();
         } finally {
@@ -142,7 +142,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
                 }
 
                 // Check for min/max fee constraints
-                let estimatedFee = bal - maxAmount;
+                const estimatedFee = bal - maxAmount;
                 if (s.min_fee && estimatedFee < s.min_fee) {
                     maxAmount = bal - s.min_fee - SAFETY_BUFFER;
                 } else if (s.max_fee && estimatedFee > s.max_fee) {

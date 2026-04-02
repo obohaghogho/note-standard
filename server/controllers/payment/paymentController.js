@@ -29,7 +29,7 @@ exports.initialize = async (req, res) => {
       amount,
       currency,
       { ...metadata, network: network || "native" },
-      { ...options, provider: requestedProvider } || {},
+      { ...(options || {}), provider: requestedProvider },
     );
 
     res.json(result);

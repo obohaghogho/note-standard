@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 
 // ─── Config ──────────────────────────────────────────────────────
 const SOCKET_URL = import.meta.env.DEV
-    ? process.env.API_URL
+    ? (import.meta.env.VITE_API_URL || 'http://localhost:5000')
     : (import.meta.env.VITE_SOCKET_URL || 'https://realtime-gateway-gsb5.onrender.com');
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -106,6 +106,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             socketRef.current = null;
             setConnected(false);
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [authReady, session?.access_token, user?.id]);
 
     return (

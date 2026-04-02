@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import {
     Megaphone,
@@ -40,11 +40,7 @@ export const BroadcastManager = () => {
         expires_in_hours: '24'
     });
 
-    useEffect(() => {
-        fetchBroadcasts();
-    }, [session]);
-
-    const fetchBroadcasts = async () => {
+    const fetchBroadcasts = useCallback(async () => {
         if (!session?.access_token) return;
         try {
             const res = await fetch(`${API_URL}/api/admin/broadcasts`, {
@@ -61,7 +57,11 @@ export const BroadcastManager = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [session?.access_token]);
+
+    useEffect(() => {
+        fetchBroadcasts();
+    }, [fetchBroadcasts]);
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();

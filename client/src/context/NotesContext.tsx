@@ -147,7 +147,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [user, fetchNotes]);
+    }, [user, fetchNotes, notes]);
 
     return (
         <NotesContext.Provider value={{ notes, stats, loading, canCreateNote, refreshNotes: fetchNotes }}>

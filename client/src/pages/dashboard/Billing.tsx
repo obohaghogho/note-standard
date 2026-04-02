@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { API_URL } from '../../lib/api';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
@@ -24,6 +24,40 @@ export const Billing = () => {
     const fetchingRef = useRef(false);
     const isMounted = useRef(true);
 
+    const [exchangeRate, setExchangeRate] = useState<number | null>(null);
+
+    const syncSubscription = useCallback(async (reference: string, method: string = 'paystack', cur: string = 'NGN') => {
+        setProcessing(true);
+        try {
+            const { data } = await supabase.auth.getSession();
+            const resolvedToken = data.session?.access_token;
+
+            const response = await fetch(`${API_URL}/api/subscription/sync`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${resolvedToken}`
+                },
+                body: JSON.stringify({ reference, method, currency: cur })
+            });
+
+            const dataRes = await response.json();
+            if (dataRes.success) {
+                toast.success('Successfully upgraded to Pro!');
+                refreshProfile(); // Refresh global auth state
+            } else {
+                toast.error('Verification failed. Please contact support.');
+            }
+        } catch (error) {
+            console.error('Sync error:', error);
+            toast.error('Failed to verify subscription');
+        } finally {
+            // ALWAYS clean URL parameters to prevent infinite looping on page reload
+            window.history.replaceState({}, '', '/dashboard/billing');
+            setProcessing(false);
+        }
+    }, [refreshProfile]);
+
     useEffect(() => {
         isMounted.current = true;
         checkSubscriptionStatus();
@@ -39,9 +73,7 @@ export const Billing = () => {
         }
         
         return () => { isMounted.current = false; };
-    }, [searchParams]);
-
-    const [exchangeRate, setExchangeRate] = useState<number | null>(null);
+    }, [searchParams, syncSubscription]);
 
     const checkSubscriptionStatus = async () => {
         if (fetchingRef.current) return;
@@ -71,38 +103,6 @@ export const Billing = () => {
         if (isMounted.current) {
             setLoading(false);
             fetchingRef.current = false;
-        }
-    };
-
-    const syncSubscription = async (reference: string, method: string = 'paystack', cur: string = 'NGN') => {
-        setProcessing(true);
-        try {
-            const { data } = await supabase.auth.getSession();
-            const resolvedToken = data.session?.access_token;
-
-            const response = await fetch(`${API_URL}/api/subscription/sync`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${resolvedToken}`
-                },
-                body: JSON.stringify({ reference, method, currency: cur })
-            });
-
-            const dataRes = await response.json();
-            if (dataRes.success) {
-                toast.success('Successfully upgraded to Pro!');
-                refreshProfile(); // Refresh global auth state
-            } else {
-                toast.error('Verification failed. Please contact support.');
-            }
-        } catch (error) {
-            console.error('Sync error:', error);
-            toast.error('Failed to verify subscription');
-        } finally {
-            // ALWAYS clean URL parameters to prevent infinite looping on page reload
-            window.history.replaceState({}, '', '/dashboard/billing');
-            setProcessing(false);
         }
     };
 

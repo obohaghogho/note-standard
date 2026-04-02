@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { API_URL } from '../../lib/api';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -36,17 +36,7 @@ export const ShareNoteModal = ({ isOpen, onClose, noteId }: ShareNoteModalProps)
     const [searchResults, setSearchResults] = useState<Profile[]>([]);
     const [sharedUsers, setSharedUsers] = useState<SharedUser[]>([]);
 
-    useEffect(() => {
-        if (isOpen && noteId) {
-            fetchSharedUsers();
-        } else {
-            setSharedUsers([]);
-            setSearchResults([]);
-            setEmail('');
-        }
-    }, [isOpen, noteId]);
-
-    const fetchSharedUsers = async () => {
+    const fetchSharedUsers = useCallback(async () => {
         if (!noteId) return;
         try {
             // We need to fetch the shared_notes and join with profiles
@@ -69,7 +59,17 @@ export const ShareNoteModal = ({ isOpen, onClose, noteId }: ShareNoteModalProps)
         } catch (error) {
             console.error('Error fetching shared users:', error);
         }
-    };
+    }, [noteId]);
+
+    useEffect(() => {
+        if (isOpen && noteId) {
+            fetchSharedUsers();
+        } else {
+            setSharedUsers([]);
+            setSearchResults([]);
+            setEmail('');
+        }
+    }, [isOpen, noteId, fetchSharedUsers]);
 
     const handleSearch = async () => {
         if (!email.trim()) return;

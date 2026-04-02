@@ -62,9 +62,8 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             console.error('[Notifications] Fetch failed:', err);
         } finally {
             if (isMounted.current) setLoading(false);
-            notificationsFetchRef.current = false;
         }
-    }, [session?.access_token]);
+    }, [session]);
 
     const subscribeToPush = useCallback(async () => {
         if (!session || pushSubscribeRef.current) return;
@@ -95,7 +94,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         } finally {
             pushSubscribeRef.current = false;
         }
-    }, [session?.access_token]);
+    }, [session]);
 
     // Initial Fetch
     useEffect(() => {
@@ -109,6 +108,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             }
         }
         return () => { isMounted.current = false; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [authReady, session?.access_token, fetchNotifications, subscribeToPush]);
 
     // Socket listeners
@@ -155,6 +155,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         return () => {
             socket.off('notification', onNotification);
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [socket, connected]);
 
     const markAsRead = async (id: string) => {

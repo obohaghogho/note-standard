@@ -1,5 +1,5 @@
 import api from "./axiosInstance";
-import type { Wallet, Transaction, InternalTransferRequest, WithdrawalRequest, CommissionSettings, LedgerEntry, ExchangeRates } from '@/types/wallet';
+import type { Wallet, Transaction, InternalTransferRequest, WithdrawalRequest, CommissionSettings, LedgerEntry, ExchangeRates, CardDepositResponse, BankDepositResponse, CryptoDepositResponse, SwapPreview, SwapResult } from '@/types/wallet';
 
 export const walletApi = {
   // Get all wallets
@@ -15,13 +15,13 @@ export const walletApi = {
   },
 
   // Internal transfer (Send funds)
-  async internalTransfer(data: InternalTransferRequest): Promise<any> {
+  async internalTransfer(data: InternalTransferRequest): Promise<{ success: boolean; transactionId: string; fee: string | number; targetUserId?: string }> {
     const response = await api.post('/wallet/transfer', data);
     return response.data;
   },
 
   // Withdraw funds
-  async withdraw(data: WithdrawalRequest): Promise<any> {
+  async withdraw(data: WithdrawalRequest): Promise<{ success: boolean; transactionId: string; fee: number }> {
     const response = await api.post('/wallet/withdraw', data);
     return response.data;
   },
@@ -82,13 +82,13 @@ export const walletApi = {
       provider?: string,
       targetCurrency?: string,
       targetNetwork?: string
-  }): Promise<any> {
+  }): Promise<CardDepositResponse | BankDepositResponse | CryptoDepositResponse> {
       const response = await api.post('/wallet/deposit', data);
       return response.data;
   },
 
   // Check deposit/payment status
-  async checkPaymentStatus(reference: string): Promise<any> {
+  async checkPaymentStatus(reference: string): Promise<{ status: string; amount: number; currency: string; [key: string]: any }> {
       const response = await api.get('/wallet/deposit/status', {
           params: { reference }
       });
@@ -96,7 +96,7 @@ export const walletApi = {
   },
 
   // Proactively verify payment status with external providers (Webhook trigger substitute)
-  async proactiveVerifyPayment(reference: string, transactionId?: string): Promise<any> {
+  async proactiveVerifyPayment(reference: string, transactionId?: string): Promise<{ success: boolean; status: string; data?: any }> {
       const response = await api.get(`/webhooks/status/${reference}`, {
           params: { transaction_id: transactionId }
       });
@@ -138,13 +138,13 @@ export const walletApi = {
   },
 
   // Swap Preview
-  async previewSwap(from: string, to: string, amount: number, slippage: number, fromNetwork: string = 'native', toNetwork: string = 'native'): Promise<any> {
+  async previewSwap(from: string, to: string, amount: number, slippage: number, fromNetwork: string = 'native', toNetwork: string = 'native'): Promise<SwapPreview> {
       const response = await api.post('/wallet/swap/preview', { from, to, amount, slippage, fromNetwork, toNetwork });
       return response.data;
   },
 
   // Execute Swap
-  async executeSwap(from: string, to: string, amount: number, idempotencyKey: string, lockId: string, slippage: number, fromNetwork: string = 'native', toNetwork: string = 'native', captchaToken?: string): Promise<any> {
+  async executeSwap(from: string, to: string, amount: number, idempotencyKey: string, lockId: string, slippage: number, fromNetwork: string = 'native', toNetwork: string = 'native', captchaToken?: string): Promise<SwapResult> {
       const response = await api.post('/wallet/swap', { from, to, amount, idempotencyKey, lockId, slippage, fromNetwork, toNetwork, captchaToken });
       return response.data;
   },
@@ -166,7 +166,7 @@ export const walletApi = {
   },
 
   // Request a limit increase
-  async createLimitRequest(data: { requested_limit: number, reason: string }): Promise<any> {
+  async createLimitRequest(data: { requested_limit: number, reason: string }): Promise<{ success: boolean; message: string; request?: any }> {
     const response = await api.post('/wallet/limit-request', data);
     return response.data;
   }

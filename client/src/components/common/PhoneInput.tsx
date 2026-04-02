@@ -45,10 +45,10 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({ value, onChange, label, 
             const country = COUNTRIES.find(c => value.startsWith(c.dialCode));
             if (country) setSelectedCountry(country);
         }
-    }, []);
+    }, [value]);
 
     const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        let val = e.target.value.replace(/\D/g, '');
+        const val = e.target.value.replace(/\D/g, '');
         // If it starts with the dial code, remove it if it was entered twice
         const dialCodeDigits = selectedCountry.dialCode.replace(/\D/g, '');
         if (val.startsWith(dialCodeDigits) && val.length > dialCodeDigits.length) {

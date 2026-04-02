@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, CreditCard, Bitcoin, Copy, Loader2, ShieldCheck, CheckCircle2, Landmark, Zap, Lock } from 'lucide-react';
+import { X, CreditCard, Bitcoin, Copy, Loader2, ShieldCheck, CheckCircle2, Landmark, Zap, Lock, ChevronDown } from 'lucide-react';
 import { Button } from '../common/Button';
 import walletApi from '../../api/walletApi';
 import toast from 'react-hot-toast';
@@ -7,7 +7,6 @@ import type { Currency } from '@/types/wallet';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { useWallet } from '../../hooks/useWallet';
-import { ChevronDown } from 'lucide-react';
 
 interface FundModalProps {
     isOpen: boolean;

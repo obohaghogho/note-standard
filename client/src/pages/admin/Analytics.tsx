@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import {
@@ -33,11 +33,7 @@ export const Analytics = () => {
     const [loading, setLoading] = useState(true);
     const [timeframe, setTimeframe] = useState('7d');
 
-    useEffect(() => {
-        fetchDetailedStats();
-    }, [session, timeframe]);
-
-    const fetchDetailedStats = async () => {
+    const fetchDetailedStats = useCallback(async () => {
         if (!session?.access_token) return;
         setLoading(true);
         try {
@@ -57,7 +53,18 @@ export const Analytics = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [session?.access_token]);
+
+    useEffect(() => {
+        fetchDetailedStats();
+    }, [fetchDetailedStats, timeframe]);
+
+    // Calc max for chart scaling
+    const maxTrendValue = useMemo(() => {
+        return stats?.usageTrends
+            ? Math.max(...stats.usageTrends.map(d => Math.max(d.notes, d.users)), 10)
+            : 10;
+    }, [stats?.usageTrends]);
 
     if (loading) {
         return (
@@ -67,13 +74,6 @@ export const Analytics = () => {
             </div>
         );
     }
-
-    // Calc max for chart scaling
-    const maxTrendValue = useMemo(() => {
-        return stats?.usageTrends
-            ? Math.max(...stats.usageTrends.map(d => Math.max(d.notes, d.users)), 10)
-            : 10;
-    }, [stats?.usageTrends]);
 
     return (
         <div className="analytics-page">

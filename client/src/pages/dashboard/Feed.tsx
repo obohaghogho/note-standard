@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Input } from '../../components/common/Input';
 import { FeedNoteCard } from '../../components/dashboard/FeedNoteCard';
 import { CommentModal } from '../../components/dashboard/CommentModal';
@@ -13,7 +13,7 @@ export const Feed = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [activeNote, setActiveNote] = useState<any | null>(null);
 
-    const fetchFeed = async () => {
+    const fetchFeed = useCallback(async () => {
         if (!user) return;
         setLoading(true);
         
@@ -63,7 +63,7 @@ export const Feed = () => {
 
         setNotes(result || []);
         setLoading(false);
-    };
+    }, [user, searchTerm]);
 
     useEffect(() => {
         const timeoutId = setTimeout(() => {
@@ -102,7 +102,7 @@ export const Feed = () => {
             supabase.removeChannel(commentChannel);
             supabase.removeChannel(likeChannel);
         };
-    }, [user, searchTerm]);
+    }, [fetchFeed]);
 
     return (
         <div className="space-y-6 max-w-4xl mx-auto">

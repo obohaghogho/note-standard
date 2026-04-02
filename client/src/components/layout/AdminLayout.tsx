@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { API_URL } from '../../lib/api';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -37,14 +37,9 @@ export const AdminLayout = () => {
     const navigate = useNavigate();
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const [newChatsCount, _setNewChatsCount] = useState(0);
+    const [newChatsCount] = useState(0);
 
-    useEffect(() => {
-        fetchAdminProfile();
-    }, [session]);
-
-    const fetchAdminProfile = async () => {
+    const fetchAdminProfile = useCallback(async () => {
         if (!session?.access_token) return;
 
         try {
@@ -69,7 +64,11 @@ export const AdminLayout = () => {
             console.error('Failed to fetch admin profile:', err);
             navigate('/dashboard');
         }
-    };
+    }, [session?.access_token, navigate]);
+
+    useEffect(() => {
+        fetchAdminProfile();
+    }, [session, fetchAdminProfile]);
 
     const handleLogout = async () => {
         await signOut();

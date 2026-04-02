@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { X, Send } from 'lucide-react';
@@ -34,6 +34,29 @@ export const CommentModal = ({ isOpen, onClose, note }: CommentModalProps) => {
     const [submitting, setSubmitting] = useState(false);
     const noteId = note?.id;
 
+    const fetchComments = useCallback(async () => {
+        if (!noteId) return;
+        setLoading(true);
+        try {
+            const { data, error } = await supabase
+                .from('comments')
+                .select(`
+                    *,
+                    profile:profiles!user_id (username, email, avatar_url)
+                `)
+                .eq('note_id', noteId)
+                .order('created_at', { ascending: true });
+
+            if (error) throw error;
+            setComments(data as any || []);
+        } catch (error) {
+            console.error('Error fetching comments:', error);
+            // toast.error('Failed to load comments');
+        } finally {
+            setLoading(false);
+        }
+    }, [noteId]);
+
     useEffect(() => {
         if (isOpen && noteId) {
             fetchComments();
@@ -63,30 +86,7 @@ export const CommentModal = ({ isOpen, onClose, note }: CommentModalProps) => {
             setComments([]);
             setNewComment('');
         }
-    }, [isOpen, noteId]);
-
-    const fetchComments = async () => {
-        if (!noteId) return;
-        setLoading(true);
-        try {
-            const { data, error } = await supabase
-                .from('comments')
-                .select(`
-                    *,
-                    profile:profiles!user_id (username, email, avatar_url)
-                `)
-                .eq('note_id', noteId)
-                .order('created_at', { ascending: true });
-
-            if (error) throw error;
-            setComments(data as any || []);
-        } catch (error) {
-            console.error('Error fetching comments:', error);
-            // toast.error('Failed to load comments');
-        } finally {
-            setLoading(false);
-        }
-    };
+    }, [isOpen, noteId, fetchComments]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

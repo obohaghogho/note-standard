@@ -187,7 +187,7 @@ export const Login = () => {
                                             sessionStorage.clear();
                                             if ('serviceWorker' in navigator) {
                                                 const regs = await navigator.serviceWorker.getRegistrations();
-                                                for (let r of regs) await r.unregister();
+                                                for (const r of regs) await r.unregister();
                                             }
                                             window.location.reload();
                                         }}

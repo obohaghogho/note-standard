@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Bot, Save, Clock, Globe, ShieldAlert, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
@@ -43,11 +43,7 @@ export const AutoReplySettings = () => {
     const [saving, setSaving] = useState(false);
     const [status, setStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
 
-    useEffect(() => {
-        fetchSettings();
-    }, [session]);
-
-    const fetchSettings = async () => {
+    const fetchSettings = useCallback(async () => {
         if (!session?.access_token) return;
         setLoading(true);
         try {
@@ -71,7 +67,11 @@ export const AutoReplySettings = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [session?.access_token]);
+
+    useEffect(() => {
+        fetchSettings();
+    }, [fetchSettings]);
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -98,7 +98,7 @@ export const AutoReplySettings = () => {
             } else {
                 throw new Error('Failed to update');
             }
-        } catch (err) {
+        } catch {
             setStatus({ type: 'error', msg: 'Failed to save settings' });
             toast.error('Failed to save settings');
         } finally {

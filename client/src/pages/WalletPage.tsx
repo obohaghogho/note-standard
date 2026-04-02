@@ -71,7 +71,7 @@ export const WalletPage: React.FC = () => {
                         setSearchParams({});
                         await refresh();
                     }
-                } catch (err) {
+                } catch {
                     if (isActive) {
                         toast.error('Confirmation delayed. Status will update shortly.', { id: toastId });
                         setSearchParams({});
@@ -149,7 +149,7 @@ export const WalletPage: React.FC = () => {
                 socket.off('rates_updated');
             };
         }
-    }, [wallets.length, socket]);
+    }, [wallets, socket]);
 
     // Calculate Total Balance & Available Balance
     useEffect(() => {
@@ -218,7 +218,7 @@ export const WalletPage: React.FC = () => {
             toast.success(`${currency} service activated!`);
             setShowCreateModal(false);
             refresh();
-        } catch (err) {
+        } catch {
            // handled in context
         }
     };

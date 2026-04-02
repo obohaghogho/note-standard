@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { adService, type Ad } from '../../services/ads';
 import { supabase } from '../../lib/supabaseSafe';
@@ -20,7 +20,7 @@ export const AdDisplay = ({ className = '', currentTags = [] }: AdDisplayProps) 
     const lastFetchRef = useRef<{ tags: string[], time: number }>({ tags: [], time: 0 });
     const fetchingRef = useRef(false);
 
-    const checkPrivacySettings = async () => {
+    const checkPrivacySettings = useCallback(async () => {
         // Generic ads always show for non-logged users
         if (!user) return true; 
 
@@ -30,9 +30,9 @@ export const AdDisplay = ({ className = '', currentTags = [] }: AdDisplayProps) 
         }
         
         return true;
-    };
+    }, [user, profile]);
 
-    const fetchRelevantAd = async (force = false) => {
+    const fetchRelevantAd = useCallback(async (force = false) => {
         if (isPro || (!force && fetchingRef.current)) return;
         
         const allowed = await checkPrivacySettings();
@@ -70,7 +70,9 @@ export const AdDisplay = ({ className = '', currentTags = [] }: AdDisplayProps) 
             fetchingRef.current = false;
             setLoading(false);
         }
-    };
+    }, [isPro, currentTags, checkPrivacySettings]);
+
+    const stringifiedTags = useMemo(() => JSON.stringify(currentTags), [currentTags]);
 
     useEffect(() => {
         if (isPro) {
@@ -102,7 +104,7 @@ export const AdDisplay = ({ className = '', currentTags = [] }: AdDisplayProps) 
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [isPro, JSON.stringify(currentTags)]);
+    }, [isPro, stringifiedTags, fetchRelevantAd]);
 
     if (isPro || !visible) return null;
 

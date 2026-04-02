@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
     Settings,
     Shield,
@@ -33,11 +33,7 @@ export const AdminSettings = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
-    useEffect(() => {
-        fetchSettings();
-    }, [session]);
-
-    const fetchSettings = async () => {
+    const fetchSettings = useCallback(async () => {
         if (!session?.access_token) return;
         setLoading(true);
         try {
@@ -62,7 +58,11 @@ export const AdminSettings = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [session?.access_token]);
+
+    useEffect(() => {
+        fetchSettings();
+    }, [fetchSettings]);
 
     const handleSave = async () => {
         if (!session?.access_token) return;

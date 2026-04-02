@@ -107,7 +107,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 });
                 // One-time click listener to retry audio
                 const unlockAudio = () => {
-                    audio.play().catch(() => {});
+                    audio.play().catch(() => { /* Ignore autoplay errors */ });
                     document.removeEventListener('click', unlockAudio);
                     document.removeEventListener('touchstart', unlockAudio);
                 };
@@ -245,6 +245,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 peerRef.current = null;
             }
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user?.id]);
 
     // ─── Start Call ──────────────────────────────────────────────
@@ -278,7 +279,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             if (socket && user) {
                 socket.emit('call:init', { to: otherUserId, type, conversationId, peerId: peerRef.current.id });
-                sendMessage(`Started ${type} call`, 'call').catch(() => {});
+                sendMessage(`Started ${type} call`, 'call').catch(() => { /* Ignore logging errors */ });
             }
 
             callTimeoutRef.current = setTimeout(() => {
@@ -417,6 +418,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             socket.off('call:ready', onReady);
             socket.off('call:ended', onEnded);
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [socket, socketConnected, cleanup]);
 
     return (

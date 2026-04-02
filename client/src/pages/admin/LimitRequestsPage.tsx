@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -35,11 +35,7 @@ export const LimitRequestsPage = () => {
     const [statusFilter, setStatusFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
     const [processingId, setProcessingId] = useState<string | null>(null);
 
-    useEffect(() => {
-        fetchRequests();
-    }, [session, statusFilter]);
-
-    const fetchRequests = async () => {
+    const fetchRequests = useCallback(async () => {
         if (!session?.access_token) return;
         setLoading(true);
 
@@ -60,7 +56,11 @@ export const LimitRequestsPage = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [session?.access_token, statusFilter]);
+
+    useEffect(() => {
+        fetchRequests();
+    }, [fetchRequests]);
 
     const handleProcessRequest = async (id: string, status: 'approved' | 'rejected', note: string = '') => {
         if (!session?.access_token) return;
@@ -80,7 +80,7 @@ export const LimitRequestsPage = () => {
             
             toast.success(`Request ${status} successfully`);
             setRequests(prev => prev.filter(r => r.id !== id));
-        } catch (err) {
+        } catch {
             toast.error('Failed to process request');
         } finally {
             setProcessingId(null);

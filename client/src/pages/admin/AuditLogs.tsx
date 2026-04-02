@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import {
@@ -48,11 +48,7 @@ export const AuditLogs = () => {
     const [actionFilter, setActionFilter] = useState('');
     const [targetFilter, setTargetFilter] = useState('');
 
-    useEffect(() => {
-        fetchLogs();
-    }, [session, pagination.page, actionFilter, targetFilter]);
-
-    const fetchLogs = async () => {
+    const fetchLogs = useCallback(async () => {
         if (!session?.access_token) return;
         setLoading(true);
 
@@ -87,7 +83,11 @@ export const AuditLogs = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [session?.access_token, pagination.page, pagination.limit, actionFilter, targetFilter]);
+
+    useEffect(() => {
+        fetchLogs();
+    }, [fetchLogs]);
 
     const formatDate = (dateStr: string) => {
         const date = new Date(dateStr);

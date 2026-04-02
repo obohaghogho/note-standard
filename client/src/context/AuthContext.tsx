@@ -105,6 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         fetchLockRef.current = null;
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const refreshProfile = async () => {
@@ -131,7 +132,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       resetRateLimiters();
       
       toast.success('Signed out successfully');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error signing out:', error);
       toast.error('Failed to sign out');
     }
@@ -303,6 +304,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (profileChannel) supabase.removeChannel(profileChannel);
       if (subscriptionChannel) supabase.removeChannel(subscriptionChannel);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncUserData]);
 
   return (

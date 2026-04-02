@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Save } from 'lucide-react';
+import { X, Save, Zap, ArrowRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { ensureProfile } from '../../lib/supabaseSafe'; // Import ensureProfile
 import { useAuth } from '../../context/AuthContext';
@@ -7,7 +7,6 @@ import { useNotes } from '../../context/NotesContext';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import { Card } from '../common/Card';
-import { Zap, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface CreateNoteModalProps {

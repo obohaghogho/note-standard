@@ -232,8 +232,8 @@ export const Settings = () => {
             // Note: Central AuthContext will eventually refresh this via event 
             // or we can manually trigger a small sync if needed, but the UI 
             // is already showing the locally updated preferredChatLanguage.
-        } catch (e) {
-            console.error(e);
+        } catch {
+            console.error('Failed to update chat language preference');
             toast.error('Failed to update language');
         } finally {
             setSaving(false);
@@ -434,7 +434,7 @@ export const Settings = () => {
                                             window.dispatchEvent(event);
                                             
                                             toast.success('Active status setting updated');
-                                        } catch (err) {
+                                        } catch {
                                             toast.error('Failed to change active status');
                                         }
                                     }}
