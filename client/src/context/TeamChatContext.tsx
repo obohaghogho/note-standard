@@ -114,12 +114,13 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
   // ====================================
 
   const lastLoadedTeamId = useRef<string | null>(null);
+  const messagesCountRef = useRef(0);
 
   const loadInitialData = useCallback(async () => {
     if (loadingRef.current || !teamId || !user || !profile || !authReady) return;
     
     // If we already loaded this team and have data, only reload if forced or empty
-    if (lastLoadedTeamId.current === teamId && messages.length > 0) return;
+    if (lastLoadedTeamId.current === teamId && messagesCountRef.current > 0) return;
 
     loadingRef.current = true;
     setLoading(true);
@@ -136,6 +137,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
 
       if (!isMounted.current) return;
 
+      messagesCountRef.current = messagesData.length;
       setMessages(messagesData);
       setMembers(membersData);
       setTeamStats(statsData);
@@ -163,7 +165,8 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
         setLoading(false);
       }
     }
-  }, [teamId, user, profile, authReady, messages.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamId, user, profile, authReady]);
 
   // ====================================
   // LOAD MORE MESSAGES (PAGINATION)
