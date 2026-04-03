@@ -2,7 +2,7 @@ const PaymentFactory = require("../services/payment/PaymentFactory");
 const fxService = require("../services/fxService");
 const supabase = require("../config/database");
 const { v4: uuidv4 } = require("uuid");
-const { getCallbackUrl } = require("../utils/urlUtils");
+const { getCallbackUrl } = require("../utils/url_utils");
 
 exports.createCheckoutSession = async (req, res) => {
   try {

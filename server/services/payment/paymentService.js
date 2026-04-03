@@ -4,7 +4,7 @@ const { v4: uuidv4 } = require("uuid");
 const logger = require("../../utils/logger");
 const mailService = require("../mailService");
 const math = require("../../utils/mathUtils");
-const { getCallbackUrl } = require("../../utils/urlUtils");
+const { getCallbackUrl } = require("../../utils/url_utils");
 
 class PaymentService {
   /**
