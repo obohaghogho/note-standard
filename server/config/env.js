@@ -8,35 +8,74 @@ if (process.env.NODE_ENV !== "production") {
   });
 }
 
+/**
+ * Validates that the given environment variables are present.
+ * Throws an error if any are missing when in production.
+ */
+const validateEnv = (vars, isProduction) => {
+  const missing = vars.filter((v) => !process.env[v]);
+  if (missing.length > 0) {
+    const errorMsg = `[Env] Critical environment variables missing: ${missing.join(", ")}`;
+    if (isProduction) {
+      throw new Error(errorMsg);
+    } else {
+      console.warn(`\x1b[33m%s\x1b[0m`, errorMsg);
+    }
+  }
+};
+
+const isProd = process.env.NODE_ENV === "production";
+
+// ─── Critical Validation ──────────────────────────────────────
+const criticalVars = [
+  "SUPABASE_URL",
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "JWT_SECRET",
+  "PAYSTACK_SECRET_KEY"
+];
+validateEnv(criticalVars, isProd);
+
 module.exports = {
   PORT: process.env.PORT || 5000,
   NODE_ENV: process.env.NODE_ENV || "development",
+  
+  // Supabase
   SUPABASE_URL: process.env.SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY,
+  
+  // Cache
   REDIS_URL: process.env.REDIS_URL || "redis://localhost:6379",
+  
+  // Infrastructure
   CLOUDINARY_URL: process.env.CLOUDINARY_URL,
-  CLIENT_URL: process.env.CLIENT_URL || "http://localhost:3000",
-  CG_API_KEY: process.env.CG_API_KEY,
-  FLUTTERWAVE_SECRET_KEY: process.env.FLUTTERWAVE_SECRET_KEY,
+  CLIENT_URL: process.env.CLIENT_URL || (isProd ? "https://notestandard.com" : "http://localhost:3000"),
+  SERVER_URL: process.env.SERVER_URL || process.env.BACKEND_URL || "http://localhost:5000",
+  
+  // Security
+  JWT_SECRET: process.env.JWT_SECRET,
   RECAPTCHA_SECRET_KEY: process.env.RECAPTCHA_SECRET_KEY,
-
+  
   // Wallet Fees
-  ADMIN_FEE_RATE: parseFloat(process.env.ADMIN_FEE_PERCENT || 4.5) / 100,
-  PARTNER_FEE_RATE: parseFloat(process.env.PARTNER_FEE_PERCENT || 0.1) / 100,
-  REFERRAL_FEE_RATE: parseFloat(process.env.REFERRAL_FEE_PERCENT || 0.1) / 100,
+  FEES: {
+    ADMIN_PERCENT: parseFloat(process.env.ADMIN_FEE_PERCENT || 4.5),
+    PARTNER_PERCENT: parseFloat(process.env.PARTNER_FEE_PERCENT || 0.1),
+    REFERRAL_PERCENT: parseFloat(process.env.REFERRAL_FEE_PERCENT || 0.1),
+  },
 
-  // Provider Config
-  COINGECKO_BASE_URL: process.env.COINGECKO_API ||
-    "https://api.coingecko.com/api/v3",
+  // Payment Providers
+  PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY,
+  FINCRA_SECRET_KEY: process.env.FINCRA_SECRET_KEY,
+  FINCRA_PUBLIC_KEY: process.env.FINCRA_PUBLIC_KEY,
   NOWPAYMENTS_API_KEY: process.env.NOWPAYMENTS_API_KEY,
-  SERVER_URL: process.env.SERVER_URL || process.env.BACKEND_URL,
+  COINGECKO_BASE_URL: process.env.COINGECKO_API || "https://api.coingecko.com/api/v3",
 };
 
-// Log loaded fee rates for verification
+// Compute derived rates
+module.exports.ADMIN_FEE_RATE = module.exports.FEES.ADMIN_PERCENT / 100;
+module.exports.PARTNER_FEE_RATE = module.exports.FEES.PARTNER_PERCENT / 100;
+module.exports.REFERRAL_FEE_RATE = module.exports.FEES.REFERRAL_PERCENT / 100;
+
 console.log(
-  `[Env] Fees Loaded - Admin: ${
-    module.exports.ADMIN_FEE_RATE * 100
-  }%, Partner: ${module.exports.PARTNER_FEE_RATE * 100}%, Referrer: ${
-    module.exports.REFERRAL_FEE_RATE * 100
-  }%`,
+  `[Env] Configuration Loaded - Environment: ${module.exports.NODE_ENV}, Fees: ${module.exports.FEES.ADMIN_PERCENT}%`
 );

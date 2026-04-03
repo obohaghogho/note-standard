@@ -16,25 +16,37 @@ const whitelist = [
   "http://[::1]:5173",
 ];
 
+const isProd = process.env.NODE_ENV === "production";
+
 /**
  * Express cors() middleware options.
  * Usage: app.use(cors(corsOptions));
  */
 const isOriginAllowed = (origin) => {
+  // Allow server-to-server or direct requests (no origin header)
   if (!origin) return true;
 
-  // Dynamic checks for allowed domains (User requested)
-  const isNoteStandard = origin.endsWith(".notestandard.com") ||
-    origin === (process.env.CLIENT_URL || "https://notestandard.com") ||
-    origin === "https://www.notestandard.com";
+  const clientUrl = process.env.CLIENT_URL || "https://notestandard.com";
 
-  // Robust local check: allow any localhost port or common dev variations
+  // 1. Production Allowed Domains
+  const isNoteStandard = origin === clientUrl || 
+    origin === "https://www.notestandard.com" ||
+    origin.endsWith(".notestandard.com");
+
+  if (isProd) {
+    if (!isNoteStandard) {
+        console.warn(`[CORS] Blocked production access from: ${origin}`);
+    }
+    return isNoteStandard;
+  }
+
+  // 2. Local Development Allowed Domains (only if not in production)
   const isLocal = origin.startsWith("http://localhost") ||
     origin.startsWith("http://127.0.0.1") ||
     origin.includes("[::1]");
 
   const result = isNoteStandard || isLocal;
-  console.log(`[CORS Check] ${origin || "Direct/Server"} -> ${result ? 'ALLOWED' : 'DENIED'}`);
+  
   if (!result) {
     console.warn(`[CORS Check] Origin NOT allowed: ${origin}`);
   }

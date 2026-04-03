@@ -2,6 +2,7 @@ const PaymentFactory = require("../services/payment/PaymentFactory");
 const fxService = require("../services/fxService");
 const supabase = require("../config/database");
 const { v4: uuidv4 } = require("uuid");
+const { getCallbackUrl } = require("../utils/urlUtils");
 
 exports.createCheckoutSession = async (req, res) => {
   try {
@@ -73,14 +74,12 @@ exports.createCheckoutSession = async (req, res) => {
     const usedMethod = useFincra ? "fincra" : "paystack";
     const provider = PaymentFactory.getProviderByName(usedMethod);
 
-    let callbackUrl = `${
-      process.env.CLIENT_URL || "https://notestandard.com"
-    }/dashboard/billing?payment_callback=true&method=${usedMethod}&currency=${upCurrency}&reference=${reference}`;
-
-    // Fincra strictly rejects "localhost" in redirect URLs.
-    if (callbackUrl.includes("http://localhost")) {
-      callbackUrl = callbackUrl.replace("http://localhost", "http://127.0.0.1");
-    }
+    const callbackUrl = getCallbackUrl("/dashboard/billing", {
+      payment_callback: "true",
+      method: usedMethod,
+      currency: upCurrency,
+      reference: reference,
+    }, usedMethod);
 
     // 5. Provider Specific Logic (e.g. Paystack Plans)
     let providerPlan = null;
@@ -89,8 +88,8 @@ exports.createCheckoutSession = async (req, res) => {
         ? process.env.PAYSTACK_PLAN_BUSINESS 
         : process.env.PAYSTACK_PLAN_PRO;
       
-      // Only use the plan if it's not a placeholder
-      if (planId && !planId.includes("placeholder")) {
+      // Ensure the plan ID is valid and present
+      if (planId) {
         providerPlan = planId;
       }
     }
@@ -116,7 +115,6 @@ exports.createCheckoutSession = async (req, res) => {
   } catch (error) {
     console.error("Error creating subscription checkout:", error);
     console.error(error.stack);
-    require("fs").writeFileSync("err_stack.txt", error.stack);
     res.status(500).json({ error: "Failed to create checkout session" });
   }
 };
@@ -261,7 +259,6 @@ exports.syncSubscription = async (req, res) => {
   } catch (error) {
     console.error("Error syncing subscription:", error);
     console.error(error.stack);
-    require("fs").writeFileSync("err_sync_stack.txt", error.stack || error.message);
     res.status(500).json({ error: "Sync failed", details: error.message });
   }
 };

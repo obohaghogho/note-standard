@@ -55,13 +55,48 @@ const requireRecaptcha = async (req, res, next) => {
   }
 };
 
+const crypto = require("crypto");
+
 /**
  * verifyTransactionSignature
- * (Placeholder) Verifies HMAC signature of payload for sensitive operations.
+ * Verifies HMAC-SHA256 signature of payload for sensitive financial operations.
+ * This prevents tampering with transaction amounts or metadata.
  */
 const verifyTransactionSignature = (req, res, next) => {
-  // Implementation for future non-repudiation requirements
-  next();
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    logger.error("[Security] JWT_SECRET missing for transaction signing");
+    return res.status(500).json({ error: "Security configuration error" });
+  }
+
+  const signature = req.headers["x-transaction-signature"];
+  
+  // In development, we can allow skipping if not provided, 
+  // but in production it's mandatory for protected routes.
+  if (!signature) {
+    if (env.NODE_ENV === "production") {
+      return res.status(403).json({ error: "Missing transaction signature" });
+    }
+    return next();
+  }
+
+  try {
+    const payload = JSON.stringify(req.body);
+    const expectedSignature = crypto
+      .createHmac("sha256", secret)
+      .update(payload)
+      .digest("hex");
+
+    if (signature !== expectedSignature) {
+      logger.warn(`[Security] Invalid transaction signature for ${req.ip}`);
+      return res.status(403).json({ error: "Invalid transaction signature" });
+    }
+
+    next();
+  } catch (err) {
+    logger.error("[Security] Signature verification failed:", err.message);
+    res.status(500).json({ error: "Security check failed" });
+  }
 };
 
 module.exports = {

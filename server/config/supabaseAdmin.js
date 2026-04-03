@@ -1,15 +1,13 @@
 const { createClient } = require("@supabase/supabase-js");
 const env = require("./env");
 
-if (!env.SUPABASE_SERVICE_ROLE_KEY) {
-  console.warn(
-    "⚠️  SUPABASE_SERVICE_ROLE_KEY missing! Admin operations may fail.",
-  );
+if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error("[SupabaseAdmin] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment");
 }
 
 const supabaseAdmin = createClient(
-  env.SUPABASE_URL || "https://placeholder.supabase.co",
-  env.SUPABASE_SERVICE_ROLE_KEY || "placeholder",
+  env.SUPABASE_URL,
+  env.SUPABASE_SERVICE_ROLE_KEY,
   {
     auth: {
       autoRefreshToken: false,

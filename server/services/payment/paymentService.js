@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require("uuid");
 const logger = require("../../utils/logger");
 const mailService = require("../mailService");
 const math = require("../../utils/mathUtils");
+const { getCallbackUrl } = require("../../utils/urlUtils");
 
 class PaymentService {
   /**
@@ -330,13 +331,7 @@ class PaymentService {
     logger.info(`[DEBUG] Step 6: Initializing with provider ${providerName}`);
     let initData = {};
     
-    // 3. Initialize with provider
-    let baseUrl = (process.env.CLIENT_URL || "https://notestandard.com").trim();
-    // Fincra's API strictly validates the redirectUrl and rejects 'localhost' even in sandbox mode.
-    if (providerName === 'fincra' && baseUrl.includes('localhost')) {
-       baseUrl = 'https://notestandard.com';
-    }
-    const callbackUrl = options.callbackUrl || `${baseUrl}/payment/success?reference=${reference}`;
+    const callbackUrl = options.callbackUrl || getCallbackUrl("/payment/success", { reference }, providerName);
 
     console.time(`[PaymentService] ProviderInit:${providerName}`);
     try {

@@ -10,13 +10,14 @@ const realtime = require("../services/realtimeService");
 
 // Create a Supabase client with service role for admin operations
 const getServiceSupabase = () => {
-  return createClient(
-    process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL ||
-      "https://placeholder.supabase.co",
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY ||
-      process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY ||
-      "placeholder",
-  );
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+  
+  if (!url || !key) {
+    throw new Error("[Admin] Missing Supabase credentials in environment");
+  }
+
+  return createClient(url, key);
 };
 
 const os = require("os");
@@ -1491,4 +1492,147 @@ exports.getPaymentAuditLogs = async (req, res) => {
     console.error("Error fetching payment audit logs:", err.message);
     res.status(500).json({ error: "Server Error" });
   }
+};
+
+/**
+ * Get all limit increase requests
+ * GET /api/admin/limit-requests
+ */
+exports.getLimitRequests = async (req, res) => {
+    try {
+        const serviceSupabase = getServiceSupabase();
+        const { status } = req.query;
+
+        let query = serviceSupabase
+            .from("limit_requests")
+            .select(`
+                *,
+                user:profiles!user_id (username, email, full_name, plan_tier, daily_deposit_limit)
+            `)
+            .order("created_at", { ascending: false });
+
+        if (status) {
+            query = query.eq("status", status);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+            if (error.code === "42P01") { // Table doesn't exist
+                return res.json([]);
+            }
+            throw error;
+        }
+
+        res.json(data);
+    } catch (err) {
+        console.error("Error fetching limit requests:", err.message);
+        res.status(500).json({ error: "Server Error" });
+    }
+};
+
+/**
+ * Approve or Reject a limit request
+ * PUT /api/admin/limit-requests/:id
+ */
+exports.updateLimitRequest = async (req, res) => {
+    try {
+        const serviceSupabase = getServiceSupabase();
+        const { id } = req.params;
+        const { status, admin_note } = req.body;
+
+        if (!["approved", "rejected"].includes(status)) {
+            return res.status(400).json({ error: "Invalid status" });
+        }
+
+        // 1. Fetch the request
+        const { data: request, error: fetchErr } = await serviceSupabase
+            .from("limit_requests")
+            .select("*")
+            .eq("id", id)
+            .single();
+
+        if (fetchErr || !request) return res.status(404).json({ error: "Request not found" });
+
+        // 2. Update the request status
+        const { error: updateErr } = await serviceSupabase
+            .from("limit_requests")
+            .update({ status, admin_note, updated_at: new Date().toISOString() })
+            .eq("id", id);
+
+        if (updateErr) throw updateErr;
+
+        // 3. If approved, update user's profile limit
+        if (status === "approved") {
+            const { error: profileErr } = await serviceSupabase
+                .from("profiles")
+                .update({ daily_deposit_limit: request.requested_limit })
+                .eq("id", request.user_id);
+            
+            if (profileErr) throw profileErr;
+        }
+
+        // 4. Notify the user
+        await createNotification({
+            receiverId: request.user_id,
+            type: "limit_request_status",
+            title: status === "approved" ? "Limit Increase Approved" : "Limit Increase Rejected",
+            message: status === "approved" 
+                ? `Your request for a $${request.requested_limit.toLocaleString()} deposit limit has been approved.` 
+                : `Your request for a limit increase was declined. Reason: ${admin_note || "N/A"}`,
+            link: "/dashboard/billing"
+        });
+
+        // 5. Log Admin Action
+        await logAdminAction(req, `${status}_limit_request`, "user", request.user_id, {
+            request_id: id,
+            limit: request.requested_limit,
+            admin_note
+        });
+
+        res.json({ success: true, message: `Request ${status} successfully` });
+    } catch (err) {
+        console.error("Error updating limit request:", err.message);
+        res.status(500).json({ error: "Server Error" });
+    }
+};
+
+/**
+ * Manually update a user's deposit limit
+ * PUT /api/admin/users/:id/limit
+ */
+exports.updateUserLimit = async (req, res) => {
+    try {
+        const serviceSupabase = getServiceSupabase();
+        const { id } = req.params;
+        const { limit } = req.body;
+
+        if (isNaN(limit) || limit < 0) {
+            return res.status(400).json({ error: "Invalid limit amount" });
+        }
+
+        const { error } = await serviceSupabase
+            .from("profiles")
+            .update({ daily_deposit_limit: limit })
+            .eq("id", id);
+
+        if (error) throw error;
+
+        // Notify User
+        await createNotification({
+            receiverId: id,
+            type: "limit_updated",
+            title: "Deposit Limit Updated",
+            message: `An administrator has updated your daily deposit limit to $${limit.toLocaleString()}.`,
+            link: "/dashboard/billing"
+        });
+
+        // Log action
+        await logAdminAction(req, "update_manual_limit", "user", id, { limit });
+
+        res.json({ success: true, message: "Limit updated successfully" });
+    } catch (err) {
+        console.error("Error updating user limit:", err.message);
+        res.status(500).json({ error: "Server Error" });
+    }
 };

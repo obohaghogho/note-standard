@@ -69,6 +69,11 @@ if (process.env.NODE_ENV === "production") {
   app.use(morgan("dev"));
 }
 
+// ─── Middleware ──────────────────────────────────────────────
+const { requireAuth } = require("./middleware/authMiddleware");
+const ApiError = require("./utils/ApiError");
+const paymentController = require("./controllers/payment/paymentController");
+
 // ─── Routes ──────────────────────────────────────────────────
 // Health check (with Supabase ping)
 app.get("/api/health", async (req, res) => {
@@ -128,6 +133,7 @@ app.use("/api/community", communityRoutes);
 app.use("/api/ads", adsRoutes);
 app.use("/api/broadcasts", broadcastsRoutes);
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/limit-requests", requireAuth, require("./routes/limitRequests"));
 
 // Legacy/Provider Specific Routes
 app.use("/api/paystack", require("./routes/paystackRoutes"));
@@ -146,58 +152,67 @@ app.use("/api/flutterwave/webhook", (req, res, next) => {
   next();
 }, require("./routes/webhooks"));
 
-// Middleware
-const { requireAuth } = require("./middleware/authMiddleware");
-const paymentController = require("./controllers/payment/paymentController");
-
 app.post("/api/verify-payment", requireAuth, paymentController.verifyPayment);
 
 // Direct Flutterwave Webhook Route
 app.post("/api/flutterwave-webhook", async (req, res) => {
   try {
-    console.log("Webhook received:", JSON.stringify(req.body, null, 2));
+    logger.info("Webhook received from Flutterwave");
     return res.status(200).send("Webhook received");
   } catch (error) {
-    console.error("Webhook Error:", error);
+    logger.error("Webhook Error:", error);
     return res.status(500).send("Error");
   }
 });
 
 app.use("/api/media", require("./routes/media"));
-// PeerJS signaling is mounted directly on the HTTP server in index.js
 
 // ─── Serve Frontend (Production) ──────────────────────────────
-// Serve static files from the React app
 app.use(express.static(path.join(__dirname, "../client/dist")));
 
-// The "catchall" handler: for any request that doesn't
-// match one above, send back React's index.html file.
+// Temporary IP detection for whitelisting (NOWPayments)
+app.get("/api/server-ip", async (req, res) => {
+  const https = require("https");
+  https.get("https://api.ipify.org", (resp) => {
+    let data = "";
+    resp.on("data", chunk => data += chunk);
+    resp.on("end", () => res.send({ ip: data }));
+  }).on("error", (err) => {
+    res.status(500).json({ error: "Error fetching IP", details: err.message });
+  });
+});
+
 app.get(/.*/, (req, res, next) => {
-  // Pass API requests through to the error handler so they return JSON 404 instead of HTML
   if (req.path.startsWith("/api")) {
     return next();
   }
   res.sendFile(path.join(__dirname, "../client/dist/index.html"));
 });
 
+// ─── Global Error Handler ──────────────────────────────────────
 app.use((err, req, res, next) => {
   // CORS rejection
   if (err.message === "Not allowed by CORS") {
     return res.status(403).json({ error: "CORS policy: origin not allowed" });
   }
 
+  // Use ApiError or default to 500
+  const statusCode = err.statusCode || (err.status ? parseInt(err.status) : 500);
+  const message = err.message || "Internal server error";
+  const errorCode = err.errorCode || "INTERNAL_ERROR";
+
   // All other errors
-  logger.error("Unhandled error:", { 
-    message: err.message, 
-    stack: err.stack,
-    path: req.path,
-    method: req.method 
+  logger.error(`${req.method} ${req.path} - ${message}`, { 
+    stack: env.NODE_ENV !== "production" ? err.stack : undefined,
+    details: err.details
   });
   
-  res.status(err.status || 500).json({
-    error: err.message || "Internal server error",
+  res.status(statusCode).json({
+    success: false,
+    error: message,
+    code: errorCode,
     path: req.path,
-    details: process.env.NODE_ENV !== "production" ? err.stack : undefined
+    timestamp: new Date().toISOString()
   });
 });
 
