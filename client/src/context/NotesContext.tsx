@@ -129,12 +129,16 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                         }
                     } else if (payload.eventType === 'DELETE') {
                         const deletedId = payload.old.id;
-                        const wasFavorite = notes.find(n => n.id === deletedId)?.is_favorite;
-                        setNotes(prev => prev.filter(n => n.id !== deletedId));
-                        setStats(prev => ({ 
-                            totalBy: Math.max(0, prev.totalBy - 1),
-                            favorites: wasFavorite ? Math.max(0, prev.favorites - 1) : prev.favorites
-                        }));
+                        setNotes(prev => {
+                            const wasFavorite = prev.find(n => n.id === deletedId)?.is_favorite;
+                            if (wasFavorite !== undefined) {
+                                setStats(s => ({ 
+                                    totalBy: Math.max(0, s.totalBy - 1),
+                                    favorites: wasFavorite ? Math.max(0, s.favorites - 1) : s.favorites
+                                }));
+                            }
+                            return prev.filter(n => n.id !== deletedId);
+                        });
                     }
                 }
             )
@@ -147,7 +151,8 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [user, fetchNotes, notes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user, fetchNotes]);
 
     return (
         <NotesContext.Provider value={{ notes, stats, loading, canCreateNote, refreshNotes: fetchNotes }}>
