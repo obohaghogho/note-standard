@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { API_URL } from '../../lib/api';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
     LayoutDashboard,
@@ -35,6 +35,7 @@ interface AdminProfile {
 export const AdminLayout = () => {
     const { session, signOut } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
     const [newChatsCount] = useState(0);
@@ -190,7 +191,7 @@ export const AdminLayout = () => {
 
                 {/* Page Content */}
                 <main className="admin-content">
-                    <Outlet />
+                    <Outlet key={location.pathname} />
                 </main>
 
                 {/* Mobile Overlay */}
