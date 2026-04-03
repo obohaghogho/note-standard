@@ -71,7 +71,7 @@ if (process.env.NODE_ENV === "production") {
 
 // ─── Middleware ──────────────────────────────────────────────
 const { requireAuth } = require("./middleware/authMiddleware");
-const ApiError = require("./utils/apierror");
+const ApiError = require("./utils/apiError");
 const paymentController = require("./controllers/payment/paymentController");
 
 // ─── Routes ──────────────────────────────────────────────────
