@@ -1,18 +1,15 @@
 import { useState } from 'react';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { CreateNoteModal } from '../dashboard/CreateNoteModal';
 import { BroadcastBanner } from '../chat/BroadcastBanner';
 import { useAuth } from '../../context/AuthContext';
 import { NotificationBell } from '../dashboard/NotificationBell';
-import { Search, Menu } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
+import { Menu, Plus } from 'lucide-react';
 import { LanguageSelector } from '../common/LanguageSelector';
 import { useChat } from '../../context/ChatContext';
 
 export const DashboardLayout = () => {
-    const { t } = useTranslation();
-    const navigate = useNavigate();
     const [isCreateNoteModalOpen, setIsCreateNoteModalOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const { user, isPro } = useAuth();
@@ -38,48 +35,33 @@ export const DashboardLayout = () => {
                 onClose={() => setIsMobileMenuOpen(false)}
             />
             <main className={`flex-1 ml-0 md:ml-64 transition-all duration-300 min-w-0 flex flex-col max-w-7xl mx-auto w-full overflow-hidden ${isChatActiveOnMobile ? 'fixed inset-0 z-[60] bg-[#0a0a0a] w-full min-h-[100dvh] overscroll-none md:relative md:inset-auto md:z-0 md:w-auto md:min-h-0 md:bg-transparent md:min-w-0' : 'relative min-h-[100dvh]'}`}>
-                {/* Header/Top bar - hide on mobile if chat is active */}
-                <header className={`pt-safe min-h-[4rem] md:min-h-[5rem] border-b border-white/10 flex items-center justify-between px-2 md:px-8 bg-black/40 backdrop-blur-md sticky top-0 z-40 ${isChatActiveOnMobile ? 'hidden md:flex' : 'flex'}`}>
-                    <div className="flex items-center gap-4 w-full max-w-xl">
-                        <button 
-                            onClick={() => setIsMobileMenuOpen(true)}
-                            className="p-2 -ml-2 text-gray-400 hover:text-white md:hidden"
-                        >
-                            <Menu size={24} />
-                        </button>
+                {/* Header/Top bar */}
+                <header className={`pt-safe min-h-[4rem] border-b border-white/10 flex items-center px-4 bg-black/40 backdrop-blur-md sticky top-0 z-40 ${isChatActiveOnMobile ? 'hidden md:flex' : 'flex'}`}>
+                    {/* Mobile Menu Toggle */}
+                    <button 
+                        onClick={() => setIsMobileMenuOpen(true)}
+                        className="p-2 -ml-2 text-gray-400 hover:text-white md:hidden"
+                    >
+                        <Menu size={24} />
+                    </button>
 
-                        <div className="hidden md:flex items-center gap-4 bg-white/5 border border-white/10 rounded-full px-4 py-1.5 w-96 max-w-full group focus-within:ring-2 focus-within:ring-primary/20 transition-all">
-                            <Search size={18} className="text-gray-500 group-focus-within:text-primary transition-colors" />
-                            <input
-                                id="sidebar-search"
-                                name="search"
-                                type="text"
-                                autoComplete="off"
-                                placeholder={t('common.search')}
-                                className="bg-transparent border-none outline-none text-sm w-full text-white placeholder:text-gray-500"
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        const target = e.target as HTMLInputElement;
-                                        if (target.value.trim()) {
-                                            navigate(`/dashboard/search?q=${encodeURIComponent(target.value)}`);
-                                        }
-                                    }
-                                }}
-                            />
-                        </div>
-                    </div>
+                    {/* Create Note Button (Desktop & Tablet) */}
+                    <button
+                        onClick={() => setIsCreateNoteModalOpen(true)}
+                         className="ml-4 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-all shadow-lg shadow-primary/20 flex items-center gap-2"
+                    >
+                        <Plus size={18} />
+                        <span className="hidden sm:inline">Create Note</span>
+                    </button>
 
-                    <div className="flex items-center gap-1.5 xs:gap-2 md:gap-4">
+                    <div className="flex-1" />
+
+                    {/* Right-side Utilities */}
+                    <div className="flex items-center gap-2 md:gap-4">
                         <NotificationBell />
-                        <div className="h-6 w-[1px] bg-white/10 mx-1 md:mx-2" />
                         <LanguageSelector />
-                        <div className="flex items-center gap-2 md:gap-3">
-                            <span className="hidden sm:inline-block px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[10px] text-gray-400 font-mono">
-                                v1.0.4-PROD
-                            </span>
-                            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs">
-                                {user?.email?.[0].toUpperCase()}
-                            </div>
+                        <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs ring-1 ring-primary/20">
+                            {user?.email?.[0].toUpperCase()}
                         </div>
                     </div>
                 </header>
