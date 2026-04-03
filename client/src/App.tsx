@@ -125,12 +125,6 @@ function App() {
   return (
     <>
       <ErrorBoundary>
-        <Suspense fallback={
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#0a0a0a' }}>
-            <div style={{ width: 36, height: 36, border: '3px solid rgba(255,255,255,0.1)', borderTopColor: '#10b981', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-            <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-          </div>
-        }>
         <Router>
             <AuthProvider>
             <SocketProvider>
@@ -140,6 +134,12 @@ function App() {
                 <WebRTCProvider>
                 <WalletProvider>
                 <NotesProvider>
+                    <Suspense fallback={
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#0a0a0a' }}>
+                        <div style={{ width: 36, height: 36, border: '3px solid rgba(255,255,255,0.1)', borderTopColor: '#10b981', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+                      </div>
+                    }>
                     <Routes>
                     <Route path="/" element={<LandingPage />} />
                     <Route path="/login" element={<Login />} />
@@ -200,6 +200,7 @@ function App() {
                         </Route>
                     </Route>
                     </Routes>
+                    </Suspense>
 
                     {/* Global Chat Widget - visible on all authenticated pages */}
                     <ChatWidget />
@@ -212,7 +213,6 @@ function App() {
             </SocketProvider>
             </AuthProvider>
         </Router>
-        </Suspense>
       </ErrorBoundary>
 
     </>
