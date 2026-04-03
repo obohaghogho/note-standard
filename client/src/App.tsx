@@ -20,7 +20,7 @@ import { lazyWithRetry } from './utils/lazyWithRetry';
 
 // ─── Lazy-loaded pages (route-level code splitting) ───
 // Public pages
-const LandingPage = lazyWithRetry(() => import('./pages/LandingPage').then(m => m.LandingPage), 'LandingPage');
+
 const Login = lazyWithRetry(() => import('./pages/Login').then(m => m.Login), 'Login');
 const Signup = lazyWithRetry(() => import('./pages/Signup').then(m => m.Signup), 'Signup');
 const TermsPage = lazyWithRetry(() => import('./pages/TermsPage').then(m => m.TermsPage), 'TermsPage');
@@ -141,7 +141,7 @@ function App() {
                       </div>
                     }>
                     <Routes>
-                    <Route path="/" element={<LandingPage />} />
+                    <Route path="/" element={<Navigate to="/dashboard/activity" replace />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/signup" element={<Signup />} />
                     <Route path="/terms" element={<TermsPage />} />
@@ -162,16 +162,50 @@ function App() {
 
                     <Route element={<ProtectedRoute />}>
                         {/* User Dashboard */}
-                        <Route path="/dashboard" element={<DashboardLayout />}>
-                        <Route index element={<DashboardHome />} />
-                        <Route path="notes" element={<Notes />} />
-                        <Route path="chat" element={<Chat />} />
-                        <Route path="shared" element={<Shared />} />
-                        <Route path="feed" element={<Feed />} />
+                        <Route path="/dashboard" element={
+                            <ErrorBoundary fallback={<div>Something went wrong loading the dashboard. <button onClick={() => window.location.reload()}>Reload</button></div>}>
+                                <DashboardLayout />
+                            </ErrorBoundary>
+                        }>
+                        <Route index element={
+                            <Suspense fallback={<div className="p-8 text-center text-gray-500">Loading home...</div>}>
+                                <DashboardHome />
+                            </Suspense>
+                        } />
+                        <Route path="notes" element={
+                            <ErrorBoundary fallback={<div className="p-8 text-center text-red-400 bg-red-400/5 rounded-xl border border-red-400/10">Failed to load Notes.</div>}>
+                                <Suspense fallback={<div className="p-8 text-center text-gray-400 animate-pulse">Loading notes...</div>}>
+                                    <Notes />
+                                </Suspense>
+                            </ErrorBoundary>
+                        } />
+                        <Route path="chat" element={
+                            <ErrorBoundary fallback={<div className="p-8 text-center text-red-400 bg-red-400/5 rounded-xl border border-red-400/10">Failed to load Chat.</div>}>
+                                <Suspense fallback={<div className="p-8 text-center text-gray-400 animate-pulse">Loading chat...</div>}>
+                                    <Chat />
+                                </Suspense>
+                            </ErrorBoundary>
+                        } />
+                        <Route path="shared" element={
+                            <Suspense fallback={<div>Loading shared...</div>}>
+                                <Shared />
+                            </Suspense>
+                        } />
+                        <Route path="feed" element={
+                            <Suspense fallback={<div>Loading feed...</div>}>
+                                <Feed />
+                            </Suspense>
+                        } />
                         <Route path="favorites" element={<Notes />} />
                         <Route path="search" element={<Search />} />
                         <Route path="billing" element={<Billing />} />
-                        <Route path="activity" element={<WalletPage />} />
+                        <Route path="activity" element={
+                            <ErrorBoundary fallback={<div className="p-8 text-center text-red-400 bg-red-400/5 rounded-xl border border-red-400/10">Failed to load Activity.</div>}>
+                                <Suspense fallback={<div className="p-8 text-center text-gray-400 animate-pulse">Loading activity...</div>}>
+                                    <WalletPage />
+                                </Suspense>
+                            </ErrorBoundary>
+                        } />
                         <Route path="history" element={<Transactions />} />
                         <Route path="affiliates" element={<Affiliates />} />
                         <Route path="deposit" element={<DepositPage />} />

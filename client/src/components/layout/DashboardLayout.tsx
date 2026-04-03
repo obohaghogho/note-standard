@@ -86,7 +86,7 @@ export const DashboardLayout = () => {
 
                 <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))] -z-10 opacity-20" />
 
-                <div className={`flex-1 ${isChatActiveOnMobile ? 'p-0 h-full' : 'p-3.5 sm:p-6 md:p-8 max-w-7xl mx-auto'} w-full flex flex-col min-w-0 overflow-hidden`}>
+                <div className={`flex-1 ${isChatActiveOnMobile ? 'p-0 h-full' : 'p-6 max-w-7xl mx-auto'} w-full flex flex-col min-w-0 overflow-hidden`}>
                     <Outlet key={location.pathname} context={{ openCreateNoteModal: () => setIsCreateNoteModalOpen(true) }} />
                 </div>
             </main>

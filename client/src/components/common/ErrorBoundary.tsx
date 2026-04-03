@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 
 interface Props {
     children: ReactNode;
+    fallback?: ReactNode;
 }
 
 interface State {
@@ -62,6 +63,9 @@ export class ErrorBoundary extends Component<Props, State> {
 
     render() {
         if (this.state.hasError) {
+            if (this.props.fallback) {
+                return this.props.fallback;
+            }
             return (
                 <div className="min-h-[100dvh] flex items-center justify-center bg-[#0a0a0a] p-4 w-full max-w-full">
                     <div className="max-w-md w-full bg-gray-900/50 backdrop-blur-xl border border-white/10 rounded-lg p-8 text-center">

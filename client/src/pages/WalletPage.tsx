@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { ErrorBoundary } from '../components/common/ErrorBoundary';
 import { useWallet } from '../hooks/useWallet';
 import { useSocket } from '../context/SocketContext';
 import walletApi from '../api/walletApi';
@@ -21,7 +22,7 @@ import toast from 'react-hot-toast';
 
 const SUPPORTED_CURRENCIES = ['BTC', 'ETH', 'USD', 'NGN', 'EUR', 'GBP', 'JPY'];
 
-export const WalletPage: React.FC = () => {
+const WalletContent: React.FC = () => {
     const { wallets, transactions, loading, refresh, createWallet } = useWallet();
     const { socket } = useSocket();
     
@@ -434,3 +435,9 @@ export const WalletPage: React.FC = () => {
         </div>
     );
 };
+
+export const WalletPage: React.FC = () => (
+    <ErrorBoundary fallback={<div className="p-8 text-center text-red-500 bg-red-500/5 rounded-xl border border-red-500/10">Something went wrong loading your wallet. <button onClick={() => window.location.reload()} className="underline ml-2">Try again</button></div>}>
+        <WalletContent />
+    </ErrorBoundary>
+);

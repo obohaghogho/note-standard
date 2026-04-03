@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
     LayoutDashboard,
@@ -41,6 +41,8 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
     const { t } = useTranslation();
     const { user, signOut, switchAccount, removeAccount, addAccount, isPro, isAdmin } = useAuth();
     const { unreadCount } = useNotifications();
+    const navigate = useNavigate();
+    const location = useLocation();
     
     // Accounts for switcher
     const allAccounts = getStoredAccounts();
@@ -103,40 +105,50 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
                 </Button>
 
                 {isAdmin && (
-                    <NavLink
-                        to="/admin"
-                        onClick={onClose}
-                        className={() => cn(
-                            "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 mb-4 bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20"
+                    <button
+                        onClick={() => {
+                            navigate('/admin');
+                            onClose?.();
+                        }}
+                        className={cn(
+                            "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 mb-4 bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20",
+                            location.pathname.startsWith('/admin') && "bg-red-500/20"
                         )}
                     >
                         <Shield size={18} />
                         Admin Panel
-                    </NavLink>
+                    </button>
                 )}
 
-                {navItems.map((item) => (
-                    <NavLink
-                        key={item.to}
-                        to={item.to}
-                        end={item.to === '/dashboard'}
-                        onClick={onClose}
-                        className={({ isActive }) => cn(
-                            "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
-                            isActive
-                                ? "bg-primary/10 text-primary border border-primary/20"
-                                : "text-gray-400 hover:text-white hover:bg-white/5"
-                        )}
-                    >
-                        <item.icon size={18} />
-                        <span className="flex-1">{item.label}</span>
-                        {item.to === '/dashboard/notifications' && unreadCount > 0 && (
-                            <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                                {unreadCount > 99 ? '99+' : unreadCount}
-                            </span>
-                        )}
-                    </NavLink>
-                ))}
+                {navItems.map((item) => {
+                    const isActive = item.to === '/dashboard' 
+                        ? location.pathname === '/dashboard' 
+                        : location.pathname.startsWith(item.to);
+                        
+                    return (
+                        <button
+                            key={item.to}
+                            onClick={() => {
+                                navigate(item.to);
+                                onClose?.();
+                            }}
+                            className={cn(
+                                "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 text-left",
+                                isActive
+                                    ? "bg-primary/10 text-primary border border-primary/20"
+                                    : "text-gray-400 hover:text-white hover:bg-white/5"
+                            )}
+                        >
+                            <item.icon size={18} />
+                            <span className="flex-1">{item.label}</span>
+                            {item.to === '/dashboard/notifications' && unreadCount > 0 && (
+                                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                                    {unreadCount > 99 ? '99+' : unreadCount}
+                                </span>
+                            )}
+                        </button>
+                    );
+                })}
 
                 <div className="mt-6 mx-4">
                     <AdDisplay />
@@ -148,22 +160,27 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
                     Account
                 </div>
 
-                {bottomNavItems.map((item) => (
-                    <NavLink
-                        key={item.to}
-                        to={item.to}
-                        onClick={onClose}
-                        className={({ isActive }) => cn(
-                            "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
-                            isActive
-                                ? "bg-primary/10 text-primary border border-primary/20"
-                                : "text-gray-400 hover:text-white hover:bg-white/5"
-                        )}
-                    >
-                        <item.icon size={18} />
-                        {item.label}
-                    </NavLink>
-                ))}
+                {bottomNavItems.map((item) => {
+                    const isActive = location.pathname.startsWith(item.to);
+                    return (
+                        <button
+                            key={item.to}
+                            onClick={() => {
+                                navigate(item.to);
+                                onClose?.();
+                            }}
+                            className={cn(
+                                "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 text-left",
+                                isActive
+                                    ? "bg-primary/10 text-primary border border-primary/20"
+                                    : "text-gray-400 hover:text-white hover:bg-white/5"
+                            )}
+                        >
+                            <item.icon size={18} />
+                            {item.label}
+                        </button>
+                    );
+                })}
             </div>
 
             {/* Footer */}
