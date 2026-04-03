@@ -4,6 +4,7 @@ const env = require("./config/env");
 
 const app = require("./app");
 const http = require("http");
+const https = require("https");
 const supabase = require("./config/database");
 const fxService = require("./services/fxService");
 const realtime = require("./services/realtimeService");
@@ -90,6 +91,14 @@ setInterval(async () => {
 // Automatically expires pending Grey payments after their window closes
 // and sends notification emails to affected users.
 const paymentExpiry = require("./workers/paymentExpiry");
+// ──────────────────────────────────────────────────────────────
+// ─── Startup Logging ──────────────────────────────────────────
+// Log public IP for troubleshooting and NOWPayments whitelisting
+https.get("https://api.ipify.org", (res) => {
+  res.on("data", (ip) => {
+    console.log("SERVER PUBLIC IP:", ip.toString());
+  });
+});
 // ──────────────────────────────────────────────────────────────
 
 server.listen(PORT, "0.0.0.0", () => {
