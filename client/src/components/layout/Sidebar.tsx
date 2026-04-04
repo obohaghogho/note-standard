@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
     LayoutDashboard,
@@ -39,16 +39,17 @@ interface SidebarProps {
 
 export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps) => {
     const { t } = useTranslation();
+    const navigate = useNavigate();
     const location = useLocation();
     const { user, signOut, switchAccount, removeAccount, addAccount, isPro, isAdmin } = useAuth();
     const { unreadCount } = useNotifications();
     
-    // Cleaner isActive logic helper
+    // Manual active route detection
     const isActiveRoute = (path: string) => {
         if (path === "/dashboard") {
             return location.pathname === "/dashboard" || location.pathname === "/dashboard/";
         }
-        return location.pathname === path;
+        return location.pathname.startsWith(path);
     };
 
     // Accounts for switcher
@@ -111,28 +112,32 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
                 </Button>
 
                 {isAdmin && (
-                    <NavLink
-                        to="/admin"
-                        onClick={onClose}
-                        className={() => cn(
-                            "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 mb-4",
-                             isActiveRoute("/admin") 
+                    <button
+                        onClick={() => {
+                            navigate("/admin");
+                            onClose?.();
+                        }}
+                        className={cn(
+                            "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 mb-4 w-full text-left",
+                             location.pathname.startsWith("/admin") 
                                 ? "bg-red-500/20 text-red-400 border border-red-500/30" 
                                 : "bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20"
                         )}
                     >
                         <Shield size={18} />
                         Admin Panel
-                    </NavLink>
+                    </button>
                 )}
 
                 {navItems.map((item) => (
-                    <NavLink
+                    <button
                         key={item.to}
-                        to={item.to}
-                        onClick={onClose}
-                        className={() => cn(
-                            "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                        onClick={() => {
+                            navigate(item.to);
+                            onClose?.();
+                        }}
+                        className={cn(
+                            "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 w-full text-left",
                             isActiveRoute(item.to)
                                 ? "bg-primary/10 text-primary border border-primary/20"
                                 : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -145,7 +150,7 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
                                 {unreadCount > 99 ? '99+' : unreadCount}
                             </span>
                         )}
-                    </NavLink>
+                    </button>
                 ))}
 
                 <div className="mt-6 mx-4">
@@ -159,12 +164,14 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
                 </div>
 
                 {bottomNavItems.map((item) => (
-                    <NavLink
+                    <button
                         key={item.to}
-                        to={item.to}
-                        onClick={onClose}
-                        className={() => cn(
-                            "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                        onClick={() => {
+                            navigate(item.to);
+                            onClose?.();
+                        }}
+                        className={cn(
+                            "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 w-full text-left",
                             isActiveRoute(item.to)
                                 ? "bg-primary/10 text-primary border border-primary/20"
                                 : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -172,7 +179,7 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
                     >
                         <item.icon size={18} />
                         {item.label}
-                    </NavLink>
+                    </button>
                 ))}
             </div>
 
