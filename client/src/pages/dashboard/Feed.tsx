@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Input } from '../../components/common/Input';
 import { FeedNoteCard } from '../../components/dashboard/FeedNoteCard';
 import { CommentModal } from '../../components/dashboard/CommentModal';
@@ -12,6 +12,7 @@ export const Feed = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeNote, setActiveNote] = useState<any | null>(null);
+    const fetchFeedRef = useRef<() => void>(() => {});
 
     const fetchFeed = useCallback(async () => {
         if (!user) return;
@@ -65,17 +66,30 @@ export const Feed = () => {
         setLoading(false);
     }, [user, searchTerm]);
 
+    // Update the ref to always point to the latest stable fetch function
+    useEffect(() => {
+        fetchFeedRef.current = fetchFeed;
+    }, [fetchFeed]);
+
+    // Effect 1: Debounced Search Fetcher
     useEffect(() => {
         const timeoutId = setTimeout(() => {
             fetchFeed();
         }, 500);
+        return () => clearTimeout(timeoutId);
+    }, [fetchFeed]);
 
+    // Effect 2: Realtime Listeners - 🔥 ONLY RUN ONCE
+    useEffect(() => {
+        if (!user) return;
+
+        console.log('[Feed] Setting up stable realtime listeners');
+        
         // Setup Realtime Subscriptions for counts
-        // Use debounce to prevent excessive refetching from global events
         let debounceTimer: ReturnType<typeof setTimeout> | null = null;
         const debouncedRefetch = () => {
             if (debounceTimer) clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => fetchFeed(), 2000);
+            debounceTimer = setTimeout(() => fetchFeedRef.current(), 1000);
         };
 
         const commentChannel = supabase
@@ -97,12 +111,11 @@ export const Feed = () => {
             .subscribe();
 
         return () => {
-            clearTimeout(timeoutId);
             if (debounceTimer) clearTimeout(debounceTimer);
             supabase.removeChannel(commentChannel);
             supabase.removeChannel(likeChannel);
         };
-    }, [fetchFeed]);
+    }, [user]); // Only re-runs if the user identity changes
 
     return (
         <div className="space-y-6 max-w-4xl mx-auto">
