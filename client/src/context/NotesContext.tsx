@@ -18,6 +18,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const [notes, setNotes] = useState<Note[]>([]);
     const [stats, setStats] = useState({ totalBy: 0, favorites: 0 });
     const [loading, setLoading] = useState(true);
+    const [hasFetched, setHasFetched] = useState(false);
 
     const canCreateNote = isPro || stats.totalBy < 100;
 
@@ -87,8 +88,11 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             return;
         }
 
-        // Initial fetch
-        fetchNotes();
+        // Initial fetch - 🔥 Production-safe guard
+        if (!hasFetched) {
+            fetchNotes();
+            setHasFetched(true);
+        }
 
         // 1. Subscribe to changes for this user's notes
         const channel = supabase
@@ -152,7 +156,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             supabase.removeChannel(channel);
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user, fetchNotes]);
+    }, [user, fetchNotes, hasFetched]);
 
     return (
         <NotesContext.Provider value={{ notes, stats, loading, canCreateNote, refreshNotes: fetchNotes }}>

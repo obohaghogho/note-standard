@@ -11,6 +11,7 @@ export const Feed = () => {
     const [notes, setNotes] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [hasFetched, setHasFetched] = useState(false);
     const [activeNote, setActiveNote] = useState<any | null>(null);
     const fetchFeedRef = useRef<() => void>(() => {});
 
@@ -71,13 +72,24 @@ export const Feed = () => {
         fetchFeedRef.current = fetchFeed;
     }, [fetchFeed]);
 
-    // Effect 1: Debounced Search Fetcher
+    // Effect 1: Initial Mount Fetcher - 🔥 Production-safe guard
     useEffect(() => {
+        if (!user || hasFetched || searchTerm) return;
+        
+        console.log('[Feed] Production-safe initial fetch');
+        fetchFeed();
+        setHasFetched(true);
+    }, [user, hasFetched, searchTerm, fetchFeed]);
+
+    // Effect 2: Debounced Search Fetcher
+    useEffect(() => {
+        if (!searchTerm) return; // Managed by initial fetch or realtime
+        
         const timeoutId = setTimeout(() => {
             fetchFeed();
         }, 500);
         return () => clearTimeout(timeoutId);
-    }, [fetchFeed]);
+    }, [fetchFeed, searchTerm]);
 
     // Effect 2: Realtime Listeners - 🔥 ONLY RUN ONCE
     useEffect(() => {

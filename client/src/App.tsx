@@ -15,7 +15,8 @@ import { WebRTCProvider } from './context/WebRTCContext';
 import { PresenceProvider } from './context/PresenceContext';
 import { NotesProvider } from './context/NotesContext';
 import { ChatWidget } from './components/chat/ChatWidget';
-import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { ErrorBoundary } from 'react-error-boundary';
+import DashboardHome from './pages/dashboard/DashboardHome';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 
 // ─── Lazy-loaded pages (route-level code splitting) ───
@@ -33,7 +34,7 @@ const ActivitySuccess = lazyWithRetry(() => import('./pages/ActivitySuccess'), '
 const ActivityCancel = lazyWithRetry(() => import('./pages/ActivityCancel'), 'ActivityCancel');
 
 // Dashboard pages
-const DashboardHome = lazyWithRetry(() => import('./pages/dashboard/DashboardHome'), 'DashboardHome');
+// DashboardHome is now eagerly loaded for diagnostic test
 const Notes = lazyWithRetry(() => import('./pages/dashboard/Notes'), 'Notes');
 const Chat = lazyWithRetry(() => import('./pages/dashboard/Chat'), 'Chat');
 const Shared = lazyWithRetry(() => import('./pages/dashboard/Shared'), 'Shared');
@@ -123,90 +124,101 @@ function App() {
   }, []);
 
   return (
-    <>
-      <ErrorBoundary>
-        <Router>
-          <Suspense fallback={
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#0a0a0a' }}>
-              <div style={{ width: 36, height: 36, border: '3px solid rgba(255,255,255,0.1)', borderTopColor: '#10b981', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-              <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-            </div>
-          }>
-            <AuthProvider>
-              <SocketProvider>
-                <PresenceProvider>
-                  <NotificationProvider>
-                    <ChatProvider>
-                      <WebRTCProvider>
-                        <WalletProvider>
-                          <NotesProvider>
-                            <Routes>
-                              <Route path="/" element={<LandingPage />} />
-                              <Route path="/login" element={<Login />} />
-                              <Route path="/signup" element={<Signup />} />
-                              <Route path="/terms" element={<TermsPage />} />
-                              <Route path="/privacy" element={<PrivacyPage />} />
-                              <Route path="/refund" element={<RefundPage />} />
-                              <Route path="/about" element={<AboutPage />} />
-                              <Route path="/contact" element={<ContactPage />} />
-                              <Route path="/reset-password" element={<ResetPassword />} />
-                              
-                              <Route path="/chat/:id" element={<ChatRedirect />} />
+    <Router>
+      <ErrorBoundary 
+        fallback={
+          <div style={{ padding: '2rem', textAlign: 'center', color: '#ef4444' }}>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Something went wrong</h2>
+            <p style={{ marginTop: '0.5rem', color: '#9ca3af' }}>Please refresh the page to continue.</p>
+            <button 
+              onClick={() => window.location.reload()}
+              style={{ marginTop: '1rem', padding: '0.5rem 1rem', background: '#3b82f6', color: 'white', borderRadius: '0.5rem', border: 'none', cursor: 'pointer' }}
+            >
+              Reload Page
+            </button>
+          </div>
+        }
+      >
+        <Suspense fallback={
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#0a0a0a' }}>
+            <div style={{ width: 36, height: 36, border: '3px solid rgba(255,255,255,0.1)', borderTopColor: '#10b981', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+          </div>
+        }>
+          <AuthProvider>
+            <SocketProvider>
+              <PresenceProvider>
+                <NotificationProvider>
+                  <ChatProvider>
+                    <WebRTCProvider>
+                      <WalletProvider>
+                        <NotesProvider>
+                          <Routes>
+                            <Route path="/" element={<LandingPage />} />
+                            <Route path="/login" element={<Login />} />
+                            <Route path="/signup" element={<Signup />} />
+                            <Route path="/terms" element={<TermsPage />} />
+                            <Route path="/privacy" element={<PrivacyPage />} />
+                            <Route path="/refund" element={<RefundPage />} />
+                            <Route path="/about" element={<AboutPage />} />
+                            <Route path="/contact" element={<ContactPage />} />
+                            <Route path="/reset-password" element={<ResetPassword />} />
+                            
+                            <Route path="/chat/:id" element={<ChatRedirect />} />
 
-                              <Route path="/activity/success" element={<ActivitySuccess />} />
-                              <Route path="/activity/cancel" element={<ActivityCancel />} />
-                              <Route path="/activity" element={<Navigate to="/dashboard/activity" replace />} />
+                            <Route path="/activity/success" element={<ActivitySuccess />} />
+                            <Route path="/activity/cancel" element={<ActivityCancel />} />
+                            <Route path="/activity" element={<Navigate to="/dashboard/activity" replace />} />
 
-                              <Route element={<ProtectedRoute />}>
-                                <Route path="/dashboard" element={<DashboardLayout />}>
-                                  <Route index element={<DashboardHome />} />
-                                  <Route path="notes" element={<Notes />} />
-                                  <Route path="chat" element={<Chat />} />
-                                  <Route path="shared" element={<Shared />} />
-                                  <Route path="feed" element={<Feed />} />
-                                  <Route path="favorites" element={<Notes />} />
-                                  <Route path="search" element={<Search />} />
-                                  <Route path="billing" element={<Billing />} />
-                                  <Route path="activity" element={<WalletPage />} />
-                                  <Route path="history" element={<Transactions />} />
-                                  <Route path="affiliates" element={<Affiliates />} />
-                                  <Route path="deposit" element={<DepositPage />} />
-                                  <Route path="settings" element={<Settings />} />
-                                  <Route path="notifications" element={<Notifications />} />
-                                  <Route path="trends" element={<Trends />} />
-                                  <Route path="teams" element={<TeamsPage />} />
-                                </Route>
+                            <Route element={<ProtectedRoute />}>
+                              <Route path="/dashboard" element={<DashboardLayout />}>
+                                <Route index element={<DashboardHome />} />
+                                <Route path="notes" element={<Notes />} />
+                                <Route path="chat" element={<Chat />} />
+                                <Route path="shared" element={<Shared />} />
+                                <Route path="feed" element={<Feed />} />
+                                <Route path="favorites" element={<Notes />} />
+                                <Route path="search" element={<Search />} />
+                                <Route path="billing" element={<Billing />} />
+                                <Route path="activity" element={<WalletPage />} />
+                                <Route path="history" element={<Transactions />} />
+                                <Route path="affiliates" element={<Affiliates />} />
+                                <Route path="deposit" element={<DepositPage />} />
+                                <Route path="settings" element={<Settings />} />
+                                <Route path="notifications" element={<Notifications />} />
+                                <Route path="trends" element={<Trends />} />
+                                <Route path="teams" element={<TeamsPage />} />
                               </Route>
+                            </Route>
 
-                              <Route element={<ProtectedRoute allowedRoles={['admin', 'support']} />}>
-                                <Route path="/admin" element={<AdminLayout />}>
-                                  <Route index element={<AdminDashboard />} />
-                                  <Route path="users" element={<UserManagement />} />
-                                  <Route path="chats" element={<AdminChat />} />
-                                  <Route path="audit-logs" element={<AuditLogs />} />
-                                  <Route path="broadcasts" element={<BroadcastManager />} />
-                                  <Route path="auto-reply" element={<AutoReplySettings />} />
-                                  <Route path="analytics" element={<Analytics />} />
-                                  <Route path="ads" element={<ManageAds />} />
-                                  <Route path="deposits" element={<ManualDeposits />} />
-                                  <Route path="limit-requests" element={<LimitRequestsPage />} />
-                                  <Route path="settings" element={<AdminSettings />} />
-                                </Route>
+                            <Route element={<ProtectedRoute allowedRoles={['admin', 'support']} />}>
+                              <Route path="/admin" element={<AdminLayout />}>
+                                <Route index element={<AdminDashboard />} />
+                                <Route path="users" element={<UserManagement />} />
+                                <Route path="chats" element={<AdminChat />} />
+                                <Route path="audit-logs" element={<AuditLogs />} />
+                                <Route path="broadcasts" element={<BroadcastManager />} />
+                                <Route path="auto-reply" element={<AutoReplySettings />} />
+                                <Route path="analytics" element={<Analytics />} />
+                                <Route path="ads" element={<ManageAds />} />
+                                <Route path="deposits" element={<ManualDeposits />} />
+                                <Route path="limit-requests" element={<LimitRequestsPage />} />
+                                <Route path="settings" element={<AdminSettings />} />
                               </Route>
-                            </Routes>
-                            <ChatWidget />
-                          </NotesProvider>
-                        </WalletProvider>
-                      </WebRTCProvider>
-                    </ChatProvider>
-                  </NotificationProvider>
-                </PresenceProvider>
-              </SocketProvider>
-            </AuthProvider>
-          </Suspense>
-        </Router>
+                            </Route>
+                          </Routes>
+                          <ChatWidget />
+                        </NotesProvider>
+                      </WalletProvider>
+                    </WebRTCProvider>
+                  </ChatProvider>
+                </NotificationProvider>
+              </PresenceProvider>
+            </SocketProvider>
+          </AuthProvider>
+        </Suspense>
       </ErrorBoundary>
-    </>
+    </Router>
   );
 }
 
