@@ -11,7 +11,10 @@ interface AdDisplayProps {
     currentTags?: string[]; // Tags from the currently viewed note
 }
 
-export const AdDisplay = ({ className = '', currentTags = [] }: AdDisplayProps) => {
+const EMPTY_TAGS: string[] = [];
+
+export const AdDisplay = ({ className = '', currentTags = EMPTY_TAGS }: AdDisplayProps) => {
+
     const { isPro, user, profile } = useAuth();
     const [ad, setAd] = useState<Ad | null>(null);
     const [visible, setVisible] = useState(true);
@@ -19,6 +22,9 @@ export const AdDisplay = ({ className = '', currentTags = [] }: AdDisplayProps) 
     const [loading, setLoading] = useState(true);
     const lastFetchRef = useRef<{ tags: string[], time: number }>({ tags: [], time: 0 });
     const fetchingRef = useRef(false);
+    
+    // Stabilize tags to prevent infinite re-renders
+    const stringifiedTags = useMemo(() => JSON.stringify(currentTags), [currentTags]);
 
     const checkPrivacySettings = useCallback(async () => {
         // Generic ads always show for non-logged users
@@ -43,8 +49,9 @@ export const AdDisplay = ({ className = '', currentTags = [] }: AdDisplayProps) 
         }
 
         const now = Date.now();
-        const tagString = JSON.stringify(currentTags);
+        const tagString = stringifiedTags;
         const lastTagString = JSON.stringify(lastFetchRef.current.tags);
+        const tagsArray = JSON.parse(stringifiedTags);
         
         // Prevent spam: only fetch if tags changed, or if forced (realtime), or if > 30s passed
         if (!force && tagString === lastTagString && (now - lastFetchRef.current.time < 30000)) {
@@ -55,7 +62,7 @@ export const AdDisplay = ({ className = '', currentTags = [] }: AdDisplayProps) 
         if (!force) setLoading(true);
         fetchingRef.current = true;
         try {
-            const ads = await adService.getPublicAds(currentTags);
+            const ads = await adService.getPublicAds(tagsArray);
             if (ads && ads.length > 0) {
                 // Pick a random ad from the relevant ones
                 const randomIndex = Math.floor(Math.random() * ads.length);
@@ -63,16 +70,14 @@ export const AdDisplay = ({ className = '', currentTags = [] }: AdDisplayProps) 
             } else {
                 setAd(null);
             }
-            lastFetchRef.current = { tags: [...currentTags], time: now };
+            lastFetchRef.current = { tags: tagsArray, time: now };
         } catch (err) {
             console.error('Failed to fetch ads:', err);
         } finally {
             fetchingRef.current = false;
             setLoading(false);
         }
-    }, [isPro, currentTags, checkPrivacySettings]);
-
-    const stringifiedTags = useMemo(() => JSON.stringify(currentTags), [currentTags]);
+    }, [isPro, stringifiedTags, checkPrivacySettings]);
 
     useEffect(() => {
         if (isPro) {
@@ -104,7 +109,8 @@ export const AdDisplay = ({ className = '', currentTags = [] }: AdDisplayProps) 
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [isPro, stringifiedTags, fetchRelevantAd]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isPro, stringifiedTags]);
 
     if (isPro || !visible) return null;
 

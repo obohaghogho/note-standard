@@ -18,19 +18,6 @@ export const ProtectedRoute = ({ allowedRoles }: ProtectedRouteProps) => {
         );
     }
 
-    // No user = redirect to login
-    if (!user) {
-        return <Navigate to="/login" replace />;
-    }
-
-    // Account activation check: restrict access if email is not confirmed
-    if (!user?.email_confirmed_at) {
-        // If not confirmed, we can either redirect to a special message page 
-        // or just stay on login with a message.
-        // For now, let's redirect to login if they somehow bypass it.
-        return <Navigate to="/login" replace />;
-    }
-
     // Role-based access
     if (allowedRoles && profile?.role && !allowedRoles.includes(profile.role)) {
         return <Navigate to="/dashboard" replace />;
