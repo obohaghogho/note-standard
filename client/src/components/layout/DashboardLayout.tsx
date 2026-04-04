@@ -18,7 +18,13 @@ export const DashboardLayout = () => {
 
     useEffect(() => {
         // Essential render trace for debugging production navigation hangs
-        console.log(`[DashboardLayout] Nav: ${location.pathname} | Auth: ${authReady} | User: ${!!user}`);
+        console.log(`[DashboardLayout] Render: ${location.pathname} | Auth: ${authReady} | User: ${!!user}`);
+        
+        // Navigation completion check
+        const t = setTimeout(() => {
+            console.log(`[DashboardLayout] Navigation suspected complete: ${location.pathname}`);
+        }, 500);
+        return () => clearTimeout(t);
     }, [location.pathname, authReady, !!user]);
     
     if (!authReady) {
@@ -92,7 +98,6 @@ export const DashboardLayout = () => {
                 <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))] -z-10 opacity-20" />
 
                 <div 
-                    key={location.pathname} // 🔥 The "Key Trick": Forces fresh mount on nav
                     className={cn(
                         "flex-1 w-full flex flex-col min-w-0 overflow-y-auto relative",
                         isChatActiveOnMobile ? "p-0" : "p-4 md:p-8 max-w-7xl mx-auto"

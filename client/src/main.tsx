@@ -5,8 +5,14 @@ import './index.css'
 import './i18n'
 import App from './App.tsx'
 
-console.log('🚀 NoteStandard Client Version 1.0.5 - reCAPTCHA Timeout Fix');
+console.log('🚀 NoteStandard Client Version 1.1.0 - Navigation Stabilization Update');
 console.log("ENV CHECK:", import.meta.env);
+
+// Cleanup stale navigation flags on full reload
+if (window.performance && window.performance.navigation.type === 1) {
+    sessionStorage.removeItem('last_chunk_load_error_reload');
+    console.log('[Init] Stale navigation flags cleared');
+}
 
 window.onerror = function(msg, url, line, col) {
   const errorMsg = "GLOBAL ERROR: " + msg + "\nAt: " + url + ":" + line + ":" + col;

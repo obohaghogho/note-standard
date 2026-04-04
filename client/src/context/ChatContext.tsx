@@ -102,6 +102,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const isMounted = useRef(true);
     const conversationsFetchRef = useRef(false);
     const hasInitialFetched = useRef(false);
+    const conversationsRef = useRef<Conversation[]>([]);
+
+    // Keep ref in sync
+    useEffect(() => {
+        conversationsRef.current = conversations;
+    }, [conversations]);
 
     const loadConversations = useCallback(async () => {
         if (!session || conversationsFetchRef.current) return;
@@ -173,7 +179,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             };
 
             if (msg.sender_id !== user?.id) {
-                const sender = conversations.find(c => c.id === msg.conversation_id)?.members.find(m => m.user_id === msg.sender_id)?.profile?.username || 'Someone';
+                const sender = conversationsRef.current.find(c => c.id === msg.conversation_id)?.members.find(m => m.user_id === msg.sender_id)?.profile?.username || 'Someone';
                 NotificationService.notifyNewMessage(sender, msg.content, msg.conversation_id);
             }
 
@@ -334,10 +340,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             });
         });
 
-        // Aggressively join rooms on connect/reconnect
+        // Join rooms for all current conversations
         const joinAllRooms = () => {
-            console.log('[Chat] Joining rooms for', conversations.length, 'conversations');
-            conversations.forEach(conv => {
+            console.log('[Chat] Joining rooms for', conversationsRef.current.length, 'conversations');
+            conversationsRef.current.forEach(conv => {
                 socket.emit('join_room', conv.id);
             });
         };
@@ -345,14 +351,18 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         joinAllRooms();
 
         return () => {
-        socket.off('receive_message', processIncomingMessage);
-        socket.off('new_conversation', onNewConversation);
-        socket.off('conversation_updated', onNewConversation);
-        socket.off('message_read', onMessageRead);
-        socket.off('conversation_deleted', onConversationDeleted);
+            socket.off('receive_message', processIncomingMessage);
+            socket.off('new_conversation', onNewConversation);
+            socket.off('conversation_updated', onNewConversation);
+            socket.off('message_read', onMessageRead);
+            socket.off('conversation_deleted', onConversationDeleted);
+            socket.off('message_deleted');
+            socket.off('message_edited');
+            socket.off('user_typing');
+            socket.off('user_stop_typing');
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [socket, connected, conversations, user?.id, loadConversations, activeConversationId]);
+    }, [socket, connected, user?.id, loadConversations, activeConversationId]);
 
     const sendMessage = async (content: string, type: string = 'text', attachmentId?: string) => {
         if (!activeConversationId) throw new Error('No active conversation');
