@@ -12,13 +12,13 @@ import { cn } from '../../utils/cn';
 export const DashboardLayout = () => {
     const [isCreateNoteModalOpen, setIsCreateNoteModalOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    const { user, isPro } = useAuth();
+    const { user, isPro, profile, authReady } = useAuth();
+
+    console.log("[DashboardLayout] Auth Status:", { authReady, user: !!user, path: window.location.pathname });
     const location = useLocation();
 
     const isChatActiveOnMobile = location.pathname.startsWith('/dashboard/chat');
-    
-    console.log("PATH:", location.pathname);
-    console.log("CHAT ACTIVE:", isChatActiveOnMobile);
+    console.log("Layout rendered");
 
     return (
         <div className="min-h-[100dvh] text-white flex relative overflow-hidden w-full max-w-full">

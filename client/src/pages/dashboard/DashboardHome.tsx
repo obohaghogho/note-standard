@@ -58,6 +58,7 @@ export const DashboardHome = () => {
     const { transactions } = useWallet();
     const [greeting, setGreeting] = useState('');
     console.log("Dashboard rendered");
+    console.log("Page rendered (Home)");
     
     // Combined Activity Feed Logic
     const recentNotes = useMemo(() => notes.slice(0, 5).map(n => ({

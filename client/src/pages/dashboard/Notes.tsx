@@ -20,6 +20,8 @@ import type { Note } from '../../types/note';
 const NotesContent = () => {
     const { user } = useAuth();
     const { notes, loading, refreshNotes } = useNotes();
+    console.log("Notes rendered");
+    console.log("Page rendered (Notes)");
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [sortBy, setSortBy] = useState<'latest' | 'oldest' | 'title'>('latest');

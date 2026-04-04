@@ -7,6 +7,7 @@ interface ProtectedRouteProps {
 
 export const ProtectedRoute = ({ allowedRoles }: ProtectedRouteProps) => {
     const { user, profile, authReady } = useAuth();
+    console.log("[ProtectedRoute] Status:", { authReady, user: !!user, path: window.location.pathname });
 
     // Wait until auth state is fully resolved before making redirect decisions
     if (!authReady) {

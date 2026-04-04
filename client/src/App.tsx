@@ -17,6 +17,7 @@ import { NotesProvider } from './context/NotesContext';
 import { ChatWidget } from './components/chat/ChatWidget';
 import { ErrorBoundary } from 'react-error-boundary';
 import DashboardHome from './pages/dashboard/DashboardHome';
+import Notes from './pages/dashboard/Notes';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 
 // ─── Lazy-loaded pages (route-level code splitting) ───
@@ -34,8 +35,7 @@ const ActivitySuccess = lazyWithRetry(() => import('./pages/ActivitySuccess'), '
 const ActivityCancel = lazyWithRetry(() => import('./pages/ActivityCancel'), 'ActivityCancel');
 
 // Dashboard pages
-// DashboardHome is now eagerly loaded for diagnostic test
-const Notes = lazyWithRetry(() => import('./pages/dashboard/Notes'), 'Notes');
+// DashboardHome and Notes are now eagerly loaded for diagnostic test
 const Chat = lazyWithRetry(() => import('./pages/dashboard/Chat'), 'Chat');
 const Shared = lazyWithRetry(() => import('./pages/dashboard/Shared'), 'Shared');
 const Feed = lazyWithRetry(() => import('./pages/dashboard/Feed'), 'Feed');
