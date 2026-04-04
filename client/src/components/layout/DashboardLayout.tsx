@@ -7,17 +7,15 @@ import { useAuth } from '../../context/AuthContext';
 import { NotificationBell } from '../dashboard/NotificationBell';
 import { Menu, Plus } from 'lucide-react';
 import { LanguageSelector } from '../common/LanguageSelector';
-import { useChat } from '../../context/ChatContext';
 import { cn } from '../../utils/cn';
 
 export const DashboardLayout = () => {
     const [isCreateNoteModalOpen, setIsCreateNoteModalOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const { user, isPro } = useAuth();
-    const { activeConversationId } = useChat();
     const location = useLocation();
 
-    const isChatActiveOnMobile = location.pathname.includes('/dashboard/chat') && activeConversationId;
+    const isChatActiveOnMobile = location.pathname.startsWith('/dashboard/chat');
     
     console.log("PATH:", location.pathname);
     console.log("CHAT ACTIVE:", isChatActiveOnMobile);
