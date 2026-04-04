@@ -179,3 +179,5 @@ export const ActivitySuccess: React.FC = () => {
 };
 
 export default ActivitySuccess;
+
+export default ActivitySuccess;

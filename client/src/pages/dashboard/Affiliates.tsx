@@ -370,3 +370,5 @@ export const Affiliates = () => {
     </div>
   );
 };
+
+export default Affiliates;

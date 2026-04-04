@@ -251,3 +251,5 @@ export const AuditLogs = () => {
         </div>
     );
 };
+
+export default AuditLogs;

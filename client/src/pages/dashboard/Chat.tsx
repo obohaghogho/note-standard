@@ -57,3 +57,5 @@ export const Chat: React.FC = () => (
         <ChatContent />
     </ErrorBoundary>
 );
+
+export default Chat;

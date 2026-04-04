@@ -202,3 +202,5 @@ export const ManageAds = () => {
         </div>
     );
 };
+
+export default ManageAds;

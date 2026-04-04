@@ -525,3 +525,5 @@ export const AdminChat = () => {
         </div>
     );
 };
+
+export default AdminChat;

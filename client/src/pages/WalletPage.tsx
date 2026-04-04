@@ -441,3 +441,5 @@ export const WalletPage: React.FC = () => (
         <WalletContent />
     </ErrorBoundary>
 );
+
+export default WalletPage;

@@ -112,3 +112,5 @@ export const PrivacyPage = () => {
         </div>
     );
 };
+
+export default PrivacyPage;

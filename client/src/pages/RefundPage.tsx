@@ -98,3 +98,5 @@ export const RefundPage = () => {
         </div>
     );
 };
+
+export default RefundPage;

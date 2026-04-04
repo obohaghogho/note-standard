@@ -397,3 +397,5 @@ export const Transactions: React.FC = () => {
         </div>
     );
 };
+
+export default Transactions;

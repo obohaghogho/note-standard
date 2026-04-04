@@ -245,3 +245,5 @@ const DepositPage: React.FC = () => {
 };
 
 export default DepositPage;
+
+export default DepositPage;

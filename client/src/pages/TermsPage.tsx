@@ -98,3 +98,5 @@ export const TermsPage = () => {
         </div>
     );
 };
+
+export default TermsPage;

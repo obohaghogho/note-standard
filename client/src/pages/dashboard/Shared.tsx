@@ -160,3 +160,5 @@ export const Shared = () => {
         </div>
     );
 };
+
+export default Shared;

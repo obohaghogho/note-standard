@@ -208,3 +208,5 @@ export const LimitRequestsPage = () => {
         </div>
     );
 };
+
+export default LimitRequestsPage;

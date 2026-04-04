@@ -710,3 +710,5 @@ export const TeamsPage: React.FC = () => {
     </div>
   );
 };
+
+export default TeamsPage;

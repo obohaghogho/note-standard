@@ -302,3 +302,5 @@ export const DashboardHome = () => {
         </motion.div>
     );
 };
+
+export default DashboardHome;

@@ -257,3 +257,5 @@ export const BroadcastManager = () => {
         </div>
     );
 };
+
+export default BroadcastManager;

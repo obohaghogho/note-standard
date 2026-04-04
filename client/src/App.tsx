@@ -20,47 +20,47 @@ import { lazyWithRetry } from './utils/lazyWithRetry';
 
 // ─── Lazy-loaded pages (route-level code splitting) ───
 // Public pages
-const LandingPage = lazyWithRetry(() => import('./pages/LandingPage').then(m => m.LandingPage), 'LandingPage');
-const Login = lazyWithRetry(() => import('./pages/Login').then(m => m.Login), 'Login');
-const Signup = lazyWithRetry(() => import('./pages/Signup').then(m => m.Signup), 'Signup');
-const TermsPage = lazyWithRetry(() => import('./pages/TermsPage').then(m => m.TermsPage), 'TermsPage');
-const PrivacyPage = lazyWithRetry(() => import('./pages/PrivacyPage').then(m => m.PrivacyPage), 'PrivacyPage');
-const RefundPage = lazyWithRetry(() => import('./pages/RefundPage').then(m => m.RefundPage), 'RefundPage');
-const AboutPage = lazyWithRetry(() => import('./pages/AboutPage').then(m => m.AboutPage), 'AboutPage');
-const ContactPage = lazyWithRetry(() => import('./pages/ContactPage').then(m => m.ContactPage), 'ContactPage');
-const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword').then(m => m.ResetPassword), 'ResetPassword');
-const ActivitySuccess = lazyWithRetry(() => import('./pages/ActivitySuccess').then(m => m.ActivitySuccess), 'ActivitySuccess');
-const ActivityCancel = lazyWithRetry(() => import('./pages/ActivityCancel').then(m => m.ActivityCancel), 'ActivityCancel');
+const LandingPage = lazyWithRetry(() => import('./pages/LandingPage'), 'LandingPage');
+const Login = lazyWithRetry(() => import('./pages/Login'), 'Login');
+const Signup = lazyWithRetry(() => import('./pages/Signup'), 'Signup');
+const TermsPage = lazyWithRetry(() => import('./pages/TermsPage'), 'TermsPage');
+const PrivacyPage = lazyWithRetry(() => import('./pages/PrivacyPage'), 'PrivacyPage');
+const RefundPage = lazyWithRetry(() => import('./pages/RefundPage'), 'RefundPage');
+const AboutPage = lazyWithRetry(() => import('./pages/AboutPage'), 'AboutPage');
+const ContactPage = lazyWithRetry(() => import('./pages/ContactPage'), 'ContactPage');
+const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword'), 'ResetPassword');
+const ActivitySuccess = lazyWithRetry(() => import('./pages/ActivitySuccess'), 'ActivitySuccess');
+const ActivityCancel = lazyWithRetry(() => import('./pages/ActivityCancel'), 'ActivityCancel');
 
 // Dashboard pages
-const DashboardHome = lazyWithRetry(() => import('./pages/dashboard/DashboardHome').then(m => m.DashboardHome), 'DashboardHome');
-const Notes = lazyWithRetry(() => import('./pages/dashboard/Notes').then(m => m.Notes), 'Notes');
-const Chat = lazyWithRetry(() => import('./pages/dashboard/Chat').then(m => m.Chat), 'Chat');
-const Shared = lazyWithRetry(() => import('./pages/dashboard/Shared').then(m => m.Shared), 'Shared');
-const Feed = lazyWithRetry(() => import('./pages/dashboard/Feed').then(m => m.Feed), 'Feed');
-const Search = lazyWithRetry(() => import('./pages/dashboard/Search').then(m => m.Search), 'Search');
-const Settings = lazyWithRetry(() => import('./pages/dashboard/Settings').then(m => m.Settings), 'Settings');
-const Billing = lazyWithRetry(() => import('./pages/dashboard/Billing').then(m => m.Billing), 'Billing');
-const Affiliates = lazyWithRetry(() => import('./pages/dashboard/Affiliates').then(m => m.Affiliates), 'Affiliates');
-const Notifications = lazyWithRetry(() => import('./pages/dashboard/Notifications').then(m => m.Notifications), 'Notifications');
-const Trends = lazyWithRetry(() => import('./pages/dashboard/Trends').then(m => m.Trends), 'Trends');
-const WalletPage = lazyWithRetry(() => import('./pages/WalletPage').then(m => m.WalletPage), 'WalletPage');
-const Transactions = lazyWithRetry(() => import('./pages/dashboard/Transactions').then(m => m.Transactions), 'Transactions');
-const TeamsPage = lazyWithRetry(() => import('./pages/teams/TeamsPage').then(m => m.TeamsPage), 'TeamsPage');
+const DashboardHome = lazyWithRetry(() => import('./pages/dashboard/DashboardHome'), 'DashboardHome');
+const Notes = lazyWithRetry(() => import('./pages/dashboard/Notes'), 'Notes');
+const Chat = lazyWithRetry(() => import('./pages/dashboard/Chat'), 'Chat');
+const Shared = lazyWithRetry(() => import('./pages/dashboard/Shared'), 'Shared');
+const Feed = lazyWithRetry(() => import('./pages/dashboard/Feed'), 'Feed');
+const Search = lazyWithRetry(() => import('./pages/dashboard/Search'), 'Search');
+const Settings = lazyWithRetry(() => import('./pages/dashboard/Settings'), 'Settings');
+const Billing = lazyWithRetry(() => import('./pages/dashboard/Billing'), 'Billing');
+const Affiliates = lazyWithRetry(() => import('./pages/dashboard/Affiliates'), 'Affiliates');
+const Notifications = lazyWithRetry(() => import('./pages/dashboard/Notifications'), 'Notifications');
+const Trends = lazyWithRetry(() => import('./pages/dashboard/Trends'), 'Trends');
+const WalletPage = lazyWithRetry(() => import('./pages/WalletPage'), 'WalletPage');
+const Transactions = lazyWithRetry(() => import('./pages/dashboard/Transactions'), 'Transactions');
+const TeamsPage = lazyWithRetry(() => import('./pages/teams/TeamsPage'), 'TeamsPage');
 
 // Admin pages
-const AdminDashboard = lazyWithRetry(() => import('./pages/admin/AdminDashboard').then(m => m.AdminDashboard), 'AdminDashboard');
-const UserManagement = lazyWithRetry(() => import('./pages/admin/UserManagement').then(m => m.UserManagement), 'UserManagement');
-const AdminChat = lazyWithRetry(() => import('./pages/admin/AdminChat').then(m => m.AdminChat), 'AdminChat');
-const AuditLogs = lazyWithRetry(() => import('./pages/admin/AuditLogs').then(m => m.AuditLogs), 'AuditLogs');
-const BroadcastManager = lazyWithRetry(() => import('./pages/admin/BroadcastManager').then(m => m.BroadcastManager), 'BroadcastManager');
-const AutoReplySettings = lazyWithRetry(() => import('./pages/admin/AutoReplySettings').then(m => m.AutoReplySettings), 'AutoReplySettings');
-const Analytics = lazyWithRetry(() => import('./pages/admin/Analytics').then(m => m.Analytics), 'Analytics');
-const AdminSettings = lazyWithRetry(() => import('./pages/admin/AdminSettings').then(m => m.AdminSettings), 'AdminSettings');
-const ManageAds = lazyWithRetry(() => import('./pages/admin/ManageAds').then(m => m.ManageAds), 'ManageAds');
-const LimitRequestsPage = lazyWithRetry(() => import('./pages/admin/LimitRequestsPage').then(m => m.LimitRequestsPage), 'LimitRequestsPage');
+const AdminDashboard = lazyWithRetry(() => import('./pages/admin/AdminDashboard'), 'AdminDashboard');
+const UserManagement = lazyWithRetry(() => import('./pages/admin/UserManagement'), 'UserManagement');
+const AdminChat = lazyWithRetry(() => import('./pages/admin/AdminChat'), 'AdminChat');
+const AuditLogs = lazyWithRetry(() => import('./pages/admin/AuditLogs'), 'AuditLogs');
+const BroadcastManager = lazyWithRetry(() => import('./pages/admin/BroadcastManager'), 'BroadcastManager');
+const AutoReplySettings = lazyWithRetry(() => import('./pages/admin/AutoReplySettings'), 'AutoReplySettings');
+const Analytics = lazyWithRetry(() => import('./pages/admin/Analytics'), 'Analytics');
+const AdminSettings = lazyWithRetry(() => import('./pages/admin/AdminSettings'), 'AdminSettings');
+const ManageAds = lazyWithRetry(() => import('./pages/admin/ManageAds'), 'ManageAds');
+const LimitRequestsPage = lazyWithRetry(() => import('./pages/admin/LimitRequestsPage'), 'LimitRequestsPage');
 const DepositPage = lazyWithRetry(() => import('./pages/dashboard/DepositPage'), 'DepositPage');
-const ManualDeposits = lazyWithRetry(() => import('./pages/admin/ManualDeposits').then(m => m.ManualDeposits), 'ManualDeposits');
+const ManualDeposits = lazyWithRetry(() => import('./pages/admin/ManualDeposits'), 'ManualDeposits');
 
 const ChatRedirect = () => {
   const { id } = useParams();

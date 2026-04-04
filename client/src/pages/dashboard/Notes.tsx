@@ -284,3 +284,5 @@ export const Notes = () => (
         <NotesContent />
     </ErrorBoundary>
 );
+
+export default Notes;

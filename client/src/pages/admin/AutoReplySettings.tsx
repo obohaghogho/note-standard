@@ -230,3 +230,5 @@ export const AutoReplySettings = () => {
         </div>
     );
 };
+
+export default AutoReplySettings;

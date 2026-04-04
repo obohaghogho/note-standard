@@ -8,3 +8,5 @@ export const ManualDeposits: React.FC = () => {
         </div>
     );
 };
+
+export default ManualDeposits;
