@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { CreateNoteModal } from '../dashboard/CreateNoteModal';
@@ -69,7 +69,16 @@ export const DashboardLayout = () => {
                 <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))] -z-10 opacity-20" />
 
                 <div className={`flex-1 ${isChatActiveOnMobile ? 'p-0 h-full' : 'p-4 md:p-8 max-w-7xl mx-auto'} w-full flex flex-col min-w-0`}>
-                    <Outlet key={location.pathname} context={{ openCreateNoteModal: () => setIsCreateNoteModalOpen(true) }} />
+                    <Suspense fallback={
+                        <div className="flex-1 flex items-center justify-center p-12">
+                            <div className="flex flex-col items-center gap-4">
+                                <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+                                <p className="text-gray-500 text-sm animate-pulse font-medium">Loading content...</p>
+                            </div>
+                        </div>
+                    }>
+                        <Outlet context={{ openCreateNoteModal: () => setIsCreateNoteModalOpen(true) }} />
+                    </Suspense>
                 </div>
             </main>
 

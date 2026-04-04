@@ -167,93 +167,22 @@ function App() {
                                 <DashboardLayout />
                             </ErrorBoundary>
                         }>
-                        <Route index element={
-                            <Suspense fallback={<div className="p-8 text-center text-gray-500">Loading home...</div>}>
-                                <DashboardHome />
-                            </Suspense>
-                        } />
-                        <Route path="notes" element={
-                            <ErrorBoundary fallback={<div className="p-8 text-center text-red-400 bg-red-400/5 rounded-xl border border-red-400/10">Failed to load Notes.</div>}>
-                                <Suspense fallback={<div className="p-8 text-center text-gray-400 animate-pulse">Loading notes...</div>}>
-                                    <Notes />
-                                </Suspense>
-                            </ErrorBoundary>
-                        } />
-                        <Route path="chat" element={
-                            <ErrorBoundary fallback={<div className="p-8 text-center text-red-400 bg-red-400/5 rounded-xl border border-red-400/10">Failed to load Chat.</div>}>
-                                <Suspense fallback={<div className="p-8 text-center text-gray-400 animate-pulse">Loading chat...</div>}>
-                                    <Chat />
-                                </Suspense>
-                            </ErrorBoundary>
-                        } />
-                        <Route path="shared" element={
-                            <Suspense fallback={<div>Loading...</div>}>
-                                <Shared />
-                            </Suspense>
-                        } />
-                        <Route path="feed" element={
-                            <Suspense fallback={<div>Loading...</div>}>
-                                <Feed />
-                            </Suspense>
-                        } />
-                        <Route path="favorites" element={
-                            <Suspense fallback={<div>Loading...</div>}>
-                                <Notes />
-                            </Suspense>
-                        } />
-                        <Route path="search" element={
-                            <Suspense fallback={<div>Loading...</div>}>
-                                <Search />
-                            </Suspense>
-                        } />
-                        <Route path="billing" element={
-                            <Suspense fallback={<div>Loading...</div>}>
-                                <Billing />
-                            </Suspense>
-                        } />
-                        <Route path="activity" element={
-                            <ErrorBoundary fallback={<div className="p-8 text-center text-red-400">Failed to load Activity.</div>}>
-                                <Suspense fallback={<div className="p-8 text-center text-gray-400 animate-pulse">Loading activity...</div>}>
-                                    <WalletPage />
-                                </Suspense>
-                            </ErrorBoundary>
-                        } />
-                        <Route path="history" element={
-                            <Suspense fallback={<div>Loading...</div>}>
-                                <Transactions />
-                            </Suspense>
-                        } />
-                        <Route path="affiliates" element={
-                            <Suspense fallback={<div>Loading...</div>}>
-                                <Affiliates />
-                            </Suspense>
-                        } />
-                        <Route path="deposit" element={
-                            <Suspense fallback={<div>Loading...</div>}>
-                                <DepositPage />
-                            </Suspense>
-                        } />
-                        <Route path="settings" element={
-                            <Suspense fallback={<div>Loading...</div>}>
-                                <Settings />
-                            </Suspense>
-                        } />
-
-                        <Route path="notifications" element={
-                            <Suspense fallback={<div>Loading...</div>}>
-                                <Notifications />
-                            </Suspense>
-                        } />
-                        <Route path="trends" element={
-                            <Suspense fallback={<div>Loading...</div>}>
-                                <Trends />
-                            </Suspense>
-                        } />
-                        <Route path="teams" element={
-                            <Suspense fallback={<div>Loading...</div>}>
-                                <TeamsPage />
-                            </Suspense>
-                        } />
+                        <Route index element={<DashboardHome />} />
+                        <Route path="notes" element={<Notes />} />
+                        <Route path="chat" element={<Chat />} />
+                        <Route path="shared" element={<Shared />} />
+                        <Route path="feed" element={<Feed />} />
+                        <Route path="favorites" element={<Notes />} />
+                        <Route path="search" element={<Search />} />
+                        <Route path="billing" element={<Billing />} />
+                        <Route path="activity" element={<WalletPage />} />
+                        <Route path="history" element={<Transactions />} />
+                        <Route path="affiliates" element={<Affiliates />} />
+                        <Route path="deposit" element={<DepositPage />} />
+                        <Route path="settings" element={<Settings />} />
+                        <Route path="notifications" element={<Notifications />} />
+                        <Route path="trends" element={<Trends />} />
+                        <Route path="teams" element={<TeamsPage />} />
                         </Route>
                     </Route>
 

@@ -10,10 +10,6 @@ export function lazyWithRetry<T extends React.ComponentType<any>>(
   name?: string
 ): React.LazyExoticComponent<T> {
   return React.lazy(async () => {
-    const pageHasAlreadyBeenForceRefreshed = JSON.parse(
-      window.sessionStorage.getItem('page-has-been-force-refreshed') || 'false'
-    );
-
     try {
       const component = await componentImport();
       // If successful, reset the refresh flag
@@ -25,19 +21,20 @@ export function lazyWithRetry<T extends React.ComponentType<any>>(
       }
       return { default: component } as { default: T };
     } catch (error) {
-      console.error(`Error loading lazy component ${name || ''}:`, error);
+      console.error(`[LazyLoad] Error loading component ${name || 'unknown'}:`, error);
 
-      if (!pageHasAlreadyBeenForceRefreshed) {
-        // Log that we're forcing a refresh
-        console.warn('ChunkLoadError detected, forcing page refresh to get latest version.');
-        window.sessionStorage.setItem('page-has-been-force-refreshed', 'true');
+      // Check if we've already tried to refresh to resolve this
+      const hasRefreshed = sessionStorage.getItem(`refreshed-${name}`) === 'true';
+
+      if (!hasRefreshed) {
+        sessionStorage.setItem(`refreshed-${name}`, 'true');
+        console.warn(`[LazyLoad] Retrying ${name}...`);
         window.location.reload();
-        
-        // Return a promise that never resolves while the page is reloading
-        return new Promise(() => {});
+        return new Promise(() => {}); // Wait for reload
       }
 
-      // If we already refreshed and it still fails, throw the error
+      // If we already refreshed, clear the flag and propagate error
+      sessionStorage.removeItem(`refreshed-${name}`);
       throw error;
     }
   });
