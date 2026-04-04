@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useEffect, Suspense } from 'react';
 
@@ -68,6 +68,90 @@ const ChatRedirect = () => {
   return <Navigate to={`/dashboard/chat?id=${id}`} replace />;
 };
 
+/**
+ * AppRoutes component ensures that the Routes tree always has access 
+ * to the current location, forcing it to re-render when the URL changes.
+ */
+const AppRoutes = () => {
+    const location = useLocation();
+
+    return (
+        <Suspense fallback={
+            <div className="flex items-center justify-center min-h-[100dvh] bg-[#0a0a0a]">
+                <div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
+            </div>
+        }>
+            <Routes location={location}>
+                <Route path="/" element={<Suspense fallback={null}><LandingPage /></Suspense>} />
+                <Route path="/login" element={<Suspense fallback={null}><Login /></Suspense>} />
+                <Route path="/signup" element={<Suspense fallback={null}><Signup /></Suspense>} />
+                <Route path="/terms" element={<Suspense fallback={null}><TermsPage /></Suspense>} />
+                <Route path="/privacy" element={<Suspense fallback={null}><PrivacyPage /></Suspense>} />
+                <Route path="/refund" element={<Suspense fallback={null}><RefundPage /></Suspense>} />
+                <Route path="/about" element={<Suspense fallback={null}><AboutPage /></Suspense>} />
+                <Route path="/contact" element={<Suspense fallback={null}><ContactPage /></Suspense>} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                
+                {/* Legacy Chat Redirect */}
+                <Route path="/chat/:id" element={<ChatRedirect />} />
+
+                {/* Activity result pages - outside protected route as user returns from external service */}
+                <Route path="/activity/success" element={<Suspense fallback={<div>Loading...</div>}><ActivitySuccess /></Suspense>} />
+                <Route path="/activity/cancel" element={<Suspense fallback={<div>Loading...</div>}><ActivityCancel /></Suspense>} />
+                {/* Alias for activity path */}
+                <Route path="/activity" element={<Navigate to="/dashboard/activity" replace />} />
+
+                <Route element={<ProtectedRoute />}>
+                    {/* User Dashboard */}
+                    <Route path="/dashboard" element={
+                        <ErrorBoundary fallback={<div>Something went wrong loading the dashboard. <button onClick={() => window.location.reload()}>Reload</button></div>}>
+                            <DashboardLayout />
+                        </ErrorBoundary>
+                    }>
+                        <Route index element={<DashboardHome />} />
+                        <Route path="notes" element={<Notes />} />
+                        <Route path="chat" element={<Chat />} />
+                        <Route path="shared" element={<Shared />} />
+                        <Route path="feed" element={<Feed />} />
+                        <Route path="favorites" element={<Notes />} />
+                        <Route path="search" element={<Search />} />
+                        <Route path="billing" element={<Billing />} />
+                        <Route path="activity" element={<WalletPage />} />
+                        <Route path="history" element={<Transactions />} />
+                        <Route path="affiliates" element={<Affiliates />} />
+                        <Route path="deposit" element={<DepositPage />} />
+                        <Route path="settings" element={<Settings />} />
+                        <Route path="notifications" element={<Notifications />} />
+                        <Route path="trends" element={<Trends />} />
+                        <Route path="teams" element={<TeamsPage />} />
+                    </Route>
+                </Route>
+
+                {/* Admin Routes - Restrict to admin/support roles */}
+                <Route element={<ProtectedRoute allowedRoles={['admin', 'support']} />}>
+                    <Route path="/admin" element={
+                        <ErrorBoundary fallback={<div>Admin Error</div>}>
+                            <AdminLayout />
+                        </ErrorBoundary>
+                    }>
+                        <Route index element={<Suspense fallback={null}><AdminDashboard /></Suspense>} />
+                        <Route path="users" element={<Suspense fallback={null}><UserManagement /></Suspense>} />
+                        <Route path="chats" element={<Suspense fallback={null}><AdminChat /></Suspense>} />
+                        <Route path="audit-logs" element={<Suspense fallback={null}><AuditLogs /></Suspense>} />
+                        <Route path="broadcasts" element={<Suspense fallback={null}><BroadcastManager /></Suspense>} />
+                        <Route path="auto-reply" element={<Suspense fallback={null}><AutoReplySettings /></Suspense>} />
+                        <Route path="analytics" element={<Suspense fallback={null}><Analytics /></Suspense>} />
+                        <Route path="ads" element={<Suspense fallback={null}><ManageAds /></Suspense>} />
+                        <Route path="deposits" element={<Suspense fallback={null}><ManualDeposits /></Suspense>} />
+                        <Route path="limit-requests" element={<Suspense fallback={null}><LimitRequestsPage /></Suspense>} />
+                        <Route path="settings" element={<Suspense fallback={null}><AdminSettings /></Suspense>} />
+                    </Route>
+                </Route>
+            </Routes>
+        </Suspense>
+    );
+};
+
 function App() {
   useEffect(() => {
     // Global error handler for uncaught errors
@@ -135,80 +219,7 @@ function App() {
                 <WebRTCProvider>
                 <WalletProvider>
                 <NotesProvider>
-                    <Suspense fallback={
-                      <div className="flex items-center justify-center min-h-[100dvh] bg-[#0a0a0a]">
-                        <div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
-                      </div>
-                    }>
-                    <Routes>
-                    <Route path="/" element={<Suspense fallback={null}><LandingPage /></Suspense>} />
-                    <Route path="/login" element={<Suspense fallback={null}><Login /></Suspense>} />
-                    <Route path="/signup" element={<Suspense fallback={null}><Signup /></Suspense>} />
-                    <Route path="/terms" element={<Suspense fallback={null}><TermsPage /></Suspense>} />
-                    <Route path="/privacy" element={<Suspense fallback={null}><PrivacyPage /></Suspense>} />
-                    <Route path="/refund" element={<Suspense fallback={null}><RefundPage /></Suspense>} />
-                    <Route path="/about" element={<Suspense fallback={null}><AboutPage /></Suspense>} />
-                    <Route path="/contact" element={<Suspense fallback={null}><ContactPage /></Suspense>} />
-                    <Route path="/reset-password" element={<ResetPassword />} />
-                    
-                    {/* Legacy Chat Redirect */}
-                    <Route path="/chat/:id" element={<ChatRedirect />} />
-
-                    {/* Activity result pages - outside protected route as user returns from external service */}
-                    <Route path="/activity/success" element={<Suspense fallback={<div>Loading...</div>}><ActivitySuccess /></Suspense>} />
-                    <Route path="/activity/cancel" element={<Suspense fallback={<div>Loading...</div>}><ActivityCancel /></Suspense>} />
-                    {/* Alias for activity path */}
-                    <Route path="/activity" element={<Navigate to="/dashboard/activity" replace />} />
-
-                    <Route element={<ProtectedRoute />}>
-                        {/* User Dashboard */}
-                        <Route path="/dashboard" element={
-                            <ErrorBoundary fallback={<div>Something went wrong loading the dashboard. <button onClick={() => window.location.reload()}>Reload</button></div>}>
-                                <DashboardLayout />
-                            </ErrorBoundary>
-                        }>
-                        <Route index element={<DashboardHome />} />
-                        <Route path="notes" element={<Notes />} />
-                        <Route path="chat" element={<Chat />} />
-                        <Route path="shared" element={<Shared />} />
-                        <Route path="feed" element={<Feed />} />
-                        <Route path="favorites" element={<Notes />} />
-                        <Route path="search" element={<Search />} />
-                        <Route path="billing" element={<Billing />} />
-                        <Route path="activity" element={<WalletPage />} />
-                        <Route path="history" element={<Transactions />} />
-                        <Route path="affiliates" element={<Affiliates />} />
-                        <Route path="deposit" element={<DepositPage />} />
-                        <Route path="settings" element={<Settings />} />
-                        <Route path="notifications" element={<Notifications />} />
-                        <Route path="trends" element={<Trends />} />
-                        <Route path="teams" element={<TeamsPage />} />
-                        </Route>
-                    </Route>
-
-                    {/* Admin Routes - Restrict to admin/support roles */}
-                    <Route element={<ProtectedRoute allowedRoles={['admin', 'support']} />}>
-                        <Route path="/admin" element={
-                            <ErrorBoundary fallback={<div>Admin Error</div>}>
-                                <AdminLayout />
-                            </ErrorBoundary>
-                        }>
-                        <Route index element={<Suspense fallback={null}><AdminDashboard /></Suspense>} />
-                        <Route path="users" element={<Suspense fallback={null}><UserManagement /></Suspense>} />
-                        <Route path="chats" element={<Suspense fallback={null}><AdminChat /></Suspense>} />
-                        <Route path="audit-logs" element={<Suspense fallback={null}><AuditLogs /></Suspense>} />
-                        <Route path="broadcasts" element={<Suspense fallback={null}><BroadcastManager /></Suspense>} />
-                        <Route path="auto-reply" element={<Suspense fallback={null}><AutoReplySettings /></Suspense>} />
-                        <Route path="analytics" element={<Suspense fallback={null}><Analytics /></Suspense>} />
-                        <Route path="ads" element={<Suspense fallback={null}><ManageAds /></Suspense>} />
-                        <Route path="deposits" element={<Suspense fallback={null}><ManualDeposits /></Suspense>} />
-                        <Route path="limit-requests" element={<Suspense fallback={null}><LimitRequestsPage /></Suspense>} />
-                        <Route path="settings" element={<Suspense fallback={null}><AdminSettings /></Suspense>} />
-                        </Route>
-                    </Route>
-                    </Routes>
-                    </Suspense>
-                    
+                    <AppRoutes />
                     <ChatWidget />
                 </NotesProvider>
                 </WalletProvider>
