@@ -307,6 +307,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncUserData]);
 
+  console.log("Loading:", loading);
+  console.log("User:", user);
+
   return (
     <AuthContext.Provider value={{ 
       user, 
