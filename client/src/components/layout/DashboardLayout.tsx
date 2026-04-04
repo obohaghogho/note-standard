@@ -60,6 +60,10 @@ export const DashboardLayout = () => {
                 onClose={() => setIsMobileMenuOpen(false)}
             />
             
+            <div className="bg-red-600 text-white text-center text-[11px] font-black py-1 z-[9999] uppercase tracking-widest sticky top-0 shadow-xl">
+                🚨 NoteStandard Stabilization Build v1.3.0 Active 🚨
+            </div>
+
             <main className={mainContainerClass}>
                 {/* Header/Top bar */}
                 <header className={cn(
