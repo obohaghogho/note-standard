@@ -60,8 +60,9 @@ export const DashboardLayout = () => {
                 onClose={() => setIsMobileMenuOpen(false)}
             />
             
-            <div className="bg-red-600 text-white text-center text-[11px] font-black py-1 z-[9999] uppercase tracking-widest sticky top-0 shadow-xl">
-                🚨 NoteStandard Stabilization Build v1.3.0 Active 🚨
+            {/* Lower z-index to prevent covering sidebar/header while still being a visual guide */}
+            <div className="bg-red-600 text-white text-center text-[10px] font-black py-0.5 z-20 uppercase tracking-tighter sticky top-0 shadow-sm pointer-events-none">
+                🚩 v1.3.1 - DIAGNOSTIC OVERLAY 🚩
             </div>
 
             <main className={mainContainerClass}>
