@@ -101,6 +101,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     const isMounted = useRef(true);
     const conversationsFetchRef = useRef(false);
+    const hasInitialFetched = useRef(false);
 
     const loadConversations = useCallback(async () => {
         if (!session || conversationsFetchRef.current) return;
@@ -108,7 +109,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         conversationsFetchRef.current = true;
         
         try {
-            console.log('[Chat] Loading conversations');
+            console.log('[Chat] FETCH: Loading conversations', { userId: user?.id });
             const res = await fetch(`${API_URL}/api/chat/conversations`, {
                 headers: { 'Authorization': `Bearer ${session.access_token}` }
             });
@@ -139,15 +140,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => {
         isMounted.current = true;
         if (authReady) {
-            if (session) {
+            if (session && !hasInitialFetched.current) {
+                console.log('[Chat] Initial load triggered by authReady');
+                hasInitialFetched.current = true;
                 loadConversations();
-            } else {
+            } else if (!session) {
                 setLoading(false);
             }
         }
         return () => { isMounted.current = false; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [authReady, session?.access_token, loadConversations]);
+    }, [authReady, session?.access_token]);
 
     // Socket listeners
     useEffect(() => {

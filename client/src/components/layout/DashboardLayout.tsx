@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { CreateNoteModal } from '../dashboard/CreateNoteModal';
@@ -13,9 +13,17 @@ export const DashboardLayout = () => {
     const location = useLocation();
     const [isCreateNoteModalOpen, setIsCreateNoteModalOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    const { user, isPro, authReady } = useAuth();
+    const { user, loading, authReady, isPro } = useAuth();
 
-    console.log("[DashboardLayout] Auth Status:", { authReady, user: !!user, path: window.location.pathname });
+    useEffect(() => {
+        console.log("[DashboardLayout] Render Trace:", { 
+            path: location.pathname, 
+            authReady, 
+            loading,
+            hasUser: !!user,
+            time: new Date().toISOString()
+        });
+    }, [location.pathname, authReady, loading, !!user]);
     
     if (!authReady) {
         return (

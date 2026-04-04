@@ -179,136 +179,114 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  useEffect(() => {
-    isMounted.current = true;
-
-    const initAuth = async () => {
-      try {
-        setLoading(true);
-        // Step 1: Just get the session (fastest possible)
-        const { data: { session: initialSession }, error } = await supabase.auth.getSession();
-        if (error) throw error;
-
-        if (isMounted.current) {
-          const currentUser = initialSession?.user ?? null;
-          setSession(initialSession);
-          setUser(currentUser);
-          
-          // Clear loading immediately so the app can render the dashboard/login
-          setLoading(false);
-          setAuthReady(true);
-
-          if (currentUser) {
-            // Step 2: Sync profile/sub in the background without awaiting
-            syncUserData(currentUser.id, currentUser).catch(err => {
-              console.error('[Auth] Background sync failed:', err);
-            });
+    useEffect(() => {
+      isMounted.current = true;
+  
+      const initAuthAndSubscribe = async () => {
+        try {
+          if (!isMounted.current) return;
+          setLoading(true);
+  
+          // Step 1: Initial session check
+          const { data: { session: initialSession }, error } = await supabase.auth.getSession();
+          if (error) throw error;
+  
+          if (isMounted.current) {
+            const currentUser = initialSession?.user ?? null;
+            
+            // Only update session if it's actually different from current to avoid redundant renders
+            setSession(initialSession);
+            setUser(currentUser);
+            
+            if (currentUser) {
+              syncUserData(currentUser.id, currentUser).catch(err => {
+                console.error('[Auth] Initial sync failed:', err);
+              });
+              // Setup subscriptions immediately
+              setupSubscriptions(currentUser.id);
+            }
+  
+            // Finalize boot
+            setLoading(false);
+            setAuthReady(true);
+            console.log('[Auth] Boot Complete:', { userId: currentUser?.id });
+          }
+        } catch (err) {
+          console.error('[Auth] Boot Error:', err);
+          if (isMounted.current) {
+            setLoading(false);
+            setAuthReady(true);
           }
         }
-      } catch (err) {
-        console.error('[Auth] Init failed:', err);
-        if (isMounted.current) {
-          setLoading(false);
-          setAuthReady(true);
-        }
-      }
-    };
-
-    initAuth();
-
-    // Global Realtime Subscriptions for Profile and Billing
-    let profileChannel: any = null;
-    let subscriptionChannel: any = null;
-
-    const setupSubscriptions = (userId: string) => {
-      // 1. Subscribe to profile changes
-      profileChannel = supabase
-        .channel(`public:profiles:${userId}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'profiles',
-            filter: `id=eq.${userId}`
-          },
-          () => {
-            console.log('[Auth] Profile changed, syncing...');
-            syncUserData(userId, undefined, true);
-          }
-        )
-        .subscribe();
-
-      // 2. Subscribe to subscription changes
-      subscriptionChannel = supabase
-        .channel(`public:subscriptions:${userId}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'subscriptions',
-            filter: `user_id=eq.${userId}`
-          },
-          () => {
-            console.log('[Auth] Subscription changed, syncing...');
-            syncUserData(userId, undefined, true);
-          }
-        )
-        .subscribe();
-    };
-
-    const { data: { subscription: authListener } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
-      if (!isMounted.current) return;
-      
-      console.log(`[Auth] Event: ${event}`, newSession?.user?.id);
-
-      const currentUser = newSession?.user ?? null;
-      
-      if (event === 'SIGNED_OUT') {
-        // Cleanup subscriptions
+      };
+  
+      // Step 2: Global Realtime Subscriptions for Profile and Billing
+      let profileChannel: any = null;
+      let subscriptionChannel: any = null;
+  
+      const setupSubscriptions = (userId: string) => {
         if (profileChannel) supabase.removeChannel(profileChannel);
         if (subscriptionChannel) supabase.removeChannel(subscriptionChannel);
+  
+        profileChannel = supabase
+          .channel(`public:profiles:${userId}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, 
+            () => syncUserData(userId, undefined, true))
+          .subscribe();
+  
+        subscriptionChannel = supabase
+          .channel(`public:subscriptions:${userId}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions', filter: `user_id=eq.${userId}` }, 
+            () => syncUserData(userId, undefined, true))
+          .subscribe();
+      };
+  
+      // Pre-init
+      initAuthAndSubscribe();
+  
+      // Step 3: Global Auth Listener
+      const { data: { subscription: authListener } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+        if (!isMounted.current) return;
         
-        setSession(null);
-        setUser(null);
-        setProfile(null);
-        setSubscription(null);
-        fetchLockRef.current = null;
-        resetRateLimiters();
-        return;
-      }
-
-      setSession(newSession);
-      setUser(currentUser);
-
-      if (currentUser) {
-        // Setup/Refresh subscriptions if user is logged in
-        if (!profileChannel) {
-          setupSubscriptions(currentUser.id);
+        console.log(`[Auth] Event: ${event}`, { userId: newSession?.user?.id });
+  
+        const currentUser = newSession?.user ?? null;
+        
+        if (event === 'SIGNED_OUT') {
+          if (profileChannel) supabase.removeChannel(profileChannel);
+          if (subscriptionChannel) supabase.removeChannel(subscriptionChannel);
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setSubscription(null);
+          fetchLockRef.current = null;
+          resetRateLimiters();
+          return;
         }
-
-        if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
-          if (!profile || event === 'USER_UPDATED') {
+  
+        // Only trigger state updates/syncs if the user identity has actually changed to avoid handshake loops
+        if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+          setSession(newSession);
+          setUser(currentUser);
+          if (currentUser) {
+            setupSubscriptions(currentUser.id);
             syncUserData(currentUser.id, currentUser).catch(err => {
               console.error('[Auth] Background sync on event failed:', err);
             });
           }
         }
-      }
-    });
+      });
+  
+      return () => {
+        isMounted.current = false;
+        authListener.unsubscribe();
+        if (profileChannel) supabase.removeChannel(profileChannel);
+        if (subscriptionChannel) supabase.removeChannel(subscriptionChannel);
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [syncUserData]);
 
-    return () => {
-      isMounted.current = false;
-      authListener.unsubscribe();
-      if (profileChannel) supabase.removeChannel(profileChannel);
-      if (subscriptionChannel) supabase.removeChannel(subscriptionChannel);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncUserData]);
-
-  console.log("Loading:", loading);
-  console.log("User:", user);
+  // Removal of frequent logging to prevent console pressure in production
 
   return (
     <AuthContext.Provider value={{ 

@@ -189,6 +189,8 @@ function App() {
                                 <Route path="trends" element={<Trends />} />
                                 <Route path="teams" element={<TeamsPage />} />
                               </Route>
+                              {/* The widget is now conditionally rendered only when protected route is active */}
+                              <Route path="*" element={<ChatWidget />} />
                             </Route>
 
                             <Route element={<ProtectedRoute allowedRoles={['admin', 'support']} />}>
@@ -207,7 +209,6 @@ function App() {
                               </Route>
                             </Route>
                           </Routes>
-                          <ChatWidget />
                         </NotesProvider>
                       </WalletProvider>
                     </WebRTCProvider>
