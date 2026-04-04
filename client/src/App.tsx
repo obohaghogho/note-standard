@@ -14,10 +14,24 @@ import { WalletProvider } from './context/WalletContext';
 import { WebRTCProvider } from './context/WebRTCContext';
 import { PresenceProvider } from './context/PresenceContext';
 import { NotesProvider } from './context/NotesContext';
+// import { ChatWidget } from './components/chat/ChatWidget'; // already handled by Route
 import { ChatWidget } from './components/chat/ChatWidget';
 import { ErrorBoundary } from 'react-error-boundary';
 import DashboardHome from './pages/dashboard/DashboardHome';
 import Notes from './pages/dashboard/Notes';
+import Chat from './pages/dashboard/Chat';
+import Shared from './pages/dashboard/Shared';
+import Feed from './pages/dashboard/Feed';
+import Search from './pages/dashboard/Search';
+import Settings from './pages/dashboard/Settings';
+import Billing from './pages/dashboard/Billing';
+import Affiliates from './pages/dashboard/Affiliates';
+import Notifications from './pages/dashboard/Notifications';
+import Trends from './pages/dashboard/Trends';
+import WalletPage from './pages/WalletPage';
+import Transactions from './pages/dashboard/Transactions';
+import TeamsPage from './pages/teams/TeamsPage';
+import DepositPage from './pages/dashboard/DepositPage';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 
 // ─── Lazy-loaded pages (route-level code splitting) ───
@@ -34,22 +48,8 @@ const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword'), 'Rese
 const ActivitySuccess = lazyWithRetry(() => import('./pages/ActivitySuccess'), 'ActivitySuccess');
 const ActivityCancel = lazyWithRetry(() => import('./pages/ActivityCancel'), 'ActivityCancel');
 
-// Dashboard pages
-// DashboardHome and Notes are now eagerly loaded for diagnostic test
-const Chat = lazyWithRetry(() => import('./pages/dashboard/Chat'), 'Chat');
-const Shared = lazyWithRetry(() => import('./pages/dashboard/Shared'), 'Shared');
-const Feed = lazyWithRetry(() => import('./pages/dashboard/Feed'), 'Feed');
-const Search = lazyWithRetry(() => import('./pages/dashboard/Search'), 'Search');
-const Settings = lazyWithRetry(() => import('./pages/dashboard/Settings'), 'Settings');
-const Billing = lazyWithRetry(() => import('./pages/dashboard/Billing'), 'Billing');
-const Affiliates = lazyWithRetry(() => import('./pages/dashboard/Affiliates'), 'Affiliates');
-const Notifications = lazyWithRetry(() => import('./pages/dashboard/Notifications'), 'Notifications');
-const Trends = lazyWithRetry(() => import('./pages/dashboard/Trends'), 'Trends');
-const WalletPage = lazyWithRetry(() => import('./pages/WalletPage'), 'WalletPage');
-const Transactions = lazyWithRetry(() => import('./pages/dashboard/Transactions'), 'Transactions');
-const TeamsPage = lazyWithRetry(() => import('./pages/teams/TeamsPage'), 'TeamsPage');
+// Dashboard pages are now static for performance and reliability
 
-// Admin pages
 const AdminDashboard = lazyWithRetry(() => import('./pages/admin/AdminDashboard'), 'AdminDashboard');
 const UserManagement = lazyWithRetry(() => import('./pages/admin/UserManagement'), 'UserManagement');
 const AdminChat = lazyWithRetry(() => import('./pages/admin/AdminChat'), 'AdminChat');
@@ -60,7 +60,6 @@ const Analytics = lazyWithRetry(() => import('./pages/admin/Analytics'), 'Analyt
 const AdminSettings = lazyWithRetry(() => import('./pages/admin/AdminSettings'), 'AdminSettings');
 const ManageAds = lazyWithRetry(() => import('./pages/admin/ManageAds'), 'ManageAds');
 const LimitRequestsPage = lazyWithRetry(() => import('./pages/admin/LimitRequestsPage'), 'LimitRequestsPage');
-const DepositPage = lazyWithRetry(() => import('./pages/dashboard/DepositPage'), 'DepositPage');
 const ManualDeposits = lazyWithRetry(() => import('./pages/admin/ManualDeposits'), 'ManualDeposits');
 
 const ChatRedirect = () => {
