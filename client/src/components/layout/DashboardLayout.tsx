@@ -8,6 +8,7 @@ import { NotificationBell } from '../dashboard/NotificationBell';
 import { Menu, Plus } from 'lucide-react';
 import { LanguageSelector } from '../common/LanguageSelector';
 import { useChat } from '../../context/ChatContext';
+import { cn } from '../../utils/cn';
 
 export const DashboardLayout = () => {
     const [isCreateNoteModalOpen, setIsCreateNoteModalOpen] = useState(false);
@@ -34,9 +35,16 @@ export const DashboardLayout = () => {
                 isOpen={isMobileMenuOpen}
                 onClose={() => setIsMobileMenuOpen(false)}
             />
-            <main className={`flex-1 ml-0 md:ml-64 transition-all duration-300 min-w-0 flex flex-col w-full ${isChatActiveOnMobile ? 'fixed inset-0 z-[60] bg-[#0a0a0a] w-full min-h-[100dvh] overscroll-none md:relative md:inset-auto md:z-0 md:w-auto md:min-h-0 md:bg-transparent md:min-w-0' : 'relative min-h-[100dvh] overflow-y-auto'}`}>
+            
+            <main className={cn(
+                "flex-1 md:ml-64 transition-all duration-300 min-w-0 flex flex-col w-full min-h-[100dvh]",
+                isChatActiveOnMobile ? "fixed inset-0 z-[60] bg-[#0a0a0a] md:relative md:inset-auto md:z-0 md:bg-transparent" : "relative"
+            )}>
                 {/* Header/Top bar */}
-                <header className={`pt-safe min-h-[4rem] border-b border-white/10 flex items-center px-4 bg-black/40 backdrop-blur-md sticky top-0 z-40 ${isChatActiveOnMobile ? 'hidden md:flex' : 'flex'}`}>
+                <header className={cn(
+                    "pt-safe min-h-[4rem] border-b border-white/10 px-4 bg-black/40 backdrop-blur-md sticky top-0 z-40 items-center",
+                    isChatActiveOnMobile ? "hidden md:flex" : "flex"
+                )}>
                     {/* Mobile Menu Toggle */}
                     <button 
                         onClick={() => setIsMobileMenuOpen(true)}
@@ -68,10 +76,10 @@ export const DashboardLayout = () => {
 
                 <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))] -z-10 opacity-20" />
 
-                <div 
-                    key={location.pathname}
-                    className={`flex-1 ${isChatActiveOnMobile ? 'p-0 h-full' : 'p-4 md:p-8 max-w-7xl mx-auto'} w-full flex flex-col min-w-0`}
-                >
+                <div className={cn(
+                    "flex-1 w-full flex flex-col min-w-0 overflow-y-auto",
+                    isChatActiveOnMobile ? "p-0" : "p-4 md:p-8 max-w-7xl mx-auto"
+                )}>
                     <Suspense fallback={
                         <div className="flex-1 flex items-center justify-center p-12">
                             <div className="flex flex-col items-center gap-4">

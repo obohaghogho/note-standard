@@ -125,90 +125,86 @@ function App() {
   return (
     <>
       <ErrorBoundary>
-        <Suspense fallback={
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#0a0a0a' }}>
-            <div style={{ width: 36, height: 36, border: '3px solid rgba(255,255,255,0.1)', borderTopColor: '#10b981', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-            <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-          </div>
-        }>
         <Router>
-            <AuthProvider>
+          <AuthProvider>
             <SocketProvider>
-            <PresenceProvider>
-            <NotificationProvider>
-                <ChatProvider>
-                <WebRTCProvider>
-                <WalletProvider>
-                <NotesProvider>
-                    <Routes>
-                        <Route path="/" element={<LandingPage />} />
-                        <Route path="/login" element={<Login />} />
-                        <Route path="/signup" element={<Signup />} />
-                        <Route path="/terms" element={<TermsPage />} />
-                        <Route path="/privacy" element={<PrivacyPage />} />
-                        <Route path="/refund" element={<RefundPage />} />
-                        <Route path="/about" element={<AboutPage />} />
-                        <Route path="/contact" element={<ContactPage />} />
-                        <Route path="/reset-password" element={<ResetPassword />} />
-                        
-                        {/* Legacy Chat Redirect */}
-                        <Route path="/chat/:id" element={<ChatRedirect />} />
+              <PresenceProvider>
+                <NotificationProvider>
+                  <ChatProvider>
+                    <WebRTCProvider>
+                      <WalletProvider>
+                        <NotesProvider>
+                          <Suspense fallback={
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#0a0a0a' }}>
+                              <div style={{ width: 36, height: 36, border: '3px solid rgba(255,255,255,0.1)', borderTopColor: '#10b981', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                              <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+                            </div>
+                          }>
+                            <Routes>
+                              <Route path="/" element={<LandingPage />} />
+                              <Route path="/login" element={<Login />} />
+                              <Route path="/signup" element={<Signup />} />
+                              <Route path="/terms" element={<TermsPage />} />
+                              <Route path="/privacy" element={<PrivacyPage />} />
+                              <Route path="/refund" element={<RefundPage />} />
+                              <Route path="/about" element={<AboutPage />} />
+                              <Route path="/contact" element={<ContactPage />} />
+                              <Route path="/reset-password" element={<ResetPassword />} />
+                              
+                              <Route path="/chat/:id" element={<ChatRedirect />} />
 
-                        <Route path="/activity/success" element={<ActivitySuccess />} />
-                        <Route path="/activity/cancel" element={<ActivityCancel />} />
-                        <Route path="/activity" element={<Navigate to="/dashboard/activity" replace />} />
+                              <Route path="/activity/success" element={<ActivitySuccess />} />
+                              <Route path="/activity/cancel" element={<ActivityCancel />} />
+                              <Route path="/activity" element={<Navigate to="/dashboard/activity" replace />} />
 
-                        <Route element={<ProtectedRoute />}>
-                            {/* User Dashboard */}
-                            <Route path="/dashboard" element={<DashboardLayout />}>
-                                <Route index element={<DashboardHome />} />
-                                <Route path="notes" element={<Notes />} />
-                                <Route path="chat" element={<Chat />} />
-                                <Route path="shared" element={<Shared />} />
-                                <Route path="feed" element={<Feed />} />
-                                <Route path="favorites" element={<Notes />} />
-                                <Route path="search" element={<Search />} />
-                                <Route path="billing" element={<Billing />} />
-                                <Route path="activity" element={<WalletPage />} />
-                                <Route path="history" element={<Transactions />} />
-                                <Route path="affiliates" element={<Affiliates />} />
-                                <Route path="deposit" element={<DepositPage />} />
-                                <Route path="settings" element={<Settings />} />
-                                <Route path="notifications" element={<Notifications />} />
-                                <Route path="trends" element={<Trends />} />
-                                <Route path="teams" element={<TeamsPage />} />
-                            </Route>
-                        </Route>
+                              <Route element={<ProtectedRoute />}>
+                                <Route path="/dashboard" element={<DashboardLayout />}>
+                                  <Route index element={<DashboardHome />} />
+                                  <Route path="notes" element={<Notes />} />
+                                  <Route path="chat" element={<Chat />} />
+                                  <Route path="shared" element={<Shared />} />
+                                  <Route path="feed" element={<Feed />} />
+                                  <Route path="favorites" element={<Notes />} />
+                                  <Route path="search" element={<Search />} />
+                                  <Route path="billing" element={<Billing />} />
+                                  <Route path="activity" element={<WalletPage />} />
+                                  <Route path="history" element={<Transactions />} />
+                                  <Route path="affiliates" element={<Affiliates />} />
+                                  <Route path="deposit" element={<DepositPage />} />
+                                  <Route path="settings" element={<Settings />} />
+                                  <Route path="notifications" element={<Notifications />} />
+                                  <Route path="trends" element={<Trends />} />
+                                  <Route path="teams" element={<TeamsPage />} />
+                                </Route>
+                              </Route>
 
-                        {/* Admin Routes - Restrict to admin/support roles */}
-                        <Route element={<ProtectedRoute allowedRoles={['admin', 'support']} />}>
-                            <Route path="/admin" element={<AdminLayout />}>
-                                <Route index element={<AdminDashboard />} />
-                                <Route path="users" element={<UserManagement />} />
-                                <Route path="chats" element={<AdminChat />} />
-                                <Route path="audit-logs" element={<AuditLogs />} />
-                                <Route path="broadcasts" element={<BroadcastManager />} />
-                                <Route path="auto-reply" element={<AutoReplySettings />} />
-                                <Route path="analytics" element={<Analytics />} />
-                                <Route path="ads" element={<ManageAds />} />
-                                <Route path="deposits" element={<ManualDeposits />} />
-                                <Route path="limit-requests" element={<LimitRequestsPage />} />
-                                <Route path="settings" element={<AdminSettings />} />
-                            </Route>
-                        </Route>
-                    </Routes>
-
-                    <ChatWidget />
-                </NotesProvider>
-                </WalletProvider>
-                </WebRTCProvider>
-                </ChatProvider>
-            </NotificationProvider>
-            </PresenceProvider>
+                              <Route element={<ProtectedRoute allowedRoles={['admin', 'support']} />}>
+                                <Route path="/admin" element={<AdminLayout />}>
+                                  <Route index element={<AdminDashboard />} />
+                                  <Route path="users" element={<UserManagement />} />
+                                  <Route path="chats" element={<AdminChat />} />
+                                  <Route path="audit-logs" element={<AuditLogs />} />
+                                  <Route path="broadcasts" element={<BroadcastManager />} />
+                                  <Route path="auto-reply" element={<AutoReplySettings />} />
+                                  <Route path="analytics" element={<Analytics />} />
+                                  <Route path="ads" element={<ManageAds />} />
+                                  <Route path="deposits" element={<ManualDeposits />} />
+                                  <Route path="limit-requests" element={<LimitRequestsPage />} />
+                                  <Route path="settings" element={<AdminSettings />} />
+                                </Route>
+                              </Route>
+                            </Routes>
+                          </Suspense>
+                          <ChatWidget />
+                        </NotesProvider>
+                      </WalletProvider>
+                    </WebRTCProvider>
+                  </ChatProvider>
+                </NotificationProvider>
+              </PresenceProvider>
             </SocketProvider>
-            </AuthProvider>
+          </AuthProvider>
         </Router>
-        </Suspense>
       </ErrorBoundary>
     </>
   );
