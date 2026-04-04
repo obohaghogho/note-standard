@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { useState, useEffect, Suspense } from 'react';
 import { Sidebar } from './Sidebar';
 import { CreateNoteModal } from '../dashboard/CreateNoteModal';
 import { BroadcastBanner } from '../chat/BroadcastBanner';
@@ -8,22 +8,18 @@ import { NotificationBell } from '../dashboard/NotificationBell';
 import { Menu, Plus } from 'lucide-react';
 import { LanguageSelector } from '../common/LanguageSelector';
 import { cn } from '../../utils/cn';
+import { ErrorBoundary } from 'react-error-boundary';
 
 export const DashboardLayout = () => {
     const location = useLocation();
     const [isCreateNoteModalOpen, setIsCreateNoteModalOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    const { user, loading, authReady, isPro } = useAuth();
+    const { user, authReady, isPro } = useAuth();
 
     useEffect(() => {
-        console.log("[DashboardLayout] Render Trace:", { 
-            path: location.pathname, 
-            authReady, 
-            loading,
-            hasUser: !!user,
-            time: new Date().toISOString()
-        });
-    }, [location.pathname, authReady, loading, !!user]);
+        // Essential render trace for debugging production navigation hangs
+        console.log(`[DashboardLayout] Nav: ${location.pathname} | Auth: ${authReady} | User: ${!!user}`);
+    }, [location.pathname, authReady, !!user]);
     
     if (!authReady) {
         return (
@@ -34,7 +30,12 @@ export const DashboardLayout = () => {
     }
 
     const isChatActiveOnMobile = location.pathname.startsWith('/dashboard/chat');
-    console.log("Layout rendered");
+    
+    // Normalize layout flow to prevent "fixed" ghosting
+    const mainContainerClass = cn(
+        "flex-1 md:ml-64 transition-all duration-300 min-w-0 flex flex-col w-full min-h-[100dvh]",
+        isChatActiveOnMobile && "fixed inset-0 z-[60] bg-[#0a0a0a] md:relative md:inset-auto md:z-0 md:bg-transparent"
+    );
 
     return (
         <div className="min-h-[100dvh] text-white flex relative overflow-hidden w-full max-w-full">
@@ -53,10 +54,7 @@ export const DashboardLayout = () => {
                 onClose={() => setIsMobileMenuOpen(false)}
             />
             
-            <main className={cn(
-                "flex-1 md:ml-64 transition-all duration-300 min-w-0 flex flex-col w-full min-h-[100dvh]",
-                isChatActiveOnMobile ? "fixed inset-0 z-[60] bg-[#0a0a0a] md:relative md:inset-auto md:z-0 md:bg-transparent" : "relative"
-            )}>
+            <main className={mainContainerClass}>
                 {/* Header/Top bar */}
                 <header className={cn(
                     "pt-safe min-h-[4rem] border-b border-white/10 px-4 bg-black/40 backdrop-blur-md sticky top-0 z-40 items-center",
@@ -93,11 +91,28 @@ export const DashboardLayout = () => {
 
                 <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))] -z-10 opacity-20" />
 
-                <div className={cn(
-                    "flex-1 w-full flex flex-col min-w-0 overflow-y-auto",
-                    isChatActiveOnMobile ? "p-0" : "p-4 md:p-8 max-w-7xl mx-auto"
-                )}>
-                    <Outlet context={{ openCreateNoteModal: () => setIsCreateNoteModalOpen(true) }} />
+                <div 
+                    key={location.pathname} // 🔥 The "Key Trick": Forces fresh mount on nav
+                    className={cn(
+                        "flex-1 w-full flex flex-col min-w-0 overflow-y-auto relative",
+                        isChatActiveOnMobile ? "p-0" : "p-4 md:p-8 max-w-7xl mx-auto"
+                    )}
+                >
+                    <ErrorBoundary fallback={
+                        <div className="p-8 text-center bg-red-500/10 rounded-xl border border-red-500/20 m-4">
+                            <h3 className="text-lg font-bold text-red-500">View blocked</h3>
+                            <p className="text-gray-400 text-sm mt-1">Please try again or refresh.</p>
+                            <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-red-500 text-white rounded-lg text-sm">Refresh Now</button>
+                        </div>
+                    }>
+                        <Suspense fallback={
+                            <div className="flex items-center justify-center p-20">
+                                <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+                            </div>
+                        }>
+                            <Outlet context={{ openCreateNoteModal: () => setIsCreateNoteModalOpen(true) }} />
+                        </Suspense>
+                    </ErrorBoundary>
                 </div>
             </main>
 
