@@ -17,7 +17,7 @@ import {
     Zap,
     ShieldCheck
 } from 'lucide-react';
-import type { Message } from '../../context/ChatContext';
+import type { Message, Conversation } from '../../context/ChatContext';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { CallOverlay } from './CallOverlay';
 import { AudioPlayer } from './AudioPlayer';
@@ -37,12 +37,12 @@ export const ChatWidget = () => {
     const [isMinimized, setIsMinimized] = useState(false);
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
-    const [supportChat, setSupportChat] = useState<any | null>(null);
+    const [supportChat, setSupportChat] = useState<Conversation | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [adminTyping, setAdminTyping] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const typingTimeoutRef = useRef<any>(null);
+    const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
     const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
@@ -88,7 +88,7 @@ export const ChatWidget = () => {
 
             if (res.ok) {
                 const chats = await res.json();
-                const openSupportChat = chats.find((c: any) =>
+                const openSupportChat = chats.find((c: Conversation) =>
                     c.chat_type === 'support' && c.support_status !== 'resolved'
                 );
 
@@ -118,13 +118,13 @@ export const ChatWidget = () => {
             }
         };
 
-        const onTyping = ({ conversationId, userId, isTyping: typing }: any) => {
+        const onTyping = ({ conversationId, userId, isTyping: typing }: { conversationId: string, userId: string, isTyping: boolean }) => {
             if (conversationId === supportChat?.id && userId !== user?.id) {
                 setAdminTyping(typing);
             }
         };
 
-        const onMessageRead = ({ messageId }: any) => {
+        const onMessageRead = ({ messageId }: { messageId: string }) => {
             setMessages(prev => prev.map(m => m.id === messageId ? { ...m, read_at: new Date().toISOString() } : m));
         };
         
@@ -143,8 +143,8 @@ export const ChatWidget = () => {
                     table: 'conversations',
                     filter: `id=eq.${supportChat?.id}`
                 },
-                (payload: any) => {
-                    setSupportChat((prev: any) => ({ ...prev, ...payload.new }));
+                (payload: { new: Partial<Conversation> }) => {
+                    setSupportChat((prev) => prev ? { ...prev, ...payload.new } : null);
                 }
             )
             .subscribe();
@@ -191,7 +191,14 @@ export const ChatWidget = () => {
             const data = await res.json();
             if (!res.ok) {
                 if (data.existingChatId) {
-                    setSupportChat({ id: data.existingChatId, name: 'Support', support_status: 'open' });
+                    setSupportChat({ 
+                        id: data.existingChatId, 
+                        name: 'Support', 
+                        support_status: 'open',
+                        type: 'direct',
+                        updated_at: new Date().toISOString(),
+                        members: []
+                    } as Conversation);
                     fetchMessages(data.existingChatId);
                     if (socket && connected) {
                         socket.emit('join_room', data.existingChatId);
@@ -293,7 +300,7 @@ export const ChatWidget = () => {
         if (!supportChat?.id) return;
         
         // Find an admin/agent in the chat to call
-        const otherMember = supportChat.members?.find((m: any) => m.role === 'admin' || m.user_id !== user?.id);
+        const otherMember = supportChat.members?.find((m) => m.role === 'admin' || m.user_id !== user?.id);
         
         if (!otherMember) {
             toast.error('Waiting for an agent to join the chat...');

@@ -50,8 +50,8 @@ export const LimitRequestModal: React.FC<LimitRequestModalProps> = ({ isOpen, on
             toast.success('Limit increase request submitted successfully!');
             onSuccess();
             onClose();
-        } catch (err: any) {
-            toast.error(err.message);
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'An unknown error occurred');
         } finally {
             setSubmitting(false);
         }

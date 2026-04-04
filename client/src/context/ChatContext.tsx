@@ -34,7 +34,7 @@ export interface Conversation {
     id: string;
     type: 'direct' | 'group';
     chat_type?: 'support' | 'general' | 'admin';
-    support_status?: 'open' | 'pending' | 'resolved';
+    support_status?: 'open' | 'pending' | 'resolved' | 'escalated';
     name: string;
     updated_at: string;
     lastMessage?: {

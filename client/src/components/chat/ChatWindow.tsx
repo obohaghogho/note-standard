@@ -34,7 +34,7 @@ const ChatWindow: React.FC = () => {
 
     // ── WhatsApp-Style Selection System ──────────────────────
     const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
-    const longPressTimerRef = useRef<any>(null);
+    const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const longPressTriggeredRef = useRef(false);
     const isSelectionMode = selectedMessages.size > 0;
 
@@ -157,7 +157,7 @@ const ChatWindow: React.FC = () => {
     
     // Mentions state
     const [mentionSearch, setMentionSearch] = useState('');
-    const [mentionParticipants, setMentionParticipants] = useState<any[]>([]);
+    const [mentionParticipants, setMentionParticipants] = useState<{id: string, username: string, full_name?: string, avatar_url?: string}[]>([]);
     const [showMentions, setShowMentions] = useState(false);
     
     const emojis = ['😀', '😂', '😍', '🙌', '🔥', '👍', '🙏', '💯', '✨', '❤️', '🎉', '😊', '✅', '🚀', '👀', '💡'];
@@ -478,7 +478,7 @@ const ChatWindow: React.FC = () => {
     };
 
     // Typing Status Debounce
-    const typingTimeoutRef = useRef<any>(null);
+    const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = applyAutoCorrect(e.target.value);
@@ -506,7 +506,10 @@ const ChatWindow: React.FC = () => {
                 if (activeConversation?.members) {
                     const filtered = activeConversation.members
                         .filter((m: any) => m.user_id !== user?.id && m.profile)
-                        .map((m: any) => m.profile)
+                        .map((m: any) => ({
+                            ...m.profile,
+                            id: m.user_id
+                        }))
                         .filter((p: any) => 
                             p.username.toLowerCase().includes(query.toLowerCase()) || 
                             p.full_name?.toLowerCase().includes(query.toLowerCase())

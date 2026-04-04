@@ -1,4 +1,4 @@
-import { useState, Suspense } from 'react';
+import { useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { CreateNoteModal } from '../dashboard/CreateNoteModal';
@@ -10,9 +10,10 @@ import { LanguageSelector } from '../common/LanguageSelector';
 import { cn } from '../../utils/cn';
 
 export const DashboardLayout = () => {
+    const location = useLocation();
     const [isCreateNoteModalOpen, setIsCreateNoteModalOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    const { user, isPro, profile, authReady } = useAuth();
+    const { user, isPro, authReady } = useAuth();
 
     console.log("[DashboardLayout] Auth Status:", { authReady, user: !!user, path: window.location.pathname });
     
@@ -23,8 +24,6 @@ export const DashboardLayout = () => {
             </div>
         );
     }
-
-    const location = useLocation();
 
     const isChatActiveOnMobile = location.pathname.startsWith('/dashboard/chat');
     console.log("Layout rendered");
