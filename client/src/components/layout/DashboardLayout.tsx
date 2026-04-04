@@ -34,7 +34,7 @@ export const DashboardLayout = () => {
                 isOpen={isMobileMenuOpen}
                 onClose={() => setIsMobileMenuOpen(false)}
             />
-            <main className={`flex-1 ml-0 md:ml-64 transition-all duration-300 min-w-0 flex flex-col max-w-7xl mx-auto w-full overflow-hidden ${isChatActiveOnMobile ? 'fixed inset-0 z-[60] bg-[#0a0a0a] w-full min-h-[100dvh] overscroll-none md:relative md:inset-auto md:z-0 md:w-auto md:min-h-0 md:bg-transparent md:min-w-0' : 'relative min-h-[100dvh]'}`}>
+            <main className={`flex-1 ml-0 md:ml-64 transition-all duration-300 min-w-0 flex flex-col w-full ${isChatActiveOnMobile ? 'fixed inset-0 z-[60] bg-[#0a0a0a] w-full min-h-[100dvh] overscroll-none md:relative md:inset-auto md:z-0 md:w-auto md:min-h-0 md:bg-transparent md:min-w-0' : 'relative min-h-[100dvh] overflow-y-auto h-screen'}`}>
                 {/* Header/Top bar */}
                 <header className={`pt-safe min-h-[4rem] border-b border-white/10 flex items-center px-4 bg-black/40 backdrop-blur-md sticky top-0 z-40 ${isChatActiveOnMobile ? 'hidden md:flex' : 'flex'}`}>
                     {/* Mobile Menu Toggle */}
@@ -68,7 +68,7 @@ export const DashboardLayout = () => {
 
                 <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))] -z-10 opacity-20" />
 
-                <div className={`flex-1 ${isChatActiveOnMobile ? 'p-0 h-full' : 'p-6 max-w-7xl mx-auto'} w-full flex flex-col min-w-0 overflow-hidden`}>
+                <div className={`flex-1 ${isChatActiveOnMobile ? 'p-0 h-full' : 'p-4 md:p-8 max-w-7xl mx-auto'} w-full flex flex-col min-w-0`}>
                     <Outlet key={location.pathname} context={{ openCreateNoteModal: () => setIsCreateNoteModalOpen(true) }} />
                 </div>
             </main>

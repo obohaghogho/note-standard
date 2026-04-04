@@ -21,6 +21,7 @@ import { lazyWithRetry } from './utils/lazyWithRetry';
 // ─── Lazy-loaded pages (route-level code splitting) ───
 // Public pages
 
+const LandingPage = lazyWithRetry(() => import('./pages/LandingPage').then(m => m.LandingPage), 'LandingPage');
 const Login = lazyWithRetry(() => import('./pages/Login').then(m => m.Login), 'Login');
 const Signup = lazyWithRetry(() => import('./pages/Signup').then(m => m.Signup), 'Signup');
 const TermsPage = lazyWithRetry(() => import('./pages/TermsPage').then(m => m.TermsPage), 'TermsPage');
@@ -134,15 +135,20 @@ function App() {
                 <WebRTCProvider>
                 <WalletProvider>
                 <NotesProvider>
+                    <Suspense fallback={
+                      <div className="flex items-center justify-center min-h-[100dvh] bg-[#0a0a0a]">
+                        <div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
+                      </div>
+                    }>
                     <Routes>
-                    <Route path="/" element={<Navigate to="/dashboard/activity" replace />} />
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/signup" element={<Signup />} />
-                    <Route path="/terms" element={<TermsPage />} />
-                    <Route path="/privacy" element={<PrivacyPage />} />
-                    <Route path="/refund" element={<RefundPage />} />
-                    <Route path="/about" element={<AboutPage />} />
-                    <Route path="/contact" element={<ContactPage />} />
+                    <Route path="/" element={<Suspense fallback={null}><LandingPage /></Suspense>} />
+                    <Route path="/login" element={<Suspense fallback={null}><Login /></Suspense>} />
+                    <Route path="/signup" element={<Suspense fallback={null}><Signup /></Suspense>} />
+                    <Route path="/terms" element={<Suspense fallback={null}><TermsPage /></Suspense>} />
+                    <Route path="/privacy" element={<Suspense fallback={null}><PrivacyPage /></Suspense>} />
+                    <Route path="/refund" element={<Suspense fallback={null}><RefundPage /></Suspense>} />
+                    <Route path="/about" element={<Suspense fallback={null}><AboutPage /></Suspense>} />
+                    <Route path="/contact" element={<Suspense fallback={null}><ContactPage /></Suspense>} />
                     <Route path="/reset-password" element={<ResetPassword />} />
                     
                     {/* Legacy Chat Redirect */}
@@ -272,6 +278,7 @@ function App() {
                         </Route>
                     </Route>
                     </Routes>
+                    </Suspense>
                     
                     <ChatWidget />
                 </NotesProvider>
