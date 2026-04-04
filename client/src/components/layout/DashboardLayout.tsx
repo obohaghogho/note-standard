@@ -17,12 +17,12 @@ export const DashboardLayout = () => {
     const { user, authReady, isPro } = useAuth();
 
     useEffect(() => {
-        // Essential render trace for debugging production navigation hangs
-        console.log(`[DashboardLayout] Render: ${location.pathname} | Auth: ${authReady} | User: ${!!user}`);
+        // Essential render trace with version for debugging production navigation hangs
+        console.log(`[DashboardLayout v1.1.0] Render: ${location.pathname} | Auth: ${authReady} | User: ${!!user}`);
         
         // Navigation completion check
         const t = setTimeout(() => {
-            console.log(`[DashboardLayout] Navigation suspected complete: ${location.pathname}`);
+            console.log(`[DashboardLayout v1.1.0] Navigation suspected complete: ${location.pathname}`);
         }, 500);
         return () => clearTimeout(t);
     }, [location.pathname, authReady, !!user]);
@@ -115,7 +115,9 @@ export const DashboardLayout = () => {
                                 <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
                             </div>
                         }>
-                            <Outlet context={{ openCreateNoteModal: () => setIsCreateNoteModalOpen(true) }} />
+                            <div key={location.pathname + location.search} className="flex-1 flex flex-col min-w-0">
+                                <Outlet context={{ openCreateNoteModal: () => setIsCreateNoteModalOpen(true) }} />
+                            </div>
                         </Suspense>
                     </ErrorBoundary>
                 </div>
