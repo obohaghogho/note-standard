@@ -190,9 +190,6 @@ function App() {
                               </Route>
                             </Route>
 
-                            {/* Global Chat Widget - visible on all authenticated pages */}
-                            <ChatWidget />
-
                             <Route element={<ProtectedRoute allowedRoles={['admin', 'support']} />}>
                               <Route path="/admin" element={<AdminLayout />}>
                                 <Route index element={<AdminDashboard />} />
@@ -209,6 +206,8 @@ function App() {
                               </Route>
                             </Route>
                           </Routes>
+                          {/* Global Chat Widget - visible on all authenticated pages */}
+                          <ChatWidget />
                         </NotesProvider>
                       </WalletProvider>
                     </WebRTCProvider>
