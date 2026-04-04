@@ -17,7 +17,10 @@ export const DashboardLayout = () => {
     const { activeConversationId } = useChat();
     const location = useLocation();
 
-    const isChatActiveOnMobile = location.pathname.startsWith('/dashboard/chat') && activeConversationId;
+    const isChatActiveOnMobile = location.pathname.includes('/dashboard/chat') && activeConversationId;
+    
+    console.log("PATH:", location.pathname);
+    console.log("CHAT ACTIVE:", isChatActiveOnMobile);
 
     return (
         <div className="min-h-[100dvh] text-white flex relative overflow-hidden w-full max-w-full">
