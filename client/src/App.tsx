@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useEffect, Suspense } from 'react';
 
@@ -124,7 +124,6 @@ function App() {
 
   return (
     <Router>
-      <NavigationWatchdog />
       <ErrorBoundary 
         fallback={
           <div style={{ padding: '2rem', textAlign: 'center', color: '#ef4444' }}>
@@ -222,13 +221,5 @@ function App() {
     </Router>
   );
 }
-
-const NavigationWatchdog = () => {
-    const location = useLocation();
-    useEffect(() => {
-        console.log(`[ROUTER-SYNC] URL updated to: ${location.pathname}${location.search}`);
-    }, [location.pathname, location.search]);
-    return null;
-};
 
 export default App;

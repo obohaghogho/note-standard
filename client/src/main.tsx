@@ -5,14 +5,32 @@ import './index.css'
 import './i18n'
 import App from './App.tsx'
 
-console.log('🚀 NoteStandard Client Version 1.1.0 - Navigation Stabilization Update');
-console.log("ENV CHECK:", import.meta.env);
+console.log('🚀 NoteStandard Client Version 1.2.0 - NUCLEAR CACHE PURGE ACTIVE');
+console.log("ENV CHECK:", import.meta.env.VITE_SUPABASE_URL ? "Supabase Configured" : "Supabase Missing");
 
-// Cleanup stale navigation flags on full reload
-if (window.performance && window.performance.navigation.type === 1) {
+// Nuclear Cache Purge: Kills all stale production caches including Service Workers
+(function() {
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+            for (const registration of registrations) {
+                registration.unregister();
+                console.log('[PURGE] Service Worker Unregistered');
+            }
+        });
+    }
+    
+    // Clear browser caches
+    if (window.caches) {
+        caches.keys().then((names) => {
+            for (const name of names) caches.delete(name);
+            console.log('[PURGE] Browser Cache Storage Cleared');
+        });
+    }
+
+    // Standard Cleanup
     sessionStorage.removeItem('last_chunk_load_error_reload');
-    console.log('[Init] Stale navigation flags cleared');
-}
+    console.log('[Init] App State Normalized');
+})();
 
 window.onerror = function(msg, url, line, col) {
   const errorMsg = "GLOBAL ERROR: " + msg + "\nAt: " + url + ":" + line + ":" + col;
