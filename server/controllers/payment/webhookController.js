@@ -90,12 +90,16 @@ exports.handleGrey = async (req, res) => {
     }
 
     // 4. Queue for async processing
-    await paymentQueue.add("process-grey-webhook", {
-      provider: "grey",
-      event,
-      payload: req.body,
-      logId: log?.id,
-    });
+    if (paymentQueue) {
+      await paymentQueue.add("process-grey-webhook", {
+        provider: "grey",
+        event,
+        payload: req.body,
+        logId: log?.id,
+      });
+    } else {
+      logger.warn("⚠️ Redis disabled: Skipping queue for grey webhook");
+    }
 
     return res.status(200).json({ received: true });
   } catch (error) {
@@ -211,21 +215,24 @@ exports.handleBrevo = async (req, res) => {
     // 6. Queue for processing
     // High-confidence matches go through the normal payment flow.
     // Low-confidence matches go to the unmatched queue for admin review.
-    await paymentQueue.add(
-      parsed.confidence >= 60
-        ? "process-brevo-webhook"
-        : "process-brevo-unmatched",
-      {
-        provider: "grey",
-        event,
-        payload: parsed,
-        logId: log?.id,
-      }
-    );
-
-    logger.info(
-      `[Webhook] Brevo email queued for processing (confidence: ${parsed.confidence}%)`
-    );
+    if (paymentQueue) {
+      await paymentQueue.add(
+        parsed.confidence >= 60
+          ? "process-brevo-webhook"
+          : "process-brevo-unmatched",
+        {
+          provider: "grey",
+          event,
+          payload: parsed,
+          logId: log?.id,
+        }
+      );
+      logger.info(
+        `[Webhook] Brevo email queued for processing (confidence: ${parsed.confidence}%)`
+      );
+    } else {
+      logger.warn("⚠️ Redis disabled: Skipping queue for brevo webhook");
+    }
   } catch (error) {
     logger.error("[Webhook] Brevo processing crash:", {
       error: error.message,

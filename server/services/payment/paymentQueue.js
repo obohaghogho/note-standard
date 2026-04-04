@@ -3,23 +3,30 @@ const IORedis = require("ioredis");
 const env = require("../../config/env");
 const logger = require("../../utils/logger");
 
-const connection = new IORedis(env.REDIS_URL, {
-    maxRetriesPerRequest: null,
-});
+let connection;
+let paymentQueue;
 
-const paymentQueue = new Queue("payment-processing", {
-    connection,
-    defaultJobOptions: {
-        attempts: 5,
-        backoff: {
-            type: "exponential",
-            delay: 1000,
+if (env.REDIS_URL) {
+    connection = new IORedis(env.REDIS_URL, {
+        maxRetriesPerRequest: null,
+    });
+
+    paymentQueue = new Queue("payment-processing", {
+        connection,
+        defaultJobOptions: {
+            attempts: 5,
+            backoff: {
+                type: "exponential",
+                delay: 1000,
+            },
+            removeOnComplete: true,
+            removeOnFail: 1000, // Keep last 1000 failures for debugging
         },
-        removeOnComplete: true,
-        removeOnFail: 1000, // Keep last 1000 failures for debugging
-    },
-});
+    });
 
-logger.info(`[PaymentQueue] Initialized with Redis: ${env.REDIS_URL.split("@").pop()}`);
+    logger.info(`[PaymentQueue] Initialized with Redis: ${env.REDIS_URL.split("@").pop()}`);
+} else {
+    logger.warn('⚠️ Redis disabled (no REDIS_URL) - paymentQueue is inactive');
+}
 
 module.exports = { paymentQueue, connection };

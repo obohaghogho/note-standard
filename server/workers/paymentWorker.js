@@ -6,9 +6,13 @@ const logger = require("../utils/logger");
 const paymentService = require("../services/payment/paymentService");
 const math = require("../utils/mathUtils");
 
-const connection = new IORedis(env.REDIS_URL, {
-  maxRetriesPerRequest: null,
-});
+let connection;
+
+if (env.REDIS_URL) {
+  connection = new IORedis(env.REDIS_URL, {
+    maxRetriesPerRequest: null,
+  });
+}
 
 /**
  * Payment Processing Worker
@@ -21,7 +25,10 @@ const connection = new IORedis(env.REDIS_URL, {
  *
  * All jobs follow idempotency rules and log results.
  */
-const worker = new Worker(
+let worker;
+
+if (env.REDIS_URL) {
+worker = new Worker(
   "payment-processing",
   async (job) => {
     const { provider, event, payload, logId } = job.data;
@@ -299,5 +306,9 @@ worker.on("failed", (job, err) => {
     `[PaymentWorker] Job ${job.id} failed after ${job.attemptsMade} attempts: ${err.message}`
   );
 });
+
+} else {
+  logger.warn('⚠️ Redis disabled (no REDIS_URL) - paymentWorker is inactive');
+}
 
 module.exports = worker;
