@@ -15,6 +15,15 @@ export const DashboardLayout = () => {
     const { user, isPro, profile, authReady } = useAuth();
 
     console.log("[DashboardLayout] Auth Status:", { authReady, user: !!user, path: window.location.pathname });
+    
+    if (!authReady) {
+        return (
+            <div className="flex items-center justify-center h-screen bg-[#0a0a0a]">
+                <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+            </div>
+        );
+    }
+
     const location = useLocation();
 
     const isChatActiveOnMobile = location.pathname.startsWith('/dashboard/chat');
@@ -81,16 +90,7 @@ export const DashboardLayout = () => {
                     "flex-1 w-full flex flex-col min-w-0 overflow-y-auto",
                     isChatActiveOnMobile ? "p-0" : "p-4 md:p-8 max-w-7xl mx-auto"
                 )}>
-                    <Suspense fallback={
-                        <div className="flex-1 flex items-center justify-center p-12">
-                            <div className="flex flex-col items-center gap-4">
-                                <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-                                <p className="text-gray-500 text-sm animate-pulse font-medium">Loading content...</p>
-                            </div>
-                        </div>
-                    }>
-                        <Outlet context={{ openCreateNoteModal: () => setIsCreateNoteModalOpen(true) }} />
-                    </Suspense>
+                    <Outlet context={{ openCreateNoteModal: () => setIsCreateNoteModalOpen(true) }} />
                 </div>
             </main>
 
