@@ -53,5 +53,3 @@ export const ActivityCancel: React.FC = () => {
 };
 
 export default ActivityCancel;
-
-export default ActivityCancel;

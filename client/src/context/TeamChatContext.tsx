@@ -14,6 +14,10 @@ import {
   markMessagesRead,
   getTeamMembers,
   shareNote as apiShareNote,
+  getTeamStats,
+  deleteTeamMessage,
+  editTeamMessage,
+  clearTeamChatHistory,
 } from '../lib/teamsApi';
 import type {
   TeamMessage,
@@ -132,7 +136,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
       const [messagesData, membersData, statsData] = await Promise.all([
         getTeamMessages(teamId, 50),
         getTeamMembers(teamId),
-        import('../lib/teamsApi').then(m => m.getTeamStats(teamId))
+        getTeamStats(teamId)
       ]);
 
       if (!isMounted.current) return;
@@ -203,7 +207,6 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
   const deleteMessage = useCallback(async (messageId: string) => {
     if (!teamId) return;
     try {
-      const { deleteTeamMessage } = await import('../lib/teamsApi');
       const success = await deleteTeamMessage(teamId, messageId);
       if (success && isMounted.current) {
         setMessages(prev => prev.filter(m => m.id !== messageId));
@@ -226,7 +229,6 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
     });
 
     try {
-      const { editTeamMessage } = await import('../lib/teamsApi');
       const success = await editTeamMessage(teamId, messageId, newContent);
       if (!success) {
         throw new Error('Failed to edit team message');
@@ -244,7 +246,6 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
   const clearChatHistory = useCallback(async () => {
     if (!teamId) return;
     try {
-      const { clearTeamChatHistory } = await import('../lib/teamsApi');
       const success = await clearTeamChatHistory(teamId);
       if (success && isMounted.current) {
         setMessages([]);
