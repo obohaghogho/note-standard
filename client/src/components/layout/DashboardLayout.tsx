@@ -60,11 +60,6 @@ export const DashboardLayout = () => {
                 onClose={() => setIsMobileMenuOpen(false)}
             />
             
-            {/* Lower z-index to prevent covering sidebar/header while still being a visual guide */}
-            <div className="bg-red-600 text-white text-center text-[10px] font-black py-0.5 z-20 uppercase tracking-tighter sticky top-0 shadow-sm pointer-events-none">
-                🚩 v1.3.1 - DIAGNOSTIC OVERLAY 🚩
-            </div>
-
             <main className={mainContainerClass}>
                 {/* Header/Top bar */}
                 <header className={cn(
@@ -120,7 +115,7 @@ export const DashboardLayout = () => {
                                 <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
                             </div>
                         }>
-                            <div key={location.pathname + location.search} className="flex-1 flex flex-col min-w-0">
+                            <div className="flex-1 flex flex-col min-w-0">
                                 <Outlet context={{ openCreateNoteModal: () => setIsCreateNoteModalOpen(true) }} />
                             </div>
                         </Suspense>

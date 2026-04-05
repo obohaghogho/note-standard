@@ -5,7 +5,7 @@ import './index.css'
 import './i18n'
 import App from './App.tsx'
 
-console.log('🚀 NoteStandard Client Version 1.3.0 - NAVIGATION STABILIZATION V3');
+console.log('🚀 NoteStandard Client Version 1.4.1 - GOLD MASTER STABLE');
 console.log("ENV CHECK:", import.meta.env.VITE_SUPABASE_URL ? "Supabase Configured" : "Supabase Missing");
 
 // Nuclear Cache Purge: Kills all stale production caches including Service Workers
