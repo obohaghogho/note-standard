@@ -46,7 +46,7 @@ module.exports = {
   SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY,
   
   // Cache
-  REDIS_URL: process.env.REDIS_URL || "redis://localhost:6379",
+  REDIS_URL: process.env.REDIS_URL || "",
   
   // Infrastructure
   CLOUDINARY_URL: process.env.CLOUDINARY_URL,
