@@ -1,5 +1,5 @@
 import { Outlet, useLocation } from 'react-router-dom';
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from './Sidebar';
 import { CreateNoteModal } from '../dashboard/CreateNoteModal';
 import { BroadcastBanner } from '../chat/BroadcastBanner';
@@ -110,15 +110,9 @@ export const DashboardLayout = () => {
                             <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-red-500 text-white rounded-lg text-sm">Refresh Now</button>
                         </div>
                     }>
-                        <Suspense fallback={
-                            <div className="flex items-center justify-center p-20">
-                                <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-                            </div>
-                        }>
                             <div className="flex-1 flex flex-col min-w-0">
                                 <Outlet context={{ openCreateNoteModal: () => setIsCreateNoteModalOpen(true) }} />
                             </div>
-                        </Suspense>
                     </ErrorBoundary>
                 </div>
             </main>

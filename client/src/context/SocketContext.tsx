@@ -4,9 +4,9 @@ import { useAuth } from './AuthContext';
 import toast from 'react-hot-toast';
 
 // ─── Config ──────────────────────────────────────────────────────
-const SOCKET_URL = import.meta.env.DEV
-    ? (import.meta.env.VITE_API_URL || 'http://localhost:5000')
-    : (import.meta.env.VITE_SOCKET_URL || 'https://realtime-gateway-gsb5.onrender.com');
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL 
+    ? import.meta.env.VITE_SOCKET_URL 
+    : (import.meta.env.DEV ? (import.meta.env.VITE_API_URL || 'http://localhost:5000') : 'https://realtime-gateway-gsb5.onrender.com');
 
 // ─── Types ───────────────────────────────────────────────────────
 interface SocketContextValue {

@@ -158,9 +158,12 @@ app.get('/health', (_req, res) => {
 const SOCKET_PORT = process.env.PORT || 5000;
 const PEER_PORT = process.env.PEER_PORT || 9000;
 const IS_PROD = process.env.NODE_ENV === 'production';
+const PUBLIC_URL = process.env.RENDER_EXTERNAL_URL || "https://realtime-gateway-gsb5.onrender.com";
 
 httpServer.listen(SOCKET_PORT, () => {
-  console.log(`[Gateway] Socket.IO  → http://localhost:${SOCKET_PORT}`);
+  const isRender = process.env.RENDER || process.env.RENDER_EXTERNAL_URL;
+  const displayUrl = isRender ? PUBLIC_URL : `http://localhost:${SOCKET_PORT}`;
+  console.log(`[Gateway] Socket.IO  → ${displayUrl} (port ${SOCKET_PORT})`);
 });
 
 // Since PROD uses the public PeerJS cloud now, we only need the local PeerJS server in DEV.
