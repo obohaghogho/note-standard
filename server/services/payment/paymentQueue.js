@@ -29,4 +29,8 @@ if (env.REDIS_URL) {
     logger.warn('⚠️ Redis disabled (no REDIS_URL) - paymentQueue is inactive');
 }
 
-module.exports = { paymentQueue, connection };
+// Ensure exports are safe even if Redis is missing
+module.exports = { 
+    paymentQueue: paymentQueue || { add: () => Promise.resolve({ id: 'dummy' }) }, 
+    connection: connection || null 
+};

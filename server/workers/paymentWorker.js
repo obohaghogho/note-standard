@@ -12,6 +12,8 @@ if (env.REDIS_URL) {
   connection = new IORedis(env.REDIS_URL, {
     maxRetriesPerRequest: null,
   });
+} else {
+  logger.warn('⚠️ Redis disabled (no REDIS_URL) - IORedis connection not established');
 }
 
 /**
@@ -310,5 +312,5 @@ worker.on("failed", (job, err) => {
 } else {
   logger.warn('⚠️ Redis disabled (no REDIS_URL) - paymentWorker is inactive');
 }
-
-module.exports = worker;
+// Ensure worker is exported safely even if not initialized
+module.exports = worker || { on: () => {}, close: () => Promise.resolve() };
