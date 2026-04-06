@@ -54,6 +54,8 @@ export interface Conversation {
             full_name: string;
             avatar_url: string;
             is_online?: boolean;
+            plan_tier?: 'free' | 'pro' | 'team' | 'business' | 'enterprise';
+            is_verified?: boolean;
         };
     }[];
 }

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useChat } from '../../context/ChatContext';
+import type { Message } from '../../context/ChatContext';
 import { usePresence } from '../../context/PresenceContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
@@ -150,7 +151,7 @@ const ChatWindow: React.FC = () => {
     // Search states
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [searchResults, setSearchResults] = useState<Message[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [isAccepting, setIsAccepting] = useState(false);
@@ -172,7 +173,7 @@ const ChatWindow: React.FC = () => {
 
     const otherMember = useMemo(() => {
         if (!activeConversation?.members || !user) return null;
-        return activeConversation.members.find((m: any) => m.user_id !== user.id) || null;
+        return activeConversation.members.find(m => m.user_id !== user.id) || null;
     }, [activeConversation?.members, user]);
 
     const isWaitingForOthers = myMember?.status === 'accepted' && otherMember?.status === 'pending';
@@ -505,12 +506,12 @@ const ChatWindow: React.FC = () => {
                 // Filter current conversation members
                 if (activeConversation?.members) {
                     const filtered = activeConversation.members
-                        .filter((m: any) => m.user_id !== user?.id && m.profile)
-                        .map((m: any) => ({
-                            ...m.profile,
+                        .filter(m => m.user_id !== user?.id && m.profile)
+                        .map(m => ({
+                            ...m.profile!,
                             id: m.user_id
                         }))
-                        .filter((p: any) => 
+                        .filter(p => 
                             p.username.toLowerCase().includes(query.toLowerCase()) || 
                             p.full_name?.toLowerCase().includes(query.toLowerCase())
                         );
@@ -524,7 +525,7 @@ const ChatWindow: React.FC = () => {
         }
     };
 
-    const handleSelectMention = (mentionedUser: any) => {
+    const handleSelectMention = (mentionedUser: { id: string, username: string }) => {
         const lastAtPos = inputValue.lastIndexOf('@');
         const beforeAt = inputValue.substring(0, lastAtPos);
         const afterMention = inputValue.substring(lastAtPos + mentionSearch.length + 1);
@@ -651,9 +652,9 @@ const ChatWindow: React.FC = () => {
                             let otherM = null;
 
                             if (activeConversation?.type === 'direct' && activeConversation.members) {
-                                otherM = activeConversation.members.find((m: any) => m.user_id !== user?.id);
+                                otherM = activeConversation.members.find(m => m.user_id !== user?.id);
                                 if (otherM && otherM.profile) {
-                                    const p = otherM.profile as any;
+                                    const p = otherM.profile;
                                     displayName = p.full_name || p.username;
                                     displayAvatar = p.avatar_url;
                                 }
@@ -673,10 +674,10 @@ const ChatWindow: React.FC = () => {
                                     <div className="min-w-0">
                                         <h2 className="font-semibold truncate max-w-[60px] xs:max-w-[100px] sm:max-w-[150px] md:max-w-[300px] text-[10px] xs:text-xs md:text-base flex items-center gap-1">
                                             {displayName || 'Chat'}
-                                            {activeConversation?.type === 'direct' && otherM && (
+                                            {activeConversation?.type === 'direct' && otherM && otherM.profile && (
                                                 <UserBadge 
-                                                    planTier={(otherM as any).profile?.plan_tier}
-                                                    isVerified={(otherM as any).profile?.is_verified}
+                                                    planTier={otherM.profile.plan_tier}
+                                                    isVerified={otherM.profile.is_verified}
                                                 />
                                             )}
                                         </h2>

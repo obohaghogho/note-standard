@@ -25,9 +25,6 @@ import {
   LogOut,
   Crown,
   Shield,
-  User,
-  FileText,
-  Calendar,
   Loader2,
   ArrowLeft,
   Camera,
@@ -87,7 +84,7 @@ export const TeamsPage: React.FC = () => {
       if (!selectedTeamId && data.length > 0 && window.innerWidth > 768) {
         setSelectedTeamId(data[0].id);
       }
-    } catch (err) {
+    } catch (_err) {
       toast.error('Failed to load teams');
     } finally {
       setLoading(false);
