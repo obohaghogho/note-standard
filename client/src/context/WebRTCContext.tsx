@@ -64,7 +64,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const peerRef = useRef<Peer | null>(null);
     const mediaConnectionRef = useRef<MediaConnection | null>(null);
     const localStreamRef = useRef<MediaStream | null>(null);
-    const callTimeoutRef = useRef<any>(null);
+    const callTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const currentCallStatus = useRef<CallState['status']>('idle');
     const pendingCallRef = useRef<{ from: string; peerId: string; type: 'voice' | 'video' } | null>(null);
 
@@ -208,7 +208,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 call.on('error', () => { toast.error('Call error'); cleanup(); });
             });
 
-            peer.on('error', (err: any) => {
+            peer.on('error', (err: Error & { type?: string }) => {
                 if (err.type === 'unavailable-id') {
                     console.warn('[PeerJS] ID taken — retrying…');
                     if (peerRef.current && !peerRef.current.destroyed) {
@@ -260,7 +260,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     noiseSuppression: true, 
                     autoGainControl: true,
                     // Advanced constraints (supported in Chromium)
-                    // @ts-ignore
+                    // @ts-expect-error -- vendor-specific getUserMedia audio constraints
                     googEchoCancellation: true,
                     googAutoGainControl: true,
                     googNoiseSuppression: true,
@@ -305,7 +305,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     echoCancellation: true, 
                     noiseSuppression: true, 
                     autoGainControl: true,
-                    // @ts-ignore
+                    // @ts-expect-error -- vendor-specific getUserMedia audio constraints
                     googEchoCancellation: true,
                     googAutoGainControl: true,
                     googNoiseSuppression: true,
@@ -351,7 +351,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     useEffect(() => {
         if (!socket || !socketConnected) return;
 
-        const onIncoming = (data: any) => {
+        const onIncoming = (data: { from: string; peerId: string; type: 'voice' | 'video'; conversationId: string; fromName?: string; fromAvatar?: string }) => {
             if (currentCallStatus.current !== 'idle') {
                 socket.emit('call:end', { to: data.from, conversationId: data.conversationId });
                 return;
@@ -365,13 +365,12 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             });
         };
 
-        const onReady = (data: any) => {
+        const onReady = (data: { peerId?: string; from: string }) => {
             if (currentCallStatus.current === 'calling' && peerRef.current && localStreamRef.current) {
                 if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
                 const calleePeerId = data.peerId || makePeerId(data.from);
                 const call = peerRef.current.call(calleePeerId, localStreamRef.current, {
                     // Set bandwidth to ensure high quality audio
-                    // @ts-ignore
                     sdpTransform: (sdp: string) => {
                         // 1. Lower Application Specific (AS) bandwidth to prevent jitter
                         // Using 2000 (2Mbps) for video, and remove for voice

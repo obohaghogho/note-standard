@@ -103,7 +103,7 @@ export const ManageAds = () => {
                             <p>No advertisements found in this category.</p>
                         </div>
                     ) : (
-                        ads.map((ad: any) => (
+                        ads.map((ad: Ad) => (
                             <Card key={ad.id} variant="glass" className="p-6">
                                 <div className="flex flex-col md:flex-row gap-6">
                                     {/* Image Preview */}

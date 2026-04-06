@@ -18,8 +18,22 @@ import toast from 'react-hot-toast';
 import { Button } from '../../components/common/Button';
 import { cn } from '../../utils/cn';
 
+interface Transaction {
+    id: string;
+    type: string;
+    status: string;
+    amount: number;
+    currency: string;
+    fee: number;
+    exchange_rate?: number;
+    display_label?: string;
+    provider?: string;
+    created_at: string;
+    metadata?: { to_currency?: string; sender_address?: string; receiver_address?: string };
+}
+
 interface TransactionDetailModalProps {
-    tx: any;
+    tx: Transaction;
     onClose: () => void;
 }
 
@@ -119,7 +133,7 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({ tx, onC
 
 export const Transactions: React.FC = () => {
     const { refresh } = useWallet();
-    const [transactions, setTransactions] = useState<any[]>([]);
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
     const [currencyFilter, setCurrencyFilter] = useState('ALL');
     const [statusFilter, setStatusFilter] = useState('ALL');
@@ -128,13 +142,13 @@ export const Transactions: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
     const [, setHasMore] = useState(false);
-    const [selectedTx, setSelectedTx] = useState<any>(null);
+    const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
     const itemsPerPage = 20;
 
     const fetchTransactions = useCallback(async (page: number) => {
         setLoading(true);
         try {
-            const params: any = { page, limit: itemsPerPage };
+            const params: Record<string, string | number> = { page, limit: itemsPerPage };
             if (currencyFilter !== 'ALL') params.currency = currencyFilter;
             if (statusFilter !== 'ALL') params.status = statusFilter;
             if (typeFilter !== 'ALL') params.type = typeFilter;

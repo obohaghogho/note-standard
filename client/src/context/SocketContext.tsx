@@ -74,7 +74,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             retryCount.current = 0;
 
             // Log the upgrade when it happens
-            socket.io.engine.on('upgrade', (t: any) => {
+            socket.io.engine.on('upgrade', (t: { name: string }) => {
                 console.log(`[Socket] ↑ Upgraded to ${t.name}`);
             });
         });

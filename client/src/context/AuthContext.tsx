@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useMemo, useCallback } from "react";
-import type { User, Session } from "@supabase/supabase-js";
+import type { User, Session, RealtimeChannel } from "@supabase/supabase-js";
 import { safeProfile, safeSubscription, supabase, resetRateLimiters, ensureProfile } from "../lib/supabaseSafe";
 import type { Profile, Subscription } from "../types/auth";
 import toast from "react-hot-toast";
@@ -221,8 +221,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
   
       // Step 2: Global Realtime Subscriptions for Profile and Billing
-      let profileChannel: any = null;
-      let subscriptionChannel: any = null;
+      let profileChannel: RealtimeChannel | null = null;
+      let subscriptionChannel: RealtimeChannel | null = null;
   
       const setupSubscriptions = (userId: string) => {
         if (profileChannel) supabase.removeChannel(profileChannel);
@@ -286,7 +286,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (profileChannel) supabase.removeChannel(profileChannel);
         if (subscriptionChannel) supabase.removeChannel(subscriptionChannel);
       };
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [syncUserData]);
 
   // Removal of frequent logging to prevent console pressure in production

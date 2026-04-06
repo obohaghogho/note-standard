@@ -71,7 +71,7 @@ export const AdminChat = () => {
             setChats(prev => [chat, ...prev]);
         };
 
-        const onPresenceUpdate = ({ conversationId, adminId, adminName, status }: any) => {
+        const onPresenceUpdate = ({ conversationId, adminId, adminName, status }: { conversationId: string; adminId: string; adminName: string; status: string }) => {
             if (adminId === user?.id) return;
             setActiveAdmins(prev => {
                 const current = prev[conversationId] || [];
@@ -86,7 +86,7 @@ export const AdminChat = () => {
             });
         };
 
-        const onMessageRead = ({ messageId }: any) => {
+        const onMessageRead = ({ messageId }: { messageId: string }) => {
             setMessages(prev => prev.map(m => m.id === messageId ? { ...m, read_at: new Date().toISOString() } : m));
         };
 
@@ -228,10 +228,10 @@ export const AdminChat = () => {
 
             if (res.ok) {
                 setChats(prev => prev.map(c =>
-                    c.id === chatId ? { ...c, support_status: status as any } : c
+                    c.id === chatId ? { ...c, support_status: status as Conversation['support_status'] } : c
                 ));
                 if (activeChat?.id === chatId) {
-                    setActiveChat(prev => prev ? { ...prev, support_status: status as any } : null);
+                    setActiveChat(prev => prev ? { ...prev, support_status: status as Conversation['support_status'] } : null);
                 }
             }
         } catch (err) {

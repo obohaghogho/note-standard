@@ -698,11 +698,11 @@ const ChatWindow: React.FC = () => {
                                             ) : (
                                                 <p className="text-[10px] text-gray-400 hidden sm:flex items-center gap-1">
                                                     <span className="w-1.5 h-1.5 rounded-full bg-gray-500"></span> 
-                                                    {(otherM.profile as any)?.show_online_status === false ? (
+                                                    {otherM.profile?.show_online_status === false ? (
                                                         'offline'
                                                     ) : (
                                                         (() => {
-                                                            const ts = getUserLastSeen(otherM.user_id) || (otherM.profile as any)?.last_seen;
+                                                            const ts = getUserLastSeen(otherM.user_id) || otherM.profile?.last_seen;
                                                             return ts ? `Last seen ${formatDistanceToNow(new Date(ts), { addSuffix: true })}` : 'offline';
                                                         })()
                                                     )}
@@ -1253,7 +1253,15 @@ const VideoWithSignedUrl = ({ path, fetchUrl, onPreview }: { path: string, fetch
 
 
 
-const SearchMessageItem = ({ msg, isOwn, query, fetchUrl, onPreviewMedia }: { msg: any, isOwn: boolean, query: string, fetchUrl: any, onPreviewMedia: (data: any) => void }) => {
+const SearchMessageItem = ({ 
+    msg, isOwn, query, fetchUrl, onPreviewMedia 
+}: { 
+    msg: Message, 
+    isOwn: boolean, 
+    query: string, 
+    fetchUrl: (p: string) => Promise<string | null>, 
+    onPreviewMedia: (data: { url: string; type: 'image' | 'video'; fileName?: string; isSender?: boolean }) => void 
+}) => {
     const highlight = (text: string) => {
         if (!query) return text;
         const parts = text.split(new RegExp(`(${query})`, 'gi'));

@@ -84,7 +84,7 @@ export const TeamsPage: React.FC = () => {
       if (!selectedTeamId && data.length > 0 && window.innerWidth > 768) {
         setSelectedTeamId(data[0].id);
       }
-    } catch (_err) {
+    } catch {
       toast.error('Failed to load teams');
     } finally {
       setLoading(false);
@@ -124,8 +124,8 @@ export const TeamsPage: React.FC = () => {
       } else {
         toast.error('Failed to create team', { id: toastId });
       }
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to create team', { id: toastId });
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create team', { id: toastId });
     }
   };
 
@@ -157,8 +157,8 @@ export const TeamsPage: React.FC = () => {
       } else {
         toast.error('Failed to send invitation', { id: toastId });
       }
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to invite member', { id: toastId });
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to invite member', { id: toastId });
     }
   };
 

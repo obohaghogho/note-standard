@@ -242,7 +242,7 @@ export const DashboardHome = () => {
                                         <div className="flex-1 min-w-0">
                                             <div className="flex justify-between items-center">
                                                 <p className="text-sm font-bold truncate group-hover/item:text-primary transition-colors">{act.title}</p>
-                                                {act.type === 'TX' && (act as any).amount && <span className="text-xs font-black text-white">{(act as any).amount}</span>}
+                                                {act.type === 'TX' && 'amount' in act && act.amount && <span className="text-xs font-black text-white">{act.amount}</span>}
                                             </div>
                                             <p className="text-[10px] text-gray-500 uppercase tracking-tighter">
                                                 {act.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {act.type}

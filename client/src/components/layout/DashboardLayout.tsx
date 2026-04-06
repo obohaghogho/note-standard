@@ -16,16 +16,18 @@ export const DashboardLayout = () => {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const { user, authReady } = useAuth();
 
+    const isUserLoggedIn = !!user;
+
     useEffect(() => {
         // Essential render trace with version for debugging production navigation hangs
-        console.log(`[DashboardLayout v1.1.0] Render: ${location.pathname} | Auth: ${authReady} | User: ${!!user}`);
+        console.log(`[DashboardLayout v1.1.0] Render: ${location.pathname} | Auth: ${authReady} | User: ${isUserLoggedIn}`);
         
         // Navigation completion check
         const t = setTimeout(() => {
             console.log(`[DashboardLayout v1.1.0] Navigation suspected complete: ${location.pathname}`);
         }, 500);
         return () => clearTimeout(t);
-    }, [location.pathname, authReady, !!user]);
+    }, [location.pathname, authReady, isUserLoggedIn]);
     
     if (!authReady) {
         return (

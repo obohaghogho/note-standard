@@ -5,7 +5,7 @@ import React from 'react';
  * This is particularly useful for handling "Failed to fetch dynamically imported module" errors
  * which occur when a new version of the app is deployed and old chunks are removed.
  */
-export function lazyWithRetry<T extends React.ComponentType<any>>(
+export function lazyWithRetry<T extends React.ComponentType<Record<string, unknown>>>(
   componentImport: () => Promise<{ default: T } | T>,
   name?: string
 ): React.LazyExoticComponent<T> {

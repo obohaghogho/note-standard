@@ -89,7 +89,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                     {cancelText}
                   </Button>
                   <Button
-                    variant={getButtonVariant() as any}
+                    variant={getButtonVariant() as 'danger' | 'primary'}
                     onClick={onConfirm}
                     loading={isLoading}
                   >

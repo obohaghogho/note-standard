@@ -81,9 +81,9 @@ export const Login = () => {
             toast.success('Successfully logged in!');
             navigate('/dashboard');
 
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Login process failed:', err);
-            const errMsg = err.message || 'Login failed unexpectedly';
+            const errMsg = err instanceof Error ? err.message : 'Login failed unexpectedly';
             setError(errMsg);
             toast.error(errMsg);
         } finally {
@@ -104,8 +104,8 @@ export const Login = () => {
             });
             if (error) throw error;
             toast.success('Verification link resent! Check your inbox.');
-        } catch (err: any) {
-            toast.error(err.message || 'Failed to resend link');
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Failed to resend link');
         } finally {
             setResendLoading(false);
         }
@@ -132,9 +132,9 @@ export const Login = () => {
             
             setResetSent(true);
             toast.success('Password reset email sent. Please check your inbox.');
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Password reset error:', err);
-            toast.error(err.message || 'Failed to send reset email. Please try again.');
+            toast.error(err instanceof Error ? err.message : 'Failed to send reset email. Please try again.');
         } finally {
             setResetLoading(false);
         }

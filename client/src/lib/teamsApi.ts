@@ -81,7 +81,7 @@ export async function getMyTeams(): Promise<TeamWithUnreadCount[]> {
 
     // 2. Fetch unread counts and member counts for each team
     const teamsWithDetails = await Promise.all(
-      memberships.map(async (membership: any) => {
+      (memberships as unknown as Array<{ team_id: string; role: string; teams: Team | null }>).map(async (membership) => {
         const team = membership.teams;
         if (!team) return null;
 
@@ -214,7 +214,7 @@ export async function getTeamMembers(teamId: string): Promise<TeamMember[]> {
     if (error) throw error;
 
     // Map profiles to proper structure
-    return (data ?? []).map((member: any) => ({
+    return (data as unknown as Array<TeamMember & { profiles?: TeamMember['profile'] }> ?? []).map((member) => ({
       ...member,
       profile: member.profiles,
       profiles: undefined
@@ -233,7 +233,7 @@ export async function inviteMember(teamId: string, req: InviteMemberRequest): Pr
     if (!sessionData.session) throw new Error('Not authenticated');
 
     // Find user by email or username (case-insensitive)
-    let invitee: any = null;
+    let invitee: { id: string; full_name?: string; username?: string; email?: string } | null = null;
 
     if (req.email) {
       const { data } = await supabase
@@ -426,7 +426,7 @@ export async function getTeamMessages(
     if (error) throw error;
 
     // Map and reverse (newest last)
-    return ((data ?? []) as any[])
+    return ((data ?? []) as unknown as Array<TeamMessage & { profiles?: TeamMessage['sender'] }>)
       .map((msg) => ({
         ...msg,
         sender: msg.profiles,
@@ -569,7 +569,7 @@ export async function getSharedNotes(teamId: string): Promise<SharedNote[]> {
 
     if (error) throw error;
 
-    return ((data ?? []) as any[]).map((sn) => ({
+    return ((data ?? []) as unknown as Array<SharedNote & { notes?: SharedNote['note']; profiles?: SharedNote['sharer'] }>).map((sn) => ({
       ...sn,
       note: sn.notes,
       sharer: sn.profiles,

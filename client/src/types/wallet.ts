@@ -51,7 +51,7 @@ export interface Transaction {
     from_currency?: string;
     to_currency?: string;
     rate?: number;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
     created_at: string;
     updated_at: string;
     wallet?: {
@@ -129,8 +129,11 @@ export interface BankDepositResponse {
 export interface CryptoDepositResponse {
     currency: Currency;
     address: string;
+    payAddress?: string; // Some providers use address, others payAddress
     network: string;
     minDeposit: number;
+    reference: string;
+    paymentUrl?: string;
 }
 
 // Swap Types

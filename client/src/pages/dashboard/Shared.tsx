@@ -6,20 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { ViewNoteModal } from '../../components/dashboard/ViewNoteModal';
-
-interface Note {
-    id: string;
-    title: string;
-    content: string;
-    created_at: string;
-    tags: string[];
-    owner_id: string;
-    is_private?: boolean;
-    owner?: {
-        email: string;
-        username: string;
-    }
-}
+import type { Note } from '../../types/note';
 
 export const Shared = () => {
     const { user } = useAuth();
@@ -52,7 +39,7 @@ export const Shared = () => {
                     .order('shared_at', { ascending: false });
 
                 if (searchTerm) {
-                    query = query.ilike('notes.title', `%${searchTerm}%`) as any;
+                    query = query.ilike('notes.title', `%${searchTerm}%`) as typeof query;
                 }
 
                 const { data: sharedData, error } = await query;
@@ -60,7 +47,7 @@ export const Shared = () => {
 
                 if (sharedData && sharedData.length > 0) {
                     // Extract inner notes and deduplicate (if shared in multiple teams)
-                    const rawNotes = sharedData.map((d: any) => d.note).filter(Boolean);
+                    const rawNotes = sharedData.map((d) => (d as unknown as { note: Note }).note).filter(Boolean);
                     const uniqueNotes = Array.from(new Map(rawNotes.map(n => [n.id, n])).values());
 
                     // Fetch profiles of original owners

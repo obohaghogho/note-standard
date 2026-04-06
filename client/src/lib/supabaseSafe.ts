@@ -1,5 +1,5 @@
 import { SupabaseClient, PostgrestError } from "@supabase/supabase-js";
-import type { Session } from "@supabase/supabase-js";
+import type { Session, User } from "@supabase/supabase-js";
 import toast from "react-hot-toast";
 import type { Wallet } from '@/types/wallet';
 import type { Profile, Subscription } from '../types/auth';
@@ -24,7 +24,7 @@ type RateLimiter = {
 };
 
 const rateLimiters: Record<string, RateLimiter> = {};
-const inFlightPromises = new Map<string, Promise<any>>();
+const inFlightPromises = new Map<string, Promise<unknown>>();
 
 /**
  * Reset rate limiters - call on session change to avoid stale cooldowns
@@ -79,7 +79,8 @@ export async function safeCall<T>(
   }
 
   // Helper to determine if error is transient
-  const isRetryable = (err: any) => {
+  const isRetryable = (err: unknown) => {
+    const e = err as { code?: string | number; status?: number; message?: string; name?: string };
     // 1. Explicitly ignore Supabase initialization/internal states if possible
     // 2. Terminal Postgrest/Auth errors
     const terminalCodes = [
@@ -96,24 +97,24 @@ export async function safeCall<T>(
       'BGR88', // Rate limit
     ];
 
-    const errCode = err.code?.toString();
-    const errStatus = err.status?.toString();
+    const errCode = e.code?.toString();
+    const errStatus = e.status?.toString();
 
-    if (terminalCodes.includes(errCode) || terminalCodes.includes(errStatus)) return false;
+    if (terminalCodes.includes(errCode ?? '') || terminalCodes.includes(errStatus ?? '')) return false;
 
     // 3. Retry on timeouts, network failures, and 5xx errors
-    const isTimeout = err.message?.includes('Timeout') || err.name === 'AbortError' || err.message?.includes('abort');
-    const isNetwork = !err.code && (
-      err.message?.toLowerCase().includes('fetch') || 
-      err.message?.toLowerCase().includes('network') ||
-      err.message?.toLowerCase().includes('failed to fetch') ||
-      err.message?.toLowerCase().includes('load failed') ||
-      err.message?.toLowerCase().includes('connection refused')
+    const isTimeout = e.message?.includes('Timeout') || e.name === 'AbortError' || e.message?.includes('abort');
+    const isNetwork = !e.code && (
+      e.message?.toLowerCase().includes('fetch') || 
+      e.message?.toLowerCase().includes('network') ||
+      e.message?.toLowerCase().includes('failed to fetch') ||
+      e.message?.toLowerCase().includes('load failed') ||
+      e.message?.toLowerCase().includes('connection refused')
     );
-    const is5xx = err.status >= 500;
+    const is5xx = (e.status ?? 0) >= 500;
 
     // DO NOT retry if we are still in a "recovering" state if identifiable
-    if (err.message?.includes('_recoverAndRefresh')) return false;
+    if (e.message?.includes('_recoverAndRefresh')) return false;
 
     return isTimeout || isNetwork || is5xx;
   };
@@ -132,25 +133,27 @@ export async function safeCall<T>(
         const result = await Promise.race([fn(), timeoutPromise]);
         
         // Handle Supabase error object inside result
-        if (result && typeof result === 'object' && 'error' in result && (result as any).error) {
-          throw (result as any).error;
+        if (result && typeof result === 'object' && 'error' in result) {
+          const { error: supaErr } = result as { error: unknown };
+          if (supaErr) throw supaErr;
         }
 
         return result;
 
-      } catch (err: any) {
+      } catch (err: unknown) {
         attempt++;
         const canRetry = isRetryable(err);
+        const errInfo = err as { code?: string | number; message?: string; status?: number };
 
         if (!canRetry || attempt > retries) {
           const tag = canRetry ? 'MAX_RETRIES' : 'TERMINAL';
           if (!navigator.onLine) {
             toast.error("You're offline. Please reconnect to continue.", { id: 'supabase-offline' });
           } else {
-            console.error(`[Supabase ${tag}] '${key}' (Code: ${err.code || 'None'}):`, {
-              message: err.message,
+            console.error(`[Supabase ${tag}] '${key}' (Code: ${errInfo.code || 'None'}):`, {
+              message: errInfo.message,
               attempt,
-              status: err.status
+              status: errInfo.status
             });
           }
 
@@ -362,7 +365,7 @@ export async function safeWallet(userId: string): Promise<Wallet[]> {
 // --------------------------
 export async function supabaseSafe<T>(
   key: string,
-  fn: () => Promise<T | { data: T | null; error: any | null }>,
+  fn: () => Promise<T | { data: T | null; error: PostgrestError | null }>,
   options: { minDelay?: number; retries?: number; timeout?: number; fallback?: T } = {}
 ): Promise<T | null> {
   return safeCall<T | null>(key, async () => {
@@ -370,7 +373,7 @@ export async function supabaseSafe<T>(
     
     // Auto-unwrap Supabase response if needed
     if (result && typeof result === 'object' && 'error' in result) {
-      const { data, error } = result as { data: T | null; error: any | null };
+      const { data, error } = result as { data: T | null; error: PostgrestError | null };
       if (error) throw error;
       return data;
     }
@@ -453,7 +456,7 @@ export function createSafeWebSocket(
 // --------------------------
 // Ensure Profile Exists (Robust)
 // --------------------------
-export async function ensureProfile(user: any): Promise<Profile | null> {
+export async function ensureProfile(user: User): Promise<Profile | null> {
   if (!user?.id) return null;
 
   // 1. Check if profile exists

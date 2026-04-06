@@ -7,7 +7,7 @@ export const useMultiAccountNotifications = () => {
   const { user } = useAuth();
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const accounts = getStoredAccounts();
-  const intervalRef = useRef<any>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchUnreadCounts = useCallback(async () => {
     // Dynamically retrieve to avoid stable-reference loops on every render

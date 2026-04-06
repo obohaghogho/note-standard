@@ -8,26 +8,29 @@ import { UserBadge } from '../../components/common/UserBadge';
 
 import { API_URL, getAuthHeader } from '../../lib/api';
 
-interface FeedNoteCardProps {
-    note: {
-        id: string;
-        title: string;
-        content: string;
-        created_at: string;
-        tags: string[];
-        owner_id: string;
-        likes_count?: number;
-        comments_count?: number;
-        user_has_liked?: boolean;
-        owner?: {
-            username: string;
-            email: string;
-            avatar_url?: string;
-            plan_tier?: string;
-            is_verified?: boolean;
-        };
+export interface FeedNoteData {
+    id: string;
+    title: string;
+    content: string;
+    created_at: string;
+    tags: string[];
+    owner_id: string;
+    is_private: boolean;
+    likes_count: number;
+    comments_count: number;
+    user_has_liked: boolean;
+    owner?: {
+        username?: string;
+        email?: string;
+        avatar_url?: string;
+        plan_tier?: string;
+        is_verified?: boolean;
     };
-    onCommentClick: (note: any) => void;
+}
+
+interface FeedNoteCardProps {
+    note: FeedNoteData;
+    onCommentClick: (note: FeedNoteData) => void;
 }
 
 export const FeedNoteCard = ({ note, onCommentClick }: FeedNoteCardProps) => {

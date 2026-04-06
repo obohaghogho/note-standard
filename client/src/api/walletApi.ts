@@ -110,7 +110,7 @@ export const walletApi = {
       network?: string,
       toCurrency?: string,
       toNetwork?: string
-  }): Promise<{ authorization_url?: string, checkoutUrl?: string, reference: string }> {
+  }): Promise<CardDepositResponse> {
       const response = await api.post('/wallet/deposit/card', data);
       return response.data;
   },
@@ -122,7 +122,7 @@ export const walletApi = {
       network?: string,
       toCurrency?: string,
       toNetwork?: string
-  }): Promise<{ reference: string, bankDetails: Record<string, unknown> }> {
+  }): Promise<BankDepositResponse> {
       const response = await api.post('/wallet/deposit/transfer', data);
       return response.data;
   },

@@ -24,7 +24,7 @@ export function PresenceProvider({ children }: { children: React.ReactNode }) {
     const { socket, connected } = useSocket();
     const { user } = useAuth();
     const [presenceMap, setPresenceMap] = useState<Record<string, PresenceState>>({});
-    const heartbeatTimer = useRef<any>(null);
+    const heartbeatTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // Initial load and heartbeat
     useEffect(() => {
@@ -50,9 +50,10 @@ export function PresenceProvider({ children }: { children: React.ReactNode }) {
         window.addEventListener('beforeunload', handleBeforeUnload);
 
         // Listen for new Privacy toggle changes from the UI
-        const handleSettingsChange = (e: any) => {
-            if (e.detail && 'show_online_status' in e.detail) {
-                socket.emit('presence:settings_changed', { show_online_status: e.detail.show_online_status });
+        const handleSettingsChange = (e: Event) => {
+            const detail = (e as CustomEvent<{ show_online_status?: boolean }>).detail;
+            if (detail && 'show_online_status' in detail) {
+                socket.emit('presence:settings_changed', { show_online_status: detail.show_online_status });
             }
         };
         window.addEventListener('presence:settings_changed', handleSettingsChange);

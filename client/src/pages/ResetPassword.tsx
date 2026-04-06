@@ -67,9 +67,10 @@ export const ResetPassword = () => {
                          } else {
                             setError('No active session found. Please try requesting a new password reset link.');
                          }
-                     } catch (err: any) {
+                     } catch (err: unknown) {
                          console.error('Session retrieval error:', err);
-                         if (err.message?.includes('LockManager')) {
+                         const errMsg = err instanceof Error ? err.message : 'Error loading session.';
+                         if (errMsg.includes('LockManager')) {
                              setError('Browser storage lock timeout. Please refresh the page and try again, or try opening in an incognito window.');
                              
                              // Attempt to force clear the lock from localStorage behind the scenes
@@ -77,7 +78,7 @@ export const ResetPassword = () => {
                                  if (key.includes('-auth-token')) localStorage.removeItem(key);
                              });
                          } else {
-                             setError(err.message || 'Error loading session.');
+                             setError(errMsg);
                          }
                      }
                   }, 4000);
@@ -104,9 +105,9 @@ export const ResetPassword = () => {
 
             toast.success('Password updated successfully!');
             navigate('/login');
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Update password error:', err);
-            setError(err.message);
+            setError(err instanceof Error ? err.message : 'Failed to update password');
         } finally {
             setLoading(false);
         }

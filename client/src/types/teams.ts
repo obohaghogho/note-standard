@@ -42,7 +42,7 @@ export interface TeamMessage {
   sender_id: string;
   content?: string;
   message_type: MessageType;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   is_deleted: boolean;
@@ -132,7 +132,7 @@ export interface UpdateMemberRoleRequest {
 export interface SendMessageRequest {
   content: string;
   message_type?: MessageType;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   parent_message_id?: string;
 }
 
@@ -169,7 +169,7 @@ export interface TeamStats {
 
 export type RealtimeEventType = 'INSERT' | 'UPDATE' | 'DELETE';
 
-export interface RealtimePayload<T = any> {
+export interface RealtimePayload<T = unknown> {
   eventType: RealtimeEventType;
   new: T;
   old: T;

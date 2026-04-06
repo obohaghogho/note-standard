@@ -63,7 +63,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
 
   // ── WhatsApp-Style Selection System ──────────────────────
   const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
-  const longPressTimerRef = useRef<any>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTriggeredRef = useRef(false);
   const isSelectionMode = selectedMessages.size > 0;
 
@@ -209,7 +209,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
     }
   };
 
-  const typingTimeoutRef = useRef<any>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = applyAutoCorrect(e.target.value);
     setInput(val);
@@ -262,9 +262,10 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
 
       await sendMessage('', { image_url: imageUrl }, 'image');
       toast.success('Image sent', { id: loadingToast });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[TeamChat] Image upload error:', err);
-      toast.error('Failed to upload image', { id: loadingToast });
+      const error = err as any;
+      toast.error(error.message || 'Failed to upload image', { id: loadingToast });
     } finally {
       setIsSending(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -294,9 +295,10 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
       await sendMessage('', { audio_url: audioUrl }, 'audio');
       toast.success('Voice note sent', { id: loadingToast });
       setShowRecorder(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[TeamChat] Audio upload error:', err);
-      toast.error('Failed to send voice note', { id: loadingToast });
+      const error = err as any;
+      toast.error(error.message || 'Failed to send voice note', { id: loadingToast });
     } finally {
       setIsSending(false);
     }

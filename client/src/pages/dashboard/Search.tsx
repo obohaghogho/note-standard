@@ -75,7 +75,7 @@ export const Search = () => {
             const { data: notesData, error: notesError } = await notesQuery;
 
             if (notesError) throw notesError;
-            setNotes(notesData as any || []);
+            setNotes((notesData as unknown as NoteResult[]) || []);
 
         } catch (error) {
             console.error('Search error:', error);
@@ -286,7 +286,7 @@ export const Search = () => {
             <ViewNoteModal
                 isOpen={!!viewingNote}
                 onClose={() => setViewingNote(null)}
-                note={viewingNote as any}
+                note={viewingNote as unknown as React.ComponentProps<typeof ViewNoteModal>['note']}
             />
         </div>
     );

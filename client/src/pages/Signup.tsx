@@ -123,9 +123,9 @@ export const Signup = () => {
             setStep('success');
             toast.success('Registration successful! Please check your email.');
 
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error(err);
-            const msg = err.message || 'Signup failed. Please check your details.';
+            const msg = err instanceof Error ? err.message : 'Signup failed. Please check your details.';
             
             setError(msg);
             toast.success(msg); // Use success color for errors sometimes to avoid scaring users? No, toast.error.

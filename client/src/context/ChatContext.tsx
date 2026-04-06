@@ -26,7 +26,7 @@ export interface Message {
         file_type: string;
         file_size: number;
         storage_path: string;
-        metadata: any;
+        metadata: Record<string, unknown>;
     };
 }
 
@@ -56,6 +56,8 @@ export interface Conversation {
             is_online?: boolean;
             plan_tier?: 'free' | 'pro' | 'team' | 'business' | 'enterprise';
             is_verified?: boolean;
+            show_online_status?: boolean;
+            last_seen?: string;
         };
     }[];
 }
@@ -128,7 +130,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             
             if (isMounted.current) {
                 // Map backend last_message object to lastMessage
-                const mappedData = data.map((conv: any) => ({
+                const mappedData = data.map((conv: Conversation & { last_message?: Conversation['lastMessage'] }) => ({
                     ...conv,
                     lastMessage: conv.last_message 
                 }));
@@ -164,7 +166,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => {
         if (!socket || !connected) return;
 
-        const processIncomingMessage = (msg: any) => {
+        const processIncomingMessage = (msg: Message & { sender_id: string; conversation_id: string }) => {
             if (!isMounted.current) return;
             
             const newMessage: Message = {
@@ -220,7 +222,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }
         };
 
-        const onMessageRead = ({ messageId, conversationId }: any) => {
+        const onMessageRead = ({ messageId, conversationId }: { messageId: string; conversationId: string }) => {
             setMessages(prev => {
                 const convMessages = prev[conversationId] || [];
                 // If message already marked read later, don't overwrite with older timestamp
@@ -248,7 +250,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }));
         };
 
-        const onNewConversation = (newConv?: any) => {
+        const onNewConversation = (newConv?: { id?: string }) => {
             loadConversations();
             if (newConv && newConv.id && socket && connected) {
                 socket.emit('join_room', newConv.id);
@@ -284,7 +286,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
             // Update conversation last message if the deleted message was the preview
             setConversations(prev => prev.map(conv => {
-                if (conv.id === conversationId && conv.lastMessage && (conv.lastMessage as any).id === messageId) {
+                if (conv.id === conversationId && conv.lastMessage && (conv.lastMessage as { id?: string }).id === messageId) {
                     return {
                         ...conv,
                         lastMessage: undefined
@@ -308,7 +310,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
             // Update conversation lastMessage preview if it was edited
             setConversations(prev => prev.map(conv => {
-                if (conv.id === conversationId && conv.lastMessage && (conv.lastMessage as any).sender_id === editedMsg.sender_id) {
+                if (conv.id === conversationId && conv.lastMessage && (conv.lastMessage as { sender_id?: string }).sender_id === editedMsg.sender_id) {
                     // It's tricky to know if it's the absolute last message without searching messages state
                     // We'll just optimistically update it if the created_at matches
                     if (conv.lastMessage.created_at === editedMsg.created_at) {
@@ -382,7 +384,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             sender_id: user.id,
             content,
             created_at: new Date().toISOString(),
-            type: type as any,
+            type: type as Message['type'],
             isOwn: true,
             attachment: attachmentId ? { id: attachmentId, file_name: 'File', file_type: '', file_size: 0, storage_path: '', metadata: {} } : undefined
         };
@@ -588,7 +590,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         // Update conversation last message optimistically
         setConversations(prev => prev.map(conv => {
-            if (conv.id === activeConversationId && conv.lastMessage && (conv.lastMessage as any).id === messageId) {
+            if (conv.id === activeConversationId && conv.lastMessage && (conv.lastMessage as { id?: string }).id === messageId) {
                 return { ...conv, lastMessage: undefined };
             }
             return conv;
@@ -636,7 +638,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         // Update conversation last message optimistically
         setConversations(prev => prev.map(conv => {
-            if (conv.id === activeConversationId && conv.lastMessage && (conv.lastMessage as any).id === messageId) {
+            if (conv.id === activeConversationId && conv.lastMessage && (conv.lastMessage as { id?: string }).id === messageId) {
                  // Or by checking created_at
                  return { ...conv, lastMessage: { ...conv.lastMessage, content } };
             }
@@ -739,7 +741,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const rawMessages = await res.json();
                 if (!isMounted.current) return;
 
-                const messageList: Message[] = rawMessages.map((msg: any) => ({
+                const messageList: Message[] = rawMessages.map((msg: Message) => ({
                     id: msg.id,
                     conversation_id: msg.conversation_id,
                     sender_id: msg.sender_id,

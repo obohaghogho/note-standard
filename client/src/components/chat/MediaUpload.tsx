@@ -116,9 +116,9 @@ export const MediaUpload: React.FC<MediaUploadProps> = ({ conversationId, onUplo
             
             onUploadComplete(attachment.id, type, attachment.file_name);
             toast.success('Media sent');
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Upload failed:', err);
-            toast.error(err.message || 'Upload failed');
+            toast.error(err instanceof Error ? err.message : 'Upload failed');
         } finally {
             setUploading(false);
             setUploadProgress(0);

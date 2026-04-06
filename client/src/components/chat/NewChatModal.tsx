@@ -9,11 +9,18 @@ interface NewChatModalProps {
     onClose: () => void;
 }
 
+interface UserResult {
+    id: string;
+    username: string;
+    full_name: string | null;
+    avatar_url: string | null;
+}
+
 const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose }) => {
     const [recipientId, setRecipientId] = useState(''); // Stores input text (username)
     const [error, setError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [searchResults, setSearchResults] = useState<UserResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const { startConversation } = useChat();
 
@@ -52,8 +59,9 @@ const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose }) => {
             onClose();
             setRecipientId('');
             setSearchResults([]);
-        } catch (err: any) {
-            setError(err.message || 'Failed to start conversation');
+        } catch (err: unknown) {
+            const error = err as any;
+            setError(error.message || 'Failed to start conversation');
             setIsSubmitting(false);
         }
     };

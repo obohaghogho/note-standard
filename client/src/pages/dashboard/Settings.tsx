@@ -23,7 +23,7 @@ export const Settings = () => {
     // Check params for tab or payment status
     const initialTab = searchParams.get('tab') === 'ads' || searchParams.get('ad_success') ? 'ads' : (searchParams.get('tab') === 'privacy' ? 'privacy' : 'profile');
 
-    const [activeTab, setActiveTab] = useState<'profile' | 'ads' | 'privacy' | 'chat' | 'security'>(initialTab as any);
+    const [activeTab, setActiveTab] = useState<'profile' | 'ads' | 'privacy' | 'chat' | 'security'>(initialTab as 'profile' | 'ads' | 'privacy' | 'chat' | 'security');
     const [preferredChatLanguage, setPreferredChatLanguage] = useState(authProfile?.preferred_language || 'en');
     const [privacySettings, setPrivacySettings] = useState({
         analytics: true,
@@ -122,9 +122,9 @@ export const Settings = () => {
             const data = await response.json();
             setAvatarUrl(data.url);
             toast.success('Image uploaded! Click Save to apply.');
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Error uploading image:', error);
-            toast.error(error.message || 'Failed to upload image');
+            toast.error(error instanceof Error ? error.message : 'Failed to upload image');
         } finally {
             setUploading(false);
         }
@@ -175,7 +175,7 @@ export const Settings = () => {
                 },
                 { minDelay: 500 } // FIXED: safeCall 3rd argument is object
             );
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Error updating profile:', error);
             // safeCall already shows generic error toast
         } finally {
@@ -203,7 +203,7 @@ export const Settings = () => {
 
             if (error) throw error;
             toast.success('Privacy preferences updated');
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Error saving privacy settings:', error);
             toast.error('Failed to update privacy settings');
         } finally {
@@ -305,9 +305,9 @@ export const Settings = () => {
             toast.success('Account deleted. We\'re sorry to see you go.');
             await signOut();
             navigate('/', { replace: true });
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Delete error:', error);
-            toast.error(error.message || 'Failed to delete account');
+            toast.error(error instanceof Error ? error.message : 'Failed to delete account');
         } finally {
             setSaving(false);
         }
@@ -725,8 +725,8 @@ export const Settings = () => {
                                             });
                                             if (error) throw error;
                                             toast.success('Check your email for the reset link!');
-                                        } catch (err: any) {
-                                            toast.error(err.message || 'Failed to send reset email');
+                                        } catch (err: unknown) {
+                                            toast.error(err instanceof Error ? err.message : 'Failed to send reset email');
                                         } finally {
                                             setSaving(false);
                                         }

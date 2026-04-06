@@ -12,7 +12,7 @@ export interface Profile {
     analytics?: boolean;
     offers?: boolean;
     partners?: boolean;
-    [key: string]: any;
+    [key: string]: boolean | string | number | null | undefined;
   };
   is_verified?: boolean;
   plan_tier?: 'free' | 'pro' | 'team' | 'business' | 'enterprise';

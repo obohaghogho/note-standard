@@ -98,7 +98,7 @@ export const WalletAllocationChart: React.FC<WalletAllocationChartProps> = ({ wa
                 padding: 12,
                 cornerRadius: 8,
                 callbacks: {
-                    label: function(context: any) {
+                    label: function(context: import('chart.js').TooltipItem<"doughnut">) {
                         let label = context.label || '';
                         if (label) {
                             label += ': ';

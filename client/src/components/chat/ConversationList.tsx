@@ -27,7 +27,7 @@ const ConversationList: React.FC = () => {
                 let isOnline = false;
                 
                 if (conv.type === 'direct') {
-                    const otherMember = conv.members.find((m: any) => m.user_id !== user?.id);
+                    const otherMember = conv.members.find(m => m.user_id !== user?.id);
                     if (otherMember && otherMember.profile) {
                         const profile = otherMember.profile;
                         displayName = profile.full_name || profile.username || 'Unknown User';
@@ -70,8 +70,8 @@ const ConversationList: React.FC = () => {
                                     {displayName || 'Untitled Chat'}
                                     {conv.type === 'direct' && (
                                         <UserBadge 
-                                            planTier={(conv.members as any).find((m: any) => m.user_id !== user?.id)?.profile?.plan_tier}
-                                            isVerified={(conv.members as any).find((m: any) => m.user_id !== user?.id)?.profile?.is_verified}
+                                            planTier={conv.members.find(m => m.user_id !== user?.id)?.profile?.plan_tier}
+                                            isVerified={conv.members.find(m => m.user_id !== user?.id)?.profile?.is_verified}
                                         />
                                     )}
                                     {typingUsers[conv.id]?.length > 0 && (

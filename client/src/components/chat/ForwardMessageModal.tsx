@@ -27,7 +27,7 @@ export const ForwardMessageModal: React.FC<ForwardMessageModalProps> = ({
 
   const filteredConversations = useMemo(() => {
     return conversations.filter(conv => {
-      const otherMember = conv.members.find((m: any) => m.user_id !== user?.id);
+      const otherMember = conv.members.find(m => m.user_id !== user?.id);
       const name = conv.type === 'direct' && otherMember
         ? (otherMember.profile?.full_name || otherMember.profile?.username || '')
         : (conv.name || '');
@@ -108,7 +108,7 @@ export const ForwardMessageModal: React.FC<ForwardMessageModalProps> = ({
             </div>
           ) : (
             filteredConversations.map(conv => {
-              const otherMember = conv.members.find((m: any) => m.user_id !== user?.id);
+              const otherMember = conv.members.find(m => m.user_id !== user?.id);
               const displayName = conv.type === 'direct' && otherMember
                 ? (otherMember.profile?.full_name || otherMember.profile?.username || 'User')
                 : (conv.name || 'Chat');

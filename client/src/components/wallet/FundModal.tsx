@@ -3,7 +3,7 @@ import { X, CreditCard, Bitcoin, Copy, Loader2, ShieldCheck, CheckCircle2, Landm
 import { Button } from '../common/Button';
 import walletApi from '../../api/walletApi';
 import toast from 'react-hot-toast';
-import type { Currency } from '@/types/wallet';
+import type { Currency, BankDepositResponse, CryptoDepositResponse } from '@/types/wallet';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { useWallet } from '../../hooks/useWallet';
@@ -38,7 +38,7 @@ export const FundModal: React.FC<FundModalProps> = ({
     const [loading, setLoading] = useState(false);
     
     // Bank deposit state
-    const [bankDetails, setBankDetails] = useState<any>(null);
+    const [bankDetails, setBankDetails] = useState<BankDepositResponse | null>(null);
 
     // Crypto deposit state
     const [cryptoAddress, setCryptoAddress] = useState<{
@@ -112,7 +112,7 @@ export const FundModal: React.FC<FundModalProps> = ({
 
     // Polling for crypto status
     useEffect(() => {
-        let interval: any;
+        let interval: ReturnType<typeof setInterval> | undefined;
         if (cryptoAddress?.reference && cryptoStatus === 'PENDING') {
             interval = setInterval(async () => {
                 try {
@@ -157,11 +157,11 @@ export const FundModal: React.FC<FundModalProps> = ({
 
         setLoading(true);
         try {
-            const result = await walletApi.initializePayment({
+            const result = (await walletApi.initializePayment({
                 amount: parseFloat(amount),
                 currency: activeCurrency,
                 provider: activeNetwork || 'native'
-            });
+            })) as CryptoDepositResponse;
             
             setCryptoAddress({
                 address: result.payAddress || '',
@@ -170,8 +170,8 @@ export const FundModal: React.FC<FundModalProps> = ({
                 network: activeNetwork !== 'native' ? activeNetwork : (activeCurrency === 'BTC' ? 'Bitcoin' : 'Ethereum')
             });
             toast.success('Deposit address generated!');
-        } catch (err: any) {
-            toast.error(err.response?.data?.error || err.message || 'Failed to generate crypto address');
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Failed to generate crypto address');
         } finally {
             setLoading(false);
         }
@@ -188,8 +188,8 @@ export const FundModal: React.FC<FundModalProps> = ({
             });
             setCryptoStatus('PENDING'); // Reset status for new address
             toast.success("New deposit address generated!");
-        } catch (err: any) {
-            toast.error(err.message || "Failed to generate new address");
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : "Failed to generate new address");
         } finally {
             setLoading(false);
         }
@@ -233,8 +233,8 @@ export const FundModal: React.FC<FundModalProps> = ({
                 toast.error('Payment initialization failed - no checkout URL received');
                 setLoading(false);
             }
-        } catch (err: any) {
-            const message = err.response?.data?.error || err.message || 'Card deposit failed';
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Card deposit failed';
             if (message.includes('Unauthorized') || message.includes('401')) {
                 toast.error('Session expired. Please refresh the page or log in again.');
             } else {
@@ -271,8 +271,8 @@ export const FundModal: React.FC<FundModalProps> = ({
             });
             setBankDetails(result);
             toast.success('Service allocation details generated!');
-        } catch (err: any) {
-            toast.error(err.response?.data?.error || err.message || 'Failed to generate bank details');
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Failed to generate bank details');
         } finally {
             setLoading(false);
         }
@@ -294,8 +294,8 @@ export const FundModal: React.FC<FundModalProps> = ({
             setIsRequestingLimit(false);
             setRequestedLimit('');
             setRequestReason('');
-        } catch (err: any) {
-            toast.error(err.response?.data?.error || err.message || 'Failed to submit request');
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Failed to submit request');
         } finally {
             setLoading(false);
         }

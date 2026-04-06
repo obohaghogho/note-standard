@@ -14,7 +14,7 @@ export interface WalletContextValue {
     createWallet: (currency: string, network?: string) => Promise<Wallet>;
     sendFunds: (data: InternalTransferRequest) => Promise<void>;
     withdraw: (data: WithdrawalRequest) => Promise<void>;
-    getCommissionRate: (type: string, currency: string) => Promise<CommissionSettings[]>;
+    getCommissionRate: (type: 'swap' | 'withdrawal' | 'deposit', currency: string) => Promise<CommissionSettings[]>;
 }
 
 export const WalletContext = createContext<WalletContextValue | null>(null);
@@ -102,8 +102,8 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     
                     // Live Status Notifications
                     if (payload.eventType === 'UPDATE') {
-                        const newTx = payload.new as any;
-                        const oldTx = payload.old as any;
+                        const newTx = payload.new as Partial<{ status: string; display_label?: string; metadata?: Record<string, string>; }>;
+                        const oldTx = payload.old as Partial<{ status: string }>;
 
                         if (oldTx.status === 'PENDING' && (newTx.status === 'COMPLETED' || newTx.status === 'SUCCESSFUL')) {
                             toast.success(`${newTx.display_label || 'Transaction'} confirmed!`, { 
@@ -186,8 +186,8 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
     };
 
-    const getCommissionRate = async (type: string, currency: string) => {
-        return walletApi.getCommissionRate(type as any, currency);
+    const getCommissionRate = async (type: 'swap' | 'withdrawal' | 'deposit', currency: string) => {
+        return walletApi.getCommissionRate(type, currency);
     };
 
     return (

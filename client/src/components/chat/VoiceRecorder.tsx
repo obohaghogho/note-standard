@@ -17,7 +17,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
     const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
-    const timerRef = useRef<any>(null);
+    const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const startRecording = async () => {
         try {
@@ -26,7 +26,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
                     echoCancellation: true,
                     noiseSuppression: true,
                     autoGainControl: true,
-                    // @ts-ignore
+                    // @ts-expect-error -- vendor-specific getUserMedia audio constraints
                     googEchoCancellation: true,
                     googAutoGainControl: true,
                     googNoiseSuppression: true,
@@ -72,11 +72,13 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
                 setRecordingTime((prev) => prev + 1);
             }, 1000);
 
-        } catch (error: any) {
-            console.error('Error accessing microphone:', error.name, error.message);
-            if (error.name === 'NotAllowedError' || error.name === 'SecurityError') {
+        } catch (error: unknown) {
+            const e = error instanceof Error ? error : new Error('Microphone error');
+            const errName = (error as { name?: string }).name || '';
+            console.error('Error accessing microphone:', errName, e.message);
+            if (errName === 'NotAllowedError' || errName === 'SecurityError') {
                 toast.error('Microphone access denied. Please enable permissions in your browser settings.');
-            } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+            } else if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
                 toast.error('Microphone not found. Please connect a microphone and try again.');
             } else {
                 toast.error('Could not access microphone. Ensure permissions are granted.');

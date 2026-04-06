@@ -37,7 +37,7 @@ interface TeamChatContextValue {
   members: TeamMember[];
   loading: boolean;
   connected: boolean;
-  sendMessage: (content: string, metadata?: Record<string, any>, type?: import('../types/teams').MessageType) => Promise<void>;
+  sendMessage: (content: string, metadata?: Record<string, unknown>, type?: import('../types/teams').MessageType) => Promise<void>;
   shareNote: (noteId: string, permission?: 'read' | 'edit') => Promise<void>;
   loadMoreMessages: () => Promise<void>;
   hasMore: boolean;
@@ -110,7 +110,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
   const loadingRef = useRef(false);
   const sendCooldownRef = useRef(false);
   const retryCountRef = useRef(0);
-  const retryTimeoutRef = useRef<any>(null);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastMessageIdRef = useRef<string | null>(null);
 
   // ====================================
@@ -157,7 +157,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
 
       lastMessageIdRef.current =
         messagesData.length > 0 ? messagesData[messagesData.length - 1].id : null;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[TeamChat] Failed to load initial data:', err);
       if (isMounted.current) {
         setError('Failed to load chat. Please refresh.');
@@ -169,7 +169,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
         setLoading(false);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId, user, profile, authReady]);
 
   // ====================================
@@ -262,7 +262,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
   // ====================================
 
   const sendMessage = useCallback(
-    async (content: string, metadata?: Record<string, any>, type: import('../types/teams').MessageType = 'text') => {
+    async (content: string, metadata?: Record<string, unknown>, type: import('../types/teams').MessageType = 'text') => {
       if (!user || (!content.trim() && !metadata?.image_url && !metadata?.audio_url)) return;
 
       // Cooldown check (prevent spam)
@@ -319,7 +319,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
         setMessages((prev) =>
           prev.map((msg) => (msg.id === optimisticId ? { ...result, isOwn: true } : msg))
         );
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('[TeamChat] Failed to send message:', err);
 
         // Mark optimistic message as failed
@@ -351,9 +351,9 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
         if (!result) throw new Error('Failed to share note');
 
         toast.success('Note shared successfully');
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('[TeamChat] Failed to share note:', err);
-        toast.error(err.message || 'Failed to share note');
+        toast.error(err instanceof Error ? err.message : 'Failed to share note');
       }
     },
     [teamId]
@@ -363,7 +363,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
   // TYPING INDICATORS (BROADCAST)
   // ====================================
   
-  const typingTimersRef = useRef<Record<string, any>>({});
+  const typingTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const sendTypingStatus = useCallback((isTyping: boolean) => {
     if (!channelRef.current || !user || !profile) return;
@@ -380,7 +380,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
   }, [user, profile]);
 
   // Handler for typing events
-  const handleTypingEvent = useCallback((payload: any) => {
+  const handleTypingEvent = useCallback((payload: { userId: string; userName: string; isTyping: boolean }) => {
     const { userId, userName, isTyping } = payload;
     if (userId === user?.id) return;
 
@@ -428,7 +428,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
 
       // Listen for new messages
       channel.on(
-        'postgres_changes' as any,
+        'postgres_changes' as never,
         {
           event: 'INSERT',
           schema: 'public',
@@ -462,7 +462,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
 
       // Listen for message updates (like soft deletion)
       channel.on(
-        'postgres_changes' as any,
+        'postgres_changes' as never,
         {
           event: 'UPDATE',
           schema: 'public',

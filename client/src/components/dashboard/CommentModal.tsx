@@ -23,7 +23,7 @@ interface Comment {
 interface CommentModalProps {
     isOpen: boolean;
     onClose: () => void;
-    note: any | null;
+    note: { id: string; title?: string; content?: string; tags?: string[] } | null;
 }
 
 export const CommentModal = ({ isOpen, onClose, note }: CommentModalProps) => {
@@ -48,7 +48,7 @@ export const CommentModal = ({ isOpen, onClose, note }: CommentModalProps) => {
                 .order('created_at', { ascending: true });
 
             if (error) throw error;
-            setComments(data as any || []);
+            setComments((data as Comment[]) || []);
         } catch (error) {
             console.error('Error fetching comments:', error);
             // toast.error('Failed to load comments');

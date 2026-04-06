@@ -35,8 +35,9 @@ const DepositPage: React.FC = () => {
       setInstructions(data.instructions);
       setReference(data.reference);
       toast.success("Deposit instructions generated!");
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || "Failed to get deposit details.");
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } }, message?: string };
+      toast.error(error.response?.data?.error || error.message || "Failed to get deposit details.");
     } finally {
       setLoading(false);
     }

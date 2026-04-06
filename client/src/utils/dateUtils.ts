@@ -5,7 +5,7 @@ import { formatDistanceToNow, isValid, parseISO } from 'date-fns';
  * @param date The date to format (string, number, or Date)
  * @returns Formatted string or a fallback
  */
-export const safeFormatDistanceToNow = (date: any): string => {
+export const safeFormatDistanceToNow = (date: string | number | Date | null | undefined): string => {
     if (!date) return 'some time ago';
     
     let dateObj: Date;

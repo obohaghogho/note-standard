@@ -1,18 +1,19 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Input } from '../../components/common/Input';
-import { FeedNoteCard } from '../../components/dashboard/FeedNoteCard';
 import { CommentModal } from '../../components/dashboard/CommentModal';
 import { Search, Loader2 } from 'lucide-react';
 import { supabase, safeCall } from '../../lib/supabaseSafe';
 import { useAuth } from '../../context/AuthContext';
+import { FeedNoteCard } from '../../components/dashboard/FeedNoteCard';
+import type { FeedNoteData } from '../../components/dashboard/FeedNoteCard';
 
 export const Feed = () => {
     const { user } = useAuth();
-    const [notes, setNotes] = useState<any[]>([]);
+    const [notes, setNotes] = useState<FeedNoteData[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [hasFetched, setHasFetched] = useState(false);
-    const [activeNote, setActiveNote] = useState<any | null>(null);
+    const [activeNote, setActiveNote] = useState<FeedNoteData | null>(null);
     const fetchFeedRef = useRef<() => void>(() => {});
 
     const fetchFeed = useCallback(async () => {

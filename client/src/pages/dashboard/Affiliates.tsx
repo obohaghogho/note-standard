@@ -34,7 +34,7 @@ export const Affiliates = () => {
     totalReferrals: 0,
     commissionRate: 0.1
   });
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<import('@supabase/supabase-js').User | null>(null);
 
   useEffect(() => {
     fetchData();
