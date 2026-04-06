@@ -171,6 +171,8 @@ const AdminDepositPanel: React.FC = () => {
                     <div className="relative">
                         <MessageSquare className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
                         <textarea 
+                            id={`admin-note-${deposit.id}`}
+                            name={`adminNote-${deposit.id}`}
                             value={adminNotes[deposit.id] || ""}
                             onChange={(e) => handleNoteChange(deposit.id, e.target.value)}
                             placeholder="Add notes for approval or a reason for rejection..."

@@ -103,6 +103,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ path, fetchUrl }) => {
                     
                     {/* Invisible Range Input for seeking */}
                     <input 
+                        id="audio-seek-range"
+                        name="seek"
                         type="range"
                         min="0"
                         max={duration || 0}
@@ -114,6 +116,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ path, fetchUrl }) => {
                             }
                         }}
                         className="absolute inset-0 w-full opacity-0 cursor-pointer z-10"
+                        aria-label="Seek audio"
                     />
                 </div>
                 

@@ -561,7 +561,7 @@ const ChatWindow: React.FC = () => {
     }
 
     return (
-        <div className="flex-1 flex flex-col h-full min-h-0 bg-gray-900 text-white overflow-hidden relative max-w-[1100px] mx-auto w-full shadow-2xl border-x border-gray-800">
+        <div className="flex-1 flex flex-col h-full min-h-0 bg-gray-950 text-white overflow-hidden relative max-w-[1100px] mx-auto w-full md:shadow-2xl md:border-x md:border-gray-800">
             {/* ── Selection Action Bar (WhatsApp-style) ── */}
             {isSelectionMode ? (
                 <div className="pt-safe flex-shrink-0 border-b border-blue-500/30 bg-blue-600/10 backdrop-blur-md sticky top-0 z-10 animate-in slide-in-from-top-2 duration-200">
@@ -595,12 +595,14 @@ const ChatWindow: React.FC = () => {
                                 (() => {
                                     const msgId = Array.from(selectedMessages)[0];
                                     const msg = currentMessages.find(m => m.id === msgId);
-                                    if (msg && msg.isOwn && msg.type === 'text') {
+                                    if (msg && msg.sender_id === user?.id && msg.type === 'text') {
                                         return (
                                             <button 
                                                 onClick={() => {
-                                                    setEditingMessageId(msg.id);
-                                                    setInputValue(msg.content || '');
+                                                    if (msg) {
+                                                        setEditingMessageId(msg.id);
+                                                        setInputValue(msg.content || '');
+                                                    }
                                                     clearSelection();
                                                 }}
                                                 className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-green-400 hover:text-green-300 hover:bg-green-500/15 rounded-xl transition-all active:scale-95"
@@ -633,7 +635,7 @@ const ChatWindow: React.FC = () => {
                     </div>
                 </div>
             ) : (
-            <div className="pt-safe flex-shrink-0 border-b border-gray-800 bg-gray-900/50 backdrop-blur-md sticky top-0 z-10">
+            <div className="flex-shrink-0 border-b border-white/5 bg-gray-950/80 backdrop-blur-xl sticky top-0 z-10">
                 <div className="p-2 md:p-4 flex items-center justify-between gap-4 w-full">
                     <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                         <button 
@@ -648,7 +650,7 @@ const ChatWindow: React.FC = () => {
                             let displayAvatar = null;
                             let otherM = null;
 
-                            if (activeConversation?.type === 'direct') {
+                            if (activeConversation?.type === 'direct' && activeConversation.members) {
                                 otherM = activeConversation.members.find((m: any) => m.user_id !== user?.id);
                                 if (otherM && otherM.profile) {
                                     const p = otherM.profile as any;
@@ -767,17 +769,16 @@ const ChatWindow: React.FC = () => {
             </div>
             )}
 
-            {hasMore[activeConversationId] && (
-                <div className="flex justify-center py-2 bg-gray-900">
-                    <button onClick={() => loadMoreMessages(activeConversationId)} className="text-xs font-medium text-blue-400 hover:text-blue-300">Load older messages</button>
+            {activeConversationId && hasMore[activeConversationId] && (
+                <div className="flex justify-center py-2 bg-gray-950">
+                    <button onClick={() => activeConversationId && loadMoreMessages(activeConversationId)} className="text-xs font-medium text-blue-400 hover:text-blue-300">Load older messages</button>
                 </div>
             )}
 
             <div 
-                className="flex-1 overflow-y-auto p-2 md:p-4 space-y-3 md:space-y-4 scroll-smooth overscroll-contain transition-all"
+                className="flex-1 overflow-y-auto p-2 md:p-4 space-y-3 md:space-y-4 scroll-smooth overscroll-contain transition-all scrollbar-hide"
                 style={{ 
-                    WebkitOverflowScrolling: 'touch',
-                    paddingBottom: '100px'
+                    WebkitOverflowScrolling: 'touch'
                 }}
                 ref={scrollContainerRef}
                 onScroll={handleScroll}
@@ -963,7 +964,7 @@ const ChatWindow: React.FC = () => {
                         })}
                         
                         {/* Typing Indicator */}
-                        {activeConversationId && typingUsers[activeConversationId]?.length > 0 && (
+                        {activeConversationId && typingUsers[activeConversationId] && typingUsers[activeConversationId].length > 0 && (
                             <div className="flex justify-start items-center gap-2 mt-2 animate-in fade-in slide-in-from-left-2">
                                 <div className="bg-gray-800 rounded-2xl p-3 flex gap-1 border border-gray-700 shadow-lg">
                                     <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
@@ -971,7 +972,7 @@ const ChatWindow: React.FC = () => {
                                     <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></div>
                                 </div>
                                 <span className="text-[10px] text-gray-500 font-medium italic">
-                                    {typingUsers[activeConversationId].join(', ')} {typingUsers[activeConversationId].length > 1 ? 'are' : 'is'} typing...
+                                    {typingUsers[activeConversationId]?.join(', ')} {typingUsers[activeConversationId]?.length > 1 ? 'are' : 'is'} typing...
                                 </span>
                             </div>
                         )}
@@ -1000,8 +1001,7 @@ const ChatWindow: React.FC = () => {
             {!isAtBottom && (
                 <button 
                     onClick={scrollToBottom} 
-                    className="fixed right-8 bg-blue-600 text-white p-3 rounded-full shadow-2xl hover:bg-blue-700 transition-all animate-in zoom-in-0 duration-200 z-[1100] hover:scale-110 active:scale-95"
-                    style={{ bottom: '120px' }}
+                    className="absolute bottom-24 right-6 bg-blue-600 text-white p-3 rounded-full shadow-2xl hover:bg-blue-700 transition-all animate-in zoom-in-0 duration-200 z-[30] hover:scale-110 active:scale-95 border border-white/10"
                 >
                     <ArrowDown size={20} />
                 </button>
@@ -1016,8 +1016,8 @@ const ChatWindow: React.FC = () => {
 
 
             {!isPending ? (
-                <div className="fixed bottom-0 left-0 md:left-64 right-0 z-[1000] bg-gray-900 shadow-[0_-15px_40px_rgba(0,0,0,0.4)]">
-                    <div className="max-w-[800px] mx-auto p-3 md:p-6 border-t border-gray-800 bg-gray-900/95 backdrop-blur-2xl pb-[max(env(safe-area-inset-bottom,16px),16px)]">
+                <div className="flex-shrink-0 bg-gray-950 border-t border-white/5 z-20">
+                    <div className="max-w-[800px] mx-auto p-2 md:p-4 pb-[max(env(safe-area-inset-bottom,8px),8px)]">
                         <form onSubmit={handleSend} className="flex flex-col gap-2 md:gap-3 max-w-full">
                             {isVoiceRecording ? (
                                 <div className="flex justify-center p-3 bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700/50 animate-in slide-in-from-bottom-4 duration-300">
@@ -1132,8 +1132,8 @@ const ChatWindow: React.FC = () => {
                     </div>
                 </div>
             ) : (
-                <div className="fixed bottom-0 left-0 md:left-64 right-0 z-[1000] bg-gray-900 border-t border-gray-800">
-                    <div className="max-w-[800px] mx-auto p-8 text-center text-gray-400 text-sm font-medium">Please accept the message request to start chatting.</div>
+                <div className="flex-shrink-0 bg-gray-950 border-t border-white/5 p-8 text-center text-gray-500 text-sm font-medium">
+                    Please accept the message request to start chatting.
                 </div>
             )}
 

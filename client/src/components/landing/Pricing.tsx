@@ -38,9 +38,9 @@ export const Pricing = () => {
             <div className="absolute bottom-0 right-0 w-full max-w-[400px] h-[400px] bg-purple-500/10 rounded-full blur-[100px] -z-10" />
 
             <div className="max-w-7xl mx-auto px-4 sm:px-6">
-                <div className="text-center mb-16">
-                    <h2 className="text-3xl md:text-5xl font-bold mb-6">Simple, Transparent <span className="text-primary">Pricing</span></h2>
-                    <p className="text-xl text-gray-400">Choose the plan that fits your needs.</p>
+                <div className="text-center mb-16 relative z-10">
+                    <h2 className="text-3xl md:text-5xl font-bold mb-6">Simple, Transparent <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400 drop-shadow-[0_0_10px_rgba(16,185,129,0.5)]">Pricing</span></h2>
+                    <p className="text-xl text-gray-300">Choose the plan that fits your needs.</p>
                 </div>
 
                 <div className="grid md:grid-cols-3 gap-8 items-start">

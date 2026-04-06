@@ -86,6 +86,8 @@ export const LimitRequestModal: React.FC<LimitRequestModalProps> = ({ isOpen, on
                         <div className="space-y-1">
                             <label className="text-sm font-medium text-gray-400 ml-1">New Requested Limit ($)</label>
                             <input
+                                id="requestedLimit"
+                                name="requestedLimit"
                                 type="number"
                                 value={requestedLimit}
                                 onChange={(e) => setRequestedLimit(e.target.value)}
@@ -98,6 +100,8 @@ export const LimitRequestModal: React.FC<LimitRequestModalProps> = ({ isOpen, on
                         <div className="space-y-1">
                             <label className="text-sm font-medium text-gray-400 ml-1">Reason for Increase</label>
                             <textarea
+                                id="requestReason"
+                                name="reason"
                                 value={reason}
                                 onChange={(e) => setReason(e.target.value)}
                                 className="w-full bg-gray-800 border border-gray-700 rounded-xl p-3.5 text-white focus:border-primary outline-none min-h-[100px]"

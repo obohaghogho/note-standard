@@ -204,7 +204,7 @@ export const Login = () => {
                             icon={Mail}
                             type="email"
                             label="Email Address"
-                            placeholder="name@company.com"
+                            placeholder="Enter your email"
                             required
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}

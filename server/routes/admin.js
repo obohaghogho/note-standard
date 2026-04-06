@@ -11,8 +11,9 @@ const { requireAdmin } = require(
 // All admin routes require admin authentication
 router.use(requireAdmin);
 
-// Dashboard
+// Dashboard & Analytics
 router.get("/stats", adminController.getStats);
+router.get("/analytics/detailed", adminController.getStats);
 router.get("/me", adminController.getAdminProfile);
 
 // User Management

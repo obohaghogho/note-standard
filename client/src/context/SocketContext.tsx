@@ -5,7 +5,12 @@ import toast from 'react-hot-toast';
 
 // ─── Config ──────────────────────────────────────────────────────
 // Vite loads the correct URL from .env.development or .env.production
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
+
+if (!SOCKET_URL && import.meta.env.PROD) {
+    console.error('❌ CRITICAL: VITE_SOCKET_URL is not defined in production environment!');
+}
+
 
 // ─── Types ───────────────────────────────────────────────────────
 interface SocketContextValue {

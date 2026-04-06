@@ -228,14 +228,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (profileChannel) supabase.removeChannel(profileChannel);
         if (subscriptionChannel) supabase.removeChannel(subscriptionChannel);
   
+        // Generate unique names to prevent re-using a cached, already-subscribed channel
+        const timestamp = Date.now();
+        
         profileChannel = supabase
-          .channel(`public:profiles:${userId}`)
+          .channel(`public:profiles:${userId}:${timestamp}`)
           .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, 
             () => syncUserData(userId, undefined, true))
           .subscribe();
   
         subscriptionChannel = supabase
-          .channel(`public:subscriptions:${userId}`)
+          .channel(`public:subscriptions:${userId}:${timestamp}`)
           .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions', filter: `user_id=eq.${userId}` }, 
             () => syncUserData(userId, undefined, true))
           .subscribe();

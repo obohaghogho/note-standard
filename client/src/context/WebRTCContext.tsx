@@ -174,8 +174,8 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             let reconnectAttempts = 0;
 
             const peerConfig = import.meta.env.DEV 
-                ? { host: 'localhost', port: 9000, path: '/peerjs', secure: false }
-                : {}; 
+                ? { host: import.meta.env.VITE_PEER_HOST || 'localhost', port: parseInt(import.meta.env.VITE_PEER_PORT || '9000'), path: '/peerjs', secure: false }
+                : (import.meta.env.VITE_PEER_HOST ? { host: import.meta.env.VITE_PEER_HOST, port: parseInt(import.meta.env.VITE_PEER_PORT || '443'), path: '/peerjs', secure: true } : {}); 
 
             const peer = new Peer(peerId, {
                 ...peerConfig,

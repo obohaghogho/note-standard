@@ -144,10 +144,10 @@ export const DashboardHome = () => {
             animate="visible"
             variants={containerVariants}
         >
-            {/* ── Immersive Hero Section ────────────────────────────── */}
-            <motion.div variants={itemVariants} className="relative overflow-hidden p-8 md:p-12 rounded-[2.5rem] bg-[#0a0a0a] border border-white/5 shadow-2xl">
+            {/* ── Crystal Hero Section ────────────────────────────── */}
+            <motion.div variants={itemVariants} className="relative overflow-hidden p-8 md:p-12 rounded-[2.5rem] crystal-panel border-white/10 shadow-2xl">
                 <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-primary/20 rounded-full blur-[120px] pointer-events-none animate-pulse" />
-                <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-blue-500/10 rounded-full blur-[100px] pointer-events-none" />
+                <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-blue-500/15 rounded-full blur-[100px] pointer-events-none" />
                 
                 <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
                     <div className="space-y-4">

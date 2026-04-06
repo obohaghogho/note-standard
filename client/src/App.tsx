@@ -32,6 +32,7 @@ import WalletPage from './pages/WalletPage';
 import Transactions from './pages/dashboard/Transactions';
 import TeamsPage from './pages/teams/TeamsPage';
 import DepositPage from './pages/dashboard/DepositPage';
+import DownloadPage from './pages/dashboard/DownloadPage';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 
 // ─── Lazy-loaded pages (route-level code splitting) ───
@@ -187,6 +188,7 @@ function App() {
                                 <Route path="notifications" element={<Notifications />} />
                                 <Route path="trends" element={<Trends />} />
                                 <Route path="teams" element={<TeamsPage />} />
+                                <Route path="download" element={<DownloadPage />} />
                               </Route>
                             </Route>
 

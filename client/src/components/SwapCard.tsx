@@ -480,6 +480,8 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                                 ))}
                                 <div className="flex-1 relative">
                                     <input
+                                        id="swap-slippage-input"
+                                        name="slippage"
                                         type="number"
                                         value={slippage}
                                         onChange={(e) => setSlippage(parseFloat(e.target.value) || 0)}

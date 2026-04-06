@@ -250,7 +250,7 @@ export const Signup = () => {
                                                 icon={User}
                                                 type="text"
                                                 label="Full Name"
-                                                placeholder="John Doe"
+                                                placeholder="Enter your full name"
                                                 value={fullName}
                                                 onChange={(e) => setFullName(e.target.value)}
                                                 autoComplete="name"
@@ -262,7 +262,7 @@ export const Signup = () => {
                                                 icon={UserCircle}
                                                 type="text"
                                                 label="Username"
-                                                placeholder="johndoe123"
+                                                placeholder="Pick a unique username"
                                                 value={username}
                                                 onChange={(e) => setUsername(e.target.value)}
                                                 autoComplete="username"

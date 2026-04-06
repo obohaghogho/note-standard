@@ -180,12 +180,74 @@
   .glass-card {
     @apply bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl;
   }
+
 }
+
+/* CRYSTAL THEME UTILITIES - GLOBALIZED */
+.bg-crystal {
+  background-color: #050510;
+  background-image: 
+    radial-gradient(ellipse 600px 400px at 10% 20%, rgba(16, 185, 129, 0.35) 0%, transparent 70%),
+    radial-gradient(ellipse 500px 500px at 85% 15%, rgba(139, 92, 246, 0.4) 0%, transparent 70%),
+    radial-gradient(ellipse 400px 400px at 50% 80%, rgba(59, 130, 246, 0.25) 0%, transparent 70%),
+    radial-gradient(ellipse 300px 300px at 70% 50%, rgba(16, 185, 129, 0.2) 0%, transparent 60%),
+    linear-gradient(135deg, rgba(255,255,255,0.03) 0%, transparent 50%);
+  background-attachment: fixed;
+  background-size: cover;
+  position: relative;
+}
+
+.crystal-shape {
+  position: absolute;
+  pointer-events: none;
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-top: 1px solid rgba(255, 255, 255, 0.4);
+  border-left: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: inset 0 0 30px rgba(255, 255, 255, 0.1), 0 15px 50px -10px rgba(0, 0, 0, 0.6);
+  z-index: 0;
+}
+
+.crystal-panel {
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(50px);
+  -webkit-backdrop-filter: blur(50px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 0 30px rgba(255, 255, 255, 0.08), 0 40px 80px rgba(0, 0, 0, 0.7);
+}
+
 /* Prevent auto-zoom on iOS inputs */
 @media screen and (max-width: 768px) {
   input, select, textarea {
     font-size: 16px !important;
   }
+}
+
+/* MOBILE RESPONSIVENESS UTILITIES */
+.min-h-screen-safe {
+  min-height: 100dvh;
+}
+
+.h-screen-safe {
+  height: 100dvh;
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
 }
 
 /* Remove up and down arrows (spin buttons) from number inputs globally */

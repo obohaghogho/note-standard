@@ -17,6 +17,7 @@ import {
     Shield,
     BadgeCheck,
     TrendingUp,
+    Smartphone,
     X
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
@@ -61,6 +62,7 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
         { icon: FileText, label: 'Activity Logs', to: '/dashboard/history' },
         { icon: TrendingUp, label: 'Affiliates', to: '/dashboard/affiliates' },
         { icon: Bell, label: t('common.notifications'), to: '/dashboard/notifications' },
+        { icon: Smartphone, label: 'Download App', to: '/dashboard/download' },
         { icon: Search, label: t('nav.search_item'), to: '/dashboard/search' },
     ];
 

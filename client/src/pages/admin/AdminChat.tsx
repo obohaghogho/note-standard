@@ -319,6 +319,8 @@ export const AdminChat = () => {
                     <h3>Support Chats</h3>
                     <div className="filters">
                         <select
+                            id="support-status-filter"
+                            name="statusFilter"
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value)}
                             aria-label="Filter chats"
@@ -334,6 +336,8 @@ export const AdminChat = () => {
                 <div className="search-bar">
                     <Search size={16} />
                     <input
+                        id="chat-search-input"
+                        name="chatSearch"
                         type="text"
                         placeholder="Search chats..."
                         value={searchTerm}
@@ -436,6 +440,8 @@ export const AdminChat = () => {
                                     </button>
                                 </div>
                                 <select
+                                    id="support-status-select"
+                                    name="supportStatus"
                                     value={activeChat.support_status}
                                     onChange={(e) => updateChatStatus(activeChat.id, e.target.value)}
                                     className={`status-select ${activeChat.support_status}`}
@@ -500,6 +506,8 @@ export const AdminChat = () => {
 
                         <div className="chat-input">
                             <input
+                                id="chat-reply-input"
+                                name="chatReply"
                                 type="text"
                                 placeholder="Type a response..."
                                 value={newMessage}

@@ -372,6 +372,8 @@ export const UserManagement = () => {
                                 <label className="block text-xs uppercase tracking-wider text-gray-500 mb-2">Daily Deposit Limit (USD)</label>
                                 <div className="relative">
                                     <input
+                                        id="daily-limit-input"
+                                        name="dailyLimit"
                                         type="number"
                                         value={newLimit}
                                         onChange={e => setNewLimit(e.target.value)}

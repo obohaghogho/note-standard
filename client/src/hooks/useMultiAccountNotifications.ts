@@ -10,11 +10,9 @@ export const useMultiAccountNotifications = () => {
   const intervalRef = useRef<any>(null);
 
   const fetchUnreadCounts = useCallback(async () => {
-    const updatedCounts: Record<string, number> = { ...unreadCounts };
-    
-    // Only poll for accounts that are NOT the current active user
-    // (Active user's count is handled by NotificationContext)
-    const otherAccounts = accounts.filter(acc => acc.id !== user?.id);
+    // Dynamically retrieve to avoid stable-reference loops on every render
+    const currentAccounts = getStoredAccounts();
+    const otherAccounts = currentAccounts.filter(acc => acc.id !== user?.id);
     
     for (const acc of otherAccounts) {
       try {
@@ -26,18 +24,15 @@ export const useMultiAccountNotifications = () => {
         
         if (res.ok) {
           const { count } = await res.json();
-          updatedCounts[acc.id] = count;
+          setUnreadCounts(prev => ({ ...prev, [acc.id]: count }));
         } else if (res.status === 401) {
-          // Token expired? We could potentially refresh it here or just mark as error
           console.warn(`[MultiAccountAuth] Token expired for account ${acc.id}`);
         }
       } catch (err) {
         console.error(`[MultiAccountAuth] Failed to fetch count for ${acc.id}:`, err);
       }
     }
-    
-    setUnreadCounts(updatedCounts);
-  }, [accounts, unreadCounts, user?.id]);
+  }, [user?.id]);
 
   useEffect(() => {
     // Initial fetch

@@ -22,7 +22,8 @@ const validateEnv = (vars, isProduction) => {
     if (isProduction) {
       throw new Error(errorMsg);
     } else {
-      console.warn(`\x1b[33m%s\x1b[0m`, errorMsg);
+      console.error(`\x1b[31m%s\x1b[0m`, `❌ CRITICAL ERROR: ${errorMsg}`);
+      console.warn(`\x1b[33m%s\x1b[0m`, `⚠️  Server will start but features requiring these keys will fail.`);
     }
   }
 };

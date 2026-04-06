@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
-import { API_URL } from '../../lib/api';
 import { adService, type Ad } from '../../services/ads';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
@@ -20,21 +19,8 @@ export const ManageAds = () => {
         setLoading(true);
         try {
             const statusFilter = activeTab === 'all' ? undefined : activeTab;
-            const params = new URLSearchParams();
-            if (statusFilter) params.append('status', statusFilter);
-
-            const res = await fetch(`${API_URL}/api/ads/moderation?${params}`, {
-                headers: { 
-                    'Authorization': `Bearer ${session.access_token}`,
-                    'Accept': 'application/json'
-                }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setAds(data);
-            } else {
-                throw new Error(`HTTP error! status: ${res.status}`);
-            }
+            const data = await adService.getAdminAds(statusFilter);
+            setAds(data);
         } catch (error) {
             console.error('Failed to fetch ads:', error);
             toast.error('Failed to load ads');

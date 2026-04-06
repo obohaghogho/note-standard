@@ -83,6 +83,8 @@ const DepositPage: React.FC = () => {
               <div className="space-y-3">
                 <label className="block text-sm font-bold text-slate-600 dark:text-slate-300 ml-1">Choose Currency</label>
                 <select
+                  id="depositCurrency"
+                  name="currency"
                   value={currency}
                   onChange={(e) => setCurrency(e.target.value)}
                   className="w-full h-14 px-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-slate-900 dark:text-white font-bold appearance-none focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all cursor-pointer"

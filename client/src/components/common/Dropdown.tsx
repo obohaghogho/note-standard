@@ -32,15 +32,24 @@ export const Dropdown = ({ items, trigger }: DropdownProps) => {
 
     return (
         <div className="relative" ref={dropdownRef}>
-            <button
+            <div
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsOpen(!isOpen);
+                    }
+                }}
                 onClick={(e) => {
                     e.stopPropagation();
                     setIsOpen(!isOpen);
                 }}
-                className="p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors focus:outline-none"
+                className="p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors focus:outline-none inline-flex cursor-pointer"
             >
                 {trigger || <MoreVertical size={16} />}
-            </button>
+            </div>
 
             {isOpen && (
                 <div className="absolute right-0 mt-2 w-48 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl z-50 overflow-hidden backdrop-blur-xl animate-in fade-in zoom-in-95 duration-200">
