@@ -168,6 +168,17 @@ app.post("/api/flutterwave-webhook", async (req, res) => {
 app.use("/api/media", require("./routes/media"));
 
 // ─── Serve Frontend (Production) ──────────────────────────────
+app.use((req, res, next) => {
+  if (req.path.endsWith('.apk')) {
+    res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+    res.setHeader('Content-Disposition', `attachment; filename="${path.basename(req.path)}"`);
+  } else if (req.path.endsWith('.ipa')) {
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${path.basename(req.path)}"`);
+  }
+  next();
+});
+
 app.use(express.static(path.join(__dirname, "../client/dist")));
 
 // Temporary IP detection for whitelisting (NOWPayments)

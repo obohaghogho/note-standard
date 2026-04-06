@@ -47,7 +47,7 @@ export const DownloadPage: React.FC = () => {
   };
 
   const handleNativeDownload = (platform: 'android' | 'ios') => {
-    const filename = platform === 'android' ? 'NoteStandard.apk' : 'NoteStandard.ipa';
+    const filename = platform === 'android' ? 'app-release.apk' : 'app-release.ipa';
     const link = document.createElement('a');
     link.href = `/downloads/${filename}`;
     link.download = filename;
