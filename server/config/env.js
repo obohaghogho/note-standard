@@ -1,12 +1,15 @@
 const path = require("path");
-require("dotenv").config();
 
-// Load .env.development if not in production
+// ─── Environment Loading ──────────────────────────────────────
+// dotenv does NOT overwrite existing values, so load order matters:
+//   Development: .env.development first (priority) → .env (fallback)
+//   Production:  .env only (Render sets NODE_ENV=production)
 if (process.env.NODE_ENV !== "production") {
   require("dotenv").config({
     path: path.join(__dirname, "..", ".env.development"),
   });
 }
+require("dotenv").config(); // .env as fallback (won't overwrite dev values)
 
 /**
  * Validates that the given environment variables are present.
