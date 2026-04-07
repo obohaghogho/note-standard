@@ -173,11 +173,10 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const peerId = makePeerId(user!.id, suffix || Math.random().toString(36).substring(7));
             let reconnectAttempts = 0;
 
-            const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            const hostname = window.location.hostname;
+            const isDev = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.');
             
             // ─── Hybrid Signaling Strategy ───────────────────────────
-            // PROD: Use official PeerJS Cloud (most reliable for Render)
-            // DEV:  Use isolated local server on port 9000
             const peerHost = isDev ? 'localhost' : '0.peerjs.com';
             const peerPort = isDev ? parseInt(import.meta.env.VITE_PEER_PORT || '9000') : 443;
             const peerPath = isDev ? '/peerjs' : '/';
@@ -188,20 +187,27 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 port: peerPort,
                 path: peerPath,
                 secure: peerSecure,
+                key: 'peerjs', // Required for PeerJS Cloud
             };
+
+            console.log('[PeerJS] 👋 Connecting with config:', { 
+                host: peerHost, 
+                port: peerPort, 
+                path: peerPath, 
+                secure: peerSecure,
+                env: isDev ? 'DEV' : 'PROD' 
+            });
 
             const peer = new Peer(peerId, {
                 ...peerConfig,
-                debug: import.meta.env.DEV ? 2 : 0,
-                pingInterval: 3000, // Heartbeat every 3s to keep signaling alive
+                debug: 3, // Enable high-verbosity logs to find the exact failure
+                pingInterval: 3000,
                 config: {
                     iceServers: [
                         { urls: 'stun:stun.l.google.com:19302' },
                         { urls: 'stun:stun1.l.google.com:19302' },
-                        // TURN servers for NAT traversal (ensures calls work behind firewalls)
                         { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
                         { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-                        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
                     ],
                 },
             });
