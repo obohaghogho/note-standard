@@ -175,7 +175,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 key: 'peerjs',
             };
 
-            console.log('[WebRTC] 👋 Connecting with config:', { 
+            console.warn('[WebRTC] 👋 Connecting with config:', { 
                 host: peerHost, 
                 port: peerPort, 
                 path: peerPath, 
