@@ -53,9 +53,6 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const { user } = useAuth();
     const { sendMessage } = useChat();
 
-    // 🕵️ Auth Handshake Diagnostic
-    console.warn('[WebRTC] 🛡️ Provider Status:', { mounted: true, authReady: !!user, userId: user?.id });
-
     const [callState, setCallState] = useState<CallState>({
         type: null, status: 'idle', otherUser: null, conversationId: null, connectedAt: null,
     });
