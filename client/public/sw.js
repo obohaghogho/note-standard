@@ -16,7 +16,7 @@ self.addEventListener('install', (event) => {
       return cache.addAll(ASSETS_TO_CACHE);
     })
   );
-  self.skipWaiting();
+  self.skipWaiting(); // Still present for initial migration, but the UI will control updates later
 });
 
 // Activate Event
@@ -98,4 +98,11 @@ self.addEventListener('notificationclick', function (event) {
             }
         })
     );
+});
+
+// Listener for SKIP_WAITING from the UI
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });

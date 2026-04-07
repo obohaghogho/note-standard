@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Toaster } from 'react-hot-toast'
+import { Toaster, toast } from 'react-hot-toast'
 import './index.css'
 import './i18n'
 import App from './App.tsx'
@@ -8,7 +8,7 @@ import App from './App.tsx'
 console.log('🚀 NoteStandard Client Version 1.5.0 - INFRASTRUCTURE RECOVERY');
 console.log("ENV CHECK:", import.meta.env.VITE_SUPABASE_URL ? "Supabase Configured" : "Supabase Missing");
 
-// Service Worker Registration
+// Service Worker Registration with Update Detection
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
@@ -16,17 +16,56 @@ if ('serviceWorker' in navigator) {
       .then((registration) => {
         console.log('SW registered: ', registration);
         
-        // Check for updates
+        // Listen for the controllerchange event (reload when new worker takes over)
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (!refreshing) {
+            refreshing = true;
+            window.location.reload();
+          }
+        });
+
+        const showUpdateToast = (worker: ServiceWorker) => {
+          toast.success(
+            (t) => (
+              <div className="flex flex-col gap-2">
+                <span className="font-semibold text-white">New version available!</span>
+                <p className="text-xs text-gray-400">Update now to access new features and fixes.</p>
+                <button
+                  onClick={() => {
+                    worker.postMessage({ type: 'SKIP_WAITING' });
+                    toast.dismiss(t.id);
+                  }}
+                  className="mt-2 bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold transition-all shadow-lg shadow-emerald-500/20 uppercase tracking-wide cursor-pointer"
+                >
+                  🚀 Update Now
+                </button>
+              </div>
+            ),
+            {
+              duration: Infinity,
+              id: 'sw-update-toast',
+              style: {
+                background: '#1a1a1a',
+                border: '1px solid rgba(255,255,255,0.1)',
+                padding: '16px',
+              }
+            }
+          );
+        };
+
+        // Check if there is already a waiting worker (e.g. from a previous load)
+        if (registration.waiting) {
+          showUpdateToast(registration.waiting);
+        }
+
+        // Check for updates being found
         registration.onupdatefound = () => {
           const installingWorker = registration.installing;
           if (installingWorker) {
             installingWorker.onstatechange = () => {
-              if (installingWorker.state === 'installed') {
-                if (navigator.serviceWorker.controller) {
-                  console.log('New content is available; please refresh.');
-                } else {
-                  console.log('Content is cached for offline use.');
-                }
+              if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                showUpdateToast(installingWorker);
               }
             };
           }
