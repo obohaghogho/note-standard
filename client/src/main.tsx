@@ -26,32 +26,12 @@ if ('serviceWorker' in navigator) {
         });
 
         const showUpdateToast = (worker: ServiceWorker) => {
-          toast.success(
-            (t) => (
-              <div className="flex flex-col gap-2">
-                <span className="font-semibold text-white">New version available!</span>
-                <p className="text-xs text-gray-400">Update now to access new features and fixes.</p>
-                <button
-                  onClick={() => {
-                    worker.postMessage({ type: 'SKIP_WAITING' });
-                    toast.dismiss(t.id);
-                  }}
-                  className="mt-2 bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold transition-all shadow-lg shadow-emerald-500/20 uppercase tracking-wide cursor-pointer"
-                >
-                  🚀 Update Now
-                </button>
-              </div>
-            ),
-            {
-              duration: Infinity,
-              id: 'sw-update-toast',
-              style: {
-                background: '#1a1a1a',
-                border: '1px solid rgba(255,255,255,0.1)',
-                padding: '16px',
-              }
-            }
-          );
+          toast.success('New version available! Refreshing...', {
+            duration: 4000,
+            id: 'sw-update-toast',
+          });
+          // For now, let's just skip waiting immediately to see if it fixes the crash
+          worker.postMessage({ type: 'SKIP_WAITING' });
         };
 
         // Check if there is already a waiting worker (e.g. from a previous load)

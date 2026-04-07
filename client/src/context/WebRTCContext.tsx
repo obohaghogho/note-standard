@@ -173,9 +173,17 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const peerId = makePeerId(user!.id, suffix || Math.random().toString(36).substring(7));
             let reconnectAttempts = 0;
 
-            const peerConfig = import.meta.env.DEV 
-                ? { host: import.meta.env.VITE_PEER_HOST || 'localhost', port: parseInt(import.meta.env.VITE_PEER_PORT || '5000'), path: '/peerjs', secure: false }
-                : (import.meta.env.VITE_PEER_HOST ? { host: import.meta.env.VITE_PEER_HOST, port: parseInt(import.meta.env.VITE_PEER_PORT || '443'), path: '/peerjs', secure: true } : { host: 'realtime-gateway-gsb5.onrender.com', port: 443, path: '/peerjs', secure: true }); 
+            const isDev = import.meta.env.DEV;
+            const peerHost = import.meta.env.VITE_PEER_HOST || (isDev ? 'localhost' : 'realtime-gateway-gsb5.onrender.com');
+            const peerPort = parseInt(import.meta.env.VITE_PEER_PORT || (isDev ? '5000' : '443'));
+            const peerSecure = !isDev || import.meta.env.VITE_PEER_SECURE === 'true';
+
+            const peerConfig = {
+                host: peerHost,
+                port: peerPort,
+                path: '/peerjs',
+                secure: peerSecure,
+            };
 
             const peer = new Peer(peerId, {
                 ...peerConfig,
