@@ -4,7 +4,7 @@ import { ArrowRight, Shield, Zap, Globe, Diamond } from 'lucide-react';
 
 export const Hero = () => {
     return (
-        <section className="relative min-h-[100dvh] flex items-center justify-center pt-24 overflow-hidden">
+        <section className="relative min-h-[100dvh] flex items-center justify-center pt-24">
             {/* Crystal Shards Background - VIVID MOD */}
             <motion.div
                 animate={{ y: [-30, 30, -30], rotate: [0, 8, 0] }}

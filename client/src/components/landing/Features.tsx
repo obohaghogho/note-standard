@@ -36,7 +36,7 @@ const features = [
 
 export const Features = () => {
     return (
-        <section id="features" className="py-20 relative overflow-hidden">
+        <section id="features" className="py-20 relative">
             <div className="max-w-7xl mx-auto px-4 sm:px-6">
                 <div className="text-center mb-16 relative z-10">
                     <h2 className="text-3xl md:text-5xl font-bold mb-6">Designed for <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400 drop-shadow-[0_0_10px_rgba(16,185,129,0.5)]">Power Users</span></h2>

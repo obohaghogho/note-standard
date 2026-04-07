@@ -32,7 +32,7 @@ const plans = [
 export const Pricing = () => {
     const navigate = useNavigate();
     return (
-        <section id="pricing" className="py-20 relative overflow-hidden">
+        <section id="pricing" className="py-20 relative">
             {/* Background blobs */}
             <div className="absolute top-1/2 left-0 w-full max-w-[400px] h-[400px] bg-blue-500/10 rounded-full blur-[100px] -z-10" />
             <div className="absolute bottom-0 right-0 w-full max-w-[400px] h-[400px] bg-purple-500/10 rounded-full blur-[100px] -z-10" />
