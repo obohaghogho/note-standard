@@ -38,10 +38,13 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     useEffect(() => {
         // ── Gate: wait until auth is fully ready ──────────────
-        if (!authReady || !session?.access_token || !user) {
+        const token = session?.access_token;
+        const isValidToken = token && typeof token === 'string' && token.length > 20;
+
+        if (!authReady || !isValidToken || !user) {
             // Tear down existing socket if session is lost
             if (socketRef.current) {
-                console.log('[Socket] Auth lost — disconnecting');
+                console.log('[Socket] Auth lost or token invalid — disconnecting');
                 socketRef.current.disconnect();
                 socketRef.current = null;
                 setConnected(false);

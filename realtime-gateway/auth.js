@@ -9,15 +9,23 @@ const supabase = createClient(
 const authMiddleware = async (socket, next) => {
   try {
     const token = socket.handshake.auth.token;
-    if (!token) {
-      return next(new Error('Authentication error: Token missing'));
+    
+    // 1. Initial validation
+    if (!token || typeof token !== 'string' || token.trim() === '' || token === 'undefined' || token === 'null') {
+      console.warn(`[Auth] ✗ Connection rejected: Token is type '${typeof token}' or value '${token}'`);
+      return next(new Error('Authentication error: Token missing or malformed'));
     }
 
-    // Verify token with Supabase
+    // 2. Verify token with Supabase
     const { data: { user }, error } = await supabase.auth.getUser(token);
 
     if (error || !user) {
-      console.error('[Auth] JWT verification failed:', error?.message);
+      const isSessionMissing = error?.message?.includes('Auth session missing');
+      console.error(`[Auth] ✗ JWT verification failed: ${error?.message || 'Invalid user'} (Token: ${token.substring(0, 10)}...)`);
+      
+      if (isSessionMissing) {
+        return next(new Error('Authentication error: Session expired or missing'));
+      }
       return next(new Error('Authentication error: Invalid token'));
     }
 
