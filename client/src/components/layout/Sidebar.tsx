@@ -62,7 +62,7 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
         { icon: FileText, label: 'Activity Logs', to: '/dashboard/history' },
         { icon: TrendingUp, label: 'Affiliates', to: '/dashboard/affiliates' },
         { icon: Bell, label: t('common.notifications'), to: '/dashboard/notifications' },
-        { icon: Smartphone, label: 'Download App', to: '/dashboard/download' },
+        { icon: Smartphone, label: 'Download App', to: '/download' },
         { icon: Search, label: t('nav.search_item'), to: '/dashboard/search' },
     ];
 
@@ -82,13 +82,13 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
             {/* Mobile Overlay */}
             {isOpen && (
                 <div 
-                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
+                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[65] md:hidden"
                     onClick={onClose}
                 />
             )}
             
             <div className={cn(
-                "w-64 h-[100dvh] border-r border-white/10 flex flex-col fixed left-0 top-0 z-50 transition-transform duration-300 bg-gray-900",
+                "w-64 h-[100dvh] border-r border-white/10 flex flex-col fixed left-0 top-0 z-[70] transition-transform duration-300 bg-gray-900",
                 isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
             )}>
             {/* Header */}

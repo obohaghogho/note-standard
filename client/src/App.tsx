@@ -163,6 +163,7 @@ function App() {
                             <Route path="/about" element={<AboutPage />} />
                             <Route path="/contact" element={<ContactPage />} />
                             <Route path="/reset-password" element={<ResetPassword />} />
+                            <Route path="/download" element={<DownloadPage />} />
                             
                             <Route path="/chat/:id" element={<ChatRedirect />} />
 
@@ -188,7 +189,7 @@ function App() {
                                 <Route path="notifications" element={<Notifications />} />
                                 <Route path="trends" element={<Trends />} />
                                 <Route path="teams" element={<TeamsPage />} />
-                                <Route path="download" element={<DownloadPage />} />
+                                {/* Download page is now at /download */}
                               </Route>
                             </Route>
 

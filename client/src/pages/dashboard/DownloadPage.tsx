@@ -182,7 +182,7 @@ export const DownloadPage: React.FC = () => {
              <div className="pt-8 flex justify-center">
                 <div className="bg-white p-6 rounded-[2.5rem] shadow-2xl shadow-white/5 border border-white/10 group-hover:scale-105 transition-transform duration-500">
                    <QRCodeSVG 
-                     value={window.location.origin + '/dashboard/download'} 
+                     value={window.location.origin + '/download'} 
                      size={160}
                      bgColor="#ffffff"
                      fgColor="#000000"
