@@ -1,44 +1,44 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import Peer, { type MediaConnection } from 'peerjs';
+import Peer, { MediaConnection } from 'peerjs';
 import { useSocket } from './SocketContext';
 import { useAuth } from './AuthContext';
 import { useChat } from './ChatContext';
-import { CallOverlay } from '../components/chat/CallOverlay';
 import toast from 'react-hot-toast';
+import CallOverlay from '../components/Dashboard/CallOverlay';
 
-// ─── PeerJS signaling config ─────────────────────────────────────
-// Uses local server in DEV, public PeerJS cloud in PROD
-
-// ─── Types ───────────────────────────────────────────────────────
 interface CallState {
     type: 'voice' | 'video' | null;
-    status: 'idle' | 'calling' | 'incoming' | 'connecting' | 'connected';
-    otherUser: string | null;
-    otherUserName?: string;
-    otherUserAvatar?: string;
+    status: 'idle' | 'calling' | 'incoming' | 'connected' | 'ended';
+    otherUser: {
+        id: string;
+        full_name: string;
+        avatar_url?: string;
+    } | null;
     conversationId: string | null;
-    connectedAt?: number | null;
+    connectedAt: number | null;
 }
 
-interface WebRTCContextValue {
+interface WebRTCContextType {
     callState: CallState;
     localStream: MediaStream | null;
     remoteStream: MediaStream | null;
-    startCall: (userId: string, conversationId: string, type: 'voice' | 'video', name?: string, avatar?: string) => Promise<void>;
+    isMuted: boolean;
+    isVideoEnabled: boolean;
+    startCall: (targetUserId: string, conversationId: string, type: 'voice' | 'video', otherUser: CallState['otherUser']) => Promise<void>;
     acceptCall: () => Promise<void>;
     rejectCall: () => void;
     endCall: () => void;
     toggleMute: () => void;
     toggleVideo: () => void;
-    isMuted: boolean;
-    isVideoEnabled: boolean;
 }
 
-const WebRTCContext = createContext<WebRTCContextValue | null>(null);
+const WebRTCContext = createContext<WebRTCContextType | undefined>(undefined);
 
 export const useWebRTC = () => {
     const context = useContext(WebRTCContext);
-    if (!context) throw new Error('useWebRTC must be used within a WebRTCProvider');
+    if (!context) {
+        throw new Error('useWebRTC must be used within a WebRTCProvider');
+    }
     return context;
 };
 
@@ -47,11 +47,13 @@ function makePeerId(userId: string, suffix?: string): string {
     return suffix ? `${base}_${suffix}` : base;
 }
 
-// ═════════════════════════════════════════════════════════════════
 export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { socket, connected: socketConnected } = useSocket();
     const { user } = useAuth();
     const { sendMessage } = useChat();
+
+    // 🕵️ Auth Handshake Diagnostic
+    console.log('[WebRTC] 🛡️ Provider Status:', { mounted: true, authReady: !!user, userId: user?.id });
 
     const [callState, setCallState] = useState<CallState>({
         type: null, status: 'idle', otherUser: null, conversationId: null, connectedAt: null,
@@ -68,16 +70,10 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const currentCallStatus = useRef<CallState['status']>('idle');
     const pendingCallRef = useRef<{ from: string; peerId: string; type: 'voice' | 'video' } | null>(null);
 
-    // Audio Refs for ringtones
-    // dialToneRef = calm ring-ring sound the CALLER hears while waiting
-    // incomingRingtoneRef = attention-grabbing sound the CALLEE hears for incoming call
     const dialToneRef = useRef<HTMLAudioElement | null>(null);
     const incomingRingtoneRef = useRef<HTMLAudioElement | null>(null);
 
     useEffect(() => {
-        // Initialize audio objects
-        // ringtone.wav = calm dial tone for caller
-        // ringing.wav = attention-grabbing ringtone for callee
         dialToneRef.current = new Audio('/sounds/ringtone.wav');
         dialToneRef.current.loop = true;
         dialToneRef.current.volume = 0.5;
@@ -93,21 +89,18 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     useEffect(() => { currentCallStatus.current = callState.status; }, [callState.status]);
 
-    // Robust audio playback — handles browser autoplay restrictions
     const playAudio = useCallback((audio: HTMLAudioElement | null, label: string) => {
         if (!audio) return;
         const playPromise = audio.play();
         if (playPromise) {
             playPromise.catch((err) => {
                 console.warn(`[Audio] ${label} play blocked:`, err.message);
-                // Show a toast so user knows to interact to enable sound
                 toast(`🔇 Tap anywhere to enable ${label}`, {
                     duration: 3000,
                     id: `audio-unlock-${label}`,
                 });
-                // One-time click listener to retry audio
                 const unlockAudio = () => {
-                    audio.play().catch(() => { /* Ignore autoplay errors */ });
+                    audio.play().catch(() => { });
                     document.removeEventListener('click', unlockAudio);
                     document.removeEventListener('touchstart', unlockAudio);
                 };
@@ -117,7 +110,6 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
     }, []);
 
-    // Handle audio playback based on status
     useEffect(() => {
         const stopAll = () => {
             dialToneRef.current?.pause();
@@ -127,11 +119,9 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         };
 
         if (callState.status === 'calling') {
-            // I am the CALLER — play calm dial tone
             stopAll();
             playAudio(dialToneRef.current, 'dial tone');
         } else if (callState.status === 'incoming') {
-            // I am the CALLEE — play attention-grabbing ringtone
             stopAll();
             playAudio(incomingRingtoneRef.current, 'ringtone');
         } else {
@@ -139,13 +129,11 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
     }, [callState.status, playAudio]);
 
-    // ─── Cleanup ─────────────────────────────────────────────────
     const cleanup = useCallback(() => {
         if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
         if (mediaConnectionRef.current) { mediaConnectionRef.current.close(); mediaConnectionRef.current = null; }
         if (localStreamRef.current) { localStreamRef.current.getTracks().forEach(t => t.stop()); localStreamRef.current = null; }
         
-        // Stop audio
         dialToneRef.current?.pause();
         if (dialToneRef.current) dialToneRef.current.currentTime = 0;
         incomingRingtoneRef.current?.pause();
@@ -159,24 +147,21 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setIsVideoEnabled(true);
     }, []);
 
-    // ─── PeerJS initialization ───────────────────────────────────
     useEffect(() => {
+        console.log('[WebRTC] 🔄 Initialization Effect Triggered', { userId: user?.id });
         if (!user?.id) return;
         if (peerRef.current) return;
 
         let destroyed = false;
-        const MAX_RECONNECT = 3;
+        const MAX_RECONNECT = 5;
 
         function createPeer(suffix?: string) {
-            if (destroyed) return;
-
             const peerId = makePeerId(user!.id, suffix || Math.random().toString(36).substring(7));
             let reconnectAttempts = 0;
 
             const hostname = window.location.hostname;
             const isDev = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.');
             
-            // ─── Hybrid Signaling Strategy ───────────────────────────
             const peerHost = isDev ? 'localhost' : '0.peerjs.com';
             const peerPort = isDev ? parseInt(import.meta.env.VITE_PEER_PORT || '9000') : 443;
             const peerPath = isDev ? '/peerjs' : '/';
@@ -187,10 +172,10 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 port: peerPort,
                 path: peerPath,
                 secure: peerSecure,
-                key: 'peerjs', // Required for PeerJS Cloud
+                key: 'peerjs',
             };
 
-            console.log('[PeerJS] 👋 Connecting with config:', { 
+            console.log('[WebRTC] 👋 Connecting with config:', { 
                 host: peerHost, 
                 port: peerPort, 
                 path: peerPath, 
@@ -200,7 +185,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             const peer = new Peer(peerId, {
                 ...peerConfig,
-                debug: 3, // Enable high-verbosity logs to find the exact failure
+                debug: 3,
                 pingInterval: 3000,
                 config: {
                     iceServers: [
@@ -217,38 +202,50 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 reconnectAttempts = 0;
             });
 
-            peer.on('call', (call) => {
-                mediaConnectionRef.current = call;
-                call.on('stream', (remote) => { 
-                    setRemoteStream(remote); 
-                    setCallState(p => ({ ...p, status: 'connected', connectedAt: p.connectedAt || Date.now() })); 
-                });
-                call.on('close', cleanup);
-                call.on('error', () => { toast.error('Call error'); cleanup(); });
-            });
-
-            peer.on('error', (err: Error & { type?: string }) => {
-                if (err.type === 'unavailable-id') {
-                    console.warn('[PeerJS] ID taken — retrying…');
-                    if (peerRef.current && !peerRef.current.destroyed) {
-                        peerRef.current.destroy();
-                    }
-                    peerRef.current = null;
-                    setTimeout(() => createPeer(Date.now().toString(36)), 800);
+            peer.on('call', async (call) => {
+                const callerPeerId = call.peer;
+                const metadata = call.metadata || {};
+                
+                if (currentCallStatus.current !== 'idle') {
+                    call.answer();
+                    setTimeout(() => call.close(), 500);
                     return;
                 }
-                if (err.type === 'network' || err.type === 'server-error') {
-                    console.warn('[PeerJS] Signaling server unreachable. Calls unavailable.');
-                }
+
+                pendingCallRef.current = { from: callerPeerId, peerId: callerPeerId, type: metadata.type || 'voice' };
+                mediaConnectionRef.current = call;
+
+                setCallState({
+                    type: metadata.type || 'voice',
+                    status: 'incoming',
+                    otherUser: metadata.caller || { id: 'unknown', full_name: 'Unknown User' },
+                    conversationId: metadata.conversationId || 'unknown',
+                    connectedAt: null,
+                });
             });
 
             peer.on('disconnected', () => {
-                if (!destroyed && !peer.destroyed && reconnectAttempts < MAX_RECONNECT) {
+                if (destroyed) return;
+                console.warn('[PeerJS] Disconnected from server.');
+                if (reconnectAttempts < MAX_RECONNECT) {
                     reconnectAttempts++;
-                    console.log(`[PeerJS] Reconnecting (${reconnectAttempts}/${MAX_RECONNECT})…`);
-                    peer.reconnect();
-                } else if (reconnectAttempts >= MAX_RECONNECT) {
-                    console.warn('[PeerJS] Max reconnects reached. Calls unavailable.');
+                    setTimeout(() => peer.reconnect(), 3000);
+                }
+            });
+
+            peer.on('error', (err: any) => {
+                console.error('[PeerJS] Error:', err.type, err);
+                if (err.type === 'unavailable-id') {
+                    peer.destroy();
+                    createPeer(Math.random().toString(36).substring(7));
+                } else if (err.type === 'peer-unavailable') {
+                    toast.error('User is offline or unavailable');
+                    cleanup();
+                } else if (err.type === 'network' || err.type === 'server-error') {
+                    if (reconnectAttempts < MAX_RECONNECT) {
+                        reconnectAttempts++;
+                        setTimeout(() => peer.reconnect(), 3000);
+                    }
                 }
             });
 
@@ -264,202 +261,138 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 peerRef.current = null;
             }
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user?.id]);
+    }, [user?.id, cleanup]);
 
-    // ─── Start Call ──────────────────────────────────────────────
-    const startCall = async (otherUserId: string, conversationId: string, type: 'voice' | 'video', name?: string, avatar?: string) => {
+    const startCall = async (targetUserId: string, conversationId: string, type: 'voice' | 'video', otherUser: CallState['otherUser']) => {
+        if (!peerRef.current || !peerRef.current.open) {
+            toast.error('Signaling server not ready');
+            return;
+        }
+
+        setCallState({ type, status: 'calling', otherUser, conversationId, connectedAt: null });
+
         try {
-            if (!peerRef.current) { toast.error('Connection not ready'); return; }
-            setCallState({ type, status: 'calling', otherUser: otherUserId, otherUserName: name, otherUserAvatar: avatar, conversationId, connectedAt: null });
-
             const stream = await navigator.mediaDevices.getUserMedia({
-                audio: { 
-                    echoCancellation: true, 
-                    noiseSuppression: true, 
-                    autoGainControl: true,
-                    // Advanced constraints (supported in Chromium)
-                    // @ts-expect-error -- vendor-specific getUserMedia audio constraints
-                    googEchoCancellation: true,
-                    googAutoGainControl: true,
-                    googNoiseSuppression: true,
-                    googHighpassFilter: true,
-                    googTypingNoiseDetection: true,
-                    googAudioMirroring: false,
-                },
-                video: type === 'video' ? {
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
-                    frameRate: { ideal: 30 }
-                } : false,
+                audio: true,
+                video: type === 'video',
             });
             localStreamRef.current = stream;
             setLocalStream(stream);
 
-            if (socket && user) {
-                socket.emit('call:init', { to: otherUserId, type, conversationId, peerId: peerRef.current.id });
-                sendMessage(`Started ${type} call`, 'call').catch(() => { /* Ignore logging errors */ });
-            }
+            const targetPeerId = `ns_${targetUserId.replace(/-/g, '_')}`;
+            
+            socket.emit('call:initiate', { to: targetUserId, from: user!.id, peerId: peerRef.current.id, type });
+            sendMessage(conversationId, `Started a ${type} call`, 'system');
 
             callTimeoutRef.current = setTimeout(() => {
                 if (currentCallStatus.current === 'calling') {
                     toast.error('No answer');
-                    socket?.emit('call:end', { to: otherUserId, conversationId });
+                    socket.emit('call:timeout', { to: targetUserId });
                     cleanup();
                 }
             }, 45000);
-        } catch {
-            toast.error('Failed to access media');
+
+        } catch (err) {
+            console.error('[WebRTC] Camera/Mic Error:', err);
+            toast.error('Please allow camera/mic access');
             cleanup();
         }
     };
 
-    // ─── Accept Call ─────────────────────────────────────────────
     const acceptCall = async () => {
+        if (!peerRef.current || !mediaConnectionRef.current) {
+            cleanup();
+            return;
+        }
+
         try {
-            if (!peerRef.current || !pendingCallRef.current) { toast.error('Call data missing'); cleanup(); return; }
-            const { type } = pendingCallRef.current;
             const stream = await navigator.mediaDevices.getUserMedia({
-                audio: { 
-                    echoCancellation: true, 
-                    noiseSuppression: true, 
-                    autoGainControl: true,
-                    // @ts-expect-error -- vendor-specific getUserMedia audio constraints
-                    googEchoCancellation: true,
-                    googAutoGainControl: true,
-                    googNoiseSuppression: true,
-                    googHighpassFilter: true,
-                    googTypingNoiseDetection: true,
-                    googAudioMirroring: false,
-                },
-                video: type === 'video' ? {
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
-                    frameRate: { ideal: 30 }
-                } : false,
+                audio: true,
+                video: callState.type === 'video',
             });
             localStreamRef.current = stream;
             setLocalStream(stream);
 
-            if (mediaConnectionRef.current) {
-                mediaConnectionRef.current.answer(stream);
-                setCallState(p => ({ ...p, status: 'connecting' }));
-            }
-            socket?.emit('call:ready', { to: callState.otherUser, peerId: peerRef.current.id });
-        } catch {
-            toast.error('Failed to join call');
+            mediaConnectionRef.current.answer(stream);
+            setCallState(p => ({ ...p, status: 'connected', connectedAt: Date.now() }));
+
+            mediaConnectionRef.current.on('stream', (remote) => {
+                setRemoteStream(remote);
+                setCallState(p => ({ ...p, status: 'connected' }));
+            });
+
+            mediaConnectionRef.current.on('close', () => cleanup());
+            mediaConnectionRef.current.on('error', () => cleanup());
+
+        } catch (err) {
+            console.error('[WebRTC] Accept Error:', err);
             cleanup();
         }
     };
 
-    // ─── Reject / End ────────────────────────────────────────────
-    const rejectCall = () => { socket?.emit('call:end', { to: callState.otherUser, conversationId: callState.conversationId }); cleanup(); };
-    const endCall = () => { socket?.emit('call:end', { to: callState.otherUser, conversationId: callState.conversationId }); cleanup(); };
+    const rejectCall = () => {
+        socket.emit('call:reject', { to: callState.otherUser?.id, from: user!.id });
+        cleanup();
+    };
 
-    // ─── Mute / Video ────────────────────────────────────────────
+    const endCall = () => {
+        socket.emit('call:end', { to: callState.otherUser?.id, from: user!.id });
+        cleanup();
+    };
+
     const toggleMute = () => {
-        localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = isMuted; });
-        setIsMuted(!isMuted);
-    };
-    const toggleVideo = () => {
-        localStreamRef.current?.getVideoTracks().forEach(t => { t.enabled = !isVideoEnabled; });
-        setIsVideoEnabled(!isVideoEnabled);
+        if (localStreamRef.current) {
+            localStreamRef.current.getAudioTracks().forEach(t => t.enabled = isMuted);
+            setIsMuted(!isMuted);
+        }
     };
 
-    // ─── Socket.IO call signaling ────────────────────────────────
+    const toggleVideo = () => {
+        if (localStreamRef.current) {
+            localStreamRef.current.getVideoTracks().forEach(t => t.enabled = !isVideoEnabled);
+            setIsVideoEnabled(!isVideoEnabled);
+        }
+    };
+
     useEffect(() => {
         if (!socket || !socketConnected) return;
 
-        const onIncoming = (data: { from: string; peerId: string; type: 'voice' | 'video'; conversationId: string; fromName?: string; fromAvatar?: string }) => {
-            if (currentCallStatus.current !== 'idle') {
-                socket.emit('call:end', { to: data.from, conversationId: data.conversationId });
-                return;
-            }
-            pendingCallRef.current = { from: data.from, peerId: data.peerId, type: data.type };
-            setCallState({
-                type: data.type, status: 'incoming', otherUser: data.from,
-                otherUserName: data.fromName, otherUserAvatar: data.fromAvatar,
-                conversationId: data.conversationId,
-                connectedAt: null,
-            });
-        };
+        const handleCallRejected = () => cleanup();
+        const handleCallEnded = () => cleanup();
+        const handleCallTimeout = () => cleanup();
 
-        const onReady = (data: { peerId?: string; from: string }) => {
-            if (currentCallStatus.current === 'calling' && peerRef.current && localStreamRef.current) {
-                if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
-                const calleePeerId = data.peerId || makePeerId(data.from);
-                const call = peerRef.current.call(calleePeerId, localStreamRef.current, {
-                    // Set bandwidth to ensure high quality audio
-                    sdpTransform: (sdp: string) => {
-                        // 1. Lower Application Specific (AS) bandwidth to prevent jitter
-                        // Using 2000 (2Mbps) for video, and remove for voice
-                        let newSdp = sdp;
-                        if (callState.type === 'video') {
-                            newSdp = sdp.replace(/AS:([0-9]+)/g, 'AS:2000');
-                        } else {
-                            newSdp = sdp.replace(/b=AS:([0-9]+).*\r\n/g, '');
-                        }
-
-                        // 2. Optimize OPUS audio quality (payload type 111)
-                        // This adds stereo support and boosts the bit rate for high fidelity
-                        if (newSdp.includes('a=fmtp:111')) {
-                            newSdp = newSdp.replace(
-                                /a=fmtp:111 .*/,
-                                'a=fmtp:111 minptime=10;stereo=1;useinbandfec=1;maxaveragebitrate=128000;sprop-stereo=1'
-                            );
-                        }
-                        
-                        return newSdp;
-                    }
-                });
-                if (!call) { toast.error('Failed to connect'); cleanup(); return; }
-
-                mediaConnectionRef.current = call;
-                setCallState(p => ({ ...p, status: 'connecting' }));
-                call.on('stream', (remote) => { 
-                    setRemoteStream(remote); 
-                    setCallState(p => ({ ...p, status: 'connected', connectedAt: p.connectedAt || Date.now() })); 
-                });
-                call.on('close', cleanup);
-                call.on('error', () => { toast.error('Call failed'); cleanup(); });
-            }
-        };
-
-        const onEnded = () => cleanup();
-
-        socket.on('call:incoming', onIncoming);
-        socket.on('call:ready', onReady);
-        socket.on('call:ended', onEnded);
+        socket.on('call:rejected', handleCallRejected);
+        socket.on('call:ended', handleCallEnded);
+        socket.on('call:timeout', handleCallTimeout);
 
         return () => {
-            socket.off('call:incoming', onIncoming);
-            socket.off('call:ready', onReady);
-            socket.off('call:ended', onEnded);
+            socket.off('call:rejected', handleCallRejected);
+            socket.off('call:ended', handleCallEnded);
+            socket.off('call:timeout', handleCallTimeout);
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [socket, socketConnected, cleanup]);
 
     return (
         <WebRTCContext.Provider value={{
-            callState, localStream, remoteStream,
-            startCall, acceptCall, rejectCall, endCall,
-            toggleMute, toggleVideo, isMuted, isVideoEnabled,
+            callState, localStream, remoteStream, isMuted, isVideoEnabled,
+            startCall, acceptCall, rejectCall, endCall, toggleMute, toggleVideo
         }}>
             {children}
             {callState.status !== 'idle' && (
-                <CallOverlay
-                    callState={callState}
-                    acceptCall={acceptCall}
-                    rejectCall={rejectCall}
-                    endCall={endCall}
+                <CallOverlay 
+                    status={callState.status}
+                    type={callState.type}
+                    otherUser={callState.otherUser}
                     localStream={localStream}
                     remoteStream={remoteStream}
-                    toggleMute={toggleMute}
-                    toggleVideo={toggleVideo}
+                    connectedAt={callState.connectedAt}
+                    onAccept={acceptCall}
+                    onReject={rejectCall}
+                    onEnd={endCall}
+                    onToggleMute={toggleMute}
+                    onToggleVideo={toggleVideo}
                     isMuted={isMuted}
                     isVideoEnabled={isVideoEnabled}
-                    otherUserName={callState.otherUserName || 'User'}
-                    otherUserAvatar={callState.otherUserAvatar}
                 />
             )}
         </WebRTCContext.Provider>
