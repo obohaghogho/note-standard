@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import Peer, { MediaConnection } from 'peerjs';
+import Peer from 'peerjs';
+import type { MediaConnection } from 'peerjs';
 import { useSocket } from './SocketContext';
 import { useAuth } from './AuthContext';
 import { useChat } from './ChatContext';
