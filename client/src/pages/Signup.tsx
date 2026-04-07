@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, User, ArrowLeft, CheckCircle2, ShieldCheck, UserCircle, ArrowRight, Loader2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 import { Card } from '../components/common/Card';
@@ -139,22 +139,7 @@ export const Signup = () => {
         }
     };
 
-    const stepVariants = {
-        enter: (direction: number) => ({
-            x: direction > 0 ? 50 : -50,
-            opacity: 0
-        }),
-        center: {
-            zIndex: 1,
-            x: 0,
-            opacity: 1
-        },
-        exit: (direction: number) => ({
-            zIndex: 0,
-            x: direction < 0 ? 50 : -50,
-            opacity: 0
-        })
-    };
+
 
     return (
         <div className="min-h-[100dvh] flex items-center justify-center p-4 relative overflow-hidden bg-[#0a0a0a] w-full selection:bg-primary/30">
@@ -222,157 +207,134 @@ export const Signup = () => {
                         )}
 
                         <form onSubmit={(e) => { e.preventDefault(); handleNext(); }} className="space-y-6">
-                            <AnimatePresence mode="wait" custom={step}>
-                                <motion.div
-                                    key={step}
-                                    custom={step}
-                                    variants={stepVariants}
-                                    initial="enter"
-                                    animate="center"
-                                    exit="exit"
-                                    transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                                    className="space-y-6"
-                                >
-                                    {step === 'details' && (
-                                        <div className="space-y-5">
-                                            <div className="flex items-center gap-3 mb-2">
-                                                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                                                    <UserCircle size={24} />
-                                                </div>
-                                                <div>
-                                                    <h3 className="font-semibold text-white">Basic Info</h3>
-                                                    <p className="text-xs text-gray-500">Let's get to know you</p>
-                                                </div>
-                                            </div>
-                                            <Input
-                                                id="fullName"
-                                                name="fullName"
-                                                icon={User}
-                                                type="text"
-                                                label="Full Name"
-                                                placeholder="Enter your full name"
-                                                value={fullName}
-                                                onChange={(e) => setFullName(e.target.value)}
-                                                autoComplete="name"
-                                                className="bg-white/[0.03]"
-                                            />
-                                            <Input
-                                                id="username"
-                                                name="username"
-                                                icon={UserCircle}
-                                                type="text"
-                                                label="Username"
-                                                placeholder="Pick a unique username"
-                                                value={username}
-                                                onChange={(e) => setUsername(e.target.value)}
-                                                autoComplete="username"
-                                                className="bg-white/[0.03]"
-                                            />
-                                            <Input
-                                                id="email"
-                                                name="email"
-                                                icon={Mail}
-                                                type="email"
-                                                label="Email Address"
-                                                placeholder="name@company.com"
-                                                value={email}
-                                                onChange={(e) => setEmail(e.target.value)}
-                                                autoComplete="email"
-                                                className="bg-white/[0.03]"
-                                            />
+                            {/* Step 1: Details */}
+                            <div className={cn("space-y-6", step !== 'details' && "hidden")}>
+                                <div className="space-y-5">
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                                            <UserCircle size={24} />
                                         </div>
-                                    )}
-
-                                    {step === 'security' && (
-                                        <div className="space-y-5">
-                                            <div className="flex items-center gap-3 mb-2">
-                                                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
-                                                    <ShieldCheck size={24} />
-                                                </div>
-                                                <div>
-                                                    <h3 className="font-semibold text-white">Secure Your Account</h3>
-                                                    <p className="text-xs text-gray-500">Use a strong password</p>
-                                                </div>
-                                            </div>
-                                            <Input
-                                                id="password"
-                                                name="password"
-                                                icon={Lock}
-                                                type="password"
-                                                label="Password"
-                                                placeholder="••••••••"
-                                                value={password}
-                                                onChange={(e) => setPassword(e.target.value)}
-                                                showPasswordToggle
-                                                autoComplete="new-password"
-                                                className="bg-white/[0.03]"
-                                            />
-                                            <PasswordStrengthMeter password={password} />
-                                            <Input
-                                                id="confirmPassword"
-                                                name="confirmPassword"
-                                                icon={Lock}
-                                                type="password"
-                                                label="Confirm Password"
-                                                placeholder="••••••••"
-                                                value={confirmPassword}
-                                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                                showPasswordToggle
-                                                autoComplete="new-password"
-                                                className="bg-white/[0.03]"
-                                            />
-                                            
-                                            <div className="pt-2 space-y-4">
-                                                <label htmlFor="terms-accepted" className="flex items-start gap-3 cursor-pointer group">
-                                                    <div className="relative flex items-center mt-0.5">
-                                                        <input 
-                                                            id="terms-accepted"
-                                                            name="terms-accepted"
-                                                            type="checkbox" 
-                                                            className="sr-only"
-                                                            checked={termsAccepted}
-                                                            onChange={(e) => setTermsAccepted(e.target.checked)}
-                                                        />
-                                                        <div className={cn(
-                                                            "w-5 h-5 rounded-md border-2 transition-all duration-200 flex items-center justify-center",
-                                                            termsAccepted ? "bg-primary border-primary shadow-[0_0_10px_rgba(var(--primary-rgb),0.3)]" : "border-white/10 bg-white/5"
-                                                        )}>
-                                                            {termsAccepted && <CheckCircle2 className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
-                                                        </div>
-                                                    </div>
-                                                    <span className="text-xs text-gray-400 leading-relaxed group-hover:text-gray-300 transition-colors">
-                                                        I accept the <button type="button" onClick={() => setShowTermsModal(true)} className="text-primary hover:underline">Terms of Service</button> and <button type="button" className="text-primary hover:underline">Privacy Policy</button>. I understand that my data will be stored securely.
-                                                    </span>
-                                                </label>
-                                                
-                                                {/* Bot Protection disabled for audit */}
-                                                {/* <div className="mt-4 flex justify-center scale-90 origin-center sm:scale-100">
-                                                    <ReCAPTCHA
-                                                        ref={recaptchaRef}
-                                                        sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI'}
-                                                        theme="dark"
-                                                        onChange={(token: string | null) => setCaptchaToken(token)}
-                                                    />
-                                                </div> */}
-                                            </div>
+                                        <div>
+                                            <h3 className="font-semibold text-white">Basic Info</h3>
+                                            <p className="text-xs text-gray-500">Let's get to know you</p>
                                         </div>
-                                    )}
+                                    </div>
+                                    <Input
+                                        id="fullName"
+                                        name="fullName"
+                                        icon={User}
+                                        type="text"
+                                        label="Full Name"
+                                        placeholder="Enter your full name"
+                                        value={fullName}
+                                        onChange={(e) => setFullName(e.target.value)}
+                                        autoComplete="name"
+                                        className="bg-white/[0.03]"
+                                    />
+                                    <Input
+                                        id="username"
+                                        name="username"
+                                        icon={UserCircle}
+                                        type="text"
+                                        label="Username"
+                                        placeholder="Pick a unique username"
+                                        value={username}
+                                        onChange={(e) => setUsername(e.target.value)}
+                                        autoComplete="username"
+                                        className="bg-white/[0.03]"
+                                    />
+                                    <Input
+                                        id="email"
+                                        name="email"
+                                        icon={Mail}
+                                        type="email"
+                                        label="Email Address"
+                                        placeholder="name@company.com"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        autoComplete="email"
+                                        className="bg-white/[0.03]"
+                                    />
+                                </div>
+                            </div>
 
-
-                                    {step === 'success' && (
-                                        <div className="space-y-6 py-4 text-center">
-                                            <div className="w-20 h-20 rounded-full bg-green-500/10 flex items-center justify-center text-green-500 mx-auto mb-4 border border-green-500/20">
-                                                <CheckCircle2 size={48} className="animate-bounce" />
-                                            </div>
-                                            <h3 className="text-2xl font-bold text-white">Check Your Email</h3>
-                                            <p className="text-gray-400">We've sent a verification link to <span className="text-white font-medium">{email}</span>. Please click the link to activate your account.</p>
-                                            <Button variant="outline" fullWidth onClick={() => navigate('/login')} className="mt-4">
-                                                Go to Login
-                                            </Button>
+                            {/* Step 2: Security */}
+                            <div className={cn("space-y-6", step !== 'security' && "hidden")}>
+                                <div className="space-y-5">
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
+                                            <ShieldCheck size={24} />
                                         </div>
-                                    )}
-                                </motion.div>
-                            </AnimatePresence>
+                                        <div>
+                                            <h3 className="font-semibold text-white">Secure Your Account</h3>
+                                            <p className="text-xs text-gray-500">Use a strong password</p>
+                                        </div>
+                                    </div>
+                                    <Input
+                                        id="password"
+                                        name="password"
+                                        icon={Lock}
+                                        type="password"
+                                        label="Password"
+                                        placeholder="••••••••"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        showPasswordToggle
+                                        autoComplete="new-password"
+                                        className="bg-white/[0.03]"
+                                    />
+                                    <PasswordStrengthMeter password={password} />
+                                    <Input
+                                        id="confirmPassword"
+                                        name="confirmPassword"
+                                        icon={Lock}
+                                        type="password"
+                                        label="Confirm Password"
+                                        placeholder="••••••••"
+                                        value={confirmPassword}
+                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                        showPasswordToggle
+                                        autoComplete="new-password"
+                                        className="bg-white/[0.03]"
+                                    />
+                                    
+                                    <div className="pt-2 space-y-4">
+                                        <label htmlFor="terms-accepted" className="flex items-start gap-3 cursor-pointer group">
+                                            <div className="relative flex items-center mt-0.5">
+                                                <input 
+                                                    id="terms-accepted"
+                                                    name="terms-accepted"
+                                                    type="checkbox" 
+                                                    className="sr-only"
+                                                    checked={termsAccepted}
+                                                    onChange={(e) => setTermsAccepted(e.target.checked)}
+                                                />
+                                                <div className={cn(
+                                                    "w-5 h-5 rounded-md border-2 transition-all duration-200 flex items-center justify-center",
+                                                    termsAccepted ? "bg-primary border-primary shadow-[0_0_10px_rgba(var(--primary-rgb),0.3)]" : "border-white/10 bg-white/5"
+                                                )}>
+                                                    {termsAccepted && <CheckCircle2 className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
+                                                </div>
+                                            </div>
+                                            <span className="text-xs text-gray-400 leading-relaxed group-hover:text-gray-300 transition-colors">
+                                                I accept the <button type="button" onClick={() => setShowTermsModal(true)} className="text-primary hover:underline">Terms of Service</button> and <button type="button" className="text-primary hover:underline">Privacy Policy</button>. I understand that my data will be stored securely.
+                                            </span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Step 3: Success */}
+                            <div className={cn("space-y-6 py-4 text-center", step !== 'success' && "hidden")}>
+                                <div className="w-20 h-20 rounded-full bg-green-500/10 flex items-center justify-center text-green-500 mx-auto mb-4 border border-green-500/20">
+                                    <CheckCircle2 size={48} className="animate-bounce" />
+                                </div>
+                                <h3 className="text-2xl font-bold text-white">Check Your Email</h3>
+                                <p className="text-gray-400">We've sent a verification link to <span className="text-white font-medium">{email}</span>. Please click the link to activate your account.</p>
+                                <Button variant="outline" fullWidth onClick={() => navigate('/login')} className="mt-4">
+                                    Go to Login
+                                </Button>
+                            </div>
 
                             <div className="pt-2">
                                 <Button 

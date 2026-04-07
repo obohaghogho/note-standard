@@ -200,7 +200,7 @@ export const Login = () => {
                         )}
                         <Input
                             id="email"
-                            name="email"
+                            name="username"
                             icon={Mail}
                             type="email"
                             label="Email Address"
@@ -208,7 +208,7 @@ export const Login = () => {
                             required
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            autoComplete="email"
+                            autoComplete="username"
                         />
 
                         <div className="space-y-1">
