@@ -175,7 +175,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             const isDev = import.meta.env.DEV;
             const peerHost = import.meta.env.VITE_PEER_HOST || (isDev ? 'localhost' : 'realtime-gateway-gsb5.onrender.com');
-            const peerPort = parseInt(import.meta.env.VITE_PEER_PORT || (isDev ? '9000' : '443'));
+            const peerPort = parseInt(import.meta.env.VITE_PEER_PORT || (isDev ? '5000' : '443'));
             const peerSecure = !isDev || import.meta.env.VITE_PEER_SECURE === 'true';
 
             const peerConfig = {
