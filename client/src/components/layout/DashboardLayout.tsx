@@ -80,7 +80,7 @@ export const DashboardLayout = () => {
     };
 
     return (
-        <div className="h-screen-safe text-white flex relative overflow-hidden w-full max-w-full bg-crystal">
+        <div className="h-screen-safe pt-safe pb-safe text-white flex relative overflow-hidden w-full max-w-full bg-crystal">
             {!isChatActiveOnMobile && <BroadcastBanner />}
             
             {/* Inner ambient glow for dashboard depth */}
@@ -93,7 +93,7 @@ export const DashboardLayout = () => {
             />
             
             <main className={cn(
-                "flex-1 transition-all duration-300 min-w-0 flex flex-col w-full h-full relative",
+                "flex-1 transition-all duration-300 min-w-0 flex flex-col w-full h-full relative pb-safe",
                 !isChatActiveOnMobile && "md:ml-64",
                 isChatActiveOnMobile && "fixed inset-0 z-[60] bg-gray-900 md:relative md:inset-auto md:z-0 md:bg-transparent md:ml-64"
             )}>
