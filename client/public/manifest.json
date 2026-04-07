@@ -1,43 +1,21 @@
 {
+  "id": "/",
   "short_name": "NoteStandard",
   "name": "NoteStandard | Professional Digital Solutions & Asset Management",
-  "description": "Secure, real-time professional digital note-taking and asset management solution.",
   "icons": [
     {
-      "src": "/notestandard.svg",
-      "type": "image/svg+xml",
-      "sizes": "any",
-      "purpose": "any"
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
     },
     {
-      "src": "/logo192.png",
+      "src": "/icon-512.png",
       "type": "image/png",
-      "sizes": "192x192",
-      "purpose": "any"
-    },
-    {
-      "src": "/logo192.png",
-      "type": "image/png",
-      "sizes": "192x192",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/logo512.png",
-      "type": "image/png",
-      "sizes": "512x512",
-      "purpose": "any"
-    },
-    {
-      "src": "/logo512.png",
-      "type": "image/png",
-      "sizes": "512x512",
-      "purpose": "maskable"
+      "sizes": "512x512"
     }
   ],
   "start_url": "/",
-  "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
   "theme_color": "#10b981",
-  "background_color": "#0f172a"
+  "background_color": "#ffffff"
 }
