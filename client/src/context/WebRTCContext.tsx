@@ -4,7 +4,7 @@ import { useSocket } from './SocketContext';
 import { useAuth } from './AuthContext';
 import { useChat } from './ChatContext';
 import toast from 'react-hot-toast';
-import CallOverlay from '../components/Dashboard/CallOverlay';
+import { CallOverlay } from '../components/chat/CallOverlay';
 
 interface CallState {
     type: 'voice' | 'video' | null;
@@ -53,7 +53,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const { sendMessage } = useChat();
 
     // 🕵️ Auth Handshake Diagnostic
-    console.log('[WebRTC] 🛡️ Provider Status:', { mounted: true, authReady: !!user, userId: user?.id });
+    console.warn('[WebRTC] 🛡️ Provider Status:', { mounted: true, authReady: !!user, userId: user?.id });
 
     const [callState, setCallState] = useState<CallState>({
         type: null, status: 'idle', otherUser: null, conversationId: null, connectedAt: null,
@@ -148,7 +148,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }, []);
 
     useEffect(() => {
-        console.log('[WebRTC] 🔄 Initialization Effect Triggered', { userId: user?.id });
+        console.warn('[WebRTC] 🔄 Initialization Effect Triggered', { userId: user?.id });
         if (!user?.id) return;
         if (peerRef.current) return;
 
@@ -167,14 +167,6 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const peerPath = isDev ? '/peerjs' : '/';
             const peerSecure = !isDev || import.meta.env.VITE_PEER_SECURE === 'true';
 
-            const peerConfig = {
-                host: peerHost,
-                port: peerPort,
-                path: peerPath,
-                secure: peerSecure,
-                key: 'peerjs',
-            };
-
             console.warn('[WebRTC] 👋 Connecting with config:', { 
                 host: peerHost, 
                 port: peerPort, 
@@ -184,7 +176,11 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             });
 
             const peer = new Peer(peerId, {
-                ...peerConfig,
+                host: peerHost,
+                port: peerPort,
+                path: peerPath,
+                secure: peerSecure,
+                key: 'peerjs',
                 debug: 3,
                 pingInterval: 3000,
                 config: {
@@ -198,7 +194,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             });
 
             peer.on('open', (id) => {
-                console.log('[PeerJS] ✓ Connected:', id);
+                console.warn('[PeerJS] ✓ Connected:', id);
                 reconnectAttempts = 0;
             });
 
@@ -279,15 +275,13 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             localStreamRef.current = stream;
             setLocalStream(stream);
 
-            const targetPeerId = `ns_${targetUserId.replace(/-/g, '_')}`;
-            
-            socket.emit('call:initiate', { to: targetUserId, from: user!.id, peerId: peerRef.current.id, type });
+            socket?.emit('call:initiate', { to: targetUserId, from: user!.id, peerId: peerRef.current.id, type });
             sendMessage(conversationId, `Started a ${type} call`, 'system');
 
             callTimeoutRef.current = setTimeout(() => {
                 if (currentCallStatus.current === 'calling') {
                     toast.error('No answer');
-                    socket.emit('call:timeout', { to: targetUserId });
+                    socket?.emit('call:timeout', { to: targetUserId });
                     cleanup();
                 }
             }, 45000);
@@ -331,12 +325,12 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     const rejectCall = () => {
-        socket.emit('call:reject', { to: callState.otherUser?.id, from: user!.id });
+        socket?.emit('call:reject', { to: callState.otherUser?.id, from: user!.id });
         cleanup();
     };
 
     const endCall = () => {
-        socket.emit('call:end', { to: callState.otherUser?.id, from: user!.id });
+        socket?.emit('call:end', { to: callState.otherUser?.id, from: user!.id });
         cleanup();
     };
 
@@ -380,19 +374,22 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             {children}
             {callState.status !== 'idle' && (
                 <CallOverlay 
-                    status={callState.status}
-                    type={callState.type}
-                    otherUser={callState.otherUser}
+                    callState={{
+                        type: callState.type,
+                        status: callState.status as any,
+                        connectedAt: callState.connectedAt
+                    }}
                     localStream={localStream}
                     remoteStream={remoteStream}
-                    connectedAt={callState.connectedAt}
-                    onAccept={acceptCall}
-                    onReject={rejectCall}
-                    onEnd={endCall}
-                    onToggleMute={toggleMute}
-                    onToggleVideo={toggleVideo}
+                    acceptCall={acceptCall}
+                    rejectCall={rejectCall}
+                    endCall={endCall}
+                    toggleMute={toggleMute}
+                    toggleVideo={toggleVideo}
                     isMuted={isMuted}
                     isVideoEnabled={isVideoEnabled}
+                    otherUserName={callState.otherUser?.full_name || 'Unknown'}
+                    otherUserAvatar={callState.otherUser?.avatar_url}
                 />
             )}
         </WebRTCContext.Provider>
