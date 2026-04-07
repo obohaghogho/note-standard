@@ -149,7 +149,6 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }, []);
 
     useEffect(() => {
-        console.warn('[WebRTC] 🔄 Initialization Effect Triggered', { userId: user?.id });
         if (!user?.id) return;
         if (peerRef.current) return;
 
@@ -168,21 +167,13 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const peerPath = isDev ? '/peerjs' : '/';
             const peerSecure = !isDev || import.meta.env.VITE_PEER_SECURE === 'true';
 
-            console.warn('[WebRTC] 👋 Connecting with config:', { 
-                host: peerHost, 
-                port: peerPort, 
-                path: peerPath, 
-                secure: peerSecure,
-                env: isDev ? 'DEV' : 'PROD' 
-            });
-
             const peer = new Peer(peerId, {
                 host: peerHost,
                 port: peerPort,
                 path: peerPath,
                 secure: peerSecure,
                 key: 'peerjs',
-                debug: 3,
+                debug: 1,
                 pingInterval: 3000,
                 config: {
                     iceServers: [
@@ -195,7 +186,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             });
 
             peer.on('open', (id) => {
-                console.warn('[PeerJS] ✓ Connected:', id);
+                console.log('[PeerJS] Connected:', id);
                 reconnectAttempts = 0;
             });
 
