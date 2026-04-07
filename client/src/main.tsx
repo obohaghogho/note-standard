@@ -8,29 +8,35 @@ import App from './App.tsx'
 console.log('🚀 NoteStandard Client Version 1.5.0 - INFRASTRUCTURE RECOVERY');
 console.log("ENV CHECK:", import.meta.env.VITE_SUPABASE_URL ? "Supabase Configured" : "Supabase Missing");
 
-// Nuclear Cache Purge: Kills all stale production caches including Service Workers
-(function() {
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then((registrations) => {
-            for (const registration of registrations) {
-                registration.unregister();
-                console.log('[PURGE] Service Worker Unregistered');
-            }
-        });
-    }
-    
-    // Clear browser caches
-    if (window.caches) {
-        caches.keys().then((names) => {
-            for (const name of names) caches.delete(name);
-            console.log('[PURGE] Browser Cache Storage Cleared');
-        });
-    }
-
-    // Standard Cleanup
-    sessionStorage.removeItem('last_chunk_load_error_reload');
-    console.log('[Init] App State Normalized');
-})();
+// Service Worker Registration
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then((registration) => {
+        console.log('SW registered: ', registration);
+        
+        // Check for updates
+        registration.onupdatefound = () => {
+          const installingWorker = registration.installing;
+          if (installingWorker) {
+            installingWorker.onstatechange = () => {
+              if (installingWorker.state === 'installed') {
+                if (navigator.serviceWorker.controller) {
+                  console.log('New content is available; please refresh.');
+                } else {
+                  console.log('Content is cached for offline use.');
+                }
+              }
+            };
+          }
+        };
+      })
+      .catch((registrationError) => {
+        console.error('SW registration failed: ', registrationError);
+      });
+  });
+}
 
 window.onerror = function(msg, url, line, col) {
   const errorMsg = "GLOBAL ERROR: " + msg + "\nAt: " + url + ":" + line + ":" + col;
