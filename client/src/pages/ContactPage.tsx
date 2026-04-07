@@ -7,7 +7,7 @@ export const ContactPage = () => {
     const navigate = useNavigate();
 
     return (
-        <div className="min-h-[100dvh] bg-[#0a0a0a] p-4 md:p-8 relative overflow-hidden w-full max-w-full">
+        <div className="min-h-[100dvh] bg-[#0a0a0a] p-4 md:p-8 relative w-full max-w-full">
             <SEO 
                 title="Contact Us"
                 description="Get in touch with the NoteStandard team for support, feedback, or partnership enquiries."

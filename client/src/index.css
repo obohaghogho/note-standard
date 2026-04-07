@@ -22,10 +22,10 @@
     max-width: 100%;
     margin: 0;
     padding: 0;
-    overscroll-behavior-y: none;
+    overscroll-behavior-y: contain; /* Changed from none to contain to allow bounce but prevent exit */
     overflow-x: hidden;
     position: relative;
-    touch-action: pan-y;
+    touch-action: auto; /* Changed from pan-y to auto to allow full browser gesture support */
     -webkit-overflow-scrolling: touch;
     /* Respect Safe Areas (Notches, Home Indicators) */
     padding-top: env(safe-area-inset-top, 0px);

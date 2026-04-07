@@ -6,7 +6,7 @@ export const TermsPage = () => {
     const navigate = useNavigate();
 
     return (
-        <div className="min-h-[100dvh] bg-[#0a0a0a] p-4 md:p-8 relative overflow-hidden w-full max-w-full">
+        <div className="min-h-[100dvh] bg-[#0a0a0a] p-4 md:p-8 relative w-full max-w-full">
             {/* Background gradients */}
             <div className="absolute top-0 right-1/4 w-full max-w-[1000px] h-[600px] bg-primary/10 rounded-full blur-[120px] -z-10" />
             <div className="absolute bottom-0 left-1/4 w-full max-w-[800px] h-[600px] bg-purple-500/5 rounded-full blur-[100px] -z-10" />
@@ -20,7 +20,7 @@ export const TermsPage = () => {
                     Back
                 </button>
 
-                <Card variant="glass" className="p-8 md:p-12 overflow-hidden">
+                <Card variant="glass" className="p-8 md:p-12">
                     <div className="flex flex-col mb-10">
                         <div className="flex items-center gap-4 mb-2">
                             <div className="p-3 bg-primary/10 rounded-xl border border-primary/20">

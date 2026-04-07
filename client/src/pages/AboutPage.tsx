@@ -7,7 +7,7 @@ export const AboutPage = () => {
     const navigate = useNavigate();
 
     return (
-        <div className="min-h-[100dvh] bg-[#0a0a0a] p-4 md:p-8 relative overflow-hidden w-full max-w-full">
+        <div className="min-h-[100dvh] bg-[#0a0a0a] p-4 md:p-8 relative w-full max-w-full">
             <SEO 
                 title="About Us"
                 description="Learn about Aghogho Plyboard Enterprise and our commitment to providing simple and reliable software solutions for digital services."
