@@ -1,10 +1,12 @@
 
-const CACHE_NAME = 'notestandard-v1';
+const CACHE_NAME = 'notestandard-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/notestandard.svg'
+  '/notestandard.svg',
+  '/icon-192.png',
+  '/icon-512.png'
 ];
 
 // Install Event
@@ -61,8 +63,8 @@ self.addEventListener('push', function (event) {
         const data = event.data.json();
         const options = {
             body: data.body,
-            icon: data.icon || '/logo192.png',
-            badge: '/logo192.png',
+            icon: data.icon || '/icon-192.png',
+            badge: '/icon-192.png',
             data: {
                 url: data.data?.url || '/'
             },
