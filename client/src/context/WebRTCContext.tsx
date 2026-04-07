@@ -173,15 +173,20 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const peerId = makePeerId(user!.id, suffix || Math.random().toString(36).substring(7));
             let reconnectAttempts = 0;
 
-            const isDev = import.meta.env.DEV;
-            const peerHost = import.meta.env.VITE_PEER_HOST || (isDev ? 'localhost' : 'realtime-gateway-gsb5.onrender.com');
-            const peerPort = parseInt(import.meta.env.VITE_PEER_PORT || (isDev ? '5000' : '443'));
+            const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            
+            // ─── Hybrid Signaling Strategy ───────────────────────────
+            // PROD: Use official PeerJS Cloud (most reliable for Render)
+            // DEV:  Use isolated local server on port 9000
+            const peerHost = isDev ? 'localhost' : '0.peerjs.com';
+            const peerPort = isDev ? parseInt(import.meta.env.VITE_PEER_PORT || '9000') : 443;
+            const peerPath = isDev ? '/peerjs' : '/';
             const peerSecure = !isDev || import.meta.env.VITE_PEER_SECURE === 'true';
 
             const peerConfig = {
                 host: peerHost,
                 port: peerPort,
-                path: '/peerjs',
+                path: peerPath,
                 secure: peerSecure,
             };
 

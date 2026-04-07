@@ -20,12 +20,11 @@ const { authMiddleware } = require('./auth');
 require('dotenv').config();
 
 // ═══════════════════════════════════════════════════════════════
-//  1. UNIFIED REALTIME GATEWAY (Port 5000)
+//  1. SOCKET.IO GATEWAY (Port 5000 - Chat, Signaling, Wallet)
 // ═══════════════════════════════════════════════════════════════
 const app = express();
 const httpServer = http.createServer(app);
 
-// ─── Socket.IO Configuration ─────────────────────────────────────
 const io = new Server(httpServer, {
   cors: {
     origin: [
@@ -68,40 +67,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// ─── PeerJS Configuration ───────────────────────────────────────
-// Important: Do NOT pass httpServer here. We will handle upgrades manually.
-const peerServer = ExpressPeerServer(httpServer, {
-  debug: true,
-  path: '/',
-  allow_discovery: false,
-  proxied: true,
-});
-
-// Mount PeerJS on /peerjs path
-app.use('/peerjs', peerServer);
-
-// ─── Surgical Upgrade Handler ────────────────────────────────────
-// This is the CRITICAL fix that prevents "Invalid frame header".
-// By manually handling the upgrade event and checking the path, 
-// we only pass PeerJS requests to PeerJS and ignore others (Socket.IO handle its own).
-httpServer.on('upgrade', (request, socket, head) => {
-  const url = new URL(request.url, `http://${request.headers.host}`);
-  
-  if (url.pathname.startsWith('/peerjs/peerjs')) {
-    // Manually trigger PeerJS WebSocket upgrade for this path only
-    // PeerServer handles its internal WebSocket via its own upgrade logic 
-    // when those requests reach its internal handler.
-    // However, since we mounted it as middleware on httpServer, 
-    // httpServer automatically emits 'upgrade'.
-    // In this unified mode, Socket.IO is less "greedy" than PeerJS.
-  }
-});
-
-peerServer.on('connection', (client) => {
-  console.log(`[PeerJS] ✓ Peer connected: ${client.getId()}`);
-});
-
-// ─── HTTP Bridge & Health ───────────────────────────────────────
+// ─── HTTP Bridge & Health (on main port) ────────────────────────
 app.use(express.json());
 
 app.post('/internal/emit', (req, res) => {
@@ -123,17 +89,37 @@ app.get('/health', (_req, res) => {
     status: 'ok',
     service: 'realtime-gateway',
     socketClients: io.engine.clientsCount,
-    peerClients: peerServer._clients ? Object.keys(peerServer._clients).length : 0,
   });
 });
 
-// ─── Start Server ───────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  2. PEERJS SERVER (Port 9000 - Local WebRTC Discovery)
+// ═══════════════════════════════════════════════════════════════
+// This server is used for LOCAL DEVELOPMENT to avoid port conflicts.
+const peerApp = express();
+const peerServer = http.createServer(peerApp);
+const peerHandler = ExpressPeerServer(peerServer, {
+  debug: true,
+  path: '/',
+  allow_discovery: false,
+  proxied: true,
+});
+
+peerApp.use('/peerjs', peerHandler);
+
+peerHandler.on('connection', (client) => {
+  console.log(`[PeerJS] ✓ Peer connected: ${client.getId()}`);
+});
+
+// ─── Start Servers ──────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
-const PUBLIC_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+const PEER_PORT = process.env.PEER_PORT || 9000;
 
 httpServer.listen(PORT, () => {
-    console.log(`[Gateway] ✓ Unified Gateway active on port ${PORT}`);
-    console.log(`[Gateway] Socket.IO → ${PUBLIC_URL}/socket.io`);
-    console.log(`[Gateway] PeerJS   → ${PUBLIC_URL}/peerjs`);
+    console.log(`[Gateway] ✓ Socket.IO active on port ${PORT}`);
+});
+
+peerServer.listen(PEER_PORT, () => {
+    console.log(`[Gateway] ✓ PeerJS active on port ${PEER_PORT}`);
 });
 
