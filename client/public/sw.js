@@ -6,8 +6,7 @@
  */
 
 self.addEventListener('install', () => {
-    // Force skip waiting to ensure the new "empty" worker takes over immediately
-    self.skipWaiting();
+    // We don't skipWaiting automatically anymore to allow for the UI notification
 });
 
 self.addEventListener('activate', (event) => {
@@ -17,6 +16,13 @@ self.addEventListener('activate', (event) => {
             return Promise.all(keys.map((k) => caches.delete(k)));
         })
     );
+});
+
+// Enable the browser to skip waiting for the new SW to take control
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
 });
 
 // Avoid intercepting any fetches during this "recovery" phase
