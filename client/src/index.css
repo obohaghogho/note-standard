@@ -22,6 +22,7 @@
     max-width: 100%;
     margin: 0;
     padding: 0;
+    overscroll-behavior-y: none;
     overflow-x: hidden;
     position: relative;
     touch-action: pan-y;

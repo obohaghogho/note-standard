@@ -13,6 +13,7 @@ import { Button } from '../../components/common/Button';
 import { cn } from '../../utils/cn';
 import toast from 'react-hot-toast';
 import { QRCodeSVG } from 'qrcode.react';
+import { IOSInstallModal } from '../../components/common/IOSInstallModal';
 
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: string[];
@@ -26,8 +27,15 @@ interface BeforeInstallPromptEvent extends Event {
 export const DownloadPage: React.FC = () => {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstallable, setIsInstallable] = useState(false);
+  const [isIOSModalOpen, setIsIOSModalOpen] = useState(false);
+
+  const isIOS = typeof window !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
 
   useEffect(() => {
+    if (isIOS) {
+      setIsInstallable(true);
+    }
+
     const handleBeforeInstallPrompt = (e: Event) => {
       // Prevent the mini-infobar from appearing on mobile
       e.preventDefault();
@@ -42,9 +50,14 @@ export const DownloadPage: React.FC = () => {
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
-  }, []);
+  }, [isIOS]);
 
   const handleInstallPWA = async () => {
+    if (isIOS && !deferredPrompt) {
+      setIsIOSModalOpen(true);
+      return;
+    }
+
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
@@ -56,6 +69,15 @@ export const DownloadPage: React.FC = () => {
   };
 
   const handleNativeDownload = (platform: 'android' | 'ios') => {
+    if (platform === 'ios') {
+      toast('Downloading IPA. Note: Apple requires AltStore or a developer certificate to install IPAs directly. We highly recommend using "Install via Browser" below instead!', {
+        icon: '⚠️',
+        duration: 8000,
+      });
+    } else {
+      toast.success(`Starting Android (APK) download...`);
+    }
+
     const filename = platform === 'android' ? 'app-release.apk' : 'app-release.ipa';
     const link = document.createElement('a');
     link.href = `/downloads/${filename}`;
@@ -63,8 +85,6 @@ export const DownloadPage: React.FC = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
-    toast.success(`Starting ${platform === 'android' ? 'Android (APK)' : 'iOS (IPA)'} download...`);
   };
 
   return (
@@ -256,6 +276,8 @@ export const DownloadPage: React.FC = () => {
         </div>
 
       </div>
+
+      <IOSInstallModal isOpen={isIOSModalOpen} onClose={() => setIsIOSModalOpen(false)} />
     </div>
   );
 };

@@ -3,14 +3,15 @@ import { ErrorBoundary } from '../../components/common/ErrorBoundary';
 import ChatWindow from '../../components/chat/ChatWindow';
 import ConversationList from '../../components/chat/ConversationList';
 import NewChatModal from '../../components/chat/NewChatModal';
-import { Plus, MessageSquare } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { Plus, MessageSquare, Menu } from 'lucide-react';
+import { useSearchParams, useOutletContext } from 'react-router-dom';
 import { useChat } from '../../context/ChatContext';
 
 const ChatContent: React.FC = () => {
     const [isNewChatOpen, setIsNewChatOpen] = useState(false);
     const [searchParams] = useSearchParams();
     const { activeConversationId, setActiveConversationId } = useChat();
+    const { openMobileMenu } = useOutletContext<{ openMobileMenu?: () => void }>() || {};
 
     useEffect(() => {
         const id = searchParams.get('id');
@@ -25,7 +26,16 @@ const ChatContent: React.FC = () => {
             <div className={`${activeConversationId ? 'hidden md:flex' : 'flex'} w-full md:w-80 border-r border-gray-800 flex-col bg-gray-900`}>
                 <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900">
                     <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                        <MessageSquare size={24} className="text-blue-500" />
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                openMobileMenu?.();
+                            }}
+                            className="p-1 -ml-1 text-gray-400 hover:text-white md:hidden mr-1"
+                        >
+                            <Menu size={24} />
+                        </button>
+                        <MessageSquare size={24} className="text-blue-500 hidden sm:block" />
                         Messages
                     </h2>
                     <button

@@ -38,6 +38,9 @@ self.addEventListener('fetch', (event) => {
   // Only handle GET requests
   if (event.request.method !== 'GET') return;
 
+  // Ignore range requests to prevent issues with audio/video files
+  if (event.request.headers.has('range')) return;
+
   event.respondWith(
     caches.match(event.request).then((response) => {
       return response || fetch(event.request).catch(() => {
@@ -45,6 +48,8 @@ self.addEventListener('fetch', (event) => {
         if (event.request.mode === 'navigate') {
           return caches.match('/');
         }
+        // Return a generic error response for other failed requests
+        return Response.error();
       });
     })
   );

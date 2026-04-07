@@ -111,7 +111,7 @@ export const DashboardLayout = () => {
                         </div>
                     }>
                         <div className="flex-1 flex flex-col min-w-0 h-full">
-                            <Outlet context={{ openCreateNoteModal: () => setIsCreateNoteModalOpen(true) }} />
+                            <Outlet context={{ openCreateNoteModal: () => setIsCreateNoteModalOpen(true), openMobileMenu: () => setIsMobileMenuOpen(true) }} />
                         </div>
                     </ErrorBoundary>
                 </div>
