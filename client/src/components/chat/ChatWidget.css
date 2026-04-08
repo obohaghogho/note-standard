@@ -2,7 +2,7 @@
 
 .chat-widget {
     position: fixed;
-    bottom: 90px;
+    bottom: 120px;
     right: 16px;
     z-index: 900;
     font-family: inherit;
@@ -354,7 +354,7 @@
 /* Responsive */
 @media (max-width: 480px) {
     .chat-widget {
-        bottom: 90px;
+        bottom: 160px; /* Moved up to strongly clear iOS native bars, chat inputs, and the scroll-down button */
         right: 16px;
         left: auto;
     }
@@ -373,7 +373,7 @@
         padding: 0;
         justify-content: center;
         border-radius: 50%;
-        box-shadow: 0 4px 20px rgba(99, 102, 241, 0.5);
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(99, 102, 241, 0.5); /* Stronger drop shadow for visibility over other UI */
     }
 
     .button-label {
