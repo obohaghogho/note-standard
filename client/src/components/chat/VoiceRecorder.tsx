@@ -25,40 +25,33 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
                 audio: {
                     echoCancellation: true,
                     noiseSuppression: true,
-                    autoGainControl: true,
-                    // @ts-expect-error -- vendor-specific getUserMedia audio constraints
-                    googEchoCancellation: true,
-                    googAutoGainControl: true,
-                    googNoiseSuppression: true,
-                    googHighpassFilter: true,
-                    googTypingNoiseDetection: true,
-                    sampleRate: 48000,
-                    channelCount: 1
+                    autoGainControl: true
                 }
             });
             
-            // Choose the best supported mime type
+            // Prioritize mp4 for robust Safari iOS compatibility, followed by WebM for Chrome/Android
             const types = [
+                'audio/mp4',
                 'audio/webm;codecs=opus',
                 'audio/webm',
-                'audio/mp4',
                 'audio/ogg;codecs=opus',
             ];
             
-            const mimeType = types.find(type => MediaRecorder.isTypeSupported(type));
+            const mimeType = types.find(type => typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(type)) || '';
             
             mediaRecorderRef.current = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
             audioChunksRef.current = [];
 
             mediaRecorderRef.current.ondataavailable = (event) => {
-                if (event.data.size > 0) {
+                if (event.data && event.data.size > 0) {
                     audioChunksRef.current.push(event.data);
                 }
             };
 
             mediaRecorderRef.current.onstop = () => {
-                const mime = mediaRecorderRef.current?.mimeType || 'audio/webm';
+                const mime = mediaRecorderRef.current?.mimeType || mimeType || 'audio/mp4';
                 const audioBlob = new Blob(audioChunksRef.current, { type: mime });
+                audioChunksRef.current = [audioBlob]; // Cache the correct blob
                 const url = URL.createObjectURL(audioBlob);
                 setAudioUrl(url);
             };
@@ -92,14 +85,15 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
             if (timerRef.current) clearInterval(timerRef.current);
             setIsRecording(false);
 
-            // Stop all tracks to release mic completely
-            if (mediaRecorderRef.current.stream) {
-                mediaRecorderRef.current.stream.getTracks().forEach(track => {
-                    track.stop();
-                    mediaRecorderRef.current?.stream.removeTrack(track); // Clean reference
-                });
-            }
-            mediaRecorderRef.current = null;
+            // Wait a brief moment to allow onstop to fire before destroying the stream
+            setTimeout(() => {
+                if (mediaRecorderRef.current?.stream) {
+                    mediaRecorderRef.current.stream.getTracks().forEach(track => {
+                        track.stop();
+                    });
+                }
+                mediaRecorderRef.current = null;
+            }, 100);
         }
     };
 
@@ -122,8 +116,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
 
     const handleSend = () => {
         if (audioChunksRef.current.length > 0) {
-            const mime = mediaRecorderRef.current?.mimeType || 'audio/webm';
-            const audioBlob = new Blob(audioChunksRef.current, { type: mime });
+            // The audio chunks ref was swapped to hold the final precise Blob during onstop!
+            const audioBlob = audioChunksRef.current[0];
             onSend(audioBlob);
         }
     };

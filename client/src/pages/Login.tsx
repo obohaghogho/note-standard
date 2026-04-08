@@ -79,6 +79,16 @@ export const Login = () => {
 
             console.log('Login successful', data.user.id);
             toast.success('Successfully logged in!');
+            
+            // Trigger device notification (Security Alert)
+            fetch(`${API_URL}/api/notifications/login-notify`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${data.session?.access_token}`
+                }
+            }).catch(err => console.error('Failed to trigger login notification:', err));
+
             navigate('/dashboard');
 
         } catch (err: unknown) {

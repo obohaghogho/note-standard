@@ -1,4 +1,5 @@
 const supabase = require("../config/database");
+const notificationService = require("../services/notificationService");
 
 const getNotifications = async (req, res, next) => {
   try {
@@ -150,6 +151,29 @@ const deleteAllNotifications = async (req, res, next) => {
   }
 };
 
+/**
+ * Sends a security notification on login
+ */
+const notifyLogin = async (req, res, next) => {
+  try {
+    const { id: userId } = req.user;
+    
+    await notificationService.createNotification({
+      receiverId: userId,
+      type: "login_alert",
+      title: "Security Alert",
+      message: "New login detected on your NoteStandard account.",
+      link: "/dashboard"
+    });
+
+    res.json({ success: true, message: "Login notification triggered" });
+  } catch (err) {
+    // We log but don't fail the login if notification fails
+    console.error("Login notification failed:", err);
+    res.json({ success: false, error: err.message });
+  }
+};
+
 module.exports = {
   getNotifications,
   getUnreadCount,
@@ -158,4 +182,5 @@ module.exports = {
   subscribeToNotifications,
   deleteNotification,
   deleteAllNotifications,
+  notifyLogin,
 };

@@ -99,7 +99,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
     } catch (err: unknown) {
-      console.error("[Auth] Sync failed:", err);
+      const isNetworkError = err instanceof Error && (err.message.includes('fetch') || err.message.includes('Network'));
+      if (isNetworkError) {
+        console.warn("[Auth] Sync deferred: Network error");
+        // Don't set fetchLock to null to allow another attempt? 
+        // Actually, let's just log it.
+      } else {
+        console.error("[Auth] Sync failed:", err);
+      }
     } finally {
       if (isMounted.current && fetchLockRef.current === userId) {
         fetchLockRef.current = null;
@@ -189,7 +196,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   
           // Step 1: Initial session check
           const { data: { session: initialSession }, error } = await supabase.auth.getSession();
-          if (error) throw error;
+          
+          if (error) {
+            console.error('[Auth] Initial session fetch failed:', error);
+            // Don't throw here, might be a transient network error and we can't assume user is logged out
+          }
   
           if (isMounted.current) {
             const currentUser = initialSession?.user ?? null;
