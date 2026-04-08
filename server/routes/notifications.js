@@ -9,6 +9,7 @@ const {
   subscribeToNotifications,
   deleteNotification,
   deleteAllNotifications,
+  notifyLogin,
 } = require("../controllers/notificationController");
 
 router.use(requireAuth);
