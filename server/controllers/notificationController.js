@@ -85,14 +85,27 @@ const subscribeToNotifications = async (req, res, next) => {
     const { id: userId } = req.user;
     const { subscription } = req.body;
 
-    if (!subscription) {
-      return res.status(400).json({ error: "Subscription is required" });
+    if (!subscription || !subscription.endpoint) {
+      return res.status(400).json({ error: "Subscription endpoint is required" });
+    }
+
+    const { endpoint, keys } = subscription;
+    const p256dh = keys?.p256dh;
+    const auth = keys?.auth;
+
+    if (!p256dh || !auth) {
+      return res.status(400).json({ error: "Subscription keys missing" });
     }
 
     const { error } = await supabase
       .from("push_subscriptions")
-      .upsert({ user_id: userId, subscription }, {
-        onConflict: "user_id, subscription",
+      .upsert({ 
+        user_id: userId, 
+        endpoint, 
+        p256dh, 
+        auth 
+      }, {
+        onConflict: "user_id,endpoint",
       });
 
     if (error) throw error;

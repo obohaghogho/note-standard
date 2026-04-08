@@ -22,8 +22,11 @@
     padding: 0;
     overflow-x: hidden;
     /* Allow native vertical scroll behavior */
-    overflow-y: auto;
+    overflow-y: hidden; /* Use hidden to prevent body bounce, let internal containers scroll */
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: none; /* Prevent iOS elastic scroll on the main document */
+    -webkit-text-size-adjust: 100%; /* Prevent font scaling in landscape orientation */
+    text-size-adjust: 100%;
     /* Core Safe Area Resets */
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -33,26 +36,27 @@
 
   body {
     width: 100%;
+    height: 100dvh; /* Lock body strictly to the viewport */
     margin: 0;
     padding: 0;
-    /* overscroll-behavior-y: contain; - Moved to specific wrappers if needed, 
-       but keeping it here can lock Android scroll if not handled carefully */
-    overflow-x: hidden;
-    overflow-y: visible; /* Let html handle the scroll */
+    overflow: hidden; /* Hard block on body scroll to prevent bounce at the OS level */
+    overscroll-behavior-y: none;
     background-color: #0a0a0a;
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
-    min-height: 100dvh;
+    touch-action: pan-x pan-y; /* Prevent double-tap-to-zoom delays globally */
   }
 
   #root {
     width: 100%;
-    max-width: 100%;
-    min-height: 100dvh;
+    height: 100%; /* Take exact dimensions of body */
     display: flex;
     flex-direction: column;
     z-index: 1;
     overflow-x: hidden;
+    overflow-y: auto; /* Root acts as the true main scroll container */
+    overscroll-behavior-y: none;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* Universal resets to prevent content-driven overflow */

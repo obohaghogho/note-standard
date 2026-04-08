@@ -42,7 +42,16 @@ export interface TeamMessage {
   sender_id: string;
   content?: string;
   message_type: MessageType;
-  metadata: Record<string, unknown>;
+  metadata: {
+    event?: string;
+    note_id?: string;
+    note_title?: string;
+    permission?: string;
+    user_name?: string;
+    image_url?: string;
+    audio_url?: string;
+    [key: string]: unknown;
+  };
   created_at: string;
   updated_at: string;
   is_deleted: boolean;

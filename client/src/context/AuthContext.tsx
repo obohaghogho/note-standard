@@ -267,10 +267,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
   
-        // Only trigger state updates/syncs if the user identity has actually changed to avoid handshake loops
-        if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        // Only trigger state updates/syncs if the user identity has actually changed or token was refreshed
+        if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'TOKEN_REFRESHED') {
+          console.log(`[Auth] Updating session on ${event}`);
           setSession(newSession);
           setUser(currentUser);
+          
           if (currentUser) {
             setupSubscriptions(currentUser.id);
             syncUserData(currentUser.id, currentUser).catch(err => {
@@ -279,10 +281,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       });
+
+      // Step 4: Background Session Heartbeat
+      // Periodically check if session is still valid (every 10 minutes)
+      const heartbeat = setInterval(async () => {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (currentSession && isMounted.current) {
+          setSession(currentSession);
+          setUser(currentSession.user);
+        }
+      }, 1000 * 60 * 10);
   
       return () => {
         isMounted.current = false;
         authListener.unsubscribe();
+        clearInterval(heartbeat);
         if (profileChannel) supabase.removeChannel(profileChannel);
         if (subscriptionChannel) supabase.removeChannel(subscriptionChannel);
       };

@@ -14,9 +14,11 @@ import { adService } from '../../services/ads';
 import { Toggle } from '../../components/common/Toggle';
 import { User, Camera, Save, Loader2, Megaphone, BadgeCheck, Shield, Lock, Download, Trash2, Activity as ActivityIcon, MessageSquare, Globe } from 'lucide-react';
 import { UserBadge } from '../../components/common/UserBadge';
+import { usePushNotifications } from '../../hooks/usePushNotifications';
 
 export const Settings = () => {
     const { user, profile: authProfile, isBusiness, signOut } = useAuth();
+    const { permission, isSubscribed, subscribeUser, unsubscribeUser } = usePushNotifications();
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
 
@@ -438,6 +440,14 @@ export const Settings = () => {
                                             toast.error('Failed to change active status');
                                         }
                                     }}
+                                />
+                                <div className="h-px bg-white/5" />
+                                <Toggle
+                                    label="System Push Notifications"
+                                    description={permission === 'denied' ? "Notification permission was denied in your browser settings. Please enable them to receive alerts." : "Receive real-time alerts for messages, mentions, and important updates even when the app is closed."}
+                                    checked={isSubscribed && permission === 'granted'}
+                                    disabled={permission === 'denied'}
+                                    onChange={(c) => c ? subscribeUser() : unsubscribeUser()}
                                 />
                             </div>
                             <div className="mt-6 pt-4 border-t border-white/10 flex justify-end flex-wrap">

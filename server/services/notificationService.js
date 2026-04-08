@@ -76,7 +76,7 @@ const sendPushNotification = async (userId, payload) => {
   try {
     const { data: subscriptions, error } = await supabase
       .from("push_subscriptions")
-      .select("subscription")
+      .select("endpoint, p256dh, auth")
       .eq("user_id", userId);
 
     if (error || !subscriptions) return;
@@ -91,18 +91,27 @@ const sendPushNotification = async (userId, payload) => {
       },
     });
 
-    const sendPromises = subscriptions.map((sub) =>
-      webpush.sendNotification(sub.subscription, pushPayload)
+    const sendPromises = subscriptions.map((sub) => {
+      // Reconstruct the subscription object required by web-push
+      const pushSubscription = {
+        endpoint: sub.endpoint,
+        keys: {
+          p256dh: sub.p256dh,
+          auth: sub.auth,
+        },
+      };
+
+      return webpush.sendNotification(pushSubscription, pushPayload)
         .catch((err) => {
           if (err.statusCode === 410 || err.statusCode === 404) {
             // Subscription has expired or is no longer valid, delete it
             return supabase.from("push_subscriptions")
               .delete()
-              .eq("subscription", JSON.stringify(sub.subscription));
+              .match({ user_id: userId, endpoint: sub.endpoint });
           }
           console.error("Push error:", err);
-        })
-    );
+        });
+    });
 
     await Promise.all(sendPromises);
   } catch (err) {
@@ -121,15 +130,14 @@ const broadcastNotification = async ({
   link,
 }) => {
   try {
-    // 1. Get all user IDs (this might be heavy for many users, but for now it's okay)
-    // Better: Use a dedicated table or handle it differently for massive scale.
+    // 1. Get all user IDs
     const { data: profiles, error: profileError } = await supabase
       .from("profiles")
       .select("id");
 
     if (profileError) throw profileError;
 
-    // 2. Persist to Database for everyone in safe chunks to avoid payload limits
+    // 2. Persist to Database for everyone in safe chunks
     const chunkSize = 500;
     for (let i = 0; i < profiles.length; i += chunkSize) {
       const chunk = profiles.slice(i, i + chunkSize);
@@ -149,7 +157,6 @@ const broadcastNotification = async ({
 
       if (error) {
         console.error("Batch insert error:", error);
-        // Continue processing other chunks even if one fails
       }
     }
 
@@ -175,15 +182,28 @@ const broadcastNotification = async ({
     // Fetch ALL subscriptions
     const { data: allSubscriptions } = await supabase
       .from("push_subscriptions")
-      .select("subscription");
+      .select("endpoint, p256dh, auth, user_id");
 
     if (allSubscriptions && allSubscriptions.length > 0) {
       for (let i = 0; i < allSubscriptions.length; i += chunkSize) {
         const subChunk = allSubscriptions.slice(i, i + chunkSize);
         await Promise.all(
-          subChunk.map((sub) =>
-            webpush.sendNotification(sub.subscription, pushPayload).catch(() => {})
-          )
+          subChunk.map((sub) => {
+            const pushSubscription = {
+              endpoint: sub.endpoint,
+              keys: {
+                p256dh: sub.p256dh,
+                auth: sub.auth,
+              },
+            };
+            return webpush.sendNotification(pushSubscription, pushPayload).catch((err) => {
+              if (err.statusCode === 410 || err.statusCode === 404) {
+                return supabase.from("push_subscriptions")
+                  .delete()
+                  .match({ user_id: sub.user_id, endpoint: sub.endpoint });
+              }
+            });
+          })
         );
       }
     }

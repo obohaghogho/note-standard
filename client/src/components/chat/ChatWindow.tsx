@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useChat } from '../../context/ChatContext';
+import { useOutletContext } from 'react-router-dom';
 import type { Message } from '../../context/ChatContext';
 import { usePresence } from '../../context/PresenceContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../common/SecureImage';
-import { Send, Languages, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Maximize, Trash2, Share2, X, Copy } from 'lucide-react';
+import { Send, Languages, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Maximize, Trash2, Share2, X, Copy, Menu } from 'lucide-react';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { MediaUpload } from './MediaUpload';
 import { VoiceRecorder } from './VoiceRecorder';
@@ -32,6 +33,7 @@ const ChatWindow: React.FC = () => {
     const { isUserOnline, getUserLastSeen } = usePresence();
     const { user, profile, session } = useAuth();
     const { startCall } = useWebRTC();
+    const { openMobileMenu } = useOutletContext<{ openMobileMenu: () => void }>() || {};
 
     // ── WhatsApp-Style Selection System ──────────────────────
     const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
@@ -472,7 +474,11 @@ const ChatWindow: React.FC = () => {
             toast(`${otherUserTitle} may be away. Call will still be attempted.`, { icon: 'ℹ️', duration: 3000 });
         }
         toast.loading(`Starting ${type} call...`, { duration: 2000, id: 'call-start' });
-        startCall(otherMember.user_id, activeConversationId, type, otherUserTitle, otherUserAvatar || undefined)
+        startCall(otherMember.user_id, activeConversationId, type, {
+            id: otherMember.user_id,
+            full_name: otherUserTitle,
+            avatar_url: otherUserAvatar || undefined
+        })
             .catch(() => {
                 toast.error('Failed to start call. Check camera/mic permissions.');
             });
@@ -645,6 +651,13 @@ const ChatWindow: React.FC = () => {
                             aria-label="Back to conversations"
                         >
                             <ArrowLeft size={22} />
+                        </button>
+                        <button 
+                            onClick={openMobileMenu}
+                            className="p-1.5 text-gray-400 hover:text-white md:hidden"
+                            aria-label="Open sidebar"
+                        >
+                            <Menu size={22} />
                         </button>
                         {(() => {
                             let displayName = activeConversation?.name;
@@ -1272,7 +1285,24 @@ const SearchMessageItem = ({
             <div className={`max-w-[85%] rounded-xl p-3 border ${isOwn ? 'bg-blue-600/20 border-blue-500/30' : 'bg-gray-800 border-gray-700'}`}>
                 {msg.attachment && (
                     <div className="mb-2 rounded-lg overflow-hidden border border-black/20 bg-black/10 max-h-32">
-                        {msg.type === 'image' ? (<ImageWithSignedUrl path={msg.attachment.storage_path} fetchUrl={fetchUrl} onPreview={(url) => onPreviewMedia({ url, type: 'image', fileName: msg.attachment.file_name, isSender: isOwn })} />) : msg.type === 'video' ? (<VideoWithSignedUrl path={msg.attachment.storage_path} fetchUrl={fetchUrl} onPreview={(url) => onPreviewMedia({ url, type: 'video', fileName: msg.attachment.file_name, isSender: isOwn })} />) : (<div className="p-2 flex items-center gap-2"><Paperclip size={14} className="text-blue-400" /><span className="text-[10px] truncate">{msg.attachment.file_name}</span></div>)}
+                        {msg.type === 'image' ? (
+                            <ImageWithSignedUrl 
+                                path={msg.attachment.storage_path} 
+                                fetchUrl={fetchUrl} 
+                                onPreview={(url) => onPreviewMedia({ url, type: 'image', fileName: msg.attachment?.file_name, isSender: isOwn })} 
+                            />
+                        ) : msg.type === 'video' ? (
+                            <VideoWithSignedUrl 
+                                path={msg.attachment.storage_path} 
+                                fetchUrl={fetchUrl} 
+                                onPreview={(url) => onPreviewMedia({ url, type: 'video', fileName: msg.attachment?.file_name, isSender: isOwn })} 
+                            />
+                        ) : (
+                            <div className="p-2 flex items-center gap-2">
+                                <Paperclip size={14} className="text-blue-400" />
+                                <span className="text-[10px] truncate">{msg.attachment.file_name}</span>
+                            </div>
+                        )}
                     </div>
                 )}
                 <p className="text-xs text-blue-400 font-bold mb-1">{isOwn ? 'You' : 'Matched Message'}</p>

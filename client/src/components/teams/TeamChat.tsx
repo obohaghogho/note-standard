@@ -4,7 +4,7 @@
 // ====================================
 
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { useTeamChat } from '../../context/TeamChatContext';
 import { useAuth } from '../../context/AuthContext';
 import { Card } from '../common/Card';
@@ -27,6 +27,7 @@ import {
   X,
   Share2,
   Check,
+  Menu,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { uploadTeamImage, uploadTeamAudio } from '../../lib/teamsApi';
@@ -51,6 +52,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
     messages, members, loading, connected, sendMessage, loadMoreMessages, 
     hasMore, deleteMessage, editMessage, clearChatHistory, error, typingUsers, sendTypingStatus 
   } = useTeamChat();
+  const { openMobileMenu } = useOutletContext<{ openMobileMenu: () => void }>() || {};
 
   const myMember = members.find(m => m.user_id === user?.id);
   const myRole = myMember?.role || 'member';
@@ -331,8 +333,8 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
 
     // Different rendering based on message type
     if (msg.message_type === 'system') {
-      const inviterName = msg.sender?.full_name || msg.sender?.username || 'Some member';
-      const inviteeName = msg.metadata?.user_name || 'a new member';
+      const inviterName = String(msg.sender?.full_name || msg.sender?.username || 'Some member');
+      const inviteeName = String(msg.metadata?.user_name || 'a new member');
 
       return (
         <div key={msg.id} className="team-chat__message--system">
@@ -394,7 +396,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
                 size="sm" 
                 variant="ghost" 
                 className="mt-2 text-blue-400 hover:text-blue-300 hover:bg-blue-400/10"
-                onClick={() => navigate(`/dashboard/notes?id=${msg.metadata?.note_id}`)}
+                onClick={() => navigate(`/dashboard/notes?id=${msg.metadata?.note_id as string}`)}
               >
                 Open Note
               </Button>
@@ -459,13 +461,13 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
                 className="team-chat__message-image-container cursor-pointer hover:opacity-90 transition-opacity"
                 onClick={(e) => { if (!isSelectionMode) { e.stopPropagation(); setPreviewMedia({
                   isOpen: true,
-                  url: msg.metadata!.image_url!,
+                  url: msg.metadata!.image_url as string,
                   type: 'image',
                   isSender: isOwn
                 }); } }}
               >
                 <SecureImage 
-                  src={msg.metadata.image_url} 
+                  src={msg.metadata.image_url as string} 
                   alt="Shared image" 
                   className="team-chat__message-image"
                 />
@@ -474,7 +476,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
             {msg.message_type === 'audio' && msg.metadata?.audio_url && (
               <div className="team-chat__message-audio-container mt-1 mb-2">
                 <AudioPlayer 
-                  path={msg.metadata.audio_url} 
+                  path={msg.metadata.audio_url as string} 
                   fetchUrl={async (p) => p}
                 />
               </div>
@@ -589,6 +591,13 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
       ) : (
         <div className="team-chat__header">
           <div className="team-chat__header-title">
+            <button 
+              onClick={openMobileMenu}
+              className="p-1.5 -ml-1 text-gray-400 hover:text-white md:hidden mr-2"
+              aria-label="Open sidebar"
+            >
+              <Menu size={22} />
+            </button>
             <h2>Team Chat</h2>
             <div className="team-chat__header-status">
               {connected ? (

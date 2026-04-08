@@ -7,8 +7,10 @@ import {
   Monitor,
   Zap,
   Globe,
-  QrCode
+  QrCode,
+  Menu
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/common/Button';
 import { cn } from '../../utils/cn';
 import toast from 'react-hot-toast';
@@ -30,6 +32,7 @@ export const DownloadPage: React.FC = () => {
   const [isIOSModalOpen, setIsIOSModalOpen] = useState(false);
 
   const isIOS = typeof window !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (isIOS) {
@@ -88,7 +91,14 @@ export const DownloadPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-6 md:p-12 overflow-y-auto">
+    <div className="min-h-screen bg-gray-950 text-white p-6 md:p-12 overflow-y-auto relative">
+      <button 
+          onClick={() => navigate('/dashboard')} 
+          className="absolute top-6 left-6 z-50 p-3 bg-white/5 hover:bg-white/10 rounded-full backdrop-blur-md border border-white/10 transition-all flex items-center justify-center text-gray-300 hover:text-white"
+          aria-label="Return to Dashboard"
+      >
+          <Menu size={24} />
+      </button>
       <div className="max-w-6xl mx-auto space-y-12">
         
         {/* Hero Section */}

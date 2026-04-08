@@ -523,10 +523,16 @@ exports.sendMessage = async (req, res) => {
           console.warn(
             "[Chat Controller] Column missing, retrying basic insert",
           );
+          const fallbackPayload = {
+            conversation_id: conversationId,
+            sender_id: userId,
+            content: content,
+            type: type || "text",
+          };
           const { data: retryData, error: retryErr } = await supabase
             .from("messages")
-            .insert([insertPayload])
-            .select(selectQuery)
+            .insert([fallbackPayload])
+            .select('*')
             .single();
 
           if (retryErr) throw retryErr;
@@ -538,9 +544,11 @@ exports.sendMessage = async (req, res) => {
         processAfterMsg(data);
       }
     } catch (msgErr) {
-      console.error("[Chat Controller] Send message error:", msgErr.message);
+      console.error("====================== CHAT ERROR TRACE ======================");
+      console.error(msgErr.stack || msgErr);
+      console.error("==============================================================");
       if (!res.headersSent) {
-        return res.status(500).json({ error: "Failed to send message" });
+        return res.status(500).json({ error: msgErr.message || "Failed to send message", stack: msgErr.stack });
       }
     }
 

@@ -51,7 +51,7 @@ function makePeerId(userId: string, suffix?: string): string {
 export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { socket, connected: socketConnected } = useSocket();
     const { user } = useAuth();
-    const { sendMessage } = useChat();
+    const { sendMessageToConversation } = useChat();
 
     const [callState, setCallState] = useState<CallState>({
         type: null, status: 'idle', otherUser: null, conversationId: null, connectedAt: null,
@@ -155,6 +155,9 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         function createPeer(suffix?: string) {
             const peerId = makePeerId(user!.id, suffix || Math.random().toString(36).substring(7));
             let reconnectAttempts = 0;
+            // Single flag to prevent both `disconnected` and `error` handlers
+            // from scheduling a reconnect at the same time.
+            let reconnectScheduled = false;
 
             const hostname = window.location.hostname;
             const isDev = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.');
@@ -185,6 +188,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             peer.on('open', (id) => {
                 console.log('[PeerJS] Connected:', id);
                 reconnectAttempts = 0;
+                reconnectScheduled = false;
             });
 
             peer.on('call', async (call) => {
@@ -209,28 +213,38 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 });
             });
 
+            const scheduleReconnect = () => {
+                // Guard: skip if destroyed, already pending, or limit reached
+                if (destroyed || reconnectScheduled || reconnectAttempts >= MAX_RECONNECT) return;
+                reconnectAttempts++;
+                reconnectScheduled = true;
+                console.warn(`[PeerJS] Scheduling reconnect (attempt ${reconnectAttempts}/${MAX_RECONNECT})…`);
+                setTimeout(() => {
+                    reconnectScheduled = false;
+                    if (!destroyed) peer.reconnect();
+                }, 3000);
+            };
+
             peer.on('disconnected', () => {
                 if (destroyed) return;
                 console.warn('[PeerJS] Disconnected from server.');
-                if (reconnectAttempts < MAX_RECONNECT) {
-                    reconnectAttempts++;
-                    setTimeout(() => peer.reconnect(), 3000);
-                }
+                scheduleReconnect();
             });
 
             peer.on('error', (err: any) => {
                 console.error('[PeerJS] Error:', err.type, err);
                 if (err.type === 'unavailable-id') {
+                    // Destroy and nullify before recreating to avoid the re-entry guard
+                    peerRef.current = null;
                     peer.destroy();
                     createPeer(Math.random().toString(36).substring(7));
                 } else if (err.type === 'peer-unavailable') {
                     toast.error('User is offline or unavailable');
                     cleanup();
                 } else if (err.type === 'network' || err.type === 'server-error') {
-                    if (reconnectAttempts < MAX_RECONNECT) {
-                        reconnectAttempts++;
-                        setTimeout(() => peer.reconnect(), 3000);
-                    }
+                    // `disconnected` fires alongside network errors — scheduleReconnect
+                    // deduplicates so only one reconnect attempt is queued at a time.
+                    scheduleReconnect();
                 }
             });
 
@@ -241,10 +255,11 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         return () => {
             destroyed = true;
-            if (peerRef.current) {
-                peerRef.current.destroy();
-                peerRef.current = null;
-            }
+            // Null the ref BEFORE destroy so that a concurrent re-render
+            // triggered by the auth SIGNED_IN event can create a fresh peer.
+            const peer = peerRef.current;
+            peerRef.current = null;
+            peer?.destroy();
         };
     }, [user?.id, cleanup]);
 
@@ -265,7 +280,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             setLocalStream(stream);
 
             socket?.emit('call:initiate', { to: targetUserId, from: user!.id, peerId: peerRef.current.id, type });
-            sendMessage(conversationId, `Started a ${type} call`, 'system');
+            sendMessageToConversation(conversationId, `Started a ${type} call`, 'call');
 
             callTimeoutRef.current = setTimeout(() => {
                 if (currentCallStatus.current === 'calling') {
