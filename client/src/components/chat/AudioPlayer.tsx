@@ -12,8 +12,10 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ path, fetchUrl }) => {
     const [duration, setDuration] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const durationHackAppliedRef = useRef(false);
 
     useEffect(() => {
+        if (!path) return; // Prevent 400 Bad Request during optimistic updates
         let isMounted = true;
         fetchUrl(path).then(u => {
             if (isMounted) setUrl(u);
@@ -34,15 +36,34 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ path, fetchUrl }) => {
     };
 
     const onLoadedMetadata = () => {
-        if (audioRef.current) setDuration(audioRef.current.duration);
+        if (!audioRef.current) return;
+        const d = audioRef.current.duration;
+        
+        // Fix for WebM missing duration (returns Infinity in browsers)
+        if (d === Infinity) {
+            audioRef.current.currentTime = 1e101;
+            audioRef.current.ontimeupdate = () => {
+                if (audioRef.current) {
+                    audioRef.current.ontimeupdate = null;
+                    const realDuration = audioRef.current.duration;
+                    setDuration(realDuration);
+                    audioRef.current.currentTime = 0;
+                    durationHackAppliedRef.current = true;
+                }
+            };
+        } else {
+            setDuration(d);
+        }
     };
 
     const onTimeUpdate = () => {
-        if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
+        if (audioRef.current && (!durationHackAppliedRef.current || audioRef.current.currentTime < 1e100)) {
+            setCurrentTime(audioRef.current.currentTime);
+        }
     };
 
     const formatTime = (time: number) => {
-        if (isNaN(time)) return '0:00';
+        if (isNaN(time) || !isFinite(time)) return '0:00';
         const mins = Math.floor(time / 60);
         const secs = Math.floor(time % 60);
         return `${mins}:${secs.toString().padStart(2, '0')}`;
