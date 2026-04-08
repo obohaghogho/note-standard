@@ -119,7 +119,14 @@ httpServer.listen(PORT, () => {
     console.log(`[Gateway] ✓ Socket.IO active on port ${PORT}`);
 });
 
-peerServer.listen(PEER_PORT, () => {
-    console.log(`[Gateway] ✓ PeerJS active on port ${PEER_PORT}`);
-});
+// ERROR: Render (and most cloud platforms) only allow binding to ONE port ($PORT).
+// Attempting to listen on a second port (PEER_PORT) will crash the process or be unreachable.
+if (process.env.NODE_ENV === 'production') {
+    console.warn(`[Gateway] ⚠️  Skipping standalone PeerJS server on port ${PEER_PORT} (Production/Render mode).`);
+    console.warn(`[Gateway] 💡 Multi-port binding is not supported on standard Render services.`);
+} else {
+    peerServer.listen(PEER_PORT, () => {
+        console.log(`[Gateway] ✓ PeerJS active on port ${PEER_PORT}`);
+    });
+}
 

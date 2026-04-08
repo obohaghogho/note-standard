@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "description": "Root package for note-standard monorepo",
   "scripts": {
-    "install:all": "npm install && npm install -w client && npm install -w server",
+    "install:all": "npm install && npm install -w client && npm install -w server && npm install -w realtime-gateway",
     "build": "npm run build --workspace=client",
+    "build:all": "npm run build -w client",
     "start": "node server/index.js",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "client": "npm run dev -w client",
@@ -39,7 +40,7 @@
     "realtime-gateway"
   ],
   "engines": {
-    "node": "24.x",
+    "node": "22.x",
     "npm": "10.x"
   },
   "optionalDependencies": {

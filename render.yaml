@@ -1,10 +1,58 @@
 services:
+  # 1. Frontend (Static Site)
   - type: web
     name: note-standard-frontend
     runtime: static
     buildCommand: npm run build --prefix client
     publishPath: client/dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: note-standard-server
+          property: host
+      - key: VITE_GATEWAY_URL
+        fromService:
+          type: web
+          name: note-standard-gateway
+          property: host
     routes:
       - type: rewrite
         source: /*
         destination: /index.html
+
+  # 2. Main API Server
+  - type: web
+    name: note-standard-server
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm install --prefix server
+    startCommand: node server/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: CLIENT_URL
+        fromService:
+          type: web
+          name: note-standard-frontend
+          property: host
+
+  # 3. Realtime Gateway (Socket.IO)
+  - type: web
+    name: note-standard-gateway
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm install --prefix realtime-gateway
+    startCommand: node realtime-gateway/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: SERVER_URL
+        fromService:
+          type: web
+          name: note-standard-server
+          property: host
