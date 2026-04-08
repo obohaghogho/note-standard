@@ -16,13 +16,12 @@
     word-wrap: break-word;
   }
 
-  html,
-  body {
+  html {
     width: 100%;
     margin: 0;
     padding: 0;
-    overscroll-behavior-y: contain;
     overflow-x: hidden;
+    /* Allow native vertical scroll behavior */
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     /* Core Safe Area Resets */
@@ -30,15 +29,20 @@
     padding-bottom: env(safe-area-inset-bottom, 0px);
     padding-left: env(safe-area-inset-left, 0px);
     padding-right: env(safe-area-inset-right, 0px);
-    background-color: #0a0a0a; /* Ensure background matches app theme for safe areas */
   }
 
   body {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    /* overscroll-behavior-y: contain; - Moved to specific wrappers if needed, 
+       but keeping it here can lock Android scroll if not handled carefully */
+    overflow-x: hidden;
+    overflow-y: visible; /* Let html handle the scroll */
+    background-color: #0a0a0a;
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
     min-height: 100dvh;
-    overflow-y: auto;
-    overflow-x: hidden;
   }
 
   #root {
