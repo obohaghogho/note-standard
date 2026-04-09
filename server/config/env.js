@@ -9,7 +9,9 @@ if (process.env.NODE_ENV !== "production") {
     path: path.join(__dirname, "..", ".env.development"),
   });
 }
-require("dotenv").config(); // .env as fallback (won't overwrite dev values)
+require("dotenv").config({
+    path: path.join(__dirname, "..", ".env"),
+}); // .env as fallback (won't overwrite dev values)
 
 /**
  * Validates that the given environment variables are present.

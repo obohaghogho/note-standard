@@ -1,13 +1,15 @@
 const supabase = require("../config/database");
 const webpush = require("web-push");
-require("dotenv").config();
-
-// Configure web-push
-webpush.setVapidDetails(
-  `mailto:${process.env.EMAIL_FROM || "admin@example.com"}`,
-  process.env.VAPID_PUBLIC_KEY,
-  process.env.VAPID_PRIVATE_KEY,
-);
+// Configure web-push (keys must be present in .env or .env.development)
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(
+    `mailto:${process.env.EMAIL_FROM || "admin@example.com"}`,
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY,
+  );
+} else {
+  console.warn("[NotificationService] VAPID keys missing. Push notifications will be disabled.");
+}
 
 const realtime = require("./realtimeService");
 
