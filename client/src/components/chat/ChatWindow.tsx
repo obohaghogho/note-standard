@@ -487,8 +487,9 @@ const ChatWindow: React.FC = () => {
     // Typing Status Debounce
     const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = applyAutoCorrect(e.target.value);
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement> | string) => {
+        const value = typeof e === 'string' ? e : e.target.value;
+        const val = applyAutoCorrect(value);
         setInputValue(val);
 
         // Emit typing status
@@ -1109,7 +1110,7 @@ const ChatWindow: React.FC = () => {
                                                             <button 
                                                                 key={emoji} 
                                                                 type="button" 
-                                                                onClick={() => { setInputValue(prev => prev + emoji); setShowEmojiPicker(false); handleInputChange({ target: { value: inputValue + emoji } } as any); }} 
+                                                                onClick={() => { const newValue = inputValue + emoji; setInputValue(newValue); setShowEmojiPicker(false); handleInputChange(newValue); }} 
                                                                 className="text-xl hover:bg-white/10 p-2 rounded-xl transition-all hover:scale-110 active:scale-90"
                                                             >
                                                                 {emoji}

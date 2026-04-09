@@ -63,7 +63,8 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
             const result = await walletApi.generateNewAddress(selectedCurrency, selectedNetwork);
             setHdAddress(result.address);
             toast.success('New address generated');
-        } catch (error: any) {
+        } catch (err: unknown) {
+            const error = err as Error;
             toast.error(error.message || 'Failed to generate new address');
         } finally {
             setHdLoading(false);

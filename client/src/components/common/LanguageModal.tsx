@@ -5,8 +5,16 @@ import { X, Check, Globe, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Variants } from 'framer-motion';
 
+interface Language {
+    code: string;
+    name: string;
+    flag: string;
+    native: string;
+    dir?: 'rtl' | 'ltr';
+}
+
 // Only including languages that have translation files and are registered in i18n.ts
-const ALL_LANGUAGES = [
+const ALL_LANGUAGES: Language[] = [
     { code: 'en', name: 'English', flag: '🇺🇸', native: 'English' },
     { code: 'es', name: 'Spanish', flag: '🇪🇸', native: 'Español' },
     { code: 'fr', name: 'French', flag: '🇫🇷', native: 'Français' },
@@ -198,7 +206,7 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
                         >
                             <div className="grid gap-2">
                                 {filteredLanguages.length > 0 ? (
-                                    filteredLanguages.map((lang: any) => {
+                                    filteredLanguages.map((lang: Language) => {
                                         const isActive = currentLang === lang.code;
                                         return (
                                             <button

@@ -60,7 +60,7 @@ const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose }) => {
             setRecipientId('');
             setSearchResults([]);
         } catch (err: unknown) {
-            const error = err as any;
+            const error = err as Error;
             setError(error.message || 'Failed to start conversation');
             setIsSubmitting(false);
         }

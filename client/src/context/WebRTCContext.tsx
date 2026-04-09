@@ -232,8 +232,9 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             });
 
             peer.on('error', (err: any) => {
-                console.error('[PeerJS] Error:', err.type, err);
-                if (err.type === 'unavailable-id') {
+                const error = err as { type: string };
+                console.error('[PeerJS] Error:', error.type, err);
+                if (error.type === 'unavailable-id') {
                     // Destroy and nullify before recreating to avoid the re-entry guard
                     peerRef.current = null;
                     peer.destroy();
@@ -261,7 +262,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             peerRef.current = null;
             peer?.destroy();
         };
-    }, [user?.id, cleanup]);
+    }, [user, cleanup]);
 
     const startCall = async (targetUserId: string, conversationId: string, type: 'voice' | 'video', otherUser: CallState['otherUser']) => {
         if (!peerRef.current || !peerRef.current.open) {

@@ -115,9 +115,10 @@ export const SupabaseRealtimeChat: React.FC<SupabaseRealtimeChatProps> = ({ conv
             }
 
             setInputValue('');
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Send error:', err);
-            toast.error(err.message || 'Failed to send message');
+            const error = err as Error;
+            toast.error(error.message || 'Failed to send message');
         } finally {
             setSending(false);
         }

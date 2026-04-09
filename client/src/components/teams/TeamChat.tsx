@@ -266,7 +266,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
       toast.success('Image sent', { id: loadingToast });
     } catch (err: unknown) {
       console.error('[TeamChat] Image upload error:', err);
-      const error = err as any;
+      const error = err as Error;
       toast.error(error.message || 'Failed to upload image', { id: loadingToast });
     } finally {
       setIsSending(false);
@@ -299,7 +299,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
       setShowRecorder(false);
     } catch (err: unknown) {
       console.error('[TeamChat] Audio upload error:', err);
-      const error = err as any;
+      const error = err as Error;
       toast.error(error.message || 'Failed to send voice note', { id: loadingToast });
     } finally {
       setIsSending(false);
