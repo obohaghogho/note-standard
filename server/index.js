@@ -29,81 +29,79 @@ process.on("unhandledRejection", (reason, promise) => {
 
 const PORT = env.PORT;
 
-// Presence and legacy socket middleware removed in favor of 
-// centralized gateway handling.
-
-// Background job for real-time Trends
+// Required Services & Workers
 const analyticsService = require("./services/analyticsService");
 const paymentWorker = require("./workers/paymentWorker");
 const paymentService = require("./services/payment/paymentService");
+const paymentExpiry = require("./workers/paymentExpiry");
 
-// 1. Immediate aggregation on startup
-(async () => {
+/**
+ * 🚀 START SERVER IMMEDIATELY
+ * We bind to the port as early as possible to satisfy Render's port detection.
+ * All heavy initialization and background workers start AFTER the server is live.
+ */
+server.listen(PORT, "0.0.0.0", async () => {
+  logger.info(`Server running on port ${PORT}`);
+
+  // 1. Log Public IP (Async, non-blocking)
+  https.get("https://api.ipify.org", (res) => {
+    res.on("data", (ip) => {
+      console.log("SERVER PUBLIC IP:", ip.toString());
+    });
+  }).on('error', (e) => logger.warn(`[IPify] Failed to fetch public IP: ${e.message}`));
+
+  // 2. Start Background Workers
+  paymentExpiry.start();
+  // paymentWorker is usually managed separately but included here if needed
+  
+  // 3. Initial Market Data & Trends Aggregation
   try {
     console.log("[Trends] Running initial aggregation...");
     await analyticsService.aggregateDailyStats();
     console.log("[Trends] Initial aggregation complete.");
-  } catch (err) {
-    console.error("[Trends] Initial aggregation failed:", err.message);
-  }
-})();
-
-// 2. Real-time broadcast (Every 60s) via Gateway
-setInterval(async () => {
-  try {
+    
+    const rates = await fxService.getAllRates();
+    await realtime.broadcast("rates_updated", rates);
+    
     const stats = await analyticsService.getRealtimeStats();
     if (stats) {
       await realtime.broadcast("stats_updated", stats);
     }
   } catch (err) {
-    console.error("[Trends] Interval broadcast failed:", err.message);
+    logger.error(`[Startup] Background initialization failed: ${err.message}`);
   }
-}, 60000);
 
-// 3. Periodic persistence (Every 6 hours)
-setInterval(async () => {
-  try {
-    console.log("[Trends] Running scheduled persistence...");
-    await analyticsService.aggregateDailyStats();
-  } catch (err) {
-    console.error("[Trends] Scheduled persistence failed:", err.message);
-  }
-}, 6 * 60 * 60 * 1000);
+  // 4. Register Recurring Jobs
+  
+  // Real-time Trends Broadcast (Every 60s)
+  setInterval(async () => {
+    try {
+      const stats = await analyticsService.getRealtimeStats();
+      if (stats) {
+        await realtime.broadcast("stats_updated", stats);
+      }
+    } catch (err) {
+      console.error("[Trends] Interval broadcast failed:", err.message);
+    }
+  }, 60000);
 
-// All frontend-facing socket connections are now handled by the gateway.
+  // Periodic Trends Persistence (Every 6 hours)
+  setInterval(async () => {
+    try {
+      console.log("[Trends] Running scheduled persistence...");
+      await analyticsService.aggregateDailyStats();
+    } catch (err) {
+      console.error("[Trends] Scheduled persistence failed:", err.message);
+    }
+  }, 6 * 1000 * 60 * 60);
 
-// ─── Real-time Exchange Rate Broadcasting ───────────────────
-/**
- * Active broadcasting ensures the UI is always in sync with backend pricing, 
- * especially critical for swaps and balance displays.
- */
-setInterval(async () => {
-  try {
-    const rates = await fxService.getAllRates();
-    await realtime.broadcast("rates_updated", rates);
-  } catch (err) {
-    logger.error(`[Rates Broadcast] Error: ${err.message}`);
-  }
-}, 30000); 
-// ──────────────────────────────────────────────────────────────
-
-// ─── Payment Expiry Worker ───────────────────────────────────
-// Automatically expires pending Grey payments after their window closes
-// and sends notification emails to affected users.
-const paymentExpiry = require("./workers/paymentExpiry");
-// ──────────────────────────────────────────────────────────────
-// ─── Startup Logging ──────────────────────────────────────────
-// Log public IP for troubleshooting and NOWPayments whitelisting
-https.get("https://api.ipify.org", (res) => {
-  res.on("data", (ip) => {
-    console.log("SERVER PUBLIC IP:", ip.toString());
-  });
-});
-// ──────────────────────────────────────────────────────────────
-
-server.listen(PORT, "0.0.0.0", () => {
-  logger.info(`Server running on port ${PORT}`);
-
-  // Start the payment expiry worker after server is listening
-  paymentExpiry.start();
+  // Exchange Rate Broadcasting (Every 30s)
+  setInterval(async () => {
+    try {
+      const rates = await fxService.getAllRates();
+      await realtime.broadcast("rates_updated", rates);
+    } catch (err) {
+      logger.error(`[Rates Broadcast] Error: ${err.message}`);
+    }
+  }, 30000);
 });
