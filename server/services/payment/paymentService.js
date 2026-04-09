@@ -43,8 +43,9 @@ class PaymentService {
 
     const reference = `tx_${uuidv4().replace(/-/g, "")}`;
     const isCrypto = options.isCrypto || false;
+    const method = metadata.method || options.method || "card";
 
-    logger.info(`[DEBUG] Step 1: Provider selection for ${currency} (${isCrypto ? 'Crypto' : 'Fiat'})`);
+    logger.info(`[DEBUG] Step 1: Provider selection for ${currency} (${isCrypto ? 'Crypto' : 'Fiat'}) method: ${method}`);
     // 1. Determine provider via Factory or explicit request
     const provider = options.provider
       ? PaymentFactory.getProviderByName(options.provider)
@@ -52,6 +53,7 @@ class PaymentService {
         currency,
         metadata.region || "NG",
         isCrypto,
+        method,
       );
     const providerName = provider.constructor.name.replace("Provider", "")
       .toLowerCase();

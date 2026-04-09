@@ -14,10 +14,10 @@ const GreyProvider = require(
 const logger = require("../../utils/logger");
 
 class PaymentFactory {
-  /**
+   /**
    * Get provider based on currency, region and options
    */
-  static getProvider(currency, region = "NG", isCrypto = false) {
+  static getProvider(currency, region = "NG", isCrypto = false, method = "card") {
     if (!currency) {
       console.warn("[PaymentFactory] Missing currency, defaulting to NGN for provider selection");
       return new PaystackProvider();
@@ -56,10 +56,17 @@ class PaymentFactory {
       return new PaystackProvider();
     }
 
-    // Use Grey for core USD, EUR, GBP accounts (Manual / Direct)
+    // Use Grey for core USD, EUR, GBP manual bank transfers
+    // Automated checkouts (Card) should still use Fincra or Paystack
     if (["USD", "EUR", "GBP"].includes(upCurrency)) {
-      logger.info(`PaymentFactory: Selecting Grey provider for ${upCurrency}`);
-      return new GreyProvider();
+      if (method === "bank_transfer" || method === "manual") {
+        logger.info(`PaymentFactory: Selecting Grey provider for ${upCurrency} ${method}`);
+        return new GreyProvider();
+      }
+      
+      // Card / Checkout flow for USD/EUR/GBP
+      logger.info(`PaymentFactory: Selecting Fincra for ${upCurrency} ${method}`);
+      return new FincraProvider();
     }
 
     if (

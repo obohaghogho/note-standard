@@ -109,6 +109,7 @@ async function createCardDeposit(
     currency,
     {
       type: toCurrency && toCurrency !== currency ? "Digital Assets Purchase" : "DEPOSIT",
+      method: "card",
       userPlan,
       idempotencyKey,
       targetCurrency: toCurrency,
