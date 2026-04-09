@@ -17,6 +17,15 @@ class WebhookSignatureService {
    */
   static MAX_EVENT_AGE_SECONDS = 300; // 5 minutes
 
+  static verifySendGrid(headers, body) {
+    const secret = process.env.SENDGRID_INBOUND_PARSE_SECRET;
+    if (!secret) {
+      logger.warn(
+        "[SignatureService] SENDGRID_INBOUND_PARSE_SECRET missing. Skipping verification."
+      );
+      return process.env.NODE_ENV !== "production";
+    }
+
     const incomingSecret =
       headers["x-twilio-email-event-webhook-signature"] ||
       headers["x-sendgrid-secret"];
