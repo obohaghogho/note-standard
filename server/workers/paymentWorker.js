@@ -21,9 +21,8 @@ if (env.REDIS_URL) {
  *
  * Processes queued payment events from BullMQ:
  * - process-grey-webhook: Direct Grey API callbacks
- * - process-brevo-webhook: High-confidence Brevo email matches
- * - process-brevo-unmatched: Low-confidence matches → unmatched queue
- * - process-email-webhook: Legacy email handler
+ * - process-sendgrid-webhook: High-confidence SendGrid email matches
+ * - process-sendgrid-unmatched: Low-confidence matches → unmatched queue
  *
  * All jobs follow idempotency rules and log results.
  */
@@ -47,7 +46,7 @@ worker = new Worker(
         const { data: existing } = await supabase
           .from("webhook_logs")
           .select("id, processed")
-          .eq("provider", provider === "grey" ? "brevo" : provider)
+          .eq("provider", provider === "grey" ? "sendgrid" : provider)
           .eq("unique_transaction_id", txId)
           .neq("id", logId || "00000000-0000-0000-0000-000000000000")
           .maybeSingle();
@@ -62,8 +61,8 @@ worker = new Worker(
 
       // ─── 2. Route by Job Type ──────────────────────────────
 
-      // Handle unmatched/low-confidence Brevo emails
-      if (job.name === "process-brevo-unmatched") {
+      // Handle unmatched/low-confidence SendGrid emails
+      if (job.name === "process-sendgrid-unmatched" || job.name === "process-brevo-unmatched") {
         logger.info(
           `[PaymentWorker] Low-confidence match (${event.confidence}%). Moving to unmatched queue.`
         );
@@ -79,7 +78,7 @@ worker = new Worker(
             job_id: job.id,
             confidence: event.confidence,
             reference: event.reference,
-            source: "brevo_email",
+            source: "sendgrid_email",
           },
         });
 
@@ -123,8 +122,9 @@ worker = new Worker(
         return { status: "unmatched" };
       }
 
-      // ─── 4. For Brevo emails: Validate against pending payment ─
+      // ─── 4. For SendGrid emails: Validate against pending payment ─
       if (
+        job.name === "process-sendgrid-webhook" ||
         job.name === "process-brevo-webhook" ||
         job.name === "process-email-webhook"
       ) {
@@ -209,7 +209,7 @@ worker = new Worker(
             .from("payments")
             .update({
               sender_name: event.sender,
-              verification_source: "brevo_email",
+              verification_source: "sendgrid_email",
             })
             .eq("id", pendingPayment.id)
             .catch(() => {});
@@ -266,8 +266,8 @@ worker = new Worker(
           .from("payments")
           .update({
             verification_source:
-              job.name === "process-brevo-webhook"
-                ? "brevo_email"
+              job.name === "process-sendgrid-webhook" || job.name === "process-brevo-webhook"
+                ? "sendgrid_email"
                 : "webhook",
             verified_at: new Date().toISOString(),
           })

@@ -15,6 +15,8 @@ const depositService = require("../services/depositService");
 const paymentService = require("../services/payment/paymentService");
 const supabase = require("../config/database");
 const rateLimit = require("express-rate-limit");
+const multer = require("multer");
+const upload = multer(); // For parsing multipart/form-data from SendGrid
 
 // Rate limiter for webhook endpoints (generous but protective)
 const webhookLimiter = rateLimit({
@@ -35,23 +37,10 @@ const webhookLimiter = rateLimit({
 router.post("/paystack", webhookController.handlePaystack);
 
 /**
- * POST /webhooks/brevo
- * Brevo Inbound Parse - receives Grey email notifications
- * This is the PRIMARY automated Grey payment verification path
- */
-router.post("/brevo", webhookLimiter, webhookController.handleBrevo);
-
-/**
- * POST /webhooks/grey
+ * POST /api/webhooks/grey
  * Direct Grey webhook (for future API support)
  */
 router.post("/grey", webhookLimiter, webhookController.handleGrey);
-
-/**
- * POST /webhooks/email
- * Legacy email webhook (routes to Brevo handler)
- */
-router.post("/email", webhookLimiter, webhookController.handleEmail);
 
 /**
  * POST /webhooks/flutterwave

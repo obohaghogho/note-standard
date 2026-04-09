@@ -11,6 +11,10 @@ const { transactionLimiter } = require("../middleware/rateLimiter");
  * Unified payment endpoints for both Paystack and Grey flows.
  */
 
+const multer = require("multer");
+const upload = multer();
+const webhookController = require("../controllers/payment/webhookController");
+
 // ─── Initialize Payment ──────────────────────────────────────
 // Creates a payment record and returns either:
 // - Paystack checkout URL (for card payments)
@@ -20,6 +24,14 @@ router.post(
   requireAuth,
   transactionLimiter,
   paymentController.initialize
+);
+
+// ─── SendGrid Inbound Parse (Grey Payment Emails) ────────────
+// Receives parsed email data from SendGrid Inbound Parse
+router.post(
+  "/sendgrid-inbound",
+  upload.none(),
+  webhookController.handleSendGridInbound
 );
 
 // ─── Verify Paystack Payment ─────────────────────────────────

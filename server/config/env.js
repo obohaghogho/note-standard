@@ -36,7 +36,8 @@ const criticalVars = [
   "SUPABASE_SERVICE_ROLE_KEY",
   "JWT_SECRET",
   "PAYSTACK_SECRET_KEY",
-  "FINCRA_SECRET_KEY"
+  "FINCRA_SECRET_KEY",
+  "SENDGRID_API_KEY"
 ];
 validateEnv(criticalVars, isProd);
 
@@ -48,6 +49,11 @@ module.exports = {
   SUPABASE_URL: process.env.SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
   SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY,
+  
+  // Email (SendGrid)
+  SENDGRID_API_KEY: process.env.SENDGRID_API_KEY,
+  SENDGRID_INBOUND_PARSE_SECRET: process.env.SENDGRID_INBOUND_PARSE_SECRET,
+  EMAIL_FROM: process.env.EMAIL_FROM || "noreply@notestandard.com",
   
   // Cache
   REDIS_URL: process.env.REDIS_URL || "",

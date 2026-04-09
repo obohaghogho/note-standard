@@ -101,49 +101,32 @@ exports.handleGrey = async (req, res) => {
       logger.warn("⚠️ Redis disabled: Skipping queue for grey webhook");
     }
 
-    return res.status(200).json({ received: true });
-  } catch (error) {
-    logger.error("[Webhook] Grey hit crash", { error: error.message });
     return res.status(200).json({ received: true, error: error.message });
   }
 };
 
-// ─── Brevo Inbound Parse (Grey Email Notifications) ──────────
+// ─── SendGrid Inbound Parse (Grey Email Notifications) ───────
 /**
- * POST /webhooks/brevo
+ * POST /api/payment/sendgrid-inbound
  *
- * Handles Brevo Inbound Parse webhooks. These are forwarded emails
- * from Grey's notification system. The flow:
- *
- * 1. Grey sends email notification for incoming bank transfer
- * 2. Brevo Inbound Parse forwards the email to this endpoint
- * 3. We parse the email to extract: amount, reference, sender
- * 4. We match against pending payments in our DB
- * 5. If matched & validated → credit user wallet automatically
- * 6. If unmatched → queue for admin review
+ * Handles SendGrid Inbound Parse webhooks. These are forwarded emails
+ * from Grey's notification system.
  */
-exports.handleBrevo = async (req, res) => {
-  // Always respond 200 immediately to prevent Brevo retries
+exports.handleSendGridInbound = async (req, res) => {
+  // Always respond 200 immediately to prevent SendGrid retries
   res.status(200).json({ received: true });
 
   try {
-    logger.info("[Webhook] Brevo Inbound Parse received");
+    logger.info("[Webhook] SendGrid Inbound Parse received");
 
     // 1. Verify authenticity
-    if (
-      !WebhookSignatureService.verifyBrevo(
-        req.headers,
-        req.body,
-        req.query || {}
-      )
-    ) {
+    if (!WebhookSignatureService.verifySendGrid(req.headers, req.body)) {
       const ip =
         req.headers["x-forwarded-for"] || req.socket.remoteAddress || "";
-      logger.warn("[Webhook] Unauthorized Brevo attempt from IP:", ip);
+      logger.warn("[Webhook] Unauthorized SendGrid attempt from IP:", ip);
 
-      // Log suspicious attempt
       await supabase.from("webhook_logs").insert({
-        provider: "brevo",
+        provider: "sendgrid",
         payload: { note: "Unauthorized attempt", ip },
         headers: req.headers,
         reference: "unauthorized",
@@ -154,35 +137,32 @@ exports.handleBrevo = async (req, res) => {
       return;
     }
 
-    // 2. Parse the Brevo inbound email payload
-    const parsed = GreyEmailService.parseBrevoPayload(req.body);
+    // 2. Parse the SendGrid inbound email payload
+    const parsed = GreyEmailService.parseSendGridPayload(req.body);
 
-    logger.info("[Webhook] Brevo email parsed:", {
+    logger.info("[Webhook] SendGrid email parsed:", {
       amount: parsed.amount,
       currency: parsed.currency,
       reference: parsed.reference,
       sender: parsed.sender,
       confidence: parsed.confidence,
-      status: parsed.status,
     });
 
-    // 3. Generate idempotency key from Brevo message data
+    // 3. Generate idempotency key
     const idempotencyKey =
       parsed.transactionId ||
-      parsed.brevoMessageId ||
-      `brevo_${Date.now()}_${parsed.reference || "unknown"}`;
+      `sendgrid_${Date.now()}_${parsed.reference || "unknown"}`;
 
-    // 4. Log the webhook hit (with duplicate detection)
+    // 4. Log the webhook hit
     const { data: log, error: logError } = await supabase
       .from("webhook_logs")
       .insert({
-        provider: "brevo",
+        provider: "sendgrid",
         payload: req.body,
         headers: req.headers,
         reference: parsed.reference || "unknown",
         unique_transaction_id: idempotencyKey,
-        ip_address:
-          req.headers["x-forwarded-for"] || req.socket.remoteAddress,
+        ip_address: req.headers["x-forwarded-for"] || req.socket.remoteAddress,
       })
       .select("id")
       .single();
@@ -190,11 +170,11 @@ exports.handleBrevo = async (req, res) => {
     if (logError) {
       if (logError.code === "23505") {
         logger.warn(
-          `[Webhook] Duplicate Brevo email ${idempotencyKey} dropped.`
+          `[Webhook] Duplicate SendGrid email ${idempotencyKey} dropped.`
         );
         return;
       }
-      logger.error("[Webhook] Failed to log Brevo hit", {
+      logger.error("[Webhook] Failed to log SendGrid hit", {
         error: logError.message,
       });
     }
@@ -213,13 +193,11 @@ exports.handleBrevo = async (req, res) => {
     };
 
     // 6. Queue for processing
-    // High-confidence matches go through the normal payment flow.
-    // Low-confidence matches go to the unmatched queue for admin review.
     if (paymentQueue) {
       await paymentQueue.add(
         parsed.confidence >= 60
-          ? "process-brevo-webhook"
-          : "process-brevo-unmatched",
+          ? "process-sendgrid-webhook"
+          : "process-sendgrid-unmatched",
         {
           provider: "grey",
           event,
@@ -228,21 +206,24 @@ exports.handleBrevo = async (req, res) => {
         }
       );
       logger.info(
-        `[Webhook] Brevo email queued for processing (confidence: ${parsed.confidence}%)`
+        `[Webhook] SendGrid email queued (confidence: ${parsed.confidence}%)`
       );
     } else {
-      logger.warn("⚠️ Redis disabled: Skipping queue for brevo webhook");
+      logger.warn("⚠️ Redis disabled: Skipping queue for SendGrid webhook");
     }
   } catch (error) {
-    logger.error("[Webhook] Brevo processing crash:", {
+    logger.error("[Webhook] SendGrid processing crash:", {
       error: error.message,
       stack: error.stack,
     });
   }
 };
 
-// ─── Legacy Email Webhook (Backward Compatible) ──────────────
-exports.handleEmail = async (req, res) => {
-  // Route to Brevo handler since that's our current email provider
-  return exports.handleBrevo(req, res);
+  } catch (error) {
+    logger.error("[Webhook] SendGrid processing crash:", {
+      error: error.message,
+      stack: error.stack,
+    });
+  }
 };
+

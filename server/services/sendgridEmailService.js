@@ -1,75 +1,65 @@
-const axios = require("axios");
+const sgMail = require("@sendgrid/mail");
 const logger = require("../utils/logger");
 
 /**
- * Brevo Email Service
+ * SendGrid Email Service
  *
- * Handles transactional emails via Brevo API for:
+ * Handles transactional emails via SendGrid API for:
  * - Deposit submission confirmations
  * - Deposit approval/rejection notifications
  * - Grey payment instructions
  * - Payment expiration notifications
  * - Payment success receipts
  */
-class BrevoEmailService {
+class SendGridEmailService {
   constructor() {
-    this.apiKey = process.env.BREVO_API_KEY;
-    this.apiUrl = "https://api.brevo.com/v3/smtp/email";
-    this.sender = {
-      name: "Note Standard",
-      email: process.env.EMAIL_FROM || "noreply@notestandard.com",
-    };
+    this.apiKey = process.env.SENDGRID_API_KEY;
+    if (this.apiKey) {
+      sgMail.setApiKey(this.apiKey);
+    }
+    this.from = process.env.EMAIL_FROM || "noreply@notestandard.com";
+    this.senderName = "Note Standard";
   }
 
   /**
-   * Send an email via Brevo Transactional API
+   * Send an email via SendGrid
    * @param {Object} params
    * @param {string} params.to - Recipient email
    * @param {string} params.subject - Subject line
    * @param {string} params.htmlContent - HTML body
-   * @returns {boolean} Success status
+   * @returns {Promise<boolean>} Success status
    */
   async sendEmail({ to, subject, htmlContent }) {
     if (!this.apiKey) {
-      logger.warn("[BrevoEmailService] API Key missing. Skipping email.");
+      logger.warn("[SendGridEmailService] API Key missing. Skipping email.");
       return false;
     }
 
-    try {
-      const response = await axios.post(
-        this.apiUrl,
-        {
-          sender: this.sender,
-          to: [{ email: to }],
-          subject,
-          htmlContent,
-        },
-        {
-          headers: {
-            "api-key": this.apiKey,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+    const msg = {
+      to,
+      from: {
+        email: this.from,
+        name: this.senderName,
+      },
+      subject,
+      html: htmlContent,
+    };
 
-      logger.info(
-        `[BrevoEmailService] Email sent to ${to}: ${response.data.messageId}`
-      );
+    try {
+      await sgMail.send(msg);
+      logger.info(`[SendGridEmailService] Email sent to ${to}: ${subject}`);
       return true;
     } catch (error) {
       logger.error(
-        `[BrevoEmailService] Failed to send email to ${to}:`,
-        error.response?.data || error.message
+        `[SendGridEmailService] Failed to send email to ${to}:`,
+        error.response?.body || error.message
       );
       return false;
     }
   }
 
-  // ─── Email Templates ────────────────────────────────────────
+  // ─── Email Templates (Migrated from Brevo) ────────────────────
 
-  /**
-   * Deposit submission confirmation (user uploaded proof)
-   */
   async sendDepositSubmittedEmail(email, { amount, currency, reference }) {
     const subject = "Deposit Received - Pending Review";
     const htmlContent = this._wrapTemplate(`
@@ -88,9 +78,6 @@ class BrevoEmailService {
     return this.sendEmail({ to: email, subject, htmlContent });
   }
 
-  /**
-   * Deposit approved notification
-   */
   async sendDepositApprovedEmail(email, { amount, currency }) {
     const subject = "✅ Deposit Approved - Wallet Credited";
     const htmlContent = this._wrapTemplate(`
@@ -107,9 +94,6 @@ class BrevoEmailService {
     return this.sendEmail({ to: email, subject, htmlContent });
   }
 
-  /**
-   * Deposit rejected notification
-   */
   async sendDepositRejectedEmail(email, { amount, currency, reason }) {
     const subject = "Deposit Rejected";
     const htmlContent = this._wrapTemplate(`
@@ -123,9 +107,6 @@ class BrevoEmailService {
     return this.sendEmail({ to: email, subject, htmlContent });
   }
 
-  /**
-   * Grey payment instructions (sent when user selects bank transfer)
-   */
   async sendGreyPaymentInstructions(
     email,
     { amount, currency, reference, bankDetails, expiresAt }
@@ -175,9 +156,6 @@ class BrevoEmailService {
     return this.sendEmail({ to: email, subject, htmlContent });
   }
 
-  /**
-   * Payment expiration notification
-   */
   async sendPaymentExpiredNotification(email, { amount, currency, reference }) {
     const subject = "Payment Expired";
     const htmlContent = this._wrapTemplate(`
@@ -195,9 +173,6 @@ class BrevoEmailService {
     return this.sendEmail({ to: email, subject, htmlContent });
   }
 
-  /**
-   * Payment success receipt (auto-confirmed via Brevo email parsing)
-   */
   async sendPaymentAutoConfirmedEmail(
     email,
     { amount, currency, reference, verifiedVia }
@@ -224,13 +199,6 @@ class BrevoEmailService {
     return this.sendEmail({ to: email, subject, htmlContent });
   }
 
-  // ─── Template Wrapper ─────────────────────────────────────────
-
-  /**
-   * Wraps email content in a consistent branded template
-   * @param {string} body - Inner HTML content
-   * @returns {string} Full HTML email
-   */
   _wrapTemplate(body) {
     return `
     <!DOCTYPE html>
@@ -276,4 +244,4 @@ class BrevoEmailService {
   }
 }
 
-module.exports = new BrevoEmailService();
+module.exports = new SendGridEmailService();

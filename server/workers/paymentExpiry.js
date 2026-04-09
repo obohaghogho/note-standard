@@ -1,6 +1,6 @@
 const supabase = require("../config/database");
 const logger = require("../utils/logger");
-const brevoEmailService = require("../services/brevoEmailService");
+const sendgridEmailService = require("../services/sendgridEmailService");
 
 /**
  * Payment Expiry Worker
@@ -162,7 +162,7 @@ async function notifyExpiredPayment(reference) {
   if (!profile?.email) return;
 
   // Send email
-  await brevoEmailService.sendPaymentExpiredNotification(profile.email, {
+  await sendgridEmailService.sendPaymentExpiredNotification(profile.email, {
     amount: payment.amount,
     currency: payment.currency,
     reference,

@@ -11,7 +11,7 @@ const DOMPurify = createDOMPurify(window);
  * Parses incoming bank transfer notification emails from Grey to extract
  * payment details (amount, currency, reference, sender).
  *
- * Supports both Brevo Inbound Parse and raw email text formats.
+ * Supports both Brevo Inbound Parse, SendGrid Inbound Parse, and raw email text formats.
  *
  * Security:
  * - All input is sanitized via DOMPurify to prevent injection
@@ -19,6 +19,33 @@ const DOMPurify = createDOMPurify(window);
  * - Confidence scoring helps decide auto-process vs manual review
  */
 class GreyEmailService {
+  /**
+   * Parse a SendGrid Inbound Parse payload.
+   * SendGrid sends multipart/form-data with fields like:
+   * { text, html, subject, from, to, envelope }
+   * 
+   * @param {Object} body - Parsed form fields from SendGrid
+   * @returns {Object} Parsed payment data
+   */
+  static parseSendGridPayload(body) {
+    if (!body) {
+      logger.error("[GreyEmailService] Empty SendGrid payload");
+      return this._emptyResult("Empty payload");
+    }
+
+    const { text, html, subject, from } = body;
+    const fullText = `${subject || ""}\n${text || this._htmlToText(html)}`;
+
+    const result = this.parse(fullText);
+
+    // Extract sender from SendGrid's 'from' field if not found in text
+    if (from && result.sender === "Unknown Sender") {
+      result.sender = this._sanitizeField(from, 100);
+    }
+
+    return result;
+  }
+
   /**
    * Parse a Brevo Inbound Parse payload.
    *
@@ -37,46 +64,6 @@ class GreyEmailService {
    * @param {Object} brevoPayload - The raw Brevo inbound parse payload
    * @returns {Object} Parsed payment data
    */
-  static parseBrevoPayload(brevoPayload) {
-    if (!brevoPayload) {
-      logger.error("[GreyEmailService] Empty Brevo payload");
-      return this._emptyResult("Empty payload");
-    }
-
-    // Brevo inbound parse wraps emails in an Items array
-    const items = brevoPayload.Items || brevoPayload.items || [];
-    const email = items[0] || brevoPayload;
-
-    // Extract text content (prefer plain text over HTML)
-    const subject = email.Subject || email.subject || "";
-    const textBody =
-      email.RawTextBody ||
-      email.rawTextBody ||
-      email.text ||
-      email.plain ||
-      "";
-    const htmlBody =
-      email.RawHtmlBody || email.rawHtmlBody || email.html || "";
-
-    // Combine subject + body for parsing (subject often contains key info)
-    const fullText = `${subject}\n${textBody || this._htmlToText(htmlBody)}`;
-
-    const result = this.parse(fullText);
-
-    // Also try to extract sender from Brevo's structured fields
-    const sender = email.Sender || email.sender || {};
-    if (sender.Name && result.sender === "Unknown Sender") {
-      result.sender = this._sanitizeField(sender.Name, 100);
-    }
-
-    // Extract Brevo message ID for idempotency
-    const uuids = email.Uuid || email.uuid || [];
-    if (uuids.length > 0 && !result.transactionId) {
-      result.brevoMessageId = uuids[0];
-    }
-
-    return result;
-  }
 
   /**
    * Parse raw email text from Grey to extract transaction data.

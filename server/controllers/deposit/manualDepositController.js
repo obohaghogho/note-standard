@@ -1,6 +1,6 @@
 const path = require("path");
 const supabase = require(path.join(__dirname, "..", "..", "config", "database"));
-const brevoEmailService = require("../../services/brevoEmailService");
+const sendgridEmailService = require("../../services/sendgridEmailService");
 const logger = require("../../utils/logger");
 const { createClient } = require("@supabase/supabase-js");
 
@@ -94,7 +94,7 @@ class ManualDepositController {
       if (error) throw error;
 
       // Send confirmation email
-      await brevoEmailService.sendDepositSubmittedEmail(req.user.email, {
+      await sendgridEmailService.sendDepositSubmittedEmail(req.user.email, {
         amount,
         currency: currency.toUpperCase(),
         reference
@@ -228,7 +228,7 @@ class ManualDepositController {
       if (balError) throw balError;
 
       // 4. Send Approval Email
-      await brevoEmailService.sendDepositApprovedEmail(deposit.profile.email, {
+      await sendgridEmailService.sendDepositApprovedEmail(deposit.profile.email, {
         amount: deposit.amount,
         currency: deposit.currency
       });
@@ -273,7 +273,7 @@ class ManualDepositController {
         .eq("id", id);
 
       // Send Rejection Email
-      await brevoEmailService.sendDepositRejectedEmail(deposit.profile.email, {
+      await sendgridEmailService.sendDepositRejectedEmail(deposit.profile.email, {
         amount: deposit.amount,
         currency: deposit.currency,
         reason: adminNotes
