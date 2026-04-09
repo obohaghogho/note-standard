@@ -222,11 +222,3 @@ exports.handleSendGridInbound = async (req, res) => {
   }
 };
 
-  } catch (error) {
-    logger.error("[Webhook] SendGrid processing crash:", {
-      error: error.message,
-      stack: error.stack,
-    });
-  }
-};
-
