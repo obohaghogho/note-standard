@@ -84,7 +84,7 @@ const sendPushNotification = async (userId, payload) => {
     const pushPayload = JSON.stringify({
       title: payload.title,
       body: payload.message,
-      icon: "/logo192.png", // Default icon
+      icon: "/icon-192.png", // Default icon
       data: {
         url: payload.link,
         type: payload.type,

@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, ArrowLeft } from 'lucide-react';
 import { Button } from '../components/common/Button';
+import { useAuth } from '../context/AuthContext';
 import { Input } from '../components/common/Input';
 import { Card } from '../components/common/Card';
 import { supabase } from '../lib/supabase';
@@ -10,6 +11,7 @@ import { toast } from 'react-hot-toast';
 
 export const Login = () => {
     const navigate = useNavigate();
+    const { user, authReady } = useAuth();
     const [loading, setLoading] = React.useState(false);
     const [isAddingAccount, setIsAddingAccount] = React.useState(false);
     const [email, setEmail] = React.useState('');
@@ -21,6 +23,12 @@ export const Login = () => {
 
     // Ref to track if component is mounted (for StrictMode cleanup)
     const mountedRef = React.useRef(true);
+
+    React.useEffect(() => {
+        if (authReady && user && !isAddingAccount) {
+            navigate('/dashboard', { replace: true });
+        }
+    }, [authReady, user, isAddingAccount, navigate]);
 
     React.useEffect(() => {
         mountedRef.current = true;

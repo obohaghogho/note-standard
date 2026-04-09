@@ -166,8 +166,8 @@ class GreyProvider extends BaseProvider {
   verifyWebhookSignature(headers, body) {
     const WebhookSignatureService = require("../WebhookSignatureService");
 
-    // First try Brevo verification (primary path)
-    if (WebhookSignatureService.verifyBrevo(headers, body)) {
+    // Try SendGrid verification
+    if (WebhookSignatureService.verifySendGrid(headers, body)) {
       return true;
     }
 

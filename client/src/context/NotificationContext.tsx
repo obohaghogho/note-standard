@@ -65,30 +65,63 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         }
     }, [session]);
 
+    const urlBase64ToUint8Array = (base64String: string) => {
+        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding)
+            .replace(/-/g, '+')
+            .replace(/_/g, '/');
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) {
+            outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
+    };
+
     const subscribeToPush = useCallback(async () => {
         if (!session || pushSubscribeRef.current) return;
-        if (!('serviceWorker' in navigator && 'PushManager' in window)) return;
+        if (!('serviceWorker' in navigator && 'PushManager' in window)) {
+            console.warn('[Notifications] Push NOT supported on this browser');
+            return;
+        }
         
         pushSubscribeRef.current = true;
         try {
-            const registration = await navigator.serviceWorker.register('/sw.js');
-            const permission = await Notification.requestPermission();
+            const registration = await navigator.serviceWorker.ready;
+            
+            // Check for existing subscription first
+            let subscription = await registration.pushManager.getSubscription();
+            
+            if (!subscription) {
+                // Request permission if needed
+                const permission = await Notification.requestPermission();
+                if (permission !== 'granted') {
+                    console.warn('[Notifications] Permission denied');
+                    return;
+                }
 
-            if (permission === 'granted') {
-                const subscription = await registration.pushManager.subscribe({
+                const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+                if (!vapidKey) {
+                    console.error('[Notifications] Missing VITE_VAPID_PUBLIC_KEY');
+                    return;
+                }
+
+                subscription = await registration.pushManager.subscribe({
                     userVisibleOnly: true,
-                    applicationServerKey: import.meta.env.VITE_VAPID_PUBLIC_KEY
-                });
-
-                await fetch(`${API_URL}/api/notifications/subscribe`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${session.access_token}`
-                    },
-                    body: JSON.stringify({ subscription })
+                    applicationServerKey: urlBase64ToUint8Array(vapidKey)
                 });
             }
+
+            console.log('[Notifications] Syncing push subscription with backend...');
+            await fetch(`${API_URL}/api/notifications/subscribe`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`
+                },
+                body: JSON.stringify({ subscription })
+            });
+
         } catch (err) {
             console.error('[Notifications] Push subscription failed:', err);
         } finally {

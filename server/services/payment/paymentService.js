@@ -592,7 +592,12 @@ class PaymentService {
         body.data?.status === "successful"
       ) {
         // RE-VERIFY with gateway API before finalizing (Industry Standard)
-        result = await this.verifyPaymentStatus(event.reference);
+        // EXCEPT for Grey which has no API and relies entirely on our own parsing logic
+        if (providerName === "grey") {
+          result = await this.finalizeTransaction(event.reference, event);
+        } else {
+          result = await this.verifyPaymentStatus(event.reference);
+        }
       } else if (
         event.status === "failed" ||
         body.event === "charge.failed"
@@ -632,7 +637,7 @@ class PaymentService {
       return null; // Return null so verifyPaymentStatus can handle it
     }
 
-    console.log(`[Finalize] Found transaction ${tx.id} with status ${tx.status}`);
+    logger.info(`Found transaction ${tx.id} with status ${tx.status}`);
 
     // 2. IDEMPOTENCY CHECK (using both tables for safety)
     const { data: payRecord } = await supabase
@@ -770,7 +775,7 @@ class PaymentService {
           completed_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
-        .eq("reference", reference);
+        .eq("reference", tx.reference_id);
 
       console.log("STEP 4: Wallet credited and payment marked successfully");
     } else {

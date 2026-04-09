@@ -32,47 +32,64 @@ self.addEventListener('fetch', () => {
 
 // Handle Push Notifications
 self.addEventListener('push', (event) => {
-    if (!event.data) return;
-
-    try {
-        const data = event.data.json();
-        const title = data.title || 'New Notification';
-        const options = {
-            body: data.body || '',
-            icon: data.icon || '/logo192.png',
-            badge: '/logo192.png',
-            data: data.data || {}
-        };
-
-        event.waitUntil(self.registration.showNotification(title, options));
-    } catch (e) {
-        console.error('Error in push event:', e);
-        // Fallback for non-JSON push data
-        const title = 'New Notification';
-        const options = {
-            body: event.data.text(),
-            icon: '/logo192.png'
-        };
-        event.waitUntil(self.registration.showNotification(title, options));
+    console.log('[SW] Push Received');
+    
+    let data = {};
+    if (event.data) {
+        try {
+            data = event.data.json();
+        } catch (e) {
+            console.warn('[SW] Push data is not JSON:', event.data.text());
+            data = { title: 'New Notification', body: event.data.text() };
+        }
     }
+
+    const title = data.title || 'NoteStandard Notification';
+    const options = {
+        body: data.body || 'You have a new update.',
+        icon: data.icon || '/icon-192.png',
+        badge: '/icon-192.png',
+        vibrate: [100, 50, 100],
+        data: {
+            url: data.data?.url || data.url || '/dashboard',
+            type: data.data?.type || data.type || 'general'
+        },
+        actions: [
+            { action: 'open', title: 'View Now' },
+            { action: 'close', title: 'Dismiss' }
+        ],
+        tag: data.tag || 'notestandard-push', // Prevents duplicates
+        renotify: true
+    };
+
+    event.waitUntil(self.registration.showNotification(title, options));
 });
 
 // Handle Notification Clicks
 self.addEventListener('notificationclick', (event) => {
+    console.log('[SW] Notification Clicked:', event.action);
     event.notification.close();
 
+    if (event.action === 'close') return;
+
     const data = event.notification.data;
-    const urlToOpen = data && data.url ? data.url : '/dashboard';
+    const urlToOpen = new URL(data?.url || '/dashboard', self.location.origin).href;
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-            // Check if there is already a window/tab open with the target URL
+            // 1. Try to find an existing tab with the same URL or at least one on the same origin
             for (const client of windowClients) {
-                if ('focus' in client) {
+                if (client.url === urlToOpen && 'focus' in client) {
                     return client.focus();
                 }
             }
-            // If no window/tab is open, open a new one
+            // 2. If no exact match, focus any tab on our origin and navigate it
+            for (const client of windowClients) {
+                if ('focus' in client && 'navigate' in client) {
+                    return client.focus().then(() => client.navigate(urlToOpen));
+                }
+            }
+            // 3. If no window/tab is open, open a new one
             if (clients.openWindow) {
                 return clients.openWindow(urlToOpen);
             }

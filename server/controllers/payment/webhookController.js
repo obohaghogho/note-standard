@@ -4,6 +4,7 @@ const WebhookSignatureService = require("../../services/payment/WebhookSignature
 const { paymentQueue } = require("../../services/payment/paymentQueue");
 const supabase = require("../../config/database");
 const GreyEmailService = require("../../services/payment/GreyEmailService");
+const paymentService = require("../../services/payment/paymentService");
 
 /**
  * Unified Webhook Controller
@@ -196,7 +197,7 @@ exports.handleSendGridInbound = async (req, res) => {
     };
 
     // 6. Queue for processing
-    if (paymentQueue) {
+    if (paymentQueue && paymentQueue.add) {
       await paymentQueue.add(
         parsed.confidence >= 60
           ? "process-sendgrid-webhook"
@@ -212,7 +213,50 @@ exports.handleSendGridInbound = async (req, res) => {
         `[Webhook] SendGrid email queued (confidence: ${parsed.confidence}%)`
       );
     } else {
-      logger.warn("⚠️ Redis disabled: Skipping queue for SendGrid webhook");
+      logger.info("[Webhook] Redis disabled: Falling back to synchronous processing for SendGrid webhook", {
+        reference: event.reference,
+        confidence: parsed.confidence
+      });
+      
+      // Synchronous fallback (Directly call the logic that the worker would use)
+      if (parsed.confidence >= 60) {
+        try {
+          const result = await paymentService.executeWebhookAction(event, parsed, "grey");
+          logger.info("[Webhook] SendGrid email processed synchronously", { result });
+          
+          // Mark as processed in DB
+          if (log?.id) {
+            await supabase
+              .from("webhook_logs")
+              .update({ 
+                processed: true, 
+                unique_transaction_id: idempotencyKey 
+              })
+              .eq("id", log.id);
+          }
+        } catch (syncErr) {
+          logger.error("[Webhook] Synchronous processing failed", { error: syncErr.message });
+          if (log?.id) {
+            await supabase
+              .from("webhook_logs")
+              .update({ processing_error: syncErr.message })
+              .eq("id", log.id);
+          }
+        }
+      } else {
+        logger.warn("[Webhook] Confidence too low for synchronous auto-confirm. Moving to unmatched.");
+        await supabase.from("unmatched_payments").insert({
+          amount: event.amount,
+          currency: event.currency,
+          sender: event.sender,
+          raw_text: event.raw,
+          metadata: {
+            provider: "grey",
+            confidence: event.confidence,
+            source: "sendgrid_email_sync",
+          },
+        });
+      }
     }
   } catch (error) {
     logger.error("[Webhook] SendGrid processing crash:", {
