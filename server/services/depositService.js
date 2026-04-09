@@ -142,17 +142,16 @@ async function createBankDeposit(
   const allBankDetails =
     await commissionService.getSetting("bank_deposit_details") || {
       NGN: {
-        bankName: "Paystack-Titan MFB",
-        accountNumber: "9901234567",
+        bankName: "Manual Transfer",
+        accountNumber: "Contact Support",
         accountName: "NoteStandard Admin",
         note: "Include reference in transfer description",
       },
       USD: {
-        bankName: "Chase Bank",
-        accountNumber: "9876543210",
-        routingNumber: "021000021",
+        bankName: "Manual Transfer (USD)",
+        accountNumber: "Pending Initialization",
         accountName: "NoteStandard Inc",
-        note: "Include reference in memo",
+        note: "Please wait for account details to load",
       },
     };
 
@@ -301,13 +300,22 @@ async function createBankDeposit(
       },
       {
         isCrypto: false,
-        manualReview: upCurrency !== "NGN", // Real-time for NGN via webhooks
+        manualReview: true, // Standard for manual Grey transfers
       },
     );
+
+    // CRITICAL: If the provider returned static instructions (Grey), use them
+    if (payment && payment.instructions) {
+      liveDetails = {
+        bankName: payment.instructions.bank_name,
+        accountNumber: payment.instructions.account_number,
+        accountName: payment.instructions.account_name,
+        routingNumber: payment.instructions.swift_code || payment.instructions.iban, // Map swift/iban for international
+        note: payment.instructions.additional_info || "Include reference in transfer narration",
+      };
+    }
   } catch (payErr) {
     logger.error(`[DepositService] Payment initialization failed, falling back to manual record: ${payErr.message}`);
-    // Fallback: Create a manual record or at least provide a dummy reference if initialization fails
-    // This allows the user to still see bank details.
     payment = {
       reference: idempotencyKey || `manual_${uuidv4().substring(0, 8)}`,
       provider: "manual"
@@ -320,8 +328,8 @@ async function createBankDeposit(
     currency,
     bankDetails: {
       ...liveDetails,
-      accountName: liveDetails.accountName + (upCurrency !== "NGN" ? " / " + payment.reference : ""),
-      reference: payment.reference,
+      accountName: liveDetails.accountName + (upCurrency !== "NGN" ? " / " + (payment.provider_reference || payment.reference) : ""),
+      reference: payment.provider_reference || payment.reference,
     },
     expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   };

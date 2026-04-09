@@ -16,7 +16,13 @@ const supabase = (supabaseUrl && supabaseServiceKey)
   ? createClient(supabaseUrl, supabaseServiceKey)
   : { 
       from: () => ({ 
-        select: () => ({ eq: () => ({ maybeSingle: () => ({ data: null, error: new Error('Supabase not initialized') }) }) }) 
+        select: () => ({ 
+          eq: () => ({ 
+            single: () => ({ data: null, error: new Error('Supabase not initialized') }),
+            maybeSingle: () => ({ data: null, error: new Error('Supabase not initialized') }) 
+          }),
+          maybeSingle: () => ({ data: null, error: new Error('Supabase not initialized') })
+        }) 
       }) 
     }; 
 

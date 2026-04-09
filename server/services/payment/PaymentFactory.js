@@ -56,10 +56,14 @@ class PaymentFactory {
       return new PaystackProvider();
     }
 
+    // Use Grey for core USD, EUR, GBP accounts (Manual / Direct)
+    if (["USD", "EUR", "GBP"].includes(upCurrency)) {
+      logger.info(`PaymentFactory: Selecting Grey provider for ${upCurrency}`);
+      return new GreyProvider();
+    }
+
     if (
       [
-        "GBP",
-        "EUR",
         "JPY",
         "KES",
         "GHS",
@@ -70,10 +74,9 @@ class PaymentFactory {
         "XOF",
         "EGP",
         "CAD",
-        "USD",
       ].includes(upCurrency)
     ) {
-      // Use Fincra for all cross-border fiat since Paystack test account rejects them
+      // Use Fincra for other cross-border fiat since Paystack test account rejects them
       return new FincraProvider();
     }
 

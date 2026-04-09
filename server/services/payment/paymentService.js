@@ -396,6 +396,7 @@ class PaymentService {
       checkoutUrl: initData.checkoutUrl || null,
       paymentUrl: initData.paymentUrl || initData.checkoutUrl || null,
       payAddress: initData.payAddress || null,
+      instructions: initData.instructions || null, // For manual providers like Grey
       reference: reference,
       provider: providerName,
       provider_reference: initData.providerReference || null
