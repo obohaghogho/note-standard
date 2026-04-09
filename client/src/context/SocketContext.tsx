@@ -62,7 +62,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             withCredentials: true,
             // IMPORTANT: start with polling, then upgrade.
             // This avoids "WebSocket closed before established" errors.
-            transports: ['polling', 'websocket'],
+            transports: ['websocket', 'polling'],
             reconnection: true,
             reconnectionAttempts: MAX_RETRIES,
             reconnectionDelay: 2000,

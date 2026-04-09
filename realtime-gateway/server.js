@@ -17,12 +17,39 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { ExpressPeerServer } = require('peer');
 const { authMiddleware } = require('./auth');
+const cors = require('cors');
 require('dotenv').config();
+
+// Global Error Handlers for Stability
+process.on('uncaughtException', (err) => {
+  console.error('[Process] Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Process] Unhandled Rejection at:', promise, 'reason:', reason);
+});
 
 // ═══════════════════════════════════════════════════════════════
 //  1. SOCKET.IO GATEWAY (Port 5000 - Chat, Signaling, Wallet)
 // ═══════════════════════════════════════════════════════════════
 const app = express();
+
+// ─── Express Middleware ──────────────────────────────────────────
+// Enable CORS at the Express level to catch errors and polling pre-flights
+app.use(cors({
+  origin: [
+    'https://notestandard.com',
+    'https://www.notestandard.com',
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:5173',
+  ],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  credentials: true,
+}));
+
+app.use(express.json());
+
 const httpServer = http.createServer(app);
 
 const io = new Server(httpServer, {
@@ -37,9 +64,11 @@ const io = new Server(httpServer, {
     methods: ['GET', 'POST'],
     credentials: true,
   },
-  transports: ['polling', 'websocket'],
+  // IMPORTANT: Prioritize websocket for Render stability
+  transports: ['websocket', 'polling'],
   pingTimeout: 60000,
   pingInterval: 25000,
+  allowEIO3: true, // Compatibility
 });
 
 io.use(authMiddleware);
@@ -68,7 +97,7 @@ io.on('connection', (socket) => {
 });
 
 // ─── HTTP Bridge & Health (on main port) ────────────────────────
-app.use(express.json());
+// Removed redundant app.use(express.json()) as it's defined above
 
 app.post('/internal/emit', (req, res) => {
   const { event, data } = req.body;
@@ -115,7 +144,7 @@ peerHandler.on('connection', (client) => {
 const PORT = process.env.PORT || 5000;
 const PEER_PORT = process.env.PEER_PORT || 9000;
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`[Gateway] ✓ Socket.IO active on port ${PORT}`);
 });
 
