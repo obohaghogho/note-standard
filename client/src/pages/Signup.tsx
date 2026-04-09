@@ -142,13 +142,13 @@ export const Signup = () => {
 
 
     return (
-        <div className="min-h-[100dvh] flex items-center justify-center p-4 relative overflow-hidden bg-[#0a0a0a] w-full selection:bg-primary/30">
+        <div className="min-h-screen flex flex-col justify-start sm:justify-center items-center p-4 relative overflow-x-hidden overflow-y-auto bg-[#0a0a0a] w-full selection:bg-primary/30">
             {/* Rich Background Aesthetics */}
             <div className="absolute top-0 right-[-10%] w-[600px] h-[600px] bg-primary/20 rounded-full blur-[120px] -z-10 animate-pulse" />
             <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-[100px] -z-10" />
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] opacity-[0.03] -z-10" />
 
-            <div className="w-full max-w-md relative">
+            <div className="w-full max-w-md relative py-8 sm:py-12">
                 <Link to="/" className="inline-flex items-center text-gray-500 hover:text-white mb-8 transition-all group">
                     <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center mr-3 group-hover:bg-primary/20 group-hover:text-primary transition-all">
                         <ArrowLeft className="w-4 h-4" />
@@ -321,6 +321,16 @@ export const Signup = () => {
                                             </span>
                                         </label>
                                     </div>
+
+                                    {/* reCAPTCHA Integration */}
+                                    <div className="flex justify-center pt-2 overflow-hidden rounded-xl">
+                                        <ReCAPTCHA
+                                            ref={recaptchaRef}
+                                            theme="dark"
+                                            sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || ""}
+                                            onChange={(token) => setCaptchaToken(token)}
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
@@ -342,7 +352,7 @@ export const Signup = () => {
                                     fullWidth 
                                     className="h-12 text-sm font-bold rounded-xl active:scale-95 transition-all shadow-lg shadow-primary/20"
                                     loading={loading}
-                                    disabled={loading || (step === 'security' && !termsAccepted) || step === 'success'}
+                                    disabled={loading || (step === 'security' && (!termsAccepted || !captchaToken)) || step === 'success'}
                                 >
                                     {loading ? (
                                         <div className="flex items-center gap-2">
