@@ -36,8 +36,7 @@ const criticalVars = [
   "SUPABASE_SERVICE_ROLE_KEY",
   "JWT_SECRET",
   "PAYSTACK_SECRET_KEY",
-  "FINCRA_SECRET_KEY",
-  "SENDGRID_API_KEY"
+  "FINCRA_SECRET_KEY"
 ];
 validateEnv(criticalVars, isProd);
 
