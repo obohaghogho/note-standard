@@ -123,7 +123,7 @@ exports.handleSendGridInbound = async (req, res) => {
     logger.info("[Webhook] SendGrid Inbound Parse received");
 
     // 1. Verify authenticity
-    if (!WebhookSignatureService.verifySendGrid(req.headers, req.body)) {
+    if (!WebhookSignatureService.verifySendGrid(req.headers, req.body, req.query)) {
       const ip =
         req.headers["x-forwarded-for"] || req.socket.remoteAddress || "";
       logger.warn("[Webhook] Unauthorized SendGrid attempt from IP:", ip);

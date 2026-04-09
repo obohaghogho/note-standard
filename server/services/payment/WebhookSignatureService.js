@@ -8,7 +8,6 @@ const logger = require("../../utils/logger");
  * Security features:
  * - HMAC-based signature verification
  * - Timestamp validation to prevent replay attacks
- * - IP allowlist support for Brevo
  */
 class WebhookSignatureService {
   /**
@@ -17,7 +16,7 @@ class WebhookSignatureService {
    */
   static MAX_EVENT_AGE_SECONDS = 300; // 5 minutes
 
-  static verifySendGrid(headers, body) {
+  static verifySendGrid(headers, body, query = {}) {
     const secret = process.env.SENDGRID_INBOUND_PARSE_SECRET;
     if (!secret) {
       logger.warn(
@@ -27,8 +26,11 @@ class WebhookSignatureService {
     }
 
     const incomingSecret =
+      query.secret ||
       headers["x-twilio-email-event-webhook-signature"] ||
-      headers["x-sendgrid-secret"];
+      headers["x-sendgrid-secret"] ||
+      body?.secret;
+
     return incomingSecret === secret;
   }
 
