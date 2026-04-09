@@ -101,6 +101,9 @@ exports.handleGrey = async (req, res) => {
       logger.warn("⚠️ Redis disabled: Skipping queue for grey webhook");
     }
 
+    return res.status(200).json({ received: true });
+  } catch (error) {
+    logger.error("[Webhook] Grey hit crash", { error: error.message });
     return res.status(200).json({ received: true, error: error.message });
   }
 };
