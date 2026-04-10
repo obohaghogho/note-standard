@@ -235,7 +235,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 scheduleReconnect();
             });
 
-            peer.on('error', (err: any) => {
+            peer.on('error', (err: unknown) => {
                 const error = err as { type: string };
                 console.error('[PeerJS] Error:', error.type, err);
                 if (error.type === 'unavailable-id') {
@@ -386,8 +386,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             {callState.status !== 'idle' && (
                 <CallOverlay 
                     callState={{
-                        type: callState.type,
-                        status: callState.status as any,
+                        status: callState.status as 'calling' | 'incoming' | 'connected',
                         connectedAt: callState.connectedAt
                     }}
                     localStream={localStream}

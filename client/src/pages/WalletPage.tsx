@@ -99,7 +99,7 @@ const WalletContent: React.FC = () => {
 
     // Fetch Rates & Calculate Total
     useEffect(() => {
-        const processExchangeRates = (exchangeRates: Record<string, any>) => {
+        const processExchangeRates = (exchangeRates: Record<string, number | Record<string, number>>) => {
             const usdRates: Record<string, number> = {};
             
             Object.keys(exchangeRates).forEach(curr => {
@@ -141,7 +141,7 @@ const WalletContent: React.FC = () => {
 
         // Socket.io Listener: Active Real-time Overwrite
         if (socket) {
-            socket.on('rates_updated', (newRates: any) => {
+            socket.on('rates_updated', (newRates: Record<string, number | Record<string, number>>) => {
                 console.log('[Socket] Rates updated in real-time');
                 processExchangeRates(newRates);
             });

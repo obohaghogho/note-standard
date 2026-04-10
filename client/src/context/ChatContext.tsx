@@ -612,16 +612,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const deleteMessage = async (messageId: string) => {
         if (!session || !activeConversationId) throw new Error('No session or active chat');
 
+        // Capture message for rollback
+        const currentMessages = messages[activeConversationId] || [];
+        const messageToRestore = currentMessages.find(m => m.id === messageId);
+        
+        if (!messageToRestore) return; // Already deleted or not found
+
         // Optimistic update
-        let deletedMessage: Message | undefined;
-        setMessages(prev => {
-            const current = prev[activeConversationId] || [];
-            deletedMessage = current.find(m => m.id === messageId);
-            return {
-                ...prev,
-                [activeConversationId]: current.filter(m => m.id !== messageId)
-            };
-        });
+        setMessages(prev => ({
+            ...prev,
+            [activeConversationId]: (prev[activeConversationId] || []).filter(m => m.id !== messageId)
+        }));
 
         // Update conversation last message optimistically
         setConversations(prev => prev.map(conv => {
@@ -643,14 +644,20 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }
         } catch (err) {
             // Rollback
-            if (deletedMessage) {
-                setMessages(prev => ({
+            setMessages(prev => {
+                const existing = prev[activeConversationId] || [];
+                if (existing.some(m => m.id === messageId)) return prev; // Already back somehow
+                
+                return {
                     ...prev,
-                    [activeConversationId]: [...(prev[activeConversationId] || []), deletedMessage!]
+                    [activeConversationId]: [...existing, messageToRestore]
                         .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-                }));
-            }
+                };
+            });
+            
             console.error('[Chat] Failed to delete message:', err);
+            // Show toast if possible, though context doesn't have it, ChatWindow docs show toast usage.
+            // We'll rely on the caller to handle the error or toast from there.
             throw err;
         }
     };

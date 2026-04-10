@@ -96,7 +96,7 @@ export const FeedNoteCard = ({ note, onCommentClick }: FeedNoteCardProps) => {
                             <div className="text-sm font-semibold text-white flex items-center gap-1">
                                 {note.owner?.username || 'Unknown User'}
                                 <UserBadge 
-                                    planTier={note.owner?.plan_tier?.toLowerCase() as any}
+                                    planTier={note.owner?.plan_tier?.toLowerCase() as 'free' | 'pro' | 'team' | 'business' | 'enterprise'}
                                     isVerified={note.owner?.is_verified}
                                 />
                             </div>

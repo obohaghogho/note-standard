@@ -92,7 +92,7 @@ class FincraProvider extends BaseProvider {
       // Add a specific hint if it's unauthorized, suggesting to check the key type/environment
       if (error.response?.status === 401 || error.message?.includes("401") || error.response?.data?.message?.includes("Unauthorized")) {
         throw new Error(
-          "Fincra authorization failed. Please verify that your FINCRA_SECRET_KEY is the correct API Secret Key (usually starts with 'sk_live_') and that it matches your FINCRA_BUSINESS_ID."
+          "Fincra authorization failed. Please verify that your FINCRA_SECRET_KEY is the correct API Secret Key and that it matches your FINCRA_BUSINESS_ID."
         );
       }
 

@@ -699,15 +699,15 @@ export async function deleteTeamMessage(teamId: string, messageId: string): Prom
     const { data: sessionData } = await supabase.auth.getSession();
     if (!sessionData.session) throw new Error('Not authenticated');
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('team_messages')
       .update({ is_deleted: true })
       .eq('id', messageId)
-      // RLS handles the permission check (sender or admin)
-      .eq('team_id', teamId);
+      .eq('team_id', teamId)
+      .select('id');
 
     if (error) throw error;
-    return true;
+    return !!(data && data.length > 0);
   });
 
   return result ?? false;

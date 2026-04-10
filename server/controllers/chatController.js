@@ -327,6 +327,7 @@ exports.getMessages = async (req, res) => {
             .from("messages")
             .select("*")
             .eq("conversation_id", conversationId)
+            .eq("is_deleted", false)
             .order("created_at", { ascending: false })
             .limit(parseInt(limit));
 
@@ -343,6 +344,7 @@ exports.getMessages = async (req, res) => {
         .from("messages")
         .select("*")
         .eq("conversation_id", conversationId)
+        .eq("is_deleted", false)
         .order("created_at", { ascending: false })
         .limit(parseInt(limit));
       if (error) throw error;
@@ -387,6 +389,7 @@ exports.searchMessages = async (req, res) => {
             .from("messages")
             .select("*")
             .eq("conversation_id", conversationId)
+            .eq("is_deleted", false)
             .ilike("content", `%${q}%`)
             .order("created_at", { ascending: false })
             .limit(100);
@@ -403,6 +406,7 @@ exports.searchMessages = async (req, res) => {
         .from("messages")
         .select("*")
         .eq("conversation_id", conversationId)
+        .eq("is_deleted", false)
         .ilike("content", `%${q}%`)
         .order("created_at", { ascending: false })
         .limit(100);

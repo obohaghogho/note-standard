@@ -208,8 +208,12 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
     if (!teamId) return;
     try {
       const success = await deleteTeamMessage(teamId, messageId);
-      if (success && isMounted.current) {
-        setMessages(prev => prev.filter(m => m.id !== messageId));
+      if (success) {
+        if (isMounted.current) {
+          setMessages(prev => prev.filter(m => m.id !== messageId));
+        }
+      } else {
+        toast.error('You do not have permission to delete this message');
       }
     } catch (err) {
       console.error('[TeamChat] Failed to delete message:', err);

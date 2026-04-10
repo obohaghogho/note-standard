@@ -31,7 +31,9 @@ export const DownloadPage: React.FC = () => {
   const [isInstallable, setIsInstallable] = useState(false);
   const [isIOSModalOpen, setIsIOSModalOpen] = useState(false);
 
-  const isIOS = typeof window !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+  const isIOS = typeof window !== 'undefined' && 
+    /iPad|iPhone|iPod/.test(navigator.userAgent) && 
+    !(window as Window & typeof globalThis & { MSStream?: unknown }).MSStream;
   const navigate = useNavigate();
 
   useEffect(() => {
