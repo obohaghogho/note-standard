@@ -8,8 +8,9 @@ class FincraProvider extends BaseProvider {
     this.secretKey = process.env.FINCRA_SECRET_KEY;
     this.publicKey = process.env.FINCRA_PUBLIC_KEY;
     
-    // Dynamically set baseUrl based on key pattern (test vs live)
-    const isTest = (this.secretKey && (this.secretKey.startsWith("sk_test_") || this.secretKey.startsWith("pk_test_"))) ||
+    // Dynamically set baseUrl based on key pattern (test vs live) or explicit env
+    const isTest = process.env.FINCRA_ENV === "sandbox" || 
+                   (this.secretKey && (this.secretKey.startsWith("sk_test_") || this.secretKey.startsWith("pk_test_"))) ||
                    (this.publicKey && this.publicKey.startsWith("pk_test_"));
     
     this.baseUrl = isTest ? "https://sandboxapi.fincra.com" : "https://api.fincra.com";
@@ -21,9 +22,9 @@ class FincraProvider extends BaseProvider {
       timeout: 15000, // 15s timeout
       headers: {
         "api-key": (this.secretKey || "").trim(),
-        "x-pub-key": (this.publicKey || "").trim(),
         "x-business-id": (process.env.FINCRA_BUSINESS_ID || "").trim(),
         "Content-Type": "application/json",
+        "accept": "application/json",
       },
     });
   }
@@ -87,8 +88,16 @@ class FincraProvider extends BaseProvider {
         "Fincra Init Error:",
         error.response?.data || error.message,
       );
+
+      // Add a specific hint if it's unauthorized, suggesting to check the key type/environment
+      if (error.response?.status === 401 || error.message?.includes("401") || error.response?.data?.message?.includes("Unauthorized")) {
+        throw new Error(
+          "Fincra authorization failed. Please verify that your FINCRA_SECRET_KEY is the correct API Secret Key (usually starts with 'sk_live_') and that it matches your FINCRA_BUSINESS_ID."
+        );
+      }
+
       throw new Error(
-        error.response?.data?.message || "Fincra initialization failed",
+        error.response?.data?.message || error.response?.data?.error || "Fincra initialization failed",
       );
     }
   }

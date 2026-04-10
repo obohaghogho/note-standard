@@ -68,11 +68,11 @@ exports.depositCard = async (req, res, next) => {
       return res.status(400).json({ error: error.message });
     }
 
-    // DEBUG: Return full error details to identifying the 500 cause
+    // DEBUG: Return full error details to identify the 500 cause
     res.status(500).json({
       error: error.message || "Internal Server Error",
       stack: process.env.NODE_ENV === "production" ? undefined : error.stack,
-      details: error.response?.data || error.details || error,
+      details: error.details || error.response?.data || error.message || error,
       location: "walletController.depositCard"
     });
   }
