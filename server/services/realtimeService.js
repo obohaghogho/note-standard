@@ -21,8 +21,8 @@ const emit = async (event, data) => {
     if (publisher && publisher.isOpen) {
       await publisher.publish('realtime:events', JSON.stringify({ event, data }));
     } else {
-      // Fallback: Direct HTTP call to gateway (not API server)
-      const gatewayUrl = process.env.REALTIME_GATEWAY_URL || 'https://realtime-gateway-gsb5.onrender.com';
+      // Fallback: Direct HTTP call to gateway (prefer environment variable)
+      const gatewayUrl = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
       await fetch(`${gatewayUrl}/internal/emit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

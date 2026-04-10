@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabaseSafe';
 import walletApi from '../api/walletApi';
 import type { Wallet, Transaction, InternalTransferRequest, WithdrawalRequest, CommissionSettings } from '@/types/wallet';
 import { useAuth } from './AuthContext';
+import { useSocket } from './SocketContext';
 import toast from 'react-hot-toast';
 
 export interface WalletContextValue {
@@ -21,6 +22,7 @@ export const WalletContext = createContext<WalletContextValue | null>(null);
 
 export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user, profile, authReady } = useAuth();
+    const { socket, connected } = useSocket();
     const [wallets, setWallets] = useState<Wallet[]>([]);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
@@ -142,6 +144,30 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             supabase.removeChannel(txChannel);
         };
     }, [user, fetchData]);
+
+    // Socket.io Real-time
+    useEffect(() => {
+        if (!socket || !connected) return;
+
+        const onBalanceUpdated = (data: any) => {
+            console.log('[WalletContext] Balance update via Socket:', data);
+            fetchData();
+        };
+
+        const onNotification = (data: any) => {
+            if (data.type === 'payment_success' || data.type === 'wallet_update') {
+                fetchData();
+            }
+        };
+
+        socket.on('balance_updated', onBalanceUpdated);
+        socket.on('notification', onNotification);
+
+        return () => {
+            socket.off('balance_updated', onBalanceUpdated);
+            socket.off('notification', onNotification);
+        };
+    }, [socket, connected, fetchData]);
 
     const createWallet = async (currency: string, network: string = 'native') => {
         try {

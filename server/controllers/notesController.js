@@ -136,6 +136,13 @@ const updateNote = async (req, res) => {
             }`,
             link: `/notes/${noteId}`,
           });
+
+          // Notify in real-time
+          await realtime.emitToUser(share.shared_with_user_id, "note_updated", {
+            noteId,
+            updatedBy: userId,
+            note: updatedNote
+          });
         }
       }
     } catch (notifErr) {
@@ -252,6 +259,13 @@ const shareNote = async (req, res) => {
         owner?.username || "Someone"
       } shared a note with you: ${note.title}`,
       link: `/notes/${noteId}`,
+    });
+
+    // Notify in real-time
+    await realtime.emitToUser(targetUserId, "shared_note_received", {
+      noteId,
+      sharedBy: ownerId,
+      noteTitle: note.title
     });
   } catch (err) {
     console.error("Error sharing note:", err.message);

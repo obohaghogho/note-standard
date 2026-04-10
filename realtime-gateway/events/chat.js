@@ -11,18 +11,20 @@ module.exports = (io, socket) => {
   });
 
   // Handle typing status (direct via gateway for lower latency)
-  socket.on('typing_start', (data) => {
+  socket.on('typing', (data) => {
     const { conversationId } = data;
     socket.to(conversationId).emit('user_typing', {
       userId: socket.userId,
+      username: data.username,
       isTyping: true
     });
   });
 
-  socket.on('typing_stop', (data) => {
+  socket.on('stop_typing', (data) => {
     const { conversationId } = data;
     socket.to(conversationId).emit('user_typing', {
       userId: socket.userId,
+      username: data.username,
       isTyping: false
     });
   });

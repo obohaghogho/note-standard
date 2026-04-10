@@ -18,6 +18,7 @@ const { Server } = require('socket.io');
 const { ExpressPeerServer } = require('peer');
 const { authMiddleware } = require('./auth');
 const cors = require('cors');
+const redis = require('redis');
 require('dotenv').config();
 
 // Global Error Handlers for Stability
@@ -96,6 +97,38 @@ io.on('connection', (socket) => {
   });
 });
 
+// ─── Redis Subscriber ────────────────────────────────────────────
+const REDIS_URL = process.env.REDIS_URL;
+if (REDIS_URL) {
+  const subscriber = redis.createClient({ url: REDIS_URL });
+  
+  subscriber.on('error', (err) => console.error('[Redis] Subscriber Error:', err));
+  
+  subscriber.connect().then(() => {
+    console.log('[Redis] ✓ Subscriber connected');
+    
+    subscriber.subscribe('realtime:events', (message) => {
+      try {
+        const { event, data } = JSON.parse(message);
+        console.log(`[Redis] Event: ${event}`);
+        
+        switch (event) {
+          case 'to_user': io.to(`user:${data.userId}`).emit(data.event, data.data); break;
+          case 'to_conversation': io.to(data.conversationId).emit(data.event, data.data); break;
+          case 'to_admin': io.to('admin_room').emit(data.event, data.data); break;
+          case 'broadcast': io.emit(data.event, data.data); break;
+        }
+      } catch (err) {
+        console.error('[Redis] Failed to process message:', err.message);
+      }
+    });
+  }).catch(err => {
+    console.error('[Redis] Connection failed:', err.message);
+  });
+} else {
+  console.warn('[Redis] REDIS_URL not found — Real-time sync via Redis is disabled.');
+}
+
 // ─── HTTP Bridge & Health (on main port) ────────────────────────
 // Removed redundant app.use(express.json()) as it's defined above
 
@@ -109,6 +142,7 @@ app.post('/internal/emit', (req, res) => {
     case 'to_conversation': io.to(data.conversationId).emit(data.event, data.data); break;
     case 'to_admin': io.to('admin_room').emit(data.event, data.data); break;
     case 'broadcast': io.emit(data.event, data.data); break;
+    default: res.status(400).json({ error: 'Invalid event type' }); return;
   }
   res.json({ ok: true });
 });

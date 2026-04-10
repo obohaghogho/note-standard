@@ -5,6 +5,7 @@ const logger = require("../../utils/logger");
 const mailService = require("../mailService");
 const math = require("../../utils/mathUtils");
 const { getCallbackUrl } = require("../../utils/url_utils");
+const realtime = require("../realtimeService");
 
 class PaymentService {
   /**
@@ -937,6 +938,19 @@ class PaymentService {
       });
     } catch (notifErr) {
       logger.error("Failed to send payment notification:", notifErr.message);
+    }
+
+    // ── Emit Real-time Balance Update ──
+    try {
+      await realtime.emitToUser(notifyTx.user_id, "balance_updated", {
+        userId: notifyTx.user_id,
+        transactionId: notifyTx.id,
+        amount: displayAmount,
+        currency: displayCurrency,
+        newStatus: notifyTx.status
+      });
+    } catch (realtimeErr) {
+      logger.error("Failed to emit real-time balance update:", realtimeErr.message);
     }
 
     return notifyTx;

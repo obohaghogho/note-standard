@@ -104,6 +104,23 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
         });
 
+        // ── Global Real-time Notifications ───────────────────
+        socket.on('notification', (data: any) => {
+            console.log('[Socket] Global notification received:', data);
+            if (data?.title) {
+                toast.success(`${data.title}: ${data.message || ''}`, {
+                    duration: 5000,
+                    icon: '🔔',
+                    style: {
+                        background: '#1a1a1a',
+                        color: '#fff',
+                        borderRadius: '10px',
+                        border: '1px solid rgba(255,255,255,0.1)'
+                    }
+                });
+            }
+        });
+
         socketRef.current = socket;
 
         // ── Cleanup on unmount or dependency change ──────────

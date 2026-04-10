@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase, supabaseSafe, resetRateLimiters } from '../lib/supabaseSafe';
 import { useAuth } from './AuthContext';
+import { useSocket } from './SocketContext';
+import toast from 'react-hot-toast';
 import type { Note } from '../types/note';
 
 interface NotesContextType {
@@ -15,6 +17,7 @@ const NotesContext = createContext<NotesContextType | undefined>(undefined);
 
 export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user, isPro } = useAuth();
+    const { socket, connected } = useSocket();
     const [notes, setNotes] = useState<Note[]>([]);
     const [stats, setStats] = useState({ totalBy: 0, favorites: 0 });
     const [loading, setLoading] = useState(true);
@@ -157,6 +160,33 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user, fetchNotes, hasFetched]);
+
+    /**
+     * Socket.io Real-time (for Shared Notes)
+     */
+    useEffect(() => {
+        if (!socket || !connected) return;
+
+        const onNoteUpdated = (data: { noteId: string; updatedBy: string; note: Note }) => {
+            console.log('[NotesContext] Real-time note update via Socket:', data.noteId);
+            setNotes(prev => prev.map(n => n.id === data.noteId ? { ...data.note, id: data.noteId } : n));
+            // toast.success('A shared note was updated', { icon: '📝' });
+        };
+
+        const onSharedNoteReceived = (data: { noteId: string; sharedBy: string; noteTitle: string }) => {
+            console.log('[NotesContext] New shared note received:', data.noteId);
+            fetchNotes(); // Fetch the full new note
+            toast.success(`New note shared with you: ${data.noteTitle}`, { icon: '🤝' });
+        };
+
+        socket.on('note_updated', onNoteUpdated);
+        socket.on('shared_note_received', onSharedNoteReceived);
+
+        return () => {
+            socket.off('note_updated', onNoteUpdated);
+            socket.off('shared_note_received', onSharedNoteReceived);
+        };
+    }, [socket, connected, fetchNotes]);
 
     return (
         <NotesContext.Provider value={{ notes, stats, loading, canCreateNote, refreshNotes: fetchNotes }}>
