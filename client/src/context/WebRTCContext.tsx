@@ -168,11 +168,9 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const url = new URL(gatewayUrl || window.location.origin);
 
             const peerHost = isDev ? 'localhost' : url.hostname;
-            const peerPort = isDev ? 9000 : (parseInt(url.port) || (url.protocol === 'https:' ? 443 : 80));
-            // Always '/' — PeerJS appends 'peerjs' to construct the final URL.
-            // Dev:  localhost:9000/peerjs  (isolated port, path '/')
-            // Prod: gateway.onrender.com/peerjs  (mounted at /peerjs, handler path '/')
-            const peerPath = '/';
+            // In Dev:  isolated port 9000, mounted at '/' -> final URL /peerjs
+            // In Prod: gateway port 5000, mounted at '/peerjs' -> final URL /peerjs/peerjs
+            const peerPath = isDev ? '/' : '/peerjs';
             const peerSecure = !isDev;
 
             const peer = new Peer(peerId, {

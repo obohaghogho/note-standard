@@ -196,17 +196,31 @@ if (ISOLATE_PEER) {
     console.log(`[PeerJS]  ✓ PeerJS active (isolated) on port ${PEER_PORT}`);
   });
 
-} else {
-  // ── Prod: PeerJS shares the main httpServer at /peerjs ──────
-  peerHandler = ExpressPeerServer(httpServer, {
+  // ── Prod: Co-exist on the same port by decoupling upgrade listeners ──────
+  // PeerJS uses 'ws', which aggressively destroys incoming upgrade sockets if 
+  // they do not match its path. This crashes Socket.io's engine!
+  // Fix: pass a dummy server so PeerJS doesn't attach to the main httpServer.
+  const peerDummyServer = http.createServer();
+  peerHandler = ExpressPeerServer(peerDummyServer, {
     debug: false,
-    path: '/',        // '/' here because Express strips the '/peerjs' mount prefix
+    path: '/',
     allow_discovery: false,
     proxied: true,
   });
 
+  // Mount HTTP layer (app.use strips the prefix, so internals see '/')
   app.use('/peerjs', peerHandler);
-  console.log('[PeerJS]  ✓ PeerJS mounted on main server at /peerjs');
+  
+  // Conditionally route WebSocket upgrades to the Dummy Peer Server
+  httpServer.on('upgrade', (req, socket, head) => {
+    if (req.url.startsWith('/peerjs')) {
+      // Strip /peerjs prefix so the dummy server (with path: '/') matches it
+      req.url = req.url.replace('/peerjs', '') || '/';
+      peerDummyServer.emit('upgrade', req, socket, head);
+    }
+  });
+
+  console.log('[PeerJS]  ✓ PeerJS mounted safely on main server at /peerjs');
 }
 
 peerHandler.on('connection', (client) => {
