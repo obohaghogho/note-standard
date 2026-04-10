@@ -279,7 +279,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             if (peer) {
                 try {
                     peer.destroy();
-                } catch (e) {
+                } catch {
                     // Ignore unhandled websocket destruction error
                 }
             }
