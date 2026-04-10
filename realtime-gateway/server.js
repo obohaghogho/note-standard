@@ -77,30 +77,26 @@ app.post('/internal/emit', (req, res) => {
   res.json({ ok: true });
 });
 
-// ✅ 6. PEERJS SETUP — Direct attachment to httpServer
-// ws@8 properly filters WebSocket upgrades by path. PeerJS on '/peerjs' and
-// Socket.IO on '/socket.io' coexist without conflicts on the same server.
-const peerServer = ExpressPeerServer(httpServer, {
-  path: '/peerjs',
+// ✅ 6. PEERJS SETUP — 100% Isolated Dummy Server Pattern
+// PeerJS (using 'ws') and Socket.IO (Engine.IO) fight internally over the 'upgrade'
+// listener cache. To prevent them from destroying each other's websockets,
+// we isolate PeerJS's WebSockets onto its own completely hidden loopback server.
+const peerDummyServer = http.createServer();
+peerDummyServer.listen(0, '127.0.0.1', () => {
+  const port = peerDummyServer.address().port;
+  console.log(`[PeerJS] Dummy server listening internally on 127.0.0.1:${port}`);
+});
+
+const peerServer = ExpressPeerServer(peerDummyServer, {
+  path: '/peerjs', // CRITICAL: must match the prefix of the URL forwarded to it
   allow_discovery: false,
   proxied: true,
 });
 
 app.use(peerServer);
 
-peerServer.on('connection', (client) => {
-  console.log(`[PeerJS] ✓ Peer connected: ${client.getId()}`);
-});
-peerServer.on('disconnect', (client) => {
-  console.log(`[PeerJS] ✗ Peer disconnected: ${client.getId()}`);
-});
-peerServer.on('error', (err) => {
-  console.error('[PeerJS] Error:', err.message);
-});
-
 // ✅ 7. SOCKET.IO SETUP
-// We instantiate Server without httpServer first, to avoid race conditions.
-const io = new Server({
+const io = new Server(httpServer, {
   cors: {
     origin: (origin, callback) => {
       if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
@@ -115,6 +111,24 @@ const io = new Server({
   pingTimeout: 60000,
   pingInterval: 25000,
   allowEIO3: true,
+});
+
+// Route WebSocket upgrades manually BEFORE Engine.IO absorbs them
+httpServer.on('upgrade', (req, socket, head) => {
+  if (req.url && req.url.startsWith('/peerjs')) {
+    peerDummyServer.emit('upgrade', req, socket, head);
+  }
+  // If not /peerjs, Engine.IO handles it naturally via its own listener
+});
+
+peerServer.on('connection', (client) => {
+  console.log(`[PeerJS] ✓ Peer connected: ${client.getId()}`);
+});
+peerServer.on('disconnect', (client) => {
+  console.log(`[PeerJS] ✗ Peer disconnected: ${client.getId()}`);
+});
+peerServer.on('error', (err) => {
+  console.error('[PeerJS] Error:', err.message);
 });
 
 io.use(authMiddleware);
@@ -171,12 +185,5 @@ const PORT = process.env.PORT || 5000;
 
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Gateway Server active on port ${PORT}`);
-  
-  // CRITICAL FIX: Attach Socket.IO to the httpServer AFTER it begins listening.
-  // The 'ws' library used by PeerJS defers registering its upgrade listener until
-  // the 'listening' event is emitted. By attaching Socket.IO inside this callback,
-  // we guarantee Engine.IO executes second, allowing it to safely cache and wrap 
-  // PeerJS's listener without destroying valid connections.
-  io.attach(httpServer);
 });
 
