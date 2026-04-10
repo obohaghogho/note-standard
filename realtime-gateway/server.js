@@ -99,8 +99,8 @@ peerServer.on('error', (err) => {
 });
 
 // ✅ 7. SOCKET.IO SETUP
-// Engine.IO will seamlessly wrap pre-existing WebSocket listeners (like PeerJS's native ws hook)
-const io = new Server(httpServer, {
+// We instantiate Server without httpServer first, to avoid race conditions.
+const io = new Server({
   cors: {
     origin: (origin, callback) => {
       if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
@@ -171,5 +171,12 @@ const PORT = process.env.PORT || 5000;
 
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Gateway Server active on port ${PORT}`);
+  
+  // CRITICAL FIX: Attach Socket.IO to the httpServer AFTER it begins listening.
+  // The 'ws' library used by PeerJS defers registering its upgrade listener until
+  // the 'listening' event is emitted. By attaching Socket.IO inside this callback,
+  // we guarantee Engine.IO executes second, allowing it to safely cache and wrap 
+  // PeerJS's listener without destroying valid connections.
+  io.attach(httpServer);
 });
 
