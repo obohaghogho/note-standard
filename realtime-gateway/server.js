@@ -36,6 +36,7 @@ process.on('unhandledRejection', (reason, promise) => {
 const ALLOWED_ORIGINS = [
   'https://notestandard.com',
   'https://www.notestandard.com',
+  'https://realtime-gateway-gsb5.onrender.com',
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:3000',
@@ -156,34 +157,57 @@ app.get('/health', (_req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-//  2. PEERJS SERVER (Isolated on Port 9000 for Stability)
+//  2. PEERJS SERVER — Dual Mode
+//   Dev:  Isolated on PEER_PORT (9000) — avoids WS frame corruption
+//   Prod: Mounted on the main httpServer at /peerjs (Render single-port)
 // ═══════════════════════════════════════════════════════════════
-const peerApp = express();
-const peerServer = http.createServer(peerApp);
+const PORT = parseInt(process.env.PORT) || 5000;
+const PEER_PORT = parseInt(process.env.PEER_PORT) || 9000;
+const ISOLATE_PEER = PEER_PORT !== PORT; // true in dev, false in prod
 
-// Apply CORS to the PeerJS app as well
-peerApp.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-    if (/^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin)) {
+let peerHandler;
+
+if (ISOLATE_PEER) {
+  // ── Dev: Separate dedicated PeerJS server on port 9000 ──────
+  const peerApp = express();
+  const peerServer = http.createServer(peerApp);
+
+  peerApp.use(cors({
+    origin: (origin, callback) => {
+      if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+      if (/^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin)) return callback(null, true);
       return callback(null, true);
-    }
-    return callback(null, true);
-  },
-  methods: ['GET', 'POST', 'OPTIONS'],
-  credentials: true,
-}));
+    },
+    methods: ['GET', 'POST', 'OPTIONS'],
+    credentials: true,
+  }));
 
-const peerHandler = ExpressPeerServer(peerServer, {
-  debug: false,
-  path: '/',
-  allow_discovery: false,
-  proxied: true,
-});
+  peerHandler = ExpressPeerServer(peerServer, {
+    debug: false,
+    path: '/',
+    allow_discovery: false,
+    proxied: true,
+  });
 
-peerApp.use('/', peerHandler);
-peerApp.get('/health', (_req, res) => res.json({ status: 'ok', service: 'peerjs' }));
+  peerApp.use('/', peerHandler);
+  peerApp.get('/health', (_req, res) => res.json({ status: 'ok', service: 'peerjs' }));
+
+  peerServer.listen(PEER_PORT, '0.0.0.0', () => {
+    console.log(`[PeerJS]  ✓ PeerJS active (isolated) on port ${PEER_PORT}`);
+  });
+
+} else {
+  // ── Prod: PeerJS shares the main httpServer at /peerjs ──────
+  peerHandler = ExpressPeerServer(httpServer, {
+    debug: false,
+    path: '/peerjs',
+    allow_discovery: false,
+    proxied: true,
+  });
+
+  app.use('/peerjs', peerHandler);
+  console.log('[PeerJS]  ✓ PeerJS mounted on main server at /peerjs');
+}
 
 peerHandler.on('connection', (client) => {
   console.log(`[PeerJS] ✓ Peer connected: ${client.getId()}`);
@@ -193,15 +217,11 @@ peerHandler.on('disconnect', (client) => {
   console.log(`[PeerJS] ✗ Peer disconnected: ${client.getId()}`);
 });
 
-// Start both servers
-const PORT = process.env.PORT || 5000;
-const PEER_PORT = process.env.PEER_PORT || 9000;
-
+// ── Start Socket.IO Gateway ─────────────────────────────────
 httpServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Gateway] ✓ Socket.IO active on port ${PORT}`);
-});
-
-peerServer.listen(PEER_PORT, '0.0.0.0', () => {
-    console.log(`[PeerJS]  ✓ PeerJS active on port ${PEER_PORT}`);
+  console.log(`[Gateway] ✓ Socket.IO active on port ${PORT}`);
+  if (!ISOLATE_PEER) {
+    console.log(`[PeerJS]  ✓ PeerJS accessible at http://0.0.0.0:${PORT}/peerjs`);
+  }
 });
 

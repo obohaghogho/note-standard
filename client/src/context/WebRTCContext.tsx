@@ -167,10 +167,12 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const gatewayUrl = isDev ? 'http://localhost:5000' : (import.meta.env.VITE_REALTIME_GATEWAY_URL || '');
             const url = new URL(gatewayUrl || window.location.origin);
 
-            const peerHost = url.hostname;
+            const peerHost = isDev ? 'localhost' : url.hostname;
             const peerPort = isDev ? 9000 : (parseInt(url.port) || (url.protocol === 'https:' ? 443 : 80));
-            const peerPath = '/';
-            const peerSecure = url.protocol === 'https:';
+            // In dev: PeerJS is on isolated port 9000, path is '/'
+            // In prod: PeerJS is mounted on gateway at /peerjs, path is '/peerjs'
+            const peerPath = isDev ? '/' : '/peerjs';
+            const peerSecure = !isDev;
 
             const peer = new Peer(peerId, {
                 host: peerHost,
