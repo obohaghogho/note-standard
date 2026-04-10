@@ -200,7 +200,7 @@ if (ISOLATE_PEER) {
   // ── Prod: PeerJS shares the main httpServer at /peerjs ──────
   peerHandler = ExpressPeerServer(httpServer, {
     debug: false,
-    path: '/peerjs',
+    path: '/',        // '/' here because Express strips the '/peerjs' mount prefix
     allow_discovery: false,
     proxied: true,
   });
