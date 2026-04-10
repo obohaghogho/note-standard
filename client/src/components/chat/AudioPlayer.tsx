@@ -11,25 +11,35 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ path, fetchUrl }) => {
     const [isPlaying, setIsPlaying] = useState(false);
     const [duration, setDuration] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);
+    const [error, setError] = useState<string | null>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const durationHackAppliedRef = useRef(false);
 
     useEffect(() => {
-        if (!path) return; // Prevent 400 Bad Request during optimistic updates
+        if (!path) return;
         let isMounted = true;
+        setError(null);
         fetchUrl(path).then(u => {
             if (isMounted) setUrl(u);
+        }).catch(() => {
+            if (isMounted) setError('Failed to load audio');
         });
         return () => { isMounted = false; };
     }, [path, fetchUrl]);
 
+    const onError = () => {
+        console.error('[AudioPlayer] Error loading audio:', audioRef.current?.error);
+        setError('Unsupported format or loading error');
+    };
+
     const togglePlay = () => {
-        if (!audioRef.current) return;
+        if (!audioRef.current || error) return;
         if (isPlaying) {
             audioRef.current.pause();
         } else {
             audioRef.current.play().catch(err => {
                 console.error('Playback failed:', err);
+                setError('Playback failed');
             });
         }
         setIsPlaying(!isPlaying);
@@ -41,16 +51,20 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ path, fetchUrl }) => {
         
         // Fix for WebM missing duration (returns Infinity in browsers)
         if (d === Infinity) {
-            audioRef.current.currentTime = 1e101;
-            audioRef.current.ontimeupdate = () => {
-                if (audioRef.current) {
-                    audioRef.current.ontimeupdate = null;
-                    const realDuration = audioRef.current.duration;
-                    setDuration(realDuration);
-                    audioRef.current.currentTime = 0;
-                    durationHackAppliedRef.current = true;
-                }
-            };
+            try {
+                audioRef.current.currentTime = 1e101;
+                audioRef.current.ontimeupdate = () => {
+                    if (audioRef.current) {
+                        audioRef.current.ontimeupdate = null;
+                        const realDuration = audioRef.current.duration;
+                        setDuration(realDuration);
+                        audioRef.current.currentTime = 0;
+                        durationHackAppliedRef.current = true;
+                    }
+                };
+            } catch (e) {
+                console.warn('[AudioPlayer] Duration hack failed:', e);
+            }
         } else {
             setDuration(d);
         }
@@ -69,7 +83,17 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ path, fetchUrl }) => {
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
-    if (!url) return <div className="p-2 animate-pulse bg-white/5 rounded-lg w-full h-12"></div>;
+    if (error) {
+        return (
+            <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 p-2.5 rounded-lg text-red-400 text-xs w-full max-w-sm">
+                <Mic size={14} className="flex-shrink-0" />
+                <span className="flex-1 truncate">{error}</span>
+                <a href={url || '#'} download className="text-blue-400 underline flex-shrink-0">Download</a>
+            </div>
+        );
+    }
+
+    if (!url) return <div className="p-2 animate-pulse bg-white/5 rounded-lg w-full min-w-[200px] h-12"></div>;
 
     return (
         <div className="flex items-center gap-3 bg-gradient-to-r from-gray-800/80 to-gray-900/80 backdrop-blur-xl p-3.5 rounded-[20px] border border-white/10 w-full max-w-sm shadow-2xl group/audio overflow-hidden relative">
@@ -84,6 +108,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ path, fetchUrl }) => {
                 onLoadedMetadata={onLoadedMetadata} 
                 onTimeUpdate={onTimeUpdate} 
                 onEnded={() => setIsPlaying(false)}
+                onError={onError}
+                preload="metadata"
             />
             
             <button 

@@ -34,10 +34,12 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
                 'audio/mp4',
                 'audio/webm;codecs=opus',
                 'audio/webm',
+                'audio/mpeg',
                 'audio/ogg;codecs=opus',
             ];
             
             const mimeType = types.find(type => typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(type)) || '';
+            console.log('[VoiceRecorder] Selected MIME type:', mimeType);
             
             mediaRecorderRef.current = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
             audioChunksRef.current = [];
@@ -49,9 +51,9 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
             };
 
             mediaRecorderRef.current.onstop = () => {
-                const mime = mediaRecorderRef.current?.mimeType || mimeType || 'audio/mp4';
-                const audioBlob = new Blob(audioChunksRef.current, { type: mime });
-                audioChunksRef.current = [audioBlob]; // Cache the correct blob
+                const finalMime = mediaRecorderRef.current?.mimeType || mimeType || 'audio/mp4';
+                const audioBlob = new Blob(audioChunksRef.current, { type: finalMime });
+                audioChunksRef.current = [audioBlob]; 
                 const url = URL.createObjectURL(audioBlob);
                 setAudioUrl(url);
             };

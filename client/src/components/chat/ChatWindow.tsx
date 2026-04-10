@@ -407,8 +407,11 @@ const ChatWindow: React.FC = () => {
         const loadingToast = toast.loading('Sending voice message...');
         try {
             const mimeType = blob.type || 'audio/webm';
-            const extension = mimeType.includes('mp4') ? 'm4a' : (mimeType.includes('ogg') ? 'ogg' : 'webm');
-            const fileName = `voice_${Date.now()}.${extension}`;
+            // Extract extension from mime type (e.g., audio/webm -> webm, audio/mp4 -> m4a)
+            const extension = mimeType.split('/')[1]?.split(';')[0] || 'webm';
+            const finalExtension = extension === 'mp4' ? 'm4a' : extension;
+            
+            const fileName = `voice_${Date.now()}.${finalExtension}`;
             const filePath = `${activeConversationId}/${fileName}`;
 
             // 1. Upload to Supabase Storage
