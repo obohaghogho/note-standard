@@ -63,11 +63,7 @@ app.get('/health', (req, res) => {
 // ✅ 4. CREATE HTTP SERVER (SHARED)
 const httpServer = http.createServer(app);
 
-// ✅ 5. PEERJS HTTP HANDLER
-app.use('/peerjs', (req, res, next) => {
-  res.status(200).send({ name: 'PeerJS Server', description: 'Internal Routing' });
-});
-
+// ✅ 5. INTERNAL EMIT ENDPOINT (defined before io is created — io reference hoisted via closure)
 app.post('/internal/emit', (req, res) => {
   const { event, data } = req.body;
   if (!event || !data) return res.status(400).json({ error: 'Missing event/data' });
@@ -81,25 +77,36 @@ app.post('/internal/emit', (req, res) => {
   res.json({ ok: true });
 });
 
-// ✅ 6. PEERJS SETUP (REGISTERED BEFORE SOCKET.IO!)
-const peerServer = ExpressPeerServer(httpServer, {
-  path: '/peerjs',
+// ✅ 6. PEERJS SETUP — Dummy server isolation pattern
+// Passing the real httpServer to ExpressPeerServer causes its internal 'ws' library
+// to steal and destroy Socket.IO WebSocket upgrade packets. Fix: use a dummy HTTP
+// server so PeerJS never touches the main server's upgrade event directly.
+const peerDummyServer = http.createServer();
+const peerServer = ExpressPeerServer(peerDummyServer, {
+  path: '/',
   allow_discovery: false,
-  proxied: true, // Crucial for Render
-  corsOptions: {
-    origin: 'https://www.notestandard.com',
-    credentials: true,
-  }
+  proxied: true,
 });
 
-// Mount PeerJS HTTP logic globally to gracefully process API calls without duplicate prefixing
-app.use(peerServer);
+// Mount PeerJS HTTP routing on the real app at /peerjs
+app.use('/peerjs', peerServer);
+
+// Route WebSocket upgrades: /peerjs/* → peerDummyServer, everything else → Socket.IO
+httpServer.on('upgrade', (req, socket, head) => {
+  if (req.url && req.url.startsWith('/peerjs')) {
+    peerDummyServer.emit('upgrade', req, socket, head);
+  }
+  // Socket.IO handles all other upgrades automatically via its own listener
+});
 
 peerServer.on('connection', (client) => {
   console.log(`[PeerJS] ✓ Peer connected: ${client.getId()}`);
 });
 peerServer.on('disconnect', (client) => {
   console.log(`[PeerJS] ✗ Peer disconnected: ${client.getId()}`);
+});
+peerServer.on('error', (err) => {
+  console.error('[PeerJS] Error:', err.message);
 });
 
 // ✅ 7. SOCKET.IO SETUP
