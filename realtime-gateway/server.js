@@ -160,12 +160,12 @@ app.get('/health', (_req, res) => {
 // ═══════════════════════════════════════════════════════════════
 const peerHandler = ExpressPeerServer(httpServer, {
   debug: false,
-  path: '/',
+  path: '/peerjs',
   allow_discovery: false,
   proxied: true,
 });
 
-app.use('/peerjs', peerHandler);
+app.use(peerHandler);
 
 peerHandler.on('connection', (client) => {
   console.log(`[PeerJS] ✓ Peer connected: ${client.getId()}`);
