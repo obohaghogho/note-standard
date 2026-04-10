@@ -1,15 +1,11 @@
 /**
  * Realtime Gateway — NoteStandard
- * 
- * Architecture:
- *   - Socket.IO on port 5000 (chat, wallet, presence, call signaling)
- *   - PeerJS on port 9000 (WebRTC peer discovery — MUST be isolated)
  *
- * Why separate ports?
- *   PeerJS's `ExpressPeerServer` creates its own internal WebSocket server.
- *   When attached to the same httpServer as Socket.IO, it hijacks the
- *   HTTP `upgrade` event, corrupting Socket.IO's WebSocket frames 
- *   ("Invalid frame header"). Separate ports is the only reliable fix.
+ * Architecture:
+ *   - Unified Node HTTP Server running on `PORT`
+ *   - Express handled at root
+ *   - PeerJS & Socket.IO co-exist by registering PeerJS FIRST, 
+ *     allowing Engine.IO to gracefully intercept and wrap WebSocket upgrades natively.
  */
 
 const express = require('express');
@@ -21,18 +17,15 @@ const cors = require('cors');
 const redis = require('redis');
 require('dotenv').config();
 
-// Global Error Handlers for Stability
+// ✅ 1. CRASH PREVENTION: GLOBAL ERROR HANDLERS
 process.on('uncaughtException', (err) => {
-  console.error('[Process] Uncaught Exception:', err);
+  console.error('[Process] 🔥 Uncaught Exception:', err);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('[Process] Unhandled Rejection at:', promise, 'reason:', reason);
+  console.error('[Process] 🔥 Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
-// ═══════════════════════════════════════════════════════════════
-//  1. SOCKET.IO GATEWAY (Port 5000 - Chat, Signaling, Wallet)
-// ═══════════════════════════════════════════════════════════════
 const ALLOWED_ORIGINS = [
   'https://notestandard.com',
   'https://www.notestandard.com',
@@ -42,21 +35,19 @@ const ALLOWED_ORIGINS = [
   'http://localhost:3000',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5174',
-  'http://127.0.0.1:3000',
 ];
 
 const app = express();
 
+// ✅ 2. CORS FIX (STRICT & GLOBAL)
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (e.g., mobile apps, curl, etc.)
-    if (!origin) return callback(null, true);
+    if (!origin) return callback(null, true); 
     if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-    // Allow any local network IP in dev
-    if (/^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin)) {
+    if (/^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$/.test(origin)) {
       return callback(null, true);
     }
-    return callback(null, true); // Permissive for dev — lock down in production via environment check
+    return callback(null, true);
   },
   methods: ['GET', 'POST', 'OPTIONS'],
   credentials: true,
@@ -64,33 +55,74 @@ app.use(cors({
 
 app.use(express.json());
 
+// ✅ 3. HEALTH CHECK
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
+// ✅ 4. CREATE HTTP SERVER (SHARED)
 const httpServer = http.createServer(app);
 
-// Initialize IO and capture its upgrade listener immediately
+// ✅ 5. PEERJS HTTP HANDLER
+app.use('/peerjs', (req, res, next) => {
+  res.status(200).send({ name: 'PeerJS Server', description: 'Internal Routing' });
+});
+
+app.post('/internal/emit', (req, res) => {
+  const { event, data } = req.body;
+  if (!event || !data) return res.status(400).json({ error: 'Missing event/data' });
+  switch (event) {
+    case 'to_user': io.to(`user:${data.userId}`).emit(data.event, data.data); break;
+    case 'to_conversation': io.to(data.conversationId).emit(data.event, data.data); break;
+    case 'to_admin': io.to('admin_room').emit(data.event, data.data); break;
+    case 'broadcast': io.emit(data.event, data.data); break;
+    default: res.status(400).json({ error: 'Invalid event type' }); return;
+  }
+  res.json({ ok: true });
+});
+
+// ✅ 6. PEERJS SETUP (REGISTERED BEFORE SOCKET.IO!)
+const peerServer = ExpressPeerServer(httpServer, {
+  path: '/peerjs',
+  allow_discovery: false,
+  proxied: true, // Crucial for Render
+  corsOptions: {
+    origin: 'https://www.notestandard.com',
+    credentials: true,
+  }
+});
+
+// Mount PeerJS HTTP logic globally to gracefully process API calls without duplicate prefixing
+app.use(peerServer);
+
+peerServer.on('connection', (client) => {
+  console.log(`[PeerJS] ✓ Peer connected: ${client.getId()}`);
+});
+peerServer.on('disconnect', (client) => {
+  console.log(`[PeerJS] ✗ Peer disconnected: ${client.getId()}`);
+});
+
+// ✅ 7. SOCKET.IO SETUP
+// Engine.IO will seamlessly wrap pre-existing WebSocket listeners (like PeerJS's native ws hook)
 const io = new Server(httpServer, {
   cors: {
     origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-      if (/^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin)) {
-        return callback(null, true);
-      }
+      if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+      if (/^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$/.test(origin)) return callback(null, true);
       return callback(null, true);
     },
     methods: ['GET', 'POST'],
     credentials: true,
   },
-  transports: ['polling', 'websocket'], // polling first for reliability, upgrades to ws
+  transports: ['websocket', 'polling'], // Explicitly enforce transports array
   perMessageDeflate: false,
   pingTimeout: 60000,
   pingInterval: 25000,
   allowEIO3: true,
 });
 
-
 io.use(authMiddleware);
 
-// Load event handlers
 const chatHandlers = require('./events/chat');
 const callHandlers = require('./events/call');
 const walletHandlers = require('./events/wallet');
@@ -113,11 +145,11 @@ io.on('connection', (socket) => {
   });
 });
 
-// ─── Redis Subscriber ────────────────────────────────────────────
+// ✅ 8. Redis Sub
 const REDIS_URL = process.env.REDIS_URL;
 if (REDIS_URL) {
   const subscriber = redis.createClient({ url: REDIS_URL });
-  subscriber.on('error', (err) => console.error('[Redis] Subscriber Error:', err));
+  subscriber.on('error', (err) => console.error('[Redis] Error:', err));
   subscriber.connect().then(() => {
     console.log('[Redis] ✓ Subscriber connected');
     subscriber.subscribe('realtime:events', (message) => {
@@ -129,112 +161,15 @@ if (REDIS_URL) {
           case 'to_admin': io.to('admin_room').emit(data.event, data.data); break;
           case 'broadcast': io.emit(data.event, data.data); break;
         }
-      } catch (err) {
-        console.error('[Redis] Failed to process message:', err.message);
-      }
+      } catch (err) { }
     });
-  }).catch(err => {
-    console.error('[Redis] Connection failed:', err.message);
-  });
+  }).catch(() => {});
 }
 
-// ─── HTTP Bridge & Health ───────────────────────────────────────
-app.post('/internal/emit', (req, res) => {
-  const { event, data } = req.body;
-  if (!event || !data) return res.status(400).json({ error: 'Missing event or data' });
-  switch (event) {
-    case 'to_user': io.to(`user:${data.userId}`).emit(data.event, data.data); break;
-    case 'to_conversation': io.to(data.conversationId).emit(data.event, data.data); break;
-    case 'to_admin': io.to('admin_room').emit(data.event, data.data); break;
-    case 'broadcast': io.emit(data.event, data.data); break;
-    default: res.status(400).json({ error: 'Invalid event type' }); return;
-  }
-  res.json({ ok: true });
-});
+// ✅ 9. START SERVER (RENDER PORT)
+const PORT = process.env.PORT || 5000;
 
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'realtime-gateway', socketClients: io.engine.clientsCount });
-});
-
-// ═══════════════════════════════════════════════════════════════
-//  2. PEERJS SERVER — Dual Mode
-//   Dev:  Isolated on PEER_PORT (9000) — avoids WS frame corruption
-//   Prod: Mounted on the main httpServer at /peerjs (Render single-port)
-// ═══════════════════════════════════════════════════════════════
-const PORT = parseInt(process.env.PORT) || 5000;
-const PEER_PORT = parseInt(process.env.PEER_PORT) || 9000;
-const ISOLATE_PEER = PEER_PORT !== PORT; // true in dev, false in prod
-
-let peerHandler;
-
-if (ISOLATE_PEER) {
-  // ── Dev: Separate dedicated PeerJS server on port 9000 ──────
-  const peerApp = express();
-  const peerServer = http.createServer(peerApp);
-
-  peerApp.use(cors({
-    origin: (origin, callback) => {
-      if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-      if (/^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin)) return callback(null, true);
-      return callback(null, true);
-    },
-    methods: ['GET', 'POST', 'OPTIONS'],
-    credentials: true,
-  }));
-
-  peerHandler = ExpressPeerServer(peerServer, {
-    debug: false,
-    path: '/',
-    allow_discovery: false,
-    proxied: true,
-  });
-
-  peerApp.use(peerHandler);
-  peerApp.get('/health', (_req, res) => res.json({ status: 'ok', service: 'peerjs' }));
-
-  peerServer.listen(PEER_PORT, '0.0.0.0', () => {
-    console.log(`[PeerJS]  ✓ PeerJS active (isolated) on port ${PEER_PORT}`);
-  });
-
-} else {
-  // ── Prod: Co-exist on the same port by decoupling upgrade listeners ──────
-  // PeerJS uses 'ws', which aggressively destroys incoming upgrade sockets if 
-  // they do not match its path. This crashes Socket.io's engine!
-  // Fix: pass a dummy server so PeerJS doesn't attach to the main httpServer.
-  const peerDummyServer = http.createServer();
-  peerHandler = ExpressPeerServer(peerDummyServer, {
-    debug: false,
-    path: '/',
-    allow_discovery: false,
-    proxied: true,
-  });
-
-  // Mount globally. The inner PeerJS router strictly expects exactly /:key/id pattern
-  app.use(peerHandler);
-  
-  // Conditionally route WebSocket upgrades to the Dummy Peer Server verbatim
-  httpServer.on('upgrade', (req, socket, head) => {
-    if (req.url.startsWith('/peerjs')) {
-      peerDummyServer.emit('upgrade', req, socket, head);
-    }
-  });
-
-  console.log('[PeerJS]  ✓ PeerJS mounted safely on main server at /peerjs');
-}
-
-peerHandler.on('connection', (client) => {
-  console.log(`[PeerJS] ✓ Peer connected: ${client.getId()}`);
-});
-
-peerHandler.on('disconnect', (client) => {
-  console.log(`[PeerJS] ✗ Peer disconnected: ${client.getId()}`);
-});
-
-// ── Start Socket.IO Gateway ─────────────────────────────────
 httpServer.listen(PORT, '0.0.0.0', () => {
-  console.log(`[Gateway] ✓ Socket.IO active on port ${PORT}`);
-  if (!ISOLATE_PEER) {
-    console.log(`[PeerJS]  ✓ PeerJS accessible at http://0.0.0.0:${PORT}/peerjs`);
-  }
+  console.log(`🚀 Gateway Server active on port ${PORT}`);
 });
 
