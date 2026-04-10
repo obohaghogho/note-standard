@@ -98,11 +98,7 @@ app.use(peerServer);
 // ✅ 7. SOCKET.IO SETUP
 const io = new Server(httpServer, {
   cors: {
-    origin: (origin, callback) => {
-      if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-      if (/^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$/.test(origin)) return callback(null, true);
-      return callback(null, true);
-    },
+    origin: ALLOWED_ORIGINS,
     methods: ['GET', 'POST'],
     credentials: true,
   },
