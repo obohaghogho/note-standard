@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseSafe';
 import './ChatWidget.css';
 import { API_URL } from '../../lib/api';
@@ -319,10 +320,16 @@ export const ChatWidget = () => {
         });
     };
 
-    if (!user || isKeyboardVisible) return null;
+    const location = useLocation();
+
+    // Hide the widget in the chat rooms (both user and admin) to avoid UI clutter
+    const isChatRoom = location.pathname.startsWith('/dashboard/chat') || 
+                       location.pathname.startsWith('/admin/chats');
+
+    if (!user || isKeyboardVisible || isChatRoom) return null;
 
     return (
-        <div className={`chat-widget ${isOpen ? 'open' : ''} ${isMinimized ? 'minimized' : ''}`} style={{ display: isKeyboardVisible ? 'none' : 'block' }}>
+        <div className={`chat-widget ${isOpen ? 'open' : ''} ${isMinimized ? 'minimized' : ''}`} style={{ display: isKeyboardVisible || isChatRoom ? 'none' : 'block' }}>
             {!isOpen && (
                 <button className="chat-widget-button" onClick={() => setIsOpen(true)}>
                     <MessageCircle size={24} />
