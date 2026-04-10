@@ -25,10 +25,7 @@ self.addEventListener('message', (event) => {
     }
 });
 
-// Avoid intercepting any fetches during this "recovery" phase
-self.addEventListener('fetch', () => {
-    // No-op. Just let the browser handle it.
-});
+
 
 // Handle Push Notifications
 self.addEventListener('push', (event) => {
