@@ -168,8 +168,9 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const url = new URL(gatewayUrl || window.location.origin);
 
             const peerHost = isDev ? 'localhost' : url.hostname;
-            const peerPort = isDev ? 9000 : (parseInt(url.port) || (url.protocol === 'https:' ? 443 : 80));
-            // Setting path: '/' causes PeerJS to natively append 'peerjs?key=', resulting in exactly '/peerjs?key='
+            // Unified server runs on port 5000 in dev (no separate port 9000 anymore)
+            const peerPort = isDev ? 5000 : (parseInt(url.port) || (url.protocol === 'https:' ? 443 : 80));
+            // path '/' → PeerJS appends 'peerjs?key=...' → final URL becomes '/peerjs?key=...'
             const peerPath = '/';
             const peerSecure = !isDev;
 
