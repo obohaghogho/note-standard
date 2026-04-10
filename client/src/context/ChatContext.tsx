@@ -429,6 +429,18 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             // Replace optimistic message with real one
             setMessages(prev => {
                 const current = prev[conversationId] || [];
+                // CRITICAL: Check if the message was already added by a socket event (receive_message)
+                const alreadyExists = current.some(m => m.id === data.id);
+                
+                if (alreadyExists) {
+                    // Just remove the temporary optimistic message
+                    return {
+                        ...prev,
+                        [conversationId]: current.filter(m => m.id !== tempId)
+                    };
+                }
+
+                // Otherwise, swap tempId with real data
                 return {
                     ...prev,
                     [conversationId]: current.map(m => m.id === tempId ? {

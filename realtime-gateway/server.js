@@ -156,40 +156,31 @@ app.get('/health', (_req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-//  2. PEERJS SERVER (Port 9000 - Local WebRTC Discovery)
+//  2. PEERJS SERVER (Integrated with Main port for Production)
 // ═══════════════════════════════════════════════════════════════
-// This server is used for LOCAL DEVELOPMENT to avoid port conflicts.
-const peerApp = express();
-const peerServer = http.createServer(peerApp);
-const peerHandler = ExpressPeerServer(peerServer, {
-  debug: true,
+const peerHandler = ExpressPeerServer(httpServer, {
+  debug: false,
   path: '/',
   allow_discovery: false,
   proxied: true,
 });
 
-peerApp.use('/peerjs', peerHandler);
+app.use('/peerjs', peerHandler);
 
 peerHandler.on('connection', (client) => {
   console.log(`[PeerJS] ✓ Peer connected: ${client.getId()}`);
 });
 
-// ─── Start Servers ──────────────────────────────────────────────
-const PORT = process.env.PORT || 5000;
-const PEER_PORT = process.env.PEER_PORT || 9000;
-
-httpServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Gateway] ✓ Socket.IO active on port ${PORT}`);
+peerHandler.on('disconnect', (client) => {
+  console.log(`[PeerJS] ✗ Peer disconnected: ${client.getId()}`);
 });
 
-// ERROR: Render (and most cloud platforms) only allow binding to ONE port ($PORT).
-// Attempting to listen on a second port (PEER_PORT) will crash the process or be unreachable.
-if (process.env.NODE_ENV === 'production') {
-    console.warn(`[Gateway] ⚠️  Skipping standalone PeerJS server on port ${PEER_PORT} (Production/Render mode).`);
-    console.warn(`[Gateway] 💡 Multi-port binding is not supported on standard Render services.`);
-} else {
-    peerServer.listen(PEER_PORT, () => {
-        console.log(`[Gateway] ✓ PeerJS active on port ${PEER_PORT}`);
-    });
-}
+// ─── Start Universal Server ─────────────────────────────────────
+const PORT = process.env.PORT || 5000;
+
+httpServer.listen(PORT, '0.0.0.0', () => {
+    console.log(`[Gateway] ✓ Universal Gateway active on port ${PORT}`);
+    console.log(`[Gateway]   - Socket.IO: http://0.0.0.0:${PORT}`);
+    console.log(`[Gateway]   - PeerJS: http://0.0.0.0:${PORT}/peerjs`);
+});
 

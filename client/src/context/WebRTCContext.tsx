@@ -162,10 +162,14 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const hostname = window.location.hostname;
             const isDev = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.');
             
-            const peerHost = isDev ? 'localhost' : '0.peerjs.com';
-            const peerPort = isDev ? parseInt(import.meta.env.VITE_PEER_PORT || '9000') : 443;
-            const peerPath = isDev ? '/peerjs' : '/';
-            const peerSecure = !isDev || import.meta.env.VITE_PEER_SECURE === 'true';
+            // On production, point to the main gateway URL. In dev, use localhost:5000.
+            const gatewayUrl = isDev ? 'http://localhost:5000' : (import.meta.env.VITE_REALTIME_GATEWAY_URL || '');
+            const url = new URL(gatewayUrl || window.location.origin);
+
+            const peerHost = url.hostname;
+            const peerPort = parseInt(url.port) || (url.protocol === 'https:' ? 443 : 80);
+            const peerPath = '/peerjs';
+            const peerSecure = url.protocol === 'https:';
 
             const peer = new Peer(peerId, {
                 host: peerHost,
@@ -236,9 +240,11 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 console.error('[PeerJS] Error:', error.type, err);
                 if (error.type === 'unavailable-id') {
                     // Destroy and nullify before recreating to avoid the re-entry guard
-                    peerRef.current = null;
                     peer.destroy();
-                    createPeer(Math.random().toString(36).substring(7));
+                    if (peerRef.current === peer) {
+                        peerRef.current = null;
+                        setTimeout(() => createPeer(Math.random().toString(36).substring(7)), 1000);
+                    }
                 } else if (err.type === 'peer-unavailable') {
                     toast.error('User is offline or unavailable');
                     cleanup();
