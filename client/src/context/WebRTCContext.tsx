@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import Peer from 'peerjs';
 import type { MediaConnection } from 'peerjs';
@@ -167,8 +168,8 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const url = new URL(gatewayUrl || window.location.origin);
 
             const peerHost = url.hostname;
-            const peerPort = parseInt(url.port) || (url.protocol === 'https:' ? 443 : 80);
-            const peerPath = '/peerjs';
+            const peerPort = isDev ? 9000 : (parseInt(url.port) || (url.protocol === 'https:' ? 443 : 80));
+            const peerPath = '/';
             const peerSecure = url.protocol === 'https:';
 
             const peer = new Peer(peerId, {

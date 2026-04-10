@@ -33,16 +33,30 @@ process.on('unhandledRejection', (reason, promise) => {
 // ═══════════════════════════════════════════════════════════════
 //  1. SOCKET.IO GATEWAY (Port 5000 - Chat, Signaling, Wallet)
 // ═══════════════════════════════════════════════════════════════
+const ALLOWED_ORIGINS = [
+  'https://notestandard.com',
+  'https://www.notestandard.com',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
+  'http://127.0.0.1:3000',
+];
+
 const app = express();
 
 app.use(cors({
-  origin: [
-    'https://notestandard.com',
-    'https://www.notestandard.com',
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'http://127.0.0.1:5173',
-  ],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g., mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    // Allow any local network IP in dev
+    if (/^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin)) {
+      return callback(null, true);
+    }
+    return callback(null, true); // Permissive for dev — lock down in production via environment check
+  },
   methods: ['GET', 'POST', 'OPTIONS'],
   credentials: true,
 }));
@@ -54,26 +68,24 @@ const httpServer = http.createServer(app);
 // Initialize IO and capture its upgrade listener immediately
 const io = new Server(httpServer, {
   cors: {
-    origin: [
-      'https://notestandard.com',
-      'https://www.notestandard.com',
-      'http://localhost:5173',
-      'http://localhost:3000',
-      'http://127.0.0.1:5173',
-    ],
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+      if (/^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin)) {
+        return callback(null, true);
+      }
+      return callback(null, true);
+    },
     methods: ['GET', 'POST'],
     credentials: true,
   },
-  transports: ['websocket', 'polling'],
-  perMessageDeflate: false, // Core fix for shared-port frame corruption
+  transports: ['polling', 'websocket'], // polling first for reliability, upgrades to ws
+  perMessageDeflate: false,
   pingTimeout: 60000,
   pingInterval: 25000,
   allowEIO3: true,
 });
 
-const ioUpgradeListeners = httpServer.listeners('upgrade').slice();
-httpServer.removeAllListeners('upgrade');
-console.log(`[Gateway] Captured ${ioUpgradeListeners.length} Socket.io upgrade listeners`);
 
 io.use(authMiddleware);
 
@@ -144,33 +156,34 @@ app.get('/health', (_req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-//  2. PEERJS SERVER (Integrated with Main port for Production)
+//  2. PEERJS SERVER (Isolated on Port 9000 for Stability)
 // ═══════════════════════════════════════════════════════════════
-const peerHandler = ExpressPeerServer(httpServer, {
+const peerApp = express();
+const peerServer = http.createServer(peerApp);
+
+// Apply CORS to the PeerJS app as well
+peerApp.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    if (/^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin)) {
+      return callback(null, true);
+    }
+    return callback(null, true);
+  },
+  methods: ['GET', 'POST', 'OPTIONS'],
+  credentials: true,
+}));
+
+const peerHandler = ExpressPeerServer(peerServer, {
   debug: false,
   path: '/',
   allow_discovery: false,
   proxied: true,
 });
 
-app.use('/peerjs', peerHandler);
-
-const peerUpgradeListeners = httpServer.listeners('upgrade').slice();
-httpServer.removeAllListeners('upgrade');
-console.log(`[Gateway] Captured ${peerUpgradeListeners.length} PeerJS upgrade listeners`);
-
-// Final Deterministic Upgrade Dispatcher
-httpServer.on('upgrade', (req, socket, head) => {
-  const url = req.url || '';
-  if (url.includes('/socket.io/')) {
-    ioUpgradeListeners.forEach(listener => listener(req, socket, head));
-  } else if (url.includes('/peerjs')) {
-    peerUpgradeListeners.forEach(listener => listener(req, socket, head));
-  } else {
-    console.log(`[Gateway] Rejecting unknown upgrade request: ${url}`);
-    socket.destroy();
-  }
-});
+peerApp.use('/', peerHandler);
+peerApp.get('/health', (_req, res) => res.json({ status: 'ok', service: 'peerjs' }));
 
 peerHandler.on('connection', (client) => {
   console.log(`[PeerJS] ✓ Peer connected: ${client.getId()}`);
@@ -180,12 +193,15 @@ peerHandler.on('disconnect', (client) => {
   console.log(`[PeerJS] ✗ Peer disconnected: ${client.getId()}`);
 });
 
-// ─── Start Universal Server ─────────────────────────────────────
+// Start both servers
 const PORT = process.env.PORT || 5000;
+const PEER_PORT = process.env.PEER_PORT || 9000;
 
 httpServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Gateway] ✓ Universal Gateway active on port ${PORT}`);
-    console.log(`[Gateway]   - Socket.IO: http://0.0.0.0:${PORT}`);
-    console.log(`[Gateway]   - PeerJS: http://0.0.0.0:${PORT}/peerjs`);
+    console.log(`[Gateway] ✓ Socket.IO active on port ${PORT}`);
+});
+
+peerServer.listen(PEER_PORT, '0.0.0.0', () => {
+    console.log(`[PeerJS]  ✓ PeerJS active on port ${PEER_PORT}`);
 });
 

@@ -70,8 +70,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             auth: { token: session.access_token },
             withCredentials: true,
             // IMPORTANT: start with polling, then upgrade.
-            // This avoids "WebSocket closed before established" errors.
-            transports: ['websocket', 'polling'],
+            // This avoids "WebSocket closed before established" errors and
+            // ensures the auth token is validated in the HTTP handshake.
+            transports: ['polling', 'websocket'],
             reconnection: true,
             reconnectionAttempts: MAX_RETRIES,
             reconnectionDelay: 2000,

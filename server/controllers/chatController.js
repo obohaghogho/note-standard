@@ -1034,27 +1034,67 @@ exports.deleteMessage = async (req, res) => {
     const { messageId } = req.params;
     const userId = req.user.id;
 
+    console.log(`[Chat Delete] Request by user ${userId} for message ${messageId}`);
+
+    // Fetch message first to check sender and log status
+    const { data: message, error: fetchError } = await supabase
+      .from("messages")
+      .select("id, sender_id, conversation_id")
+      .eq("id", messageId)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error(`[Chat Delete] Error fetching message ${messageId}:`, fetchError.message);
+      throw fetchError;
+    }
+
+    if (!message) {
+      console.warn(`[Chat Delete] Message ${messageId} not found in DB`);
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    console.log(`[Chat Delete] Message found. Sender: ${message.sender_id}, Requester: ${userId}`);
+
+    // Check requester role for admin bypass
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .single();
+
+    const isAdmin = profile && ["admin", "support"].includes(profile.role);
+    if (isAdmin) {
+      console.log(`[Chat Delete] Admin/Support bypass enabled for user ${userId}`);
+    }
+
     // Soft delete the message
-    const { data, error } = await supabase
+    let query = supabase
       .from("messages")
       .update({
         is_deleted: true,
         content: "Message deleted", // Optional: scrub content
       })
-      .eq("id", messageId)
-      .eq("sender_id", userId) // Force ownership
-      .select()
-      .single();
+      .eq("id", messageId);
+
+    // If not admin, force ownership check
+    if (!isAdmin) {
+      query = query.eq("sender_id", userId);
+    }
+
+    const { data, error } = await query.select().single();
 
     if (error) {
       // Check for 'No rows found' equivalent in supabase or missing permissions
       if (error.code === "PGRST116" || error.details?.includes('0 rows')) {
+        console.warn(`[Chat Delete] Deletion failed. Record not found or RLS blocked it for user ${userId}`);
         return res.status(404).json({
           error: "Message not found or you don't have permission to delete it",
         });
       }
       throw error;
     }
+
+    console.log(`[Chat Delete] Successfully soft-deleted message ${messageId}`);
 
     // Notify via Gateway
     realtime.emit("to_conversation", {
