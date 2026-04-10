@@ -35,8 +35,6 @@ process.on('unhandledRejection', (reason, promise) => {
 // ═══════════════════════════════════════════════════════════════
 const app = express();
 
-// ─── Express Middleware ──────────────────────────────────────────
-// Enable CORS at the Express level to catch errors and polling pre-flights
 app.use(cors({
   origin: [
     'https://notestandard.com',
@@ -53,6 +51,7 @@ app.use(express.json());
 
 const httpServer = http.createServer(app);
 
+// Initialize IO and capture its upgrade listener immediately
 const io = new Server(httpServer, {
   cors: {
     origin: [
@@ -65,24 +64,18 @@ const io = new Server(httpServer, {
     methods: ['GET', 'POST'],
     credentials: true,
   },
-  // IMPORTANT: Prioritize websocket for Render stability
   transports: ['websocket', 'polling'],
-  perMessageDeflate: false, // Fix "Invalid frame header" on shared port
+  perMessageDeflate: false, // Core fix for shared-port frame corruption
   pingTimeout: 60000,
   pingInterval: 25000,
   allowEIO3: true,
 });
 
-io.use(authMiddleware);
-
-// ─── WebSocket Upgrade Re-prioritization ────────────────────────
-// PeerJS and Socket.io often conflict on the 'upgrade' event.
-// We ensure Socket.io handles its own upgrades first.
-const originalUpgradeListeners = httpServer.listeners('upgrade');
+const ioUpgradeListeners = httpServer.listeners('upgrade').slice();
 httpServer.removeAllListeners('upgrade');
-originalUpgradeListeners.forEach(listener => {
-  httpServer.prependListener('upgrade', listener);
-});
+console.log(`[Gateway] Captured ${ioUpgradeListeners.length} Socket.io upgrade listeners`);
+
+io.use(authMiddleware);
 
 // Load event handlers
 const chatHandlers = require('./events/chat');
@@ -111,17 +104,12 @@ io.on('connection', (socket) => {
 const REDIS_URL = process.env.REDIS_URL;
 if (REDIS_URL) {
   const subscriber = redis.createClient({ url: REDIS_URL });
-  
   subscriber.on('error', (err) => console.error('[Redis] Subscriber Error:', err));
-  
   subscriber.connect().then(() => {
     console.log('[Redis] ✓ Subscriber connected');
-    
     subscriber.subscribe('realtime:events', (message) => {
       try {
         const { event, data } = JSON.parse(message);
-        console.log(`[Redis] Event: ${event}`);
-        
         switch (event) {
           case 'to_user': io.to(`user:${data.userId}`).emit(data.event, data.data); break;
           case 'to_conversation': io.to(data.conversationId).emit(data.event, data.data); break;
@@ -135,16 +123,12 @@ if (REDIS_URL) {
   }).catch(err => {
     console.error('[Redis] Connection failed:', err.message);
   });
-} else {
-  console.warn('[Redis] REDIS_URL not found — Real-time sync via Redis is disabled.');
 }
 
-// ─── HTTP Bridge & Health (on main port) ────────────────────────
+// ─── HTTP Bridge & Health ───────────────────────────────────────
 app.post('/internal/emit', (req, res) => {
   const { event, data } = req.body;
   if (!event || !data) return res.status(400).json({ error: 'Missing event or data' });
-  
-  console.log(`[Bridge] ${event}`);
   switch (event) {
     case 'to_user': io.to(`user:${data.userId}`).emit(data.event, data.data); break;
     case 'to_conversation': io.to(data.conversationId).emit(data.event, data.data); break;
@@ -156,11 +140,7 @@ app.post('/internal/emit', (req, res) => {
 });
 
 app.get('/health', (_req, res) => {
-  res.json({
-    status: 'ok',
-    service: 'realtime-gateway',
-    socketClients: io.engine.clientsCount,
-  });
+  res.json({ status: 'ok', service: 'realtime-gateway', socketClients: io.engine.clientsCount });
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -174,6 +154,23 @@ const peerHandler = ExpressPeerServer(httpServer, {
 });
 
 app.use('/peerjs', peerHandler);
+
+const peerUpgradeListeners = httpServer.listeners('upgrade').slice();
+httpServer.removeAllListeners('upgrade');
+console.log(`[Gateway] Captured ${peerUpgradeListeners.length} PeerJS upgrade listeners`);
+
+// Final Deterministic Upgrade Dispatcher
+httpServer.on('upgrade', (req, socket, head) => {
+  const url = req.url || '';
+  if (url.includes('/socket.io/')) {
+    ioUpgradeListeners.forEach(listener => listener(req, socket, head));
+  } else if (url.includes('/peerjs')) {
+    peerUpgradeListeners.forEach(listener => listener(req, socket, head));
+  } else {
+    console.log(`[Gateway] Rejecting unknown upgrade request: ${url}`);
+    socket.destroy();
+  }
+});
 
 peerHandler.on('connection', (client) => {
   console.log(`[PeerJS] ✓ Peer connected: ${client.getId()}`);
