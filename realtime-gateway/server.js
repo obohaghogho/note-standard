@@ -77,27 +77,16 @@ app.post('/internal/emit', (req, res) => {
   res.json({ ok: true });
 });
 
-// ✅ 6. PEERJS SETUP — Dummy server isolation pattern
-// Passing the real httpServer to ExpressPeerServer causes its internal 'ws' library
-// to steal and destroy Socket.IO WebSocket upgrade packets. Fix: use a dummy HTTP
-// server so PeerJS never touches the main server's upgrade event directly.
-const peerDummyServer = http.createServer();
-const peerServer = ExpressPeerServer(peerDummyServer, {
-  path: '/',
+// ✅ 6. PEERJS SETUP — Direct attachment to httpServer
+// ws@8 properly filters WebSocket upgrades by path. PeerJS on '/peerjs' and
+// Socket.IO on '/socket.io' coexist without conflicts on the same server.
+const peerServer = ExpressPeerServer(httpServer, {
+  path: '/peerjs',
   allow_discovery: false,
   proxied: true,
 });
 
-// Mount PeerJS HTTP routing on the real app at /peerjs
-app.use('/peerjs', peerServer);
-
-// Route WebSocket upgrades: /peerjs/* → peerDummyServer, everything else → Socket.IO
-httpServer.on('upgrade', (req, socket, head) => {
-  if (req.url && req.url.startsWith('/peerjs')) {
-    peerDummyServer.emit('upgrade', req, socket, head);
-  }
-  // Socket.IO handles all other upgrades automatically via its own listener
-});
+app.use(peerServer);
 
 peerServer.on('connection', (client) => {
   console.log(`[PeerJS] ✓ Peer connected: ${client.getId()}`);
