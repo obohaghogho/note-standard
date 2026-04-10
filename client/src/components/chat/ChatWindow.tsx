@@ -31,7 +31,7 @@ const ChatWindow: React.FC = () => {
         sendTypingStatus, typingUsers, sendMessageToConversation 
     } = useChat();
     const { isUserOnline, getUserLastSeen } = usePresence();
-    const { user, profile, session } = useAuth();
+    const { user, profile, session, isAdmin } = useAuth();
     const { startCall } = useWebRTC();
     const { openMobileMenu } = useOutletContext<{ openMobileMenu: () => void }>() || {};
 
@@ -633,15 +633,17 @@ const ChatWindow: React.FC = () => {
                                 <Copy size={18} />
                                 <span className="hidden sm:inline">Copy</span>
                             </button>
-                            <button 
-                                onClick={() => {
-                                    setConfirmModal({ isOpen: true, type: 'message', messageId: Array.from(selectedMessages)[0] });
-                                }}
-                                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/15 rounded-xl transition-all active:scale-95"
-                            >
-                                <Trash2 size={18} />
-                                <span className="hidden sm:inline">Delete</span>
-                            </button>
+                            {(isAdmin || currentMessages.filter(m => selectedMessages.has(m.id)).every(m => m.sender_id === user?.id)) && (
+                                <button 
+                                    onClick={() => {
+                                        setConfirmModal({ isOpen: true, type: 'message', messageId: Array.from(selectedMessages)[0] });
+                                    }}
+                                    className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/15 rounded-xl transition-all active:scale-95"
+                                >
+                                    <Trash2 size={18} />
+                                    <span className="hidden sm:inline">Delete</span>
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>

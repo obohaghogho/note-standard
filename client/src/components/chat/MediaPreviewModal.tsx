@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { X, Download, Share2, Trash2, Loader2, Minimize } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SecureImage from '../common/SecureImage';
@@ -23,6 +24,7 @@ export const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({
     isSender,
     onDelete
 }) => {
+    const { isAdmin } = useAuth();
     const [isLoading, setIsLoading] = useState(true);
     const [zoom, setZoom] = useState(1);
     const [isSharing, setIsSharing] = useState(false);
@@ -195,7 +197,7 @@ export const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({
                                 <Share2 size={20} />
                                 <span>{isSharing ? 'Sharing...' : 'Share'}</span>
                             </button>
-                            {isSender && onDelete && (
+                            {(isSender || isAdmin) && onDelete && (
                                 <button className="media-footer-btn delete" onClick={onDelete} title="Delete">
                                     <Trash2 size={20} />
                                     <span>Delete</span>
