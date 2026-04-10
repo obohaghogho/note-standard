@@ -184,7 +184,7 @@ if (ISOLATE_PEER) {
 
   peerHandler = ExpressPeerServer(peerServer, {
     debug: false,
-    path: '/peerjs',
+    path: '/',
     allow_discovery: false,
     proxied: true,
   });
@@ -204,12 +204,12 @@ if (ISOLATE_PEER) {
   const peerDummyServer = http.createServer();
   peerHandler = ExpressPeerServer(peerDummyServer, {
     debug: false,
-    path: '/peerjs',
+    path: '/',
     allow_discovery: false,
     proxied: true,
   });
 
-  // Mount globally. The inner PeerJS router strictly expects exactly /peerjs
+  // Mount globally. The inner PeerJS router strictly expects exactly /:key/id pattern
   app.use(peerHandler);
   
   // Conditionally route WebSocket upgrades to the Dummy Peer Server verbatim

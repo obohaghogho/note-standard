@@ -169,8 +169,8 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             const peerHost = isDev ? 'localhost' : url.hostname;
             const peerPort = isDev ? 9000 : (parseInt(url.port) || (url.protocol === 'https:' ? 443 : 80));
-            // Uniformly use '/peerjs' everywhere. Server path logic relies on this.
-            const peerPath = '/peerjs';
+            // Setting path: '/' causes PeerJS to natively append 'peerjs?key=', resulting in exactly '/peerjs?key='
+            const peerPath = '/';
             const peerSecure = !isDev;
 
             const peer = new Peer(peerId, {
