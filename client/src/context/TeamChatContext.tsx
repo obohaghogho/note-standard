@@ -169,7 +169,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
         setLoading(false);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [teamId, user, profile, authReady]);
 
   // ====================================

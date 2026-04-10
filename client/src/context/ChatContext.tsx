@@ -189,11 +189,34 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
             setMessages(prev => {
                 const current = prev[msg.conversation_id] || [];
-                // Deduplicate to avoid issues between optimistic update and socket
+                
+                // 1. Check if this exact UUID already exists (avoid duplicates from multiple socket paths)
                 if (current.some(m => m.id === msg.id)) return prev;
+
+                // 2. Optimization: Check if this is a match for an optimistic message we sent
+                // We match by: sender is me, type matches, content matches, and it was created very recently (< 10s)
+                const now = new Date(msg.created_at).getTime();
+                const optimisticMatchIndex = current.findIndex(m => 
+                    m.id.startsWith('temp-') && 
+                    m.sender_id === msg.sender_id && 
+                    m.type === msg.type &&
+                    m.content === msg.content &&
+                    Math.abs(now - new Date(m.created_at).getTime()) < 10000
+                );
+
+                let nextMessages;
+                if (optimisticMatchIndex !== -1) {
+                    // Replace the optimistic placeholder with the real message
+                    nextMessages = [...current];
+                    nextMessages[optimisticMatchIndex] = newMessage;
+                } else {
+                    // Just append the new message
+                    nextMessages = [...current, newMessage];
+                }
+
                 return {
                     ...prev,
-                    [msg.conversation_id]: [...current, newMessage]
+                    [msg.conversation_id]: nextMessages
                 };
             });
 
