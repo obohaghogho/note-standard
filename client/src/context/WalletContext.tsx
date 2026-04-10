@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabaseSafe';
 import walletApi from '../api/walletApi';
 import type { Wallet, Transaction, InternalTransferRequest, WithdrawalRequest, CommissionSettings } from '@/types/wallet';
 import { useAuth } from './AuthContext';
-import { useSocket } from './SocketContext';
+import { useSocket, type RealtimeNotification } from './SocketContext';
 import toast from 'react-hot-toast';
 
 export interface WalletContextValue {
@@ -16,6 +16,14 @@ export interface WalletContextValue {
     sendFunds: (data: InternalTransferRequest) => Promise<void>;
     withdraw: (data: WithdrawalRequest) => Promise<void>;
     getCommissionRate: (type: 'swap' | 'withdrawal' | 'deposit', currency: string) => Promise<CommissionSettings[]>;
+}
+
+export interface BalanceUpdate {
+    userId: string;
+    transactionId: string;
+    amount: number;
+    currency: string;
+    newStatus: string;
 }
 
 export const WalletContext = createContext<WalletContextValue | null>(null);
@@ -149,12 +157,12 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     useEffect(() => {
         if (!socket || !connected) return;
 
-        const onBalanceUpdated = (data: any) => {
+        const onBalanceUpdated = (data: BalanceUpdate) => {
             console.log('[WalletContext] Balance update via Socket:', data);
             fetchData();
         };
 
-        const onNotification = (data: any) => {
+        const onNotification = (data: RealtimeNotification) => {
             if (data.type === 'payment_success' || data.type === 'wallet_update') {
                 fetchData();
             }

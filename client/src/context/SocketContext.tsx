@@ -19,6 +19,15 @@ interface SocketContextValue {
     error: string | null;
 }
 
+export interface RealtimeNotification {
+    id?: string;
+    type: string;
+    title: string;
+    message?: string;
+    link?: string;
+    created_at?: string;
+}
+
 const SocketContext = createContext<SocketContextValue>({
     socket: null,
     connected: false,
@@ -105,7 +114,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         });
 
         // ── Global Real-time Notifications ───────────────────
-        socket.on('notification', (data: any) => {
+        socket.on('notification', (data: RealtimeNotification) => {
             console.log('[Socket] Global notification received:', data);
             if (data?.title) {
                 toast.success(`${data.title}: ${data.message || ''}`, {

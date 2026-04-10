@@ -158,7 +158,6 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return () => {
             supabase.removeChannel(channel);
         };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user, fetchNotes, hasFetched]);
 
     /**
@@ -167,7 +166,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     useEffect(() => {
         if (!socket || !connected) return;
 
-        const onNoteUpdated = (data: { noteId: string; updatedBy: string; note: Note }) => {
+        const onNoteUpdated = (data: { noteId: string; note: Note }) => {
             console.log('[NotesContext] Real-time note update via Socket:', data.noteId);
             setNotes(prev => prev.map(n => n.id === data.noteId ? { ...data.note, id: data.noteId } : n));
             // toast.success('A shared note was updated', { icon: '📝' });
