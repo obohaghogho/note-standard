@@ -196,6 +196,7 @@ if (ISOLATE_PEER) {
     console.log(`[PeerJS]  ✓ PeerJS active (isolated) on port ${PEER_PORT}`);
   });
 
+} else {
   // ── Prod: Co-exist on the same port by decoupling upgrade listeners ──────
   // PeerJS uses 'ws', which aggressively destroys incoming upgrade sockets if 
   // they do not match its path. This crashes Socket.io's engine!
