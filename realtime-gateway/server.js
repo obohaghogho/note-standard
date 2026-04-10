@@ -67,12 +67,22 @@ const io = new Server(httpServer, {
   },
   // IMPORTANT: Prioritize websocket for Render stability
   transports: ['websocket', 'polling'],
+  perMessageDeflate: false, // Fix "Invalid frame header" on shared port
   pingTimeout: 60000,
   pingInterval: 25000,
-  allowEIO3: true, // Compatibility
+  allowEIO3: true,
 });
 
 io.use(authMiddleware);
+
+// ─── WebSocket Upgrade Re-prioritization ────────────────────────
+// PeerJS and Socket.io often conflict on the 'upgrade' event.
+// We ensure Socket.io handles its own upgrades first.
+const originalUpgradeListeners = httpServer.listeners('upgrade');
+httpServer.removeAllListeners('upgrade');
+originalUpgradeListeners.forEach(listener => {
+  httpServer.prependListener('upgrade', listener);
+});
 
 // Load event handlers
 const chatHandlers = require('./events/chat');
@@ -130,8 +140,6 @@ if (REDIS_URL) {
 }
 
 // ─── HTTP Bridge & Health (on main port) ────────────────────────
-// Removed redundant app.use(express.json()) as it's defined above
-
 app.post('/internal/emit', (req, res) => {
   const { event, data } = req.body;
   if (!event || !data) return res.status(400).json({ error: 'Missing event or data' });
@@ -160,12 +168,12 @@ app.get('/health', (_req, res) => {
 // ═══════════════════════════════════════════════════════════════
 const peerHandler = ExpressPeerServer(httpServer, {
   debug: false,
-  path: '/peerjs',
+  path: '/',
   allow_discovery: false,
   proxied: true,
 });
 
-app.use(peerHandler);
+app.use('/peerjs', peerHandler);
 
 peerHandler.on('connection', (client) => {
   console.log(`[PeerJS] ✓ Peer connected: ${client.getId()}`);
