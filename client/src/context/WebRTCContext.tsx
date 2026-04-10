@@ -261,15 +261,28 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             peerRef.current = peer;
         }
 
-        createPeer();
+        // Delay peer creation to bypass React 18 Strict Mode double-mounts.
+        // This prevents the "WebSocket closed before connection established" warning.
+        const peerInitDelay = setTimeout(() => {
+            if (!destroyed) createPeer();
+        }, 200);
 
         return () => {
             destroyed = true;
+            clearTimeout(peerInitDelay);
             // Null the ref BEFORE destroy so that a concurrent re-render
             // triggered by the auth SIGNED_IN event can create a fresh peer.
             const peer = peerRef.current;
             peerRef.current = null;
-            peer?.destroy();
+            
+            // If the peer is still connecting, destroying it throws a loud console error.
+            if (peer) {
+                try {
+                    peer.destroy();
+                } catch (e) {
+                    // Ignore unhandled websocket destruction error
+                }
+            }
         };
     }, [user, cleanup]);
 

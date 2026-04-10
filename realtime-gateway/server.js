@@ -109,12 +109,20 @@ const io = new Server(httpServer, {
   allowEIO3: true,
 });
 
-// Route WebSocket upgrades manually BEFORE Engine.IO absorbs them
+// ✅ 7a. Ensure completely isolated upgrade routing
+// Engine.IO normally destroys unknown upgrades. We intercept and route them manually.
+const socketIoListeners = httpServer.listeners('upgrade').slice(0);
+httpServer.removeAllListeners('upgrade');
+
 httpServer.on('upgrade', (req, socket, head) => {
   if (req.url && req.url.startsWith('/peerjs')) {
     peerDummyServer.emit('upgrade', req, socket, head);
+  } else {
+    // Forward everything else to Engine.IO
+    for (const listener of socketIoListeners) {
+      listener(req, socket, head);
+    }
   }
-  // If not /peerjs, Engine.IO handles it naturally via its own listener
 });
 
 peerServer.on('connection', (client) => {
