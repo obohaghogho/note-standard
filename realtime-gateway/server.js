@@ -161,9 +161,13 @@ if (REDIS_URL) {
           case 'to_admin': io.to('admin_room').emit(data.event, data.data); break;
           case 'broadcast': io.emit(data.event, data.data); break;
         }
-      } catch (err) { }
+      } catch (err) {
+        console.error('[Redis] Failed to process message:', err.message);
+      }
     });
-  }).catch(() => {});
+  }).catch((err) => {
+    console.error('[Redis] Connection failed:', err?.message || err);
+  });
 }
 
 // ✅ 9. START SERVER (RENDER PORT)
