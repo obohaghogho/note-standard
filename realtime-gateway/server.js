@@ -184,12 +184,12 @@ if (ISOLATE_PEER) {
 
   peerHandler = ExpressPeerServer(peerServer, {
     debug: false,
-    path: '/',
+    path: '/peerjs',
     allow_discovery: false,
     proxied: true,
   });
 
-  peerApp.use('/', peerHandler);
+  peerApp.use(peerHandler);
   peerApp.get('/health', (_req, res) => res.json({ status: 'ok', service: 'peerjs' }));
 
   peerServer.listen(PEER_PORT, '0.0.0.0', () => {
@@ -204,19 +204,17 @@ if (ISOLATE_PEER) {
   const peerDummyServer = http.createServer();
   peerHandler = ExpressPeerServer(peerDummyServer, {
     debug: false,
-    path: '/',
+    path: '/peerjs',
     allow_discovery: false,
     proxied: true,
   });
 
-  // Mount HTTP layer (app.use strips the prefix, so internals see '/')
-  app.use('/peerjs', peerHandler);
+  // Mount globally. The inner PeerJS router strictly expects exactly /peerjs
+  app.use(peerHandler);
   
-  // Conditionally route WebSocket upgrades to the Dummy Peer Server
+  // Conditionally route WebSocket upgrades to the Dummy Peer Server verbatim
   httpServer.on('upgrade', (req, socket, head) => {
     if (req.url.startsWith('/peerjs')) {
-      // Strip /peerjs prefix so the dummy server (with path: '/') matches it
-      req.url = req.url.replace('/peerjs', '') || '/';
       peerDummyServer.emit('upgrade', req, socket, head);
     }
   });

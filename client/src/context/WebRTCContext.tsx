@@ -169,9 +169,8 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             const peerHost = isDev ? 'localhost' : url.hostname;
             const peerPort = isDev ? 9000 : (parseInt(url.port) || (url.protocol === 'https:' ? 443 : 80));
-            // In Dev:  isolated port 9000, mounted at '/' -> final URL /peerjs
-            // In Prod: gateway port 5000, mounted at '/peerjs' -> final URL /peerjs/peerjs
-            const peerPath = isDev ? '/' : '/peerjs';
+            // Uniformly use '/peerjs' everywhere. Server path logic relies on this.
+            const peerPath = '/peerjs';
             const peerSecure = !isDev;
 
             const peer = new Peer(peerId, {
