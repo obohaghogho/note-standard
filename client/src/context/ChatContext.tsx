@@ -109,12 +109,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const hasInitialFetched = useRef(false);
     const conversationsRef = useRef<Conversation[]>([]);
     const socketRef = useRef<any>(null);
+    const activeConversationIdRef = useRef<string | null>(null);
 
 
     // Keep refs in sync
     useEffect(() => {
         conversationsRef.current = conversations;
     }, [conversations]);
+
+    useEffect(() => {
+        activeConversationIdRef.current = activeConversationId;
+    }, [activeConversationId]);
 
     useEffect(() => {
         socketRef.current = socket;
@@ -241,7 +246,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             setConversations(prev => prev.map(conv => {
                 if (conv.id === msg.conversation_id) {
                     const isOtherMsg = msg.sender_id !== user?.id;
-                    const isActive = msg.conversation_id === activeConversationId;
+                    const isActive = msg.conversation_id === activeConversationIdRef.current;
                     return {
                         ...conv,
                         updated_at: msg.created_at,
@@ -257,7 +262,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }));
 
             // Auto-mark as read if active
-            if (msg.conversation_id === activeConversationId && msg.sender_id !== user?.id) {
+            if (msg.conversation_id === activeConversationIdRef.current && msg.sender_id !== user?.id) {
                 console.log('[Chat] Auto-marking as read:', msg.id);
                 markMessageRead(msg.id);
             }
@@ -300,7 +305,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         const onConversationDeleted = ({ conversationId }: { conversationId: string }) => {
             setConversations(prev => prev.filter(c => c.id !== conversationId));
-            if (activeConversationId === conversationId) {
+            if (activeConversationIdRef.current === conversationId) {
                 setActiveConversationId(null);
             }
             // Cleanup messages
@@ -410,7 +415,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             socket.off('user_stop_typing');
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [socket, connected, user?.id, loadConversations, activeConversationId]);
+    }, [socket, connected, user?.id, loadConversations]);
 
 
     // ✅ Re-join all rooms whenever socket reconnects (covers disconnect/reconnect scenarios)
