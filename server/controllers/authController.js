@@ -48,14 +48,35 @@ const register = async (req, res) => {
       return res.status(409).json({ error: `${field} is already in use.` });
     }
 
-    // 3. The frontend will handle the actual signUp call for better integration.
-    // However, we pre-create the profile to ensure consistency.
-    // Note: In a production app, you might use a Supabase Trigger for this.
+    // 3. Create the user in Supabase Auth via Admin API
+    // This bypasses the broken built-in SMTP and auto-confirms the user.
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        full_name: fullName,
+        username: username,
+        referrer_id: referrerId,
+        is_verified: true
+      }
+    });
 
-    // We return success to let the frontend proceed with supabase.auth.signUp
+    if (authError) {
+      console.error("[AUTH-ERROR] Admin creation failed:", authError.message);
+      return res.status(400).json({ error: authError.message });
+    }
+
+    // Note: The database trigger 'handle_new_user' will automatically create
+    // the profile and wallets when the record hits the auth.users table.
+
     res.status(200).json({
       success: true,
-      message: "Ready for registration.",
+      message: "Registration successful! You can now log in.",
+      user: {
+        id: authData.user.id,
+        email: authData.user.email
+      }
     });
   } catch (err) {
     console.error("[Register Error]:", err.message);

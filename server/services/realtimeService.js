@@ -8,6 +8,9 @@ if (process.env.REDIS_URL) {
   publisher.connect().catch(err => {
     console.error('[RealtimeService] Redis connection failed:', err.message);
   });
+  publisher.on('error', (err) => {
+    console.error('[RealtimeService] Redis Error:', err.message);
+  });
   console.log('[RealtimeService] Redis publisher initialized');
 }
 

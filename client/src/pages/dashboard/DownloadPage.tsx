@@ -79,17 +79,18 @@ export const DownloadPage: React.FC = () => {
         icon: '⚠️',
         duration: 8000,
       });
+      const filename = 'app-release.ipa';
+      const link = document.createElement('a');
+      link.href = `/downloads/${filename}`;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     } else {
       toast.success(`Starting Android (APK) download...`);
+      // Redirect to the backend dynamic resolver
+      window.location.href = `/api/app/latest-apk`;
     }
-
-    const filename = platform === 'android' ? 'app-release.apk' : 'app-release.ipa';
-    const link = document.createElement('a');
-    link.href = `/downloads/${filename}`;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   return (

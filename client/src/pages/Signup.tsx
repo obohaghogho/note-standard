@@ -54,6 +54,8 @@ export const Signup = () => {
 
     const validateSecurity = () => {
         if (password.length < 8) return 'Password must be at least 8 characters';
+        if (!/\d/.test(password)) return 'Password must contain at least one number';
+        if (!/[A-Z]/.test(password)) return 'Password must contain at least one uppercase letter';
         if (password !== confirmPassword) return 'Passwords do not match';
         return null;
     };
@@ -77,13 +79,10 @@ export const Signup = () => {
 
     const handleFinalSubmit = async () => {
         setLoading(true);
-        setLoadingStatus('Initializing secure signup...');
+        setLoadingStatus('Securing your details...');
         setError('');
 
         try {
-            // 1. First, register with the backend to handle profile creation and reCAPTCHA
-            // We still want the backend to validate reCAPTCHA and prepare the profile
-            setLoadingStatus('Securing your details...');
             const response = await fetch(`${API_URL}/api/auth/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -98,37 +97,24 @@ export const Signup = () => {
             });
 
             const result = await response.json();
-            
-            // Note: Our modified backend will now return success even if it doesn't send an OTP
             if (!response.ok) throw new Error(result.error || 'Registration failed');
 
-            // 2. Register with Supabase Auth
-            // This will send the native Supabase confirmation email
-            setLoadingStatus('Sending verification email...');
-            const { error: signUpError } = await supabase.auth.signUp({
-                email,
-                password,
-                options: {
-                    data: {
-                        full_name: fullName,
-                        username: username,
-                        is_verified: false,
-                    },
-                    emailRedirectTo: `${window.location.origin}/login`
-                }
-            });
+            // SUCCESS!
+            toast.success('Registration successful! You can now log in.');
+            localStorage.removeItem('referrer_id');
+            
+            // Since we use the Admin API on the backend, the account is already verified!
+            navigate('/login', { state: { email, message: 'Account created! You can now log in.' } });
 
-            if (signUpError) throw signUpError;
-
-            setStep('success');
-            toast.success('Registration successful! Please check your email.');
-
-        } catch (err: unknown) {
-            console.error(err);
-            const msg = err instanceof Error ? err.message : 'Signup failed. Please check your details.';
+        } catch (err: any) {
+            console.error('Registration error:', err);
+            let msg = err.message || 'Signup failed';
+            
+            if (msg === 'Failed to fetch') {
+                msg = 'Cannot connect to the security server. Please ensure the backend is running and try again.';
+            }
             
             setError(msg);
-            toast.success(msg); // Use success color for errors sometimes to avoid scaring users? No, toast.error.
             toast.error(msg);
             
             // Reset reCAPTCHA on error to allow retry

@@ -40,6 +40,15 @@ const paymentExpiry = require("./workers/paymentExpiry");
  * We bind to the port as early as possible to satisfy Render's port detection.
  * All heavy initialization and background workers start AFTER the server is live.
  */
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    logger.error(`Port ${PORT} is already in use. Please run 'npm run dev:safe' to clear it.`);
+    process.exit(1);
+  } else {
+    logger.error('Server error:', err);
+  }
+});
+
 server.listen(PORT, "0.0.0.0", async () => {
   logger.info(`Server running on port ${PORT}`);
 

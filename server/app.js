@@ -167,6 +167,20 @@ app.post("/api/flutterwave-webhook", async (req, res) => {
 
 app.use("/api/media", require("./routes/media"));
 
+// ─── Dynamic App Downloads ───────────────────────────────────
+const downloadService = require("./services/DownloadService");
+
+app.get("/api/app/latest-apk", (req, res) => {
+  const apk = downloadService.getLatestAPK();
+  if (!apk) {
+    return res.status(404).json({ error: "APK file not found" });
+  }
+  
+  res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+  res.setHeader('Content-Disposition', `attachment; filename="${apk.filename}"`);
+  res.sendFile(apk.path);
+});
+
 // ─── Serve Frontend (Production) ──────────────────────────────
 app.use((req, res, next) => {
   if (req.path.endsWith('.apk')) {
