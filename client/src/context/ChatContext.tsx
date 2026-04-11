@@ -189,21 +189,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         if (!socket || !connected) return;
 
         const processIncomingMessage = (msg: Message & { sender_id: string; conversation_id: string }) => {
+            console.log('[DEBUG] ?? Socket received msg:', msg.id, 'for room:', msg.conversation_id, 'isMounted:', isMounted.current);
             if (!isMounted.current) return;
             
-            const newMessage: Message = {
-                id: msg.id,
-                conversation_id: msg.conversation_id,
-                sender_id: msg.sender_id,
-                content: msg.content,
-                created_at: msg.created_at,
-                type: msg.type,
-                isOwn: msg.sender_id === user?.id,
-                original_language: msg.original_language,
-                attachment: msg.attachment,
-                read_at: msg.read_at
-            };
-
+            const newMessage: Message = { ...msg, isOwn: msg.sender_id === user?.id };
+            
             if (msg.sender_id !== user?.id) {
                 const sender = conversationsRef.current.find(c => c.id === msg.conversation_id)?.members.find(m => m.user_id === msg.sender_id)?.profile?.username || 'Someone';
                 NotificationService.notifyNewMessage(sender, msg.content, msg.conversation_id);
@@ -211,12 +201,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
             setMessages(prev => {
                 const current = prev[msg.conversation_id] || [];
-                
-                // 1. Check if this exact UUID already exists (avoid duplicates from multiple socket paths)
-                if (current.some(m => m.id === msg.id)) return prev;
+                // Check if uuid exists to prevent socket double-delivery
+                if (current.some(m => m.id === msg.id && m.content === msg.content)) {
+                    return prev;
+                }
 
-                // 2. Optimization: Check if this is a match for an optimistic message we sent
-                // We match by: sender is me, type matches, content matches, and it was created very recently (< 10s)
+                // If optimism matched
                 const now = new Date(msg.created_at).getTime();
                 const optimisticMatchIndex = current.findIndex(m => 
                     m.id.startsWith('temp-') && 
@@ -228,21 +218,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
                 let nextMessages;
                 if (optimisticMatchIndex !== -1) {
-                    console.log('[Chat] ✓ Replacing optimistic message:', current[optimisticMatchIndex].id);
                     nextMessages = [...current];
                     nextMessages[optimisticMatchIndex] = newMessage;
                 } else {
-                    console.log('[Chat] + Appending new message:', msg.id);
                     nextMessages = [...current, newMessage];
                 }
 
-                return {
-                    ...prev,
-                    [msg.conversation_id]: nextMessages
-                };
+                return { ...prev, [msg.conversation_id]: nextMessages };
             });
 
-            // Update conversation unread count and last message
             setConversations(prev => prev.map(conv => {
                 if (conv.id === msg.conversation_id) {
                     const isOtherMsg = msg.sender_id !== user?.id;
@@ -250,25 +234,20 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     return {
                         ...conv,
                         updated_at: msg.created_at,
-                        lastMessage: {
-                            content: msg.content,
-                            sender_id: msg.sender_id,
-                            created_at: msg.created_at
-                        },
+                        lastMessage: { content: msg.content, sender_id: msg.sender_id, created_at: msg.created_at },
                         unreadCount: (conv.unreadCount || 0) + (isOtherMsg && !isActive ? 1 : 0)
                     };
                 }
                 return conv;
             }));
 
-            // Auto-mark as read if active
             if (msg.conversation_id === activeConversationIdRef.current && msg.sender_id !== user?.id) {
-                console.log('[Chat] Auto-marking as read:', msg.id);
                 markMessageRead(msg.id);
             }
         };
 
         const onMessageRead = ({ messageId, conversationId }: { messageId: string; conversationId: string }) => {
+            
             setMessages(prev => {
                 const convMessages = prev[conversationId] || [];
                 // If message already marked read later, don't overwrite with older timestamp
@@ -309,6 +288,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 setActiveConversationId(null);
             }
             // Cleanup messages
+            
             setMessages(prev => {
                 const next = { ...prev };
                 delete next[conversationId];
@@ -323,6 +303,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         socket.on('conversation_read', ({ conversationId, readerId, readAt }: { conversationId: string, readerId: string, readAt: string }) => {
             if (readerId === user?.id) return; // Already updated locally
             
+            
             setMessages(prev => {
                 const convMessages = prev[conversationId] || [];
                 return {
@@ -335,6 +316,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         });
         socket.on('conversation_deleted', onConversationDeleted);
         socket.on('message_deleted', ({ messageId, conversationId }: { messageId: string, conversationId: string }) => {
+            
             setMessages(prev => {
                 const convMessages = prev[conversationId] || [];
                 return {
@@ -358,6 +340,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         socket.on('message_edited', (editedMsg: Message) => {
             if (!editedMsg || !editedMsg.id) return;
             const conversationId = editedMsg.conversation_id;
+            
             
             setMessages(prev => {
                 const convMessages = prev[conversationId] || [];
@@ -507,6 +490,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             const data = await res.json();
             
             // Replace optimistic message with real one
+            
             setMessages(prev => {
                 const current = prev[conversationId] || [];
                 // CRITICAL: Check if the message was already added by a socket event (receive_message)
@@ -602,6 +586,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             });
 
             // Optimistic local update
+            
             setMessages(prev => {
                 const current = prev[conversationId] || [];
                 return {
@@ -729,6 +714,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }
         } catch (err) {
             // Rollback
+            
             setMessages(prev => {
                 const existing = prev[activeConversationId] || [];
                 if (existing.some(m => m.id === messageId)) return prev; // Already back somehow
@@ -752,7 +738,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         // Optimistic update
         let oldMessageContent = '';
-        setMessages(prev => {
+        
+            setMessages(prev => {
             const current = prev[activeConversationId] || [];
             const msg = current.find(m => m.id === messageId);
             if (msg) oldMessageContent = msg.content;
@@ -789,7 +776,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         } catch (err) {
             // Rollback
             if (oldMessageContent) {
-                setMessages(prev => {
+                
+            setMessages(prev => {
                     const current = prev[activeConversationId] || [];
                     return {
                         ...prev,
@@ -925,3 +913,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         </ChatContext.Provider>
     );
 };
+
+
+

@@ -15,6 +15,7 @@ const { ExpressPeerServer } = require('peer');
 const { authMiddleware } = require('./auth');
 const cors = require('cors');
 const redis = require('redis');
+const fs = require('fs');
 require('dotenv').config();
 
 // ✅ 1. CRASH PREVENTION: GLOBAL ERROR HANDLERS
@@ -169,11 +170,23 @@ if (REDIS_URL) {
     subscriber.subscribe('realtime:events', (message) => {
       try {
         const { event, data } = JSON.parse(message);
+        console.log(`[Redis] 📥 Received event: ${event}`, JSON.stringify(data).substring(0, 100));
+        
         switch (event) {
-          case 'to_user': io.to(`user:${data.userId}`).emit(data.event, data.data); break;
-          case 'to_conversation': io.to(data.conversationId).emit(data.event, data.data); break;
-          case 'to_admin': io.to('admin_room').emit(data.event, data.data); break;
-          case 'broadcast': io.emit(data.event, data.data); break;
+          case 'to_user': 
+            console.log(`[Gateway] Emit to user:${data.userId}`);
+            io.to(`user:${data.userId}`).emit(data.event, data.data); 
+            break;
+          case 'to_conversation': 
+            console.log(`[Gateway] Emit to conversation:${data.conversationId}`);
+            io.to(data.conversationId).emit(data.event, data.data); 
+            break;
+          case 'to_admin': 
+            io.to('admin_room').emit(data.event, data.data); 
+            break;
+          case 'broadcast': 
+            io.emit(data.event, data.data); 
+            break;
         }
       } catch (err) {
         console.error('[Redis] Failed to process message:', err.message);
