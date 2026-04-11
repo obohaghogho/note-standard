@@ -83,6 +83,7 @@ export interface ChatContextValue {
     typingUsers: Record<string, string[]>;
     hasMore: Record<string, boolean>;
     sendMessageToConversation: (conversationId: string, content: string, type?: string, attachmentId?: string) => Promise<void>;
+    markConversationRead: (conversationId: string) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -297,6 +298,19 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         socket.on('new_conversation', onNewConversation);
         socket.on('conversation_updated', onNewConversation);
         socket.on('message_read', onMessageRead);
+        socket.on('conversation_read', ({ conversationId, readerId, readAt }: { conversationId: string, readerId: string, readAt: string }) => {
+            if (readerId === user?.id) return; // Already updated locally
+            
+            setMessages(prev => {
+                const convMessages = prev[conversationId] || [];
+                return {
+                    ...prev,
+                    [conversationId]: convMessages.map(m => 
+                        m.sender_id === user?.id ? { ...m, read_at: m.read_at || readAt } : m
+                    )
+                };
+            });
+        });
         socket.on('conversation_deleted', onConversationDeleted);
         socket.on('message_deleted', ({ messageId, conversationId }: { messageId: string, conversationId: string }) => {
             setMessages(prev => {
@@ -369,13 +383,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         // Join rooms for all current conversations
         const joinAllRooms = () => {
+            if (!socket || !connected || conversationsRef.current.length === 0) return;
             console.log('[Chat] Joining rooms for', conversationsRef.current.length, 'conversations');
             conversationsRef.current.forEach(conv => {
                 socket.emit('join_room', conv.id);
             });
         };
-
-        joinAllRooms();
 
         return () => {
             socket.off('receive_message', processIncomingMessage);
@@ -389,7 +402,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             socket.off('user_stop_typing');
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [socket, connected, user?.id, loadConversations, activeConversationId]);
+    }, [socket, connected, user?.id, loadConversations]);
+
+    // Separate useEffect to handle room joining whenever conversations or connection status changes
+    useEffect(() => {
+        if (!socket || !connected || conversations.length === 0) return;
+        
+        console.log('[Chat] TRIGGER: Joining rooms for', conversations.length, 'conversations');
+        conversations.forEach(conv => {
+            socket.emit('join_room', conv.id);
+        });
+    }, [socket, connected, conversations.length]);
 
     const sendMessage = async (content: string, type: string = 'text', attachmentId?: string) => {
         if (!activeConversationId) throw new Error('No active conversation');
@@ -533,6 +556,34 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             });
         } catch (err) {
             console.error('[Chat] Failed to mark read:', err);
+        }
+    };
+
+    const markConversationRead = async (conversationId: string) => {
+        if (!session) return;
+        try {
+            await fetch(`${API_URL}/api/chat/conversations/${conversationId}/read`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${session.access_token}` }
+            });
+
+            // Optimistic local update
+            setMessages(prev => {
+                const current = prev[conversationId] || [];
+                return {
+                    ...prev,
+                    [conversationId]: current.map(m => m.sender_id !== user?.id ? { ...m, read_at: m.read_at || new Date().toISOString() } : m)
+                };
+            });
+
+            setConversations(prev => prev.map(conv => {
+                if (conv.id === conversationId) {
+                    return { ...conv, unreadCount: 0 };
+                }
+                return conv;
+            }));
+        } catch (err) {
+            console.error('[Chat] Failed to mark conversation read:', err);
         }
     };
 
@@ -799,10 +850,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 setMessages(prev => ({ ...prev, [activeConversationId]: messageList }));
                 setHasMore(prev => ({ ...prev, [activeConversationId]: rawMessages.length >= 50 }));
 
-                // Mark last message as read if not own
-                const lastMsg = messageList[messageList.length - 1];
-                if (lastMsg && !lastMsg.isOwn && !lastMsg.read_at) {
-                    markMessageRead(lastMsg.id);
+                // Mark entire conversation as read when opened
+                if (rawMessages.some((m: Message) => !m.read_at && m.sender_id !== user?.id)) {
+                    markConversationRead(activeConversationId);
                 }
             } catch (err) {
                 console.error('[Chat] Failed to fetch messages:', err);
@@ -834,7 +884,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             markMessageRead,
             sendTypingStatus,
             typingUsers,
-            hasMore
+            hasMore,
+            markConversationRead
         }}>
             {children}
         </ChatContext.Provider>

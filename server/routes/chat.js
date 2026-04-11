@@ -27,6 +27,10 @@ router.delete(
   "/conversations/:conversationId",
   chatController.deleteConversation,
 );
+router.put(
+  "/conversations/:conversationId/read",
+  chatController.markConversationRead,
+);
 
 // Messages
 router.get(

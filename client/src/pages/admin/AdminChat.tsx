@@ -92,8 +92,16 @@ export const AdminChat = () => {
 
         socket.on('receive_message', onReceiveMessage);
         socket.on('new_support_chat', onNewSupportChat);
-        socket.on('admin_presence_update', onPresenceUpdate);
         socket.on('message_read', onMessageRead);
+        socket.on('conversation_read', ({ conversationId, readAt }: { conversationId: string, readAt: string }) => {
+            setMessages(prev => {
+                if (activeChat && conversationId === activeChat.id) {
+                    return prev.map(m => m.sender_id === user?.id ? { ...m, read_at: m.read_at || readAt } : m);
+                }
+                return prev;
+            });
+        });
+        socket.on('admin_presence_update', onPresenceUpdate);
 
         return () => {
             socket.off('receive_message', onReceiveMessage);
@@ -102,6 +110,16 @@ export const AdminChat = () => {
             socket.off('message_read', onMessageRead);
         };
     }, [socket, connected, isAdmin, user?.id, activeChat?.id]);
+
+    // Join rooms for all chats when they are loaded or when connection status changes
+    useEffect(() => {
+        if (!socket || !connected || chats.length === 0) return;
+        
+        console.log('[AdminChat] Joining rooms for', chats.length, 'chats');
+        chats.forEach(chat => {
+            socket.emit('join_room', chat.id);
+        });
+    }, [socket, connected, chats.length]);
 
     // Fetch messages when active chat changes
     useEffect(() => {
@@ -122,8 +140,22 @@ export const AdminChat = () => {
         };
 
         fetchMessages();
+        
+        // Mark conversation as read
+        const markRead = async () => {
+            try {
+                await fetch(`${API_URL}/api/chat/conversations/${activeChat.id}/read`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${session.access_token}` }
+                });
+            } catch (err) {
+                console.error('Failed to mark read:', err);
+            }
+        };
+        markRead();
+
         if (socket && connected) {
-            socket.emit('join_room', activeChat.id);
+            // Room joining now handled globally for all chats, but we still emit presence
             socket.emit('admin_viewing_chat', {
                 conversationId: activeChat.id,
                 adminName: user?.user_metadata?.username || user?.email || 'Admin'

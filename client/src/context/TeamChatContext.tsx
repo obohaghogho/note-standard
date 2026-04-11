@@ -584,9 +584,9 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
     };
   }, [loadInitialData]);
 
-  // Setup realtime after initial load
+  // Setup realtime as soon as we have a teamId and auth
   useEffect(() => {
-    if (!loading && teamId && user && profile && authReady) {
+    if (teamId && user && profile && authReady) {
       setupRealtime();
     }
 

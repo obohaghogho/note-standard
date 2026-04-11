@@ -1180,3 +1180,42 @@ exports.editMessage = async (req, res) => {
     res.status(500).json({ error: "Server Error" });
   }
 };
+
+exports.markConversationRead = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user.id;
+    const now = new Date().toISOString();
+
+    // Mark all messages in this conversation as read, except own
+    const { error } = await supabase
+      .from("messages")
+      .update({ read_at: now })
+      .eq("conversation_id", conversationId)
+      .neq("sender_id", userId)
+      .is("read_at", null);
+
+    if (error) {
+      if (error.code === "42703") {
+         return res.json({ success: true, note: "read_at column missing" });
+      }
+      throw error;
+    }
+
+    // Emit event to room
+    await realtime.emit("to_conversation", {
+      conversationId: conversationId,
+      event: "conversation_read",
+      data: {
+        conversationId,
+        readerId: userId,
+        readAt: now
+      }
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error marking conversation read:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
