@@ -109,7 +109,7 @@ export const AdminChat = () => {
             socket.off('admin_presence_update', onPresenceUpdate);
             socket.off('message_read', onMessageRead);
         };
-    }, [socket, connected, isAdmin, user?.id, activeChat?.id]);
+    }, [socket, connected, isAdmin, user?.id, activeChat]);
 
     // Join rooms for all chats when they are loaded or when connection status changes
     useEffect(() => {
@@ -119,7 +119,7 @@ export const AdminChat = () => {
         chats.forEach(chat => {
             socket.emit('join_room', chat.id);
         });
-    }, [socket, connected, chats.length]);
+    }, [socket, connected, chats]);
 
     // Fetch messages when active chat changes
     useEffect(() => {
@@ -167,7 +167,7 @@ export const AdminChat = () => {
                 socket.emit('admin_leaving_chat', { conversationId: activeChat.id });
             }
         };
-    }, [activeChat, session?.access_token, socket, connected, user]);
+    }, [activeChat, session, socket, connected, user]);
 
     // Initial Fetch
     useEffect(() => {

@@ -381,14 +381,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             });
         });
 
-        // Join rooms for all current conversations
-        const joinAllRooms = () => {
-            if (!socket || !connected || conversationsRef.current.length === 0) return;
-            console.log('[Chat] Joining rooms for', conversationsRef.current.length, 'conversations');
-            conversationsRef.current.forEach(conv => {
-                socket.emit('join_room', conv.id);
-            });
-        };
+        // Listeners for various events
+
 
         return () => {
             socket.off('receive_message', processIncomingMessage);
@@ -402,7 +396,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             socket.off('user_stop_typing');
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [socket, connected, user?.id, loadConversations]);
+    }, [socket, connected, user?.id, loadConversations, activeConversationId]);
+
 
     // Separate useEffect to handle room joining whenever conversations or connection status changes
     useEffect(() => {
@@ -412,7 +407,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         conversations.forEach(conv => {
             socket.emit('join_room', conv.id);
         });
-    }, [socket, connected, conversations.length]);
+    }, [socket, connected, conversations]);
+
 
     const sendMessage = async (content: string, type: string = 'text', attachmentId?: string) => {
         if (!activeConversationId) throw new Error('No active conversation');
