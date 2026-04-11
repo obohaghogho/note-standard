@@ -108,11 +108,25 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const conversationsFetchRef = useRef(false);
     const hasInitialFetched = useRef(false);
     const conversationsRef = useRef<Conversation[]>([]);
+    const socketRef = useRef<any>(null);
 
-    // Keep ref in sync
+
+    // Keep refs in sync
     useEffect(() => {
         conversationsRef.current = conversations;
     }, [conversations]);
+
+    useEffect(() => {
+        socketRef.current = socket;
+    }, [socket]);
+
+
+    const joinAllRooms = useCallback((convList: Conversation[]) => {
+        const s = socketRef.current;
+        if (!s || !s.connected || convList.length === 0) return;
+        console.log('[Chat] Joining', convList.length, 'rooms');
+        convList.forEach(conv => s.emit('join_room', conv.id));
+    }, []);
 
     const loadConversations = useCallback(async () => {
         if (!session || conversationsFetchRef.current) return;
@@ -137,6 +151,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 }));
                 setConversations(mappedData);
                 setLoading(false);
+                // ✅ Join rooms immediately after conversations load — guaranteed timing
+                joinAllRooms(mappedData);
             }
         } catch (e) {
             console.error('[Chat] Failed to load conversations:', e);
@@ -145,7 +161,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             conversationsFetchRef.current = false;
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [session?.access_token]);
+    }, [session?.access_token, joinAllRooms]);
 
     // Initial load
     useEffect(() => {
@@ -207,11 +223,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
                 let nextMessages;
                 if (optimisticMatchIndex !== -1) {
-                    // Replace the optimistic placeholder with the real message
+                    console.log('[Chat] ✓ Replacing optimistic message:', current[optimisticMatchIndex].id);
                     nextMessages = [...current];
                     nextMessages[optimisticMatchIndex] = newMessage;
                 } else {
-                    // Just append the new message
+                    console.log('[Chat] + Appending new message:', msg.id);
                     nextMessages = [...current, newMessage];
                 }
 
@@ -242,6 +258,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
             // Auto-mark as read if active
             if (msg.conversation_id === activeConversationId && msg.sender_id !== user?.id) {
+                console.log('[Chat] Auto-marking as read:', msg.id);
                 markMessageRead(msg.id);
             }
         };
@@ -381,9 +398,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             });
         });
 
-        // Listeners for various events
-
-
         return () => {
             socket.off('receive_message', processIncomingMessage);
             socket.off('new_conversation', onNewConversation);
@@ -399,15 +413,34 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, [socket, connected, user?.id, loadConversations, activeConversationId]);
 
 
-    // Separate useEffect to handle room joining whenever conversations or connection status changes
+    // ✅ Re-join all rooms whenever socket reconnects (covers disconnect/reconnect scenarios)
     useEffect(() => {
-        if (!socket || !connected || conversations.length === 0) return;
-        
-        console.log('[Chat] TRIGGER: Joining rooms for', conversations.length, 'conversations');
-        conversations.forEach(conv => {
-            socket.emit('join_room', conv.id);
-        });
-    }, [socket, connected, conversations]);
+        if (!socket) return;
+        const onConnect = () => {
+            console.log('[Chat] Socket (re)connected — rejoining', conversationsRef.current.length, 'rooms');
+            joinAllRooms(conversationsRef.current);
+        };
+        socket.on('connect', onConnect);
+        // Also join immediately if already connected (e.g., conversations loaded after connect)
+        if (connected && conversationsRef.current.length > 0) {
+            joinAllRooms(conversationsRef.current);
+        }
+        return () => {
+            socket.off('connect', onConnect);
+        };
+    }, [socket, connected, joinAllRooms]);
+
+
+    useEffect(() => {
+        if (!socket) return;
+        const onAny = (event: string, ...args: any[]) => {
+            console.log(`[Chat] 📡 Socket event: ${event}`, args);
+        };
+        socket.onAny(onAny);
+        return () => {
+            socket.offAny(onAny);
+        };
+    }, [socket]);
 
 
     const sendMessage = async (content: string, type: string = 'text', attachmentId?: string) => {
