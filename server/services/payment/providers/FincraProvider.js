@@ -18,15 +18,20 @@ class FincraProvider extends BaseProvider {
                      (this.publicKey && !this.publicKey.startsWith("pk_live_")))
                    );
     
-    this.baseUrl = (isTest) ? "https://sandboxapi.fincra.com" : "https://api.fincra.com";
+    // IF FINCRA_ENV is explicitly 'production', force live URL
+    const isExplicitProd = envFlag === "production" || envFlag === "live";
+    this.baseUrl = (isExplicitProd) ? "https://api.fincra.com" : (isTest ? "https://sandboxapi.fincra.com" : "https://api.fincra.com");
     
-    logger.info(`[FincraProvider] Environment: ${isTest ? 'SANDBOX' : 'PRODUCTION'} (${this.baseUrl})`);
+    logger.info(`[FincraProvider] Environment: ${isExplicitProd ? 'FORCED_PRODUCTION' : (isTest ? 'SANDBOX' : 'PRODUCTION')} (${this.baseUrl})`);
     
     this.client = axios.create({
       baseURL: this.baseUrl,
-      timeout: 15000, // 15s timeout
+      timeout: 30000, // 30s timeout
       headers: {
         "api-key": (this.secretKey || "").trim(),
+        "apikey": (this.secretKey || "").trim(),
+        "Authorization": `Bearer ${(this.secretKey || "").trim()}`,
+        "x-pub-key": (this.publicKey || "").trim(),
         "x-business-id": (process.env.FINCRA_BUSINESS_ID || "").trim(),
         "Content-Type": "application/json",
         "accept": "application/json",
@@ -79,15 +84,25 @@ class FincraProvider extends BaseProvider {
       };
     } catch (error) {
       console.error(
-        "Fincra Init Error:",
-        error.response?.data || error.message,
+        "Fincra Init Error [DEBUG]:",
+        JSON.stringify({
+          status: error.response?.status,
+          data: error.response?.data,
+          message: error.message,
+          headers: error.response?.headers
+        }, null, 2)
       );
 
-      // Add a specific hint if it's unauthorized, suggesting to check the key type/environment
-      if (error.response?.status === 401 || error.message?.includes("401") || error.response?.data?.message?.includes("Unauthorized")) {
-        throw new Error(
-          "Fincra authorization failed. Please verify that your FINCRA_SECRET_KEY is the correct API Secret Key and that it matches your FINCRA_BUSINESS_ID."
-        );
+      // Add a specific hint if it's unauthorized
+      if (error.response?.status === 401 || error.response?.status === 403 || error.message?.includes("401") || error.response?.data?.message?.includes("Unauthorized")) {
+        const fincraMsg = error.response?.data?.message || "";
+        let customMsg = "Fincra authorization failed. Please verify that your FINCRA_SECRET_KEY and FINCRA_BUSINESS_ID are correct and active for PRODUCTION.";
+        
+        if (fincraMsg.toLowerCase().includes("ip")) {
+          customMsg = "Fincra Error: Your server IP is not whitelisted in the Fincra dashboard. Please add your server IP to your Fincra API settings.";
+        }
+        
+        throw new Error(customMsg);
       }
 
       throw new Error(
