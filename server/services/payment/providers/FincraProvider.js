@@ -1,6 +1,7 @@
 const axios = require("axios");
 const crypto = require("crypto");
 const BaseProvider = require("./BaseProvider");
+const logger = require("../../../utils/logger");
 
 class FincraProvider extends BaseProvider {
   constructor() {
