@@ -914,8 +914,12 @@ const ChatWindow: React.FC = () => {
                                                         </span>
                                                     )}
                                                     {msg.sender_id === user?.id && (
-                                                        <div className="text-white/80 scale-75 origin-right">
-                                                            {msg.read_at ? <CheckCheck size={14} className="text-blue-300" /> : <Check size={14} />}
+                                                        <div className="text-white/80 scale-75 origin-right relative">
+                                                            {msg.read_at ? (
+                                                                <CheckCheck size={14} className="text-cyan-400 drop-shadow-[0_0_3px_rgba(34,211,238,0.8)] animate-in zoom-in-50 duration-300 transition-all font-extrabold" />
+                                                            ) : (
+                                                                <Check size={14} className="animate-in fade-in duration-300 opacity-60" />
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>
@@ -967,11 +971,11 @@ const ChatWindow: React.FC = () => {
                                                         </span>
                                                     )}
                                                     {msg.sender_id === user?.id && (
-                                                        <div className="text-white/80 scale-75 origin-right">
+                                                        <div className="text-white/80 scale-75 origin-right relative">
                                                             {msg.read_at ? (
-                                                                <CheckCheck size={14} className="text-blue-300 animate-in zoom-in-50 duration-300" />
+                                                                <CheckCheck size={14} className="text-cyan-400 drop-shadow-[0_0_3px_rgba(34,211,238,0.8)] animate-in zoom-in-50 duration-300 transition-all font-extrabold" />
                                                             ) : (
-                                                                <Check size={14} className="animate-in fade-in duration-300" />
+                                                                <Check size={14} className="animate-in fade-in duration-300 opacity-60" />
                                                             )}
                                                         </div>
                                                     )}

@@ -841,49 +841,67 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     };
 
-    // Load messages for active conversation
-    useEffect(() => {
-        if (!activeConversationId || !session) return;
+    const fetchActiveMessages = useCallback(async (convId: string) => {
+        if (!convId || !session) return;
+        try {
+            const res = await fetch(`${API_URL}/api/chat/conversations/${convId}/messages`, {
+                headers: { 'Authorization': `Bearer ${session.access_token}` }
+            });
+            
+            if (!res.ok) return;
+            
+            const rawMessages = await res.json();
+            if (!isMounted.current) return;
 
-        const fetchMessages = async () => {
-            try {
-                const res = await fetch(`${API_URL}/api/chat/conversations/${activeConversationId}/messages`, {
-                    headers: { 'Authorization': `Bearer ${session.access_token}` }
-                });
-                
-                if (!res.ok) return;
-                
-                const rawMessages = await res.json();
-                if (!isMounted.current) return;
+            const now = new Date().toISOString();
+            let hasUnread = false;
 
-                const messageList: Message[] = rawMessages.map((msg: Message) => ({
-                    id: msg.id,
-                    conversation_id: msg.conversation_id,
-                    sender_id: msg.sender_id,
-                    content: msg.content,
-                    created_at: msg.created_at,
-                    type: msg.type,
+            const messageList: Message[] = rawMessages.map((msg: Message) => {
+                const isUnread = !msg.read_at && msg.sender_id !== user?.id;
+                if (isUnread) hasUnread = true;
+                return {
+                    ...msg,
                     isOwn: msg.sender_id === user?.id,
-                    original_language: msg.original_language,
-                    attachment: msg.attachment,
-                    read_at: msg.read_at
-                }));
+                    read_at: isUnread ? now : msg.read_at
+                };
+            });
 
-                setMessages(prev => ({ ...prev, [activeConversationId]: messageList }));
-                setHasMore(prev => ({ ...prev, [activeConversationId]: rawMessages.length >= 50 }));
+            setMessages(prev => ({ ...prev, [convId]: messageList }));
+            setHasMore(prev => ({ ...prev, [convId]: rawMessages.length >= 50 }));
 
-                // Mark entire conversation as read when opened
-                if (rawMessages.some((m: Message) => !m.read_at && m.sender_id !== user?.id)) {
-                    markConversationRead(activeConversationId);
-                }
-            } catch (err) {
-                console.error('[Chat] Failed to fetch messages:', err);
+            if (hasUnread) {
+                markConversationRead(convId);
             }
-        };
+        } catch (err) {
+            console.error('[Chat] Failed to fetch messages:', err);
+        }
+    }, [session, user?.id]);
 
-        fetchMessages();
+    useEffect(() => {
+        if (activeConversationId) {
+            fetchActiveMessages(activeConversationId);
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeConversationId, session?.access_token, user?.id]);
+
+    // ✅ Mobile PWA rapid-sync on foreground (fixes lost sockets when device is locked)
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                console.log('[Chat] App resumed from background. Syncing...');
+                if (socketRef.current && socketRef.current.disconnected) {
+                    socketRef.current.connect();
+                }
+                loadConversations();
+                if (activeConversationIdRef.current) {
+                    fetchActiveMessages(activeConversationIdRef.current);
+                }
+            }
+        };
+        
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, [loadConversations, fetchActiveMessages]);
 
     return (
         <ChatContext.Provider value={{ 
