@@ -8,7 +8,6 @@ import { Card } from '../components/common/Card';
 import { PasswordStrengthMeter } from '../components/auth/PasswordStrengthMeter';
 import { TermsModal } from '../components/auth/TermsModal';
 import { VerificationModal } from '../components/auth/VerificationModal';
-import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { cn } from '../utils/cn';
 import ReCAPTCHA from 'react-google-recaptcha';
@@ -106,9 +105,10 @@ export const Signup = () => {
             // Since we use the Admin API on the backend, the account is already verified!
             navigate('/login', { state: { email, message: 'Account created! You can now log in.' } });
 
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Registration error:', err);
-            let msg = err.message || 'Signup failed';
+            const error = err as Error;
+            let msg = error.message || 'Signup failed';
             
             if (msg === 'Failed to fetch') {
                 msg = 'Cannot connect to the security server. Please ensure the backend is running and try again.';
