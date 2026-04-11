@@ -9,13 +9,17 @@ class FincraProvider extends BaseProvider {
     this.publicKey = process.env.FINCRA_PUBLIC_KEY;
     
     // Dynamically set baseUrl based on key pattern (test vs live) or explicit env
-    const isTest = process.env.FINCRA_ENV === "sandbox" || 
-                   (this.secretKey && (this.secretKey.startsWith("sk_test_") || this.secretKey.startsWith("pk_test_"))) ||
-                   (this.publicKey && this.publicKey.startsWith("pk_test_"));
+    const envFlag = (process.env.FINCRA_ENV || "").toLowerCase();
+    const isTest = envFlag === "sandbox" || 
+                   envFlag === "test" ||
+                   (!envFlag && 
+                    ((this.secretKey && !this.secretKey.startsWith("sk_live_")) || 
+                     (this.publicKey && !this.publicKey.startsWith("pk_live_")))
+                   );
     
-    this.baseUrl = isTest ? "https://sandboxapi.fincra.com" : "https://api.fincra.com";
+    this.baseUrl = (isTest) ? "https://sandboxapi.fincra.com" : "https://api.fincra.com";
     
-    console.log(`[FincraProvider] Environment: ${isTest ? 'SANDBOX' : 'PRODUCTION'} (${this.baseUrl})`);
+    logger.info(`[FincraProvider] Environment: ${isTest ? 'SANDBOX' : 'PRODUCTION'} (${this.baseUrl})`);
     
     this.client = axios.create({
       baseURL: this.baseUrl,
@@ -45,9 +49,6 @@ class FincraProvider extends BaseProvider {
       // Fincra API uses standard unit (e.g. 20 for 20 USD), unlike Paystack which uses cents
       const standardAmount = Number(amount || 0);
       
-      console.log(`[Fincra] Initializing payment for ${safeEmail}, amount: ${standardAmount} ${currency}`);
-      console.log(`[Fincra] Sending request to ${this.baseUrl}/checkout/payments (Key prefix: ${this.secretKey ? this.secretKey.substring(0, 4) + "..." : "MISSING"})`);
-      
       // Fincra Checkout Redirect Flow
       const response = await this.client.post("/checkout/payments", {
         customer: {
@@ -65,18 +66,10 @@ class FincraProvider extends BaseProvider {
         },
       });
 
-      console.log(`[Fincra] Response status: ${response.status}`);
-      console.log(`[Fincra] Response keys:`, Object.keys(response.data || {}));
-      if (response.data?.data) {
-        console.log(`[Fincra] response.data.data keys:`, Object.keys(response.data.data));
-      }
-
       // Fincra returns { data: { link: "https://...", reference: "..." } }
       const respData = response.data?.data || response.data || {};
       const checkoutUrl = respData.link || respData.checkoutUrl || respData.checkout_url || respData.payment_link || null;
       const providerRef = respData.reference || reference;
-
-      console.log(`[Fincra] Extracted checkoutUrl: ${checkoutUrl}`);
 
       return {
         checkoutUrl: checkoutUrl,
