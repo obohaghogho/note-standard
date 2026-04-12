@@ -446,15 +446,10 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
 
           const newMessage = payload.new;
 
-          // Prevent duplicates
-          setMessages((prev) => {
-            const exists = prev.some((m) => m.id === newMessage.id);
+          setMessages(prev => {
+            const exists = prev.find(m => m.id === payload.new.id);
             if (exists) return prev;
-
-            // Remove optimistic if exists
-            const filtered = prev.filter((m) => !m.isOptimistic);
-
-            return [...filtered, { ...newMessage, isOwn: newMessage.sender_id === user.id }];
+            return [...prev, { ...payload.new, isOwn: payload.new.sender_id === user.id }];
           });
 
           // Mark as read

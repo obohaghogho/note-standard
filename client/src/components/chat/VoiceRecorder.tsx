@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { toast } from 'react-hot-toast';
-import { Mic, Square, Play, Pause, Trash2, Send } from 'lucide-react';
+import { Mic, Square, Trash2, Send } from 'lucide-react';
 import { Button } from '../common/Button';
 
 interface VoiceRecorderProps {
@@ -10,7 +10,6 @@ interface VoiceRecorderProps {
 
 export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }) => {
     const [isRecording, setIsRecording] = useState(false);
-    const [isPlaying, setIsPlaying] = useState(false);
     const [audioUrl, setAudioUrl] = useState<string | null>(null);
     const [recordingTime, setRecordingTime] = useState(0);
 
@@ -99,16 +98,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
         }
     };
 
-    const togglePlayback = () => {
-        if (audioPlayerRef.current) {
-            if (isPlaying) {
-                audioPlayerRef.current.pause();
-            } else {
-                audioPlayerRef.current.play();
-            }
-            setIsPlaying(!isPlaying);
-        }
-    };
+
 
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
@@ -132,15 +122,9 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
                     <audio
                         ref={audioPlayerRef}
                         src={audioUrl}
-                        onEnded={() => setIsPlaying(false)}
-                        className="hidden"
+                        controls
+                        className="h-10 w-48 rounded"
                     />
-                    <button onClick={togglePlayback} className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
-                        {isPlaying ? <Pause size={18} /> : <Play size={18} />}
-                    </button>
-                    <div className="h-1 w-24 bg-white/10 rounded-full overflow-hidden">
-                        <div className="h-full bg-primary animate-pulse" style={{ width: '100%' }}></div>
-                    </div>
                     <button onClick={() => { setAudioUrl(null); audioChunksRef.current = []; }} className="p-2 text-red-400 hover:text-red-300">
                         <Trash2 size={18} />
                     </button>

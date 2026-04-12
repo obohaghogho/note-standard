@@ -5,17 +5,17 @@
  * and production 'white screen' issues.
  */
 
-self.addEventListener('install', () => {
-    // We don't skipWaiting automatically anymore to allow for the UI notification
+self.addEventListener('install', (event) => {
+    self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-    // Unclaim all potential clients and clear caches
     event.waitUntil(
-        caches.keys().then((keys) => {
-            return Promise.all(keys.map((k) => caches.delete(k)));
-        })
+        caches.keys().then(keys =>
+            Promise.all(keys.map(key => caches.delete(key)))
+        )
     );
+    self.clients.claim();
 });
 
 // Enable the browser to skip waiting for the new SW to take control

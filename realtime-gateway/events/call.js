@@ -25,6 +25,15 @@ module.exports = (io, socket) => {
     });
   });
 
+  // Native WebRTC Transport (SDP/ICE)
+  socket.on('call:signal', (data) => {
+    const { to, signal } = data;
+    io.to(`user:${to}`).emit('call:signal', {
+      from: socket.userId,
+      signal
+    });
+  });
+
   // 3. Reject Call
   socket.on('call:reject', (data) => {
     const { to } = data;

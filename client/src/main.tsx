@@ -7,6 +7,11 @@ import './i18n'
 
 // 🚀 SERVICE WORKER REGISTRATION & UPDATE DETECTION
 if ('serviceWorker' in navigator) {
+  // Force update existing registrations immediately
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    regs.forEach(reg => reg.update());
+  });
+
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').then((registration) => {
       console.log('✅ Service Worker registered');

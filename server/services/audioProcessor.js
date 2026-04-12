@@ -55,7 +55,9 @@ class AudioProcessor {
             // 3. Convert using FFmpeg
             await new Promise((resolve, reject) => {
                 ffmpeg(inputPath)
-                    .toFormat('ipod') // Use 'ipod' for guaranteed M4A/AAC compatibility
+                    .audioCodec('aac')
+                    .audioBitrate('128k')
+                    .toFormat('mp4')
                     .on('start', (cmd) => console.log('[FFmpeg] Command:', cmd))
                     .on('error', (err) => reject(err))
                     .on('end', () => resolve())
