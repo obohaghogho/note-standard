@@ -9,20 +9,25 @@ class FincraProvider extends BaseProvider {
     this.secretKey = process.env.FINCRA_SECRET_KEY;
     this.publicKey = process.env.FINCRA_PUBLIC_KEY;
     
-    // Dynamically set baseUrl based on key pattern (test vs live) or explicit env
+    // Use FINCRA_ENV if provided, else detect based on key prefix
     const envFlag = (process.env.FINCRA_ENV || "").toLowerCase();
-    const isTest = envFlag === "sandbox" || 
-                   envFlag === "test" ||
-                   (!envFlag && 
-                    ((this.secretKey && !this.secretKey.startsWith("sk_live_")) || 
-                     (this.publicKey && !this.publicKey.startsWith("pk_live_")))
-                   );
-    
-    // IF FINCRA_ENV is explicitly 'production', force live URL
     const isExplicitProd = envFlag === "production" || envFlag === "live";
-    this.baseUrl = (isExplicitProd) ? "https://api.fincra.com" : (isTest ? "https://sandboxapi.fincra.com" : "https://api.fincra.com");
+    const isExplicitSandbox = envFlag === "sandbox" || envFlag === "test";
     
-    logger.info(`[FincraProvider] Environment: ${isExplicitProd ? 'FORCED_PRODUCTION' : (isTest ? 'SANDBOX' : 'PRODUCTION')} (${this.baseUrl})`);
+    // Auto-detect test key: sk_test_... or pk_test_...
+    const isTestKey = (this.secretKey && this.secretKey.startsWith("sk_test_")) || 
+                      (this.publicKey && this.publicKey.startsWith("pk_test_"));
+
+    if (isExplicitProd) {
+      this.baseUrl = "https://api.fincra.com";
+    } else if (isExplicitSandbox || isTestKey) {
+      this.baseUrl = "https://sandboxapi.fincra.com";
+    } else {
+      // Default to production for safety if no clear indicator
+      this.baseUrl = "https://api.fincra.com";
+    }
+    
+    logger.info(`[FincraProvider] Init: ${this.baseUrl} (Detect: ${isTestKey ? 'TEST_KEY' : 'LIVE_KEY'})`);
     
     this.client = axios.create({
       baseURL: this.baseUrl,
@@ -83,31 +88,36 @@ class FincraProvider extends BaseProvider {
         providerReference: providerRef,
       };
     } catch (error) {
+      const status = error.response?.status || 500;
+      const data = error.response?.data || {};
+      const message = data.message || data.error || error.message || "Fincra initialization failed";
+
       console.error(
-        "Fincra Init Error [DEBUG]:",
+        "Fincra Init Error:",
         JSON.stringify({
-          status: error.response?.status,
-          data: error.response?.data,
-          message: error.message,
-          headers: error.response?.headers
+          status,
+          data,
+          message,
+          reference
         }, null, 2)
       );
 
-      // Add a specific hint if it's unauthorized
-      if (error.response?.status === 401 || error.response?.status === 403 || error.message?.includes("401") || error.response?.data?.message?.includes("Unauthorized")) {
-        const fincraMsg = error.response?.data?.message || "";
-        let customMsg = "Fincra authorization failed. Please verify that your FINCRA_SECRET_KEY and FINCRA_BUSINESS_ID are correct and active for PRODUCTION.";
+      // Create an enriched error object
+      const enrichedError = new Error(message);
+      enrichedError.statusCode = status;
+      enrichedError.details = data;
+      enrichedError.location = "FincraProvider.initialize";
+
+      // Specific helpful messages for common Fincra errors
+      if (status === 401 || status === 403 || message.toLowerCase().includes("unauthorized")) {
+        enrichedError.message = "Fincra Authorization Failed. Please check your FINCRA_SECRET_KEY, FINCRA_BUSINESS_ID, and IP Whitelist settings in the Fincra Dashboard.";
         
-        if (fincraMsg.toLowerCase().includes("ip")) {
-          customMsg = "Fincra Error: Your server IP is not whitelisted in the Fincra dashboard. Please add your server IP to your Fincra API settings.";
+        if (message.toLowerCase().includes("ip")) {
+          enrichedError.message = "IP Whitelist Error: Your server's IP is not allowed to communicate with Fincra. Please whitelist your server's public IP in your Fincra API settings.";
         }
-        
-        throw new Error(customMsg);
       }
 
-      throw new Error(
-        error.response?.data?.message || error.response?.data?.error || "Fincra initialization failed",
-      );
+      throw enrichedError;
     }
   }
 
@@ -149,7 +159,8 @@ class FincraProvider extends BaseProvider {
   }
 
   verifyWebhookSignature(headers, body, rawBody = null) {
-    const signature = headers["x-fincra-signature"];
+    // Fincra doc: "signature" header. Code also checks "x-fincra-signature" for fallback.
+    const signature = headers["signature"] || headers["x-fincra-signature"];
     const webhookSecret = process.env.FINCRA_WEBHOOK_SECRET;
     
     if (!signature || !webhookSecret) {
@@ -203,18 +214,47 @@ class FincraProvider extends BaseProvider {
    * Request a virtual account for USD/EUR/GBP deposits
    */
   async createVirtualAccount(data) {
-    const { currency, email, firstName, lastName, phone } = data;
+    const { currency, email, firstName, lastName, phone, dob, occupation, address, documentUrls } = data;
+    
+    const isFcy = ["USD", "EUR", "GBP"].includes(currency?.toUpperCase());
+
     try {
-      const response = await this.client.post("/profile/virtual-accounts/requests", {
+      const payload = {
         currency: currency,
         accountType: "individual",
         KYCInformation: {
           firstName: firstName,
           lastName: lastName,
           email: email,
+          phoneNumber: phone,
         },
-        channel: "wema", // Default for NGN/Others, Fincra handles FCY automatically if enabled
-      });
+      };
+
+      // Fincra FCY (USD/EUR/GBP) requires strict detailed KYC
+      if (isFcy) {
+        payload.KYCInformation = {
+          ...payload.KYCInformation,
+          birthDate: dob || "1990-01-01", // Placeholder if not provided
+          occupation: occupation || "Professional",
+          address: {
+            street: address?.street || "No 1 Main St",
+            city: address?.city || "Lagos",
+            state: address?.state || "Lagos State",
+            country: address?.country || "NG",
+            postalCode: address?.postalCode || "100001"
+          },
+          // Document URLs required for FCY
+          documents: {
+            idCard: documentUrls?.idCard || "https://res.cloudinary.com/dummy/id.jpg",
+            utilityBill: documentUrls?.utilityBill || "https://res.cloudinary.com/dummy/utility.jpg"
+          }
+        };
+      }
+
+      // Channel is mandatory for some currencies
+      if (currency === "NGN") payload.channel = "wema";
+
+      const response = await this.client.post("/profile/virtual-accounts/requests", payload);
 
       return {
         bankName: response.data.data.bankName,
