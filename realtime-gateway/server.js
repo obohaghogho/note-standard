@@ -6,6 +6,7 @@
  *   - Express handled at root
  *   - PeerJS & Socket.IO co-exist by registering PeerJS FIRST, 
  *     allowing Engine.IO to gracefully intercept and wrap WebSocket upgrades natively.
+ *   - PostgreSQL LISTEN/NOTIFY replaces Redis for server-to-server Pub/Sub.
  */
 
 const express = require('express');
@@ -14,7 +15,7 @@ const { Server } = require('socket.io');
 const { ExpressPeerServer } = require('peer');
 const { authMiddleware } = require('./auth');
 const cors = require('cors');
-const redis = require('redis');
+const { Client } = require('pg');
 const fs = require('fs');
 require('dotenv').config();
 
@@ -64,24 +65,41 @@ app.get('/health', (req, res) => {
 // ✅ 4. CREATE HTTP SERVER (SHARED)
 const httpServer = http.createServer(app);
 
-// ✅ 5. INTERNAL EMIT ENDPOINT (defined before io is created — io reference hoisted via closure)
+// ✅ 5. INTERNAL EMIT ENDPOINT
 app.post('/internal/emit', (req, res) => {
-  const { event, data } = req.body;
-  if (!event || !data) return res.status(400).json({ error: 'Missing event/data' });
-  switch (event) {
-    case 'to_user': io.to(`user:${data.userId}`).emit(data.event, data.data); break;
-    case 'to_conversation': io.to(data.conversationId).emit(data.event, data.data); break;
-    case 'to_admin': io.to('admin_room').emit(data.event, data.data); break;
-    case 'broadcast': io.emit(data.event, data.data); break;
-    default: res.status(400).json({ error: 'Invalid event type' }); return;
+  try {
+    dispatchSocketEvent(req.body);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-  res.json({ ok: true });
 });
 
+/**
+ * Global Dispatcher for Socket Events
+ * Standardized envelope: { type: string, room: string, event: string, payload: any }
+ */
+function dispatchSocketEvent(envelope) {
+  const { type, room, event, payload } = envelope;
+
+  if (!type || !room || !event) {
+    console.warn('[Gateway] ⚠ Received malformed event envelope:', JSON.stringify(envelope).substring(0, 100));
+    return;
+  }
+
+  // Consistent Room Resolver
+  const targetRoom = type === 'to_user' ? `user:${room}` : room;
+
+  console.log(`[Gateway] 📡 [${type}] room:${targetRoom} event:${event}`);
+
+  if (type === 'broadcast') {
+    io.emit(event, payload);
+  } else {
+    io.to(targetRoom).emit(event, payload);
+  }
+}
+
 // ✅ 6. PEERJS SETUP — 100% Isolated Dummy Server Pattern
-// PeerJS (using 'ws') and Socket.IO (Engine.IO) fight internally over the 'upgrade'
-// listener cache. To prevent them from destroying each other's websockets,
-// we isolate PeerJS's WebSockets onto its own completely hidden loopback server.
 const peerDummyServer = http.createServer();
 peerDummyServer.listen(0, '127.0.0.1', () => {
   const port = peerDummyServer.address().port;
@@ -89,7 +107,7 @@ peerDummyServer.listen(0, '127.0.0.1', () => {
 });
 
 const peerServer = ExpressPeerServer(peerDummyServer, {
-  path: '/peerjs', // CRITICAL: must match the prefix of the URL forwarded to it
+  path: '/peerjs',
   allow_discovery: false,
   proxied: true,
 });
@@ -103,15 +121,13 @@ const io = new Server(httpServer, {
     methods: ['GET', 'POST'],
     credentials: true,
   },
-  transports: ['websocket', 'polling'], // Explicitly enforce transports array
+  transports: ['websocket', 'polling'],
   perMessageDeflate: false,
   pingTimeout: 60000,
   pingInterval: 25000,
   allowEIO3: true,
 });
 
-// ✅ 7a. Ensure completely isolated upgrade routing
-// Engine.IO normally destroys unknown upgrades. We intercept and route them manually.
 const socketIoListeners = httpServer.listeners('upgrade').slice(0);
 httpServer.removeAllListeners('upgrade');
 
@@ -119,21 +135,21 @@ httpServer.on('upgrade', (req, socket, head) => {
   if (req.url && req.url.startsWith('/peerjs')) {
     peerDummyServer.emit('upgrade', req, socket, head);
   } else {
-    // Forward everything else to Engine.IO
-    for (const listener of socketIoListeners) {
-      listener(req, socket, head);
+    if (socketIoListeners.length > 0) {
+      socketIoListeners.forEach(l => l(req, socket, head));
+    } else {
+      const current = httpServer.listeners('upgrade').filter(l => l !== thisListener);
+      current.forEach(l => l(req, socket, head));
     }
   }
 });
+const thisListener = httpServer.listeners('upgrade')[0];
 
 peerServer.on('connection', (client) => {
   console.log(`[PeerJS] ✓ Peer connected: ${client.getId()}`);
 });
 peerServer.on('disconnect', (client) => {
   console.log(`[PeerJS] ✗ Peer disconnected: ${client.getId()}`);
-});
-peerServer.on('error', (err) => {
-  console.error('[PeerJS] Error:', err.message);
 });
 
 io.use(authMiddleware);
@@ -160,47 +176,66 @@ io.on('connection', (socket) => {
   });
 });
 
-// ✅ 8. Redis Sub
-const REDIS_URL = process.env.REDIS_URL;
-if (REDIS_URL) {
-  const subscriber = redis.createClient({ url: REDIS_URL });
-  subscriber.on('error', (err) => console.error('[Redis] Error:', err));
-  subscriber.connect().then(() => {
-    console.log('[Redis] ✓ Subscriber connected');
-    subscriber.subscribe('realtime:events', (message) => {
-      try {
-        const { event, data } = JSON.parse(message);
-        console.log(`[Redis] 📥 Received event: ${event}`, JSON.stringify(data).substring(0, 100));
-        
-        switch (event) {
-          case 'to_user': 
-            console.log(`[Gateway] Emit to user:${data.userId}`);
-            io.to(`user:${data.userId}`).emit(data.event, data.data); 
-            break;
-          case 'to_conversation': 
-            console.log(`[Gateway] Emit to conversation:${data.conversationId}`);
-            io.to(data.conversationId).emit(data.event, data.data); 
-            break;
-          case 'to_admin': 
-            io.to('admin_room').emit(data.event, data.data); 
-            break;
-          case 'broadcast': 
-            io.emit(data.event, data.data); 
-            break;
-        }
-      } catch (err) {
-        console.error('[Redis] Failed to process message:', err.message);
-      }
-    });
-  }).catch((err) => {
-    console.error('[Redis] Connection failed:', err?.message || err);
+// ✅ 8. PostgreSQL LISTEN Loop (Replaces Redis Sub)
+const DATABASE_URL = process.env.DATABASE_URL;
+
+async function initPgListener() {
+  if (!DATABASE_URL) {
+    console.warn('[Gateway] ⚠ DATABASE_URL missing. PostgreSQL Pub/Sub disabled.');
+    return;
+  }
+
+  const pgClient = new Client({
+    connectionString: DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+    keepAlive: true,
   });
+
+  pgClient.on('error', (err) => {
+    console.error('[Gateway] 🐘 PostgreSQL Client Error:', err.message);
+    if (err.message.includes('connection') || err.message.includes('terminated')) {
+      reconnectPg();
+    }
+  });
+
+  pgClient.on('notification', (msg) => {
+    if (msg.channel === 'realtime_events') {
+      try {
+        const envelope = JSON.parse(msg.payload);
+        dispatchSocketEvent(envelope);
+      } catch (err) {
+        console.error('[Gateway] 🐘 Failed to parse notification payload:', err.message);
+      }
+    }
+  });
+
+  async function connect() {
+    try {
+      await pgClient.connect();
+      console.log('[Gateway] 🐘 PostgreSQL connected for LISTEN');
+      await pgClient.query('LISTEN realtime_events');
+      console.log('[Gateway] 🐘 ✓ Listening for PostgreSQL events on channel: realtime_events');
+    } catch (err) {
+      console.error('[Gateway] 🐘 PostgreSQL connection failed:', err.message);
+      reconnectPg();
+    }
+  }
+
+  async function reconnectPg() {
+    console.log('[Gateway] 🐘 Attempting to reconnect to PostgreSQL in 5s...');
+    setTimeout(initPgListener, 5000);
+    try {
+      await pgClient.end().catch(() => {});
+    } catch (e) {}
+  }
+
+  connect();
 }
 
-// ✅ 9. START SERVER (RENDER PORT)
-const PORT = process.env.PORT || 5000;
+initPgListener();
 
+// ✅ 9. START SERVER
+const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Gateway Server active on port ${PORT}`);
 });
-

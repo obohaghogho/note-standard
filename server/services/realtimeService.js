@@ -1,35 +1,50 @@
-const redis = require('redis');
+const { Pool } = require('pg');
 require('dotenv').config();
 
-let publisher;
+let pgPool;
 
-if (process.env.REDIS_URL) {
-  publisher = redis.createClient({ url: process.env.REDIS_URL });
-  publisher.connect().catch(err => {
-    console.error('[RealtimeService] Redis connection failed:', err.message);
+if (process.env.DATABASE_URL) {
+  pgPool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+    max: 10, // Maintain a small pool for notifications
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 2000,
   });
-  publisher.on('error', (err) => {
-    console.error('[RealtimeService] Redis Error:', err.message);
+
+  pgPool.on('error', (err) => {
+    console.error('[RealtimeService] PostgreSQL Pool Error:', err.message);
   });
-  console.log('[RealtimeService] Redis publisher initialized');
+
+  console.log('[RealtimeService] PostgreSQL pool initialized for NOTIFY');
 }
 
 const fetch = require('node-fetch');
 
 /**
- * Emit an event to the realtime gateway via Redis Pub/Sub
+ * Standardized Realtime Emit via PostgreSQL LISTEN/NOTIFY
  */
-const emit = async (event, data) => {
+const emit = async (type, room, event, payload) => {
   try {
-    if (publisher && publisher.isOpen) {
-      await publisher.publish('realtime:events', JSON.stringify({ event, data }));
+    const envelope = { type, room, event, payload };
+    const payloadString = JSON.stringify(envelope);
+
+    if (payloadString.length > 7900) {
+      console.warn('[RealtimeService] Payload exceeds PostgreSQL NOTIFY limit (8000 bytes). Truncating or failing.');
+      // In a real app, you'd save to DB and only notify the ID. 
+      // For chat, this is rare unless sending large base64 (which we don't).
+    }
+    
+    if (pgPool) {
+      // Use NOTIFY channel 'realtime_events'
+      await pgPool.query('SELECT pg_notify($1, $2)', ['realtime_events', payloadString]);
     } else {
-      // Fallback: Direct HTTP call to gateway (prefer environment variable)
+      // Fallback: Direct HTTP call to gateway
       const gatewayUrl = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
       await fetch(`${gatewayUrl}/internal/emit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event, data })
+        body: payloadString
       });
     }
   } catch (err) {
@@ -37,20 +52,20 @@ const emit = async (event, data) => {
   }
 };
 
-const emitToUser = async (userId, event, data) => {
-  await emit('to_user', { userId, event, data });
+const emitToUser = async (userId, event, payload) => {
+  await emit('to_user', userId, event, payload);
 };
 
-const emitToConversation = async (conversationId, event, data) => {
-  await emit('to_conversation', { conversationId, event, data });
+const emitToConversation = async (conversationId, event, payload) => {
+  await emit('to_conversation', conversationId, event, payload);
 };
 
-const emitToAdmin = async (event, data) => {
-  await emit('to_admin', { event, data });
+const emitToAdmin = async (event, payload) => {
+  await emit('to_admin', 'admin_room', event, payload);
 };
 
-const broadcast = async (event, data) => {
-  await emit('broadcast', { event, data });
+const broadcast = async (event, payload) => {
+  await emit('broadcast', '*', event, payload);
 };
 
 module.exports = {

@@ -174,7 +174,7 @@ exports.createConversation = async (req, res) => {
       });
 
       // Notify recipient of new conversation
-      await realtime.emitToUser(p.id, "new_conversation", convData);
+      await realtime.emitToUser(p.id, "chat:new_conversation", convData);
     }
 
     res.json({
@@ -251,7 +251,7 @@ exports.acceptConversation = async (req, res) => {
         });
 
         // Notify about the change in conversation status
-        await realtime.emitToUser(m.user_id, "conversation_updated", {
+        await realtime.emitToUser(m.user_id, "chat:conversation_updated", {
           conversationId,
           userId,
           status: "accepted",
@@ -260,7 +260,7 @@ exports.acceptConversation = async (req, res) => {
     }
 
     // Also notify self across tabs
-    await realtime.emitToUser(userId, "conversation_updated", {
+    await realtime.emitToUser(userId, "chat:conversation_updated", {
       conversationId,
       userId,
       status: "accepted",
@@ -444,14 +444,10 @@ exports.markMessageRead = async (req, res) => {
       }
 
       // Emit read receipt via gateway
-      await realtime.emit("to_conversation", {
+      await realtime.emitToConversation(data.conversation_id, "chat:message_read", {
+        messageId,
         conversationId: data.conversation_id,
-        event: "message_read",
-        data: {
-          messageId,
-          conversationId: data.conversation_id,
-          userId,
-        }
+        userId,
       });
 
       res.json({ success: true });
@@ -558,14 +554,12 @@ exports.sendMessage = async (req, res) => {
 
     async function processAfterMsg(msgToSend) {
       // 1. Respond to sender immediately to minimize perceived latency
-      res.json(msgToSend);
+      if (!res.headersSent) {
+          res.json(msgToSend);
+      }
 
       // 2. Broadcast to other members immediately
-      await realtime.emit("to_conversation", {
-        conversationId,
-        event: "receive_message",
-        data: msgToSend
-      });
+      await realtime.emitToConversation(conversationId, "chat:message", msgToSend);
 
       // 3. Background tasks (non-blocking)
       supabase.from("conversations").update({ updated_at: new Date() }).eq(
@@ -669,10 +663,10 @@ exports.sendMessage = async (req, res) => {
         } catch(e) { botSenderId = userId; }
 
         // === IMMEDIATELY emit typing indicator so user sees feedback ===
-        await realtime.emit("to_conversation", {
-          conversationId,
-          event: "user_typing",
-          data: { conversationId, userId: botSenderId, isTyping: true }
+        await realtime.emitToConversation(conversationId, "chat:typing", { 
+           conversationId, 
+           userId: botSenderId, 
+           isTyping: true 
         });
 
         const aiSupportService = require("../services/aiSupportService");
@@ -683,10 +677,10 @@ exports.sendMessage = async (req, res) => {
             const aiResponse = await aiSupportService.processSupportMessage(conversationId, content, userId, botSenderId);
             
             // Clear typing indicator
-            await realtime.emit("to_conversation", {
-              conversationId,
-              event: "user_typing",
-              data: { conversationId, userId: botSenderId, isTyping: false }
+            await realtime.emitToConversation(conversationId, "chat:typing", { 
+               conversationId, 
+               userId: botSenderId, 
+               isTyping: false 
             });
 
             if (aiResponse && aiResponse.text) {
@@ -703,11 +697,7 @@ exports.sendMessage = async (req, res) => {
                 .single();
 
               if (!autoErr) {
-                 await realtime.emit("to_conversation", {
-                   conversationId,
-                   event: "receive_message",
-                   data: autoMsg
-                 });
+                 await realtime.emitToConversation(conversationId, "chat:message", autoMsg);
               }
               
               // If escalated, update status
@@ -732,20 +722,16 @@ exports.sendMessage = async (req, res) => {
                 .single();
               
               if (!fallbackErr) {
-                await realtime.emit("to_conversation", {
-                  conversationId,
-                  event: "receive_message",
-                  data: fallbackData
-                });
+                 await realtime.emitToConversation(conversationId, "chat:message", fallbackData);
               }
             }
           } catch (aiErr) {
             console.error("[AI Support] Processing error:", aiErr.message);
             // Clear typing indicator on error
-            await realtime.emit("to_conversation", {
-              conversationId,
-              event: "user_typing",
-              data: { conversationId, userId: botSenderId, isTyping: false }
+            await realtime.emitToConversation(conversationId, "chat:typing", { 
+               conversationId, 
+               userId: botSenderId, 
+               isTyping: false 
             });
 
             // Send fallback message so user always gets a response
@@ -763,11 +749,7 @@ exports.sendMessage = async (req, res) => {
                 .single();
               
               if (!errMsgErr) {
-                await realtime.emit("to_conversation", {
-                  conversationId,
-                  event: "receive_message",
-                  data: errMsg
-                });
+                 await realtime.emitToConversation(conversationId, "chat:message", errMsg);
               }
             } catch (fallbackInsertErr) {
               console.error("[AI Support] Even fallback message failed:", fallbackInsertErr.message);
@@ -775,10 +757,10 @@ exports.sendMessage = async (req, res) => {
           }
         } else {
           // AI not configured — clear typing indicator
-          await realtime.emit("to_conversation", {
-            conversationId,
-            event: "user_typing",
-            data: { conversationId, userId: botSenderId, isTyping: false }
+          await realtime.emitToConversation(conversationId, "chat:typing", { 
+             conversationId, 
+             userId: botSenderId, 
+             isTyping: false 
           });
 
           // Original Offline Hours Fallback Logic
@@ -821,11 +803,7 @@ exports.sendMessage = async (req, res) => {
                 .single();
 
               if (!autoErr) {
-                 await realtime.emit("to_conversation", {
-                   conversationId,
-                   event: "receive_message",
-                   data: autoMsg
-                 });
+                 await realtime.emitToConversation(conversationId, "chat:message", autoMsg);
               }
             }
           }
@@ -836,7 +814,9 @@ exports.sendMessage = async (req, res) => {
     }
   } catch (err) {
     console.error("Error sending message:", err.message);
-    res.status(500).json({ error: "Server Error" });
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Server Error" });
+    }
   }
 };
 
@@ -900,7 +880,7 @@ exports.createSupportChat = async (req, res) => {
     if (memberError) throw memberError;
 
     // Notify admins via Gateway
-    await realtime.emitToAdmin("new_support_chat", {
+    await realtime.emitToAdmin("chat:new_support_chat", {
       ...convData,
       user: profile,
     });
@@ -976,7 +956,7 @@ exports.deleteConversation = async (req, res) => {
     if (convDeleteError) throw convDeleteError;
 
     // Notify participants via Gateway
-    realtime.emitToConversation(conversationId, "conversation_deleted", { conversationId });
+    await realtime.emitToConversation(conversationId, "chat:conversation_deleted", { conversationId });
 
     res.json({ success: true, message: "Conversation deleted successfully" });
   } catch (err) {
@@ -1097,13 +1077,9 @@ exports.deleteMessage = async (req, res) => {
     console.log(`[Chat Delete] Successfully soft-deleted message ${messageId}`);
 
     // Notify via Gateway
-    realtime.emit("to_conversation", {
+    await realtime.emitToConversation(data.conversation_id, "chat:message_deleted", {
+      messageId,
       conversationId: data.conversation_id,
-      event: "message_deleted",
-      data: {
-        messageId,
-        conversationId: data.conversation_id,
-      }
     });
 
     res.json({ success: true, message: "Message deleted" });
@@ -1130,7 +1106,6 @@ exports.editMessage = async (req, res) => {
       .update({
         content: content,
         is_edited: true,
-        // we can set updated_at if it exists, otherwise omit it. Usually supabase updates this.
       })
       .eq("id", messageId)
       .eq("sender_id", userId) // Force ownership
@@ -1157,22 +1132,14 @@ exports.editMessage = async (req, res) => {
            .single();
          if (retryErr) throw retryErr;
          
-         realtime.emit("to_conversation", {
-            conversationId: retryData.conversation_id,
-            event: "message_edited",
-            data: retryData
-         });
+         await realtime.emitToConversation(retryData.conversation_id, "chat:message_edited", retryData);
          return res.json(retryData);
       }
       throw error;
     }
 
     // Notify via Gateway
-    realtime.emit("to_conversation", {
-      conversationId: data.conversation_id,
-      event: "message_edited",
-      data: data
-    });
+    await realtime.emitToConversation(data.conversation_id, "chat:message_edited", data);
 
     res.json(data);
   } catch (err) {
@@ -1203,14 +1170,10 @@ exports.markConversationRead = async (req, res) => {
     }
 
     // Emit event to room
-    await realtime.emit("to_conversation", {
-      conversationId: conversationId,
-      event: "conversation_read",
-      data: {
+    await realtime.emitToConversation(conversationId, "chat:conversation_read", {
         conversationId,
         readerId: userId,
         readAt: now
-      }
     });
 
     res.json({ success: true });

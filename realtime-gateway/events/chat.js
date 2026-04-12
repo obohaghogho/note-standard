@@ -5,15 +5,15 @@ module.exports = (io, socket) => {
     console.log(`[Gateway] User ${socket.userId} joined room: ${roomId}`);
   });
 
-  // Leave room
-  socket.on('leave_room', (roomId) => {
-    socket.leave(roomId);
+  // chat:join is a newer alias
+  socket.on('chat:join', (roomId) => {
+    socket.join(roomId);
   });
 
   // Handle typing status (direct via gateway for lower latency)
   socket.on('typing', (data) => {
     const { conversationId } = data;
-    socket.to(conversationId).emit('user_typing', {
+    socket.to(conversationId).emit('chat:typing', {
       userId: socket.userId,
       username: data.username,
       isTyping: true
@@ -22,7 +22,7 @@ module.exports = (io, socket) => {
 
   socket.on('stop_typing', (data) => {
     const { conversationId } = data;
-    socket.to(conversationId).emit('user_typing', {
+    socket.to(conversationId).emit('chat:typing', {
       userId: socket.userId,
       username: data.username,
       isTyping: false

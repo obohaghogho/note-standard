@@ -11,6 +11,7 @@ let connection;
 if (env.REDIS_URL) {
   connection = new IORedis(env.REDIS_URL, {
     maxRetriesPerRequest: null,
+    tls: { rejectUnauthorized: false }
   });
 } else {
   logger.warn('⚠️ Redis disabled (no REDIS_URL) - IORedis connection not established');

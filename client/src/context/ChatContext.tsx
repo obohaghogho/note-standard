@@ -296,11 +296,27 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             });
         };
 
-        socket.on('receive_message', processIncomingMessage);
-        socket.on('new_conversation', onNewConversation);
-        socket.on('conversation_updated', onNewConversation);
-        socket.on('message_read', onMessageRead);
-        socket.on('conversation_read', ({ conversationId, readerId, readAt }: { conversationId: string, readerId: string, readAt: string }) => {
+        socket.on('chat:message', processIncomingMessage);
+        socket.on('chat:new_conversation', onNewConversation);
+        socket.on('chat:conversation_updated', onNewConversation);
+        socket.on('chat:message_read', onMessageRead);
+        socket.on('chat:typing', ({ conversationId, userId, username, isTyping }: { conversationId: string, userId: string, username: string, isTyping?: boolean }) => {
+            if (userId === user?.id) return;
+            setTypingUsers(prev => {
+                const current = prev[conversationId] || [];
+                // If isTyping is explicitly provided (from backend/gateway normalization)
+                const shouldBeTyping = isTyping !== undefined ? isTyping : true; 
+                
+                if (shouldBeTyping) {
+                    if (current.includes(username)) return prev;
+                    return { ...prev, [conversationId]: [...current, username] };
+                } else {
+                    return { ...prev, [conversationId]: current.filter(u => u !== username) };
+                }
+            });
+        });
+        
+        socket.on('chat:conversation_read', ({ conversationId, readerId, readAt }: { conversationId: string, readerId: string, readAt: string }) => {
             if (readerId === user?.id) return; // Already updated locally
             
             
@@ -369,33 +385,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }));
         });
 
-        socket.on('user_typing', ({ conversationId, userId, username }: { conversationId: string, userId: string, username: string }) => {
-            if (userId === user?.id) return;
-            setTypingUsers(prev => {
-                const current = prev[conversationId] || [];
-                if (current.includes(username)) return prev;
-                return { ...prev, [conversationId]: [...current, username] };
-            });
-        });
-
-        socket.on('user_stop_typing', ({ conversationId, userId, username }: { conversationId: string, userId: string, username: string }) => {
-            if (userId === user?.id) return;
-            setTypingUsers(prev => {
-                const current = prev[conversationId] || [];
-                return { ...prev, [conversationId]: current.filter(u => u !== username) };
-            });
-        });
 
         return () => {
-            socket.off('receive_message', processIncomingMessage);
-            socket.off('new_conversation', onNewConversation);
-            socket.off('conversation_updated', onNewConversation);
-            socket.off('message_read', onMessageRead);
-            socket.off('conversation_deleted', onConversationDeleted);
-            socket.off('message_deleted');
-            socket.off('message_edited');
-            socket.off('user_typing');
-            socket.off('user_stop_typing');
+            socket.off('chat:message');
+            socket.off('chat:new_conversation');
+            socket.off('chat:conversation_updated');
+            socket.off('chat:message_read');
+            socket.off('chat:typing');
+            socket.off('chat:conversation_read');
+            socket.off('chat:conversation_deleted');
+            socket.off('chat:message_deleted');
+            socket.off('chat:message_edited');
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [socket, connected, user?.id, loadConversations]);
@@ -529,6 +529,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     const sendTypingStatus = useCallback((isTyping: boolean) => {
         if (!socket || !connected || !activeConversationId || !user) return;
+        // We still use the legacy 'typing'/'stop_typing' bridge for direct gateway-to-client speed
+        // but the gateway will broadcast 'chat:typing'
         const event = isTyping ? 'typing' : 'stop_typing';
         socket.emit(event, { 
             conversationId: activeConversationId, 
