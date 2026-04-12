@@ -44,13 +44,32 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
         return () => clearInterval(interval);
     }, [callState.status, callState.connectedAt]);
 
+    const remoteVideoRef = React.useRef<HTMLVideoElement>(null);
+    const localVideoRef = React.useRef<HTMLVideoElement>(null);
+
+    useEffect(() => {
+        if (remoteVideoRef.current && remoteStream) {
+            if (!remoteVideoRef.current.srcObject) {
+                remoteVideoRef.current.srcObject = remoteStream;
+            }
+        }
+    }, [remoteStream]);
+
+    useEffect(() => {
+        if (localVideoRef.current && localStream) {
+            if (!localVideoRef.current.srcObject) {
+                localVideoRef.current.srcObject = localStream;
+            }
+        }
+    }, [localStream]);
+
     return (
         <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center backdrop-blur-xl animate-in fade-in duration-300">
             <div className="relative w-full h-full md:w-[90vw] md:h-[80vh] bg-gray-900 md:rounded-3xl overflow-hidden shadow-2xl border border-white/5">
                 <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
                     {remoteStream ? (
                         <video 
-                            ref={(el) => { if (el) el.srcObject = remoteStream; }} 
+                            ref={remoteVideoRef} 
                             autoPlay 
                             playsInline
                             className="w-full h-full object-cover" 
@@ -91,7 +110,7 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
                 <div className="absolute top-8 right-8 w-40 h-56 md:w-48 md:h-64 bg-gray-950 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl z-10 transition-all">
                     {localStream ? (
                         <video 
-                            ref={(el) => { if (el) el.srcObject = localStream; }} 
+                            ref={localVideoRef} 
                             autoPlay 
                             muted 
                             playsInline

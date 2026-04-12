@@ -39,7 +39,7 @@ export const useWebRTC = () => {
     return context;
 };
 
-// Use STUN+TURN fallback
+// Use STUN+TURN fallback per strict instructions
 const iceServers = [
     { urls: "stun:stun.l.google.com:19302" },
     {
@@ -145,7 +145,10 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }, []);
 
     const createPeerConnection = useCallback((targetUserId: string) => {
-        const pc = new RTCPeerConnection({ iceServers });
+        const pc = new RTCPeerConnection({ 
+            iceServers,
+            iceCandidatePoolSize: 10
+        });
 
         pc.onicecandidate = (e) => {
             if (e.candidate && socket) {
@@ -156,6 +159,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
         };
 
+        // RULE 8: Track reception mapped strictly to avoid flickering
         pc.ontrack = (event) => {
             console.log('[WebRTC] Received remote track', event.streams[0]);
             remoteStreamRef.current = event.streams[0];
@@ -193,6 +197,23 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setCallState({ type, status: 'calling', otherUser, conversationId, connectedAt: null });
 
         try {
+            // RULE: ALWAYS GET MEDIA FIRST
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: 48000 },
+                video: type === 'video' ? { facingMode: "user" } : false,
+            });
+            
+            // Re-apply track constraints just in case (iPhone audio noise global fix)
+            const audioTrack = stream.getAudioTracks()[0];
+            if (audioTrack) {
+                await audioTrack.applyConstraints({
+                    echoCancellation: true, noiseSuppression: true, autoGainControl: true
+                });
+            }
+
+            localStreamRef.current = stream;
+            setLocalStream(stream);
+
             // Signal ring instantly without wait for peer media
             socket?.emit('call:initiate', { to: targetUserId, type, conversationId });
             sendMessageToConversation(conversationId, `Started a ${type} call`, 'call');
@@ -216,15 +237,21 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (!targetUserId) return cleanup();
 
         try {
+            // RULE: ALWAYS GET MEDIA FIRST
             const stream = await navigator.mediaDevices.getUserMedia({
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-                video: callState.type === 'video',
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: 48000 },
+                video: callState.type === 'video' ? { facingMode: "user" } : false,
             });
+
+            // Re-apply track constraints safely for iPhone edge cases
+            const audioTrack = stream.getAudioTracks()[0];
+            if (audioTrack) {
+                await audioTrack.applyConstraints({
+                    echoCancellation: true, noiseSuppression: true, autoGainControl: true
+                });
+            }
             localStreamRef.current = stream;
             setLocalStream(stream);
-
-            const pc = createPeerConnection(targetUserId);
-            stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
             socket?.emit('call:ready', { to: targetUserId });
 
@@ -283,14 +310,13 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const targetUserId = data.from;
             
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-                    video: callState.type === 'video',
-                });
-                localStreamRef.current = stream;
-                setLocalStream(stream);
+                // RULE: Media was ALREADY fetched in startCall
+                const stream = localStreamRef.current;
+                if (!stream) throw new Error("Local stream not found before offer");
 
                 const pc = createPeerConnection(targetUserId);
+                
+                // RULE: ADD TRACKS BEFORE OFFER
                 stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
                 const offer = await pc.createOffer();
@@ -307,25 +333,35 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         };
 
         const handleCallSignal = async (data: any) => {
-            const pc = pcRef.current;
+            let pc = pcRef.current;
             const { signal } = data;
-
-            if (!pc) {
-                 if (signal.candidate) incomingSignalQueue.current.push(signal);
-                 return;
-            }
 
             try {
                 if (signal.offer) {
+                    if (!pc) {
+                         // Receiver side initializing PC on incoming offer
+                         pc = createPeerConnection(data.from);
+                         const stream = localStreamRef.current;
+                         if (stream) {
+                             // RULE: ADD TRACKS BEFORE OFFER OR ANSWER, NEVER RE-ADD
+                             stream.getTracks().forEach(track => pc!.addTrack(track, stream));
+                         }
+                    }
                     await pc.setRemoteDescription(new RTCSessionDescription(signal.offer));
                     const answer = await pc.createAnswer();
                     await pc.setLocalDescription(answer);
                     socket.emit('call:signal', { to: data.from, signal: { answer } });
                     flushSignalQueue(pc);
                 } else if (signal.answer) {
-                    await pc.setRemoteDescription(new RTCSessionDescription(signal.answer));
-                    flushSignalQueue(pc);
+                    if (pc) {
+                        await pc.setRemoteDescription(new RTCSessionDescription(signal.answer));
+                        flushSignalQueue(pc);
+                    }
                 } else if (signal.candidate) {
+                    if (!pc) {
+                        incomingSignalQueue.current.push(signal);
+                        return;
+                    }
                     await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
                 }
             } catch (err) {
@@ -348,7 +384,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             socket.off('call:ended', cleanup);
             socket.off('call:timeout', cleanup);
         };
-    }, [socket, socketConnected, cleanup, callState.type]);
+    }, [socket, socketConnected, cleanup, callState.type, createPeerConnection]);
 
     return (
         <WebRTCContext.Provider value={{
