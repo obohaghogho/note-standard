@@ -16,12 +16,12 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').then((registration) => {
       console.log('✅ Service Worker registered');
 
-      // Check for updates on a regular interval
+      // Check for updates on a regular interval (via SW fallback)
       setInterval(() => {
-        registration.update();
+        registration.update().catch(() => {});
       }, 1000 * 60 * 30); // 30 mins
 
-      const showUpdateNotification = (newWorker: ServiceWorker) => {
+      const showUpdateNotification = (newWorker?: ServiceWorker) => {
         toast((t) => (
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
@@ -31,7 +31,12 @@ if ('serviceWorker' in navigator) {
             <p className="text-xs text-gray-400">Please update to get the latest features and stability fixes.</p>
             <button
               onClick={() => {
-                newWorker.postMessage({ type: 'SKIP_WAITING' });
+                if (newWorker) {
+                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                } else {
+                    caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k))))
+                        .then(() => window.location.reload());
+                }
                 toast.dismiss(t.id);
               }}
               className="mt-1 bg-primary text-white text-xs font-bold py-2 px-4 rounded-lg shadow-lg hover:bg-primary/90 transition-all active:scale-95"
@@ -51,7 +56,7 @@ if ('serviceWorker' in navigator) {
         showUpdateNotification(registration.waiting);
       }
 
-      // 2. Listen for NEW updates arriving during the session:
+      // 2. Listen for NEW updates arriving during the session via SW:
       registration.addEventListener('updatefound', () => {
         const newWorker = registration.installing;
         if (newWorker) {
@@ -62,6 +67,34 @@ if ('serviceWorker' in navigator) {
           });
         }
       });
+
+      // 3. DETERMINISTIC HARD HTML CHECKSUM (Fixes iOS/Android WebAPK background cache lock)
+      const checkForAppUpdate = async () => {
+          try {
+              const res = await fetch(`/?t=${Date.now()}`);
+              if (!res.ok) return;
+              const html = await res.text();
+              
+              // Vite injects compiled assets via <script type="module" crossorigin src="/assets/index-HASH.js">
+              const scriptMatch = html.match(/src="(\/assets\/index-[^"]+\.js)"/);
+              if (scriptMatch && scriptMatch[1]) {
+                  const latestScriptUrl = scriptMatch[1];
+                  const currentScripts = Array.from(document.querySelectorAll('script')).map(s => s.getAttribute('src'));
+                  
+                  // If the live DOM doesn't have the newly deployed JS bundle, we are deeply outdated
+                  if (!currentScripts.includes(latestScriptUrl)) {
+                      showUpdateNotification();
+                  }
+              }
+          } catch (err) {
+              console.log('[UpdateCheck] Check failed:', err);
+          }
+      };
+
+      // Execute deterministic check on boot & every 5 mins
+      setTimeout(checkForAppUpdate, 3000);
+      setInterval(checkForAppUpdate, 1000 * 60 * 5);
+
     }).catch((error) => {
       console.error('❌ Service Worker registration failed:', error);
     });
