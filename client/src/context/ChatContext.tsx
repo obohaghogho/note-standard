@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
+import { Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
 import { NotificationService } from '../services/NotificationService';
@@ -108,7 +109,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const conversationsFetchRef = useRef(false);
     const hasInitialFetched = useRef(false);
     const conversationsRef = useRef<Conversation[]>([]);
-    const socketRef = useRef<any>(null);
+    const socketRef = useRef<Socket | null>(null);
     const activeConversationIdRef = useRef<string | null>(null);
 
 
@@ -421,7 +422,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     useEffect(() => {
         if (!socket) return;
-        const onAny = (event: string, ...args: any[]) => {
+        const onAny = (event: string, ...args: unknown[]) => {
             console.log(`[Chat] 📡 Socket event: ${event}`, args);
         };
         socket.onAny(onAny);
@@ -567,7 +568,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     };
 
-    const markMessageRead = async (messageId: string) => {
+    const markMessageRead = useCallback(async (messageId: string) => {
         if (!session) return;
         try {
             await fetch(`${API_URL}/api/chat/messages/${messageId}/read`, {
@@ -577,9 +578,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         } catch (err) {
             console.error('[Chat] Failed to mark read:', err);
         }
-    };
+    }, [session]);
 
-    const markConversationRead = async (conversationId: string) => {
+    const markConversationRead = useCallback(async (conversationId: string) => {
         if (!session) return;
         try {
             await fetch(`${API_URL}/api/chat/conversations/${conversationId}/read`, {
@@ -606,7 +607,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         } catch (err) {
             console.error('[Chat] Failed to mark conversation read:', err);
         }
-    };
+    }, [session, user?.id]);
 
     const startConversation = async (username: string) => {
         if (!user || !session) throw new Error('Must be logged in');
@@ -877,7 +878,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         } catch (err) {
             console.error('[Chat] Failed to fetch messages:', err);
         }
-    }, [session, user?.id]);
+    }, [session, user?.id, markConversationRead]);
 
     useEffect(() => {
         if (activeConversationId) {

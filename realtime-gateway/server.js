@@ -226,7 +226,9 @@ async function initPgListener() {
     setTimeout(initPgListener, 5000);
     try {
       await pgClient.end().catch(() => {});
-    } catch (e) {}
+    } catch (e) {
+      // Ignore disconnect errors
+    }
   }
 
   connect();
