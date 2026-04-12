@@ -6,7 +6,8 @@
  */
 
 self.addEventListener('install', (event) => {
-    self.skipWaiting();
+    // We intentionally pause here to allow the React UI to prompt the user
+    // The UI handles posting a 'SKIP_WAITING' message!
 });
 
 self.addEventListener('activate', (event) => {
