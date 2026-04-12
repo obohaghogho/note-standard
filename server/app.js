@@ -166,6 +166,7 @@ app.post("/api/flutterwave-webhook", async (req, res) => {
 });
 
 app.use("/api/media", require("./routes/media"));
+app.use("/api/version", require("./routes/version"));
 
 // ─── Dynamic App Downloads ───────────────────────────────────
 const downloadService = require("./services/DownloadService");

@@ -154,7 +154,9 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const MAX_RECONNECT = 5;
 
         function createPeer(suffix?: string) {
-            const peerId = makePeerId(user!.id, suffix || Math.random().toString(36).substring(7));
+            // CRITICAL: Use deterministic peer ID so callers can find us.
+            // Only use a suffix on ID collision (unavailable-id error).
+            const peerId = makePeerId(user!.id, suffix);
             let reconnectAttempts = 0;
             // Single flag to prevent both `disconnected` and `error` handlers
             // from scheduling a reconnect at the same time.
@@ -246,16 +248,18 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 const error = err as { type: string };
                 console.error('[PeerJS] Error:', error.type, err);
                 if (error.type === 'unavailable-id') {
-                    // Destroy and nullify before recreating to avoid the re-entry guard
+                    // ID collision — destroy and recreate with a unique suffix
                     peer.destroy();
                     if (peerRef.current === peer) {
                         peerRef.current = null;
-                        setTimeout(() => createPeer(Math.random().toString(36).substring(7)), 1000);
+                        const fallbackSuffix = Math.random().toString(36).substring(2, 6);
+                        console.warn(`[PeerJS] ID collision, retrying with suffix: ${fallbackSuffix}`);
+                        setTimeout(() => createPeer(fallbackSuffix), 1000);
                     }
-                } else if (err.type === 'peer-unavailable') {
+                } else if ((err as { type: string }).type === 'peer-unavailable') {
                     toast.error('User is offline or unavailable');
                     cleanup();
-                } else if (err.type === 'network' || err.type === 'server-error') {
+                } else if (error.type === 'network' || error.type === 'server-error') {
                     // `disconnected` fires alongside network errors — scheduleReconnect
                     // deduplicates so only one reconnect attempt is queued at a time.
                     scheduleReconnect();
@@ -441,6 +445,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             {callState.status !== 'idle' && (
                 <CallOverlay 
                     callState={{
+                        type: callState.type,
                         status: callState.status as 'calling' | 'incoming' | 'connected',
                         connectedAt: callState.connectedAt
                     }}

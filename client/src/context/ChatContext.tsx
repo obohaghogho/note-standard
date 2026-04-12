@@ -190,7 +190,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         if (!socket || !connected) return;
 
         const processIncomingMessage = (msg: Message & { sender_id: string; conversation_id: string }) => {
-            console.log('[DEBUG] ?? Socket received msg:', msg.id, 'for room:', msg.conversation_id, 'isMounted:', isMounted.current);
+            console.log('Realtime event received:', { event: 'chat:message', id: msg.id, conversation_id: msg.conversation_id });
+            console.log('[DEBUG] 📨 Socket received msg:', msg.id, 'for room:', msg.conversation_id, 'isMounted:', isMounted.current);
             if (!isMounted.current) return;
             
             const newMessage: Message = { ...msg, isOwn: msg.sender_id === user?.id };
@@ -331,9 +332,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 };
             });
         });
-        socket.on('conversation_deleted', onConversationDeleted);
-        socket.on('message_deleted', ({ messageId, conversationId }: { messageId: string, conversationId: string }) => {
-            
+        // ── Deletion & Edit handlers (use BOTH prefixed and unprefixed for compatibility) ──
+        const onMessageDeleted = ({ messageId, conversationId }: { messageId: string, conversationId: string }) => {
+            console.log('[Chat] Realtime event received: message_deleted', { messageId, conversationId });
             setMessages(prev => {
                 const convMessages = prev[conversationId] || [];
                 return {
@@ -342,22 +343,18 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 };
             });
 
-            // Update conversation last message if the deleted message was the preview
             setConversations(prev => prev.map(conv => {
                 if (conv.id === conversationId && conv.lastMessage && (conv.lastMessage as { id?: string }).id === messageId) {
-                    return {
-                        ...conv,
-                        lastMessage: undefined
-                    };
+                    return { ...conv, lastMessage: undefined };
                 }
                 return conv;
             }));
-        });
+        };
 
-        socket.on('message_edited', (editedMsg: Message) => {
+        const onMessageEdited = (editedMsg: Message) => {
             if (!editedMsg || !editedMsg.id) return;
             const conversationId = editedMsg.conversation_id;
-            
+            console.log('[Chat] Realtime event received: message_edited', { messageId: editedMsg.id, conversationId });
             
             setMessages(prev => {
                 const convMessages = prev[conversationId] || [];
@@ -367,36 +364,40 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 };
             });
 
-            // Update conversation lastMessage preview if it was edited
             setConversations(prev => prev.map(conv => {
                 if (conv.id === conversationId && conv.lastMessage && (conv.lastMessage as { sender_id?: string }).sender_id === editedMsg.sender_id) {
-                    // It's tricky to know if it's the absolute last message without searching messages state
-                    // We'll just optimistically update it if the created_at matches
                     if (conv.lastMessage.created_at === editedMsg.created_at) {
-                        return {
-                            ...conv,
-                            lastMessage: {
-                                ...conv.lastMessage,
-                                content: editedMsg.content
-                            }
-                        };
+                        return { ...conv, lastMessage: { ...conv.lastMessage, content: editedMsg.content } };
                     }
                 }
                 return conv;
             }));
-        });
+        };
+
+        // Register with chat: prefix (server emits these)
+        socket.on('chat:conversation_deleted', onConversationDeleted);
+        socket.on('chat:message_deleted', onMessageDeleted);
+        socket.on('chat:message_edited', onMessageEdited);
+        // Also register unprefixed for backward compatibility
+        socket.on('conversation_deleted', onConversationDeleted);
+        socket.on('message_deleted', onMessageDeleted);
+        socket.on('message_edited', onMessageEdited);
 
 
         return () => {
-            socket.off('chat:message');
-            socket.off('chat:new_conversation');
-            socket.off('chat:conversation_updated');
-            socket.off('chat:message_read');
+            socket.off('chat:message', processIncomingMessage);
+            socket.off('chat:new_conversation', onNewConversation);
+            socket.off('chat:conversation_updated', onNewConversation);
+            socket.off('chat:message_read', onMessageRead);
             socket.off('chat:typing');
             socket.off('chat:conversation_read');
-            socket.off('chat:conversation_deleted');
-            socket.off('chat:message_deleted');
-            socket.off('chat:message_edited');
+            socket.off('chat:conversation_deleted', onConversationDeleted);
+            socket.off('chat:message_deleted', onMessageDeleted);
+            socket.off('chat:message_edited', onMessageEdited);
+            // Also clean up unprefixed listeners
+            socket.off('conversation_deleted', onConversationDeleted);
+            socket.off('message_deleted', onMessageDeleted);
+            socket.off('message_edited', onMessageEdited);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [socket, connected, user?.id, loadConversations]);

@@ -22,3 +22,7 @@ WALLET_README.md
 !client/src/pages/admin/AdminDebugTools.tsx
 result.txt
 *.txt
+
+# Temporary processing files
+server/tmp/
+tmp/

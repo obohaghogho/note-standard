@@ -17,6 +17,7 @@ import { NotesProvider } from './context/NotesContext';
 // import { ChatWidget } from './components/chat/ChatWidget'; // already handled by Route
 import { ChatWidget } from './components/chat/ChatWidget';
 import { ErrorBoundary } from 'react-error-boundary';
+import { VersionGuard } from './components/common/VersionGuard';
 import DashboardHome from './pages/dashboard/DashboardHome';
 import Notes from './pages/dashboard/Notes';
 import Chat from './pages/dashboard/Chat';
@@ -146,6 +147,7 @@ function App() {
           </div>
         }>
           <AuthProvider>
+            <VersionGuard>
             <SocketProvider>
               <PresenceProvider>
                 <NotificationProvider>
@@ -218,6 +220,7 @@ function App() {
                 </NotificationProvider>
               </PresenceProvider>
             </SocketProvider>
+            </VersionGuard>
           </AuthProvider>
         </Suspense>
       </ErrorBoundary>
