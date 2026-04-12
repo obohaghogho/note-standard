@@ -51,7 +51,7 @@ function makePeerId(userId: string, suffix?: string): string {
 
 export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { socket, connected: socketConnected } = useSocket();
-    const { user } = useAuth();
+    const { user, profile } = useAuth();
     const { sendMessageToConversation } = useChat();
 
     const [callState, setCallState] = useState<CallState>({
@@ -186,8 +186,12 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     iceServers: [
                         { urls: 'stun:stun.l.google.com:19302' },
                         { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun3.l.google.com:19302' },
+                        { urls: 'stun:stun4.l.google.com:19302' },
                         { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
                         { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+                        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
                     ],
                 },
             });
@@ -302,8 +306,43 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             localStreamRef.current = stream;
             setLocalStream(stream);
 
-            socket?.emit('call:initiate', { to: targetUserId, from: user!.id, peerId: peerRef.current.id, type });
+            // Notify via socket for UI ringing
+            socket?.emit('call:initiate', { to: targetUserId, from: user!.id, peerId: peerRef.current.id, type, conversationId });
             sendMessageToConversation(conversationId, `Started a ${type} call`, 'call');
+
+            // PeerJS IDs are prefixed with ns_ and use underscores
+            const targetPeerId = makePeerId(targetUserId);
+            console.log(`[WebRTC] Calling target: ${targetPeerId}`);
+
+            const call = peerRef.current.call(targetPeerId, stream, {
+                metadata: {
+                    type,
+                    conversationId,
+                    caller: {
+                        id: user!.id,
+                        full_name: profile?.full_name || user?.email?.split('@')[0] || 'Unknown User',
+                        avatar_url: profile?.avatar_url
+                    }
+                }
+            });
+
+            mediaConnectionRef.current = call;
+
+            call.on('stream', (remote) => {
+                console.log('[WebRTC] Remote stream received (caller side)');
+                setRemoteStream(remote);
+                setCallState(p => ({ ...p, status: 'connected', connectedAt: p.connectedAt || Date.now() }));
+            });
+
+            call.on('close', () => {
+                console.log('[WebRTC] Call closed (caller side)');
+                cleanup();
+            });
+
+            call.on('error', (err) => {
+                console.error('[WebRTC] Call error (caller side):', err);
+                cleanup();
+            });
 
             callTimeoutRef.current = setTimeout(() => {
                 if (currentCallStatus.current === 'calling') {

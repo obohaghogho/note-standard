@@ -6,6 +6,14 @@ on:
   pull_request:
     branches: [ main, master, develop ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: true
+  HUSKY: 0
+
 jobs:
   quality:
     name: Lint and Typecheck
@@ -23,10 +31,10 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: Lint (All Workspaces)
-        run: npx eslint .
+        run: npm run lint
 
       - name: Typecheck (Client)
-        run: npm run typecheck -w client
+        run: npm run typecheck
 
   build-client:
     name: Build Client
@@ -51,10 +59,10 @@ jobs:
           fi
 
       - name: Build Client
-        run: npm run build -w client
+        run: npm run build:client
 
-  verify-server:
-    name: Verify Server
+  verify-backend:
+    name: Verify Backend Services
     needs: quality
     runs-on: ubuntu-latest
     steps:
@@ -71,22 +79,6 @@ jobs:
 
       - name: Check Server Syntax
         run: node --check server/index.js
-
-  verify-gateway:
-    name: Verify Realtime Gateway
-    needs: quality
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
 
       - name: Check Gateway Syntax
         run: node --check realtime-gateway/server.js

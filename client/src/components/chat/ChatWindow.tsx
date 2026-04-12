@@ -404,20 +404,17 @@ const ChatWindow: React.FC = () => {
     const handleVoiceMessage = async (blob: Blob) => {
         if (!session || !activeConversationId) return;
         
-        const loadingToast = toast.loading('Sending voice message...');
+        const loadingToast = toast.loading('Processing voice message...');
         try {
             const mimeType = blob.type || 'audio/webm';
-            // Extract extension from mime type (e.g., audio/webm -> webm, audio/mp4 -> m4a)
-            const extension = mimeType.split('/')[1]?.split(';')[0] || 'webm';
-            const finalExtension = extension === 'mp4' ? 'm4a' : extension;
-            
-            const fileName = `voice_${Date.now()}.${finalExtension}`;
-            const filePath = `${activeConversationId}/${fileName}`;
+            // Use a temporary path for processing
+            const tempFileName = `raw_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+            const tempPath = `temp/${tempFileName}`;
 
-            // 1. Upload to Supabase Storage
+            // 1. Upload raw blob to Supabase Storage (Temp folder)
             const { error: uploadError, data } = await supabase.storage
                 .from('chat-media')
-                .upload(filePath, blob, {
+                .upload(tempPath, blob, {
                     cacheControl: '3600',
                     upsert: false,
                     contentType: mimeType
@@ -425,34 +422,34 @@ const ChatWindow: React.FC = () => {
 
             if (uploadError) throw uploadError;
 
-            // 2. Create Attachment Record
-            const res = await fetch(`${API_URL}/api/media/attachments`, {
+            // 2. Call Backend to convert and create record
+            const res = await fetch(`${API_URL}/api/media/process-audio`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${session.access_token}`
                 },
                 body: JSON.stringify({
-                    conversationId: activeConversationId,
-                    fileName,
-                    fileType: mimeType,
-                    fileSize: blob.size,
                     storagePath: data.path,
-                    metadata: { mimeType }
+                    conversationId: activeConversationId
                 })
             });
 
-            if (!res.ok) throw new Error('Failed to create attachment record');
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.error || 'Failed to process audio');
+            }
+
             const attachment = await res.json();
 
-            // 3. Send Message
+            // 3. Send Message referencing the new attachment
             await sendMessage('Sent a voice message', 'audio', attachment.id);
             
             setIsVoiceRecording(false);
             toast.success('Voice message sent', { id: loadingToast });
         } catch (err) {
-            console.error('Failed to send voice message:', err);
-            toast.error('Failed to send voice message', { id: loadingToast });
+            console.error('[ChatWindow] Voice message error:', err);
+            toast.error(err instanceof Error ? err.message : 'Failed to send voice message', { id: loadingToast });
         }
     };
 
