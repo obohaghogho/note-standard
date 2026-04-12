@@ -51,6 +51,7 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
         if (remoteVideoRef.current && remoteStream) {
             if (!remoteVideoRef.current.srcObject) {
                 remoteVideoRef.current.srcObject = remoteStream;
+                remoteVideoRef.current.play().catch(e => console.error('Remote play err:', e));
             }
         }
     }, [remoteStream]);
@@ -59,6 +60,7 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
         if (localVideoRef.current && localStream) {
             if (!localVideoRef.current.srcObject) {
                 localVideoRef.current.srcObject = localStream;
+                localVideoRef.current.play().catch(e => console.error('Local play err:', e));
             }
         }
     }, [localStream]);

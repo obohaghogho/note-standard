@@ -197,19 +197,10 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setCallState({ type, status: 'calling', otherUser, conversationId, connectedAt: null });
 
         try {
-            // RULE: ALWAYS GET MEDIA FIRST
             const stream = await navigator.mediaDevices.getUserMedia({
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: 48000 },
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false },
                 video: type === 'video' ? { facingMode: "user" } : false,
             });
-            
-            // Re-apply track constraints just in case (iPhone audio noise global fix)
-            const audioTrack = stream.getAudioTracks()[0];
-            if (audioTrack) {
-                await audioTrack.applyConstraints({
-                    echoCancellation: true, noiseSuppression: true, autoGainControl: true
-                });
-            }
 
             localStreamRef.current = stream;
             setLocalStream(stream);
@@ -237,19 +228,11 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (!targetUserId) return cleanup();
 
         try {
-            // RULE: ALWAYS GET MEDIA FIRST
             const stream = await navigator.mediaDevices.getUserMedia({
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: 48000 },
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false },
                 video: callState.type === 'video' ? { facingMode: "user" } : false,
             });
 
-            // Re-apply track constraints safely for iPhone edge cases
-            const audioTrack = stream.getAudioTracks()[0];
-            if (audioTrack) {
-                await audioTrack.applyConstraints({
-                    echoCancellation: true, noiseSuppression: true, autoGainControl: true
-                });
-            }
             localStreamRef.current = stream;
             setLocalStream(stream);
 
