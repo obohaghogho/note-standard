@@ -60,6 +60,13 @@ self.addEventListener('push', (event) => {
         renotify: true
     };
 
+    // If it's an incoming call, we explicitly enforce high-urgency ringing mappings natively
+    if (options.data.type === 'call_incoming') {
+        options.requireInteraction = true; // The notification stays on screen permanently until accepted/dismissed
+        options.vibrate = [500, 200, 500, 200, 500, 200, 500, 200, 500]; // Extended vibration mimicry
+        options.tag = `incoming-call-${Date.now()}`; // Unique tag so previous calls don't overwrite current ones
+    }
+
     event.waitUntil(self.registration.showNotification(title, options));
 });
 
