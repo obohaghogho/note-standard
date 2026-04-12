@@ -205,7 +205,12 @@ const WalletContent: React.FC = () => {
                 setShowWithdrawModal(true);
                 break;
             case 'swap':
-                swapCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (swapCardRef.current) {
+                    swapCardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    toast('Navigating to Exchange...', { icon: '🔄', duration: 1000 });
+                } else {
+                    toast.error('Exchange UI not found. Please refresh.');
+                }
                 break;
             case 'receive':
                 setShowReceiveModal(true);

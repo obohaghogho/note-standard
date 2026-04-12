@@ -226,7 +226,7 @@ export const DashboardHome = () => {
                                 <Activity size={20} className="text-primary" />
                                 Live Pulse
                             </h3>
-                            <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/wallet')} className="text-xs text-gray-500">History</Button>
+                            <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/activity')} className="text-xs text-gray-500">History</Button>
                         </div>
                         <div className="flex-1 overflow-y-auto p-2 scrollbar-hide">
                             <div className="space-y-1 p-2">

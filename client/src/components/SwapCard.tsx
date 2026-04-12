@@ -339,6 +339,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                 {/* Swap Icon */}
                 <div className="flex justify-center -my-2 relative z-10">
                     <button
+                        type="button"
                         onClick={handleSwapCurrencies}
                         className="p-2 rounded-full bg-gray-800 border border-gray-700 hover:border-purple-500 hover:bg-gray-700 transition-all shadow-lg group"
                     >

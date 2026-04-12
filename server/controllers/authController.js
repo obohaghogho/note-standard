@@ -131,8 +131,8 @@ const forgotPassword = async (req, res) => {
       });
     }
 
-    const clientUrl = env.CLIENT_URL || "https://notestandard.com";
-    const redirectTo = `${clientUrl}/reset-password`;
+    const clientUrl = env.CLIENT_URL || req.headers.origin || "https://notestandard.com";
+    const redirectTo = `${clientUrl.replace(/\/$/, "")}/reset-password`;
 
     // DEBUG: Log the redirect URL to verify it's correct on Render
     console.log(

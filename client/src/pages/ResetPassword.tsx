@@ -15,77 +15,81 @@ export const ResetPassword = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const [isInitializing, setIsInitializing] = useState(true);
+
     useEffect(() => {
-        // Check if we came from an error URL immediately
+        let mounted = true;
+
+        // 1. Check if we came from an error URL immediately
         const errorCode = searchParams.get('error_code');
         const errorDesc = searchParams.get('error_description');
 
         if (errorCode) {
             setError(errorDesc || 'Reset link is invalid or expired.');
+            setIsInitializing(false);
             return;
         }
 
-        // Listen for the PASSWORD_RECOVERY event which happens when the user clicks the email link
+        // 2. Setup Auth Listener (Crucial for detecting recovery event)
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-            if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
+            console.log(`[ResetPassword] Auth event: ${event}`);
+            if (!mounted) return;
+
+            if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
                 setError(null);
+                setIsInitializing(false);
                 if (session?.user?.email) {
                     setEmail(session.user.email);
                 }
             }
         });
 
-        // Also check initial session just in case the event fired before we mounted
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session) {
-                setError(null);
-                if (session.user?.email) {
-                    setEmail(session.user.email);
+        // 3. Proactive check for session or hash tokens
+        const checkSession = async () => {
+            try {
+                // First check immediate session
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!mounted) return;
+
+                if (session) {
+                    console.log('[ResetPassword] Session found');
+                    setError(null);
+                    setIsInitializing(false);
+                    if (session.user?.email) {
+                        setEmail(session.user.email);
+                    }
+                    return;
                 }
-            } else {
-                 // Check if we have a hash with tokens (implicit flow)
-                 const hashParams = new URLSearchParams(window.location.hash.substring(1));
-                 const type = hashParams.get('type');
-                 const accessToken = hashParams.get('access_token');
 
-                 if (type === 'recovery' && accessToken) {
-                     console.log('Recovery token detected in URL');
-                     setError(null);
-                 }
-
-                 // Wait a moment for the auth flow to complete
-                 setTimeout(async () => {
-                     try {
-                         const { data: { session: retrySession }, error: authError } = await supabase.auth.getSession();
-                         if (authError) throw authError;
-
-                         if (retrySession) {
-                            setError(null);
-                            if (retrySession.user?.email) {
-                                setEmail(retrySession.user.email);
-                            }
-                         } else {
-                            setError('No active session found. Please try requesting a new password reset link.');
-                         }
-                     } catch (err: unknown) {
-                         console.error('Session retrieval error:', err);
-                         const errMsg = err instanceof Error ? err.message : 'Error loading session.';
-                         if (errMsg.includes('LockManager')) {
-                             setError('Browser storage lock timeout. Please refresh the page and try again, or try opening in an incognito window.');
-                             
-                             // Attempt to force clear the lock from localStorage behind the scenes
-                             Object.keys(localStorage).forEach(key => {
-                                 if (key.includes('-auth-token')) localStorage.removeItem(key);
-                             });
-                         } else {
-                             setError(errMsg);
-                         }
-                     }
-                  }, 4000);
+                // If no session, check for recovery hash (implicit flow helper)
+                const hash = window.location.hash;
+                if (hash && (hash.includes('type=recovery') || hash.includes('access_token='))) {
+                    console.log('[ResetPassword] Recovery hash detected, waiting for event...');
+                    // We stay in initializing state as the event listener above will catch it
+                    // But we add a safety timeout if the event NEVER fires
+                    setTimeout(() => {
+                        if (mounted && isInitializing) {
+                            setIsInitializing(false);
+                            setError('Reset process timed out. Please try again or refresh the page.');
+                        }
+                    }, 8000);
+                } else {
+                    // No session and no hash? It's probably an invalid visit
+                    setIsInitializing(false);
+                    setError('No active session found. Please try requesting a new password reset link.');
+                }
+            } catch (err) {
+                if (!mounted) return;
+                console.error('[ResetPassword] Error:', err);
+                setIsInitializing(false);
+                setError('Failed to initialize reset flow.');
             }
-        });
+        };
+
+        checkSession();
 
         return () => {
+            mounted = false;
             subscription.unsubscribe();
         };
     }, [searchParams]);
@@ -126,7 +130,12 @@ export const ResetPassword = () => {
                 </div>
 
                 <Card variant="glass" className="p-8">
-                    {error ? (
+                    {isInitializing ? (
+                        <div className="flex flex-col items-center justify-center py-8 gap-4 text-gray-400">
+                             <RotateCw className="w-8 h-8 animate-spin text-primary" />
+                             <p className="text-sm font-medium animate-pulse">Checking your recovery link...</p>
+                        </div>
+                    ) : error ? (
                         <div className="text-center space-y-4">
                             <div className="text-red-500 bg-red-500/10 p-4 rounded-lg border border-red-500/20">
                                 <p className="font-medium">Error</p>

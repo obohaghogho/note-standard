@@ -71,9 +71,13 @@ export const DashboardLayout = () => {
                 <div className="flex items-center gap-2 md:gap-4">
                     <NotificationBell />
                     <LanguageSelector />
-                    <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs ring-1 ring-primary/20">
+                    <button 
+                        onClick={() => navigate('/dashboard/settings')}
+                        className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs ring-1 ring-primary/20 hover:bg-primary/30 transition-colors"
+                        title="View Settings"
+                    >
                         {user?.email?.[0].toUpperCase()}
-                    </div>
+                    </button>
                 </div>
             </header>
         );
