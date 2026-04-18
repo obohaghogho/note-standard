@@ -112,8 +112,9 @@ export const accountManager = {
 
     if (index !== -1) {
       const existing = accounts[index];
+      const existingTokens = existing.tokens || (existing as any).session;
       // Only update if newer
-      if (session.expires_at && existing.tokens.expires_at && session.expires_at < existing.tokens.expires_at) {
+      if (session.expires_at && existingTokens && existingTokens.expires_at && session.expires_at < existingTokens.expires_at) {
         return false;
       }
 
@@ -151,8 +152,9 @@ export const accountManager = {
 
   isAccountSessionValid(userId: string): boolean {
     const account = this.getAccount(userId);
-    if (!account?.tokens) return false;
-    const expiresAt = account.tokens.expires_at;
+    const tokens = account?.tokens || (account as any)?.session;
+    if (!tokens) return false;
+    const expiresAt = tokens.expires_at;
     if (!expiresAt) return true;
     const now = Math.floor(Date.now() / 1000);
     return (expiresAt - now) > 120; // 2 minute buffer
