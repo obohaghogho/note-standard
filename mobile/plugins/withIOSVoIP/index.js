@@ -1,4 +1,4 @@
-/* eslint-env node */
+/* eslint-disable no-undef */
 const { withAppDelegate, withDangerousMod } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');

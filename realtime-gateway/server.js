@@ -179,6 +179,7 @@ io.on('connection', (socket) => {
 // ✅ 8. PostgreSQL LISTEN Loop (Replaces Redis Sub)
 const DATABASE_URL = process.env.DATABASE_URL;
 
+let isReconnecting = false;
 async function initPgListener() {
   if (!DATABASE_URL) {
     console.warn('[Gateway] ⚠ DATABASE_URL missing. PostgreSQL Pub/Sub disabled.');
@@ -194,7 +195,7 @@ async function initPgListener() {
   pgClient.on('error', (err) => {
     console.error('[Gateway] 🐘 PostgreSQL Client Error:', err.message);
     if (err.message.includes('connection') || err.message.includes('terminated')) {
-      reconnectPg();
+      if (!isReconnecting) reconnectPg();
     }
   });
 
@@ -217,13 +218,17 @@ async function initPgListener() {
       console.log('[Gateway] 🐘 ✓ Listening for PostgreSQL events on channel: realtime_events');
     } catch (err) {
       console.error('[Gateway] 🐘 PostgreSQL connection failed:', err.message);
-      reconnectPg();
+      if (!isReconnecting) reconnectPg();
     }
   }
 
   async function reconnectPg() {
+    isReconnecting = true;
     console.log('[Gateway] 🐘 Attempting to reconnect to PostgreSQL in 5s...');
-    setTimeout(initPgListener, 5000);
+    setTimeout(() => {
+      isReconnecting = false;
+      initPgListener();
+    }, 5000);
     try {
       await pgClient.end().catch(() => {});
     } catch (e) {

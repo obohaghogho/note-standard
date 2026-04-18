@@ -156,52 +156,6 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         };
     }, [authReady, session, user, fetchNotifications, subscribeToPush]);
 
-    // Socket listeners
-    useEffect(() => {
-        if (!socket || !connected) return;
-
-        const onNotification = (notification: Notification) => {
-            if (!isMounted.current) return;
-            
-            setNotifications(prev => [notification, ...prev]);
-
-            toast.custom((t: Toast) => (
-                <div 
-                    className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-[#1a1a1a] shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5 border border-white/10 cursor-pointer`}
-                    onClick={() => {
-                        markAsRead(notification.id);
-                        toast.dismiss(t.id);
-                    }}
-                >
-                    <div className="flex-1 w-0 p-4">
-                        <div className="flex items-start">
-                            <div className="ml-3 flex-1">
-                                <p className="text-sm font-medium text-white">{notification.title}</p>
-                                <p className="mt-1 text-sm text-gray-400">{notification.message}</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="flex border-l border-white/10">
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                toast.dismiss(t.id);
-                            }}
-                            className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-primary hover:text-primary/80 focus:outline-none"
-                        >
-                            Close
-                        </button>
-                    </div>
-                </div>
-            ), { duration: 4000 });
-        };
-
-        socket.on('notification', onNotification);
-        return () => {
-            socket.off('notification', onNotification);
-        };
-    }, [socket, connected, markAsRead]);
-
     const markAsRead = useCallback(async (id: string) => {
         if (!session) return;
         try {
@@ -248,6 +202,52 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             toast.error('Failed to delete notification');
         }
     }, [session]);
+
+    // Socket listeners
+    useEffect(() => {
+        if (!socket || !connected) return;
+
+        const onNotification = (notification: Notification) => {
+            if (!isMounted.current) return;
+            
+            setNotifications(prev => [notification, ...prev]);
+
+            toast.custom((t: Toast) => (
+                <div 
+                    className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-[#1a1a1a] shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5 border border-white/10 cursor-pointer`}
+                    onClick={() => {
+                        markAsRead(notification.id);
+                        toast.dismiss(t.id);
+                    }}
+                >
+                    <div className="flex-1 w-0 p-4">
+                        <div className="flex items-start">
+                            <div className="ml-3 flex-1">
+                                <p className="text-sm font-medium text-white">{notification.title}</p>
+                                <p className="mt-1 text-sm text-gray-400">{notification.message}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex border-l border-white/10">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                toast.dismiss(t.id);
+                            }}
+                            className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-primary hover:text-primary/80 focus:outline-none"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            ), { duration: 4000 });
+        };
+
+        socket.on('notification', onNotification);
+        return () => {
+            socket.off('notification', onNotification);
+        };
+    }, [socket, connected, markAsRead]);
 
     const clearAllNotifications = useCallback(async () => {
         if (!session) return;

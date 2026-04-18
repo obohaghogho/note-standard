@@ -21,6 +21,7 @@
     },
     "android": {
       "package": "com.notestandard.app",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"

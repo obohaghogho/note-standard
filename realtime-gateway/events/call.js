@@ -130,7 +130,9 @@ module.exports = (io, socket) => {
           callerId: socket.userId
         }
       });
-    } catch (e) {}
+    } catch (e) {
+      console.error('[Call] Failed to send reject push:', e.message);
+    }
   });
 
   // 4. End Call (Send Push to stop ringing)
@@ -153,7 +155,9 @@ module.exports = (io, socket) => {
           callerId: socket.userId
         }
       });
-    } catch (e) {}
+    } catch (e) {
+      console.error('[Call] Failed to send cancel push:', e.message);
+    }
   });
 
   // 5. Call Timeout Handler
@@ -174,6 +178,8 @@ module.exports = (io, socket) => {
           callerId: socket.userId
         }
       });
-    } catch (e) {}
+    } catch (e) {
+      console.error('[Call] Failed to send timeout push:', e.message);
+    }
   });
 };
