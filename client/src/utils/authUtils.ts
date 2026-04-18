@@ -16,6 +16,12 @@ export const refreshSessionIsolated = async (account: StoredAccount, isRetry = f
       return null;
     }
 
+    const refreshToken = account.tokens?.refresh_token || (account as any).session?.refresh_token;
+    if (!refreshToken) {
+      console.error(`[AuthUtils] Missing refresh token for account: ${account.email}`);
+      return null;
+    }
+
     const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
       method: 'POST',
       headers: {
@@ -23,7 +29,7 @@ export const refreshSessionIsolated = async (account: StoredAccount, isRetry = f
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        refresh_token: account.tokens.refresh_token
+        refresh_token: refreshToken
       })
     });
 
@@ -36,7 +42,8 @@ export const refreshSessionIsolated = async (account: StoredAccount, isRetry = f
         
         // Reload from storage to see if we have a NEW token now
         const latestAccount = getAccount(account.id);
-        if (latestAccount && latestAccount.tokens.refresh_token !== account.tokens.refresh_token) {
+        const latestToken = latestAccount?.tokens?.refresh_token || (latestAccount as any)?.session?.refresh_token;
+        if (latestAccount && latestToken && latestToken !== refreshToken) {
           console.log(`[AuthUtils] Token was indeed rotated elsewhere. Retrying with latest...`);
           return refreshSessionIsolated(latestAccount, true);
         }
