@@ -121,8 +121,7 @@ export const AdDisplay = ({ className = '', currentTags = EMPTY_TAGS }: AdDispla
         return () => {
             supabase.removeChannel(channel);
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isPro, stringifiedTags]);
+    }, [isPro, stringifiedTags, fetchRelevantAd]);
 
     // Viewability Tracker
     useEffect(() => {

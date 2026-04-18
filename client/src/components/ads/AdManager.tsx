@@ -78,7 +78,9 @@ export const AdManager = () => {
         try {
             const data = await adService.getAuctionIntel();
             setIntel(data);
-        } catch { } // fail silently
+        } catch {
+            // Fail silently - auction data is non-critical for core functionality
+        }
     };
 
     const fetchWallet = async () => {

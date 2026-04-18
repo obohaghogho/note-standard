@@ -34,7 +34,7 @@ export interface NotificationContextValue {
 export const NotificationContext = createContext<NotificationContextValue | null>(null);
 
 export const NotificationProvider = ({ children }: { children: React.ReactNode }) => {
-    const { user, session, profile, authReady, isSwitching } = useAuth();
+    const { user, session, authReady, isSwitching } = useAuth();
     const { socket, connected } = useSocket();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [loading, setLoading] = useState(true);
@@ -64,7 +64,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         } finally {
             if (isMounted.current) setLoading(false);
         }
-    }, [session]);
+    }, [session, isSwitching]);
 
     const urlBase64ToUint8Array = (base64String: string) => {
         const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -129,7 +129,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         } finally {
             pushSubscribeRef.current = false;
         }
-    }, [session]);
+    }, [session, isSwitching]);
 
     // Initial Fetch / Identity Switch Reset
     useEffect(() => {
@@ -154,7 +154,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         return () => { 
             isMounted.current = false; 
         };
-    }, [authReady, session?.access_token, user?.id, fetchNotifications, subscribeToPush]);
+    }, [authReady, session, user, fetchNotifications, subscribeToPush]);
 
     // Socket listeners
     useEffect(() => {
@@ -200,10 +200,9 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         return () => {
             socket.off('notification', onNotification);
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [socket, connected]);
+    }, [socket, connected, markAsRead]);
 
-    const markAsRead = async (id: string) => {
+    const markAsRead = useCallback(async (id: string) => {
         if (!session) return;
         try {
             const res = await fetch(`${API_URL}/api/notifications/${id}/read`, {
@@ -216,9 +215,9 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         } catch (err) {
             console.error('[Notifications] Failed to mark as read:', err);
         }
-    };
+    }, [session]);
 
-    const markAllAsRead = async () => {
+    const markAllAsRead = useCallback(async () => {
         if (!session) return;
         try {
             const res = await fetch(`${API_URL}/api/notifications/read-all`, {
@@ -231,9 +230,9 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         } catch (err) {
             console.error('[Notifications] Failed to mark all as read:', err);
         }
-    };
+    }, [session]);
 
-    const deleteNotification = async (id: string) => {
+    const deleteNotification = useCallback(async (id: string) => {
         if (!session) return;
         try {
             const res = await fetch(`${API_URL}/api/notifications/${id}`, {
@@ -248,9 +247,9 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             console.error('[Notifications] Failed to delete:', err);
             toast.error('Failed to delete notification');
         }
-    };
+    }, [session]);
 
-    const clearAllNotifications = async () => {
+    const clearAllNotifications = useCallback(async () => {
         if (!session) return;
         if (!window.confirm('Are you sure you want to clear all notifications?')) return;
         
@@ -267,7 +266,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             console.error('[Notifications] Failed to clear all:', err);
             toast.error('Failed to clear notifications');
         }
-    };
+    }, [session]);
 
     return (
         <NotificationContext.Provider value={{ 

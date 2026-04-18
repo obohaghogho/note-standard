@@ -67,7 +67,7 @@ export const accountManager = {
    * Save or update an account in the list.
    * Deterministic logic: Extracts only the necessary tokens from the session.
    */
-  saveAccount(session: any, profile: Profile) {
+  saveAccount(session: { user: { id?: string; email?: string }; access_token: string; refresh_token: string; expires_at?: number }, profile: Profile) {
     const userId = session?.user?.id || profile?.id;
     if (!userId || !profile) return;
 
@@ -106,7 +106,7 @@ export const accountManager = {
   /**
    * Update only the tokens for an existing account
    */
-  updateAccountTokens(userId: string, session: any) {
+  updateAccountTokens(userId: string, session: { access_token: string; refresh_token: string; expires_at?: number }) {
     const accounts = this.getAllAccounts();
     const index = accounts.findIndex(a => a.id === userId);
 
@@ -144,7 +144,7 @@ export const accountManager = {
     localStorage.removeItem('notestandard_stale_accounts');
   },
 
-  clearAccountStale(_userId: string) {
+  clearAccountStale() {
     // Legacy support: We no longer use stale markers in the new architecture.
     this.clearLegacyStaleMarkers();
   },

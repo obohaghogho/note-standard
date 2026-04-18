@@ -236,8 +236,7 @@ const ChatWindow: React.FC = () => {
         };
 
         translateNewMessages();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentMessages, activeConversationId, preferredLanguage, user, session?.access_token]);
+    }, [currentMessages, activeConversationId, preferredLanguage, user, session?.access_token, translations]);
 
     const handleManualTranslate = async (msgId: string, content: string, sourceLang?: string) => {
         if (!preferredLanguage || !session?.access_token) return;

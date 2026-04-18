@@ -83,10 +83,9 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
         }, 500); // Debounce 500ms
 
         return () => clearTimeout(timeoutId);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [amount, fromCurrency, toCurrency]);
+    }, [amount, fromCurrency, toCurrency, fetchPreview]);
 
-    const fetchPreview = async (customAmount?: string) => {
+    const fetchPreview = useCallback(async (customAmount?: string) => {
         const amountToPreview = customAmount ?? amount;
         const numericAmount = parseFloat(amountToPreview);
         if (isNaN(numericAmount) || numericAmount <= 0) {
@@ -112,7 +111,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
         } finally {
             setPreviewLoading(false);
         }
-    };
+    }, [amount, fromCurrency, toCurrency, slippage]);
 
     const handleSwapCurrencies = () => {
         const temp = fromCurrency;

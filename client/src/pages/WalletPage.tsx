@@ -29,7 +29,7 @@ const WalletContent: React.FC = () => {
     // Force-refresh service data on mount (ensures fresh data after activity redirect)
     useEffect(() => {
         refresh();
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [refresh]);
     
     const safeTransactions = Array.isArray(transactions) ? transactions : [];
     

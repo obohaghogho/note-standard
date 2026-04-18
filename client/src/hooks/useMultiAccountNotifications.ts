@@ -10,9 +10,7 @@ export const useMultiAccountNotifications = () => {
 
   // In-memory-only skip list: never persisted to localStorage.
   // Resets fresh on every page load, so re-logging in always gives the account a clean slate.
-  const skipAccountsRef = useRef<Set<string>>(new Set());
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const refreshLocks = useRef<Record<string, boolean>>({});
   const pollingInProgress = useRef<boolean>(false);
 
   const fetchUnreadCounts = useCallback(async () => {

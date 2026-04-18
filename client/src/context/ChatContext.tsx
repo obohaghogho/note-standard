@@ -167,8 +167,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         } finally {
             conversationsFetchRef.current = false;
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [session?.access_token, joinAllRooms]);
+    }, [session, user, isSwitching, joinAllRooms]);
 
     // Initial load / Identity Switch Reset
     useEffect(() => {
@@ -197,7 +196,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         return () => { 
             isMounted.current = false; 
         };
-    }, [authReady, session?.access_token, user?.id, loadConversations]);
+    }, [authReady, session, user, loadConversations]);
 
     // Socket listeners
     useEffect(() => {

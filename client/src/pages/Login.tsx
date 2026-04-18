@@ -8,7 +8,7 @@ import { Card } from '../components/common/Card';
 import { supabase } from '../lib/supabase';
 import { API_URL } from '../lib/api';
 import { toast } from 'react-hot-toast';
-import { saveAccount, getAccount, clearAccountStale } from '../utils/accountManager';
+import { saveAccount, clearAccountStale } from '../utils/accountManager';
 
 export const Login = () => {
     const navigate = useNavigate();

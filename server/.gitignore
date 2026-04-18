@@ -11,7 +11,13 @@ result.txt
 
 # Environment variables
 .env
+.env.development
+
+# Credentials
+*.json
+!package.json
+!package-lock.json
+!tsconfig*.json
 
 # Dependencies
 node_modules/
-.env.development

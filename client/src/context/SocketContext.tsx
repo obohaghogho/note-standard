@@ -140,8 +140,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             socketRef.current = null;
             setConnected(false);
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [authReady, session?.access_token, user?.id]);
+    }, [authReady, session, user]);
 
     return (
         <SocketContext.Provider value={{ socket: socketRef.current, connected, error }}>

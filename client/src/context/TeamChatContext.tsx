@@ -529,8 +529,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
       setConnected(false);
       handleReconnect();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamId, user, profile, authReady]);
+  }, [teamId, user, profile, authReady, handleReconnect, handleTypingEvent]);
 
   // ====================================
   // RECONNECTION WITH EXPONENTIAL BACKOFF
@@ -595,8 +594,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
         clearTimeout(retryTimeoutRef.current);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, teamId, user, setupRealtime]);
+  }, [loading, teamId, user, profile, authReady, setupRealtime]);
 
   // ====================================
   // CONTEXT VALUE

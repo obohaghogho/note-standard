@@ -92,6 +92,9 @@ export const ResetPassword = () => {
             mounted = false;
             subscription.unsubscribe();
         };
+        // isInitializing is used in a timeout closure but adding it as a dependency 
+        // would cause the initialization logic to re-run unnecessarily.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchParams]);
 
     const handleUpdatePassword = async (e: React.FormEvent) => {

@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { useSocket } from './SocketContext';
 import { useChat } from './ChatContext';
@@ -71,7 +70,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const remoteStreamRef = useRef<MediaStream | null>(null);
     const callTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const currentCallStatus = useRef<CallState['status']>('idle');
-    const incomingSignalQueue = useRef<any[]>([]);
+    const incomingSignalQueue = useRef<unknown[]>([]);
 
     const dialToneRef = useRef<HTMLAudioElement | null>(null);
     const incomingRingtoneRef = useRef<HTMLAudioElement | null>(null);
@@ -273,7 +272,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     useEffect(() => {
         if (!socket || !socketConnected) return;
 
-        const handleCallIncoming = (data: any) => {
+        const handleCallIncoming = (data: { from: string; fromName?: string; fromAvatar?: string; type?: 'voice' | 'video'; conversationId: string }) => {
             if (currentCallStatus.current !== 'idle') {
                 socket.emit('call:reject', { to: data.from });
                 return;
@@ -287,7 +286,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             });
         };
 
-        const handleCallReady = async (data: any) => {
+        const handleCallReady = async (data: { from: string }) => {
             // Caller side: Receiver said ready, let's create Offer
             if (currentCallStatus.current !== 'calling') return;
             const targetUserId = data.from;
@@ -315,7 +314,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
         };
 
-        const handleCallSignal = async (data: any) => {
+        const handleCallSignal = async (data: { from: string; signal: { offer?: RTCSessionDescriptionInit; answer?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit } }) => {
             let pc = pcRef.current;
             const { signal } = data;
 

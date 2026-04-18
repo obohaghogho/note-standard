@@ -1,11 +1,9 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
-interface ProtectedRouteProps {
-    allowedRoles?: string[];
-}
 
-export const ProtectedRoute = ({ allowedRoles }: ProtectedRouteProps) => {
+
+export const ProtectedRoute = () => {
     const { user, authReady } = useAuth();
     console.log("[ProtectedRoute] Status:", { authReady, user: !!user });
 
