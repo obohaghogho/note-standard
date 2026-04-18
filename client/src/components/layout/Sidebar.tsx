@@ -18,14 +18,15 @@ import {
     BadgeCheck,
     TrendingUp,
     Smartphone,
-    X
+    X,
+    AlertTriangle
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { Button } from '../common/Button';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../hooks/useNotifications';
 import { AdDisplay } from '../ads/AdDisplay';
-import { getStoredAccounts } from '../../utils/accountManager';
+import { getStoredAccounts, isAccountSessionValid } from '../../utils/accountManager';
 import SecureImage from '../common/SecureImage';
 import { useMultiAccountNotifications } from '../../hooks/useMultiAccountNotifications';
 
@@ -200,23 +201,39 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
                     {allAccounts.length > 0 ? (
                         allAccounts.map((acc) => {
                             const isActive = acc.id === user?.id;
+                            // Show warning badge if the session is expired AND the account is not the active one.
+                            // Uses token expiry (not localStorage stale flag) so it resets after re-login.
+                            const sessionExpired = !isActive && !isAccountSessionValid(acc.id);
                             const unread = isActive ? unreadCount : (backgroundUnreadCounts[acc.id] || 0);
                             
                             const initials = acc.full_name
                                 ? acc.full_name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()
                                 : (acc.email?.substring(0, 2).toUpperCase() || '??');
 
+                            const handleClick = () => {
+                                if (isActive) return;
+                                if (sessionExpired) {
+                                    // Session looks expired — try switch anyway (switchAccount handles refresh)
+                                    // Only block if we know the switch will fail (e.g. permanent revocation)
+                                    switchAccount(acc.id);
+                                    return;
+                                }
+                                switchAccount(acc.id);
+                            };
+
                             return (
                                 <div key={acc.id} className="relative group/acc">
                                     <button
-                                        onClick={() => !isActive && switchAccount(acc.id)}
+                                        onClick={handleClick}
                                         className={cn(
                                             "relative w-8 h-8 rounded-full flex-shrink-0 transition-all duration-300",
                                             isActive 
                                                 ? "ring-2 ring-primary ring-offset-2 ring-offset-black scale-110 z-10" 
-                                                : "opacity-60 hover:opacity-100 hover:scale-105"
+                                                : sessionExpired
+                                                  ? "opacity-50 hover:opacity-80 cursor-pointer"
+                                                  : "opacity-60 hover:opacity-100 hover:scale-105"
                                         )}
-                                        title={acc.full_name}
+                                        title={sessionExpired ? `${acc.full_name} — Session may need refresh (click to switch)` : acc.full_name}
                                     >
                                         {acc.avatar_url ? (
                                             <SecureImage 
@@ -231,8 +248,15 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
                                             </div>
                                         )}
                                         
+                                        {/* Expired session badge */}
+                                        {sessionExpired && (
+                                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full border border-black flex items-center justify-center z-20 shadow-sm">
+                                                <AlertTriangle size={8} className="text-black" strokeWidth={3} />
+                                            </div>
+                                        )}
+
                                         {/* Unread Badge */}
-                                        {unread > 0 && (
+                                        {!sessionExpired && unread > 0 && (
                                             <div className="absolute -top-1 -right-1 min-w-[14px] h-[14px] bg-red-500 rounded-full border border-black flex items-center justify-center px-0.5 z-20 shadow-sm animate-pulse">
                                                 <span className="text-[8px] font-bold text-white leading-none">
                                                     {unread > 9 ? '9+' : unread}

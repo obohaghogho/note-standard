@@ -1,85 +1,174 @@
-import type { Session } from '@supabase/supabase-js';
 import type { Profile } from '../types/auth';
 
 const STORAGE_KEY = 'notestandard_accounts';
+const ACTIVE_ACCOUNT_KEY = 'notestandard_active_account_id';
+
+export interface MinimalSession {
+  access_token: string;
+  refresh_token: string;
+  expires_at: number;
+}
 
 export interface StoredAccount {
   id: string;
   email: string;
   full_name: string;
   avatar_url: string | null;
-  session: Session;
+  tokens: MinimalSession;
   profile: Profile;
   lastActive: number;
 }
 
 /**
- * Get all stored accounts from localStorage
+ * AccountManager handles persistent storage and retrieval of multiple user sessions.
+ * Refactored to deterministic architecture: stores only minimal tokens, no full session objects.
  */
-export const getStoredAccounts = (): StoredAccount[] => {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch (err) {
-    console.error('[AccountManager] Failed to parse accounts:', err);
-    return [];
+export const accountManager = {
+  /**
+   * Get all stored accounts from localStorage, sorted by last active
+   */
+  getAllAccounts(): StoredAccount[] {
+    try {
+      const data = localStorage.getItem(STORAGE_KEY);
+      const accounts: StoredAccount[] = data ? JSON.parse(data) : [];
+      return accounts.sort((a, b) => b.lastActive - a.lastActive);
+    } catch (err) {
+      console.error('[AccountManager] Failed to parse accounts:', err);
+      return [];
+    }
+  },
+
+  /**
+   * Get a specific account by ID
+   */
+  getAccount(userId: string): StoredAccount | undefined {
+    return this.getAllAccounts().find(a => a.id === userId);
+  },
+
+  /**
+   * Set the ID of the currently active account (for rehydration on reload)
+   */
+  setActiveAccountId(id: string | null) {
+    if (id) {
+      localStorage.setItem(ACTIVE_ACCOUNT_KEY, id);
+    } else {
+      localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
+    }
+  },
+
+  /**
+   * Get the ID of the currently active account
+   */
+  getActiveAccountId(): string | null {
+    return localStorage.getItem(ACTIVE_ACCOUNT_KEY);
+  },
+
+  /**
+   * Save or update an account in the list.
+   * Deterministic logic: Extracts only the necessary tokens from the session.
+   */
+  saveAccount(session: any, profile: Profile) {
+    const userId = session?.user?.id || profile?.id;
+    if (!userId || !profile) return;
+
+    const accounts = this.getAllAccounts();
+    const index = accounts.findIndex(a => a.id === userId);
+
+    const accountData: StoredAccount = {
+      id: userId,
+      email: session?.user?.email || profile.email || '',
+      full_name: profile.full_name || profile.username || 'User',
+      avatar_url: profile.avatar_url || null,
+      tokens: {
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+        expires_at: session.expires_at || 0
+      },
+      profile,
+      lastActive: Date.now()
+    };
+
+    if (index !== -1) {
+      accounts[index] = accountData;
+    } else {
+      accounts.push(accountData);
+    }
+
+    // Limit to 5 accounts
+    if (accounts.length > 5) {
+      accounts.sort((a, b) => b.lastActive - a.lastActive);
+      accounts.splice(5);
+    }
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+  },
+
+  /**
+   * Update only the tokens for an existing account
+   */
+  updateAccountTokens(userId: string, session: any) {
+    const accounts = this.getAllAccounts();
+    const index = accounts.findIndex(a => a.id === userId);
+
+    if (index !== -1) {
+      const existing = accounts[index];
+      // Only update if newer
+      if (session.expires_at && existing.tokens.expires_at && session.expires_at < existing.tokens.expires_at) {
+        return false;
+      }
+
+      accounts[index].tokens = {
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+        expires_at: session.expires_at || 0
+      };
+      accounts[index].lastActive = Date.now();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+      return true;
+    }
+    return false;
+  },
+
+  /**
+   * Remove an account from the list
+   */
+  removeAccount(userId: string) {
+    const accounts = this.getAllAccounts().filter(a => a.id !== userId);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+    if (this.getActiveAccountId() === userId) {
+      this.setActiveAccountId(null);
+    }
+  },
+
+  clearLegacyStaleMarkers() {
+    localStorage.removeItem('notestandard_stale_accounts');
+  },
+
+  clearAccountStale(_userId: string) {
+    // Legacy support: We no longer use stale markers in the new architecture.
+    this.clearLegacyStaleMarkers();
+  },
+
+  isAccountSessionValid(userId: string): boolean {
+    const account = this.getAccount(userId);
+    if (!account?.tokens) return false;
+    const expiresAt = account.tokens.expires_at;
+    if (!expiresAt) return true;
+    const now = Math.floor(Date.now() / 1000);
+    return (expiresAt - now) > 120; // 2 minute buffer
   }
 };
 
-/**
- * Save or update an account in the list
- */
-export const saveAccount = (session: Session, profile: Profile) => {
-  if (!session?.user?.id || !profile) return;
-
-  const accounts = getStoredAccounts();
-  const index = accounts.findIndex(a => a.id === session.user.id);
-
-  const accountData: StoredAccount = {
-    id: session.user.id,
-    email: session.user.email || '',
-    full_name: profile.full_name || profile.username || 'User',
-    avatar_url: profile.avatar_url || null,
-    session,
-    profile,
-    lastActive: Date.now()
-  };
-
-  if (index !== -1) {
-    accounts[index] = accountData;
-  } else {
-    accounts.push(accountData);
-  }
-
-  // Limit to 5 accounts for performance/sanity
-  if (accounts.length > 5) {
-    accounts.sort((a, b) => b.lastActive - a.lastActive);
-    accounts.splice(5);
-  }
-
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
-};
-
-/**
- * Remove an account from the list
- */
-export const removeAccount = (userId: string) => {
-  const accounts = getStoredAccounts().filter(a => a.id !== userId);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
-};
-
-/**
- * Prepare the app for a new login (without losing existing sessions)
- */
-export const prepareForNewAccount = () => {
-  // We don't clear localStorage, we just want the next login to not use the current session
-  // Supabase will handle the overwrite, but we might want to manually clear the 'sb-...' key 
-  // if we want to force the login page.
-};
-
-/**
- * Get a specific account by ID
- */
-export const getAccount = (userId: string): StoredAccount | undefined => {
-  return getStoredAccounts().find(a => a.id === userId);
-};
+// Export direct functions for shared usage
+export const getStoredAccounts = accountManager.getAllAccounts.bind(accountManager);
+export const saveAccount = accountManager.saveAccount.bind(accountManager);
+export const removeAccount = accountManager.removeAccount.bind(accountManager);
+export const getAccount = accountManager.getAccount.bind(accountManager);
+export const clearLegacyStaleMarkers = accountManager.clearLegacyStaleMarkers.bind(accountManager);
+export const setActiveAccountId = accountManager.setActiveAccountId.bind(accountManager);
+export const getActiveAccountId = accountManager.getActiveAccountId.bind(accountManager);
+export const updateAccountTokens = accountManager.updateAccountTokens.bind(accountManager);
+export const isAccountSessionValid = accountManager.isAccountSessionValid.bind(accountManager);
+export const clearAccountStale = accountManager.clearAccountStale.bind(accountManager);
+// Compatibility aliases
+export const updateAccountSession = updateAccountTokens;

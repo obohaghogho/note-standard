@@ -1,0 +1,65 @@
+{
+  "expo": {
+    "name": "mobile",
+    "slug": "mobile",
+    "version": "1.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.notestandard.app",
+      "infoPlist": {
+        "UIBackgroundModes": ["voip", "remote-notification", "audio", "processing"]
+      }
+    },
+    "android": {
+      "package": "com.notestandard.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "ANDROID.PERMISSION.RECORD_AUDIO",
+        "ANDROID.PERMISSION.CALL_PHONE",
+        "ANDROID.PERMISSION.READ_PHONE_STATE",
+        "ANDROID.PERMISSION.MANAGE_OWN_CALLS",
+        "ANDROID.PERMISSION.FOREGROUND_SERVICE",
+        "ANDROID.PERMISSION.USE_FULL_SCREEN_INTENT"
+      ],
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-notifications",
+      "./plugins/withAndroidNativeCall",
+      "./plugins/withIOSVoIP",
+      [
+        "@config-plugins/react-native-callkeep",
+        {
+          "ios": {
+            "appName": "NoteStandard"
+          },
+          "android": {
+            "selfManaged": false,
+            "foregroundService": {
+              "channelId": "com.notestandard.app.calls",
+              "channelName": "Incoming Calls",
+              "notificationTitle": "Incoming Call",
+              "notificationIcon": "ic_launcher"
+            }
+          }
+        }
+      ]
+    ],
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

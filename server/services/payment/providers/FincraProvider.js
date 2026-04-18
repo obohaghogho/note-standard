@@ -6,118 +6,96 @@ const logger = require("../../../utils/logger");
 class FincraProvider extends BaseProvider {
   constructor() {
     super();
-    this.secretKey = process.env.FINCRA_SECRET_KEY;
-    this.publicKey = process.env.FINCRA_PUBLIC_KEY;
+    this.secretKey = (process.env.FINCRA_SECRET_KEY || "").trim();
+    this.publicKey = (process.env.FINCRA_PUBLIC_KEY || "").trim();
+    this.businessId = (process.env.FINCRA_BUSINESS_ID || "").trim();
     
-    // Use FINCRA_ENV if provided, else detect based on key prefix
+    // STRICT: Use FINCRA_ENV as sole source of truth
     const envFlag = (process.env.FINCRA_ENV || "").toLowerCase();
-    const isExplicitProd = envFlag === "production" || envFlag === "live";
-    const isExplicitSandbox = envFlag === "sandbox" || envFlag === "test";
     
-    // Auto-detect test key: sk_test_... or pk_test_...
-    const isTestKey = (this.secretKey && this.secretKey.startsWith("sk_test_")) || 
-                      (this.publicKey && this.publicKey.startsWith("pk_test_"));
-
-    if (isExplicitProd) {
+    if (envFlag === "production" || envFlag === "live") {
       this.baseUrl = "https://api.fincra.com";
-    } else if (isExplicitSandbox || isTestKey) {
+    } else if (envFlag === "sandbox" || envFlag === "test") {
       this.baseUrl = "https://sandboxapi.fincra.com";
     } else {
-      // Default to production for safety if no clear indicator
-      this.baseUrl = "https://api.fincra.com";
+      // FAIL HARD if environment is not explicitly set
+      const configError = `[Fincra] CRITICAL CONFIG ERROR: Invalid FINCRA_ENV ("${envFlag}"). Must be 'live' or 'sandbox'.`;
+      logger.error(configError);
+      throw new Error(configError);
     }
     
-    logger.info(`[FincraProvider] Init: ${this.baseUrl} (Detect: ${isTestKey ? 'TEST_KEY' : 'LIVE_KEY'})`);
+    logger.info(`[Fincra] Initialized in ${envFlag.toUpperCase()} mode at ${this.baseUrl}`);
     
     this.client = axios.create({
       baseURL: this.baseUrl,
-      timeout: 30000, // 30s timeout
+      timeout: 30000, 
       headers: {
-        "api-key": (this.secretKey || "").trim(),
-        "apikey": (this.secretKey || "").trim(),
-        "Authorization": `Bearer ${(this.secretKey || "").trim()}`,
-        "x-pub-key": (this.publicKey || "").trim(),
-        "x-business-id": (process.env.FINCRA_BUSINESS_ID || "").trim(),
+        "Authorization": `Bearer ${this.secretKey}`,
+        ...(this.businessId ? { "x-business-id": this.businessId } : {}),
         "Content-Type": "application/json",
         "accept": "application/json",
       },
+      maxRedirects: 0 // Security best practice for payment APIs
     });
   }
 
   async initialize(data) {
     const { email, amount, currency, reference, callbackUrl, metadata, name } = data;
 
-    // Safety checks to prevent 500s from undefined properties
-    const safeEmail = email || metadata.email || "user@notestandard.com";
-    let safeName = name || metadata.customerName || (safeEmail ? safeEmail.split("@")[0] : "Standard User") || "Standard User";
-    
-    // Fincra explicitly requires a 'full name' (first and last name separated by space)
-    if (!safeName.includes(" ")) {
-      safeName = `${safeName} User`;
-    }
+    // Fincra requirement: Full Name (First Last)
+    const safeEmail = email || metadata?.email || "customer@notestandard.com";
+    let safeName = name || metadata?.customerName || safeEmail.split("@")[0] || "Standard User";
+    if (!safeName.includes(" ")) safeName = `${safeName} User`;
+
+    const payload = {
+      customer: {
+        name: safeName.trim(),
+        email: safeEmail.trim(),
+      },
+      amount: Number(amount),
+      currency: currency,
+      reference: reference,
+      redirectUrl: callbackUrl,
+      feeBearer: "business", // Standard for most fintech apps
+      metadata: {
+        ...metadata,
+        source: "note_standard_backend_v2",
+      },
+    };
 
     try {
-      // Fincra API uses standard unit (e.g. 20 for 20 USD), unlike Paystack which uses cents
-      const standardAmount = Number(amount || 0);
+      const response = await this.client.post("/checkout/payments", payload);
       
-      // Fincra Checkout Redirect Flow
-      const response = await this.client.post("/checkout/payments", {
-        customer: {
-          name: safeName,
-          email: safeEmail,
-        },
-        amount: standardAmount,
-        currency: currency,
-        reference: reference,
-        redirectUrl: callbackUrl,
-        feeBearer: "business",
-        metadata: {
-          ...metadata,
-          source: "note_standard_backend",
-        },
-      });
-
-      // Fincra returns { data: { link: "https://...", reference: "..." } }
       const respData = response.data?.data || response.data || {};
-      const checkoutUrl = respData.link || respData.checkoutUrl || respData.checkout_url || respData.payment_link || null;
-      const providerRef = respData.reference || reference;
+      const checkoutUrl = respData.link || respData.checkoutUrl || respData.payment_link;
 
       return {
+        success: true,
         checkoutUrl: checkoutUrl,
-        paymentUrl: checkoutUrl,
-        providerReference: providerRef,
+        providerReference: respData.reference || reference,
       };
     } catch (error) {
       const status = error.response?.status || 500;
-      const data = error.response?.data || {};
-      const message = data.message || data.error || error.message || "Fincra initialization failed";
+      const errorData = error.response?.data || {};
+      const message = errorData.message || errorData.error || error.message || "Fincra initialization failed";
 
-      console.error(
-        "Fincra Init Error:",
-        JSON.stringify({
-          status,
-          data,
-          message,
-          reference
-        }, null, 2)
-      );
+      logger.error(`[Fincra Init Failed] Status: ${status}`, { 
+        message, 
+        reference,
+        errorData: JSON.stringify(errorData) 
+      });
 
-      // Create an enriched error object
-      const enrichedError = new Error(message);
-      enrichedError.statusCode = status;
-      enrichedError.details = data;
-      enrichedError.location = "FincraProvider.initialize";
+      // Structured error return - preventing 500 fallback in controller
+      const structuredError = new Error(message);
+      structuredError.success = false;
+      structuredError.statusCode = status;
+      structuredError.fincra = {
+          status: status,
+          response: errorData
+      };
+      structuredError.details = errorData;
 
-      // Specific helpful messages for common Fincra errors
-      if (status === 401 || status === 403 || message.toLowerCase().includes("unauthorized")) {
-        enrichedError.message = "Fincra Authorization Failed. Please check your FINCRA_SECRET_KEY, FINCRA_BUSINESS_ID, and IP Whitelist settings in the Fincra Dashboard.";
-        
-        if (message.toLowerCase().includes("ip")) {
-          enrichedError.message = "IP Whitelist Error: Your server's IP is not allowed to communicate with Fincra. Please whitelist your server's public IP in your Fincra API settings.";
-        }
-      }
-
-      throw enrichedError;
+      throw structuredError;
     }
   }
 

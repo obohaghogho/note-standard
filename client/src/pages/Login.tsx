@@ -8,6 +8,7 @@ import { Card } from '../components/common/Card';
 import { supabase } from '../lib/supabase';
 import { API_URL } from '../lib/api';
 import { toast } from 'react-hot-toast';
+import { saveAccount, getAccount, clearAccountStale } from '../utils/accountManager';
 
 export const Login = () => {
     const navigate = useNavigate();
@@ -37,10 +38,23 @@ export const Login = () => {
         const params = new URLSearchParams(window.location.search);
         if (params.get('add_account') === 'true') {
             setIsAddingAccount(true);
-            // Clear local session only so the login form shows
-            supabase.auth.signOut({ scope: 'local' }).then(() => {
-                console.log('[Login] Local session cleared for adding new account');
-            });
+            sessionStorage.setItem('notestandard_is_switching', 'true');
+
+            // Pre-fill the hint email if provided
+            const hint = params.get('hint');
+            if (hint) setEmail(decodeURIComponent(hint));
+
+            // Save current active user ID to sessionStorage (survives StrictMode re-mounts)
+            // so we can restore the primary session after adding the new account.
+            // We DON'T signOut here, even locally, to avoid any risk of session revocation.
+            const syncPrimaryId = async () => {
+                const { data: { session: currentSession } } = await supabase.auth.getSession();
+                if (currentSession?.user?.id) {
+                    sessionStorage.setItem('notestandard_primary_id', currentSession.user.id);
+                    console.log('[Login] Primary account ID stored:', currentSession.user.email);
+                }
+            };
+            syncPrimaryId();
         }
         
         return () => {
@@ -86,8 +100,46 @@ export const Login = () => {
             }
 
             console.log('Login successful', data.user.id);
+
+            if (isAddingAccount && data.session) {
+                // === ADD ACCOUNT FLOW ===
+                // 1. Mark this account as un-stale (it's freshly authenticated)
+                clearAccountStale(data.user.id);
+
+                // 2. Fetch the profile for the new account to save complete data
+                const profileRes = await supabase
+                    .from('profiles')
+                    .select('id, username, full_name, avatar_url, role, bio, website, is_verified')
+                    .eq('id', data.user.id)
+                    .maybeSingle();
+
+                // Save Account B to the account list
+                saveAccount(data.session, profileRes.data || {
+                    id: data.user.id,
+                    username: data.user.email?.split('@')[0] || 'user',
+                    full_name: data.user.user_metadata?.full_name || data.user.email || 'User',
+                    avatar_url: data.user.user_metadata?.avatar_url || null,
+                    role: 'user',
+                    bio: null,
+                    website: null,
+                    is_verified: false
+                });
+
+                console.log('[Login] New account saved:', data.user.email);
+                toast.success(`Account ${data.user.email} added!`);
+
+                // 3. Clear the stored primary ID since we're done
+                sessionStorage.removeItem('notestandard_primary_id');
+
+                // 4. Navigate back — sidebar now shows both accounts
+                sessionStorage.removeItem('notestandard_is_switching');
+                navigate('/dashboard', { replace: true });
+                return;
+            }
+
+            // === NORMAL LOGIN FLOW ===
             toast.success('Successfully logged in!');
-            
+
             // Trigger device notification (Security Alert)
             fetch(`${API_URL}/api/notifications/login-notify`, {
                 method: 'POST',

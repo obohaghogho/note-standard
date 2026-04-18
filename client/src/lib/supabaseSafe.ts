@@ -26,6 +26,15 @@ type RateLimiter = {
 const rateLimiters: Record<string, RateLimiter> = {};
 const inFlightPromises = new Map<string, Promise<unknown>>();
 
+// Rule 5 & 6: Global auth guard state updated by AuthContext
+let globalIsSwitching = false;
+let globalSwitchId = 0;
+
+export function updateGlobalAuthState(isSwitching: boolean, switchId: number) {
+  globalIsSwitching = isSwitching;
+  globalSwitchId = switchId;
+}
+
 /**
  * Reset rate limiters - call on session change to avoid stale cooldowns
  */
@@ -53,9 +62,16 @@ export async function safeCall<T>(
     retries?: number;
     timeout?: number;
     fallback?: T;
+    switchId?: number; // Optional: validate against a specific switch ID
   } = {}
 ): Promise<T | null> {
-  const { minDelay = 500, retries = 3, timeout = 15000, fallback } = options;
+  const { minDelay = 500, retries = 3, timeout = 15000, fallback, switchId } = options;
+
+  // Rule 6: Respect isSwitching
+  if (globalIsSwitching && key !== 'auth-session') {
+    console.warn(`[Supabase] Call '${key}' blocked: Switch in progress`);
+    return null;
+  }
 
   // 1. Check if identical request is already in flight (Promise Sharing)
   if (inFlightPromises.has(key)) {
@@ -132,6 +148,12 @@ export async function safeCall<T>(
 
         const result = await Promise.race([fn(), timeoutPromise]);
         
+        // Rule 5: Discard stale responses if switchId changed during execution
+        if (switchId !== undefined && switchId !== globalSwitchId) {
+          console.warn(`[Supabase] Discarding stale res for '${key}': id mismatch ${switchId} vs ${globalSwitchId}`);
+          return null;
+        }
+
         // Handle Supabase error object inside result
         if (result && typeof result === 'object' && 'error' in result) {
           const { error: supaErr } = result as { error: unknown };
@@ -145,8 +167,8 @@ export async function safeCall<T>(
         const canRetry = isRetryable(err);
         const errInfo = err as { code?: string | number; message?: string; status?: number };
 
-        if (!canRetry || attempt > retries) {
-          const tag = canRetry ? 'MAX_RETRIES' : 'TERMINAL';
+        if (!canRetry || attempt > retries || (globalIsSwitching && key !== 'auth-session')) {
+          const tag = (globalIsSwitching && key !== 'auth-session') ? 'SWITCH_CANCEL' : (canRetry ? 'MAX_RETRIES' : 'TERMINAL');
           if (!navigator.onLine) {
             toast.error("You're offline. Please reconnect to continue.", { id: 'supabase-offline' });
           } else {
@@ -249,8 +271,8 @@ export async function safeAuth(): Promise<Session | null> {
 // --------------------------
 // Profile
 // --------------------------
-export async function safeProfile(userId: string): Promise<Profile | null | 'ERROR'> {
-  return safeCall<Profile | null | 'ERROR'>(
+export async function safeProfile(userId: string, switchId?: number): Promise<Profile | null> {
+  return safeCall<Profile | null>(
     "profile-" + userId,
     async () => {
       const { data, error } = await supabase
@@ -261,15 +283,15 @@ export async function safeProfile(userId: string): Promise<Profile | null | 'ERR
       if (error) throw error;
       return data as Profile | null;
     },
-    { fallback: 'ERROR' }
+    { switchId }
   );
 }
 
 // --------------------------
 // Subscription
 // --------------------------
-export async function safeSubscription(userId: string): Promise<Subscription | null | 'ERROR'> {
-  return safeCall<Subscription | null | 'ERROR'>(
+export async function safeSubscription(userId: string, switchId?: number): Promise<Subscription | null> {
+  return safeCall<Subscription | null>(
     "subscription-" + userId,
     async () => {
       const { data, error } = await supabase
@@ -280,7 +302,7 @@ export async function safeSubscription(userId: string): Promise<Subscription | n
       if (error) throw error;
       return data as Subscription | null;
     },
-    { fallback: 'ERROR' }
+    { switchId }
   );
 }
 
@@ -462,14 +484,14 @@ export async function ensureProfile(user: User): Promise<Profile | null> {
   // 1. Check if profile exists
   const profileResult = await safeProfile(user.id);
   
-  // If we got an ERROR (timeout/network), DO NOT attempt creation
-  if (profileResult === 'ERROR') {
-    console.error('[Supabase] Profile fetch failed definitively. Aborting automatic creation.');
+  // If we got null, it could be a transient failure or missing profile.
+  // Rule: Profile must NEVER control auth decisions, so we just return null.
+  if (!profileResult) {
     return null;
   }
 
   // If we got an actual object, it's already there
-  if (profileResult !== null) return profileResult;
+  if (profileResult) return profileResult;
 
   console.log('[Supabase] Profile missing for user, creating one...', user.id);
 
@@ -505,8 +527,7 @@ export default {
   safeAuth,
   safeProfile,
   safeSubscription,
-  safeDashboardStats,
-  safeWallet,
+  updateGlobalAuthState,
   supabaseSafe,
   createSafeWebSocket,
   ensureProfile

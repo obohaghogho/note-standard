@@ -75,6 +75,7 @@ const corsOptions = {
     "Cache-Control",
     "X-Client-Info",
     "apikey",
+    "x-device-id",
   ],
   exposedHeaders: ["X-Total-Count", "Content-Disposition"],
   maxAge: 86400,

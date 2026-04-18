@@ -4,7 +4,7 @@ import { adService, type Ad } from '../../services/ads';
 import { supabase } from '../../lib/supabaseSafe';
 import { Card } from '../common/Card';
 import SecureImage from '../common/SecureImage';
-import { ExternalLink, X } from 'lucide-react';
+import { ExternalLink, X, Info } from 'lucide-react';
 
 interface AdDisplayProps {
     className?: string;
@@ -18,10 +18,15 @@ export const AdDisplay = ({ className = '', currentTags = EMPTY_TAGS }: AdDispla
     const { isPro, user, profile } = useAuth();
     const [ad, setAd] = useState<Ad | null>(null);
     const [visible, setVisible] = useState(true);
+    const [showInfo, setShowInfo] = useState(false);
 
     const [loading, setLoading] = useState(true);
     const lastFetchRef = useRef<{ tags: string[], time: number }>({ tags: [], time: 0 });
     const fetchingRef = useRef(false);
+    
+    // Tracking state
+    const containerRef = useRef<HTMLDivElement>(null);
+    const trackedRef = useRef({ impression: false, currentAdId: '' });
     
     // Stabilize tags to prevent infinite re-renders
     const stringifiedTags = useMemo(() => JSON.stringify(currentTags), [currentTags]);
@@ -59,10 +64,16 @@ export const AdDisplay = ({ className = '', currentTags = EMPTY_TAGS }: AdDispla
             return;
         }
 
+        const getSeenAds = () => {
+            try { return JSON.parse(sessionStorage.getItem('ns_seen_ads') || '[]'); }
+            catch { return []; }
+        };
+
         if (!force) setLoading(true);
         fetchingRef.current = true;
         try {
-            const ads = await adService.getPublicAds(tagsArray);
+            const seenAds = getSeenAds();
+            const ads = await adService.getPublicAds(tagsArray, seenAds);
             if (ads && ads.length > 0) {
                 // Pick a random ad from the relevant ones
                 const randomIndex = Math.floor(Math.random() * ads.length);
@@ -73,6 +84,7 @@ export const AdDisplay = ({ className = '', currentTags = EMPTY_TAGS }: AdDispla
             lastFetchRef.current = { tags: tagsArray, time: now };
         } catch (err) {
             console.error('Failed to fetch ads:', err);
+            setAd(null); // Fix 7: clear stale ad on fetch failure (e.g. bot-shielded 403, network error)
         } finally {
             fetchingRef.current = false;
             setLoading(false);
@@ -112,6 +124,65 @@ export const AdDisplay = ({ className = '', currentTags = EMPTY_TAGS }: AdDispla
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isPro, stringifiedTags]);
 
+    // Viewability Tracker
+    useEffect(() => {
+        if (!ad || isPro || !visible || !containerRef.current) return;
+
+        // Reset tracking if ad changes
+        if (trackedRef.current.currentAdId !== ad.id) {
+            trackedRef.current = { impression: false, currentAdId: ad.id };
+        }
+
+        if (trackedRef.current.impression) return;
+
+        let timeoutId: ReturnType<typeof setTimeout>;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                const [entry] = entries;
+                if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+                    // Ad is at least 50% visible, start 1.5s timer
+                    timeoutId = setTimeout(() => {
+                        if (!trackedRef.current.impression) {
+                            trackedRef.current.impression = true;
+                            // Track organically
+                            adService.trackEvent(ad.id, 'impression').catch(console.error);
+
+                            // Store in sessionStorage to frequency cap
+                            try {
+                                const seen = JSON.parse(sessionStorage.getItem('ns_seen_ads') || '[]');
+                                if (!seen.includes(ad.id)) {
+                                    seen.push(ad.id);
+                                    sessionStorage.setItem('ns_seen_ads', JSON.stringify(seen));
+                                }
+                            } catch (e) {
+                                console.error('Failed to log seen ad', e);
+                            }
+                        }
+                    }, 1500);
+                } else {
+                    // Ad left view before 1.5s
+                    clearTimeout(timeoutId);
+                }
+            },
+            {
+                threshold: [0.5] // Require 50% visibility
+            }
+        );
+
+        observer.observe(containerRef.current);
+
+        return () => {
+            clearTimeout(timeoutId);
+            observer.disconnect();
+        };
+    }, [ad, isPro, visible]);
+
+    const handleAdClick = () => {
+        if (!ad) return;
+        adService.trackEvent(ad.id, 'click').catch(console.error);
+    };
+
     if (isPro || !visible) return null;
 
     if (loading) {
@@ -142,7 +213,7 @@ export const AdDisplay = ({ className = '', currentTags = EMPTY_TAGS }: AdDispla
     const imageUrl = ad.media_url || ad.image_url;
 
     return (
-        <div className={`relative group ${className}`}>
+        <div ref={containerRef} className={`relative group ${className}`}>
             <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                     onClick={() => setVisible(false)}
@@ -157,6 +228,7 @@ export const AdDisplay = ({ className = '', currentTags = EMPTY_TAGS }: AdDispla
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block"
+                onClick={handleAdClick}
             >
                 <Card variant="glass" className="p-4 border-l-4 border-l-primary hover:bg-white/5 transition-colors">
                     <div className="flex gap-4">
@@ -186,8 +258,24 @@ export const AdDisplay = ({ className = '', currentTags = EMPTY_TAGS }: AdDispla
                     </div>
                 </Card>
             </a>
-            <div className="text-[10px] text-center text-gray-600 mt-1">
-                Privacy-safe ad • {currentTags.length > 0 ? `Matches: ${currentTags.join(', ')}` : 'General'}
+            <div className="flex items-center justify-center gap-1 mt-1 relative">
+                <span className="text-[10px] text-gray-600">Privacy-safe ad</span>
+                <button 
+                    onClick={(e) => { e.preventDefault(); setShowInfo(!showInfo); }} 
+                    className="text-gray-500 hover:text-gray-300 transition-colors"
+                    aria-label="Why am I seeing this ad?"
+                >
+                    <Info size={10} />
+                </button>
+
+                {showInfo && (
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-3 bg-gray-900 border border-white/10 rounded-lg shadow-2xl z-20 text-[10px] text-gray-300 text-left cursor-default">
+                        <p className="font-semibold text-white mb-1.5 text-xs">Why am I seeing this?</p>
+                        <p className="leading-relaxed">This asset is served natively by NoteStandard. It was organically retrieved based on community context {currentTags.length > 0 ? <span className="font-mono text-primary/80">({currentTags.join(', ')})</span> : '(General)'}.</p>
+                        <p className="mt-1.5">No personal cookies were used and your data was strictly **not** shared with third parties.</p>
+                        <button onClick={(e) => { e.preventDefault(); setShowInfo(false); }} className="mt-2 text-primary hover:text-primary/80 font-medium">Understood</button>
+                    </div>
+                )}
             </div>
         </div>
     );

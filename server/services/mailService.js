@@ -1,5 +1,6 @@
 const nodemailer = require("nodemailer");
 const logger = require("../utils/logger");
+const env = require("../config/env");
 
 // DEBUG: Temporary – verify Render loaded the SMTP env vars (remove after confirming)
 console.log("SMTP_HOST:", process.env.SMTP_HOST);
@@ -57,7 +58,7 @@ exports.sendVerificationEmail = async (email, fullName, token, clientUrl) => {
     }&token=${token}`;
 
     const mailOptions = {
-      from: `"Note Standard" <${process.env.EMAIL_FROM}>`,
+      from: `"Note Standard" <${env.EMAIL_FROM}>`,
       to: email,
       subject: "Verify your Note Standard account",
       html: `
@@ -101,7 +102,7 @@ exports.sendPaymentReceipt = async (email, transaction) => {
     const displayLabel = transaction.display_label || "Digital Assets Purchase";
 
     const mailOptions = {
-      from: `"Note Standard" <${process.env.EMAIL_FROM}>`,
+      from: `"Note Standard" <${env.EMAIL_FROM}>`,
       to: email,
       subject: `Receipt for your ${displayLabel}`,
       text: `
@@ -125,6 +126,86 @@ exports.sendPaymentReceipt = async (email, transaction) => {
     return true;
   } catch (error) {
     logger.error("Failed to send payment receipt", {
+      error: error.message,
+      email,
+    });
+    return false;
+  }
+};
+
+/**
+ * Send Password Reset link
+ * @param {string} email - Recipient email
+ * @param {string} resetLink - The secure reset link from Supabase
+ */
+exports.sendPasswordResetEmail = async (email, resetLink) => {
+  try {
+    const mailOptions = {
+      from: `"Note Standard" <${env.EMAIL_FROM}>`,
+      to: email,
+      subject: "Reset your Note Standard password",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+          <h2 style="color: #6366f1;">Password Reset Request</h2>
+          <p>We received a request to reset your password for your Note Standard account.</p>
+          <div style="margin: 30px 0; text-align: center;">
+            <a href="${resetLink}" style="background-color: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Reset Password</a>
+          </div>
+          <p>This link will expire soon. If you didn't request a password reset, you can safely ignore this email.</p>
+          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+          <p style="font-size: 10px; color: #999;">Note: For your security, never share this link with anyone else.</p>
+        </div>
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    logger.info("Password reset email sent", {
+      messageId: info.messageId,
+      email,
+    });
+    return true;
+  } catch (error) {
+    logger.error("Failed to send password reset email", {
+      error: error.message,
+      email,
+    });
+    return false;
+  }
+};
+
+/**
+ * Send Welcome Email after registration
+ * @param {string} email - Recipient email
+ * @param {string} fullName - Recipient name
+ */
+exports.sendWelcomeEmail = async (email, fullName) => {
+  try {
+    const mailOptions = {
+      from: `"Note Standard" <${env.EMAIL_FROM}>`,
+      to: email,
+      subject: "Welcome to Note Standard!",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+          <h2 style="color: #6366f1;">Welcome to the family, ${fullName}!</h2>
+          <p>Your account has been successfully created and verified. You're all set to start using Note Standard.</p>
+          <div style="margin: 30px 0; text-align: center;">
+            <a href="${process.env.CLIENT_URL || 'https://notestandard.com'}/login" style="background-color: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Login to your Dashboard</a>
+          </div>
+          <p>If you have any questions, feel free to reach out to our support team.</p>
+          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+          <p style="font-size: 10px; color: #999;">Welcome aboard!</p>
+        </div>
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    logger.info("Welcome email sent", {
+      messageId: info.messageId,
+      email,
+    });
+    return true;
+  } catch (error) {
+    logger.error("Failed to send welcome email", {
       error: error.message,
       email,
     });

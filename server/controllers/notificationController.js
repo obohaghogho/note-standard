@@ -174,6 +174,39 @@ const notifyLogin = async (req, res, next) => {
   }
 };
 
+/**
+ * Registers a native device token (FCM for Android or VoIP for iOS)
+ */
+const registerNativeToken = async (req, res, next) => {
+  try {
+    const { id: userId } = req.user;
+    const { token, platform, type, deviceId } = req.body;
+
+    if (!token || !platform || !type) {
+      return res.status(400).json({ error: "Token, platform, and type are required" });
+    }
+
+    const { error } = await supabase
+      .from("native_device_tokens")
+      .upsert({
+        user_id: userId,
+        token,
+        platform,
+        type,
+        device_id: deviceId,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: "user_id,token",
+      });
+
+    if (error) throw error;
+
+    res.json({ success: true, message: "Native token registered successfully" });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getNotifications,
   getUnreadCount,
@@ -183,4 +216,5 @@ module.exports = {
   deleteNotification,
   deleteAllNotifications,
   notifyLogin,
+  registerNativeToken,
 };

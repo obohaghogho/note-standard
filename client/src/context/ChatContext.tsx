@@ -96,7 +96,7 @@ export const useChat = () => {
 };
 
 export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
-    const { user, profile, session, authReady } = useAuth();
+    const { user, profile, session, authReady, isSwitching } = useAuth();
     const { socket, connected } = useSocket();
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [messages, setMessages] = useState<Record<string, Message[]>>({});
@@ -135,7 +135,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     const loadConversations = useCallback(async () => {
-        if (!session || conversationsFetchRef.current) return;
+        // Rule 7 & 12: Remove profile identity check. Respect isSwitching.
+        if (!session || isSwitching || conversationsFetchRef.current) return;
         
         conversationsFetchRef.current = true;
         
@@ -169,21 +170,34 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [session?.access_token, joinAllRooms]);
 
-    // Initial load
+    // Initial load / Identity Switch Reset
     useEffect(() => {
+        if (!authReady) return;
+        
         isMounted.current = true;
-        if (authReady) {
-            if (session && !hasInitialFetched.current) {
-                console.log('[Chat] Initial load triggered by authReady');
-                hasInitialFetched.current = true;
-                loadConversations();
-            } else if (!session) {
-                setLoading(false);
-            }
+        
+        // If we have a session but haven't fetched OR if the identity has changed
+        if (session && user) {
+            console.log(`[Chat] Identity change or initial load detect: ${user.id}`);
+            
+            // Clear old data immediately to prevent identity leaks
+            setConversations([]);
+            setMessages({});
+            setLoading(true);
+            hasInitialFetched.current = true;
+            
+            loadConversations();
+        } else if (!session) {
+            setConversations([]);
+            setMessages({});
+            setLoading(false);
+            hasInitialFetched.current = false;
         }
-        return () => { isMounted.current = false; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [authReady, session?.access_token]);
+
+        return () => { 
+            isMounted.current = false; 
+        };
+    }, [authReady, session?.access_token, user?.id, loadConversations]);
 
     // Socket listeners
     useEffect(() => {

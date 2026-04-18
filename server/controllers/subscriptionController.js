@@ -277,13 +277,13 @@ exports.createAdCheckoutSession = async (req, res) => {
   try {
     const userId = req.user.id;
     const { email } = req.user;
-    const { adId } = req.body;
+    const { amount } = req.body;
 
-    if (!adId) {
-      return res.status(400).json({ error: "Ad ID is required" });
+    if (!amount || amount < 5.00) {
+      return res.status(400).json({ error: "Minimum top up is $5.00" });
     }
 
-    const usdAmount = 5.00;
+    const usdAmount = parseFloat(amount);
     const { amount: ngnAmount, rate } = await fxService.convert(
       usdAmount,
       "USD",
@@ -295,12 +295,11 @@ exports.createAdCheckoutSession = async (req, res) => {
 
     const callbackUrl = `${
       process.env.CLIENT_URL || "https://notestandard.com"
-    }/dashboard/settings?ad_success=true&adId=${adId}&reference=${reference}`;
+    }/dashboard/settings?wallet_topup=true&reference=${reference}`;
 
     const metadata = {
       userId,
-      adId,
-      type: "ad_payment",
+      type: "wallet_topup",
       usdAmount,
       exchangeRate: rate,
     };
@@ -335,18 +334,34 @@ exports.syncAdPayment = async (req, res) => {
 
     if (
       verification.success &&
-      verification.metadata?.type === "ad_payment"
+      verification.metadata?.type === "wallet_topup"
     ) {
-      const adId = verification.metadata.adId;
+      const usdAmount = verification.metadata.usdAmount;
+      const userId = verification.metadata.userId;
 
-      const { error } = await supabase
-        .from("ads")
-        .update({ status: "pending" }) // Move from pending_payment to pending (review)
-        .eq("id", adId);
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("ad_wallet_balance")
+        .eq("id", userId)
+        .single();
+        
+      const currentBalance = Number(profile.ad_wallet_balance || 0);
 
-      if (error) throw error;
+      await supabase
+        .from("profiles")
+        .update({ ad_wallet_balance: currentBalance + Number(usdAmount) })
+        .eq("id", userId);
 
-      res.json({ success: true });
+      await supabase
+        .from("wallet_transactions")
+        .insert({
+          user_id: userId,
+          amount: usdAmount,
+          type: "deposit",
+          metadata: { reference }
+        });
+
+      res.json({ success: true, newBalance: currentBalance + Number(usdAmount) });
     } else {
       res.json({ success: false });
     }

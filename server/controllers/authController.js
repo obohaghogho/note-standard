@@ -2,6 +2,7 @@ const bcrypt = require("bcryptjs");
 const axios = require("axios");
 const supabase = require("../config/database");
 const env = require("../config/env");
+const mailService = require("../services/mailService");
 
 /**
  * Handles the initial registration request
@@ -69,6 +70,12 @@ const register = async (req, res) => {
 
     // Note: The database trigger 'handle_new_user' will automatically create
     // the profile and wallets when the record hits the auth.users table.
+
+    // 4. Send Welcome Email (Confirmation)
+    // We send this as a background task to not block the response
+    mailService.sendWelcomeEmail(email, fullName).catch(err => {
+      console.error("[AUTH-WARN] Failed to send welcome email:", err.message);
+    });
 
     res.status(200).json({
       success: true,
@@ -139,21 +146,32 @@ const forgotPassword = async (req, res) => {
       `[AUTH-DEBUG] CLIENT_URL=${env.CLIENT_URL}, redirectTo=${redirectTo}`,
     );
 
-    // Leverage Supabase's built in email service to send the reset link
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo,
+    // Generate a secure reset link via Supabase Admin API
+    // This bypasses the built-in SMTP and gives us the link to send via our own mail service
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+      type: 'recovery',
+      email: email,
+      options: { redirectTo }
     });
 
-    if (error) {
+    if (linkError) {
       console.error(
-        `[AUTH-ERROR] Failed to send reset email: ${error.message}`,
+        `[AUTH-ERROR] Failed to generate reset link: ${linkError.message}`,
       );
-      throw error;
+      throw linkError;
     }
 
-    console.log(
-      `[AUTH-INFO] Password reset email sent via Supabase to ${email}`,
-    );
+    const resetLink = linkData.properties.action_link;
+    console.log(`[AUTH-INFO] Generated reset link for ${email}`);
+
+    // Send the link via our custom mail service
+    const emailSent = await mailService.sendPasswordResetEmail(email, resetLink);
+
+    if (!emailSent) {
+      console.error(`[AUTH-ERROR] Failed to send reset email to ${email}`);
+      // We still return success to the user for security, but log the error
+    }
+
     res.json({
       success: true,
       message: "If an account exists, a reset email has been sent.",

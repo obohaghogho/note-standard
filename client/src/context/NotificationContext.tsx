@@ -34,7 +34,7 @@ export interface NotificationContextValue {
 export const NotificationContext = createContext<NotificationContextValue | null>(null);
 
 export const NotificationProvider = ({ children }: { children: React.ReactNode }) => {
-    const { session, authReady } = useAuth();
+    const { user, session, profile, authReady, isSwitching } = useAuth();
     const { socket, connected } = useSocket();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [loading, setLoading] = useState(true);
@@ -46,7 +46,8 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
     const unreadCount = notifications.filter(n => !n.is_read).length;
 
     const fetchNotifications = useCallback(async () => {
-        if (!session || notificationsFetchRef.current) return;
+        // Rule 7 & 12: Remove profile identity check. Respect isSwitching.
+        if (!session || isSwitching || notificationsFetchRef.current) return;
         notificationsFetchRef.current = true;
         
         try {
@@ -79,7 +80,8 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
     };
 
     const subscribeToPush = useCallback(async () => {
-        if (!session || pushSubscribeRef.current) return;
+        // Rule 7 & 12: Remove profile identity check. Respect isSwitching.
+        if (!session || isSwitching || pushSubscribeRef.current) return;
         if (!('serviceWorker' in navigator && 'PushManager' in window)) {
             console.warn('[Notifications] Push NOT supported on this browser');
             return;
@@ -129,20 +131,30 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         }
     }, [session]);
 
-    // Initial Fetch
+    // Initial Fetch / Identity Switch Reset
     useEffect(() => {
+        if (!authReady) return;
+
         isMounted.current = true;
-        if (authReady) {
-            if (session) {
-                fetchNotifications();
-                subscribeToPush();
-            } else {
-                setLoading(false);
-            }
+        
+        if (session && user) {
+            console.log(`[Notifications] Identity change or initial load detect: ${user.id}`);
+            
+            // Clear old data to prevent identity leaks
+            setNotifications([]);
+            setLoading(true);
+            
+            fetchNotifications();
+            subscribeToPush();
+        } else if (!session) {
+            setNotifications([]);
+            setLoading(false);
         }
-        return () => { isMounted.current = false; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [authReady, session?.access_token, fetchNotifications, subscribeToPush]);
+
+        return () => { 
+            isMounted.current = false; 
+        };
+    }, [authReady, session?.access_token, user?.id, fetchNotifications, subscribeToPush]);
 
     // Socket listeners
     useEffect(() => {

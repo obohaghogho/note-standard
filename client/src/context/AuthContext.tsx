@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useMemo, useCallback } from "react";
 import type { User, Session, RealtimeChannel } from "@supabase/supabase-js";
-import { safeProfile, safeSubscription, supabase, resetRateLimiters, ensureProfile } from "../lib/supabaseSafe";
+import { safeProfile, safeSubscription, supabase, resetRateLimiters, ensureProfile, updateGlobalAuthState } from "../lib/supabaseSafe";
 import type { Profile, Subscription } from "../types/auth";
 import toast from "react-hot-toast";
 import * as accountManager from "../utils/accountManager";
+import { refreshSessionIsolated } from "../utils/authUtils";
 
 interface AuthContextValue {
   user: User | null;
@@ -20,6 +21,8 @@ interface AuthContextValue {
   addAccount: () => void;
   removeAccount: (userId: string) => void;
   refreshProfile: () => Promise<void>;
+  isSwitching: boolean;
+  switchId: number;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -39,85 +42,88 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [authReady, setAuthReady] = useState(false);
+  const [isSwitching, setIsSwitching] = useState(false);
+  const [switchId, setSwitchId] = useState(0);
 
-  // Use refs to track if data fetching is in progress for the current session to prevent throttling
   const fetchLockRef = useRef<string | null>(null);
   const isMounted = useRef(true);
+  const switchInProgress = useRef(false);
+  const switchIdRef = useRef(0);
 
-  // Compute isPro based on subscription status (any paid plan)
+  // Rule 6: Sink state to safeCall guard
+  useEffect(() => {
+    updateGlobalAuthState(isSwitching, switchId);
+  }, [isSwitching, switchId]);
+
+  useEffect(() => {
+    accountManager.clearLegacyStaleMarkers();
+  }, []);
+
   const isPro = useMemo(() => {
     return subscription?.status === 'active' && ['pro', 'team', 'business', 'enterprise'].includes(subscription?.plan_tier as string);
   }, [subscription]);
 
-  // Compute isBusiness based on subscription status
   const isBusiness = useMemo(() => {
     return subscription?.status === 'active' && subscription?.plan_tier === 'business';
   }, [subscription]);
 
-  // Compute isAdmin based on profile role
   const isAdmin = useMemo(() => {
     return profile?.role === 'admin' || profile?.role === 'support';
   }, [profile]);
 
-  // Consolidated Fetch Profile & Subscription
-  const syncUserData = useCallback(async (userId: string, userObj?: User, force = false) => {
-    // If already fetching for this user and not forced, skip
-    if (!force && fetchLockRef.current === userId) return;
-
-    // Optimization: Skip if we already have data for this user and it's not a force refresh
-    if (!force && profile?.id === userId && subscription) {
-      console.log('[Auth] User data already cached for:', userId);
-      return;
-    }
+  /**
+   * Single Source of Truth for identity data fetching.
+   * Respects switchIdRef to prevent race conditions.
+   */
+  const syncUserData = useCallback(async (userId: string, userObj?: User, currentSwitchId?: number) => {
+    if (userId === fetchLockRef.current) return;
     
+    // Discard if a switch happened before we started
+    if (currentSwitchId !== undefined && currentSwitchId !== switchIdRef.current) return;
+
     fetchLockRef.current = userId;
     
     try {
       if (!isMounted.current) return;
 
+      // Rule 5: profile fetch is non-blocking but respects switchId
       const [profileResult, subResult] = await Promise.all([
         userObj ? ensureProfile(userObj) : safeProfile(userId),
         safeSubscription(userId)
       ]);
       
-      if (isMounted.current && fetchLockRef.current === userId) {
-        // Only update state if we didn't get a terminal ERROR
-        if (profileResult !== 'ERROR') {
+      // Rule 5: Discard stale responses
+      if (currentSwitchId !== undefined && currentSwitchId !== switchIdRef.current) {
+        console.warn(`[Auth] Discarding stale sync for ${userId}. SwitchId mismatch.`);
+        return;
+      }
+
+      if (isMounted.current) {
+        if (profileResult && profileResult !== 'ERROR') {
           const prof = profileResult as Profile;
           setProfile(prof);
           
-          // Save to multi-account list if we have a session
-          supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-            if (currentSession?.user?.id === userId) {
-              accountManager.saveAccount(currentSession, prof);
-            }
-          });
+          // Atomic update to account manager
+          const { data: { session: currentSession } } = await supabase.auth.getSession();
+          if (currentSession?.user?.id === userId) {
+            accountManager.saveAccount(currentSession, prof);
+          }
         }
         
-        if (subResult !== 'ERROR') {
+        if (subResult && subResult !== 'ERROR') {
           setSubscription(subResult as Subscription | null);
         }
       }
-    } catch (err: unknown) {
-      const isNetworkError = err instanceof Error && (err.message.includes('fetch') || err.message.includes('Network'));
-      if (isNetworkError) {
-        console.warn("[Auth] Sync deferred: Network error");
-        // Don't set fetchLock to null to allow another attempt? 
-        // Actually, let's just log it.
-      } else {
-        console.error("[Auth] Sync failed:", err);
-      }
+    } catch (err) {
+      console.error("[Auth] Sync failed:", err);
     } finally {
-      if (isMounted.current && fetchLockRef.current === userId) {
-        fetchLockRef.current = null;
-      }
+      if (isMounted.current) fetchLockRef.current = null;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const refreshProfile = async () => {
     if (user?.id) {
-       await syncUserData(user.id, user, true);
+       await syncUserData(user.id, user, switchIdRef.current);
     }
   };
 
@@ -126,18 +132,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       
-      // State cleanup
       if (user?.id) {
         accountManager.removeAccount(user.id);
       }
       
-      setSession(null);
-      setUser(null);
-      setProfile(null);
-      setSubscription(null);
-      fetchLockRef.current = null;
+      // Rule 9: state will be updated by onAuthStateChange listener
       resetRateLimiters();
-      
       toast.success('Signed out successfully');
     } catch (error) {
       console.error('Error signing out:', error);
@@ -146,190 +146,214 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addAccount = () => {
-    // Explicitly save current account if it exists before navigating
-    if (session && profile) {
-      accountManager.saveAccount(session, profile);
-    }
-    // Correct URL path
+    // Correct URL path for add account flow
     window.location.href = '/login?add_account=true';
   };
 
   const removeAccount = (userId: string) => {
-    // Cannot remove current account via this method (use signOut instead)
     if (userId === user?.id) return;
-    
     accountManager.removeAccount(userId);
-    // Page reload or state update to refresh UI
-    window.location.reload();
   };
 
+  /**
+   * Refactored ATOMIC Switch logic (Rule 4)
+   */
   const switchAccount = async (userId: string) => {
+    // Rule 4: switchLock
+    if (switchInProgress.current) return;
+
     const target = accountManager.getAccount(userId);
     if (!target) {
-      toast.error('Account not found. Please log in again.');
+      toast.error('Account not found.');
       return;
     }
 
-    const toastId = toast.loading('Switching account...');
+    const toastId = toast.loading('Switching to ' + target.email);
+
     try {
-      const { error } = await supabase.auth.setSession({
-        access_token: target.session.access_token,
-        refresh_token: target.session.refresh_token
-      });
-      if (error) throw error;
+      setIsSwitching(true);
+      switchInProgress.current = true;
       
-      // Page reload to ensure all contexts are reset
-      window.location.reload();
+      // Rule 5: switchIdRef
+      switchIdRef.current += 1;
+      setSwitchId(switchIdRef.current);
+      const currentSwitchId = switchIdRef.current;
+
+      console.log(`[Auth] Switch #${currentSwitchId}: refreshing ${target.email}...`);
+
+      // Rule 13: refresh if needed before setSession
+      let freshSession = await refreshSessionIsolated(target);
+      
+      if (!freshSession) {
+        // Retry if something changed in storage
+        const latestFromStorage = accountManager.getAccount(userId);
+        if (latestFromStorage && latestFromStorage.tokens.refresh_token !== target.tokens.refresh_token) {
+          freshSession = await refreshSessionIsolated(latestFromStorage);
+        }
+      }
+
+      // Rule 5: Protect against overlapping switch
+      if (currentSwitchId !== switchIdRef.current) return;
+
+      if (!freshSession) {
+        throw new Error('Session expired. Please log in again.');
+      }
+
+      // Rule 3: Update active account ID FIRST
+      accountManager.setActiveAccountId(userId);
+
+      // Rule 4: Atomic setSession
+      const { error } = await supabase.auth.setSession({
+        access_token: freshSession.access_token,
+        refresh_token: freshSession.refresh_token
+      });
+
+      if (error) throw error;
+
+      // Note: Logic continues in onAuthStateChange listener.
+      // We don't need syncUserData here as listener will trigger it.
+      
+      toast.success(`Switched to ${target.email}`, { id: toastId });
+
     } catch (err) {
       console.error('[Auth] Switch failed:', err);
-      toast.error('Failed to switch account', { id: toastId });
+      toast.error(err instanceof Error ? err.message : 'Switch failed', { id: toastId });
+      setIsSwitching(false);
+      switchInProgress.current = false;
     }
   };
 
-    useEffect(() => {
-      isMounted.current = true;
-  
-      const initAuthAndSubscribe = async () => {
-        try {
-          if (!isMounted.current) return;
-          setLoading(true);
-  
-          // Step 1: Initial session check
-          const { data: { session: initialSession }, error } = await supabase.auth.getSession();
-          
-          if (error) {
-            console.error('[Auth] Initial session fetch failed:', error);
-            // Don't throw here, might be a transient network error and we can't assume user is logged out
-          }
-  
-          if (isMounted.current) {
-            const currentUser = initialSession?.user ?? null;
-            
-            // Only update session if it's actually different from current to avoid redundant renders
-            setSession(initialSession);
-            setUser(currentUser);
-            
-            if (currentUser) {
-              syncUserData(currentUser.id, currentUser).catch(err => {
-                console.error('[Auth] Initial sync failed:', err);
-              });
-              // Setup subscriptions immediately
-              setupSubscriptions(currentUser.id);
-            }
-  
-            // Finalize boot
-            setLoading(false);
-            setAuthReady(true);
-            console.log('[Auth] Boot Complete:', { userId: currentUser?.id });
-          }
-        } catch (err) {
-          console.error('[Auth] Boot Error:', err);
-          if (isMounted.current) {
-            setLoading(false);
-            setAuthReady(true);
-          }
-        }
-      };
-  
-      // Step 2: Global Realtime Subscriptions for Profile and Billing
-      let profileChannel: RealtimeChannel | null = null;
-      let subscriptionChannel: RealtimeChannel | null = null;
-  
-      const setupSubscriptions = (userId: string) => {
-        if (profileChannel) supabase.removeChannel(profileChannel);
-        if (subscriptionChannel) supabase.removeChannel(subscriptionChannel);
-  
-        // Generate unique names to prevent re-using a cached, already-subscribed channel
-        const timestamp = Date.now();
-        
-        profileChannel = supabase
-          .channel(`public:profiles:${userId}:${timestamp}`)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, 
-            () => syncUserData(userId, undefined, true))
-          .subscribe();
-  
-        subscriptionChannel = supabase
-          .channel(`public:subscriptions:${userId}:${timestamp}`)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions', filter: `user_id=eq.${userId}` }, 
-            () => syncUserData(userId, undefined, true))
-          .subscribe();
-      };
-  
-      // Pre-init
-      initAuthAndSubscribe();
-  
-      // Step 3: Global Auth Listener
-      const { data: { subscription: authListener } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
-        if (!isMounted.current) return;
-        
-        console.log(`[Auth] Event: ${event}`, { userId: newSession?.user?.id });
-  
-        const currentUser = newSession?.user ?? null;
-        
-        if (event === 'SIGNED_OUT') {
-          if (profileChannel) supabase.removeChannel(profileChannel);
-          if (subscriptionChannel) supabase.removeChannel(subscriptionChannel);
-          setSession(null);
-          setUser(null);
-          setProfile(null);
-          setSubscription(null);
-          fetchLockRef.current = null;
-          resetRateLimiters();
-          return;
-        }
-  
-        // Only trigger state updates/syncs if the user identity has actually changed or token was refreshed
-        if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'TOKEN_REFRESHED') {
-          console.log(`[Auth] Updating session on ${event}`);
-          setSession(newSession);
-          setUser(currentUser);
-          
-          if (currentUser) {
-            setupSubscriptions(currentUser.id);
-            syncUserData(currentUser.id, currentUser).catch(err => {
-              console.error('[Auth] Background sync on event failed:', err);
+  useEffect(() => {
+    isMounted.current = true;
+
+    const initAuthAndSubscribe = async () => {
+      try {
+        setLoading(true);
+
+        // Rule 10: Session Rehydration on App Load
+        const activeId = accountManager.getActiveAccountId();
+        if (activeId) {
+          const acc = accountManager.getAccount(activeId);
+          if (acc) {
+            console.log(`[Auth] Rehydrating active account: ${acc.email}`);
+            await supabase.auth.setSession({
+              access_token: acc.tokens.access_token,
+              refresh_token: acc.tokens.refresh_token
             });
           }
         }
+
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        
+        if (isMounted.current) {
+          // Rule 9: Listener handles state, but we set initial once for loading sync
+          setSession(initialSession);
+          setUser(initialSession?.user ?? null);
+          
+          if (initialSession?.user) {
+            syncUserData(initialSession.user.id, initialSession.user, switchIdRef.current);
+            setupSubscriptions(initialSession.user.id);
+          }
+
+          setLoading(false);
+          setAuthReady(true);
+        }
+      } catch (err) {
+        console.error('[Auth] Initial boot failed:', err);
+        setLoading(false);
+        setAuthReady(true);
+      }
+    };
+
+    let profileChannel: RealtimeChannel | null = null;
+    let subscriptionChannel: RealtimeChannel | null = null;
+
+    const setupSubscriptions = (userId: string) => {
+      // 1. Aggressively clean up ALL previous profile/subscription channels to prevent leaks and race conditions
+      supabase.getChannels().forEach(c => {
+        if (c.topic.startsWith('public:profiles:') || c.topic.startsWith('public:subscriptions:')) {
+          supabase.removeChannel(c);
+        }
       });
 
-      // Step 4: Background Session Heartbeat
-      // Periodically check if session is still valid (every 10 minutes)
-      const heartbeat = setInterval(async () => {
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        if (currentSession && isMounted.current) {
-          setSession(currentSession);
-          setUser(currentSession.user);
-        }
-      }, 1000 * 60 * 10);
-  
-      return () => {
-        isMounted.current = false;
-        authListener.unsubscribe();
-        clearInterval(heartbeat);
-        if (profileChannel) supabase.removeChannel(profileChannel);
-        if (subscriptionChannel) supabase.removeChannel(subscriptionChannel);
-      };
-    }, [syncUserData]);
+      // 2. Use a unique topic suffix to bypass the Supabase 'already subscribed' error entirely
+      const uniqueTopic = Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
 
-  // Removal of frequent logging to prevent console pressure in production
+      profileChannel = supabase
+        .channel(`public:profiles:${userId}:${uniqueTopic}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, 
+          () => syncUserData(userId, undefined, switchIdRef.current))
+        .subscribe();
+
+      subscriptionChannel = supabase
+        .channel(`public:subscriptions:${userId}:${uniqueTopic}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions', filter: `user_id=eq.${userId}` }, 
+          () => syncUserData(userId, undefined, switchIdRef.current))
+        .subscribe();
+    };
+
+    initAuthAndSubscribe();
+
+    /**
+     * Rule 9: The Listener is the MANDATORY Source of Truth
+     */
+    const { data: { subscription: authListener } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      if (!isMounted.current) return;
+      
+      const currentId = switchIdRef.current;
+      console.log(`[Auth] Event: ${event} (#${currentId})`, { email: newSession?.user?.email });
+
+      if (event === 'SIGNED_OUT') {
+        // If we are switching, we ignore SIGNED_OUT from the old account
+        if (switchInProgress.current) return;
+
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setSubscription(null);
+        accountManager.setActiveAccountId(null);
+        resetRateLimiters();
+        return;
+      }
+
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        const currentUser = newSession?.user ?? null;
+        
+        setSession(newSession);
+        setUser(currentUser);
+
+        // Rule 4: Switch complete - Disable lock immediately to allow syncUserData to fetch
+        if (switchInProgress.current) {
+          switchInProgress.current = false;
+          setIsSwitching(false);
+          // Force it to global state immediately so safeCall won't be blocked
+          updateGlobalAuthState(false, currentId);
+        }
+
+        if (newSession && currentUser) {
+          // Sync tokens to multi-account storage
+          accountManager.updateAccountTokens(currentUser.id, newSession);
+          accountManager.setActiveAccountId(currentUser.id);
+
+          setupSubscriptions(currentUser.id);
+          syncUserData(currentUser.id, currentUser, currentId);
+        }
+      }
+    });
+
+    return () => {
+      isMounted.current = false;
+      authListener.unsubscribe();
+      if (profileChannel) supabase.removeChannel(profileChannel);
+      if (subscriptionChannel) supabase.removeChannel(subscriptionChannel);
+    };
+  }, [syncUserData]);
 
   return (
     <AuthContext.Provider value={{ 
-      user, 
-      session, 
-      profile, 
-      subscription, 
-      loading, 
-      authReady, 
-      isPro,
-      isBusiness,
-      isAdmin, 
-      signOut,
-      switchAccount,
-      addAccount,
-      removeAccount,
-      refreshProfile
+      user, session, profile, subscription, loading, authReady, 
+      isPro, isBusiness, isAdmin, signOut, switchAccount, 
+      addAccount, removeAccount, refreshProfile, isSwitching, switchId
     }}>
       {children}
     </AuthContext.Provider>

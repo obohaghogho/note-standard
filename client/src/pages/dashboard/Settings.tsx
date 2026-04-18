@@ -71,6 +71,11 @@ export const Settings = () => {
     }, [initialTab, searchParams, navigate]);
 
     useEffect(() => {
+        if (user && authProfile && user.id !== authProfile.id) {
+            setLoading(true);
+            return;
+        }
+
         if (authProfile) {
             setProfile(authProfile);
             setUsername(authProfile.username || '');
@@ -84,7 +89,7 @@ export const Settings = () => {
             });
             setLoading(false);
         }
-    }, [authProfile]);
+    }, [authProfile, user]);
 
 
 

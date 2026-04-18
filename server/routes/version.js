@@ -7,10 +7,10 @@ const router = express.Router();
  * No auth required — must be accessible to all clients including outdated ones.
  */
 const APP_CONFIG = {
-  latest_version: '1.0.1',
-  minimum_version: '1.0.0',
-  force_update: false,
-  update_message: 'A new version of NoteStandard is available with important fixes for calls and voice notes.',
+  latest_version: '1.1.0',
+  minimum_version: '1.1.0',
+  force_update: true,
+  update_message: 'Current status: Version 1.1.0 is now required for production stability and security updates.',
   changelog: [
     'Fixed audio/video call connections',
     'Universal voice note compatibility (Android ↔ iPhone)',
