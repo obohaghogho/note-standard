@@ -7,17 +7,16 @@ const router = express.Router();
  * No auth required — must be accessible to all clients including outdated ones.
  */
 const APP_CONFIG = {
-  latest_version: '1.1.2',
-  minimum_version: '1.1.2',
+  latest_version: '1.1.3',
+  minimum_version: '1.1.3',
   force_update: true,
-  update_message: 'v1.1.2 is required: Deep mobile fix for icons, charts, chat and touch interactions.',
+  update_message: 'v1.1.3 is required: Emergency hardening of authentication system and stability fixes.',
   changelog: [
-    'Fixed all dashboard icons on mobile (root CSS reset conflict resolved)',
-    'Fixed Chart.js activity charts disappearing on mobile',
-    'Fixed chat video/voice player layout on mobile',
-    'Fixed notification dropdown position on notched phones',
-    'Fixed touch interaction issues on mobile inputs and scrollable areas',
-    'Fixed navigation crash on mobile settings button'
+    'Fixed 503 Service Unavailable errors on dashboard and wallet',
+    'Hardened authentication middleware against expired sessions',
+    'Improved realtime gateway connection stability',
+    'Fixed all dashboard icons and chart rendering bugs',
+    'Resolved touch-action issues on mobile devices'
   ]
 };
 

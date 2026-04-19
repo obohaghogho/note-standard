@@ -15,8 +15,19 @@ if (!API_URL) {
 
 
 export const getAuthHeader = async () => {
-    const { data } = await supabase.auth.getSession();
-    return {
-        'Authorization': `Bearer ${data.session?.access_token}`
-    };
+    try {
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.access_token;
+        
+        if (!token) {
+            return {}; // No token available
+        }
+        
+        return {
+            'Authorization': `Bearer ${token}`
+        };
+    } catch (err) {
+        console.error('[API] Failed to get session:', err);
+        return {};
+    }
 };

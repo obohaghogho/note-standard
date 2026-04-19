@@ -3,5 +3,5 @@
  * This MUST be updated on every deployment.
  * The service worker + version check system will force users to update.
  */
-export const APP_VERSION = '1.1.2';
+export const APP_VERSION = '1.1.3';
 export const APP_BUILD = '20260419';

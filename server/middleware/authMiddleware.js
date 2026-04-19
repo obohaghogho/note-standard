@@ -4,8 +4,16 @@ const supabase = require("../config/database");
  * Helper to fetch user with retry logic for Supabase Auth
  * Mitigates transient network/service availability issues
  */
-const getUserWithRetry = async (token, maxAttempts = 4) => {
+const getUserWithRetry = async (token, maxAttempts = 3) => {
   let lastError = null;
+
+  // 1. Pre-validation: Catch malformed JS-error tokens from client
+  if (!token || token === "undefined" || token === "null" || token.length < 10) {
+    return { 
+      data: { user: null }, 
+      error: { status: 401, message: "Malformated or missing token" } 
+    };
+  }
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -17,8 +25,16 @@ const getUserWithRetry = async (token, maxAttempts = 4) => {
         return { data, error };
       }
 
-      // Auth-level errors (401, 403, invalid token) are not retryable
-      if (error.status && error.status !== 500 && error.status !== 0) {
+      // 2. Identify definitively non-retryable errors
+      const msg = error.message?.toLowerCase() || "";
+      const isAuthError = 
+        (error.status && error.status !== 500 && error.status !== 0) ||
+        msg.includes("invalid") ||
+        msg.includes("missing") ||
+        msg.includes("expired") ||
+        msg.includes("not found");
+
+      if (isAuthError) {
         return { data, error };
       }
 
@@ -34,16 +50,16 @@ const getUserWithRetry = async (token, maxAttempts = 4) => {
       );
     }
 
-    // Wait before next attempt (exponential backoff: 800ms, 1600ms, 3200ms)
+    // Wait before next attempt (exponential backoff: 500ms, 1000ms)
     if (attempt < maxAttempts) {
-      const delay = Math.pow(2, attempt - 1) * 800;
+      const delay = Math.pow(2, attempt - 1) * 500;
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 
   return {
     data: { user: null },
-    error: lastError || new Error("Auth service unavailable"),
+    error: lastError || { status: 503, message: "Auth service unavailable" },
   };
 };
 
