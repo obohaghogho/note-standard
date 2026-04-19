@@ -23,7 +23,7 @@ const SUPPORTED_CURRENCIES = ['BTC', 'ETH', 'USD', 'NGN', 'EUR', 'GBP', 'JPY'];
 
 function WalletContent() {
     const { wallets, financialView, transactions, loading, refresh, createWallet } = useWallet();
-    const { socket } = useSocket();
+    // socket removed (unused)
     
     // Force-refresh service data on mount
     useEffect(() => {

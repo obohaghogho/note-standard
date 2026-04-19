@@ -3,7 +3,6 @@ import { ArrowRightLeft, Loader2, RefreshCcw, Info, Clock } from 'lucide-react';
 import { Button } from './common/Button';
 import walletApi from '../api/walletApi';
 import { useWallet } from '../hooks/useWallet';
-import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 // import type { WalletViewDTO } from '@/types/wallet';
 import { motion } from 'framer-motion';

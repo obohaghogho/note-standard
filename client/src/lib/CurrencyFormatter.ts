@@ -33,18 +33,7 @@ export const formatCurrency = (amount: number | string | null | undefined, curre
 /**
  * Helper to determine decimal places based on currency type
  */
-const getDecimalPlaces = (currency: string | null | undefined): number => {
-  const code = (currency || 'USD').toUpperCase();
-  
-  // Crypto typically shown with more precision
-  if (['BTC', 'ETH', 'SOL'].includes(code)) return 6;
-  
-  // Zero-decimal currencies
-  if (['JPY', 'KRW', 'VND'].includes(code)) return 0;
-  
-  // Default for fiat
-  return 2;
-};
+// getDecimalPlaces removed (unused)
 
 /**
  * Detect user's suggested currency based on locale
