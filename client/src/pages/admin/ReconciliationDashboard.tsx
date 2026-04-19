@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldAlert, CheckCircle, Clock, XCircle, AlertTriangle, RefreshCw } from 'lucide-react';
-import adminApi from '../../../api/adminApi';
+import adminApi from '../../api/adminApi';
 import toast from 'react-hot-toast';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 
