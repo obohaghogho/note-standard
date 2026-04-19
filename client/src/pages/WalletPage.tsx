@@ -22,7 +22,7 @@ import toast from 'react-hot-toast';
 
 const SUPPORTED_CURRENCIES = ['BTC', 'ETH', 'USD', 'NGN', 'EUR', 'GBP', 'JPY'];
 
-function WalletContent() {
+const WalletContent = () => {
     const { wallets, transactions, loading, refresh, createWallet } = useWallet();
     const { socket } = useSocket();
     
@@ -441,12 +441,12 @@ function WalletContent() {
     );
 };
 
-export function WalletPage() {
+export const WalletPage = () => {
     return (
         <ErrorBoundary fallback={<div className="p-8 text-center text-red-500 bg-red-500/5 rounded-xl border border-red-500/10">Something went wrong loading your wallet. <button onClick={() => window.location.reload()} className="underline ml-2">Try again</button></div>}>
             <WalletContent />
         </ErrorBoundary>
     );
-}
+};
 
 export default WalletPage;

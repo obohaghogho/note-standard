@@ -50,7 +50,7 @@ const itemVariants = {
     visible: { opacity: 1, y: 0, transition: { duration: 0.5 } }
 };
 
-export function DashboardHome() {
+export const DashboardHome = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
     const { openCreateNoteModal } = useOutletContext<DashboardContext>();
