@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ErrorBoundary } from '../components/common/ErrorBoundary';
 import { useWallet } from '../hooks/useWallet';
-import { useSocket } from '../context/SocketContext';
 import walletApi from '../api/walletApi';
 import { WalletBalanceCard } from '../components/WalletBalance';
 import { ActionsGrid } from '../components/wallet/ActionsGrid';

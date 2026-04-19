@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ShieldAlert, CheckCircle, Clock, XCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 
 import toast from 'react-hot-toast';
@@ -35,14 +35,7 @@ export const ReconciliationDashboard: React.FC = () => {
     const [filter, setFilter] = useState<'ALL' | 'AUDITING' | 'APPLIED' | 'INVALIDATED'>('ALL');
     const [now, setNow] = useState(new Date());
 
-    useEffect(() => {
-        fetchProposals();
-        // Update countdowns every second
-        const interval = setInterval(() => setNow(new Date()), 1000);
-        return () => clearInterval(interval);
-    }, [filter]);
-
-    const fetchProposals = async () => {
+    const fetchProposals = useCallback(async () => {
         setLoading(true);
         try {
             const statusQ = filter === 'ALL' ? '' : `?status=${filter}`;
@@ -54,12 +47,19 @@ export const ReconciliationDashboard: React.FC = () => {
             if (data.success) {
                 setProposals(data.proposals);
             }
-        } catch (error) {
+        } catch {
             toast.error('Failed to fetch reconciliation proposals');
         } finally {
             setLoading(false);
         }
-    };
+    }, [filter]);
+
+    useEffect(() => {
+        fetchProposals();
+        // Update countdowns every second
+        const interval = setInterval(() => setNow(new Date()), 1000);
+        return () => clearInterval(interval);
+    }, [fetchProposals]);
 
     const handleInvalidate = async (id: string) => {
         if (!confirm('Are you sure you want to hard-invalidate this proposal?')) return;
@@ -80,7 +80,7 @@ export const ReconciliationDashboard: React.FC = () => {
             } else {
                 toast.error(data.error || 'Failed to invalidate');
             }
-        } catch (err) {
+        } catch {
             toast.error('Network Error');
         }
     };
@@ -105,7 +105,7 @@ export const ReconciliationDashboard: React.FC = () => {
             } else {
                 toast.error(data.error || 'Failed to approve');
             }
-        } catch (err) {
+        } catch {
             toast.error('Network Error');
         }
     };
@@ -144,7 +144,7 @@ export const ReconciliationDashboard: React.FC = () => {
                 {['ALL', 'AUDITING', 'APPLIED', 'INVALIDATED'].map(f => (
                     <button
                         key={f}
-                        onClick={() => setFilter(f as any)}
+                        onClick={() => setFilter(f as 'ALL' | 'AUDITING' | 'APPLIED' | 'INVALIDATED')}
                         className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
                             filter === f 
                                 ? 'bg-purple-600 text-white' 
