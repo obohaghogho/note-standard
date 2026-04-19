@@ -18,7 +18,8 @@ import {
     Bot,
     Target,
     Home,
-    Zap
+    Zap,
+    ShieldAlert
 } from 'lucide-react';
 import { LanguageSelector } from '../common/LanguageSelector';
 import SecureImage from '../common/SecureImage';
@@ -82,6 +83,7 @@ export const AdminLayout = () => {
         { to: '/admin/chats', icon: MessageSquare, label: 'Support Chats', badge: newChatsCount },
         { to: '/admin/ads', icon: Target, label: 'Manage Ads' },
         { to: '/admin/audit-logs', icon: HistoryIcon, label: 'Audit Logs' },
+        { to: '/admin/reconciliation', icon: ShieldAlert, label: 'Observatory' },
         { to: '/admin/broadcasts', icon: Megaphone, label: 'Broadcasts' },
         { to: '/admin/limit-requests', icon: Zap, label: 'Limit Requests' },
         { to: '/admin/auto-reply', icon: Bot, label: 'Auto-Reply' },

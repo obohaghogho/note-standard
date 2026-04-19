@@ -4,6 +4,10 @@ const path = require("path");
 const adminController = require(
   path.join(__dirname, "..", "controllers", "adminController"),
 );
+const reconciliationController = require(
+  path.join(__dirname, "..", "controllers", "reconciliationController"),
+);
+
 const { requireAdmin } = require(
   path.join(__dirname, "..", "middleware", "auth"),
 );
@@ -34,6 +38,12 @@ router.post("/support-chats/:id/join", adminController.joinSupportChat);
 // Audit Logs
 router.get("/audit-logs", adminController.getAuditLogs);
 router.get("/payment-audit-logs", adminController.getPaymentAuditLogs);
+
+// Institutional Reconciliation & Observability (Phase 7)
+router.get("/reconciliation/proposals", reconciliationController.getProposals);
+router.post("/reconciliation/proposals/:id/invalidate", reconciliationController.invalidateProposal);
+router.post("/reconciliation/proposals/:id/approve", reconciliationController.approveHighDriftProposal);
+
 
 // Bank Payment Management
 router.get("/unmatched-payments", adminController.getUnmatchedPayments);

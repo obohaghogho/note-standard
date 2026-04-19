@@ -63,6 +63,8 @@ const AdminSettings = lazyWithRetry(() => import('./pages/admin/AdminSettings'),
 const ManageAds = lazyWithRetry(() => import('./pages/admin/ManageAds'), 'ManageAds');
 const LimitRequestsPage = lazyWithRetry(() => import('./pages/admin/LimitRequestsPage'), 'LimitRequestsPage');
 const ManualDeposits = lazyWithRetry(() => import('./pages/admin/ManualDeposits'), 'ManualDeposits');
+const ReconciliationDashboard = lazyWithRetry(() => import('./pages/admin/ReconciliationDashboard').then(m => ({ default: m.ReconciliationDashboard })), 'ReconciliationDashboard');
+
 
 const ChatRedirect = () => {
   const { id } = useParams();
@@ -204,6 +206,7 @@ function App() {
                                 <Route path="broadcasts" element={<BroadcastManager />} />
                                 <Route path="auto-reply" element={<AutoReplySettings />} />
                                 <Route path="analytics" element={<Analytics />} />
+                                <Route path="reconciliation" element={<ReconciliationDashboard />} />
                                 <Route path="ads" element={<ManageAds />} />
                                 <Route path="deposits" element={<ManualDeposits />} />
                                 <Route path="limit-requests" element={<LimitRequestsPage />} />
