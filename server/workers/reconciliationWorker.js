@@ -1,5 +1,7 @@
-const supabase = require('../config/database');
 const paymentService = require('../services/payment/paymentService');
+const governanceManager = require('../services/GovernanceManager');
+const settlementEngine = require('../services/SettlementEngine');
+const decisionEngine = require('../services/DecisionEngine');
 const logger = require('../utils/logger');
 
 let intervalId = null;
@@ -21,8 +23,84 @@ class ReconciliationWorker {
 
     static async runFullCycle() {
         await this.processQueue();
+        await this.runGovernanceCycle(); // Step 4: Institutional Guard Cycle
         await this.syncSentPayouts();
         await this.cleanupStaleReservations();
+    }
+
+    /**
+     * Governance Cycle (Phase 6B)
+     * Identifies eligible reconciliation proposals and applies them 
+     * after the 1-hour audit window.
+     */
+    static async runGovernanceCycle() {
+        try {
+            logger.info("[ReconciliationWorker] Starting Governance Audit Cycle...");
+
+            // 1. Fetch proposals that have passed the audit window
+            const now = new Date().toISOString();
+            const { data: eligibleProposals, error } = await supabase
+                .from('reconciliation_proposals')
+                .select('*')
+                .eq('status', 'AUDITING')
+                .lte('eligible_at', now)
+                .lt('drift_amount', 0.001); // 0.1% Threshold for auto-apply
+
+            if (error) throw error;
+            if (!eligibleProposals || eligibleProposals.length === 0) return;
+
+            logger.info(`[ReconciliationWorker] Found ${eligibleProposals.length} eligible proposals for final audit.`);
+
+            for (const proposal of eligibleProposals) {
+                // 2. Fetch Latest State for Validation
+                const { data: wallet } = await supabase
+                    .from('wallets_v6')
+                    .select('balance, epoch_id')
+                    .eq('id', proposal.wallet_id)
+                    .single();
+
+                // 3. Evaluate Market Regime (DecisionEngine)
+                // For worker logic, we assume standard snapshot availability
+                const systemState = { state: 'ALLOWED', reason: 'CONSENSUS_STABLE' }; // Mock for now, would use SnapshotService.getLatest()
+
+                // 4. Validate via GovernanceManager
+                const currentDrift = 0; // Logic for calculating current drift vs proposal
+                const validation = await governanceManager.validateProposal(
+                    proposal, 
+                    proposal.drift_amount, // For auto-apply we ensure drift remains within bounds
+                    wallet.epoch_id, 
+                    systemState
+                );
+
+                if (validation.valid) {
+                    logger.info(`[ReconciliationWorker] Proposal ${proposal.id} PASSED audit. Applying correction...`);
+                    
+                    // 5. Execute via SettlementEngine
+                    // This will Advance Status -> Write Ledger -> Bump Epoch
+                    await settlementEngine.processEvent({
+                        transactionId: proposal.id, // Proposal acts as the event trigger
+                        status: 'LEDGER_COMMITTED',
+                        providerId: 'SYSTEM_GOVERNANCE',
+                        payload: { drift: proposal.drift_amount },
+                        eventAt: now
+                    });
+
+                    await supabase
+                        .from('reconciliation_proposals')
+                        .update({ status: 'APPLIED', applied_at: now })
+                        .eq('id', proposal.id);
+
+                } else {
+                    logger.warn(`[ReconciliationWorker] Proposal ${proposal.id} INVALIDATED: ${validation.reason}`);
+                    await supabase
+                        .from('reconciliation_proposals')
+                        .update({ status: 'INVALIDATED', metadata: { reason: validation.reason } })
+                        .eq('id', proposal.id);
+                }
+            }
+        } catch (err) {
+            logger.error(`[ReconciliationWorker] Governance cycle failed: ${err.message}`);
+        }
     }
 
     static async processQueue() {

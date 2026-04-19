@@ -13,7 +13,7 @@ class WalletService {
    */
   async getWallets(userId) {
     const { data: wallets, error } = await supabase
-      .from("wallets") // Query the view for AVAILABLE/SETTLING/FINAL balances
+      .from("wallets_v6") // Query the institutional view for ledger truth
       .select("*")
       .eq("user_id", userId);
 
@@ -154,8 +154,6 @@ class WalletService {
         user_id: userId,
         currency: upCurrency,
         network: upNetwork,
-        balance: 0,
-        available_balance: 0,
         address: address,
         provider: provider,
       })

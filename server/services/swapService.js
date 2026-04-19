@@ -97,14 +97,11 @@ class SwapService {
     const env = require("../config/env");
 
     const { data: txId, error: txError } = await supabase.rpc(
-      "execute_production_swap",
+      "execute_swap_v6",
       {
         p_quote_id: lockId,
         p_current_market_rate: currentRate,
-        p_idempotency_key: idempotencyKey,
-        p_admin_rate: env.ADMIN_FEE_RATE,
-        p_partner_rate: env.PARTNER_FEE_RATE,
-        p_referrer_rate: env.REFERRAL_FEE_RATE,
+        p_idempotency_key: idempotencyKey
       },
     );
 
