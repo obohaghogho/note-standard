@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ArrowRightLeft, Loader2, RefreshCcw, Info, Clock, Zap, ShieldCheck } from 'lucide-react';
+import { ArrowRightLeft, Loader2, RefreshCcw, Info, Clock } from 'lucide-react';
 import { Button } from './common/Button';
 import walletApi from '../api/walletApi';
 import { useWallet } from '../hooks/useWallet';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
-import type { WalletViewDTO } from '@/types/wallet';
+// import type { WalletViewDTO } from '@/types/wallet';
 import { motion } from 'framer-motion';
 import ReCAPTCHA from 'react-google-recaptcha';
 
@@ -23,7 +23,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
     onSuccess 
 }) => {
     const { wallets, financialView, refresh } = useWallet();
-    const { isPro, isBusiness } = useAuth();
+    // const { isPro, isBusiness } = useAuth();
     
     const [fromCurrency, setFromCurrency] = useState<string>(initialFromCurrency);
     const [fromNetwork, setFromNetwork] = useState<string>(initialFromNetwork);
@@ -32,8 +32,8 @@ export const SwapCard: React.FC<SwapCardProps> = ({
     const [amount, setAmount] = useState('');
     const [loading, setLoading] = useState(false);
     const [previewLoading, setPreviewLoading] = useState(false);
-    const [slippage, setSlippage] = useState<number>(0.5); 
-    const [showSlippageSettings, setShowSlippageSettings] = useState(false);
+    const [slippage] = useState<number>(0.5); 
+    // const [showSlippageSettings, setShowSlippageSettings] = useState(false);
     const [captchaToken, setCaptchaToken] = useState<string | null>(null);
     const [isTouched, setIsTouched] = useState(false);
     const recaptchaRef = useRef<ReCAPTCHA>(null);
@@ -60,9 +60,9 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         financialView.wallets.find(w => w.asset === fromCurrency && w.network === fromNetwork),
     [financialView.wallets, fromCurrency, fromNetwork]);
 
-    const toView = useMemo(() => 
-        financialView.wallets.find(w => w.asset === toCurrency && w.network === toNetwork),
-    [financialView.wallets, toCurrency, toNetwork]);
+    // const toView = useMemo(() => 
+    //     financialView.wallets.find(w => w.asset === toCurrency && w.network === toNetwork),
+    // [financialView.wallets, toCurrency, toNetwork]);
 
     // Countdown logic for rate lock
     useEffect(() => {

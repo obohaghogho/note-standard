@@ -8,7 +8,7 @@ export const FinancialSanitizer = {
   /**
    * Cleans a raw financial value. Rejects NaN, Infinity, and invalid types.
    */
-  sanitize(val: any, fallback: number = 0): number {
+  sanitize(val: unknown, fallback: number = 0): number {
     if (val === null || val === undefined) return fallback;
     
     let num: number;
@@ -33,14 +33,14 @@ export const FinancialSanitizer = {
   /**
    * Recursively scans an object/array and sanitizes potential financial fields
    */
-  quarantine(data: any): any {
+  quarantine<T>(data: T): T {
     if (!data || typeof data !== 'object') return data;
 
     if (Array.isArray(data)) {
       return data.map(item => this.quarantine(item));
     }
 
-    const sanitized: any = {};
+    const sanitized: Record<string, unknown> = {};
     const financialKeys = [
       'balance', 'available_balance', 'amount', 'rate', 'price', 
       'fee', 'total', 'exchange_rate', 'amount_from', 'amount_to',

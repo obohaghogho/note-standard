@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, EyeOff, Lock, Info, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, Lock, Info, AlertTriangle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface WalletBalanceCardProps {

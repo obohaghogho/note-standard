@@ -22,7 +22,7 @@ export interface WalletContextValue {
     loading: boolean;
     error: string | null;
     refresh: () => Promise<void>;
-    createWallet: (currency: string, network?: string) => Promise<any>;
+    createWallet: (currency: string, network?: string) => Promise<Record<string, unknown>>;
     sendFunds: (data: InternalTransferRequest) => Promise<void>;
     withdraw: (data: WithdrawalRequest) => Promise<void>;
     getCommissionRate: (type: 'swap' | 'withdrawal' | 'deposit', currency: string) => Promise<CommissionSettings[]>;
@@ -69,7 +69,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             // Map raw wallets to Unified Balance Model (WalletEntry)
             const rawWallets = Array.isArray(walletsData) ? walletsData : [];
-            const mappedWallets: WalletEntry[] = rawWallets.map((w: any) => ({
+            const mappedWallets: WalletEntry[] = (rawWallets as Array<Record<string, unknown>>).map((w) => ({
                 id: w.id,
                 asset: w.currency,
                 type: w.provider === 'nowpayments' ? 'external' : 'custodial',
@@ -94,7 +94,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 setFrozenAssets(ratesData.frozenAssets);
                 
                 // Extract regime from any metadata entry (global signal)
-                const firstMeta = Object.values(ratesData.metadata || {})[0] as any;
+                const firstMeta = Object.values(ratesData.metadata || {})[0] as Record<string, unknown> | undefined;
                 setRegime(firstMeta?.regime);
             } else if (typeof ratesData === 'object') {
                 // Compatibility for old simple rate objects
