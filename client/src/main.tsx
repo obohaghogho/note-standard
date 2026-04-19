@@ -4,6 +4,8 @@ import { Toaster, toast } from 'react-hot-toast'
 import App from './App.tsx'
 import './index.css'
 import './i18n'
+import { APP_VERSION } from './version'
+import { API_URL } from './lib/api'
 
 // 🚀 SERVICE WORKER REGISTRATION & UPDATE DETECTION
 if ('serviceWorker' in navigator) {
@@ -68,26 +70,20 @@ if ('serviceWorker' in navigator) {
         }
       });
 
-      // 3. DETERMINISTIC HARD HTML CHECKSUM (Fixes iOS/Android WebAPK background cache lock)
+      // 3. DETERMINISTIC BACKGROUND VERSION CHECK via API
       const checkForAppUpdate = async () => {
           try {
-              const res = await fetch(`/?t=${Date.now()}`);
+              const res = await fetch(`${API_URL}/api/version/check?v=${APP_VERSION}`);
               if (!res.ok) return;
-              const html = await res.text();
               
-              // Vite injects compiled assets via <script type="module" crossorigin src="/assets/index-HASH.js">
-              const scriptMatch = html.match(/src="(\/assets\/index-[^"]+\.js)"/);
-              if (scriptMatch && scriptMatch[1]) {
-                  const latestScriptUrl = scriptMatch[1];
-                  const currentScripts = Array.from(document.querySelectorAll('script')).map(s => s.getAttribute('src'));
-                  
-                  // If the live DOM doesn't have the newly deployed JS bundle, we are deeply outdated
-                  if (!currentScripts.includes(latestScriptUrl)) {
-                      showUpdateNotification();
-                  }
+              const data = await res.json();
+              
+              // If the server explicitly says we need an update based on our known APP_VERSION
+              if (data.force_update || data.update_available) {
+                  showUpdateNotification();
               }
           } catch (err) {
-              console.log('[UpdateCheck] Check failed:', err);
+              console.log('[UpdateCheck] API check failed:', err);
           }
       };
 
