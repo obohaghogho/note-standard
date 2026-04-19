@@ -278,86 +278,8 @@ class WalletService {
         payoutId: payoutRequest.id 
       };
 
-      // 4. Fraud Scoring
-      const fraudResult = await fraudEngine.evaluateWithdrawalRisk(userId, { 
-        amount: totalDebit, currency: upCurrency, ip, deviceId 
-      });
-      
-      // APPROVED status is required before PROCESSING
-      // If score is high, we stay stuck in VALIDATING/RESERVED for human review
-      await payoutService.updatePayoutState(payoutRequest.id, 
-        fraudResult.action === 'allow' ? 'APPROVED' : 'RESERVED', 
-        'RESERVED',
-        { fraud: fraudResult }
-      );
-
-      if (fraudResult.action === 'block') {
-         await supabase.rpc('reverse_withdrawal_funds', { p_ledger_id: ledgerId, p_reason: 'Fraud Block' });
-         await payoutService.updatePayoutState(payoutRequest.id, 'FAILED', null, { error: 'Fraud Block', reasons: fraudResult.reasons });
-         throw new Error("Withdrawal blocked by safety engine.");
-      }
-
-      if (fraudResult.action === 'review') {
-         await payoutService.updatePayoutState(payoutRequest.id, 'VALIDATING', 'VALIDATING', { requires_admin: true });
-         return { 
-           success: true, 
-           status: 'PENDING_REVIEW', 
-           payoutId: payoutRequest.id,
-           message: 'Withdrawal acknowledged and under standard verification. Expected resolution: 2-6 hours.'
-         };
-      }
-
-      // 5. State: PROCESSING (After Approval)
-      await payoutService.updatePayoutState(payoutRequest.id, 'PROCESSING', 'APPROVED');
-      
-      let payoutResult;
-      // Step: SENT (Dispatched to external provider)
-      if (type === "crypto") {
-        payoutResult = await payoutService.createNowPaymentsPayout(
-          data.destination,
-          math.formatForCurrency(amount, upCurrency),
-          upCurrency,
-          reference,
-          data.network,
-        );
-      } else {
-        payoutResult = await payoutService.createFincraTransfer(
-          data.bankCode || data.bankId,
-          data.bankId,
-          math.formatForCurrency(amount, upCurrency),
-          upCurrency,
-          reference,
-          `Withdrawal ${payoutRequest.id}`,
-          { ...data, accountName: data.accountName || "User" }
-        );
-      }
-
-      // Mark as SENT
-      await payoutService.updatePayoutState(payoutRequest.id, 'SENT', 'PROCESSING', { 
-        provider_response: payoutResult, 
-        provider_reference: payoutResult.payoutId 
-      });
-
-      // -------------------------------------------------------------------------
-      // NOTE: In a TRUE bank-grade system, the code stops here.
-      // SETTLED and COMPLETED are triggered ONLY by external webhooks/signals
-      // via the reconciliationWorker or settlementWorker.
-      // -------------------------------------------------------------------------
-
-      return {
-        success: true,
-        transactionId: ledgerId,
-        payoutId: payoutRequest.id,
-        status: 'SENT',
-        message: 'Withdrawal successfully dispatched. Awaiting banking settlement.'
-      };
-
     } catch (err) {
       logger.error(`[WalletService] Withdrawal Pipeline Failure`, err);
-      // Attempt reversal if reserved funds exist
-      if (ledgerId) {
-        await supabase.rpc('reverse_withdrawal_funds', { p_ledger_id: ledgerId, p_reason: err.message }).catch(()=>{});
-      }
       await payoutService.updatePayoutState(payoutRequest.id, 'FAILED', { error: err.message });
       throw err;
     }

@@ -15,6 +15,7 @@ export interface StoredAccount {
   full_name: string;
   avatar_url: string | null;
   tokens: MinimalSession;
+  session?: MinimalSession; // Legacy support
   profile: Profile;
   lastActive: number;
 }
@@ -112,7 +113,7 @@ export const accountManager = {
 
     if (index !== -1) {
       const existing = accounts[index];
-      const existingTokens = existing.tokens || (existing as any).session;
+      const existingTokens = existing.tokens || existing.session;
       // Only update if newer
       if (session.expires_at && existingTokens && existingTokens.expires_at && session.expires_at < existingTokens.expires_at) {
         return false;
@@ -152,7 +153,7 @@ export const accountManager = {
 
   isAccountSessionValid(userId: string): boolean {
     const account = this.getAccount(userId);
-    const tokens = account?.tokens || (account as any)?.session;
+    const tokens = account?.tokens || account?.session;
     if (!tokens) return false;
     const expiresAt = tokens.expires_at;
     if (!expiresAt) return true;
