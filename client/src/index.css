@@ -70,11 +70,19 @@
   }
 
   /* Images and media must always scale down and maintain aspect ratio */
-  img, video, svg, canvas, iframe, picture, object {
+  /* NOTE: svg is intentionally excluded — applying height:auto breaks inline SVG icons (lucide-react)
+     which rely on explicit width/height attributes to size correctly on mobile browsers. */
+  img, video, canvas, iframe, picture, object {
     max-width: 100%;
     height: auto;
     display: block;
     aspect-ratio: auto;
+  }
+
+  /* Standalone SVG files (not inline icon SVGs) should still be responsive */
+  img[src$=".svg"] {
+    max-width: 100%;
+    height: auto;
   }
 
   /* Pre and code blocks should not cause overflow */

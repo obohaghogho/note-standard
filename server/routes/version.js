@@ -7,14 +7,15 @@ const router = express.Router();
  * No auth required — must be accessible to all clients including outdated ones.
  */
 const APP_CONFIG = {
-  latest_version: '1.1.0',
-  minimum_version: '1.1.0',
+  latest_version: '1.1.1',
+  minimum_version: '1.1.1',
   force_update: true,
-  update_message: 'Current status: Version 1.1.0 is now required for production stability and security updates.',
+  update_message: 'v1.1.1 is required: Critical mobile icon fix and navigation bug patch.',
   changelog: [
-    'Fixed audio/video call connections',
-    'Universal voice note compatibility (Android ↔ iPhone)',
-    'Improved real-time message delivery',
+    'Fixed missing icons on mobile dashboard (SVG rendering bug)',
+    'Fixed navigation crash on mobile settings button',
+    'Improved PWA icon display on Android home screen',
+    'Dark splash screen for PWA install (matches app theme)',
     'Performance improvements'
   ]
 };
