@@ -112,6 +112,10 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
   const retryCountRef = useRef(0);
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastMessageIdRef = useRef<string | null>(null);
+  // Ref to break the circular dependency between setupRealtime ↔ handleReconnect.
+  // handleReconnect calls setupRealtimeRef.current() instead of setupRealtime() directly,
+  // allowing handleReconnect to be declared BEFORE setupRealtime without a TDZ error.
+  const setupRealtimeRef = useRef<() => void>(() => {});
 
   // ====================================
   // LOAD INITIAL DATA
@@ -407,7 +411,43 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
   }, [user?.id]);
 
   // ====================================
+  // RECONNECTION WITH EXPONENTIAL BACKOFF
+  // (Defined BEFORE setupRealtime to prevent TDZ in production bundles)
+  // ====================================
+
+  const handleReconnect = useCallback(() => {
+    if (retryCountRef.current >= BACKOFF_CONFIG.maxRetries) {
+      console.warn('[TeamChat] Max retries reached, switching to polling');
+      toast.error('Real-time connection lost. Refresh to reconnect.', { duration: 5000 });
+      setConnected(false);
+      return;
+    }
+
+    retryCountRef.current += 1;
+    const delay = Math.min(
+      BACKOFF_CONFIG.initialDelay * Math.pow(2, retryCountRef.current - 1),
+      BACKOFF_CONFIG.maxDelay
+    );
+
+    console.log(
+      `[TeamChat] Reconnecting in ${delay}ms (attempt ${retryCountRef.current}/${BACKOFF_CONFIG.maxRetries})`
+    );
+
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+    }
+
+    // Call setupRealtime via ref to avoid circular dependency with useCallback
+    retryTimeoutRef.current = setTimeout(() => {
+      if (isMounted.current) {
+        setupRealtimeRef.current();
+      }
+    }, delay);
+  }, []); // No deps on setupRealtime — uses the ref instead to break the cycle
+
+  // ====================================
   // REALTIME SUBSCRIPTION (WITH SAFETY)
+  // handleReconnect is declared above, so referencing it here is safe (no TDZ)
   // ====================================
 
   const setupRealtime = useCallback(() => {
@@ -459,7 +499,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
         }
       );
 
-      // Listen for message updates (like soft deletion)
+      // Listen for message updates (edits / soft-deletes)
       channel.on(
         'postgres_changes' as never,
         {
@@ -472,12 +512,11 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
           if (!isMounted.current) return;
           const updatedMsg = payload.new;
           if (updatedMsg.is_deleted) {
-             setMessages(prev => prev.filter(m => m.id !== updatedMsg.id));
+            setMessages(prev => prev.filter(m => m.id !== updatedMsg.id));
           } else if (updatedMsg.is_edited) {
-             setMessages(prev => prev.map(m => m.id === updatedMsg.id ? { ...m, content: updatedMsg.content, is_edited: true, updated_at: updatedMsg.updated_at } : m));
+            setMessages(prev => prev.map(m => m.id === updatedMsg.id ? { ...m, content: updatedMsg.content, is_edited: true, updated_at: updatedMsg.updated_at } : m));
           } else if (updatedMsg.content) {
-             // Catch-all for other updates that change content
-             setMessages(prev => prev.map(m => m.id === updatedMsg.id ? { ...m, content: updatedMsg.content, updated_at: updatedMsg.updated_at, is_edited: updatedMsg.is_edited } : m));
+            setMessages(prev => prev.map(m => m.id === updatedMsg.id ? { ...m, content: updatedMsg.content, updated_at: updatedMsg.updated_at, is_edited: updatedMsg.is_edited } : m));
           }
         }
       );
@@ -502,21 +541,20 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
       );
 
       // Subscribe with error handling
-      channel
-        .subscribe((status) => {
-          console.log('[TeamChat] Subscription status:', status);
+      channel.subscribe((status) => {
+        console.log('[TeamChat] Subscription status:', status);
 
-          if (status === 'SUBSCRIBED') {
-            setConnected(true);
-            retryCountRef.current = 0;
-            toast.success('Connected to team chat', { duration: 2000, icon: '🟢' });
-          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            setConnected(false);
-            handleReconnect();
-          } else if (status === 'CLOSED') {
-            setConnected(false);
-          }
-        });
+        if (status === 'SUBSCRIBED') {
+          setConnected(true);
+          retryCountRef.current = 0;
+          toast.success('Connected to team chat', { duration: 2000, icon: '🟢' });
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          setConnected(false);
+          handleReconnect(); // Safe — handleReconnect is declared above
+        } else if (status === 'CLOSED') {
+          setConnected(false);
+        }
+      });
 
       // Listen for typing broadcast
       channel.on('broadcast', { event: 'user_typing' }, ({ payload }) => {
@@ -527,41 +565,13 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
     } catch (err) {
       console.error('[TeamChat] Failed to setup realtime:', err);
       setConnected(false);
-      handleReconnect();
+      handleReconnect(); // Safe — handleReconnect is declared above
     }
   }, [teamId, user, profile, authReady, handleReconnect, handleTypingEvent]);
 
-  // ====================================
-  // RECONNECTION WITH EXPONENTIAL BACKOFF
-  // ====================================
-
-  const handleReconnect = useCallback(() => {
-    if (retryCountRef.current >= BACKOFF_CONFIG.maxRetries) {
-      console.warn('[TeamChat] Max retries reached, switching to polling');
-      toast.error('Real-time connection lost. Refresh to reconnect.', { duration: 5000 });
-      setConnected(false);
-      return;
-    }
-
-    retryCountRef.current += 1;
-    const delay = Math.min(
-      BACKOFF_CONFIG.initialDelay * Math.pow(2, retryCountRef.current - 1),
-      BACKOFF_CONFIG.maxDelay
-    );
-
-    console.log(
-      `[TeamChat] Reconnecting in ${delay}ms (attempt ${retryCountRef.current}/${BACKOFF_CONFIG.maxRetries})`
-    );
-
-    if (retryTimeoutRef.current) {
-      clearTimeout(retryTimeoutRef.current);
-    }
-
-    retryTimeoutRef.current = setTimeout(() => {
-      if (isMounted.current) {
-        setupRealtime();
-      }
-    }, delay);
+  // Keep setupRealtimeRef in sync so handleReconnect can always call the latest version
+  useEffect(() => {
+    setupRealtimeRef.current = setupRealtime;
   }, [setupRealtime]);
 
   // ====================================
