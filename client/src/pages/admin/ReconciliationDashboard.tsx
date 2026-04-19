@@ -2,7 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { ShieldAlert, CheckCircle, Clock, XCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 import adminApi from '../../api/adminApi';
 import toast from 'react-hot-toast';
-import { formatDistanceToNow, parseISO } from 'date-fns';
+
+// Helper to format distance to now natively
+function getDistanceToNow(dateObj: Date): string {
+    const diffInSeconds = Math.max(0, Math.floor((dateObj.getTime() - Date.now()) / 1000));
+    if (diffInSeconds < 60) return `${diffInSeconds}s`;
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    if (diffInMinutes < 60) return `${diffInMinutes}m ${diffInSeconds % 60}s`;
+    return `${Math.floor(diffInMinutes / 60)}h ${diffInMinutes % 60}m`;
+}
 
 interface Proposal {
     id: string;
@@ -158,7 +166,7 @@ export const ReconciliationDashboard: React.FC = () => {
                     </div>
                 ) : (
                     proposals.map(p => {
-                        const eligible = parseISO(p.eligible_at);
+                        const eligible = new Date(p.eligible_at);
                         const isTimeLocked = p.status === 'AUDITING' && now < eligible;
                         
                         return (
@@ -193,7 +201,7 @@ export const ReconciliationDashboard: React.FC = () => {
                                     
                                     {p.status === 'APPLIED' && (
                                         <div className="text-xs text-emerald-500/80 flex items-center gap-1">
-                                            <CheckCircle size={12} /> Applied {formatDistanceToNow(parseISO(p.applied_at || p.created_at))} ago
+                                            <CheckCircle size={12} /> Applied {new Date(p.applied_at || p.created_at).toLocaleString()}
                                         </div>
                                     )}
                                     {p.status === 'INVALIDATED' && (
@@ -210,7 +218,7 @@ export const ReconciliationDashboard: React.FC = () => {
                                         <div className="flex items-center gap-2 text-amber-400 font-mono text-sm bg-amber-400/5 px-3 py-1.5 rounded w-full justify-center md:justify-end border border-amber-400/10">
                                             <Clock size={16} className="animate-pulse" />
                                             {isTimeLocked 
-                                                ? `T- ${formatDistanceToNow(eligible, { includeSeconds: true })}` 
+                                                ? `T- ${getDistanceToNow(eligible)}` 
                                                 : "Eligible for Execution"
                                             }
                                         </div>
