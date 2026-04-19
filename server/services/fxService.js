@@ -199,7 +199,6 @@ class FXService {
 
     return true;
   }
-   */
   async getAllRates(base = "USD", walletId = null) {
     const CanaryUtils = require("../utils/canaryUtils");
     const DecisionEngine = require("./DecisionEngine");
