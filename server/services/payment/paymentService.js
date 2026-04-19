@@ -861,7 +861,6 @@ class PaymentService {
         .eq("id", tx.id);
 
       logger.info(`[Finalize] Transaction ${reference} provisional credit complete. Settlement set to PENDING_SETTLEMENT.`);
-        .eq("reference", tx.reference_id);
 
       console.log("STEP 4: Wallet credited and payment marked successfully");
     } else {
