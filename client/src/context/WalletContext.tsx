@@ -271,7 +271,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     return (
-        <WalletContext.Provider value={{ wallets, transactions, loading, error, refresh: fetchData, createWallet, sendFunds, withdraw, getCommissionRate }}>
+        <WalletContext.Provider value={{ wallets, financialView, transactions, loading, error, refresh: fetchData, createWallet, sendFunds, withdraw, getCommissionRate }}>
             {children}
         </WalletContext.Provider>
     );
