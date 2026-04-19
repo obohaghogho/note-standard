@@ -21,13 +21,11 @@
     margin: 0;
     padding: 0;
     overflow-x: hidden;
-    /* Allow native vertical scroll behavior */
-    overflow-y: hidden; /* Use hidden to prevent body bounce, let internal containers scroll */
+    overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
-    overscroll-behavior-y: none; /* Prevent iOS elastic scroll on the main document */
-    -webkit-text-size-adjust: 100%; /* Prevent font scaling in landscape orientation */
+    overscroll-behavior-y: none;
+    -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
-    /* Core Safe Area Resets */
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
     padding-left: env(safe-area-inset-left, 0px);
@@ -36,53 +34,72 @@
 
   body {
     width: 100%;
-    height: 100dvh; /* Lock body strictly to the viewport */
+    height: 100dvh;
     margin: 0;
     padding: 0;
-    overflow: hidden; /* Hard block on body scroll to prevent bounce at the OS level */
+    overflow: hidden;
     overscroll-behavior-y: none;
     background-color: #0a0a0a;
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
-    touch-action: pan-x pan-y; /* Prevent double-tap-to-zoom delays globally */
+    /* touch-action is intentionally NOT set on body — setting pan-x pan-y here
+       suppresses legitimate touch events on mobile inputs, scroll areas, and
+       interactive elements like the chat input and notification dropdowns. */
   }
 
   #root {
     width: 100%;
-    height: 100%; /* Take exact dimensions of body */
+    height: 100%;
     display: flex;
     flex-direction: column;
     z-index: 1;
     overflow-x: hidden;
-    overflow-y: auto; /* Root acts as the true main scroll container */
+    overflow-y: auto;
     overscroll-behavior-y: none;
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Universal resets to prevent content-driven overflow */
+  /* Remove tap highlight globally */
   * {
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* Prevent flex/grid children from overflowing their parents */
-  *:where(:not(html, body, #root)) {
+  /* Prevent flex/grid children from overflowing their parents.
+     Scoped to flex/grid layout children only to avoid collapsing
+     inline elements like icon wrappers on narrow mobile screens. */
+  .flex > *, .grid > * {
     min-width: 0;
   }
 
-  /* Images and media must always scale down and maintain aspect ratio */
-  /* NOTE: svg is intentionally excluded — applying height:auto breaks inline SVG icons (lucide-react)
-     which rely on explicit width/height attributes to size correctly on mobile browsers. */
-  img, video, canvas, iframe, picture, object {
+  /* Images only — safe to apply height:auto + display:block.
+     NOTE: svg, canvas, video, iframe are intentionally excluded:
+     - svg: lucide-react inline icons use explicit width/height attrs; height:auto overrides collapse them on mobile
+     - canvas: Chart.js manages canvas dimensions internally; height:auto breaks chart rendering on mobile
+     - video: no explicit height on ChatWindow videos; height:auto collapses them on some mobile browsers
+     - iframe: embedded content needs its own height management */
+  img, picture {
     max-width: 100%;
     height: auto;
     display: block;
     aspect-ratio: auto;
   }
 
-  /* Standalone SVG files (not inline icon SVGs) should still be responsive */
+  /* Standalone SVG image files (not inline icon components) */
   img[src$=".svg"] {
     max-width: 100%;
     height: auto;
+  }
+
+  /* Videos: constrain width but let height be natural or set by component */
+  video {
+    max-width: 100%;
+    display: block;
+  }
+
+  /* Canvas: DO NOT restrict height — Chart.js sets it explicitly */
+  canvas {
+    max-width: 100%;
+    display: block;
   }
 
   /* Pre and code blocks should not cause overflow */
@@ -144,6 +161,7 @@
   .modal-body {
     @apply flex-1 mt-4 min-h-0;
   }
+
   @keyframes modalScale {
     from { transform: scale(0.95); opacity: 0; }
     to { transform: scale(1); opacity: 1; }

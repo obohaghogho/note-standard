@@ -7,16 +7,17 @@ const router = express.Router();
  * No auth required — must be accessible to all clients including outdated ones.
  */
 const APP_CONFIG = {
-  latest_version: '1.1.1',
-  minimum_version: '1.1.1',
+  latest_version: '1.1.2',
+  minimum_version: '1.1.2',
   force_update: true,
-  update_message: 'v1.1.1 is required: Critical mobile icon fix and navigation bug patch.',
+  update_message: 'v1.1.2 is required: Deep mobile fix for icons, charts, chat and touch interactions.',
   changelog: [
-    'Fixed missing icons on mobile dashboard (SVG rendering bug)',
-    'Fixed navigation crash on mobile settings button',
-    'Improved PWA icon display on Android home screen',
-    'Dark splash screen for PWA install (matches app theme)',
-    'Performance improvements'
+    'Fixed all dashboard icons on mobile (root CSS reset conflict resolved)',
+    'Fixed Chart.js activity charts disappearing on mobile',
+    'Fixed chat video/voice player layout on mobile',
+    'Fixed notification dropdown position on notched phones',
+    'Fixed touch interaction issues on mobile inputs and scrollable areas',
+    'Fixed navigation crash on mobile settings button'
   ]
 };
 

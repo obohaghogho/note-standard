@@ -96,7 +96,9 @@ export const NotificationBell = () => {
             </button>
 
             {isOpen && (
-                <div className="fixed sm:absolute left-4 right-4 sm:left-auto sm:right-0 top-[72px] sm:top-full mt-2 w-auto sm:w-80 md:w-96 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl z-[2000] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="fixed sm:absolute left-2 right-2 sm:left-auto sm:right-0 top-auto mt-1 sm:top-full w-auto sm:w-80 md:w-96 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl z-[2000] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                    style={{ top: 'calc(var(--floating-ui-offset, 0px) + 4rem)' }}
+                >
                     <div className="p-3 md:p-4 border-b border-white/10 flex items-center justify-between bg-white/5">
                         <h3 className="font-bold text-xs md:text-sm">Notifications</h3>
                         {unreadCount > 0 && (
