@@ -295,7 +295,6 @@ exports.handleSendGridInbound = async (req, res) => {
     
     // Tier 1: MATCHED (Confidence >= 85 AND Fraud Allow)
     logger.info(`[Webhook] MATCHED (Confidence: ${parsed.confidence_score}%). Proceeding to Layer 3.`);
-    }
 
     // 7. Auto-Approve Pipeline (>=85 Confidence)
     if (paymentQueue && paymentQueue.add) {

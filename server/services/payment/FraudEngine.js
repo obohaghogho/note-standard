@@ -108,8 +108,8 @@ class FraudEngine {
         } catch (err) {
             logger.error('[FraudEngine] Evaluation failed. Defaulting to review mode for safety.', err);
             // Default to 'review' if fraud engine goes down (fail closed)
-            return { score: 50, action: 'review', reasons: ['Fraud Engine Internal Error'] };
         }
+    }
     /**
      * Evaluate a withdrawal attempt against behavioral heuristics.
      * @param {string} userId - UUID of the user
