@@ -1,0 +1,311 @@
+const supabase = require("../config/database");
+const coingeckoProvider = require("../providers/coingeckoProvider");
+const nowpaymentsProvider = require("../providers/nowpaymentsProvider");
+const exchangeRateProvider = require("../providers/exchangeRateProvider");
+const logger = require("../utils/logger");
+const cache = require("../utils/cache");
+const crypto = require("crypto");
+const hybridTIM = require("./chaos/HybridTemporalMonitor");
+const correlationPCS = require("./chaos/CorrelationGraphEngine");
+const ACE = require("./chaos/AntiConsensusEngine");
+
+/**
+ * Snapshot Service (DFOS v6.x+)
+ * Truth-Resilient pricing engine with hybrid temporal signals.
+ */
+class SnapshotService {
+    constructor() {
+        this.STABILIZATION_WINDOW_MS = 48 * 60 * 60 * 1000; // 48 Hours
+        this.CONSENSUS_WEIGHT = 0.65;
+        this.VELOCITY_WEIGHT = 0.35;
+        this.DRIFT_THRESHOLD_HIGH = 0.005; // 0.5%
+        this.DRIFT_THRESHOLD_MED = 0.0005; // 0.05%
+        
+        // Phase 5 Structural Diversity Matrix
+        this.PCS_SEED = {
+            'coingecko': { infra: 'aws', cdn: 'cloudflare', type: 'aggregator' },
+            'nowpayments': { infra: 'aws', cdn: 'cloudflare', type: 'aggregator' },
+            'exchangerate_api': { infra: 'gcp', cdn: 'fastly', type: 'fiat_bridge' }
+        };
+
+        this.coinMapping = {
+      "BTC": "bitcoin",
+      "ETH": "ethereum",
+      "USDT": "tether",
+      "USDC": "usd-coin",
+    };
+    this.fiatCurrencies = ["NGN", "EUR", "GBP", "JPY", "USD"];
+    this.rePollCycleLock = false; // Phase 3 Recursive Safety
+    this.REGIME_THRESHOLD_VOLATILE = 0.02; // 2% 1-tick move = Volatile
+  }
+
+  /**
+   * Generates a deterministic replay key for valuation reconstruction.
+   */
+  generateEvaluationId(walletId, snapshotId, timestamp, riskPolicyVersion = "1.0") {
+    // Bucket timestamp to 5s increments to ensure symmetry anchors
+    const bucket = Math.floor(new Date(timestamp).getTime() / 5000) * 5000;
+    const data = `${walletId}:${snapshotId}:${bucket}:${riskPolicyVersion}`;
+    return crypto.createHash("sha256").update(data).digest("hex");
+  }
+
+  /**
+   * Generates an integrity checksum for a rate set.
+   */
+  generateChecksum(rates) {
+    const sortedRates = Object.keys(rates).sort().reduce((obj, key) => {
+      obj[key] = rates[key];
+      return obj;
+    }, {});
+    return crypto.createHash("sha256").update(JSON.stringify(sortedRates)).digest("hex");
+  }
+
+    /**
+     * Main job: Atomic Snapshot generation (v6.x+ Truth Resilience)
+     * @param {Object} injectedResults - Phase 4 Chaos Injection (Optional)
+     */
+    async generateMarketSnapshot(injectedResults = null) {
+        try {
+            const symbols = Object.keys(this.coinMapping);
+            
+            // 1a. Temporal Integrity Sampling (Phase 5)
+            const temporal = await hybridTIM.sampleMetrics();
+            const timeIntegrityScore = temporal.timeIntegrityScore;
+
+            // 1b. Atomic Multi-Provider Fetch (CONSENSUS BASE)
+            // Phase 4: Use injected results if provided (Chaos Kernel Path)
+            const results = injectedResults || await this._fetchMultiSource(symbols);
+            
+            // 1c. Probabilistic Correlation Scoring (Phase 5 PCS)
+            const pcsScore = await correlationPCS.calculatePCS(results, this.PCS_SEED);
+
+            // 2. Market Regime Analysis (v6.0 Self-Healing)
+            const prevSnapshot = cache.get("latest_market_snapshot");
+            const regime = this._classifyMarketRegime(results.cgPrices || {}, prevSnapshot);
+            
+            // 3. Consensus Arbitration (Regime & Truth Aware)
+            let { finalRates, sourceTrace, confidence } = this._arbitrateConsensus(results, regime);
+            
+            // Phase 5: effectiveConfidence = raw * pcsAdjustment * temporalAdjustment
+            confidence *= (1 - pcsScore); // Penalty for shared correlation
+            confidence *= timeIntegrityScore; // Penalty for system desync
+
+            // 4. Emergency Stabilization Loop (Single-cycle locked)
+            // Phase 5: Re-poll is triggered by truth-adjusted confidence
+            if (confidence < 0.6 && !this.rePollCycleLock && !injectedResults) {
+                logger.warn(`[SnapshotService] Low Confidence (${confidence.toFixed(2)}) detected. Triggering Emergency Re-poll...`);
+                this.rePollCycleLock = true;
+                try {
+                    return await this.generateMarketSnapshot(); // RECURSION POINT (Locked)
+                } finally {
+                    this.rePollCycleLock = false;
+                }
+            }
+
+            // 5. Persistence (DFOS v6.x+ Immutable Ledger)
+            if (injectedResults) {
+                // Phase 4/5: Shadow Simulation isolation
+                return { 
+                    id: 'SHADOW_SIMULATION', 
+                    rates: finalRates, 
+                    confidence_score: parseFloat(confidence.toFixed(4)), 
+                    created_at: new Date().toISOString(),
+                    mode: 'VALID',
+                    source_metadata: { 
+                        sourceTrace, 
+                        regime, 
+                        isSimulation: true,
+                        pcsScore,
+                        timeIntegrityScore,
+                        temporal
+                    } 
+                };
+            }
+
+            const checksum = this.generateChecksum(finalRates);
+            
+            const { data: snapshot, error } = await supabase
+                .from("market_snapshots")
+                .insert({
+                    rates: finalRates,
+                    confidence_score: parseFloat(confidence.toFixed(4)),
+                    source_metadata: { 
+                        sourceTrace, 
+                        regime, 
+                        pcsScore,
+                        timeIntegrityScore,
+                        temporal,
+                        isEmergencyFixed: this.rePollCycleLock 
+                    },
+                    checksum
+                })
+                .select().single();
+
+      if (error) throw error;
+
+      cache.set("latest_market_snapshot", snapshot, 300);
+      logger.info(`[SnapshotService] Snapshot ${snapshot.id} [${regime}] (Confidence: ${snapshot.confidence_score})`);
+      
+      return snapshot;
+    } catch (err) {
+      logger.error(`[SnapshotService] Generation Failed: ${err.message}`);
+      throw err;
+    }
+  }
+
+  /**
+   * Retrieves the authoritative rate set (Single Truth Phase 2)
+   * @param {string} context - 'DISPLAY' | 'EXECUTION'
+   */
+  async getAuthoritativeRates(context = 'DISPLAY') {
+    let snapshot = cache.get("latest_market_snapshot");
+    
+    if (!snapshot) {
+      // Recovery Path: Attempt to find the latest valid snapshot in DB
+      const { data } = await supabase
+        .from("market_snapshots")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(1);
+      
+      snapshot = data?.[0];
+    }
+
+    if (!snapshot) return { rates: {}, mode: 'INVALID', score: 0 };
+
+    const now = Date.now();
+    const age = now - new Date(snapshot.created_at).getTime();
+    
+    // Tiered LKG Policy (v6.0 Refined)
+    if (age > 300000) { // Older than 5 minutes
+      if (context === 'EXECUTION') {
+        return { ...snapshot, mode: 'INVALID_STALE_BLOCKED', score: 0 };
+      }
+      return { 
+        ...snapshot, 
+        mode: 'STALE_EXPLICIT', 
+        score: Math.min(snapshot.confidence_score, 0.75) // Confidence Ceiling
+      };
+    }
+
+    return { ...snapshot, mode: 'VALID', score: snapshot.confidence_score };
+  }
+
+  /**
+   * Shadow Mode Reconciliation Logic (Non-authoritative)
+   */
+  async reconcileValuation(walletId, cacheValue, snapshotValue, snapshotId) {
+    const delta = cacheValue > 0 ? Math.abs(snapshotValue - cacheValue) / cacheValue : (snapshotValue > 0 ? 1 : 0);
+    
+    let driftClass = "LOW";
+    if (delta > this.DRIFT_THRESHOLD_HIGH) driftClass = "HIGH";
+    else if (delta > this.DRIFT_THRESHOLD_MED) driftClass = "MEDIUM";
+
+    // Deterministic Replay Key for forensic reconstruction
+    const replayKey = this.generateEvaluationId(walletId, snapshotId, new Date());
+
+    // SHADOW LOGGING ONLY (Non-authoritative)
+    const { error } = await supabase.rpc("capture_valuation_event", {
+      p_wallet_id: walletId,
+      p_snapshot_id: snapshotId,
+      p_replay_key: replayKey,
+      p_prev_val: cacheValue,
+      p_new_val: snapshotValue,
+      p_trigger: "MISMATCH_DETECTED",
+      p_prev_status: "CACHE_LEGACY",
+      p_new_status: "SNAPSHOT_SHADOW",
+      p_risk_meta: { delta, phase: "SHADOW_MODE_PHASE_1" }
+    });
+
+    if (error) logger.error(`[SnapshotService] Reconciliation Log Failed: ${error.message}`);
+    
+    if (driftClass === "HIGH") {
+      logger.warn(`[SnapshotService] HIGH DRIFT DETECTED for wallet ${walletId}: ${delta.toFixed(4)}% mismatch.`);
+    }
+  }
+
+  /**
+   * Internal Multiprovider Fetch
+   */
+  async _fetchMultiSource(symbols) {
+    const [cgPrices, erpRates] = await Promise.all([
+      coingeckoProvider.getPrices(Object.values(this.coinMapping)),
+      exchangeRateProvider.getFiatRate("USD", "NGN")
+    ]);
+
+    const nowRates = await Promise.all(symbols.map(s => 
+      nowpaymentsProvider.getRate(s, "USD").catch(() => null)
+    ));
+
+    return { symbols, cgPrices, erpRates, nowRates };
+  }
+
+  /**
+   * Classify market into STABLE or VOLATILE (v6.0 Regime Aware)
+   */
+  _classifyMarketRegime(currentRaw, prevSnapshot) {
+    if (!prevSnapshot) return 'STABLE';
+    
+    let maxDrift = 0;
+    Object.keys(this.coinMapping).forEach(sym => {
+      const old = prevSnapshot.rates[sym];
+      const curr = currentRaw[this.coinMapping[sym]] || currentRaw[sym];
+      if (old && curr) {
+        const drift = Math.abs(curr - old) / old;
+        maxDrift = Math.max(maxDrift, drift);
+      }
+    });
+
+    return maxDrift > this.REGIME_THRESHOLD_VOLATILE ? 'VOLATILE' : 'STABLE';
+  }
+
+  /**
+   * Consensus Arbitration Kernel (Phase 3)
+   */
+  _arbitrateConsensus(fetchResults, regime) {
+    const { symbols, cgPrices, erpRates, nowRates } = fetchResults;
+    const finalRates = { "USD": 1.0 };
+    const sourceTrace = {};
+    
+    // Tolerance widening for volatile markets (User Requested Refinement)
+    const tolerance = regime === 'VOLATILE' ? 0.025 : 0.01; // 2.5% vs 1%
+
+    symbols.forEach((sym, idx) => {
+      const p1 = cgPrices[this.coinMapping[sym]];
+      const p2 = nowRates[idx];
+      
+      let consensus = 0;
+      let bestPrice = p1 || p2 || 0;
+      
+      if (p1 && p2) {
+        const diff = Math.abs(p1 - p2) / Math.max(p1, p2);
+        if (diff < tolerance) {
+          consensus = 1.0;
+          bestPrice = (p1 + p2) / 2;
+        } else {
+          // OUTLIER DETECTED (Contextual Repair)
+          consensus = 0.5;
+          bestPrice = p1; // Prefer primary source in disagreement
+        }
+      } else if (p1 || p2) {
+        consensus = 0.33;
+      }
+
+      finalRates[sym] = bestPrice;
+      sourceTrace[sym] = { p1: !!p1, p2: !!p2, consensus };
+    });
+
+    // Add Fiat (Stripe-grade deterministic expansion)
+    const fiatTargets = ["NGN", "EUR", "GBP", "JPY"];
+    fiatTargets.forEach(t => {
+      finalRates[t] = erpRates || 0; 
+      sourceTrace[t] = { consensus: 1.0 };
+    });
+
+    const consensusAvg = Object.values(sourceTrace).reduce((a, b) => a + b.consensus, 0) / Object.keys(sourceTrace).length;
+    
+    return { finalRates, sourceTrace, confidence: consensusAvg };
+  }
+}
+
+module.exports = new SnapshotService();

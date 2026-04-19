@@ -69,7 +69,10 @@ server.listen(PORT, "0.0.0.0", async () => {
   try {
     console.log("[Trends] Running initial aggregation...");
     await analyticsService.aggregateDailyStats();
-    console.log("[Trends] Initial aggregation complete.");
+    
+    // Generate Initial DFOS v6.0 Snapshot (Shadow Phase 1)
+    const SnapshotService = require("./services/SnapshotService");
+    await SnapshotService.generateMarketSnapshot();
     
     const rates = await fxService.getAllRates();
     await realtime.broadcast("rates_updated", rates);
@@ -84,6 +87,16 @@ server.listen(PORT, "0.0.0.0", async () => {
 
   // 4. Register Recurring Jobs
   
+  // DFOS v6.0 Market Snapshot Builder (Every 60s)
+  setInterval(async () => {
+    try {
+      const SnapshotService = require("./services/SnapshotService");
+      await SnapshotService.generateMarketSnapshot();
+    } catch (err) {
+      logger.error(`[SnapshotWorker] Generation Failed: ${err.message}`);
+    }
+  }, 60000);
+
   // Real-time Trends Broadcast (Every 60s)
   setInterval(async () => {
     try {

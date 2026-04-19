@@ -1,98 +1,82 @@
 const ethers = require("ethers");
 
 /**
- * Math utilities using ethers.js BigNumber for safe, precise currency calculations.
- * Avoids native JavaScript floating point precision issues.
+ * Math utilities (Hardened v5.4)
+ * Using ethers.js BigInt for absolute decimal precision (10^18 standard).
+ * No floating point math is permitted for ledger-affecting calculations.
  */
 
-const CRYPTO_DECIMALS = 8; // Enforce standard 8-decimal precision for Crypto (Satoshi standard)
-const FIAT_DECIMALS = 2;
-const FEE_DECIMALS = 4; // Standard for fee rates (e.g., 0.0450)
-
-// Used for high-precision internal calculations
-const CALCULATION_DECIMALS = 18;
+const CALCULATION_DECIMALS = 18; // Standard minor-unit denominator
 const ONE_UNIT = ethers.parseUnits("1", CALCULATION_DECIMALS);
 
-// Standard Fee Constants (matching DB defaults in execute_production_swap)
+// Standard Fee Constants
 const ADMIN_FEE_RATE = "0.045";
 const PARTNER_FEE_RATE = "0.001";
 const REFERRAL_FEE_RATE = "0.001";
 const TOTAL_FEE_RATE = "0.047";
 
-// Standard Platform Fee Constants (for specific platforms)
-const PLATFORM_A_ADMIN_FEE_RATE = "0.03";
-const PLATFORM_A_PARTNER_FEE_RATE = "0.005";
-const PLATFORM_B_ADMIN_FEE_RATE = "0.025";
-const PLATFORM_B_PARTNER_FEE_RATE = "0.002";
-
-
 /**
- * Determines decimals based on currency code
+ * Sanitize any input to a safe number (NaN/Null -> 0)
  */
-function getDecimals(currency) {
-  const fiatCurrencies = ["USD", "NGN", "EUR", "GBP", "JPY"];
-  return fiatCurrencies.includes(currency.toUpperCase())
-    ? FIAT_DECIMALS
-    : CRYPTO_DECIMALS;
+function safeNumber(val) {
+  if (val === null || val === undefined) return 0;
+  const num = typeof val === 'string' ? parseFloat(val) : val;
+  return isNaN(num) || !isFinite(num) ? 0 : num;
 }
 
 /**
- * Safely parses a float string/number into a BigNumber
+ * Normalizes input to a string for BigInt parsing, preventing e-notation errors.
  */
-function parseSafe(amount, decimals = CALCULATION_DECIMALS) {
-  // Prevent floating point e-notation bugs in toString()
-  const strAmount = typeof amount === "number"
-    ? Number(amount).toLocaleString("fullwide", {
-      useGrouping: false,
-      maximumFractionDigits: decimals,
-    })
-    : String(amount);
-  return ethers.parseUnits(strAmount, decimals);
+function normalizeToString(val, decimals = CALCULATION_DECIMALS) {
+  const safeVal = safeNumber(val);
+  return Number(safeVal).toLocaleString("fullwide", {
+    useGrouping: false,
+    maximumFractionDigits: decimals,
+  });
 }
 
 /**
- * Safely formats a BigInt back to a float number string
+ * Safely parses a value into a BigInt string at 10^18 precision
  */
-function formatSafe(bn, decimals = CALCULATION_DECIMALS) {
-  return ethers.formatUnits(bn, decimals);
+function parseSafe(amount) {
+  return ethers.parseUnits(normalizeToString(amount), CALCULATION_DECIMALS);
 }
 
 /**
- * Multiply two numbers safely
+ * Safely formats a BigInt back to a precision string
  */
-function multiply(a, b, decimals = CALCULATION_DECIMALS) {
-  const bnA = parseSafe(a, decimals);
-  const bnB = parseSafe(b, decimals);
-  // When multiplying two numbers with X decimals, the result has 2X decimals.
-  // We divide by ONE_UNIT (which has X decimals) to bring it back to X decimals.
-  const result = (bnA * bnB) / ethers.parseUnits("1", decimals);
-  return formatSafe(result, decimals);
+function formatSafe(bn) {
+  return ethers.formatUnits(bn, CALCULATION_DECIMALS);
 }
 
 /**
- * Divide two numbers safely
+ * Multiply two numbers safely at 10^18 precision
  */
-function divide(a, b, decimals = CALCULATION_DECIMALS) {
-  const bnA = parseSafe(a, decimals);
-  const bnB = parseSafe(b, decimals);
+function multiply(a, b) {
+  const bnA = parseSafe(a);
+  const bnB = parseSafe(b);
+  const result = (bnA * bnB) / ONE_UNIT;
+  return formatSafe(result);
+}
 
+/**
+ * Divide two numbers safely at 10^18 precision
+ */
+function divide(a, b) {
+  const bnA = parseSafe(a);
+  const bnB = parseSafe(b);
   if (bnB === 0n) throw new Error("Division by zero");
-
-  // Scale up numerator by ONE_UNIT before dividing to maintain precision
-  const expandedA = bnA * ethers.parseUnits("1", decimals);
-  const result = expandedA / bnB;
-  return formatSafe(result, decimals);
+  const result = (bnA * ONE_UNIT) / bnB;
+  return formatSafe(result);
 }
 
 /**
- * Compare two numbers for equality safely
+ * Compare equality at 10^18 precision
  */
-function isEqual(a, b, decimals = CALCULATION_DECIMALS) {
+function isEqual(a, b) {
   try {
-    const bnA = parseSafe(a, decimals);
-    const bnB = parseSafe(b, decimals);
-    return bnA === bnB;
-  } catch (e) {
+    return parseSafe(a) === parseSafe(b);
+  } catch {
     return false;
   }
 }
@@ -100,28 +84,27 @@ function isEqual(a, b, decimals = CALCULATION_DECIMALS) {
 /**
  * Check if a >= b safely
  */
-function isGreaterOrEqual(a, b, decimals = CALCULATION_DECIMALS) {
+function isGreaterOrEqual(a, b) {
   try {
-    const bnA = parseSafe(a, decimals);
-    const bnB = parseSafe(b, decimals);
-    return bnA >= bnB;
-  } catch (e) {
+    return parseSafe(a) >= parseSafe(b);
+  } catch {
     return false;
   }
 }
 
 /**
- * Format final output to appropriate decimal places strictly as a String
- * This prevents float manipulation exploits downstream.
+ * Format strictly as a String for final outputs
  */
 function formatForCurrency(amount, currency) {
-  const decimals = getDecimals(currency);
-  const value = typeof amount === "string" ? parseFloat(amount) : amount;
-  return Number(value).toFixed(decimals); // Explicit string serialization
+  const fiatCurrencies = ["USD", "NGN", "EUR", "GBP", "JPY"];
+  const isFiat = fiatCurrencies.includes(currency.toUpperCase());
+  const decimals = isFiat ? 2 : 8;
+  const safeVal = safeNumber(amount);
+  return Number(safeVal).toFixed(decimals);
 }
 
 module.exports = {
-  getDecimals,
+  safeNumber,
   parseSafe,
   formatSafe,
   multiply,
@@ -129,10 +112,10 @@ module.exports = {
   isEqual,
   isGreaterOrEqual,
   formatForCurrency,
-  CRYPTO_DECIMALS,
-  FIAT_DECIMALS,
+  CALCULATION_DECIMALS,
   ADMIN_FEE_RATE,
   PARTNER_FEE_RATE,
   REFERRAL_FEE_RATE,
   TOTAL_FEE_RATE,
 };
+

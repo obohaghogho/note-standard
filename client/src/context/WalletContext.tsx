@@ -1,29 +1,31 @@
-import React, { createContext, useEffect, useState, useCallback, useRef } from 'react';
+import React, { createContext, useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../lib/supabaseSafe';
 import walletApi from '../api/walletApi';
-import type { Wallet, Transaction, InternalTransferRequest, WithdrawalRequest, CommissionSettings } from '@/types/wallet';
+import type { 
+    WalletEntry, 
+    Transaction, 
+    InternalTransferRequest, 
+    WithdrawalRequest, 
+    CommissionSettings,
+    GlobalViewDTO,
+    ValuationMode 
+} from '@/types/wallet';
+import { FinancialViewService } from '../services/FinancialViewService';
 import { useAuth } from './AuthContext';
 import { useSocket, type RealtimeNotification } from './SocketContext';
 import toast from 'react-hot-toast';
 
 export interface WalletContextValue {
-    wallets: Wallet[];
+    wallets: WalletEntry[];
+    financialView: GlobalViewDTO;
     transactions: Transaction[];
     loading: boolean;
     error: string | null;
     refresh: () => Promise<void>;
-    createWallet: (currency: string, network?: string) => Promise<Wallet>;
+    createWallet: (currency: string, network?: string) => Promise<any>;
     sendFunds: (data: InternalTransferRequest) => Promise<void>;
     withdraw: (data: WithdrawalRequest) => Promise<void>;
     getCommissionRate: (type: 'swap' | 'withdrawal' | 'deposit', currency: string) => Promise<CommissionSettings[]>;
-}
-
-export interface BalanceUpdate {
-    userId: string;
-    transactionId: string;
-    amount: number;
-    currency: string;
-    newStatus: string;
 }
 
 export const WalletContext = createContext<WalletContextValue | null>(null);
@@ -31,12 +33,24 @@ export const WalletContext = createContext<WalletContextValue | null>(null);
 export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user, profile, authReady } = useAuth();
     const { socket, connected } = useSocket();
-    const [wallets, setWallets] = useState<Wallet[]>([]);
+    
+    // Internal State: Raw Holdings & Rates Metadata
+    const [wallets, setWallets] = useState<WalletEntry[]>([]);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [rates, setRates] = useState<Record<string, number>>({});
+    const [rateMeta, setRateMeta] = useState<Record<string, { mode: ValuationMode; canExecute: boolean }>>({});
+    const [evaluationId, setEvaluationId] = useState<string | undefined>(undefined);
+    const [frozenAssets, setFrozenAssets] = useState<string[] | undefined>(undefined);
+    const [regime, setRegime] = useState<string | undefined>(undefined);
+    
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-
     const fetchingRef = useRef(false);
+
+    // Derived State: The Valuation Singleton DTO
+    const financialView = useMemo(() => {
+        return FinancialViewService.computeGlobalView(wallets, rates, rateMeta, evaluationId, frozenAssets, regime);
+    }, [wallets, rates, rateMeta, evaluationId, frozenAssets, regime]);
 
     const fetchData = useCallback(async () => {
         if (!user || !profile || !authReady) return;
@@ -47,14 +61,45 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setError(null);
 
         try {
-            const [walletsData, transactionsData] = await Promise.all([
+            const [walletsData, transactionsData, ratesData] = await Promise.all([
                 walletApi.getWallets(),
-                walletApi.getTransactions()
+                walletApi.getTransactions(),
+                walletApi.getExchangeRates()
             ]);
 
-            // Defensive checks: API might return { error: "..." } instead of array
-            setWallets(Array.isArray(walletsData) ? walletsData : []);
+            // Map raw wallets to Unified Balance Model (WalletEntry)
+            const rawWallets = Array.isArray(walletsData) ? walletsData : [];
+            const mappedWallets: WalletEntry[] = rawWallets.map((w: any) => ({
+                id: w.id,
+                asset: w.currency,
+                type: w.provider === 'nowpayments' ? 'external' : 'custodial',
+                balance: w.balance,
+                available: w.available_balance ?? w.balance,
+                locked: (w.balance - (w.available_balance ?? w.balance)),
+                source: w.provider === 'nowpayments' ? 'external_provider' : 'internal_ledger',
+                network: w.network,
+                address: w.address,
+                is_frozen: w.is_frozen,
+                provider: w.provider
+            }));
+
+            setWallets(mappedWallets);
             setTransactions(Array.isArray(transactionsData?.transactions) ? transactionsData.transactions : []);
+            
+            // Handle Rates & Metadata (Phase 3 Regime Aware)
+            if (ratesData?.rates) {
+                setRates(ratesData.rates);
+                setRateMeta(ratesData.metadata || {});
+                setEvaluationId(ratesData.evaluationId);
+                setFrozenAssets(ratesData.frozenAssets);
+                
+                // Extract regime from any metadata entry (global signal)
+                const firstMeta = Object.values(ratesData.metadata || {})[0] as any;
+                setRegime(firstMeta?.regime);
+            } else if (typeof ratesData === 'object') {
+                // Compatibility for old simple rate objects
+                setRates(ratesData as unknown as Record<string, number>);
+            }
         } catch (err) {
             console.error('Error fetching wallet data:', err);
             setError(err instanceof Error ? err.message : 'Failed to load wallet data');
@@ -63,6 +108,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             fetchingRef.current = false;
         }
     }, [user, profile, authReady]);
+
 
     // Initial Load
     useEffect(() => {

@@ -1,63 +1,58 @@
-export type Currency = string;
-
-export interface WalletBalance {
-  currency: Currency;
-  amount: number;
+export enum ValuationMode {
+    FRESH = 'FRESH',
+    STALE = 'STALE',
+    INVALID = 'INVALID'
 }
 
-export interface WalletTransaction {
-  id: string;
-  fromUserId?: string;
-  toUserId?: string;
-  currency: Currency;
-  amount: number;
-  createdAt: string;
-}
-
-// Legacy / Full Interfaces (Updated Currency)
-export interface Wallet {
+/**
+ * Unified Balance Model: Raw Holdings (TRUTH)
+ * Standardized across all wallet types.
+ */
+export interface WalletEntry {
     id: string;
-    user_id: string;
-    currency: Currency;
-    network: string;
-    balance: number;
-    available_balance: number;
-    address: string;
-    provider: string;
-    provider_reference?: string;
-    is_frozen: boolean;
-    created_at: string;
-    updated_at: string;
-}
-
-export interface Transaction {
-    id: string;
-    txn_reference?: string;
-    wallet_id: string;
-    type: 'DEPOSIT' | 'WITHDRAWAL' | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'BUY' | 'SELL' | 'SWAP' | 'swap' | 'SWAP_IN' | 'SWAP_OUT' | 'Digital Assets Purchase' | string;
-    display_label?: string;
-    amount: number;
-    currency: Currency;
-    status: 'PENDING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
-    reference_id?: string;
-    external_hash?: string;
-    fee: number;
-    exchange_rate?: number;
-    spread_amount?: number;
+    type: "custodial" | "external" | "vault";
+    asset: string;
+    balance: number;       // Ledger Truth
+    available: number;     // Ledger Truth
+    locked: number;        // Ledger Truth
+    source: "internal_ledger" | "external_provider";
     network?: string;
-    // Swap-specific fields
-    amount_from?: number;
-    amount_to?: number;
-    from_currency?: string;
-    to_currency?: string;
-    rate?: number;
-    metadata?: Record<string, unknown>;
-    created_at: string;
-    updated_at: string;
-    wallet?: {
-        currency: Currency;
-    };
+    address?: string;
+    is_frozen: boolean;
+    provider?: string;
 }
+
+/**
+ * WalletView DTO: UI Projection (DISPLAY)
+ * Produced ONLY by FinancialViewService.
+ */
+export interface WalletViewDTO {
+    id: string;
+    type: "custodial" | "external" | "vault";
+    asset: string;
+    balance: string;       // Formatted for display
+    available: string;     // Formatted for display
+    valuationUsd: string;  // Holdings * Price
+    mode: ValuationMode;
+    canExecute: boolean;   // Final blockade for financial actions
+    evaluationId?: string; // v6.0 Forensic Replay Key
+    network?: string;
+    address?: string;
+    isFrozen: boolean;
+}
+
+export interface GlobalViewDTO {
+    totalBalanceValuation: string;
+    totalAvailableValuation: string;
+    ratesReady: boolean;
+    systemStale: boolean;
+    evaluationId?: string; // v6.0 Global Snapshot Replay Key
+    frozenAssets?: string[]; // Scoped Freeze Domains
+    regime?: string; // Market State (STABLE/VOLATILE)
+}
+
+// Legacy types preserved for compatibility during migration
+export type Currency = string;
 
 export interface InternalTransferRequest {
     currency: string;
@@ -184,4 +179,3 @@ export interface LedgerEntry {
     status: string;
     created_at: string;
 }
-

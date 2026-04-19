@@ -17,31 +17,25 @@ import { WalletAllocationChart } from '../components/wallet/WalletAllocationChar
 import { LedgerTrail } from '../components/wallet/LedgerTrail';
 import { RefreshCw, Plus, X, Loader2 } from 'lucide-react';
 import { Button } from '../components/common/Button';
-import { formatCurrency } from '../lib/CurrencyFormatter';
 import toast from 'react-hot-toast';
 
 const SUPPORTED_CURRENCIES = ['BTC', 'ETH', 'USD', 'NGN', 'EUR', 'GBP', 'JPY'];
 
 function WalletContent() {
-    const { wallets, transactions, loading, refresh, createWallet } = useWallet();
+    const { wallets, financialView, transactions, loading, refresh, createWallet } = useWallet();
     const { socket } = useSocket();
     
-    // Force-refresh service data on mount (ensures fresh data after activity redirect)
+    // Force-refresh service data on mount
     useEffect(() => {
         refresh();
     }, [refresh]);
     
     const safeTransactions = Array.isArray(transactions) ? transactions : [];
-    
-    const [rates, setRates] = useState<Record<string, number>>({}); // Rates in USD
-    const [totalBalance, setTotalBalance] = useState(0);
-    const [totalAvailableBalance, setTotalAvailableBalance] = useState(0);
-    const [ratesLoading, setRatesLoading] = useState(true);
     const [refreshKey, setRefreshKey] = useState(0);
     const [showBalances, setShowBalances] = useState(true);
     const [searchParams, setSearchParams] = useSearchParams();
 
-    // Instant Proactive Polling for external redirects (e.g. Flutterwave/Paystack)
+    // Instant Proactive Polling for external redirects
     useEffect(() => {
         const txRef = searchParams.get('tx_ref');
         const reference = searchParams.get('reference');
@@ -94,93 +88,14 @@ function WalletContent() {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [selectedAsset, setSelectedAsset] = useState<{ currency: string; network: string }>({ currency: 'BTC', network: 'native' });
 
-    // Stats
     const swapCardRef = useRef<HTMLDivElement>(null);
 
-    // Fetch Rates & Calculate Total
-    useEffect(() => {
-        const processExchangeRates = (exchangeRates: Record<string, number | Record<string, number>>) => {
-            const usdRates: Record<string, number> = {};
-            
-            Object.keys(exchangeRates).forEach(curr => {
-                let val = exchangeRates[curr];
-                
-                // Handle objects (old provider format)
-                if (typeof val === 'object' && val !== null) {
-                    val = val['USD'] || val[curr] || 0;
-                }
-
-                const numVal = typeof val === 'string' ? parseFloat(val) : val;
-                
-                if (typeof numVal === 'number' && !isNaN(numVal) && numVal > 0) {
-                    // Convert "1 USD = X Currency" to "1 Currency = Y USD"
-                    usdRates[curr] = 1 / numVal;
-                }
-            });
-
-            usdRates['USD'] = 1;
-            setRates(usdRates);
-            setRatesLoading(false);
-        };
-
-        const fetchRates = async () => {
-            setRatesLoading(true);
-            try {
-                const exchangeRates = await walletApi.getExchangeRates();
-                processExchangeRates(exchangeRates);
-            } catch (err) {
-                console.error('Failed to fetch rates', err);
-                setRatesLoading(false);
-            }
-        };
-
-        // Initial fetch
-        if (Array.isArray(wallets) && wallets.length > 0) {
-            fetchRates();
-        }
-
-        // Socket.io Listener: Active Real-time Overwrite
-        if (socket) {
-            socket.on('rates_updated', (newRates: Record<string, number | Record<string, number>>) => {
-                console.log('[Socket] Rates updated in real-time');
-                processExchangeRates(newRates);
-            });
-
-            return () => {
-                socket.off('rates_updated');
-            };
-        }
-    }, [wallets, socket]);
-
-    // Calculate Total Balance & Available Balance
-    useEffect(() => {
-        if (wallets.length > 0 && Object.keys(rates).length > 0) {
-            let total = 0;
-            let available = 0;
-            const safeWallets = Array.isArray(wallets) ? wallets : [];
-            
-            safeWallets.forEach(w => {
-                const rate = rates[w.currency] || 0;
-                // Using a slightly more robust multiplication to reduce float noise
-                const balValue = Number((w.balance * rate).toFixed(12));
-                const availValue = Number(((w.available_balance ?? w.balance) * rate).toFixed(12));
-                
-                total += balValue;
-                available += availValue;
-            });
-
-            setTotalBalance(Number(total.toFixed(8)));
-            setTotalAvailableBalance(Number(available.toFixed(8)));
-        }
-    }, [wallets, rates]);
-
     const handleAction = (action: 'send' | 'receive' | 'fund' | 'withdraw' | 'swap' | 'buy') => {
-        const safeWallets = Array.isArray(wallets) ? wallets : [];
+        const safeWallets = financialView.wallets || [];
         if (!selectedAsset.currency && safeWallets.length > 0) {
-            // Prefer a fiat wallet as default for global actions (better feature discoverability)
-            const fiatWallet = safeWallets.find(w => ['USD', 'EUR', 'NGN', 'GBP'].includes(w.currency));
+            const fiatWallet = safeWallets.find(w => ['USD', 'EUR', 'NGN', 'GBP'].includes(w.asset));
             const defaultWallet = fiatWallet || safeWallets[0];
-            setSelectedAsset({ currency: defaultWallet.currency, network: defaultWallet.network });
+            setSelectedAsset({ currency: defaultWallet.asset, network: defaultWallet.network || 'native' });
         }
 
         switch (action) {
@@ -188,11 +103,10 @@ function WalletContent() {
                 setShowFundModal(true);
                 break;
             case 'buy':
-                // For buy action, default to a crypto wallet to trigger direct purchase
                 if (['USD', 'EUR', 'NGN', 'GBP'].includes(selectedAsset.currency)) {
-                    const cryptoWallet = safeWallets.find(w => !['USD', 'EUR', 'NGN', 'GBP'].includes(w.currency));
+                    const cryptoWallet = safeWallets.find(w => !['USD', 'EUR', 'NGN', 'GBP'].includes(w.asset));
                     if (cryptoWallet) {
-                        setSelectedAsset({ currency: cryptoWallet.currency, network: cryptoWallet.network });
+                        setSelectedAsset({ currency: cryptoWallet.asset, network: cryptoWallet.network || 'native' });
                     }
                 }
                 setIsBuyMode(true);
@@ -231,7 +145,7 @@ function WalletContent() {
 
     const handleRefresh = () => {
         refresh();
-        setRefreshKey(k => k + 1); // Trigger ledger trail refresh
+        setRefreshKey(k => k + 1);
     };
 
     return (
@@ -239,20 +153,20 @@ function WalletContent() {
             <div className="max-w-7xl mx-auto space-y-8">
                 
                 {/* Market Price Ticker */}
-                {!loading && Object.keys(rates).length > 0 && (
+                {!loading && financialView.ratesReady && (
                     <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-none no-scrollbar">
-                        {['BTC', 'ETH'].map(curr => (
-                            <div key={curr} className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full shrink-0">
-                                <span className={`w-2 h-2 rounded-full bg-green-400 animate-pulse`} />
-                                <span className="text-xs font-bold text-gray-300">{curr}/USD</span>
-                                <span className="text-xs font-black text-white">
-                                    { (rates[curr] || 0) < 0.01 
-                                        ? `$${(rates[curr] || 0).toFixed((rates[curr] || 0) < 0.0001 ? 6 : 4)}` 
-                                        : formatCurrency(rates[curr] || 0, 'USD') 
-                                    }
-                                </span>
-                            </div>
-                        ))}
+                        {['BTC', 'ETH'].map(curr => {
+                            const walletView = financialView.wallets.find(w => w.asset === curr);
+                            return (
+                                <div key={curr} className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full shrink-0">
+                                    <span className={`w-2 h-2 rounded-full ${walletView?.mode === 'FRESH' ? 'bg-green-400' : 'bg-yellow-400'} animate-pulse`} />
+                                    <span className="text-xs font-bold text-gray-300">{curr}/USD</span>
+                                    <span className="text-xs font-black text-white">
+                                        {walletView?.valuationUsd || '...'}
+                                    </span>
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
 
@@ -274,20 +188,21 @@ function WalletContent() {
                     </div>
                 </div>
 
-                {/* Top Section: Balance & Actions */}
+                {/* Top Section */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Left: Balance Card */}
                     <div className="lg:col-span-2 space-y-6">
                         <WalletBalanceCard 
-                            totalBalance={totalBalance} 
-                            availableBalance={totalAvailableBalance}
+                            totalBalance={financialView.totalBalanceValuation} 
+                            availableBalance={financialView.totalAvailableValuation}
                             currency="USD"
-                            loading={ratesLoading || loading}
+                            loading={loading || !financialView.ratesReady}
                             showBalance={showBalances}
                             onToggleBalance={() => setShowBalances(!showBalances)}
+                            evaluationId={financialView.evaluationId}
+                            frozenAssets={financialView.frozenAssets}
+                            systemStale={financialView.systemStale}
                         />
 
-                        {/* Quick Actions */}
                         <ActionsGrid 
                             onSend={() => handleAction('send')}
                             onReceive={() => handleAction('receive')}
@@ -296,13 +211,10 @@ function WalletContent() {
                             onDeposit={() => handleAction('fund')}
                             onBuy={() => handleAction('buy')}
                             disabledActions={
-                                ['BTC', 'ETH', 'USDT', 'USDC'].some(c => selectedAsset.currency?.startsWith(c)) 
-                                ? ['Move In'] 
-                                : []
+                                financialView.systemStale ? ['Swap', 'Withdraw'] : []
                             }
                         />
                          
-                         {/* Wallet List (Breakdown) */}
                          <div>
                             <div className="flex justify-between items-center gap-4 mb-4 flex-wrap">
                                 <h3 className="text-lg font-bold">Your Services</h3>
@@ -316,8 +228,7 @@ function WalletContent() {
                                 </div>
                             ) : (
                                 <CurrencyList 
-                                    wallets={wallets} 
-                                    rates={rates} 
+                                    wallets={financialView.wallets} 
                                     onSelect={(curr, net) => setSelectedAsset({ currency: curr, network: net || 'native' })}
                                     showBalances={showBalances}
                                 />
@@ -325,7 +236,6 @@ function WalletContent() {
                         </div>
                     </div>
 
-                    {/* Right: Swap Module + Allocation Chart + Ledger Trail */}
                     <div className="lg:col-span-1">
                         <div className="sticky top-6 space-y-6">
                            <div ref={swapCardRef}>
@@ -339,16 +249,12 @@ function WalletContent() {
                                 />
                            </div>
                            
-                           {/* Allocation Chart */}
-                           <WalletAllocationChart wallets={wallets} rates={rates} />
-
-                           {/* Ledger Audit Trail */}
+                           <WalletAllocationChart wallets={wallets} rates={financialView.ratesReady ? {} : {}} /> 
                            <LedgerTrail refreshKey={refreshKey} />
                         </div>
                     </div>
                 </div>
 
-                {/* Bottom Section: Transaction History */}
                 <div className="pb-12">
                      <TransactionHistory 
                         transactions={safeTransactions} 
@@ -358,7 +264,6 @@ function WalletContent() {
 
             </div>
 
-            {/* Modals */}
             {showFundModal && (
                 <FundModal 
                     isOpen={showFundModal} 
@@ -404,19 +309,16 @@ function WalletContent() {
                 />
             )}
 
-            {/* Create Service Modal */}
              {showCreateModal && (
                 <div className="modal-overlay p-4">
                   <div className="modal-content w-full max-w-lg">
-
                     <button className="modal-close" onClick={() => setShowCreateModal(false)}>
                       <X size={20} />
                     </button>
                     <h2 className="text-xl font-bold mb-6">Add New Service</h2>
-                    
                     <div className="grid grid-cols-2 gap-4">
-                      {(SUPPORTED_CURRENCIES ?? []).map((curr) => {
-                        const exists = (wallets ?? []).some(w => w.currency === curr);
+                      {SUPPORTED_CURRENCIES.map((curr) => {
+                        const exists = financialView.wallets.some(w => w.asset === curr);
                         if (exists) return null;
                         
                         return (
@@ -430,7 +332,7 @@ function WalletContent() {
                           </button>
                         );
                       })}
-                      {wallets.length === SUPPORTED_CURRENCIES.length && (
+                      {financialView.wallets.length === SUPPORTED_CURRENCIES.length && (
                           <p className="col-span-2 text-center text-gray-500 py-4">All available services active.</p>
                       )}
                     </div>

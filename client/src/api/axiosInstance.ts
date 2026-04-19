@@ -23,9 +23,17 @@ api.interceptors.request.use(
   }
 )
 
-// Add a response interceptor to auto-retry on 503 (transient auth/service failures)
+// Add a response interceptor to apply financial quarantine and auto-retry on 503
+import FinancialSanitizer from "../utils/FinancialSanitizer";
+
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Quarantine Layer: Sanitize all incoming data before it hits the store/components
+    if (response.data) {
+      response.data = FinancialSanitizer.quarantine(response.data);
+    }
+    return response;
+  },
   async (error) => {
     const config = error.config;
     if (!config) return Promise.reject(error);

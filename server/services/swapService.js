@@ -5,15 +5,22 @@ const logger = require("../utils/logger");
 const math = require("../utils/mathUtils");
 
 /**
- * Swap Service
- * Responsible for calculating and executing swaps.
+ * Swap Service (Hardened v5.4)
+ * Responsible for calculating and executing swaps with backend price validation.
  */
 class SwapService {
   /**
    * Calculate a time-locked swap quote
    */
   async calculateSwap(userId, fromCurrency, toCurrency, amount, slippage = 0.005) {
-    const marketPrice = await fxService.getRate(fromCurrency, toCurrency);
+    const rateMeta = await fxService.getValidatedRate(fromCurrency, toCurrency);
+    
+    // Kernel Protection: Block quote generation if rates are unreliable
+    if (!rateMeta.canExecute) {
+      throw new Error(`Swap disabled: Pricing for ${fromCurrency}/${toCurrency} is currently ${rateMeta.mode}.`);
+    }
+
+    const marketPrice = rateMeta.rate;
     
     // Check if user has a referrer for conditional fee calculation
     const { data: profile } = await supabase
@@ -26,7 +33,6 @@ class SwapService {
     const fees = feeService.calculateFees(amount, fromCurrency, hasReferrer);
     const amountOut = math.multiply(fees.netAmount, marketPrice);
 
-    // Direct circular dependency fix if needed, but here we require within method
     const walletService = require("./walletService");
     const fromWallet = await walletService.createWallet(userId, fromCurrency);
     const toWallet = await walletService.createWallet(userId, toCurrency);
@@ -49,6 +55,7 @@ class SwapService {
           fee_breakdown: fees,
           calculated_at: new Date().toISOString(),
           requested_slippage: slippage,
+          price_mode: rateMeta.mode
         },
       })
       .select().single();
@@ -78,14 +85,16 @@ class SwapService {
       throw new Error("Quote expired or invalid.");
     }
 
-    // All swaps use the atomic production swap RPC.
-    // This is the standard approach used by Coinbase, Remitano, etc.:
-    // The platform holds all balances internally, so swaps are instant
-    // ledger transfers — debit source wallet, credit destination wallet,
-    // distribute fees — all in a single atomic database transaction.
+    // Kernel Protection (The Sentinel): Independent Freshness check at execution time
+    const currentRateMeta = await fxService.getValidatedRate(quote.from_currency, quote.to_currency, false); // No cache
+    
+    if (!currentRateMeta.canExecute) {
+      logger.error(`[SwapService] Blocked stale execution for ${quote.from_currency}/${quote.to_currency}. Mode: ${currentRateMeta.mode}`);
+      throw new Error(`Market volatility too high. Please get a fresh quote.`);
+    }
+
+    const currentRate = currentRateMeta.rate;
     const env = require("../config/env");
-    // Verifying current market rate for slippage protection (Active Cache Bypass)
-    const currentRate = await fxService.getRate(quote.from_currency, quote.to_currency, false);
 
     const { data: txId, error: txError } = await supabase.rpc(
       "execute_production_swap",
@@ -123,3 +132,4 @@ class SwapService {
 }
 
 module.exports = new SwapService();
+

@@ -7,10 +7,37 @@ const fxService = require("../services/fxService");
  */
 exports.getRates = async (req, res) => {
   try {
-    const rates = await fxService.getAllRates();
-    res.json(rates);
+    const data = await fxService.getAllRates("USD", req.user?.id);
+    res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+};
+
+/**
+ * Perform Currency Swap (v6.0 Scoped Freeze Aware)
+ */
+exports.executeSwap = async (req, res, next) => {
+  try {
+    const { from, to, amount } = req.body;
+    
+    // 1. Refetch authoritative state for execution
+    const data = await fxService.getAllRates("USD", req.user.id);
+    const frozenAssets = data.frozenAssets || [];
+
+    // 2. Domain-Level Freeze Enforcer (Scoped)
+    if (frozenAssets.includes(from) || frozenAssets.includes(to) || frozenAssets.includes("*")) {
+      return res.status(403).json({ 
+        error: "DOMAIN_FREEZE_ACTIVE", 
+        message: `Execution for ${from}/${to} is temporarily suspended due to volatility.`,
+        evaluationId: data.evaluationId
+      });
+    }
+
+    const result = await swapService.executeSwap(req.user.id, from, to, amount);
+    res.json(result);
+  } catch (err) {
+    next(err);
   }
 };
 

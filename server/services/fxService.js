@@ -1,207 +1,348 @@
-const coingeckoProvider = require("../providers/coingeckoProvider");
-const nowpaymentsProvider = require("../providers/nowpaymentsProvider");
-const exchangeRateProvider = require("../providers/exchangeRateProvider");
+const SnapshotService = require("./SnapshotService");
+const DecisionEngine = require("./DecisionEngine");
+const ACE = require("./chaos/AntiConsensusEngine");
+const epistemicManager = require("./chaos/EpistemicManager");
 const logger = require("../utils/logger");
 const cache = require("../utils/cache");
-const math = require("../utils/mathUtils");
 
 /**
- * FX Service
- * Handles currency rates using decoupled providers.
+ * FX Service (Strict v6.0 Shadow Integrated)
+ * Handles currency rates with LKG fallback and execution-layer sanity checks.
+ * Phase 1: Shadow Mode Reconciliation Enabled.
  */
 class FXService {
   constructor() {
-    this.CRYPTO_CACHE_TTL = 30; // 30 seconds (real-time enough for dashboard)
+    this.FRESH_TTL = 60; // 60 seconds (Live)
+    this.STALE_THRESHOLD = 3600; // 1 hour (LKG limit)
+    this.SANITY_DEVIATION_CAP = 0.15; // 15% max jump per tick
+    
     this.coinMapping = {
       "BTC": "bitcoin",
       "ETH": "ethereum",
       "USDT": "tether",
       "USDC": "usd-coin",
     };
+    this.DRIFT_WINDOW = 5; // Rolling snapshots for velocity
   }
 
   /**
-   * Get price of crypto in USD
+   * Internal helper to store and retrieve LKG (Last Known Good) prices
    */
-  async getCryptoPrice(symbol, useCache = true) {
-    const prices = await this.getMultipleCryptoPrices([symbol], useCache);
-    return prices[symbol.toUpperCase()] || null;
+  async _handleLKG(symbol, newPrice = null) {
+    const key = `lkg_price_${symbol.toUpperCase()}`;
+    const timestampKey = `lkg_time_${symbol.toUpperCase()}`;
+    
+    if (newPrice !== null && !isNaN(newPrice) && newPrice > 0) {
+      const currentLKG = cache.get(key);
+      
+      // 1. Sanity Check: Deviation Cap (15%)
+      if (currentLKG) {
+        const deviation = Math.abs(newPrice - currentLKG) / currentLKG;
+        if (deviation > this.SANITY_DEVIATION_CAP) {
+          logger.warn(`[FXService] Price spike detected for ${symbol}: ${currentLKG} -> ${newPrice} (${(deviation*100).toFixed(2)}%). Quarantining tick.`);
+          return { price: currentLKG, mode: 'INVALID', stale: true };
+        }
+      }
+
+      cache.set(key, newPrice, 86400 * 7); // Persistent for 1 week
+      cache.set(timestampKey, Date.now(), 86400 * 7);
+      return { price: newPrice, mode: 'FRESH', stale: false };
+    }
+
+    // Retrieve LKG
+    const lkgValue = cache.get(key);
+    const lkgTime = cache.get(timestampKey) || 0;
+    const age = (Date.now() - lkgTime) / 1000;
+
+    if (!lkgValue) return { price: 0, mode: 'INVALID', stale: true };
+    
+    const mode = age < this.STALE_THRESHOLD ? 'STALE' : 'INVALID';
+    return { price: lkgValue, mode, stale: true };
   }
 
   /**
-   * Get multiple crypto prices in one batch
+   * Get price metadata for crypto
    */
-  async getMultipleCryptoPrices(symbols, useCache = true) {
-    const keys = symbols.map((s) => s.toUpperCase());
-    const cacheKey = `crypto_batch_${keys.sort().join("_")}`;
+  async getPriceMetadata(symbol, useCache = true) {
+    const sym = symbol.toUpperCase();
+    const cacheKey = `crypto_meta_${sym}`;
 
-    const fetchValues = async () => {
-      const coinIds = symbols
-        .map((s) => this.coinMapping[s.toUpperCase()])
-        .filter(Boolean);
-
-      if (coinIds.length === 0) return {};
-
+    const fetcher = async () => {
       try {
-        const results = {};
-        try {
-          const prices = await coingeckoProvider.getPrices(coinIds);
-          symbols.forEach((s) => {
-            const id = this.coinMapping[s.toUpperCase()];
-            results[s.toUpperCase()] = prices[id] || null;
-          });
-        } catch (err) {
-          logger.warn(
-            `[FXService] CoinGecko Batch failed, seeking fallback: ${err.message}`,
-          );
+        const coinId = this.coinMapping[sym];
+        let rawPrice = null;
+        
+        if (coinId) {
+          const prices = await coingeckoProvider.getPrices([coinId]);
+          rawPrice = prices[coinId] || null;
         }
 
-        // Fallback for missing/failed assets using NowPayments
-        const missing = symbols.filter((s) => !results[s.toUpperCase()]);
-        if (missing.length > 0) {
-          logger.info(
-            `[FXService] Attempting NowPayments fallback for: ${
-              missing.join(", ")
-            }`,
-          );
-          for (const sym of missing) {
-            try {
-              const rate = await nowpaymentsProvider.getRate(sym, "USD");
-              if (rate) results[sym.toUpperCase()] = rate;
-            } catch (fallbackErr) {
-              logger.error(
-                `[FXService] Fallback failed for ${sym}: ${fallbackErr.message}`,
-              );
-            }
-          }
+        if (!rawPrice) {
+          rawPrice = await nowpaymentsProvider.getRate(sym, "USD");
         }
 
-        return results;
+        return await this._handleLKG(sym, rawPrice);
       } catch (err) {
-        logger.error(
-          `[FXService] All Crypto Providers failed: ${err.message}`,
-        );
-        return {};
+        logger.error(`[FXService] Fetch failed for ${sym}: ${err.message}`);
+        return await this._handleLKG(sym);
       }
     };
 
-    if (useCache === false) {
-      return await fetchValues();
-    }
-
-    return cache.wrap(cacheKey, this.CRYPTO_CACHE_TTL, fetchValues);
+    if (!useCache) return await fetcher();
+    return cache.wrap(cacheKey, this.FRESH_TTL, fetcher);
   }
 
   /**
-   * Get exchange rate for any pair (Base -> USD -> Target)
+   * Hardened Rate Engine (The source of truth for execution)
    */
-  async getRate(from, to, useCache = true) {
+  async getValidatedRate(from, to, useCache = true) {
     const fromSym = from.toUpperCase();
     const toSym = to.toUpperCase();
-    if (fromSym === toSym) return 1.0;
+    
+    if (fromSym === toSym) return { rate: 1.0, mode: 'FRESH', canExecute: true };
 
     try {
-      // 1. Get USD value of FROM
-      let fromInUsd = 1.0;
-      if (fromSym !== "USD") {
+      // 1. Resolve FROM in USD
+      let fromMeta = { price: 1.0, mode: 'FRESH' };
+      if (fromSym !== 'USD') {
         if (this.coinMapping[fromSym]) {
-          fromInUsd = await this.getCryptoPrice(fromSym, useCache);
+          fromMeta = await this.getPriceMetadata(fromSym, useCache);
         } else {
-          // Fiat rates always use provider's internal caching for now as they move slowly
-          fromInUsd = await exchangeRateProvider.getFiatRate(fromSym, "USD");
+          try {
+            const fiatRate = await exchangeRateProvider.getFiatRate(fromSym, "USD");
+            fromMeta = await this._handleLKG(fromSym, fiatRate);
+          } catch {
+            fromMeta = await this._handleLKG(fromSym);
+          }
         }
       }
 
-      // 2. Get value of TARGET in USD
-      let usdInTo = 1.0;
-      if (toSym !== "USD") {
+      // 2. Resolve TO in USD
+      let toMeta = { price: 1.0, mode: 'FRESH' };
+      if (toSym !== 'USD') {
         if (this.coinMapping[toSym]) {
-          const toPrice = await this.getCryptoPrice(toSym, useCache);
-          usdInTo = toPrice ? math.divide(1, toPrice) : null;
+          const priceMeta = await this.getPriceMetadata(toSym, useCache);
+          toMeta = { 
+            price: priceMeta.price > 0 ? 1 / priceMeta.price : 0, 
+            mode: priceMeta.mode 
+          };
         } else {
-          usdInTo = await exchangeRateProvider.getFiatRate("USD", toSym);
+          try {
+            const fiatRate = await exchangeRateProvider.getFiatRate("USD", toSym);
+            toMeta = await this._handleLKG(`${toSym}_INV`, fiatRate);
+          } catch {
+            toMeta = await this._handleLKG(`${toSym}_INV`);
+          }
         }
       }
 
-        if (fromInUsd === null || usdInTo === null) {
-          throw new Error(`Pricing unavailable for ${from}/${to}`);
-        }
-  
-        return math.multiply(fromInUsd, usdInTo);
+      const combinedMode = (fromMeta.mode === 'INVALID' || toMeta.mode === 'INVALID') ? 'INVALID' 
+                         : (fromMeta.mode === 'STALE' || toMeta.mode === 'STALE') ? 'STALE'
+                         : 'FRESH';
+
+      const rate = math.multiply(fromMeta.price, toMeta.price);
+      
+      return {
+        rate: parseFloat(rate),
+        mode: combinedMode,
+        canExecute: combinedMode === 'FRESH',
+        attribution: { from: fromMeta.mode, to: toMeta.mode }
+      };
     } catch (err) {
-      logger.error(
-        `[FXService] GetRate Error for ${from}/${to}: ${err.message}`,
-      );
-      throw err;
+      logger.error(`[FXService] Critical Rate Failure ${from}/${to}: ${err.message}`);
+      return { rate: 0, mode: 'INVALID', canExecute: false };
     }
   }
 
   /**
-   * Convert amount from one currency to another
+   * Drift Velocity Engine (Phase 3 Predictive Layer)
+   * Classifies drift into JITTER, TREND, or SHOCK regimes.
    */
-  async convert(amount, from, to, useCache = true) {
-    const rate = await this.getRate(from, to, useCache);
-    return {
-      amount: math.multiply(amount, rate),
-      rate,
-    };
+  async classifyDriftRegime(walletId, currentDrift) {
+    const { data: snapshots } = await supabase
+      .from("market_snapshots")
+      .select("confidence_score, source_metadata")
+      .order("created_at", { ascending: false })
+      .limit(this.DRIFT_WINDOW);
+
+    if (!snapshots || snapshots.length < 2) return "JITTER";
+
+    const avgConfidence = snapshots.reduce((acc, s) => acc + s.confidence_score, 0) / snapshots.length;
+    
+    if (currentDrift > 0.015) return "SHOCK"; // > 1.5% = Abrupt Shift
+    if (currentDrift > 0.005 && avgConfidence < 0.8) return "TREND"; // 0.5% with low confidence = Slow Drift
+    
+    return "JITTER";
   }
 
   /**
-   * For dashboard display
+   * Authoritative Baseline Push (Self-Healing Gate)
+   * Strictly gated truth propagation to Legacy Cache.
    */
-  async getAllRates(base = "USD") {
-    const cryptoCurrencies = Object.keys(this.coinMapping);
-    const additionalFiatTargets = ["NGN", "EUR", "GBP", "JPY"];
-    const targets = [...new Set([...cryptoCurrencies, ...additionalFiatTargets, "USD"])];
-    const cryptoTargets = targets.filter((t) => this.coinMapping[t]);
-    const fiatTargets = targets.filter((t) =>
-      !this.coinMapping[t] && t !== "USD"
-    );
+  async healLegacyBaseline(symbol, snapshotRate, confidence) {
+    // 1. Gating Logic (User Requested Phase 3 Invariant)
+    if (confidence < 0.9) return false;
+    
+    const latestSnapshot = cache.get("latest_market_snapshot");
+    if (!latestSnapshot || latestSnapshot.confidence_score < 0.9) return false;
 
-    const results = { "USD": 1.0 };
+    // 2. Perform Healing (Observe only, align if certain)
+    logger.info(`[FXService] HEALING_TRIGGERED for ${symbol}: Aligning Legacy Cache to Snapshot Truth.`);
+    
+    // We update the legacy internal cache for this symbol (DFOS v6.0 Baseline Repair)
+    cache.set(`rate_${symbol}_USD`, {
+      rate: snapshotRate,
+      mode: 'HEALED',
+      timestamp: Date.now(),
+      canExecute: true
+    }, 600); // 10 min TTL
 
-    try {
-      // 1. Batch fetch all crypto prices
-      const cryptoPrices = await this.getMultipleCryptoPrices(cryptoTargets);
-      Object.keys(cryptoPrices).forEach((sym) => {
-        const price = cryptoPrices[sym];
-        if (base === "USD") {
-          results[sym] = price ? math.divide(1, price) : 0;
-        } else {
-          // Cross conversion handled via getRate if base isn't USD
-          // but usually it's USD for dashboard
+    return true;
+  }
+   */
+  async getAllRates(base = "USD", walletId = null) {
+    const CanaryUtils = require("../utils/canaryUtils");
+    const DecisionEngine = require("./DecisionEngine");
+    
+    // 1. Determine Authority (Canary vs Legacy)
+    const isCanary = CanaryUtils.isCanary(walletId);
+    let rates = {};
+    let metadata = {};
+    let evaluationId = null;
+    let frozenAssets = [];
+
+    // 2. Fetch Truth (Snapshot Ledger)
+    const snapshotBase = await SnapshotService.getAuthoritativeRates('DISPLAY');
+    
+    if (isCanary && snapshotBase.mode !== 'INVALID') {
+      // CANARY PATH: Snapshot is the System of Record
+      rates = snapshotBase.rates;
+      evaluationId = SnapshotService.generateEvaluationId(walletId || "global", snapshotBase.id, new Date());
+      
+      const legacyRaw = await this._getLegacyRates(base);
+      const decision = DecisionEngine.evaluate(snapshotBase, walletId, legacyRaw.rates);
+      
+      // Phase 5: Truth-Resilience Kernel
+      const maxDrift = decision.maxDrift || 0;
+      const driftFriction = ACE.calculateDriftFriction(walletId || "global", maxDrift);
+      const microstructureInconsistency = ACE.checkMicrostructureConsistency(
+          maxDrift * 10000, 
+          snapshotBase.source_metadata?.temporal?.loadMetrics?.cpu?.user / 1e5 || 5
+      );
+      
+      const isSuspicious = ACE.isConsensusSuspicious(
+          snapshotBase.confidence_score,
+          microstructureInconsistency,
+          driftFriction
+      );
+
+      const epistemic = epistemicManager.evaluateState(walletId || "global", decision.score, {
+          isSuspicious,
+          timeIntegrityScore: snapshotBase.source_metadata?.timeIntegrityScore || 1.0
+      });
+
+      // Phase 3: Drift Velocity Engine (Predictive Layer)
+      const driftRegime = await this.classifyDriftRegime(walletId || "global", maxDrift);
+
+      // Phase 3/5: Gated Self-Healing (Disbaled in uncertainty)
+      if (decision.score > 0.90 && epistemic.state === 'STABLE') {
+        for (const [sym, rate] of Object.entries(rates)) {
+          const legacyRate = legacyRaw.rates[sym];
+          if (legacyRate && Math.abs(rate - legacyRate) / legacyRate > 0.0075) {
+            await this.healLegacyBaseline(sym, rate, snapshotBase.score);
+          }
         }
-      });
-
-      // 2. Fetch fiat rates in parallel
-      const fiatPromises = fiatTargets.map(async (t) => {
-        try {
-          return { symbol: t, rate: await this.getRate(base, t) };
-        } catch (e) {
-          return { symbol: t, rate: 0 };
-        }
-      });
-
-      const fiatResults = await Promise.all(fiatPromises);
-      fiatResults.forEach(({ symbol, rate }) => {
-        results[symbol] = rate;
-      });
-
-      // If base isn't USD, normalize everything
-      if (base !== "USD") {
-        const basePrice = results[base] || 1;
-        Object.keys(results).forEach((k) => {
-          results[k] = math.divide(results[k], basePrice);
-        });
       }
 
-      return results;
+      metadata = Object.keys(rates).reduce((acc, sym) => {
+        acc[sym] = { 
+          mode: snapshotBase.mode, 
+          canExecute: decision.state === 'ALLOWED' || decision.state === 'SOFT_WARN',
+          reason: decision.reason,
+          regime: driftRegime
+        };
+        return acc;
+      }, {});
+      
+      frozenAssets = decision.frozenAssets;
+    } else {
+      // LEGACY PATH (or Snapshot Failure)
+      const legacy = await this._getLegacyRates(base);
+      rates = legacy.rates;
+      metadata = legacy.metadata;
+      
+      // If we are in Canary but failed to find a snapshot, flag the fallback
+      if (isCanary) {
+        Object.values(metadata).forEach(m => m.isFallback = true);
+      }
+      
+      if (snapshotBase.id) {
+        evaluationId = SnapshotService.generateEvaluationId(walletId || "global", snapshotBase.id, new Date());
+      }
+    }
+
+    // 3. Shadow Reconciliation (Always run for forensics)
+    if (walletId) {
+      const liveSnapshot = snapshotBase.id ? snapshotBase : await cache.get("latest_market_snapshot");
+      if (liveSnapshot) {
+        this._triggerShadowReconciliation(walletId, rates, liveSnapshot).catch(e => 
+          logger.error(`[FXService] Shadow Recon Trigger Failed: ${e.message}`)
+        );
+      }
+    }
+
+    return { rates, metadata, evaluationId, frozenAssets };
+  }
+
+  /**
+   * Internal Legacy Rate Fetcher
+   */
+  async _getLegacyRates(base) {
+    const cryptoCurrencies = Object.keys(this.coinMapping);
+    const fiatCurrencies = ["NGN", "EUR", "GBP", "JPY"];
+    const targets = [...new Set([...cryptoCurrencies, ...fiatCurrencies, "USD"])];
+    
+    const results = {};
+    const metadata = {};
+
+    await Promise.all(targets.map(async (sym) => {
+      const val = await this.getValidatedRate(base, sym);
+      results[sym] = val.rate;
+      metadata[sym] = { mode: val.mode, canExecute: val.canExecute };
+    }));
+
+    return { rates: results, metadata };
+  }
+
+  /**
+   * Non-authoritative reconciliation hook
+   */
+  async _triggerShadowReconciliation(walletId, legacyRates, preFetchedSnapshot = null) {
+    try {
+      const snapshot = preFetchedSnapshot || cache.get("latest_market_snapshot") || await SnapshotService.generateMarketSnapshot();
+      if (!snapshot) return;
+
+      // Calculate total valuation mismatch for this wallet/user
+      // This is the core 'Comparison Symmetry' anchor
+      const walletService = require("./walletService");
+      const wallets = await walletService.getWalletsByUserId(walletId);
+      
+      let legacyTotal = 0;
+      let snapshotTotal = 0;
+
+      for (const w of wallets) {
+        const rateLegacy = legacyRates[w.asset] || 0;
+        const rateSnapshot = snapshot.rates[w.asset] || 0;
+        legacyTotal += w.balance * rateLegacy;
+        snapshotTotal += w.balance * rateSnapshot;
+      }
+
+      await SnapshotService.reconcileValuation(walletId, legacyTotal, snapshotTotal, snapshot.id);
     } catch (err) {
-      logger.error(`[FXService] GetAllRates Error: ${err.message}`);
-      return results;
+      logger.error(`[FXService] Shadow Recon Internal Error: ${err.message}`);
     }
   }
 }
 
 module.exports = new FXService();
+
