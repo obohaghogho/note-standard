@@ -7,7 +7,7 @@ import { Plus, MessageSquare, Menu } from 'lucide-react';
 import { useSearchParams, useOutletContext } from 'react-router-dom';
 import { useChat } from '../../context/ChatContext';
 
-const ChatContent: React.FC = () => {
+function ChatContent() {
     const [isNewChatOpen, setIsNewChatOpen] = useState(false);
     const [searchParams] = useSearchParams();
     const { activeConversationId, setActiveConversationId } = useChat();
@@ -60,12 +60,12 @@ const ChatContent: React.FC = () => {
             <NewChatModal isOpen={isNewChatOpen} onClose={() => setIsNewChatOpen(false)} />
         </div>
     );
-};
+}
 
-export const Chat: React.FC = () => (
-    <ErrorBoundary fallback={<div className="p-8 text-center text-red-500 bg-red-500/5 rounded-xl border border-red-500/10">Something went wrong loading chat. <button onClick={() => window.location.reload()} className="underline ml-2">Try again</button></div>}>
-        <ChatContent />
-    </ErrorBoundary>
-);
-
-export default Chat;
+export default function Chat() {
+    return (
+        <ErrorBoundary fallback={<div className="p-8 text-center text-red-500 bg-red-500/5 rounded-xl border border-red-500/10">Something went wrong loading chat. <button onClick={() => window.location.reload()} className="underline ml-2">Try again</button></div>}>
+            <ChatContent />
+        </ErrorBoundary>
+    );
+}

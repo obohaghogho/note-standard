@@ -10,7 +10,7 @@ import { LanguageSelector } from '../common/LanguageSelector';
 import { cn } from '../../utils/cn';
 import { ErrorBoundary } from 'react-error-boundary';
 
-export const DashboardLayout = () => {
+export function DashboardLayout() {
     const location = useLocation();
     const navigate = useNavigate();
     const [isCreateNoteModalOpen, setIsCreateNoteModalOpen] = useState(false);
@@ -131,4 +131,5 @@ export const DashboardLayout = () => {
             />
         </div>
     );
-};
+}
+

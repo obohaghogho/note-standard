@@ -17,7 +17,7 @@ import { cn } from '../../utils/cn';
 
 import type { Note } from '../../types/note';
 
-const NotesContent = () => {
+function NotesContent() {
     const { user } = useAuth();
     const { notes, loading, refreshNotes } = useNotes();
     console.log("Notes rendered");
@@ -279,12 +279,12 @@ const NotesContent = () => {
             />
         </div>
     );
-};
+}
 
-export const Notes = () => (
-    <ErrorBoundary fallback={<div className="p-8 text-center text-red-500 bg-red-500/5 rounded-xl border border-red-500/10">Something went wrong loading your notes. <button onClick={() => window.location.reload()} className="underline ml-2">Try again</button></div>}>
-        <NotesContent />
-    </ErrorBoundary>
-);
-
-export default Notes;
+export default function Notes() {
+    return (
+        <ErrorBoundary fallback={<div className="p-8 text-center text-red-500 bg-red-500/5 rounded-xl border border-red-500/10">Something went wrong loading your notes. <button onClick={() => window.location.reload()} className="underline ml-2">Try again</button></div>}>
+            <NotesContent />
+        </ErrorBoundary>
+    );
+}

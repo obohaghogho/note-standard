@@ -16,10 +16,22 @@ export default defineConfig({
     strictPort: true,
   },
   build: {
-    sourcemap: false,
+    sourcemap: 'hidden', // generates .map files for production debugging without exposing to users
     chunkSizeWarningLimit: 1600,
-    target: 'esnext',
-    minify: 'esbuild',
+    target: 'es2020',   // broader mobile WebView and Android browser support
+    minify: 'terser',   // terser is more conservative than esbuild, reducing TDZ crashes
+    terserOptions: {
+      compress: {
+        // Disable inlining which can cause TDZ issues in compressed bundles
+        inline: false,
+        keep_classnames: true,
+        keep_fnames: true,
+      },
+      mangle: {
+        keep_classnames: true,
+        keep_fnames: true,
+      },
+    },
   },
   esbuild: {
     pure: ['console.log'],

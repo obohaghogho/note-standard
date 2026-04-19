@@ -53,6 +53,7 @@
     "@babel/core": "^7.29.0",
     "@tailwindcss/vite": "^4.2.1",
     "@types/uuid": "^10.0.0",
+    "terser": "^5.46.1",
     "vite": "^6.4.1"
   },
   "engines": {
