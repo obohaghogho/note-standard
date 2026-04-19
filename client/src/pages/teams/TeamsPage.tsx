@@ -39,10 +39,208 @@ import { cn } from '../../utils/cn';
 import './TeamsPage.css';
 
 // ====================================
+// SUB-COMPONENTS (Defined first to prevent initialization errors)
+// ====================================
+
+const TeamHeader: React.FC<{
+  team: TeamWithUnreadCount;
+  myRole: string;
+  onBack: () => void;
+  isInfoOpen: boolean;
+  onToggleInfo: () => void;
+  onInvite: () => void;
+}> = ({ team, myRole, onBack, isInfoOpen, onToggleInfo, onInvite }) => {
+  return (
+    <div className="teams-page__header flex items-center justify-between p-3 md:p-5 bg-gray-900/50 backdrop-blur-3xl border-b border-white/5 z-20">
+      <div className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer group" onClick={onToggleInfo}>
+         <button 
+           className="p-2 -ml-2 text-gray-400 hover:text-white md:hidden"
+           onClick={(e) => { e.stopPropagation(); onBack(); }}
+         >
+           <ArrowLeft size={20} />
+         </button>
+         <div className="w-10 h-10 md:w-11 md:h-11 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg overflow-hidden flex-shrink-0 group-hover:scale-105 transition-transform">
+            {team.avatar_url ? (
+              <SecureImage src={team.avatar_url} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-white font-black text-lg">{team.name.charAt(0).toUpperCase()}</span>
+            )}
+         </div>
+         <div className="min-w-0">
+            <h1 className="text-sm md:text-base font-black text-white truncate group-hover:text-primary transition-colors flex items-center gap-2">
+              {team.name}
+              {(myRole === 'owner' || myRole === 'admin') && <Shield size={12} className="text-primary hidden md:inline" />}
+            </h1>
+            <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest truncate mt-0.5">View team information</p>
+         </div>
+      </div>
+
+      <div className="flex items-center gap-1 md:gap-3">
+         <button 
+          onClick={onToggleInfo}
+          className={cn(
+            "p-2.5 rounded-2xl transition-all hidden md:flex active:scale-95",
+            isInfoOpen ? "bg-primary text-white shadow-lg shadow-primary/20" : "text-gray-400 hover:bg-white/5"
+          )}
+         >
+            <Users size={20} />
+         </button>
+         {(myRole === 'owner' || myRole === 'admin') && (
+           <button onClick={(e) => { e.stopPropagation(); onInvite(); }} className="p-2.5 text-gray-400 hover:text-primary transition-all rounded-2xl hover:bg-primary/10 active:scale-95">
+              <UserPlus size={20} />
+           </button>
+         )}
+      </div>
+    </div>
+  );
+};
+
+const TeamInfoSidebar: React.FC<{
+  team: TeamWithUnreadCount;
+  myRole: string;
+  isOpen: boolean;
+  onClose: () => void;
+  onLeave: () => void;
+  onDelete: () => void;
+  onUpdate: () => void;
+}> = ({ team, myRole, isOpen, onClose, onLeave, onDelete, onUpdate }) => {
+  const { members, teamStats, loading } = useTeamChat();
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !team) return;
+
+    const toastId = toast.loading('Uploading avatar...');
+    try {
+      const url = await uploadTeamImage(team.id, file);
+      if (url) {
+        await updateTeam(team.id, { avatar_url: url });
+        toast.success('Team updated!', { id: toastId });
+        onUpdate();
+      }
+    } catch {
+      toast.error('Failed to update team', { id: toastId });
+    }
+  };
+
+  return (
+    <div className={cn(
+      "teams-page__info h-full overflow-y-auto bg-gray-900 border-l border-white/5 p-8 flex flex-col gap-10 transition-all duration-500 ease-in-out z-30 shadow-2xl",
+      !isOpen && "hidden md:hidden"
+    )}>
+      {/* Mobile Back Button */}
+      <button 
+         className="flex items-center gap-3 text-primary text-xs font-black uppercase tracking-[0.2em] md:hidden mb-4 group"
+         onClick={onClose}
+       >
+          <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" /> Back to Workspace
+       </button>
+
+      <div className="flex flex-col items-center text-center gap-6">
+          <div className="w-28 h-28 rounded-[2.5rem] bg-gradient-to-br from-blue-500 to-indigo-600 p-1 shadow-2xl relative group cursor-pointer overflow-hidden transition-transform hover:scale-105 active:scale-95">
+             <div className="absolute inset-x-0 bottom-0 top-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity z-10 flex items-center justify-center">
+                <label htmlFor="team-avatar-input" className="cursor-pointer">
+                  <Camera size={24} className="text-white" />
+                  <input id="team-avatar-input" type="file" className="hidden" accept="image/*" onChange={handleAvatarChange} />
+                </label>
+             </div>
+             {team.avatar_url ? (
+               <SecureImage src={team.avatar_url} alt="" className="w-full h-full rounded-[2.25rem] object-cover" />
+             ) : (
+               <div className="w-full h-full rounded-[2.25rem] flex items-center justify-center text-5xl font-black text-white">
+                  {team.name.charAt(0).toUpperCase()}
+               </div>
+             )}
+          </div>
+          <div>
+             <h2 className="text-2xl font-black text-white uppercase tracking-tighter italic">{team.name}</h2>
+             <p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mt-3">{team.description || 'Verified Team Workspace'}</p>
+          </div>
+       </div>
+
+       {/* Bento Grid Stats */}
+       <div className="grid grid-cols-2 gap-4">
+          <div className="p-5 rounded-[2rem] bg-blue-500/5 border border-blue-500/10 flex flex-col justify-between h-32 hover:bg-blue-500/10 transition-colors group">
+             <div className="w-9 h-9 rounded-2xl bg-blue-500/20 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+                <MessageSquare size={18} />
+             </div>
+             <div>
+                <div className="text-2xl font-black text-white tracking-tighter italic">{teamStats?.total_messages || '0'}</div>
+                <div className="text-[9px] font-black text-gray-600 uppercase tracking-widest mt-1">Activity</div>
+             </div>
+          </div>
+          <div className="p-5 rounded-[2rem] bg-purple-500/5 border border-purple-500/10 flex flex-col justify-between h-32 hover:bg-purple-500/10 transition-colors group">
+             <div className="w-9 h-9 rounded-2xl bg-purple-500/20 flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform">
+                <Users size={18} />
+             </div>
+             <div>
+                <div className="text-2xl font-black text-white tracking-tighter italic">{team.member_count}</div>
+                <div className="text-[9px] font-black text-gray-600 uppercase tracking-widest mt-1">Active Members</div>
+             </div>
+          </div>
+       </div>
+
+       {/* Members List */}
+       <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em]">Directory</h4>
+            <span className="text-[9px] font-black text-primary bg-primary/10 px-2 py-1 rounded-lg">Online</span>
+          </div>
+          <div className="space-y-3">
+             {loading ? (
+                <div className="flex justify-center p-4"><Loader2 className="animate-spin text-primary" size={20} /></div>
+             ) : (
+                members.slice(0, 5).map((m: TeamMember) => (
+                  <div key={m.id} className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-transparent hover:border-white/5 transition-all group">
+                     <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden border border-white/5 group-hover:scale-110 transition-transform flex-shrink-0">
+                        {m.profile?.avatar_url ? (
+                          <SecureImage src={m.profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-[10px] font-black text-gray-400">{m.profile?.full_name?.charAt(0) || 'U'}</span>
+                        )}
+                     </div>
+                     <div className="flex-1 min-w-0">
+                        <div className="text-[11px] font-bold text-white truncate">{m.profile?.full_name || m.profile?.email}</div>
+                        <div className="text-[9px] font-black text-gray-600 uppercase tracking-widest flex items-center gap-1">
+                          {m.role === 'owner' && <Crown size={8} className="text-yellow-500" />} {m.role}
+                        </div>
+                     </div>
+                  </div>
+                ))
+             )}
+          </div>
+       </div>
+
+       {/* Danger Zone */}
+       <div className="mt-auto pt-6 space-y-4">
+          <h4 className="text-[10px] font-black text-red-500/50 uppercase tracking-[0.3em]">Security</h4>
+          <div className="space-y-3">
+             {myRole !== 'owner' ? (
+                <button 
+                 onClick={onLeave}
+                 className="flex items-center justify-center gap-3 w-full p-4 rounded-2xl bg-red-500/5 hover:bg-red-500/10 text-red-400 text-[11px] font-black tracking-widest uppercase transition-all border border-red-500/10 group active:scale-95"
+                >
+                  <LogOut size={16} className="group-hover:-translate-x-1 transition-transform" /> Exit Workspace
+                </button>
+             ) : (
+                <button 
+                 onClick={onDelete}
+                 className="flex items-center justify-center gap-3 w-full p-4 rounded-2xl bg-red-500/5 hover:bg-red-500/10 text-red-400 text-[11px] font-black tracking-widest uppercase transition-all border border-red-500/10 group active:scale-95"
+                >
+                  <Trash2 size={16} className="group-hover:rotate-12 transition-transform" /> Delete Hub
+                </button>
+             )}
+          </div>
+       </div>
+    </div>
+  );
+};
+
+// ====================================
 // MAIN PAGE COMPONENT
 // ====================================
 
-export const TeamsPage: React.FC = () => {
+export function TeamsPage() {
   const { isBusiness } = useAuth();
   const navigate = useNavigate();
   
@@ -427,204 +625,6 @@ export const TeamsPage: React.FC = () => {
       )}
     </div>
   );
-};
-
-// ====================================
-// SUB-COMPONENTS
-// ====================================
-
-const TeamHeader: React.FC<{
-  team: TeamWithUnreadCount;
-  myRole: string;
-  onBack: () => void;
-  isInfoOpen: boolean;
-  onToggleInfo: () => void;
-  onInvite: () => void;
-}> = ({ team, myRole, onBack, isInfoOpen, onToggleInfo, onInvite }) => {
-  return (
-    <div className="teams-page__header flex items-center justify-between p-3 md:p-5 bg-gray-900/50 backdrop-blur-3xl border-b border-white/5 z-20">
-      <div className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer group" onClick={onToggleInfo}>
-         <button 
-           className="p-2 -ml-2 text-gray-400 hover:text-white md:hidden"
-           onClick={(e) => { e.stopPropagation(); onBack(); }}
-         >
-           <ArrowLeft size={20} />
-         </button>
-         <div className="w-10 h-10 md:w-11 md:h-11 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg overflow-hidden flex-shrink-0 group-hover:scale-105 transition-transform">
-            {team.avatar_url ? (
-              <SecureImage src={team.avatar_url} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <span className="text-white font-black text-lg">{team.name.charAt(0).toUpperCase()}</span>
-            )}
-         </div>
-         <div className="min-w-0">
-            <h1 className="text-sm md:text-base font-black text-white truncate group-hover:text-primary transition-colors flex items-center gap-2">
-              {team.name}
-              {(myRole === 'owner' || myRole === 'admin') && <Shield size={12} className="text-primary hidden md:inline" />}
-            </h1>
-            <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest truncate mt-0.5">View team information</p>
-         </div>
-      </div>
-
-      <div className="flex items-center gap-1 md:gap-3">
-         <button 
-          onClick={onToggleInfo}
-          className={cn(
-            "p-2.5 rounded-2xl transition-all hidden md:flex active:scale-95",
-            isInfoOpen ? "bg-primary text-white shadow-lg shadow-primary/20" : "text-gray-400 hover:bg-white/5"
-          )}
-         >
-            <Users size={20} />
-         </button>
-         {(myRole === 'owner' || myRole === 'admin') && (
-           <button onClick={(e) => { e.stopPropagation(); onInvite(); }} className="p-2.5 text-gray-400 hover:text-primary transition-all rounded-2xl hover:bg-primary/10 active:scale-95">
-              <UserPlus size={20} />
-           </button>
-         )}
-      </div>
-    </div>
-  );
-};
-
-const TeamInfoSidebar: React.FC<{
-  team: TeamWithUnreadCount;
-  myRole: string;
-  isOpen: boolean;
-  onClose: () => void;
-  onLeave: () => void;
-  onDelete: () => void;
-  onUpdate: () => void;
-}> = ({ team, myRole, isOpen, onClose, onLeave, onDelete, onUpdate }) => {
-  const { members, teamStats, loading } = useTeamChat();
-
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !team) return;
-
-    const toastId = toast.loading('Uploading avatar...');
-    try {
-      const url = await uploadTeamImage(team.id, file);
-      if (url) {
-        await updateTeam(team.id, { avatar_url: url });
-        toast.success('Team updated!', { id: toastId });
-        onUpdate();
-      }
-    } catch {
-      toast.error('Failed to update team', { id: toastId });
-    }
-  };
-
-  return (
-    <div className={cn(
-      "teams-page__info h-full overflow-y-auto bg-gray-900 border-l border-white/5 p-8 flex flex-col gap-10 transition-all duration-500 ease-in-out z-30 shadow-2xl",
-      !isOpen && "hidden md:hidden"
-    )}>
-      {/* Mobile Back Button */}
-      <button 
-         className="flex items-center gap-3 text-primary text-xs font-black uppercase tracking-[0.2em] md:hidden mb-4 group"
-         onClick={onClose}
-       >
-          <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" /> Back to Workspace
-       </button>
-
-      <div className="flex flex-col items-center text-center gap-6">
-          <div className="w-28 h-28 rounded-[2.5rem] bg-gradient-to-br from-blue-500 to-indigo-600 p-1 shadow-2xl relative group cursor-pointer overflow-hidden transition-transform hover:scale-105 active:scale-95">
-             <div className="absolute inset-x-0 bottom-0 top-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity z-10 flex items-center justify-center">
-                <label htmlFor="team-avatar-input" className="cursor-pointer">
-                  <Camera size={24} className="text-white" />
-                  <input id="team-avatar-input" type="file" className="hidden" accept="image/*" onChange={handleAvatarChange} />
-                </label>
-             </div>
-             {team.avatar_url ? (
-               <SecureImage src={team.avatar_url} alt="" className="w-full h-full rounded-[2.25rem] object-cover" />
-             ) : (
-               <div className="w-full h-full rounded-[2.25rem] flex items-center justify-center text-5xl font-black text-white">
-                  {team.name.charAt(0).toUpperCase()}
-               </div>
-             )}
-          </div>
-          <div>
-             <h2 className="text-2xl font-black text-white uppercase tracking-tighter italic">{team.name}</h2>
-             <p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mt-3">{team.description || 'Verified Team Workspace'}</p>
-          </div>
-       </div>
-
-       {/* Bento Grid Stats */}
-       <div className="grid grid-cols-2 gap-4">
-          <div className="p-5 rounded-[2rem] bg-blue-500/5 border border-blue-500/10 flex flex-col justify-between h-32 hover:bg-blue-500/10 transition-colors group">
-             <div className="w-9 h-9 rounded-2xl bg-blue-500/20 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
-                <MessageSquare size={18} />
-             </div>
-             <div>
-                <div className="text-2xl font-black text-white tracking-tighter italic">{teamStats?.total_messages || '0'}</div>
-                <div className="text-[9px] font-black text-gray-600 uppercase tracking-widest mt-1">Activity</div>
-             </div>
-          </div>
-          <div className="p-5 rounded-[2rem] bg-purple-500/5 border border-purple-500/10 flex flex-col justify-between h-32 hover:bg-purple-500/10 transition-colors group">
-             <div className="w-9 h-9 rounded-2xl bg-purple-500/20 flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform">
-                <Users size={18} />
-             </div>
-             <div>
-                <div className="text-2xl font-black text-white tracking-tighter italic">{team.member_count}</div>
-                <div className="text-[9px] font-black text-gray-600 uppercase tracking-widest mt-1">Active Members</div>
-             </div>
-          </div>
-       </div>
-
-       {/* Members List */}
-       <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em]">Directory</h4>
-            <span className="text-[9px] font-black text-primary bg-primary/10 px-2 py-1 rounded-lg">Online</span>
-          </div>
-          <div className="space-y-3">
-             {loading ? (
-                <div className="flex justify-center p-4"><Loader2 className="animate-spin text-primary" size={20} /></div>
-             ) : (
-                members.slice(0, 5).map((m: TeamMember) => (
-                  <div key={m.id} className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-transparent hover:border-white/5 transition-all group">
-                     <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden border border-white/5 group-hover:scale-110 transition-transform flex-shrink-0">
-                        {m.profile?.avatar_url ? (
-                          <SecureImage src={m.profile.avatar_url} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="text-[10px] font-black text-gray-400">{m.profile?.full_name?.charAt(0) || 'U'}</span>
-                        )}
-                     </div>
-                     <div className="flex-1 min-w-0">
-                        <div className="text-[11px] font-bold text-white truncate">{m.profile?.full_name || m.profile?.email}</div>
-                        <div className="text-[9px] font-black text-gray-600 uppercase tracking-widest flex items-center gap-1">
-                          {m.role === 'owner' && <Crown size={8} className="text-yellow-500" />} {m.role}
-                        </div>
-                     </div>
-                  </div>
-                ))
-             )}
-          </div>
-       </div>
-
-       {/* Danger Zone */}
-       <div className="mt-auto pt-6 space-y-4">
-          <h4 className="text-[10px] font-black text-red-500/50 uppercase tracking-[0.3em]">Security</h4>
-          <div className="space-y-3">
-             {myRole !== 'owner' ? (
-               <button 
-                onClick={onLeave}
-                className="flex items-center justify-center gap-3 w-full p-4 rounded-2xl bg-red-500/5 hover:bg-red-500/10 text-red-400 text-[11px] font-black tracking-widest uppercase transition-all border border-red-500/10 group active:scale-95"
-               >
-                 <LogOut size={16} className="group-hover:-translate-x-1 transition-transform" /> Exit Workspace
-               </button>
-             ) : (
-               <button 
-                onClick={onDelete}
-                className="flex items-center justify-center gap-3 w-full p-4 rounded-2xl bg-red-500/5 hover:bg-red-500/10 text-red-400 text-[11px] font-black tracking-widest uppercase transition-all border border-red-500/10 group active:scale-95"
-               >
-                 <Trash2 size={16} className="group-hover:rotate-12 transition-transform" /> Delete Hub
-               </button>
-             )}
-          </div>
-       </div>
-    </div>
-  );
-};
+}
 
 export default TeamsPage;

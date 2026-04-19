@@ -7,11 +7,15 @@ const router = express.Router();
  * No auth required — must be accessible to all clients including outdated ones.
  */
 const APP_CONFIG = {
-  latest_version: '1.1.3',
-  minimum_version: '1.1.3',
+  latest_version: '1.1.4',
+  minimum_version: '1.1.4',
   force_update: true,
-  update_message: 'v1.1.3 is required: Emergency hardening of authentication system and stability fixes.',
+  update_message: 'Critical fix for dashboard stability and authentication reliability.',
   changelog: [
+    'Fixed ReferenceError in Teams dashboard',
+    'Hardened authentication retry logic',
+    'Stability improvements for mobile connections',
+    'Resolved 503 Service Unavailable errors during login',
     'Fixed 503 Service Unavailable errors on dashboard and wallet',
     'Hardened authentication middleware against expired sessions',
     'Improved realtime gateway connection stability',
