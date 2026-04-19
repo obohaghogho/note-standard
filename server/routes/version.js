@@ -7,20 +7,17 @@ const router = express.Router();
  * No auth required — must be accessible to all clients including outdated ones.
  */
 const APP_CONFIG = {
-  latest_version: '1.1.4',
-  minimum_version: '1.1.4',
+  latest_version: '1.1.5',
+  minimum_version: '1.1.5',
   force_update: true,
-  update_message: 'Critical fix for dashboard stability and authentication reliability.',
+  update_message: 'Production stability update: Fixed dashboard initialization and real-time connectivity.',
   changelog: [
+    'Fixed "View blocked" errors on dashboard pages',
+    'Restructured components for production stability',
+    'Resolved real-time connection issues (CSP update)',
+    'Verified Supabase connectivity across all services',
     'Fixed ReferenceError in Teams dashboard',
-    'Hardened authentication retry logic',
-    'Stability improvements for mobile connections',
-    'Resolved 503 Service Unavailable errors during login',
-    'Fixed 503 Service Unavailable errors on dashboard and wallet',
-    'Hardened authentication middleware against expired sessions',
-    'Improved realtime gateway connection stability',
-    'Fixed all dashboard icons and chart rendering bugs',
-    'Resolved touch-action issues on mobile devices'
+    'Hardened authentication retry logic'
   ]
 };
 

@@ -16,7 +16,7 @@ import { User, Camera, Save, Loader2, Megaphone, BadgeCheck, Shield, Lock, Downl
 import { UserBadge } from '../../components/common/UserBadge';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 
-export const Settings = () => {
+export function Settings() {
     const { user, profile: authProfile, isBusiness, signOut } = useAuth();
     const { permission, isSubscribed, subscribeUser, unsubscribeUser } = usePushNotifications();
     const [searchParams] = useSearchParams();

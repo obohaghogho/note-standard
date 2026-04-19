@@ -26,7 +26,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "https://www.google.com/recaptcha/", "https://www.gstatic.com/recaptcha/"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       imgSrc: ["'self'", "data:", "https://*.supabase.co", "https://res.cloudinary.com", "https://api.dicebear.com"],
-      connectSrc: ["'self'", "https://*.supabase.co", "wss://*.supabase.co", "https://api.fincra.com", "https://api.paystack.co", "https://api.nowpayments.io"],
+      connectSrc: ["'self'", "https://*.supabase.co", "wss://*.supabase.co", "https://realtime-gateway-gsb5.onrender.com", "wss://realtime-gateway-gsb5.onrender.com", "https://api.fincra.com", "https://api.paystack.co", "https://api.nowpayments.io"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'", "https://res.cloudinary.com", "https://*.supabase.co"],
