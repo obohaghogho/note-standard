@@ -57,9 +57,10 @@ class GreyProvider extends BaseProvider {
     }
 
     // 2. Generate user-friendly reference if not already NOTE- format
+    const userId = data.metadata?.user_id || data.userId || "system";
     const userReference = reference.startsWith("NOTE-") || reference.startsWith("NS-")
       ? reference
-      : GreyEmailService.generateReference();
+      : GreyEmailService.generateReference(userId);
 
     // 3. Calculate expiration time
     const expiresAt = new Date(
@@ -105,6 +106,7 @@ class GreyProvider extends BaseProvider {
         currency: upCurrency,
         expires_at: expiresAt,
         expiry_minutes: this.expiryMinutes,
+        critical_warning: "You MUST include this exact reference in your bank transfer narration/memo or your payment will not be processed.",
       },
     };
   }

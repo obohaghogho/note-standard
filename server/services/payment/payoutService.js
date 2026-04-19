@@ -1,5 +1,6 @@
 const axios = require("axios");
 const crypto = require("crypto");
+const supabase = require("../../config/database"); // Added missing import
 const logger = require("../../utils/logger");
 
 const FINCRA_SECRET_KEY = process.env.FINCRA_SECRET_KEY;
@@ -246,6 +247,70 @@ class PayoutService {
         }`,
       );
     }
+  }
+
+  /**
+   * Initialize a managed payout request in the database
+   */
+  async createPayoutRequest(userId, walletId, data) {
+    const { amount, currency, method, destination, ip, deviceId } = data;
+    
+    // -------------------------------------------------------------------------
+    // DETERMINISTIC KERNEL: INTENT PUSH
+    // We do NOT write to payout_requests directly. We push to the Causal Queue.
+    // -------------------------------------------------------------------------
+    const causalGroupId = require('crypto').randomUUID();
+    const shardId = parseInt(walletId.substring(0, 8), 16) % 4;
+    const idempotencyKey = `payout_init_${userId}_${amount}_${Date.now()}`;
+
+    const { data: intent, error: intentErr } = await supabase
+      .from('causal_execution_queue')
+      .insert({
+        wallet_id: walletId,
+        shard_id: shardId,
+        causal_group_id: causalGroupId,
+        idempotency_key: idempotencyKey,
+        intent_type: 'payout_create',
+        expected_version: 1, 
+        payload: {
+          user_id: userId,
+          amount: parseFloat(amount),
+          currency,
+          payout_method: method,
+          destination: destination,
+          ip_address: ip,
+          device_fingerprint: deviceId
+        }
+      })
+      .select()
+      .single();
+
+    if (intentErr) throw intentErr;
+    return { ...intent, status: 'Processing' };
+  }
+
+  /**
+   * Latency-Abstracted Status Exposure (3-Layer Model)
+   */
+  async getStatus(requestId) {
+    const latencyMapper = require('./LatencyMapper');
+    const { data: request, error } = await supabase
+        .from('payout_requests')
+        .select('*')
+        .eq('id', requestId)
+        .single();
+    
+    if (error || !request) return { status: 'Unknown' };
+
+    // Map internal withdrawal_state and system latency (SLA) to user status
+    const userStatus = latencyMapper.mapStatus(request.withdrawal_state, request.metadata?.sla_status || 'PENDING');
+    const reason = latencyMapper.getReason(request.metadata?.sla_status || 'PENDING');
+
+    return { 
+        status: userStatus,
+        explanation: reason,
+        updatedAt: request.updated_at
+    };
   }
 }
 

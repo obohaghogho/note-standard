@@ -3,8 +3,9 @@ const logger = require("../../utils/logger");
 const WebhookSignatureService = require("../../services/payment/WebhookSignatureService");
 const { paymentQueue } = require("../../services/payment/paymentQueue");
 const supabase = require("../../config/database");
-const GreyEmailService = require("../../services/payment/GreyEmailService");
+const UniversalParserEngine = require("../../services/payment/UniversalParserEngine");
 const paymentService = require("../../services/payment/paymentService");
+const crypto = require("crypto");
 
 /**
  * Unified Webhook Controller
@@ -141,121 +142,184 @@ exports.handleSendGridInbound = async (req, res) => {
       return;
     }
 
-    // 2. Parse the SendGrid inbound email payload
-    const parsed = GreyEmailService.parseSendGridPayload(req.body);
+    // 1. Check Global System Mode (Safe Mode Kill Switch)
+    const { data: settings } = await supabase
+      .from("admin_settings")
+      .select("value")
+      .eq("key", "SYSTEM_MODE")
+      .single();
+    
+    if (settings?.value?.mode === 'SAFE') {
+      logger.error(`[Webhook] BLOCKED: System is in SAFE MODE. No payment ingestion permitted.`);
+      return res.status(503).json({ error: "System is in maintenance/protection mode." });
+    }
 
-    logger.info("[Webhook] SendGrid email parsed:", {
-      amount: parsed.amount,
-      currency: parsed.currency,
-      reference: parsed.reference,
-      sender: parsed.sender,
-      confidence: parsed.confidence,
+    // 2. Initialize Parsing
+    const parsed = UniversalParserEngine.parseSendGridPayload(req.body);
+    
+    // Evaluate Fraud Score Early
+    const FraudEngine = require("../../services/payment/FraudEngine");
+    const fraudResult = await FraudEngine.evaluateTransaction(parsed);
+    
+    // Global Fraud Block - Hard Gate
+    if (fraudResult.action === 'block') {
+       logger.warn(`[Webhook] Critical Fraud Blocked: ${parsed.sender_fingerprint} (Score: ${fraudResult.score})`);
+       return res.status(403).json({ success: false, reason: "security_block" });
+    }
+
+    logger.info(`[Webhook] SendGrid email received:`, {
+      amount: parsed.normalized_amount,
+      currency: parsed.normalized_currency,
+      reference: parsed.normalized_reference,
+      sender: parsed.sender_fingerprint,
+      confidence: parsed.confidence_score,
+      fraud_score: fraudResult.score,
+      region: parsed.provider_region
     });
 
-    // 3. Generate idempotency key
-    const idempotencyKey =
-      parsed.transactionId ||
-      `sendgrid_${Date.now()}_${parsed.reference || "unknown"}`;
+    // 3. Generate strict DUAL idempotency hashes
+    const payloadString = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    const payloadHash = crypto.createHash("sha256").update(payloadString).digest("hex");
+    const transactionId = parsed.transactionId || null;
+    
+    // Business Idempotency: Protects against functionally identical emails even if raw data differs slightly
+    const reqAmount = parsed.normalized_amount || 0;
+    const reqRef = parsed.normalized_reference || 'NOREFERENCE';
+    const businessHashInput = `${reqRef}:${reqAmount}:${parsed.normalized_currency}:${parsed.sender_fingerprint}`;
+    const businessHash = crypto.createHash("sha256").update(businessHashInput).digest("hex");
 
-    // 4. Log the webhook hit
-    const { data: log, error: logError } = await supabase
-      .from("webhook_logs")
+    // 3.b Timestamp Window Enforcement (Replay Protection)
+    // Assume headers.date or headers.timestamp exists, otherwise we default loosely
+    const webhookTs = req.headers['date'] || req.headers['x-timestamp'] || null;
+    let webhookDate = Date.now();
+    if (webhookTs) {
+        webhookDate = new Date(webhookTs).getTime();
+        const now = Date.now();
+        if ((now - webhookDate) > 24 * 60 * 60 * 1000) {
+            logger.warn(`[Webhook] Stale webhook rejected (older than 24 hours): ${webhookTs}`);
+            return;
+        }
+    }
+
+    // 3.c Triple-ID Identity Model (fingerprint_hash)
+    // SHA256(sender + amount + currency + TRUNCATE_DAY(timestamp))
+    const truncateDayTs = new Date(webhookDate).toISOString().split('T')[0];
+    const fingerprintString = `${parsed.sender_fingerprint}:${reqAmount}:${parsed.normalized_currency}:${truncateDayTs}`;
+    const fingerprintHash = crypto.createHash("sha256").update(fingerputString).digest("hex");
+
+    // 4. IDEMPOTENCY LAYER: Check webhook_events table
+    // If external_id, payload_hash, business_hash, or fingerprint_hash exists, it throws 23505
+    const { data: eventLog, error: eventErr } = await supabase
+      .from("webhook_events")
       .insert({
-        provider: "sendgrid",
-        payload: req.body,
-        headers: req.headers,
-        reference: parsed.reference || "unknown",
-        unique_transaction_id: idempotencyKey,
-        ip_address: req.headers["x-forwarded-for"] || req.socket.remoteAddress,
+        provider: "universal_email",
+        external_id: transactionId,
+        payload_hash: payloadHash,
+        business_hash: businessHash,
+        fingerprint_hash: fingerprintHash,
+        status: "processing"
       })
       .select("id")
       .single();
 
-    if (logError) {
-      if (logError.code === "23505") {
-        logger.warn(
-          `[Webhook] Duplicate SendGrid email ${idempotencyKey} dropped.`
-        );
-        return;
-      }
-      logger.error("[Webhook] Failed to log SendGrid hit", {
-        error: logError.message,
-      });
+    if (eventErr && eventErr.code === "23505") {
+      logger.warn(`[Webhook] Duplicate SendGrid email dropped (Triple-ID / Dual Idempotency Triggered).`);
+      return;
     }
 
-    // 5. Build unified event structure
+    // 5. Build unified event structure for the downstream pipeline
     const event = {
       type: "deposit",
-      reference: parsed.reference,
-      status: parsed.status === "completed" ? "success" : "needs_review",
-      amount: parsed.amount,
-      currency: parsed.currency,
-      sender: parsed.sender,
-      transactionId: idempotencyKey,
-      confidence: parsed.confidence,
+      reference: parsed.normalized_reference,
+      status: parsed.confidence_score >= 85 ? "success" : "needs_review",
+      amount: parsed.normalized_amount,
+      currency: parsed.normalized_currency,
+      sender: parsed.sender_fingerprint,
+      transactionId: transactionId || payloadHash,
+      confidence: parsed.confidence_score,
+      region: parsed.provider_region,
       raw: parsed.raw,
+      webhook_event_id: eventLog.id // Pass ID so success overrides it
     };
 
-    // 6. Queue for processing
+    // 6. STRICT DECISION ENGINE ROUTING (Approved Final Form thresholds)
+    if (parsed.confidence_score < 40) {
+        // Tier 4: FAILED_PARSE_QUEUE
+        logger.warn(`[Webhook] FAILED_PARSE (<40). Rerouted.`);
+        await supabase.from("reconciliation_queue").insert({
+            raw_payload: req.body,
+            parsed_data: { ...parsed, fraudScore: fraudResult.score },
+            reason: "parsing_failed",
+            queue_type: "failed_parse",
+            status: "pending"
+        });
+        
+        // Notify User of potential signal
+        const paymentService = require("../../services/payment/paymentService");
+        await paymentService.notifyPotentialPayment(parsed.sender_fingerprint, "failed_parse");
+        
+        await supabase.from("webhook_events").update({ status: "skipped", error_message: "Low confidence parse" }).eq("id", eventLog.id);
+        return;
+    } else if (parsed.confidence_score >= 40 && parsed.confidence_score < 60) {
+        // Tier 3: AMBIGUOUS_MATCH_QUEUE
+        logger.warn(`[Webhook] AMBIGUOUS_MATCH (40-59). Rerouted.`);
+        await supabase.from("reconciliation_queue").insert({
+            payment_reference: parsed.normalized_reference,
+            raw_payload: req.body,
+            parsed_data: { ...parsed, fraudScore: fraudResult.score },
+            reason: "ambiguous_match",
+            queue_type: "ambiguous_match",
+            status: "pending"
+        });
+
+        // Notify User of potential signal
+        const paymentService = require("../../services/payment/paymentService");
+        await paymentService.notifyPotentialPayment(parsed.sender_fingerprint, "ambiguous_match");
+
+        await supabase.from("webhook_events").update({ status: "skipped", error_message: "Ambiguous match" }).eq("id", eventLog.id);
+        return;
+    } else if ((parsed.confidence_score >= 60 && parsed.confidence_score < 85) || fraudResult.action === 'review') {
+        // Tier 2: PENDING_CONFIRMATION (Reasonable but needs secondary check)
+        logger.info(`[Webhook] PENDING_CONFIRMATION (60-84 or Fraud Review). Rerouted.`);
+        await supabase.from("reconciliation_queue").insert({
+            payment_reference: parsed.normalized_reference,
+            raw_payload: req.body,
+            parsed_data: { ...parsed, fraudScore: fraudResult.score },
+            reason: fraudResult.action === 'review' ? "fraud_review" : "pending_confirmation",
+            queue_type: "pending_confirmation",
+            status: "pending"
+        });
+        await supabase.from("webhook_events").update({ status: "skipped", error_message: "Pending Confirmation" }).eq("id", eventLog.id);
+        return;
+    }
+    
+    // Tier 1: MATCHED (Confidence >= 85 AND Fraud Allow)
+    logger.info(`[Webhook] MATCHED (Confidence: ${parsed.confidence_score}%). Proceeding to Layer 3.`);
+    }
+
+    // 7. Auto-Approve Pipeline (>=85 Confidence)
     if (paymentQueue && paymentQueue.add) {
-      await paymentQueue.add(
-        parsed.confidence >= 60
-          ? "process-sendgrid-webhook"
-          : "process-sendgrid-unmatched",
-        {
+      await paymentQueue.add("process-sendgrid-webhook", {
           provider: "grey",
           event,
           payload: parsed,
-          logId: log?.id,
-        }
-      );
-      logger.info(
-        `[Webhook] SendGrid email queued (confidence: ${parsed.confidence}%)`
-      );
-    } else {
-      logger.info("[Webhook] Redis disabled: Falling back to synchronous processing for SendGrid webhook", {
-        reference: event.reference,
-        confidence: parsed.confidence
+          logId: eventLog.id,
       });
+      logger.info(`[Webhook] SendGrid email queued (confidence: ${parsed.confidence_score}%)`);
+    } else {
+      logger.info("[Webhook] Redis disabled: Falling back to synchronous processing");
       
-      // Synchronous fallback (Directly call the logic that the worker would use)
-      if (parsed.confidence >= 60) {
-        try {
-          const result = await paymentService.executeWebhookAction(event, parsed, "grey");
-          logger.info("[Webhook] SendGrid email processed synchronously", { result });
-          
-          // Mark as processed in DB
-          if (log?.id) {
-            await supabase
-              .from("webhook_logs")
-              .update({ 
-                processed: true, 
-                unique_transaction_id: idempotencyKey 
-              })
-              .eq("id", log.id);
-          }
-        } catch (syncErr) {
-          logger.error("[Webhook] Synchronous processing failed", { error: syncErr.message });
-          if (log?.id) {
-            await supabase
-              .from("webhook_logs")
-              .update({ processing_error: syncErr.message })
-              .eq("id", log.id);
-          }
+      try {
+        const result = await paymentService.executeWebhookAction(event, parsed, "grey");
+        
+        if (result && result.error) {
+           await supabase.from("webhook_events").update({ status: "failed", error_message: result.error }).eq("id", eventLog.id);
+        } else {
+           await supabase.from("webhook_events").update({ status: "success" }).eq("id", eventLog.id);
         }
-      } else {
-        logger.warn("[Webhook] Confidence too low for synchronous auto-confirm. Moving to unmatched.");
-        await supabase.from("unmatched_payments").insert({
-          amount: event.amount,
-          currency: event.currency,
-          sender: event.sender,
-          raw_text: event.raw,
-          metadata: {
-            provider: "grey",
-            confidence: event.confidence,
-            source: "sendgrid_email_sync",
-          },
-        });
+      } catch (syncErr) {
+        logger.error("[Webhook] Sync processing failed", { error: syncErr.message });
+        await supabase.from("webhook_events").update({ status: "failed", error_message: syncErr.message }).eq("id", eventLog.id);
       }
     }
   } catch (error) {

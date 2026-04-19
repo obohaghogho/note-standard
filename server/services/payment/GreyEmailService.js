@@ -216,19 +216,25 @@ class GreyEmailService {
   }
 
   /**
-   * Generate a unique, user-friendly payment reference.
-   * Format: NOTE-XXXXXX (6 uppercase alphanumeric characters)
+   * Generate a secure, unique, and time-bound payment reference.
+   * Format: NOTE-<userIdHash>-<timestampHex>-<cryptoRandom>
    *
-   * @returns {string} e.g. "NOTE-A3B7K2"
+   * @param {string} userId - User ID to inject entropy
+   * @returns {string} e.g. "NOTE-A3B7-18C8B1A-F4"
    */
-  static generateReference() {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // Excluding I, O, 0, 1 for readability
-    let code = "";
-    const randomBytes = require("crypto").randomBytes(6);
-    for (let i = 0; i < 6; i++) {
-      code += chars[randomBytes[i] % chars.length];
-    }
-    return `NOTE-${code}`;
+  static generateReference(userId = "anonymous") {
+    const crypto = require("crypto");
+    
+    // User Entropy (first 4 chars of sha256 hash)
+    const userHash = crypto.createHash('sha256').update(String(userId)).digest('hex').substring(0, 4).toUpperCase();
+    
+    // Time-bound Component (Hex timestamp)
+    const timestampHex = Date.now().toString(16).toUpperCase();
+    
+    // Cryptographically secure random piece
+    const randomHex = crypto.randomBytes(2).toString('hex').toUpperCase();
+
+    return `NOTE-${userHash}-${timestampHex}-${randomHex}`;
   }
 
   // ─── Private Helpers ──────────────────────────────────────────

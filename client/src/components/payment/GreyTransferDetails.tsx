@@ -38,7 +38,28 @@ export default function GreyTransferDetails({
   const [isPolling, setIsPolling] = useState(false);
   const [pollStatus, setPollStatus] = useState<string>("waiting");
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [isSafeMode, setIsSafeMode] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const stopPollingRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    // Check system status
+    const checkSystemMode = async () => {
+       const { data } = await supabase.from('admin_settings').select('value').eq('key', 'SYSTEM_MODE').single();
+       if (data?.value?.mode === 'SAFE') setIsSafeMode(true);
+    };
+
+    const checkUserRole = async () => {
+       const { data: { user } } = await supabase.auth.getUser();
+       const { data: profile } = await supabase.from('profiles').select('role').eq('id', user?.id).maybeSingle();
+       if (profile?.role === 'admin' || profile?.role === 'superadmin') setIsAdmin(true);
+    }
+
+    checkSystemMode();
+    checkUserRole();
+    
+    if (pollStatus === "confirmed" || pollStatus === "failed") return;
+  }, [pollStatus]);
 
   const bankName = (instructions.bank_name as string) || "";
   const accountName = (instructions.account_name as string) || "";
@@ -47,6 +68,7 @@ export default function GreyTransferDetails({
   const iban = (instructions.iban as string) || "";
   const additionalInfo = (instructions.additional_info as string) || "";
   const displayRef = (instructions.reference as string) || reference;
+  const criticalWarning = (instructions.critical_warning as string) || "";
 
   // ─── Countdown Timer ──────────────────────────────────────
 
@@ -118,9 +140,21 @@ export default function GreyTransferDetails({
       "grey",
       (status: PaymentStatus) => {
         if (status.success || status.status === "success") {
-          setPollStatus("confirmed");
+          // If explicitly finalized or no provisional status, we're done
+          if (!status.isProvisional && status.settlementStatus === "FINALIZED_LEDGER") {
+              setPollStatus("confirmed");
+              setIsPolling(false);
+              onConfirmed(status);
+          } else if (status.isProvisional) {
+              setPollStatus("settling");
+          } else {
+              setPollStatus("confirmed");
+              setIsPolling(false);
+              onConfirmed(status);
+          }
+        } else if (status.status === "needs_review" || status.status === "pending_review") {
+          setPollStatus("review");
           setIsPolling(false);
-          onConfirmed(status);
         } else if (
           status.status === "expired" ||
           status.status === "failed"
@@ -225,6 +259,11 @@ export default function GreyTransferDetails({
             {copiedField === "ref" ? "Copied! ✓" : "Copy Reference"}
           </button>
         </div>
+        {criticalWarning && (
+          <div className="gt-critical-alert" style={{marginTop: '12px', padding: '10px', backgroundColor: 'rgba(255, 170, 0, 0.1)', borderLeft: '4px solid #ffaa00', color: '#cc8800', fontSize: '13px', borderRadius: '4px'}}>
+            <strong>⚠️ CRITICAL:</strong> {criticalWarning}
+          </div>
+        )}
       </div>
 
       {/* Instructions */}
@@ -273,10 +312,47 @@ export default function GreyTransferDetails({
                   </p>
                 </>
               )}
+              {isSafeMode && (
+                <div className="gt-safe-mode-alert">
+                  <span className="gt-alert-icon">⚠️</span>
+                  <div className="gt-alert-content">
+                    <h4>System Protected (Safe Mode)</h4>
+                    <p>Automated settlement is temporarily paused for security. Your funds are recorded and will be processed once audits conclude.</p>
+                    {isAdmin && (
+                        <button className="gt-admin-override-btn" onClick={() => {/* logic for multi-admin request */}}>
+                           Initiate Multi-Admin Override →
+                        </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {pollStatus === "checking" && (
+                <div className="gt-poll-checking">
+                  <div className="gt-loader" />
+                  <p>Searching for your bank transfer...</p>
+                </div>
+              )}
               {pollStatus === "confirmed" && (
                 <div className="gt-poll-success">
                   <span>✅</span>
-                  <p>Payment confirmed! Crediting your wallet...</p>
+                  <p>Payment Finalized! Crediting complete.</p>
+                </div>
+              )}
+              {pollStatus === "settling" && (
+                <div className="gt-poll-settling">
+                   <div className="gt-settling-loader" />
+                   <span>⏳ Settling...</span>
+                   <p>Your payment was detected and matched! Funds are now <strong>provisionally available</strong> for use while bank-grade finalization concludes (Layer 3 Settlement).</p>
+                   <button className="gt-continue-btn" onClick={() => onConfirmed({ success: true, status: 'success' })}>
+                      Continue with Provisional Balance →
+                   </button>
+                </div>
+              )}
+              {pollStatus === "review" && (
+                <div className="gt-poll-review" style={{color: '#d97706'}}>
+                  <span>⏳</span>
+                  <p>Your payment was detected but needs manual review (e.g. amount variance or missing reference). Our team will process this shortly.</p>
                 </div>
               )}
               {pollStatus === "failed" && (

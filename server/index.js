@@ -34,6 +34,7 @@ const analyticsService = require("./services/analyticsService");
 const paymentWorker = require("./workers/paymentWorker");
 const paymentService = require("./services/payment/paymentService");
 const paymentExpiry = require("./workers/paymentExpiry");
+const reconciliationWorker = require("./workers/reconciliationWorker");
 
 /**
  * 🚀 START SERVER IMMEDIATELY
@@ -61,6 +62,7 @@ server.listen(PORT, "0.0.0.0", async () => {
 
   // 2. Start Background Workers
   paymentExpiry.start();
+  reconciliationWorker.start();
   // paymentWorker is usually managed separately but included here if needed
   
   // 3. Initial Market Data & Trends Aggregation

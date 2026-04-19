@@ -598,7 +598,42 @@ class PaymentService {
         // RE-VERIFY with gateway API before finalizing (Industry Standard)
         // EXCEPT for Grey which has no API and relies entirely on our own parsing logic
         if (providerName === "grey") {
-          result = await this.finalizeTransaction(event.reference, event);
+          const FraudEngine = require("./FraudEngine");
+          const fraudResult = await FraudEngine.evaluateTransaction(event);
+          
+          if (fraudResult.action === "block") {
+              logger.warn(`[PaymentService] Fraud block for ${event.reference}: ${fraudResult.reasons.join(', ')}`);
+              await supabase.from('reconciliation_queue').insert({
+                 payment_reference: event.reference,
+                 raw_payload: body,
+                 parsed_data: event,
+                 reason: `Fraud Block (Score ${fraudResult.score}): ${fraudResult.reasons.join(', ')}`,
+                 status: 'rejected'
+              });
+              await supabase.from("payments").update({ status: 'MATCHED' }).eq('reference', event.reference).select();
+              await supabase.from("payments").update({ status: 'REJECTED' }).eq('reference', event.reference);
+              result = { status: "verification_failed", error: "Fraud threshold exceeded" };
+          } else if (fraudResult.action === "review") {
+              logger.warn(`[PaymentService] Fraud review for ${event.reference}: ${fraudResult.reasons.join(', ')}`);
+              await supabase.from('reconciliation_queue').insert({
+                 payment_reference: event.reference,
+                 raw_payload: body,
+                 parsed_data: event,
+                 reason: `Fraud Review (Score ${fraudResult.score}): ${fraudResult.reasons.join(', ')}`,
+                 status: 'pending'
+              });
+              await supabase.from("payments").update({ status: 'MATCHED' }).eq('reference', event.reference).select();
+              await supabase.from("payments").update({ status: 'UNDER_REVIEW' }).eq('reference', event.reference);
+              result = { status: "verification_failed", error: "Sent to manual review" };
+          } else {
+              // Action == "allow"
+              // Force state transitions properly
+              await supabase.from("payments").update({ status: 'PARSED' }).eq('reference', event.reference).select();
+              await supabase.from("payments").update({ status: 'MATCHED' }).eq('reference', event.reference).select();
+              await supabase.from("payments").update({ status: 'APPROVED' }).eq('reference', event.reference);
+              
+              result = await this.finalizeTransaction(event.reference, event);
+          }
         } else {
           result = await this.verifyPaymentStatus(event.reference);
         }
@@ -646,15 +681,29 @@ class PaymentService {
     // 2. IDEMPOTENCY CHECK (using both tables for safety)
     const { data: payRecord } = await supabase
       .from("payments")
-      .select("status, credited")
+      .select("status, credited, expires_at")
       .eq("reference", reference)
       .single();
 
-    if (tx.status?.toUpperCase() === "COMPLETED" || payRecord?.credited) {
-      console.log(
-        `[Finalize] Transaction ${reference} already completed or credited. Skipping.`,
-      );
+    if (tx.status?.toUpperCase() === "COMPLETED" || payRecord?.status === "CREDITED" || payRecord?.status === "success" || payRecord?.credited) {
+      console.log(`[Finalize] Transaction ${reference} already completed or credited. Skipping.`);
       return { status: "already_completed" };
+    }
+
+    // EXPIRATION ENFORCEMENT
+    if (payRecord && payRecord.status === 'pending' && payRecord.expires_at) {
+        if (new Date(payRecord.expires_at) < new Date()) {
+            console.warn(`[Finalize] Payment ${reference} expired. Routing to reconciliation_queue.`);
+            await supabase.from('reconciliation_queue').insert({
+                payment_reference: reference,
+                raw_payload: rawData,
+                parsed_data: eventData,
+                reason: 'payment_expired',
+                status: 'pending'
+            });
+            await supabase.from('payments').update({ status: 'EXPIRED', updated_at: new Date() }).eq('reference', reference);
+            return { status: "verification_failed", error: "Payment expired" };
+        }
     }
 
     console.log("STEP 2: Verification passed");
@@ -666,10 +715,35 @@ class PaymentService {
       rawData?.currency_code || eventData?.payment_type;
 
     if (evAmount !== undefined && evAmount !== null) {
-      if (!math.isEqual(tx.amount, evAmount)) {
+      // Amount Tolerance Validation (Currency-Isolated Rules)
+      const currency = String(tx.currency).toUpperCase();
+      let isWithinTolerance = false;
+      let toleranceMsg = "";
+
+      if (currency === 'NGN') {
+          // 1% relative scaling tolerance for NGN
+          const tolerance = Number(tx.amount) * 0.01;
+          isWithinTolerance = Math.abs(Number(tx.amount) - Number(evAmount)) <= tolerance;
+          toleranceMsg = `1% (${tolerance})`;
+      } else {
+          // ±5 Flat for GBP, USD, EUR, and others
+          const tolerance = 5;
+          isWithinTolerance = Math.abs(Number(tx.amount) - Number(evAmount)) <= tolerance;
+          toleranceMsg = `flat ${tolerance}`;
+      }
+
+      if (!isWithinTolerance) {
         console.error(
-          `[Finalize] Amount mismatch for ${reference}. DB: ${tx.amount}, Provider: ${evAmount}`,
+          `[Finalize] Amount mismatch for ${reference}. DB: ${tx.amount}, Provider: ${evAmount}. Tolerance: ${toleranceMsg}`,
         );
+        await supabase.from('reconciliation_queue').insert({
+            payment_reference: reference,
+            raw_payload: rawData,
+            parsed_data: eventData,
+            reason: `amount_mismatch: expected ${tx.amount}, received ${evAmount}. Rule: ${toleranceMsg}`,
+            queue_type: 'ambiguous_match',
+            status: 'pending'
+        });
         return {
           status: "verification_failed",
           error: "Amount mismatch between provider and database",
@@ -750,35 +824,43 @@ class PaymentService {
         p_external_hash: externalHash ? String(externalHash) : null,
       });
 
-      if (rpcError) {
-        console.error(
-          `[Finalize] confirm_deposit RPC failed for ${reference}:`,
-          rpcError.message || rpcError,
-        );
+      // ── AUDIT LOGGING OVER RPC ──
+      await supabase.from('audit_logs').insert({
+          reference: reference,
+          action: 'rpc_crediting',
+          status: rpcError ? 'failed' : 'success',
+          details: { transaction_id: tx.id, creditAmount, creditCurrency, error: rpcError?.message, wallet: targetWalletId }
+      });
 
-        // Handle specific idempotent exceptions from the SQL RPC
-        if (
-          rpcError.message?.includes("already completed") ||
-          rpcError.message?.includes("already")
-        ) {
-          console.log(
-            `[Finalize] Transaction ${reference} was completed concurrently inside RPC.`,
-          );
-        } else {
-           // On other RPC errors, we still want to return the transaction object to the poll
-           // so it doesn't crash, it will just show PENDING until it works or fails permanently.
+      if (rpcError) {
+        console.error(`[Finalize] confirm_deposit RPC failed for ${reference}:`, rpcError.message || rpcError);
+        if (rpcError.message?.includes("already completed") || rpcError.message?.includes("already")) {
+          console.log(`[Finalize] Transaction ${reference} was completed concurrently inside RPC.`);
         }
       }
 
-      // ── Update payments table status ──
+      // ── Update payments table status state machine ──
+      // Transition to CREDITED (Soft finality) but PENDING_SETTLEMENT (Bank finality)
       await supabase
         .from("payments")
         .update({
-          status: "success",
+          status: "CREDITED",
           credited: true,
           completed_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
+        .eq("reference", reference);
+
+      // ── Update Transaction Settlement Status ──
+      await supabase
+        .from("transactions")
+        .update({
+          settlement_status: "PENDING_SETTLEMENT",
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", tx.id);
+
+      logger.info(`[Finalize] Transaction ${reference} provisional credit complete. Settlement set to PENDING_SETTLEMENT.`);
         .eq("reference", tx.reference_id);
 
       console.log("STEP 4: Wallet credited and payment marked successfully");
@@ -1064,6 +1146,51 @@ class PaymentService {
 
     if (profile && profile.email) {
       await mailService.sendPaymentReceipt(profile.email, transaction);
+    }
+  }
+
+  /**
+   * Notify User of Potential/Ambiguous Payment (Final Form Strategy)
+   */
+  async notifyPotentialPayment(senderFingerprint, queueType) {
+    try {
+      const email = senderFingerprint?.includes('@') ? senderFingerprint : null;
+      if (!email) return;
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("email", email)
+        .maybeSingle();
+
+      if (!profile) return;
+
+      const { createNotification } = require("../notificationService");
+      
+      let title = "";
+      let message = "";
+
+      if (queueType === "ambiguous_match") {
+         title = "Payment Review Initiated";
+         message = "We detected a payment that may belong to you. Our system is reviewing it and will update you shortly.";
+      } else if (queueType === "failed_parse") {
+         title = "Payment Signal Received";
+         message = "We received a payment signal but couldn’t fully verify the details. If you recently made a transfer, our team is reviewing it.";
+      }
+
+      if (title) {
+        await createNotification({
+          receiverId: profile.id,
+          senderId: null,
+          type: "system_update",
+          title,
+          message,
+          link: "/dashboard/wallet",
+        });
+        logger.info(`[PaymentService] Potential payment notification sent for ${email} (${queueType})`);
+      }
+    } catch (err) {
+      logger.error(`[PaymentService] notifyPotentialPayment failed: ${err.message}`);
     }
   }
 }

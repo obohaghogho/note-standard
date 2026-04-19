@@ -159,6 +159,13 @@ exports.verifyGrey = async (req, res) => {
       status = "expired";
     }
 
+    // Fetch settlement info from transactions table
+    const { data: tx } = await supabase
+      .from("transactions")
+      .select("settlement_status, created_at")
+      .or(`reference_id.eq.${reference},id.eq.${payment.metadata?.transaction_id}`)
+      .maybeSingle();
+
     res.json({
       success: status === "success",
       status,
@@ -167,6 +174,8 @@ exports.verifyGrey = async (req, res) => {
       credited: payment.credited,
       senderName: payment.sender_name,
       expiresAt: payment.expires_at,
+      settlementStatus: tx?.settlement_status || 'PENDING',
+      isProvisional: tx?.settlement_status === 'SETTLEMENT_CONFIRMED' || tx?.settlement_status === 'PENDING_SETTLEMENT'
     });
   } catch (error) {
     logger.error("[PaymentController] Verify Grey Error:", error.message);

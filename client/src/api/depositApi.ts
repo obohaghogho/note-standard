@@ -48,6 +48,12 @@ export interface PaymentStatus {
   senderName?: string;
   expiresAt?: string;
   provider?: string;
+  
+  // Layer 3 & 4 Settlement Signals
+  settlementStatus?: "PENDING_SETTLEMENT" | "SETTLEMENT_CONFIRMED" | "FINALIZED_LEDGER";
+  settlingBalance?: number;
+  finalizedBalance?: number;
+  isProvisional?: boolean;
 }
 
 export interface ManualDeposit {
