@@ -187,20 +187,30 @@ async function createBankDeposit(
         const PaystackProvider = require("./payment/providers/PaystackProvider");
         const paystack = new PaystackProvider();
         const virtualAccount = await paystack.getDedicatedAccount(profile.email, firstName, lastName, userPhone);
+        
         liveDetails = {
           bankName: virtualAccount.bankName,
           accountNumber: virtualAccount.accountNumber,
           accountName: virtualAccount.accountName,
           note: "Funds are credited instantly after transfer",
         };
-      } catch (err) { console.error("[DepositService] NGN failed:", err.message); }
+      } catch (err) {
+        console.error("[DepositService] NGN Virtual account generation failed:", err.message);
+      }
     } else if (["USD", "EUR", "GBP"].includes(upCurrency)) {
       try {
         const hasFincra = process.env.FINCRA_SECRET_KEY && process.env.FINCRA_PUBLIC_KEY;
         if (hasFincra) {
           const FincraProvider = require("./payment/providers/FincraProvider");
           const fincra = new FincraProvider();
-          const va = await fincra.createVirtualAccount({ currency: upCurrency, email: profile.email, firstName, lastName, phone: userPhone });
+          const va = await fincra.createVirtualAccount({
+            currency: upCurrency, 
+            email: profile.email, 
+            firstName, 
+            lastName, 
+            phone: userPhone 
+          });
+
           if (va) {
             liveDetails = {
               bankName: va.bankName,
@@ -211,9 +221,14 @@ async function createBankDeposit(
             };
           }
         }
-      } catch (err) { console.error(`[DepositService] ${upCurrency} failed:`, err.message); }
+      } catch (err) {
+        console.error(`[DepositService] ${upCurrency} Virtual account generation error:`, err);
+      }
     }
-  } catch (err) { logger.warn(`[DepositService] Auto-gen error: ${err.message}`); }
+  } catch (err) {
+    logger.warn(`[DepositService] Global virtual account generation fail: ${err.message}`);
+  }
+
 
   const limit = await checkDailyLimit(userId, userPlan, amount);
   if (!limit.allowed) { throw new Error("Daily limit exceeded."); }
@@ -307,7 +322,9 @@ async function confirmDeposit(reference, externalHash = null) {
       message: `Your deposit of ${tx.amount} ${tx.currency} has been confirmed.`,
       link: "/dashboard/wallet",
     });
-  } catch (nErr) { }
+  } catch (nErr) {
+    logger.warn(`[DepositService] Notification skipped for ${tx.id}: ${nErr.message}`);
+  }
 
   return { success: true, amount: tx.amount, currency: tx.currency, walletId: tx.wallet_id };
 }
