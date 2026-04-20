@@ -65,8 +65,6 @@ async function createCardDeposit(
     throw new Error(`Profile not found or email missing for user ${userId}. Please update your profile before depositing.`);
   }
 
-  logger.info(`[DEBUG] DepositService Step 1: Limits check for ${amount} ${currency}`);
-
   // 1. Check Internal Daily Limits
   const limit = await checkDailyLimit(userId, userPlan, amount);
   if (!limit.allowed) {
@@ -76,7 +74,6 @@ async function createCardDeposit(
   }
 
   // 2. Check Provider/Test Mode Limits (safety cap)
-  // We use a safe margin of $5,000 USD equivalent.
   const MAX_USD_EQUIVALENT = 5000;
   try {
     const rate = await fxService.getRate(currency, "USD");
@@ -89,7 +86,6 @@ async function createCardDeposit(
       );
     }
   } catch (fxErr) {
-    // If FX fails, fallback to a VERY safe hardcoded cap for known currencies or just allow (failing safe)
     if (currency === "JPY" && amount > 1000000) {
       throw new Error("JPY amount too high for test mode");
     }
@@ -98,10 +94,7 @@ async function createCardDeposit(
     }
   }
 
-  logger.info(`[DEBUG] DepositService Step 2: Calling PaymentService.initializePayment`);
-
   // Initialize payment through unified service
-  // This handles provider selection (Paystack/Flutterwave/Stripe) and DB records
   return await PaymentService.initializePayment(
     userId,
     profile.email,
@@ -139,24 +132,12 @@ async function createBankDeposit(
     throw new Error("BTC and ETH deposits are not supported via bank transfer");
   }
 
-  // Fetch bank details from settings instead of hardcoding
-  const allBankDetails =
-    await commissionService.getSetting("bank_deposit_details") || {
-      NGN: {
-        bankName: "Manual Transfer",
-        accountNumber: "Contact Support",
-        accountName: "NoteStandard Admin",
-        note: "Include reference in transfer description",
-      },
-      USD: {
-        bankName: "Manual Transfer (USD)",
-        accountNumber: "Pending Initialization",
-        accountName: "NoteStandard Inc",
-        note: "Please wait for account details to load",
-      },
-    };
+  // Fetch bank details from settings
+  const allBankDetails = await commissionService.getSetting("bank_deposit_details") || {
+      NGN: { bankName: "Manual Transfer", accountNumber: "Contact Support", accountName: "NoteStandard Admin" },
+      USD: { bankName: "Manual Transfer (USD)", accountNumber: "Pending Initialization", accountName: "NoteStandard Inc" }
+  };
 
-  // Fetch user profile for email/names (Robust lookup with production fallbacks)
   let profile = null;
   let profileError = null;
 
@@ -169,9 +150,7 @@ async function createBankDeposit(
     profile = data;
     profileError = error;
 
-    // Fallback: If full_name column doesn't exist, retry with just email
     if (profileError && profileError.code === "42703") {
-      logger.info("[DepositService] full_name missing on prod, falling back to email-only lookup");
       const { data: fallbackData, error: fallbackError } = await supabase
         .from("profiles")
         .select("email")
@@ -185,30 +164,15 @@ async function createBankDeposit(
   }
 
   if (profileError || !profile || !profile.email) {
-    logger.error("[DepositService] Profile lookup failed or email missing", {
-      userId,
-      error: profileError,
-      hasProfile: !!profile,
-    });
-    throw new Error(`Profile not found or email missing for user ${userId}. Please update your profile before depositing.`);
+    throw new Error(`Profile not found or email missing for user ${userId}.`);
   }
 
-  // Handle name splitting safely
   const nameParts = (profile.full_name || "User Standard").split(" ");
   const firstName = nameParts[0] || "User";
   const lastName = nameParts.slice(1).join(" ") || "Standard";
-  const userPhone = ""; // phone column does not exist in profiles
+  const userPhone = ""; 
 
-  // Hardened selection: ensure we never have null selectedDetails or null accountName
   let rawDetails = allBankDetails[upCurrency] || allBankDetails.USD || allBankDetails.NGN;
-  if (!rawDetails || typeof rawDetails !== "object") {
-    rawDetails = {
-      bankName: "Manual Transfer",
-      accountNumber: "Contact Support",
-      accountName: "NoteStandard Admin",
-    };
-  }
-  
   const selectedDetails = {
     ...rawDetails,
     accountName: rawDetails.accountName || "NoteStandard Admin",
@@ -216,74 +180,44 @@ async function createBankDeposit(
     accountNumber: rawDetails.accountNumber || "Contact Support",
   };
 
-  // 1a. Attempt Real-time Virtual Account Generation
   let liveDetails = { ...selectedDetails };
   try {
     if (upCurrency === "NGN") {
       try {
         const PaystackProvider = require("./payment/providers/PaystackProvider");
         const paystack = new PaystackProvider();
-        const virtualAccount = await paystack.getDedicatedAccount(
-          profile.email,
-          firstName,
-          lastName,
-          userPhone
-        );
-        
+        const virtualAccount = await paystack.getDedicatedAccount(profile.email, firstName, lastName, userPhone);
         liveDetails = {
           bankName: virtualAccount.bankName,
           accountNumber: virtualAccount.accountNumber,
           accountName: virtualAccount.accountName,
           note: "Funds are credited instantly after transfer",
         };
-      } catch (err) {
-        console.error("[DepositService] NGN Virtual account generation failed:", err.message);
-      }
+      } catch (err) { console.error("[DepositService] NGN failed:", err.message); }
     } else if (["USD", "EUR", "GBP"].includes(upCurrency)) {
       try {
-        // Fallback logic: Use Fincra for USD/EUR/GBP virtual accounts
         const hasFincra = process.env.FINCRA_SECRET_KEY && process.env.FINCRA_PUBLIC_KEY;
-
-        let virtualAccount = null;
-
         if (hasFincra) {
           const FincraProvider = require("./payment/providers/FincraProvider");
           const fincra = new FincraProvider();
-          virtualAccount = await fincra.createVirtualAccount({
-            currency: upCurrency,
-            email: profile.email,
-            firstName,
-            lastName,
-            phone: userPhone,
-          });
+          const va = await fincra.createVirtualAccount({ currency: upCurrency, email: profile.email, firstName, lastName, phone: userPhone });
+          if (va) {
+            liveDetails = {
+              bankName: va.bankName,
+              accountNumber: va.accountNumber,
+              accountName: va.accountName,
+              routingNumber: va.routingNumber || va.swiftCode,
+              note: `Funds are credited after ${upCurrency} settlement (1-3 days)`,
+            };
+          }
         }
-
-        if (virtualAccount) {
-          liveDetails = {
-            bankName: virtualAccount.bankName,
-            accountNumber: virtualAccount.accountNumber,
-            accountName: virtualAccount.accountName,
-            routingNumber: virtualAccount.routingNumber || virtualAccount.swiftCode,
-            note: `Funds are credited after ${upCurrency} settlement (1-3 days)`,
-          };
-        }
-      } catch (err) {
-        console.error(`[DepositService] ${upCurrency} Virtual account generation failed:`, err.message);
-      }
+      } catch (err) { console.error(`[DepositService] ${upCurrency} failed:`, err.message); }
     }
-  } catch (err) {
-    logger.warn(`[DepositService] Auto-generation error: ${err.message}`);
-  }
+  } catch (err) { logger.warn(`[DepositService] Auto-gen error: ${err.message}`); }
 
-  // Check Daily Limits
   const limit = await checkDailyLimit(userId, userPlan, amount);
-  if (!limit.allowed) {
-    throw new Error(
-      `Daily limit exceeded. You have ${limit.remaining} ${currency} remaining for today.`,
-    );
-  }
+  if (!limit.allowed) { throw new Error("Daily limit exceeded."); }
 
-  // Unified Payment Record
   let payment;
   try {
     payment = await PaymentService.initializePayment(
@@ -299,28 +233,20 @@ async function createBankDeposit(
         targetCurrency: toCurrency,
         targetNetwork: toNetwork,
       },
-      {
-        isCrypto: false,
-        manualReview: true, // Standard for manual Grey transfers
-      },
+      { isCrypto: false, manualReview: true },
     );
 
-    // CRITICAL: If the provider returned static instructions (Grey), use them
     if (payment && payment.instructions) {
       liveDetails = {
         bankName: payment.instructions.bank_name,
         accountNumber: payment.instructions.account_number,
         accountName: payment.instructions.account_name,
-        routingNumber: payment.instructions.swift_code || payment.instructions.iban, // Map swift/iban for international
+        routingNumber: payment.instructions.swift_code || payment.instructions.iban,
         note: payment.instructions.additional_info || "Include reference in transfer narration",
       };
     }
   } catch (payErr) {
-    logger.error(`[DepositService] Payment initialization failed, falling back to manual record: ${payErr.message}`);
-    payment = {
-      reference: idempotencyKey || `manual_${uuidv4().substring(0, 8)}`,
-      provider: "manual"
-    };
+    payment = { reference: idempotencyKey || `manual_${uuidv4().substring(0, 8)}`, provider: "manual" };
   }
 
   return {
@@ -337,109 +263,40 @@ async function createBankDeposit(
 }
 
 /**
- * Initialize a crypto deposit using real provider (e.g. NOWPayments)
+ * Initialize a crypto deposit
  */
-async function initializeCryptoDeposit(
-  userId,
-  currency,
-  amount = 10,
-  userPlan = "FREE",
-  idempotencyKey = null,
-) {
-  const upCurrency = currency.toUpperCase();
+async function initializeCryptoDeposit(userId, currency, amount = 10, userPlan = "FREE", idempotencyKey = null) {
+  const { data: profile } = await supabase.from("profiles").select("email").eq("id", userId).single();
+  if (!profile || !profile.email) { throw new Error("User profile not found"); }
 
-  console.log(
-    `[DepositService] Initializing crypto deposit for user ${userId}, amount ${amount}`,
-  );
-  // Fetch user profile for email
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("email")
-    .eq("id", userId)
-    .single();
-
-  if (!profile || !profile.email) {
-    throw new Error("User profile or email not found");
-  }
-
-  // Check Daily Limits
   const limit = await checkDailyLimit(userId, userPlan, amount);
-  if (!limit.allowed) {
-    throw new Error(
-      `Daily limit exceeded. You have ${limit.remaining} ${currency} remaining for today.`,
-    );
-  }
+  if (!limit.allowed) { throw new Error("Daily limit exceeded."); }
 
-  // Initialize payment through unified service
-  return await PaymentService.initializePayment(
-    userId,
-    profile.email,
-    amount,
-    currency,
-    {
-      type: "Digital Assets Purchase",
-      userPlan,
-      idempotencyKey,
-    },
-    {
-      isCrypto: true,
-    },
-  );
+  return await PaymentService.initializePayment(userId, profile.email, amount, currency, { type: "Digital Assets Purchase", userPlan, idempotencyKey }, { isCrypto: true });
 }
 
-// Deprecated in favor of initializeCryptoDeposit (which requires an amount for real gateways)
 async function getCryptoDepositAddress(userId, currency) {
-  console.warn(
-    "[DepositService] getCryptoDepositAddress is deprecated. Use initializeCryptoDeposit.",
-  );
-  return await initializeCryptoDeposit(userId, currency, 10); // Default placeholder amount
+  return await initializeCryptoDeposit(userId, currency, 10);
 }
 
 async function confirmDeposit(reference, externalHash = null) {
-  console.log(`[DepositService] Confirming deposit ${reference}`);
-
   const { data: tx, error: findError } = await supabase
     .from("transactions")
     .select("*, wallet:wallets(id, user_id, balance, currency)")
     .or(`reference_id.eq.${reference},metadata->>display_ref.eq.${reference}`)
     .single();
 
-  if (findError || !tx) {
-    throw new Error("Deposit transaction not found");
-  }
-
-  if (tx.status === "COMPLETED") {
-    return {
-      success: true,
-      amount: tx.amount,
-      currency: tx.currency,
-      alreadyProcessed: true,
-    };
-  }
-
-  if (tx.status === "FAILED") {
-    throw new Error("Cannot confirm a failed transaction");
-  }
-
-  // Credit wallet via ledger-pure RPC
-  // The Migration 067 trigger will automatically recalculate the wallet balance when status -> COMPLETED.
+  if (findError || !tx) { throw new Error("Transaction not found"); }
+  if (tx.status === "COMPLETED") { return { success: true, amount: tx.amount, currency: tx.currency, alreadyProcessed: true }; }
+  
   const { error: rpcError } = await supabase.rpc("confirm_deposit", {
     p_transaction_id: tx.id,
     p_wallet_id: tx.wallet_id,
-    p_amount: tx.amount, // This is the net amount
+    p_amount: tx.amount,
     p_external_hash: externalHash,
   });
 
-  if (rpcError) {
-    logger.error("confirm_deposit RPC failed", {
-      error: rpcError.message,
-      txId: tx.id,
-    });
-    throw new Error(`Failed to confirm deposit: ${rpcError.message}`);
-  }
-
-  // NOTE: Revenue logging is now handled by the 'trg_auto_revenue' DB trigger on the transactions table.
-  // We no longer call commissionService.logRevenue here to avoid double-logging.
+  if (rpcError) { throw new Error(`Failed to confirm: ${rpcError.message}`); }
 
   try {
     const { createNotification } = require("./notificationService");
@@ -447,18 +304,12 @@ async function confirmDeposit(reference, externalHash = null) {
       receiverId: tx.wallet.user_id,
       type: "wallet_deposit",
       title: "Deposit Confirmed",
-      message:
-        `Your deposit of ${tx.amount} ${tx.currency} (after fees) has been confirmed.`,
+      message: `Your deposit of ${tx.amount} ${tx.currency} has been confirmed.`,
       link: "/dashboard/wallet",
     });
-  } catch (nErr) { /* ignore notification error */ }
+  } catch (nErr) { }
 
-  return {
-    success: true,
-    amount: tx.amount,
-    currency: tx.currency,
-    walletId: tx.wallet_id,
-  };
+  return { success: true, amount: tx.amount, currency: tx.currency, walletId: tx.wallet_id };
 }
 
 async function failDeposit(reference, reason = "Payment failed") {
@@ -471,15 +322,9 @@ async function failDeposit(reference, reason = "Payment failed") {
 }
 
 async function getDepositStatus(reference) {
-  const { data: tx, error } = await supabase.from("transactions").select(
-    "id, status, amount, currency, created_at, updated_at",
-  ).or(`reference_id.eq.${reference},metadata->>display_ref.eq.${reference}`)
-    .single();
+  const { data: tx, error } = await supabase.from("transactions").select("id, status, amount, currency, created_at, updated_at").or(`reference_id.eq.${reference},metadata->>display_ref.eq.${reference}`).single();
   return error || !tx ? null : tx;
 }
-
-// Helpers removed: generateCryptoAddress, getNetworkName, getMinDeposit
-// Logic is now delegated to real providers via PaymentService.
 
 async function getExchangeRate(from, to) {
   return await fxService.getRate(from, to);
