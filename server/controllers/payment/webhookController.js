@@ -244,8 +244,6 @@ exports.handleSendGridInbound = async (req, res) => {
     });
 
     // 3. Generate strict DUAL idempotency hashes
-    const payloadString = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-    const payloadHash = crypto.createHash("sha256").update(payloadString).digest("hex");
     const transactionId = parsed.transactionId || null;
     
     // Business Idempotency: Protects against functionally identical emails even if raw data differs slightly
@@ -271,7 +269,7 @@ exports.handleSendGridInbound = async (req, res) => {
     // SHA256(sender + amount + currency + TRUNCATE_DAY(timestamp))
     const truncateDayTs = new Date(webhookDate).toISOString().split('T')[0];
     const fingerprintString = `${parsed.sender_fingerprint}:${reqAmount}:${parsed.normalized_currency}:${truncateDayTs}`;
-    const fingerprintHash = crypto.createHash("sha256").update(fingerputString).digest("hex");
+    const fingerprintHash = crypto.createHash("sha256").update(fingerprintString).digest("hex");
 
     // 4. IDEMPOTENCY LAYER: Check webhook_events table
     // If external_id, payload_hash, business_hash, or fingerprint_hash exists, it throws 23505
