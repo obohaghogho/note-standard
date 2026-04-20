@@ -31,6 +31,7 @@ const isOriginAllowed = (origin) => {
   // 1. Production Allowed Domains
   const isNoteStandard = origin === clientUrl || 
     origin === "https://www.notestandard.com" ||
+    origin === "https://notestandard.com" ||
     origin.endsWith(".notestandard.com");
 
   if (isProd) {

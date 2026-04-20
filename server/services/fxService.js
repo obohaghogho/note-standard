@@ -140,7 +140,7 @@ class FXService {
                          : (fromMeta.mode === 'STALE' || toMeta.mode === 'STALE') ? 'STALE'
                          : 'FRESH';
 
-      const rate = math.multiply(fromMeta.price, toMeta.price);
+      const rate = fromMeta.price * toMeta.price;
       
       return {
         rate: parseFloat(rate),
