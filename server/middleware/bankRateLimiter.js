@@ -45,7 +45,7 @@ const bankSecurityLimiter = rateLimit({
 
         // Key is anchored to IP (high trust) + userId (high trust)
         // Device hash is supplementary — limits are NOT bypassable by changing device ID
-        return `${ip}:${userId}:${deviceHash}`;
+        return `${ip.replace(/:/g, '_')}|${userId}|${deviceHash}`;
     },
 
     handler: async (req, res, options) => {
@@ -53,7 +53,7 @@ const bankSecurityLimiter = rateLimit({
         const userId = req.user?.id || 'anon';
         const deviceRaw = req.headers['x-device-id'] || req.headers['user-agent'] || 'no-fp';
         const deviceHash = crypto.createHash('sha256').update(deviceRaw).digest('hex').slice(0, 16);
-        const compositeKey = `${ip}:${userId}:${deviceHash}`;
+        const compositeKey = `${ip.replace(/:/g, '_')}|${userId}|${deviceHash}`;
 
         // Progressive escalation
         const escalations = await escalateInRedis(compositeKey);

@@ -8,9 +8,6 @@ let paymentQueue;
 if (redis && env.REDIS_URL) {
     paymentQueue = new Queue("payment-processing", {
         connection: redis,
-
-    paymentQueue = new Queue("payment-processing", {
-        connection,
         defaultJobOptions: {
             attempts: 5,
             backoff: {
