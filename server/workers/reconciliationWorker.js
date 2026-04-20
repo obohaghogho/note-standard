@@ -138,8 +138,9 @@ class ReconciliationWorker {
                            });
                            await job.remove();
                         }
+                        }
                     }
-            }
+                }
         } catch (error) {
 
             logger.error(`[Replay] Critical RECOVERY failure: ${error.message}`);
