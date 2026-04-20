@@ -1,5 +1,9 @@
 const supabase = require("../../../config/database");
 const logger = require("../../../utils/logger");
+const SystemState = require("../../../config/SystemState");
+const redis = require("../../../config/redis");
+const { paymentQueue } = require("../paymentQueue");
+const LockService = require("../LockService");
 
 /**
  * Base Payment Provider Class
@@ -85,6 +89,36 @@ class BaseProvider {
             reference = event.reference || req.body.order_id ||
               req.body.payment_id || req.body.data?.merchantReference ||
               req.body.data?.reference || req.body.tx_ref;
+            
+            // ─── Task 4.a: Redis-Backed Idempotency Proof ─────────────────────
+            // This prevents duplicate hits from processing even if the DB check is slow
+            const eventId = event.transactionId || reference;
+            if (eventId && redis) {
+              const idempotencyKey = `webhook_proof:${eventId}`;
+              const exists = await redis.get(idempotencyKey);
+              if (exists) {
+                logger.info(`[${providerName}] Webhook Deduplicated (Redis Proof): ${eventId}`);
+                return; // Already acknowledged via 200 OK at start of method
+              }
+              await redis.set(idempotencyKey, "1", "EX", 3600); // 1 hour TTL
+            }
+
+            // ─── Task 4.b: Selective Safe Mode Deflection ──────────────────
+            if (SystemState.isSafe()) {
+              logger.warn(`[${providerName}] System in SAFE_MODE. Deflecting webhook to pending queue.`);
+              if (paymentQueue) {
+                await paymentQueue.add("pending_webhook_safe_mode", {
+                  provider: providerName,
+                  event,
+                  payload: req.body,
+                  deferred_at: new Date().toISOString()
+                });
+              } else {
+                logger.error(`[${providerName}] SAFE_MODE deflection failed: No Queue available.`);
+              }
+              return; // We already sent the 200 OK
+            }
+
           } catch (err) {
             logger.warn(
               `[${providerName}] Could not parse webhook event cleanly.`,
@@ -165,13 +199,29 @@ class BaseProvider {
             }
           }
 
-          // Hand Over to PaymentService Main Execution
+          // Hand Over to PaymentService Main Execution (Wrapped in Mutex)
           const paymentService = require("../paymentService");
-          const result = await paymentService.executeWebhookAction(
-            event,
-            req.body,
-            providerName,
-          );
+          
+          const result = await LockService.withLock(eventId, async () => {
+              // ── Task 7: Re-check idempotency inside the lock ─────────────
+              const { data: alreadyProcessed } = await supabase
+                .from("webhook_events")
+                .select("id")
+                .eq("event_id", eventId)
+                .maybeSingle();
+
+              if (alreadyProcessed) {
+                logger.info(`[${providerName}] Mutex Win: Event ${eventId} already processed inside lock.`);
+                return { status: "already_completed" };
+              }
+
+              return await paymentService.executeWebhookAction(
+                event,
+                req.body,
+                providerName,
+              );
+          }, { ttl: 30000, retryWindow: 5000 });
+
 
           if (logId) {
             await supabase

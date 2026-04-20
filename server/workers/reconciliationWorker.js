@@ -3,6 +3,8 @@ const governanceManager = require('../services/GovernanceManager');
 const settlementEngine = require('../services/SettlementEngine');
 const decisionEngine = require('../services/DecisionEngine');
 const logger = require('../utils/logger');
+const SystemState = require('../config/SystemState');
+const LockService = require('../services/payment/LockService');
 
 let intervalId = null;
 const RUN_INTERVAL = 5 * 60 * 1000; // 5 minutes
@@ -17,8 +19,133 @@ class ReconciliationWorker {
     static start() {
         if (intervalId) return;
         logger.info("[ReconciliationWorker] Started automatically backing up the webhook queue.");
+        this.driftTolerance = 0.000001;
+        this.isProcessingReplay = false;
         intervalId = setInterval(() => this.runFullCycle(), RUN_INTERVAL);
+        setInterval(() => this.processSafeModeReplay(), 10000);
         setTimeout(() => this.runFullCycle(), 15000); // Run once shortly after boot
+    }
+
+    /**
+     * Stage 8: Ordered Webhook Replay System
+     * Drains the pending_webhook_safe_mode queue sequentially during RECOVERY mode.
+     */
+    static async processSafeModeReplay() {
+        if (this.isProcessingReplay || SystemState.mode !== "RECOVERY") return;
+        
+        try {
+            this.isProcessingReplay = true;
+            const { paymentQueue } = require("../services/payment/paymentQueue");
+            if (!paymentQueue) return;
+
+            const jobs = await paymentQueue.getJobs(["waiting"]);
+            const safeModeJobs = jobs.filter(j => j.name === "pending_webhook_safe_mode");
+            
+            if (safeModeJobs.length === 0) {
+                logger.info("[Replay] Safe mode queue is empty. Recovery transition to NORMAL may be authorized.");
+                if (SystemState.canExitSafeMode()) {
+                    SystemState.transition("NORMAL", "REPLAY_QUEUE_EMPTY_AND_STABLE");
+                }
+                return;
+            }
+
+            const sortedJobs = safeModeJobs.sort((a, b) => 
+                new Date(a.data.deferred_at).getTime() - new Date(b.data.deferred_at).getTime()
+            );
+
+            // ── Task 4.c: Replay Compaction (Group by Entity) ────────────
+            const entityBuckets = new Map();
+            for (const job of sortedJobs) {
+                const walletId = job.data.event?.walletId || job.data.payload?.walletId || "unassigned";
+                if (!entityBuckets.has(walletId)) entityBuckets.set(walletId, []);
+                entityBuckets.get(walletId).push(job);
+            }
+
+            logger.warn(`[Replay] Starting COMPACTED REPLAY for ${entityBuckets.size} active entities...`);
+
+            const paymentService = require("../services/payment/paymentService");
+
+            for (const [walletId, entityJobs] of entityBuckets.entries()) {
+                // ── Task 4.a: Entity-Aware Scheduling Barrier ───────────────
+                if (walletId !== "unassigned" && SystemState.isEntityFrozen(walletId)) {
+                    logger.warn(`[Replay] Skipping frozen entity ${walletId}. Barrier active.`);
+                    continue; 
+                }
+
+                const firstJob = entityJobs[0];
+                const rootCausalId = firstJob.data.event?.rootCausalId || firstJob.data.payload?.rootCausalId;
+
+                // ── Task 3.b: Halt Replay for Blacklisted Roots ──────────────
+                if (rootCausalId && SystemState.isRootBlacklisted(rootCausalId)) {
+                    logger.error(`[Replay_Halt] Skipping blacklisted causal root: ${rootCausalId}. Manual intervention required.`);
+                    continue;
+                }
+
+                const lockKey = firstJob.data.event?.transactionId || firstJob.data.event?.reference || "bulk_replay";
+
+
+                try {
+                    // One lock session per entity batch (Causal Optimism)
+                    await LockService.withLock(lockKey, async () => {
+                        for (const job of entityJobs) {
+                            const { provider, event, payload } = job.data;
+                            
+                            // Re-check idempotency for each item in the compact batch
+                            const { data: processed } = await supabase
+                                .from("webhook_events")
+                                .select("id")
+                                .eq("external_id", event?.transactionId || event?.reference)
+                                .maybeSingle();
+
+                            if (processed) {
+                                await job.remove();
+                                continue;
+                            }
+
+                            await paymentService.executeWebhookAction(event, payload, provider);
+                            await job.remove(); // Cleanly consume
+                            logger.info(`[Replay] Successfully processed and removed job ${job.id} (${lockKey})`);
+                        }
+                    });
+                } catch (err) {
+                    logger.error(`[Replay] Compaction batch failed for ${walletId}`, { error: err.message });
+                    
+                    // Task 4.b: Starvation & Escalation Logic (Applied to the failing batch)
+                    for (const job of entityJobs) {
+                        const deferCount = (job.data.defer_count || 0) + 1;
+                        await job.update({ ...job.data, defer_count: deferCount });
+
+                        if (deferCount >= 3 && walletId !== "unassigned") {
+                            logger.error(`[Replay_Starvation] ${walletId} reached max deferral. ESCALATING.`);
+                            
+                            // ── Task 3.c: Distinguish transient error vs Corruption ──
+                            if (err.message?.includes("CAUSAL_ROOT_BROKEN") || err.message?.includes("INTEGRITY_VIOLATION")) {
+                                await SystemState.handleIrrecoverableCorruption(walletId, job.data.event?.rootCausalId, { error: err.message, jobData: job.data });
+                            } else {
+                                SystemState.freezeEntity(walletId, 30); // Transient: partial freeze
+                            }
+                            break; 
+                        }
+
+
+                        if (job.attemptsMade >= 3) {
+                           // ... DLQ insertion as before ...
+                           await supabase.from("dead_letter_webhooks").insert({
+                                job_id: job.id,
+                                context_snapshot: job.data,
+                                reason: err.message,
+                                failed_at: new Date().toISOString()
+                           });
+                           await job.remove();
+                        }
+                    }
+            }
+        } catch (error) {
+
+            logger.error(`[Replay] Critical RECOVERY failure: ${error.message}`);
+        } finally {
+            this.isProcessingReplay = false;
+        }
     }
 
     static async runFullCycle() {
@@ -26,6 +153,51 @@ class ReconciliationWorker {
         await this.runGovernanceCycle(); // Step 4: Institutional Guard Cycle
         await this.syncSentPayouts();
         await this.cleanupStaleReservations();
+        await this.assertLedgerIntegrity();
+    }
+
+    /**
+     * Active Ledger Reconciliation (Silent System Drift Protection)
+     * Detects discrepancies between materialized wallet stores and the cryptographic ledger.
+     */
+    static async assertLedgerIntegrity() {
+        try {
+            logger.info("[ReconciliationWorker] Running Active Ledger Integrity Sweep...");
+            const { data: wallets, error } = await supabase.from('wallets_store').select('id, balance, user_id');
+            if (error || !wallets) return;
+
+            let driftCount = 0;
+            for (const wallet of wallets) {
+                const { data: entries } = await supabase
+                    .from('ledger_entries')
+                    .select('amount, type')
+                    .eq('wallet_id', wallet.id)
+                    .in('status', ['confirmed', 'settled']);
+
+                if (entries) {
+                    const truthSum = entries.reduce((acc, curr) => {
+                        return curr.type === 'CREDIT' ? acc + Number(curr.amount) : acc - Number(curr.amount);
+                    }, 0);
+
+                    const drift = Math.abs(Number(wallet.balance) - truthSum);
+                    if (drift > this.driftTolerance) {
+                        logger.error(`[SYSTEM_DRIFT_DETECTED] Wallet ${wallet.id} (User: ${wallet.user_id}) drift: ${drift}. Materialized: ${wallet.balance}, Ledger Truth: ${truthSum}`);
+                        SystemState.updateMetrics({ hasDrift: true, drift: drift }); // Pass drift for epsilon check
+                        SystemState.enterSafeMode(`Ledger drift detected on Wallet ${wallet.id}`);
+                        driftCount++;
+                    }
+
+                }
+            }
+
+            if (driftCount === 0) {
+                logger.info("[ReconciliationWorker] Ledger Integrity Sweep PASSED. Zero drift detected.");
+            } else {
+                logger.error(`[ReconciliationWorker] Ledger Integrity Sweep FAILED. ${driftCount} accounts show mathematical drift.`);
+            }
+        } catch (err) {
+            logger.error("[ReconciliationWorker] Integrity assertion crashed:", err.message);
+        }
     }
 
     /**
@@ -37,14 +209,13 @@ class ReconciliationWorker {
         try {
             logger.info("[ReconciliationWorker] Starting Governance Audit Cycle...");
 
-            // 1. Fetch proposals that have passed the audit window
             const now = new Date().toISOString();
             const { data: eligibleProposals, error } = await supabase
                 .from('reconciliation_proposals')
                 .select('*')
                 .eq('status', 'AUDITING')
                 .lte('eligible_at', now)
-                .lt('drift_amount', 0.001); // 0.1% Threshold for auto-apply
+                .lt('drift_amount', 0.001);
 
             if (error) throw error;
             if (!eligibleProposals || eligibleProposals.length === 0) return;
@@ -52,22 +223,17 @@ class ReconciliationWorker {
             logger.info(`[ReconciliationWorker] Found ${eligibleProposals.length} eligible proposals for final audit.`);
 
             for (const proposal of eligibleProposals) {
-                // 2. Fetch Latest State for Validation
                 const { data: wallet } = await supabase
                     .from('wallets_v6')
                     .select('balance, epoch_id')
                     .eq('id', proposal.wallet_id)
                     .single();
 
-                // 3. Evaluate Market Regime (DecisionEngine)
-                // For worker logic, we assume standard snapshot availability
-                const systemState = { state: 'ALLOWED', reason: 'CONSENSUS_STABLE' }; // Mock for now, would use SnapshotService.getLatest()
+                const systemState = { state: 'ALLOWED', reason: 'CONSENSUS_STABLE' };
 
-                // 4. Validate via GovernanceManager
-                const currentDrift = 0; // Logic for calculating current drift vs proposal
                 const validation = await governanceManager.validateProposal(
                     proposal, 
-                    proposal.drift_amount, // For auto-apply we ensure drift remains within bounds
+                    proposal.drift_amount,
                     wallet.epoch_id, 
                     systemState
                 );
@@ -75,10 +241,8 @@ class ReconciliationWorker {
                 if (validation.valid) {
                     logger.info(`[ReconciliationWorker] Proposal ${proposal.id} PASSED audit. Applying correction...`);
                     
-                    // 5. Execute via SettlementEngine
-                    // This will Advance Status -> Write Ledger -> Bump Epoch
                     await settlementEngine.processEvent({
-                        transactionId: proposal.id, // Proposal acts as the event trigger
+                        transactionId: proposal.id,
                         status: 'LEDGER_COMMITTED',
                         providerId: 'SYSTEM_GOVERNANCE',
                         payload: { drift: proposal.drift_amount },

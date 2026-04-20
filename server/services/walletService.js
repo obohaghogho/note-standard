@@ -217,6 +217,11 @@ class WalletService {
    * Bank-Grade Unified Withdrawal Pipeline (Zero-Loss)
    */
   async withdraw(userId, data) {
+    const SystemState = require('../config/SystemState');
+    if (SystemState.isSafe()) {
+        throw new Error("SAFE_MODE_BLOCK: Ledger mutations disabled");
+    }
+
     const { currency, amount, type, idempotencyKey, ip, deviceId } = data;
     const upCurrency = currency.toUpperCase();
     
@@ -288,6 +293,11 @@ class WalletService {
    * Uses atomic intent grouping and cross-shard dependencies.
    */
   async transferInternal(userId, userPlan, data) {
+    const SystemState = require('../config/SystemState');
+    if (SystemState.isSafe()) {
+        throw new Error("SAFE_MODE_BLOCK: Ledger mutations disabled");
+    }
+
     const { recipientId, amount, currency } = data;
     const causalGroupId = require('crypto').randomUUID();
     const upCurrency = currency.toUpperCase();

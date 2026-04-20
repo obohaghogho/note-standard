@@ -5,6 +5,9 @@ const { paymentQueue } = require("../../services/payment/paymentQueue");
 const supabase = require("../../config/database");
 const UniversalParserEngine = require("../../services/payment/UniversalParserEngine");
 const paymentService = require("../../services/payment/paymentService");
+const SystemState = require("../../config/SystemState");
+const redis = require("../../config/redis");
+const LockService = require("../../services/payment/LockService");
 const crypto = require("crypto");
 
 /**
@@ -64,6 +67,41 @@ exports.handleGrey = async (req, res) => {
 
     // 2. Parse event
     const event = provider.parseWebhookEvent(req.body);
+    const eventId = event.transactionId || event.reference;
+
+    // ─── Task 4.a: Redis-Backed Idempotency Proof ─────────────────────
+    if (eventId && redis) {
+        const idempotencyKey = `webhook_proof:${eventId}`;
+        const exists = await redis.get(idempotencyKey);
+        if (exists) {
+            logger.info(`[Grey] Webhook Deduplicated (Redis Proof): ${eventId}`);
+            return res.status(200).json({ received: true, duplicate: true });
+        }
+        await redis.set(idempotencyKey, "1", "EX", 3600);
+    }
+
+    // ─── Task 4.b: Selective Safe Mode Deflection ──────────────────
+    if (SystemState.mode === "SAFE") {
+        logger.warn(`[Grey] System in SAFE_MODE. Deflecting to pending queue.`);
+        if (paymentQueue) {
+            await paymentQueue.add("pending_webhook_safe_mode", {
+                provider: "grey",
+                event,
+                payload: req.body,
+                deferred_at: new Date().toISOString()
+            });
+        }
+        return res.status(202).json({ received: true, status: "deferred_safe_mode" });
+    }
+
+    // ─── Task 4.c: Recovery Mode Throttling ─────────────────────────
+    if (SystemState.mode === "RECOVERY") {
+        logger.warn(`[Grey] System in RECOVERY_MODE. Throttling ingestion.`);
+        // Simple synthetic delay to prioritize replay workers
+        await new Promise(r => setTimeout(r, 1000));
+    }
+
+
 
     // 3. Log for audit
     const { data: log, error: logError } = await supabase
@@ -142,17 +180,45 @@ exports.handleSendGridInbound = async (req, res) => {
       return;
     }
 
-    // 1. Check Global System Mode (Safe Mode Kill Switch)
-    const { data: settings } = await supabase
-      .from("admin_settings")
-      .select("value")
-      .eq("key", "SYSTEM_MODE")
-      .single();
-    
-    if (settings?.value?.mode === 'SAFE') {
-      logger.error(`[Webhook] BLOCKED: System is in SAFE MODE. No payment ingestion permitted.`);
-      return res.status(503).json({ error: "System is in maintenance/protection mode." });
+    // ─── Task 4.b: Selective Safe Mode Deflection (Tiered) ────────────
+    if (SystemState.mode === "SAFE") {
+      logger.warn("[SendGrid] System in SAFE_MODE. Queuing incoming email for later reconstruction.");
+      if (paymentQueue) {
+        await paymentQueue.add("pending_webhook_safe_mode", {
+          provider: "sendgrid",
+          payload: req.body,
+          headers: req.headers,
+          deferred_at: new Date().toISOString()
+        });
+      }
+      return; // Already responded 200 OK
     }
+
+    // ─── Task 4.c: Recovery Mode Throttling ─────────────────────────
+    if (SystemState.mode === "RECOVERY") {
+      logger.warn("[SendGrid] System in RECOVERY_MODE. Throttling email ingestion.");
+      await new Promise(r => setTimeout(r, 1000));
+    }
+
+
+    // ─── Task 4.a: Redis-Backed Idempotency Proof (SendGrid) ──────────
+    const payloadString = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    const payloadHash = crypto.createHash("sha256").update(payloadString).digest("hex");
+    if (redis) {
+        const idempotencyKey = `webhook_proof:${payloadHash}`;
+        const exists = await redis.get(idempotencyKey);
+        if (exists) {
+            logger.info(`[SendGrid] Webhook Deduplicated (Redis Proof): ${payloadHash}`);
+            return;
+        }
+        await redis.set(idempotencyKey, "1", "EX", 3600);
+    }
+
+
+
+
+    // Redundant older check removed in favor of Task 4.b centralized SystemState
+
 
     // 2. Initialize Parsing
     const parsed = UniversalParserEngine.parseSendGridPayload(req.body);
@@ -309,7 +375,10 @@ exports.handleSendGridInbound = async (req, res) => {
       logger.info("[Webhook] Redis disabled: Falling back to synchronous processing");
       
       try {
-        const result = await paymentService.executeWebhookAction(event, parsed, "grey");
+        const lockKey = parsed.transactionId || payloadHash;
+        const result = await LockService.withLock(lockKey, async () => {
+            return await paymentService.executeWebhookAction(event, parsed, "grey");
+        });
         
         if (result && result.error) {
            await supabase.from("webhook_events").update({ status: "failed", error_message: result.error }).eq("id", eventLog.id);
@@ -320,6 +389,7 @@ exports.handleSendGridInbound = async (req, res) => {
         logger.error("[Webhook] Sync processing failed", { error: syncErr.message });
         await supabase.from("webhook_events").update({ status: "failed", error_message: syncErr.message }).eq("id", eventLog.id);
       }
+
     }
   } catch (error) {
     logger.error("[Webhook] SendGrid processing crash:", {

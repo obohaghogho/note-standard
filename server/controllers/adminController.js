@@ -5,8 +5,10 @@ const PDFDocument = require("pdfkit");
 const { createNotification, broadcastNotification } = require(
   "../services/notificationService",
 );
-const { createClient } = require("@supabase/supabase-js");
+const SystemState = require("../config/SystemState");
+const logger = require("../utils/logger");
 const realtime = require("../services/realtimeService");
+const { createClient } = require("@supabase/supabase-js");
 
 // Create a Supabase client with service role for admin operations
 const getServiceSupabase = () => {
@@ -1507,5 +1509,63 @@ exports.getPaymentAuditLogs = async (req, res) => {
     res.status(500).json({ error: "Server Error" });
   }
 };
+
+/**
+ * POST /api/admin/system/state - Manual System State Override
+ */
+exports.updateSystemState = async (req, res) => {
+  try {
+    const { mode, reason, manualMode = true } = req.body;
+    const adminId = req.user.id;
+
+    if (!["NORMAL", "SAFE", "RECOVERY"].includes(mode)) {
+      return res.status(400).json({ error: "Invalid system mode" });
+    }
+
+    if (!reason || reason.length < 5) {
+      return res.status(400).json({ error: "A valid reason (min 5 chars) is required for system state overrides." });
+    }
+
+    const oldMode = SystemState.mode;
+
+    // 1. Update In-Memory Kernel
+    SystemState.manualMode = manualMode;
+    SystemState.transition(mode, `ADMIN_OVERRIDE: ${reason} (Admin ID: ${adminId})`);
+
+    // 2. Persistent Audit Log
+    const { data: admin } = await supabase.from("profiles").select("username").eq("id", adminId).single();
+
+    await logAdminAction(req, "SYSTEM_STATE_OVERRIDE", "SYSTEM_KERNEL", "GLOBAL", {
+      old_mode: oldMode,
+      new_mode: mode,
+      reason: reason,
+      manual_mode: manualMode,
+      admin_username: admin?.username
+    });
+
+    // 3. Notify via Realtime
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("system_state_update", SystemState.getStatusData());
+    }
+
+    res.json({ success: true, state: SystemState.getStatusData() });
+  } catch (err) {
+    logger.error("[Admin] System state update failed", { error: err.message });
+    res.status(500).json({ error: "Failed to update system state" });
+  }
+};
+
+/**
+ * GET /api/admin/system/status - Detailed Internal Metrics
+ */
+exports.getSystemStatus = async (req, res) => {
+  try {
+    res.json(SystemState.getStatusData());
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch system status" });
+  }
+};
+
 
 

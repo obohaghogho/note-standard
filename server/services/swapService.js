@@ -74,6 +74,11 @@ class SwapService {
    * Execute a swap (Internal Atomic or External conversion)
    */
   async executeSwap(userId, lockId, idempotencyKey) {
+    const SystemState = require("../config/SystemState");
+    if (SystemState.isSafe()) {
+        throw new Error("SAFE_MODE_BLOCK: Ledger mutations disabled due to system integrity lock.");
+    }
+
     const { data: quote, error: quoteError } = await supabase
       .from("swap_quotes")
       .select("*")

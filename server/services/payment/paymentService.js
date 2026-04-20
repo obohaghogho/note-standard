@@ -494,15 +494,62 @@ class PaymentService {
 
   /**
    * Execute Webhook core business logic (Delegated from BaseProvider)
+   * This is the CANONICAL ENTRYPOINT for all mutation webhooks.
+   * Tier 1 Mutex: Transaction-level lock.
    */
   async executeWebhookAction(event, body, providerName) {
-    logger.info(`Processing ${providerName} event`, {
+    const lockKey = event.transactionId || event.reference || "event_root";
+
+    return await LockService.withLock(lockKey, async () => {
+        // ── Task 7: Final Idempotency Check inside the canonical lock ─────────
+        const { data: alreadyProcessed } = await supabase
+          .from("webhook_events")
+          .select("id")
+          .eq("external_id", lockKey)
+          .maybeSingle();
+
+        if (alreadyProcessed) {
+          logger.info(`[PaymentService] Mutex IDEMPOTENCY Win: Event ${lockKey} already recorded.`);
+          // If we have an external_id match, we skip to prevent double-processing
+          return { status: "already_completed" };
+        }
+
+        return await this._internalExecuteMutation(event, body, providerName);
+    }, { ttl: 45000, retryWindow: 10000 });
+  }
+
+  async _internalExecuteMutation(event, body, providerName) {
+    logger.info(`Processing ${providerName} event inside Tier 1 Lock`, {
       type: event.type,
       reference: event.reference,
       status: event.status,
     });
 
+    // ── Task 2.c: Declarative Invariant Verification ──────────────────
+    const InvariantRegistry = require("./InvariantRegistry");
+    const { data: latestTx } = await supabase
+        .from("transactions")
+        .select("id")
+        .eq("wallet_id", event.walletId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (latestTx) {
+        const violations = await InvariantRegistry.verifyAll({
+            walletId: event.walletId,
+            versionId: latestTx.id,
+            event
+        });
+
+        const criticalViolation = violations.find(v => !v.valid);
+        if (criticalViolation) {
+            throw new Error(`INVARIANT_VIOLATION: Rule ${criticalViolation.rule} blocked mutation.`);
+        }
+    }
+
     let result;
+
 
     // Distinguish between incoming payments (deposits) and outbound/conversions (withdrawals/swaps)
     const isPayout = event.type === "transfer" ||
@@ -541,9 +588,13 @@ class PaymentService {
       } else {
         result = { status: "success" };
       }
-    } else if (isConversion) {
-      // Handle Swap Finalization
-      const status = event.status === "success" ? "SUCCESS" : "FAILED";
+    } else if (isConversion || event.type === "FX_CONVERSION") {
+      // Handle FX Swap Finalization
+      const status = event.status === "success" ||
+          body.status === "COMPLETED" ||
+          body.data?.status === "SUCCESSFUL"
+        ? "SUCCESS"
+        : "FAILED";
       const externalHash = event.reference || body.id;
 
       const { error: rpcError } = await supabase.rpc(
@@ -565,27 +616,16 @@ class PaymentService {
         result = { status: "success" };
       }
     } else if (event.type === "SUBSCRIPTION_CANCELLATION") {
-      // Handle subscription cancellation from provider webhooks
+      // Handle subscription cancellation
       const userId = event.userId || body.data?.metadata?.userId;
       if (userId) {
-        logger.info(`[PaymentService] Processing subscription cancellation for user ${userId}`);
         try {
-          await supabase
-            .from("subscriptions")
-            .update({ status: "canceled", plan_tier: "free", plan_type: "FREE" })
-            .eq("user_id", userId);
-          await supabase
-            .from("profiles")
-            .update({ plan_tier: "free" })
-            .eq("id", userId);
+          await supabase.from("subscriptions").update({ status: "canceled", plan_tier: "free" }).eq("user_id", userId);
+          await supabase.from("profiles").update({ plan_tier: "free" }).eq("id", userId);
           result = { status: "cancelled" };
-        } catch (cancelErr) {
-          logger.error("[PaymentService] Failed to process subscription cancellation", { error: cancelErr.message });
-          result = { error: cancelErr.message };
+        } catch (err) {
+          result = { error: err.message };
         }
-      } else {
-        logger.warn("[PaymentService] SUBSCRIPTION_CANCELLATION received but no userId found in event or metadata");
-        result = { status: "ignored", reason: "no userId" };
       }
     } else {
       // Default to Deposit Finalization
@@ -595,61 +635,15 @@ class PaymentService {
         body.event === "charge.successful" ||
         body.data?.status === "successful"
       ) {
-        // RE-VERIFY with gateway API before finalizing (Industry Standard)
-        // EXCEPT for Grey which has no API and relies entirely on our own parsing logic
-        if (providerName === "grey") {
-          const FraudEngine = require("./FraudEngine");
-          const fraudResult = await FraudEngine.evaluateTransaction(event);
-          
-          if (fraudResult.action === "block") {
-              logger.warn(`[PaymentService] Fraud block for ${event.reference}: ${fraudResult.reasons.join(', ')}`);
-              await supabase.from('reconciliation_queue').insert({
-                 payment_reference: event.reference,
-                 raw_payload: body,
-                 parsed_data: event,
-                 reason: `Fraud Block (Score ${fraudResult.score}): ${fraudResult.reasons.join(', ')}`,
-                 status: 'rejected'
-              });
-              await supabase.from("payments").update({ status: 'MATCHED' }).eq('reference', event.reference).select();
-              await supabase.from("payments").update({ status: 'REJECTED' }).eq('reference', event.reference);
-              result = { status: "verification_failed", error: "Fraud threshold exceeded" };
-          } else if (fraudResult.action === "review") {
-              logger.warn(`[PaymentService] Fraud review for ${event.reference}: ${fraudResult.reasons.join(', ')}`);
-              await supabase.from('reconciliation_queue').insert({
-                 payment_reference: event.reference,
-                 raw_payload: body,
-                 parsed_data: event,
-                 reason: `Fraud Review (Score ${fraudResult.score}): ${fraudResult.reasons.join(', ')}`,
-                 status: 'pending'
-              });
-              await supabase.from("payments").update({ status: 'MATCHED' }).eq('reference', event.reference).select();
-              await supabase.from("payments").update({ status: 'UNDER_REVIEW' }).eq('reference', event.reference);
-              result = { status: "verification_failed", error: "Sent to manual review" };
-          } else {
-              // Action == "allow"
-              // Force state transitions properly
-              await supabase.from("payments").update({ status: 'PARSED' }).eq('reference', event.reference).select();
-              await supabase.from("payments").update({ status: 'MATCHED' }).eq('reference', event.reference).select();
-              await supabase.from("payments").update({ status: 'APPROVED' }).eq('reference', event.reference);
-              
-              result = await this.finalizeTransaction(event.reference, event);
-          }
-        } else {
-          result = await this.verifyPaymentStatus(event.reference);
-        }
-      } else if (
-        event.status === "failed" ||
-        body.event === "charge.failed"
-      ) {
-        result = await this.failTransaction(
-          event.reference,
-          "Payment failed at provider",
-        );
+        result = await this.finalizeTransaction(event.reference, event);
+      } else if (event.status === "failed") {
+        result = await this.failTransaction(event.reference, "Payment failed");
       }
     }
 
     return result || { status: "ignored" };
   }
+
 
   /**
   /**
@@ -812,57 +806,39 @@ class PaymentService {
         }
       }
 
-      const externalHash = rawData
-        ? (rawData.payment_id || rawData.id || rawData.tx_ref || null)
-        : null;
+      // ── Task 3.b: Canonical Tier 2 Mutex (Wallet Constraint) ───────
+      // DERIVATION: walletId is derived strictly from tx record fetched earlier (Line 665)
+      const walletMutexKey = `wallet:${targetWalletId}:mutex`;
+      
+      console.log(`STEP 3: Calling confirm_deposit (Entity Isolation: ${targetWalletId})`);
 
-      // ── USE confirm_deposit RPC (atomic: wallets_store + transactions + ledger_entries) ──
-      const { error: rpcError } = await supabase.rpc("confirm_deposit", {
-        p_transaction_id: tx.id,
-        p_wallet_id: targetWalletId,
-        p_amount: math.formatForCurrency(creditAmount, creditCurrency),
-        p_external_hash: externalHash ? String(externalHash) : null,
-      });
+      const result = await LockService.withLock(walletMutexKey, async () => {
+          // ── Task 9.1: Entity Freeze check ──
+          if (SystemState.isEntityFrozen(targetWalletId)) {
+              throw new Error(`ENTITY_ISOLATED: Wallet ${targetWalletId} is currently frozen.`);
+          }
 
-      // ── AUDIT LOGGING OVER RPC ──
-      await supabase.from('audit_logs').insert({
-          reference: reference,
-          action: 'rpc_crediting',
-          status: rpcError ? 'failed' : 'success',
-          details: { transaction_id: tx.id, creditAmount, creditCurrency, error: rpcError?.message, wallet: targetWalletId }
-      });
+          const externalHash = rawData
+            ? (rawData.payment_id || rawData.id || rawData.tx_ref || null)
+            : null;
 
-      if (rpcError) {
-        console.error(`[Finalize] confirm_deposit RPC failed for ${reference}:`, rpcError.message || rpcError);
-        if (rpcError.message?.includes("already completed") || rpcError.message?.includes("already")) {
-          console.log(`[Finalize] Transaction ${reference} was completed concurrently inside RPC.`);
-        }
+          // ── USE confirm_deposit RPC ──
+          const { error: rpcError } = await supabase.rpc("confirm_deposit", {
+            p_transaction_id: tx.id,
+            p_wallet_id: targetWalletId,
+            p_amount: math.formatForCurrency(creditAmount, creditCurrency),
+            p_external_hash: externalHash ? String(externalHash) : null,
+          });
+
+          if (rpcError) throw rpcError;
+
+          return { success: true };
+      }, { ttl: 20000, retryWindow: 5000 });
+
+      if (result.success) {
+          console.log("STEP 4: Wallet credited and payment marked successfully");
       }
 
-      // ── Update payments table status state machine ──
-      // Transition to CREDITED (Soft finality) but PENDING_SETTLEMENT (Bank finality)
-      await supabase
-        .from("payments")
-        .update({
-          status: "CREDITED",
-          credited: true,
-          completed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("reference", reference);
-
-      // ── Update Transaction Settlement Status ──
-      await supabase
-        .from("transactions")
-        .update({
-          settlement_status: "PENDING_SETTLEMENT",
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", tx.id);
-
-      logger.info(`[Finalize] Transaction ${reference} provisional credit complete. Settlement set to PENDING_SETTLEMENT.`);
-
-      console.log("STEP 4: Wallet credited and payment marked successfully");
     } else {
       // ── NON-DEPOSIT types: manual update (subscriptions, ads, etc.) ──
       console.log(`STEP 3: Updating Non-Deposit Transaction (${tx.type})`);

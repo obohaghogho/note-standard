@@ -35,11 +35,12 @@ class FXService {
     if (newPrice !== null && !isNaN(newPrice) && newPrice > 0) {
       const currentLKG = cache.get(key);
       
-      // 1. Sanity Check: Deviation Cap (15%)
       if (currentLKG) {
         const deviation = Math.abs(newPrice - currentLKG) / currentLKG;
         if (deviation > this.SANITY_DEVIATION_CAP) {
           logger.warn(`[FXService] Price spike detected for ${symbol}: ${currentLKG} -> ${newPrice} (${(deviation*100).toFixed(2)}%). Quarantining tick.`);
+          const SystemState = require("../config/SystemState");
+          SystemState.freezeAsset(symbol, 300);
           return { price: currentLKG, mode: 'INVALID', stale: true };
         }
       }
@@ -57,6 +58,12 @@ class FXService {
     if (!lkgValue) return { price: 0, mode: 'INVALID', stale: true };
     
     const mode = age < this.STALE_THRESHOLD ? 'STALE' : 'INVALID';
+
+    if (mode === 'INVALID') {
+        const SystemState = require("../config/SystemState");
+        SystemState.enterSafeMode(`Pricing INVALID state: Feed stalled beyond recovery threshold for ${symbol}.`);
+    }
+
     return { price: lkgValue, mode, stale: true };
   }
 

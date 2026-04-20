@@ -5,6 +5,7 @@ const supabase = require('../config/database');
 const logger = require('../utils/logger');
 const paymentService = require('../services/payment/paymentService');
 const { validateJobEnvelope } = require('../services/payment/jobSecurity');
+const LockService = require('../services/payment/LockService');
 
 let worker;
 
@@ -55,8 +56,23 @@ if (redis && env.REDIS_URL) {
                     return { status: 'unmatched' };
                 }
 
-                // ── 4. Execute Business Logic ──────────────────────────────────────
-                const result = await paymentService.executeWebhookAction(event, payload, provider);
+                // ── 4. Execute Business Logic (Wrapped in Mutex) ─────────────
+                const lockKey = txId || event.reference;
+                const result = await LockService.withLock(lockKey, async () => {
+                   // ── Task 7: Re-check idempotency inside the lock ──────────
+                   const { data: alreadyProcessed } = await supabase
+                     .from("webhook_events")
+                     .select("id")
+                     .eq("event_id", lockKey)
+                     .maybeSingle();
+
+                   if (alreadyProcessed && txId) {
+                     logger.info(`[PaymentWorker] Mutex Win: Event ${lockKey} already processed inside lock.`);
+                     return { status: "already_completed" };
+                   }
+
+                   return await paymentService.executeWebhookAction(event, payload, provider);
+                }, { ttl: 30000, retryWindow: 5000 });
 
                 if (result?.error) {
                     logger.error('[PaymentWorker] Business logic failure', { jobId: job.id });
@@ -88,6 +104,10 @@ if (redis && env.REDIS_URL) {
         },
         { connection: redis, concurrency: 5 }
     );
+
+    worker.on('ready', () => {
+        logger.info('[Queue Worker Active] Worker is online and bound to Redis queue');
+    });
 
     worker.on('completed', (job) => {
         logger.info('[PaymentWorker] Job completed', { jobId: job.id });

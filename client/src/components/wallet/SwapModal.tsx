@@ -246,8 +246,13 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
             );
             onSuccess();
             onClose();
-        } catch (err: unknown) {
-            toast.error(err instanceof Error ? err.message : 'Swap failed');
+        } catch (err: any) {
+            const errData = err.response?.data || err;
+            if (errData.code === 'SYSTEM_SAFE_MODE' || errData.code === 'DOMAIN_FREEZE_ACTIVE') {
+                toast.error(errData.message || "Transactions are temporarily paused while we verify system integrity. Your funds remain secure.", { duration: 6000 });
+            } else {
+                toast.error(err instanceof Error ? err.message : 'Swap failed');
+            }
         } finally {
             setLoading(false);
         }

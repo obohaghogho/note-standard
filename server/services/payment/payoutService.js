@@ -290,6 +290,40 @@ class PayoutService {
   }
 
   /**
+   * Structure Enforced Payout State Updater
+   */
+  async updatePayoutState(requestId, status, metadata = {}) {
+      const updateData = { withdrawal_state: status };
+      
+      // If FAILED, we enforce the structured failure contract
+      if (status === 'FAILED') {
+          updateData.metadata = {
+              ...metadata,
+              failure_code: metadata.failure_code || "SYSTEM_ERROR",
+              failure_reason: metadata.failure_reason || metadata.error || "Unknown operational failure",
+              failure_stage: metadata.failure_stage || "EXECUTION",
+              is_retryable: metadata.is_retryable !== undefined ? metadata.is_retryable : false,
+              severity: metadata.severity || "HIGH",
+              owner: metadata.owner || "PAYMENT_PIPELINE"
+          };
+      } else if (Object.keys(metadata).length > 0) {
+          updateData.metadata = metadata;
+      }
+
+      const { data, error } = await supabase
+          .from('payout_requests')
+          .update(updateData)
+          .eq('id', requestId)
+          .select()
+          .single();
+          
+      if (error) {
+          logger.error(`[PayoutService] Failed to update payout state for ${requestId}:`, error);
+      }
+      return data;
+  }
+
+  /**
    * Latency-Abstracted Status Exposure (3-Layer Model)
    */
   async getStatus(requestId) {

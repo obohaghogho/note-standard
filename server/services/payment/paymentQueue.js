@@ -19,6 +19,30 @@ if (redis && env.REDIS_URL) {
         },
     });
 
+    // 1. Queue Health: Ping Redis specifically on startup
+    redis.ping().then(() => {
+        logger.info("[Queue Connected] Redis reachable (Queue Booted)");
+    }).catch(err => {
+        logger.error("[Queue Connected] Redis ping failed during Queue boot", { error: err.message });
+    });
+
+    // 2. Queue Depth Monitoring: Pulse every 30 seconds
+    setInterval(async () => {
+        const SystemState = require("../../config/SystemState");
+        try {
+            const count = await paymentQueue.count();
+            logger.info("[Queue Depth]", { count });
+
+            const MAX_QUEUE_THRESHOLD = 1000;
+            if (count > MAX_QUEUE_THRESHOLD) {
+                logger.error("[QUEUE_OVERFLOW] System entering SAFE MODE");
+                SystemState.enterSafeMode("Queue capacity breached threshold.");
+            }
+        } catch (e) {
+            logger.error("[Queue Depth] Failed to read queue count", { error: e.message });
+        }
+    }, 30000);
+
     logger.info(`[PaymentQueue] Initialized with Redis: ${env.REDIS_URL.split("@").pop()}`);
 } else {
     logger.warn('⚠️ Redis disabled (no REDIS_URL) - paymentQueue is inactive');

@@ -61,9 +61,12 @@ router.get("/support-chats/:id/export", adminController.exportChatTranscript);
 router.get("/auto-reply", adminController.getAutoReplySettings);
 router.put("/auto-reply", adminController.updateAutoReplySettings);
 
-// System Settings
+// System Settings & Governance
 router.get("/settings", adminController.getSystemSettings);
 router.put("/settings", adminController.updateSystemSettings);
+router.post("/system/state", adminController.updateSystemState);
+router.get("/system/status", adminController.getSystemStatus);
+
 
 // Monetization Management
 router.get("/monetization/stats", adminController.getMonetizationStats);

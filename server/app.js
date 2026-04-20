@@ -56,6 +56,19 @@ app.use((req, res, next) => {
   next();
 });
 
+// ─── Webhook Pre-Parser Interceptor ──────────────────────────
+app.use((req, res, next) => {
+  if (req.originalUrl && req.originalUrl.includes('webhook')) {
+    logger.info("[Webhook Raw Connection Received]", {
+      path: req.originalUrl,
+      method: req.method,
+      contentLength: req.headers['content-length'],
+      ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress
+    });
+  }
+  next();
+});
+
 // Body parsers
 app.use(express.json({
   verify: (req, res, buf) => {
@@ -136,6 +149,32 @@ app.use("/api/broadcasts", broadcastsRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/bank-account", bankAccountRoutes);
 app.use("/api/limit-requests", requireAuth, require("./routes/limitRequests"));
+
+const SystemState = require('./config/SystemState');
+
+// ─── System Operational Governance Middleware ─────────────────────
+// 1. System Status Endpoint (Read-Only Status)
+app.get('/api/system-status', (req, res) => {
+    res.json(SystemState.getStatusData());
+});
+
+// 2. Global Mutation Block (Tiered Safe Mode)
+app.use((req, res, next) => {
+    // We allow Auth and pure GETs even in SAFE MODE
+    if (req.originalUrl.startsWith('/api/auth')) return next();
+    if (req.method === 'GET') return next();
+    if (req.originalUrl.includes('/webhook')) return next(); // Webhooks allowed in, but conditionally paused at execution
+
+    // Any mutation on wallet, swap, system, payment is blocked
+    if (SystemState.isSafe()) {
+      return res.status(503).json({
+        code: "SYSTEM_SAFE_MODE",
+        message: "Transactions are temporarily paused while we verify system integrity. Your funds remain secure."
+      });
+    }
+
+    next();
+});
 
 // Legacy/Provider Specific Routes
 app.use("/api/paystack", require("./routes/paystackRoutes"));

@@ -7,9 +7,13 @@
 export const formatCurrency = (amount: number | string | null | undefined, currency: string | null | undefined) => {
   const supportedFiatCurrencies = ["USD", "EUR", "GBP", "NGN", "JPY"];
   
-  // 1. Ingestion Protection: Convert to number and check validity
+  // 1. Deterministic Pricing Fallback: Never mask missing prices as 0
+  if (amount === null || amount === undefined || Number.isNaN(Number(amount))) {
+      return "Temporarily unavailable"; // Signals broken price pipeline truthfully
+  }
+
   const rawAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
-  const safeAmount = (rawAmount === null || rawAmount === undefined || isNaN(rawAmount) || !isFinite(rawAmount)) ? 0 : rawAmount;
+  const safeAmount = (!isFinite(rawAmount)) ? 0 : rawAmount;
   
   const safeCurrency = (currency || 'USD').toUpperCase();
 

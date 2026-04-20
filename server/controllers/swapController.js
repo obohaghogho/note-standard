@@ -28,8 +28,9 @@ exports.executeSwap = async (req, res, next) => {
     // 2. Domain-Level Freeze Enforcer (Scoped)
     if (frozenAssets.includes(from) || frozenAssets.includes(to) || frozenAssets.includes("*")) {
       return res.status(403).json({ 
-        error: "DOMAIN_FREEZE_ACTIVE", 
-        message: `Execution for ${from}/${to} is temporarily suspended due to volatility.`,
+        code: "DOMAIN_FREEZE_ACTIVE", 
+        message: `Exchange disabled due to stale pricing for ${from}/${to}.`,
+        action: "TRY_LATER",
         evaluationId: data.evaluationId
       });
     }
