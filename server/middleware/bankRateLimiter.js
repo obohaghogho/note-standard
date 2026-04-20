@@ -1,4 +1,5 @@
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
 const redis = require('../config/redis');
 const logger = require('../utils/logger');
 const crypto = require('crypto');
@@ -37,7 +38,7 @@ const bankSecurityLimiter = rateLimit({
 
     // Multi-dimensional key — IP is the anchor signal
     keyGenerator: (req) => {
-        const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+        const ip = ipKeyGenerator(req);
         const userId = req.user?.id || 'anon';
         // Device fingerprint is LOW TRUST — contributes but doesn't anchor
         const deviceRaw = req.headers['x-device-id'] || req.headers['user-agent'] || 'no-fp';
@@ -45,15 +46,15 @@ const bankSecurityLimiter = rateLimit({
 
         // Key is anchored to IP (high trust) + userId (high trust)
         // Device hash is supplementary — limits are NOT bypassable by changing device ID
-        return `${ip.replace(/:/g, '_')}|${userId}|${deviceHash}`;
+        return `${ip}|${userId}|${deviceHash}`;
     },
 
     handler: async (req, res, options) => {
-        const ip = req.ip || 'unknown';
+        const ip = ipKeyGenerator(req);
         const userId = req.user?.id || 'anon';
         const deviceRaw = req.headers['x-device-id'] || req.headers['user-agent'] || 'no-fp';
         const deviceHash = crypto.createHash('sha256').update(deviceRaw).digest('hex').slice(0, 16);
-        const compositeKey = `${ip.replace(/:/g, '_')}|${userId}|${deviceHash}`;
+        const compositeKey = `${ip}|${userId}|${deviceHash}`;
 
         // Progressive escalation
         const escalations = await escalateInRedis(compositeKey);
