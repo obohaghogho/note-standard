@@ -127,6 +127,8 @@ server.listen(PORT, "0.0.0.0", async () => {
     } catch (err) {
       logger.error(`[Rates Broadcast] Error: ${err.message}`);
     }
+  }, 30000);
+
   // 5. Initialize Adversarial Chaos Session (If Enabled)
   if (require("./services/chaos/ChaosService").enabled) {
       const chaosToken = require("./services/chaos/ChaosService").createSession();
@@ -136,4 +138,5 @@ server.listen(PORT, "0.0.0.0", async () => {
   // 6. Finalize Invariant Registration
   require("./services/payment/InvariantRegistry");
 });
+
 

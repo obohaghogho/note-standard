@@ -1,12 +1,14 @@
 -- Migration: 173_corruption_and_manual_queue.sql
 
 -- 1. Add IRRECOVERABLE_STATE_CORRUPTION to classification
+-- Ensures failure_class enum supports the terminal corruption state
 ALTER TYPE dlq_failure_class ADD VALUE IF NOT EXISTS 'IRRECOVERABLE_STATE_CORRUPTION';
 
 -- 2. Create manual reconciliation queue if not exists
+-- NOTE: referencing wallets_store because wallets is a VIEW (Migration 090)
 CREATE TABLE IF NOT EXISTS public.manual_reconciliation_queue (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    wallet_id UUID NOT NULL REFERENCES public.wallets(id),
+    wallet_id UUID NOT NULL REFERENCES public.wallets_store(id),
     transaction_id UUID NOT NULL REFERENCES public.transactions(id),
     corruption_root_causal_id TEXT,
     evidence JSONB,
@@ -34,6 +36,7 @@ BEGIN
     WHERE id = p_as_of_tx_id;
 
     -- Calculate balance as of that moment
+    -- We query by created_at to isolate the ledger state at that point in time
     SELECT 
         COALESCE(SUM(CASE WHEN status = 'COMPLETED' AND type IN ('DEPOSIT', 'TRANSFER_IN', 'SWAP_IN', 'AFFILIATE_COMMISSION', 'REFUND') THEN amount ELSE 0 END), 0) -
         COALESCE(SUM(CASE WHEN status = 'COMPLETED' AND type IN ('WITHDRAWAL', 'TRANSFER_OUT', 'SWAP_OUT', 'PAYOUT', 'SUBSCRIPTION_PAYMENT', 'AD_PAYMENT', 'BUY') THEN amount + COALESCE(fee, 0) ELSE 0 END), 0)
@@ -42,8 +45,7 @@ BEGIN
     WHERE wallet_id = p_wallet_id
       AND created_at <= v_created_at;
 
-    -- Fetch health metrics from snapshots table (if available)
-    -- For now, use wallet balance metadata
+    -- Return the immutable state snapshot
     RETURN jsonb_build_object(
         'balance', v_balance,
         'version_tx_id', p_as_of_tx_id,
