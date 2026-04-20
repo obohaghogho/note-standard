@@ -1,8 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Landmark, CheckCircle2, Loader2, ShieldCheck, Plus, X, Globe } from 'lucide-react';
+import { Landmark, CheckCircle2, Loader2, Plus, X, Globe } from 'lucide-react';
 import { Button } from '../common/Button';
 import walletApi from '../../api/walletApi';
 import toast from 'react-hot-toast';
+
+interface ApiError {
+    response?: {
+        status: number;
+        data?: {
+            error?: string;
+        };
+    };
+}
 
 interface BankAccount {
     currency: string;
@@ -44,8 +53,9 @@ export const BankAccountCard: React.FC = () => {
             setLoading(true);
             const data = await walletApi.getBankAccount(currency);
             setAccount(data);
-        } catch (err: any) {
-            if (err.response?.status === 404) {
+        } catch (err) {
+            const apiErr = err as ApiError;
+            if (apiErr.response?.status === 404) {
                 setAccount(null);
             } else {
                 console.error('Failed to fetch bank account:', err);
@@ -80,8 +90,9 @@ export const BankAccountCard: React.FC = () => {
             setAccount(data);
             setShowForm(false);
             toast.success(`${selectedCurrency} Bank account linked!`);
-        } catch (err: any) {
-            toast.error(err.response?.data?.error || 'Failed to link bank account');
+        } catch (err) {
+            const apiErr = err as ApiError;
+            toast.error(apiErr.response?.data?.error || 'Failed to link bank account');
         } finally {
             setSubmitting(false);
         }

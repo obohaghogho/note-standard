@@ -10,7 +10,7 @@ const AUTH_TAG_LENGTH = 16;
  * In production, these should be loaded from a Secret Manager.
  */
 const KEY_REGISTRY = {
-    'v1': Buffer.from(process.env.BANK_ENCRYPTION_KEY, 'hex'),
+    'v1': process.env.BANK_ENCRYPTION_KEY ? Buffer.from(process.env.BANK_ENCRYPTION_KEY, 'hex') : Buffer.alloc(0),
     // 'v2': Buffer.from(process.env.BANK_ENCRYPTION_KEY_V2, 'hex'), // Example rotation
 };
 
