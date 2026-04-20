@@ -27,5 +27,5 @@ if (redis && env.REDIS_URL) {
 // Ensure exports are safe even if Redis is missing
 module.exports = { 
     paymentQueue: paymentQueue || null, 
-    connection: connection || null 
+    connection: redis || null 
 };
