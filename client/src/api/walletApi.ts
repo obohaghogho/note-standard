@@ -169,6 +169,47 @@ export const walletApi = {
   async createLimitRequest(data: { requested_limit: number, reason: string }): Promise<{ success: boolean; message: string; request?: Record<string, unknown> }> {
     const response = await api.post('/wallet/limit-request', data);
     return response.data;
+  },
+
+  // Bank Account Management
+  async saveBankAccount(data: {
+    currency: string;
+    account_holder: string;
+    account_number: string;
+    iban?: string;
+    swift_code?: string;
+    sort_code?: string;
+    wire_routing?: string;
+    ach_routing?: string;
+    bank_name: string;
+    bank_address: string;
+    payment_schemes?: string[];
+    fees?: Record<string, string>;
+    geo_restriction?: string;
+  }): Promise<{
+    currency: string;
+    account_holder: string;
+    account_number: string;
+    iban_last4?: string;
+    bank_name: string;
+    payment_schemes: string[];
+    settlement_info: string;
+  }> {
+    const response = await api.post('/bank-account', data);
+    return response.data;
+  },
+
+  async getBankAccount(currency: string = 'USD'): Promise<{
+    currency: string;
+    account_holder: string;
+    account_number: string;
+    iban_last4?: string;
+    bank_name: string;
+    payment_schemes: string[];
+    settlement_info: string;
+  }> {
+    const response = await api.get(`/bank-account?currency=${currency}`);
+    return response.data;
   }
 };
 

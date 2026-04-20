@@ -1,16 +1,13 @@
 const { Queue } = require("bullmq");
-const IORedis = require("ioredis");
+const redis = require("../../config/redis");
 const env = require("../../config/env");
 const logger = require("../../utils/logger");
 
-let connection;
 let paymentQueue;
 
-if (env.REDIS_URL) {
-    connection = new IORedis(env.REDIS_URL, {
-        maxRetriesPerRequest: null,
-        tls: { rejectUnauthorized: false }
-    });
+if (redis && env.REDIS_URL) {
+    paymentQueue = new Queue("payment-processing", {
+        connection: redis,
 
     paymentQueue = new Queue("payment-processing", {
         connection,

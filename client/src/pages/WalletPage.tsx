@@ -14,6 +14,7 @@ import { WithdrawModal } from '../components/wallet/WithdrawModal';
 import { ReceiveModal } from '../components/wallet/ReceiveModal';
 import { WalletAllocationChart } from '../components/wallet/WalletAllocationChart';
 import { LedgerTrail } from '../components/wallet/LedgerTrail';
+import { BankAccountCard } from '../components/wallet/BankAccountCard';
 import { RefreshCw, Plus, X, Loader2 } from 'lucide-react';
 import { Button } from '../components/common/Button';
 import toast from 'react-hot-toast';
@@ -247,6 +248,8 @@ function WalletContent() {
                                     }}
                                 />
                            </div>
+
+                           <BankAccountCard />
                            
                            <WalletAllocationChart wallets={wallets} rates={financialView.ratesReady ? {} : {}} /> 
                            <LedgerTrail refreshKey={refreshKey} />

@@ -118,6 +118,7 @@ const adsRoutes = require("./routes/ads");
 const broadcastsRoutes = require("./routes/broadcasts");
 const analyticsRoutes = require("./routes/analytics");
 const manualDepositRoutes = require("./routes/manualDepositRoutes");
+const bankAccountRoutes = require("./routes/bankAccountRoutes");
 
 // API Mounts
 app.use("/api/auth", authRoutes);
@@ -133,6 +134,7 @@ app.use("/api/community", communityRoutes);
 app.use("/api/ads", adsRoutes);
 app.use("/api/broadcasts", broadcastsRoutes);
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/bank-account", bankAccountRoutes);
 app.use("/api/limit-requests", requireAuth, require("./routes/limitRequests"));
 
 // Legacy/Provider Specific Routes
