@@ -2,11 +2,6 @@ const nodemailer = require("nodemailer");
 const logger = require("../utils/logger");
 const env = require("../config/env");
 
-// DEBUG: Temporary – verify Render loaded the SMTP env vars (remove after confirming)
-console.log("SMTP_HOST:", process.env.SMTP_HOST);
-console.log("SMTP_USER:", process.env.SMTP_USER);
-console.log("SMTP_PASS:", process.env.SMTP_PASS ? "***SET***" : "undefined");
-
 // Configure Nodemailer transporter with validation
 const getTransporter = () => {
   const host = process.env.SMTP_HOST;

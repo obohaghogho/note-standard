@@ -89,7 +89,7 @@ exports.handleGrey = async (req, res) => {
                 event,
                 payload: req.body,
                 deferred_at: new Date().toISOString()
-            });
+            }, { jobId: eventId });
         }
         return res.status(202).json({ received: true, status: "deferred_safe_mode" });
     }
@@ -136,7 +136,7 @@ exports.handleGrey = async (req, res) => {
         event,
         payload: req.body,
         logId: log?.id,
-      });
+      }, { jobId: eventId });
     } else {
       logger.warn("⚠️ Redis disabled: Skipping queue for grey webhook");
     }
@@ -189,7 +189,7 @@ exports.handleSendGridInbound = async (req, res) => {
           payload: req.body,
           headers: req.headers,
           deferred_at: new Date().toISOString()
-        });
+        }, { jobId: payloadHash });
       }
       return; // Already responded 200 OK
     }
@@ -367,7 +367,7 @@ exports.handleSendGridInbound = async (req, res) => {
           event,
           payload: parsed,
           logId: eventLog.id,
-      });
+      }, { jobId: event.transactionId || payloadHash });
       logger.info(`[Webhook] SendGrid email queued (confidence: ${parsed.confidence_score}%)`);
     } else {
       logger.info("[Webhook] Redis disabled: Falling back to synchronous processing");

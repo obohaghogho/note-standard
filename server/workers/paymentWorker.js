@@ -43,7 +43,20 @@ if (redis && env.REDIS_URL) {
             });
 
             try {
-                // ── 3. Reference Matching ──────────────────────────────────────────
+                // ── 3. Handle System Jobs (Reconciliation/Maintenance) ────────────────
+                if (job.name === "reconciliation-tier-1") {
+                    const ReconciliationService = require("../services/payment/ReconciliationService");
+                    await ReconciliationService.runSweep({ minAgeMinutes: 3, maxAgeHours: 1, tierLabel: "Tier 1" });
+                    return { status: "success" };
+                }
+
+                if (job.name === "reconciliation-tier-2") {
+                    const ReconciliationService = require("../services/payment/ReconciliationService");
+                    await ReconciliationService.runSweep({ minAgeMinutes: 60, maxAgeHours: 24, tierLabel: "Tier 2" });
+                    return { status: "success" };
+                }
+
+                // ── 4. Reference Matching ──────────────────────────────────────────
                 if (!event?.reference) {
                     logger.warn('[PaymentWorker] No reference found — routing to unmatched queue');
                     await supabase.from('unmatched_payments').insert({

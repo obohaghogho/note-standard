@@ -112,7 +112,7 @@ class BaseProvider {
                   event,
                   payload: req.body,
                   deferred_at: new Date().toISOString()
-                });
+                }, { jobId: event.transactionId || reference });
               } else {
                 logger.error(`[${providerName}] SAFE_MODE deflection failed: No Queue available.`);
               }

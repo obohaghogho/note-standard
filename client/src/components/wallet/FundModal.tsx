@@ -183,8 +183,7 @@ export const FundModal: React.FC<FundModalProps> = ({
             const result = await walletApi.generateNewAddress(activeCurrency);
             setCryptoAddress({
                 address: result.address,
-                network: selectedCurrency.includes('_') ? selectedCurrency.split('_')[1] : (selectedCurrency === 'BTC' ? 'Bitcoin' : 'Ethereum (ERC20)'),
-                reference: `mock_${Date.now()}`
+                network: selectedCurrency.includes('_') ? selectedCurrency.split('_')[1] : (selectedCurrency === 'BTC' ? 'Bitcoin' : 'Ethereum (ERC20)')
             });
             setCryptoStatus('PENDING'); // Reset status for new address
             toast.success("New deposit address generated!");

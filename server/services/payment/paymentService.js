@@ -672,31 +672,39 @@ class PaymentService {
 
     logger.info(`Found transaction ${tx.id} with status ${tx.status}`);
 
-    // 2. IDEMPOTENCY CHECK (using both tables for safety)
-    const { data: payRecord } = await supabase
-      .from("payments")
-      .select("status, credited, expires_at")
-      .eq("reference", reference)
-      .single();
-
-    if (tx.status?.toUpperCase() === "COMPLETED" || payRecord?.status === "CREDITED" || payRecord?.status === "success" || payRecord?.credited) {
-      console.log(`[Finalize] Transaction ${reference} already completed or credited. Skipping.`);
+    // 2. FINALIZED GUARD (Institutional Safety Tier 1)
+    const isFinalized = ["COMPLETED", "CANCELLED"].includes(tx.status?.toUpperCase());
+    if (isFinalized || payRecord?.credited || payRecord?.status === "CREDITED") {
+      console.log(`[Finalize] Transaction ${reference} already finalized or credited. Skipping.`);
       return { status: "already_completed" };
     }
 
-    // EXPIRATION ENFORCEMENT
+    // 2a. ATOMIC PROCESSING TRANSITION (Prevents duplicate queue worker races)
+    if (tx.status?.toUpperCase() === "PENDING") {
+        const { data: transitioned, error: transitionError } = await supabase
+            .from("transactions")
+            .update({ 
+                status: "PROCESSING", 
+                updated_at: new Date() 
+            })
+            .eq("id", tx.id)
+            .eq("status", "PENDING")
+            .select();
+
+        if (transitionError || !transitioned || transitioned.length === 0) {
+            logger.info(`[Finalize] Atomic Guard: Transaction ${tx.id} already picked up by another process.`);
+            return { status: "already_completed" };
+        }
+    }
+
+    // EXPIRATION ENFORCEMENT & LATE OVERRIDE PREP
+    const isFailed = tx.status?.toUpperCase() === "FAILED";
     if (payRecord && payRecord.status === 'pending' && payRecord.expires_at) {
-        if (new Date(payRecord.expires_at) < new Date()) {
-            console.warn(`[Finalize] Payment ${reference} expired. Routing to reconciliation_queue.`);
-            await supabase.from('reconciliation_queue').insert({
-                payment_reference: reference,
-                raw_payload: rawData,
-                parsed_data: eventData,
-                reason: 'payment_expired',
-                status: 'pending'
-            });
+        if (new Date(payRecord.expires_at) < new Date() && !isFailed) {
+            console.warn(`[Finalize] Payment ${reference} expired natively. Marking as FAILED.`);
             await supabase.from('payments').update({ status: 'EXPIRED', updated_at: new Date() }).eq('reference', reference);
-            return { status: "verification_failed", error: "Payment expired" };
+            // We proceed to failTransaction if it's not already failed
+            return await this.failTransaction(reference, "Payment expired (60 minute window)");
         }
     }
 
@@ -822,12 +830,14 @@ class PaymentService {
             ? (rawData.payment_id || rawData.id || rawData.tx_ref || null)
             : null;
 
-          // ── USE confirm_deposit RPC ──
+          // ── USE confirm_deposit RPC (Hardenend v1.74) ──
           const { error: rpcError } = await supabase.rpc("confirm_deposit", {
             p_transaction_id: tx.id,
             p_wallet_id: targetWalletId,
             p_amount: math.formatForCurrency(creditAmount, creditCurrency),
             p_external_hash: externalHash ? String(externalHash) : null,
+            p_override: isFailed, // Allow override if we are fixing a FAILED record
+            p_override_reason: isFailed ? "late_payment_rescue" : "standard_deposit"
           });
 
           if (rpcError) throw rpcError;

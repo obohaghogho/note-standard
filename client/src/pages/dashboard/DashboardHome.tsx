@@ -57,8 +57,7 @@ export default function DashboardHome() {
     const { notes, stats } = useNotes();
     const { transactions } = useWallet();
     const [greeting, setGreeting] = useState('');
-    console.log("Dashboard rendered");
-    console.log("Page rendered (Home)");
+    const [trendData, setTrendData] = useState<any[]>([]);
     
     // Combined Activity Feed Logic
     const recentNotes = useMemo(() => notes.slice(0, 5).map(n => ({
@@ -99,24 +98,57 @@ export default function DashboardHome() {
         return () => clearInterval(interval);
     }, []);
 
+    // Fetch real trend data for the chart
+    useEffect(() => {
+        const fetchTrends = async () => {
+            try {
+                const api = (await import('../../api/axiosInstance')).default;
+                const response = await api.get('/analytics');
+                if (Array.isArray(response.data) && response.data.length > 0) {
+                    const sorted = [...response.data].sort((a, b) => a.date.localeCompare(b.date));
+                    setTrendData(sorted);
+                }
+            } catch (err) {
+                console.error('[Dashboard] Failed to fetch trends:', err);
+            }
+        };
+        fetchTrends();
+    }, []);
+
     const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
 
     // Chart Data Generation (Trends)
     const chartData = useMemo(() => {
+        if (trendData.length > 0) {
+            return {
+                labels: trendData.map(d => {
+                    const date = new Date(d.date);
+                    return date.toLocaleDateString(undefined, { weekday: 'short' });
+                }),
+                datasets: [{
+                    label: 'Activity',
+                    data: trendData.map(d => d.total_notes_created || 0),
+                    fill: true,
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.4,
+                    pointRadius: 0,
+                    borderWidth: 2,
+                }]
+            };
+        }
+
         const labels = Array.from({ length: 7 }, (_, i) => {
             const d = new Date();
             d.setDate(d.getDate() - (6 - i));
             return d.toLocaleDateString(undefined, { weekday: 'short' });
         });
 
-        // Simple mock trend based on current counts to make it look "live"
-        const data = [12, 19, 15, 25, (stats.totalBy || 10) + 5, (stats.totalBy || 10) + 12, (stats.totalBy || 10) + 20];
-
         return {
             labels,
             datasets: [{
                 label: 'Activity',
-                data,
+                data: [0, 0, 0, 0, 0, 0, 0],
                 fill: true,
                 borderColor: '#10b981',
                 backgroundColor: 'rgba(16, 185, 129, 0.1)',
@@ -125,7 +157,7 @@ export default function DashboardHome() {
                 borderWidth: 2,
             }]
         };
-    }, [stats.totalBy]);
+    }, [trendData]);
 
     const chartOptions = {
         responsive: true,
@@ -293,7 +325,7 @@ export default function DashboardHome() {
                                 </div>
                                 <div>
                                     <p className="text-white font-bold text-lg">Did You Know?</p>
-                                    <p className="text-gray-400 text-sm italic">"Organization is the mother of performance." — Keep it up!</p>
+                                    <p className="text-gray-500 text-sm italic">"Organization is the mother of performance." — Keep it up!</p>
                                 </div>
                            </div>
                            <ChevronRight className="text-gray-500" />

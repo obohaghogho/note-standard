@@ -83,7 +83,7 @@ if (process.env.NODE_ENV === "production") {
 }
 
 // ─── Middleware ──────────────────────────────────────────────
-const { requireAuth } = require("./middleware/authMiddleware");
+const { requireAuth, requireAdmin } = require("./middleware/authMiddleware");
 const ApiError = require("./utils/apiError");
 const paymentController = require("./controllers/payment/paymentController");
 
@@ -153,8 +153,8 @@ app.use("/api/limit-requests", requireAuth, require("./routes/limitRequests"));
 const SystemState = require('./config/SystemState');
 
 // ─── System Operational Governance Middleware ─────────────────────
-// 1. System Status Endpoint (Read-Only Status)
-app.get('/api/system-status', (req, res) => {
+// 1. System Status Endpoint (Admin Only)
+app.get('/api/system-status', requireAdmin, (req, res) => {
     res.json(SystemState.getStatusData());
 });
 
@@ -237,8 +237,8 @@ app.use((req, res, next) => {
 
 app.use(express.static(path.join(__dirname, "../client/dist")));
 
-// Temporary IP detection for whitelisting (NOWPayments)
-app.get("/api/server-ip", async (req, res) => {
+// Temporary IP detection (Admin Only)
+app.get("/api/server-ip", requireAdmin, async (req, res) => {
   const https = require("https");
   https.get("https://api.ipify.org", (resp) => {
     let data = "";

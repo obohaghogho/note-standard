@@ -43,6 +43,17 @@ if (redis && env.REDIS_URL) {
         }
     }, 30000);
 
+    // 3. Schedule Deterministic Reconciliation Sweeps (Hardenend v1.74)
+    paymentQueue.add("reconciliation-tier-1", {}, {
+        repeat: { cron: "*/3 * * * *" }, // Every 3 minutes
+        jobId: "reconciliation-tier-1-repeat" 
+    }).catch(err => logger.error("[Queue] Failed to schedule Tier 1 reconciliation", { error: err.message }));
+
+    paymentQueue.add("reconciliation-tier-2", {}, {
+        repeat: { cron: "0 * * * *" }, // Every hour (Tier 2 Deep Sweep)
+        jobId: "reconciliation-tier-2-repeat"
+    }).catch(err => logger.error("[Queue] Failed to schedule Tier 2 reconciliation", { error: err.message }));
+
     logger.info(`[PaymentQueue] Initialized with Redis: ${env.REDIS_URL.split("@").pop()}`);
 } else {
     logger.warn('⚠️ Redis disabled (no REDIS_URL) - paymentQueue is inactive');

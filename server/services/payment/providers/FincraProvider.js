@@ -223,10 +223,16 @@ class FincraProvider extends BaseProvider {
           },
           // Document URLs required for FCY
           documents: {
-            idCard: documentUrls?.idCard || "https://res.cloudinary.com/dummy/id.jpg",
-            utilityBill: documentUrls?.utilityBill || "https://res.cloudinary.com/dummy/utility.jpg"
+            idCard: documentUrls?.idCard,
+            utilityBill: documentUrls?.utilityBill
           }
         };
+
+        if (!payload.KYCInformation.documents.idCard || !payload.KYCInformation.documents.utilityBill) {
+            const missingDocsError = new Error("MISSING_KYC_DOCUMENTS: USD/EUR/GBP accounts require ID card and Utility Bill URLs.");
+            missingDocsError.statusCode = 400;
+            throw missingDocsError;
+        }
       }
 
       // Channel is mandatory for some currencies

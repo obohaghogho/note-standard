@@ -218,74 +218,68 @@ class WalletService {
    */
   async withdraw(userId, data) {
     const SystemState = require('../config/SystemState');
-    if (SystemState.isSafe()) {
-        throw new Error("SAFE_MODE_BLOCK: Ledger mutations disabled");
+    const mode = SystemState.getWithdrawalMode();
+    
+    if (mode === "FROZEN") {
+        throw new Error("SYSTEM_FROZEN: Withdrawals are currently disabled.");
     }
 
-    const { currency, amount, type, idempotencyKey, ip, deviceId } = data;
-    const upCurrency = currency.toUpperCase();
+    const { currency, amount, type, client_idempotency_key, ip, deviceId } = data;
+    const upCurrency = (currency || 'USD').toUpperCase();
+    const numAmount = parseFloat(amount);
     
-    // 1. Initial State: REQUESTED
-    const payoutService = require("./payment/payoutService");
+    // 1. FRAUD GATING (Institutional Step 1)
     const fraudEngine = require("./payment/FraudEngine");
+    const risk = await fraudEngine.evaluateWithdrawalRisk(userId, {
+        amount: numAmount,
+        currency: upCurrency,
+        ip,
+        deviceId
+    });
+
+    if (risk.action === "block" || (mode === "DEGRADED" && numAmount > 100)) {
+        throw new Error(`SECURITY_BLOCK: This withdrawal request was flagged for review. Reasons: ${risk.reasons.join(', ')}`);
+    }
+
+    // 2. INITIALIZATION & DETERMINISTIC INTENT
+    const payoutService = require("./payment/payoutService");
     const commissionService = require("./commissionService");
     
     const wallet = await this.createWallet(userId, upCurrency, data.network);
     
-    // Create Payout Request (Idempotency check happens here via payout_hash)
-    const payoutRequest = await payoutService.createPayoutRequest(userId, wallet.id, {
+    // Calculate total debit including commission
+    const commission = await commissionService.calculateCommission("WITHDRAWAL", numAmount, upCurrency, data.userPlan);
+    const totalDebit = math.formatSafe(math.parseSafe(numAmount).add(math.parseSafe(commission.fee)));
+
+    // HYBRID APPROVAL LOGIC
+    let initialStatus = 'pending_review';
+    if (numAmount <= 100 && risk.score < 40 && mode === "NORMAL") {
+        initialStatus = 'approved';
+    } else if (risk.action === 'review') {
+        initialStatus = 'pending_risk_review';
+    }
+
+    // 3. CREATE PAYOUT REQUEST (Atomic Intent Push)
+    // This pushes 'payout_create' to the Causal Queue which handles the v6 'RESERVED' ledger entry.
+    const payoutIntent = await payoutService.createPayoutRequest(userId, wallet.id, {
       ...data,
+      amount: numAmount,
+      net_amount: numAmount - (commission.fee || 0),
+      fee: commission.fee,
+      status: initialStatus,
+      risk_score: risk.score,
+      client_idempotency_key,
       ip,
       deviceId
     });
 
-    let ledgerId;
-    try {
-      // 2. State: VALIDATING
-      await payoutService.updatePayoutState(payoutRequest.id, 'VALIDATING', 'REQUESTED');
-      
-      const commission = await commissionService.calculateCommission("WITHDRAWAL", amount, upCurrency, data.userPlan);
-      const totalDebit = math.formatSafe(math.parseSafe(amount).add(math.parseSafe(commission.fee)));
-
-      // 3. INTENT PUSH: RESERVED (Layer 3 Reservation)
-      // Instead of direct RPC, we push an intent to the Causal Queue.
-      // The Shard Worker will execute 'reserve_withdrawal_funds' in a fenced transaction.
-      const shardId = parseInt(wallet.id.substring(0, 8), 16) % 4;
-      const { data: intent, error: intentErr } = await supabase
-        .from('causal_execution_queue')
-        .insert({
-          wallet_id: wallet.id,
-          shard_id: shardId,
-          idempotency_key: `withdraw_reserve_${payoutRequest.id}`,
-          intent_type: 'ledger_mutation',
-          expected_version: 1, // First mutation for this payout context
-          payload: {
-            action: 'RESERVE',
-            user_id: userId,
-            amount: totalDebit,
-            currency: upCurrency,
-            reference: payoutRequest.id,
-            lock_reason: 'withdrawal_pending'
-          }
-        })
-        .select()
-        .single();
-
-      if (intentErr) throw intentErr;
-      
-      // We return the intent sequence metadata to the user
-      return { 
-        success: true, 
-        status: 'PROCESSING_ACKNOWLEDGED', 
-        sequenceId: intent.sequence_id,
-        payoutId: payoutRequest.id 
-      };
-
-    } catch (err) {
-      logger.error(`[WalletService] Withdrawal Pipeline Failure`, err);
-      await payoutService.updatePayoutState(payoutRequest.id, 'FAILED', { error: err.message });
-      throw err;
-    }
+    return { 
+      success: true, 
+      status: initialStatus.toUpperCase(), 
+      payoutId: payoutIntent.id,
+      sequenceId: payoutIntent.sequence_id,
+      message: initialStatus === 'approved' ? "Withdrawal approved and scheduled for dispatch." : "Withdrawal submitted and pending review."
+    };
   }
 
   /**

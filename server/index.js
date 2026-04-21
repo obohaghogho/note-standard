@@ -35,6 +35,7 @@ const paymentWorker = require("./workers/paymentWorker");
 const paymentService = require("./services/payment/paymentService");
 const paymentExpiry = require("./workers/paymentExpiry");
 const reconciliationWorker = require("./workers/reconciliationWorker");
+const payoutWorker = require("./workers/payoutWorker");
 
 /**
  * 🚀 START SERVER IMMEDIATELY
@@ -63,27 +64,31 @@ server.listen(PORT, "0.0.0.0", async () => {
   // 2. Start Background Workers
   paymentExpiry.start();
   reconciliationWorker.start();
+  payoutWorker.start();
   // paymentWorker is usually managed separately but included here if needed
   
-  // 3. Initial Market Data & Trends Aggregation
-  try {
-    console.log("[Trends] Running initial aggregation...");
-    await analyticsService.aggregateDailyStats();
-    
-    // Generate Initial DFOS v6.0 Snapshot (Shadow Phase 1)
-    const SnapshotService = require("./services/SnapshotService");
-    await SnapshotService.generateMarketSnapshot();
-    
-    const rates = await fxService.getAllRates();
-    await realtime.broadcast("rates_updated", rates);
-    
-    const stats = await analyticsService.getRealtimeStats();
-    if (stats) {
-      await realtime.broadcast("stats_updated", stats);
+  // 3. Initial Market Data & Trends Aggregation (Backgrounded)
+  setImmediate(async () => {
+    try {
+      logger.info("[Trends] Starting initial aggregation in background...");
+      await analyticsService.aggregateDailyStats();
+      
+      logger.info("[Snapshot] Generating initial DFOS v6.0 Snapshot...");
+      const SnapshotService = require("./services/SnapshotService");
+      await SnapshotService.generateMarketSnapshot();
+      
+      const rates = await fxService.getAllRates();
+      await realtime.broadcast("rates_updated", rates);
+      
+      const stats = await analyticsService.getRealtimeStats();
+      if (stats) {
+        await realtime.broadcast("stats_updated", stats);
+      }
+      logger.info("[Startup] Background initialization complete.");
+    } catch (err) {
+      logger.error(`[Startup] Background initialization failed: ${err.message}`);
     }
-  } catch (err) {
-    logger.error(`[Startup] Background initialization failed: ${err.message}`);
-  }
+  });
 
   // 4. Register Recurring Jobs
   

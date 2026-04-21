@@ -2,6 +2,7 @@ const axios = require("axios");
 const crypto = require("crypto");
 const supabase = require("../../config/database"); // Added missing import
 const logger = require("../../utils/logger");
+const SystemState = require("../../config/SystemState");
 
 const FINCRA_SECRET_KEY = process.env.FINCRA_SECRET_KEY;
 const FINCRA_BUSINESS_ID = process.env.FINCRA_BUSINESS_ID;
@@ -38,13 +39,12 @@ class PayoutService {
       throw new Error("Fincra configuration missing (secret key or business ID)");
     }
 
+    const startTime = Date.now();
     try {
       const accountName = options.accountName || "Account Holder";
       const country = options.country || (currency === "NGN" ? "NG" : "US");
 
-      const response = await api.post(
-        `${FINCRA_BASE_URL}/disbursements/payouts`,
-        {
+      const requestPayload = {
           sourceCurrency: currency,
           destinationCurrency: currency,
           amount: parseFloat(amount),
@@ -63,7 +63,11 @@ class PayoutService {
             sortCode: options.branchCode || options.swiftCode || undefined,
           },
           paymentDestination: "bank_account",
-        },
+      };
+
+      const response = await api.post(
+        `${FINCRA_BASE_URL}/disbursements/payouts`,
+        requestPayload,
         {
           headers: {
             "api-key": FINCRA_SECRET_KEY,
@@ -73,6 +77,7 @@ class PayoutService {
         },
       );
 
+      const latency = Date.now() - startTime;
       const respData = response.data?.data || response.data || {};
 
       return {
@@ -80,17 +85,22 @@ class PayoutService {
         payoutId: respData.id || respData.reference || reference,
         status: respData.status || "PROCESSING",
         provider: "FINCRA",
+        latency,
+        rawResponse: response.data,
+        requestPayload
       };
     } catch (error) {
+      const latency = Date.now() - startTime;
       logger.error(
         "[PayoutService] Fincra Transfer Error:",
         error.response?.data || error.message,
       );
-      throw new Error(
-        `Fincra payout failed: ${
-          error.response?.data?.message || error.message
-        }`,
-      );
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        latency,
+        rawResponse: error.response?.data || { message: error.message }
+      };
     }
   }
 
@@ -128,11 +138,10 @@ class PayoutService {
     }`;
     const payCurrency = payCurrencyMap[lookupKey] || currency.toLowerCase();
 
+    const startTime = Date.now();
     try {
       // Step 1: Request withdrawal
-      const response = await api.post(
-        `${NOWPAYMENTS_API_URL}/payout`,
-        {
+      const payload = {
           withdrawals: [
             {
               address: address,
@@ -142,7 +151,11 @@ class PayoutService {
                 `${process.env.SERVER_URL}/api/webhooks/nowpayments`,
             },
           ],
-        },
+      };
+
+      const response = await api.post(
+        `${NOWPAYMENTS_API_URL}/payout`,
+        payload,
         {
           headers: {
             "x-api-key": NOWPAYMENTS_API_KEY,
@@ -151,24 +164,30 @@ class PayoutService {
         },
       );
 
+      const latency = Date.now() - startTime;
       const withdrawal = response.data.withdrawals[0];
 
       return {
         success: true,
-        payoutId: withdrawal.id, // NOWPayments batch ID
-        status: withdrawal.status, // e.g., 'CREATING', 'PROCESSING'
+        payoutId: withdrawal.id,
+        status: withdrawal.status,
         provider: "NOWPAYMENTS",
+        latency,
+        rawResponse: response.data,
+        requestPayload: payload
       };
     } catch (error) {
+      const latency = Date.now() - startTime;
       logger.error(
         "[PayoutService] NOWPayments Payout Error:",
         error.response?.data || error.message,
       );
-      throw new Error(
-        `NOWPayments payout failed: ${
-          error.response?.data?.message || error.message
-        }`,
-      );
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        latency,
+        rawResponse: error.response?.data || { message: error.message }
+      };
     }
   }
 
@@ -253,15 +272,23 @@ class PayoutService {
    * Initialize a managed payout request in the database
    */
   async createPayoutRequest(userId, walletId, data) {
-    const { amount, currency, method, destination, ip, deviceId } = data;
+    const { amount, currency, method, destination, ip, deviceId, client_idempotency_key } = data;
     
+    // 1. Institutional Validation: Emergency Freeze Check
+    if (!SystemState.isWithdrawalsEnabled()) {
+        throw new Error("Withdrawals are currently suspended for system maintenance.");
+    }
+
+    // 2. Deterministic UUID Idempotency Check (Institutional Standard)
+    if (!client_idempotency_key) {
+        throw new Error("Missing client_idempotency_key. UUID required for financial finality.");
+    }
+
     // -------------------------------------------------------------------------
     // DETERMINISTIC KERNEL: INTENT PUSH
-    // We do NOT write to payout_requests directly. We push to the Causal Queue.
     // -------------------------------------------------------------------------
     const causalGroupId = require('crypto').randomUUID();
     const shardId = parseInt(walletId.substring(0, 8), 16) % 4;
-    const idempotencyKey = `payout_init_${userId}_${amount}_${Date.now()}`;
 
     const { data: intent, error: intentErr } = await supabase
       .from('causal_execution_queue')
@@ -269,7 +296,7 @@ class PayoutService {
         wallet_id: walletId,
         shard_id: shardId,
         causal_group_id: causalGroupId,
-        idempotency_key: idempotencyKey,
+        idempotency_key: client_idempotency_key, // ENFORCED UUID
         intent_type: 'payout_create',
         expected_version: 1, 
         payload: {
@@ -292,22 +319,30 @@ class PayoutService {
   /**
    * Structure Enforced Payout State Updater
    */
-  async updatePayoutState(requestId, status, metadata = {}) {
-      const updateData = { withdrawal_state: status };
+  async updatePayoutState(requestId, status, auditData = {}) {
+      const updateData = { 
+          status: status,
+          updated_at: new Date().toISOString()
+      };
       
-      // If FAILED, we enforce the structured failure contract
-      if (status === 'FAILED') {
+      // Map SLA & Audit metrics to columns
+      if (auditData.latency) updateData.latency_ms = auditData.latency;
+      if (auditData.rawResponse) updateData.last_provider_response = auditData.rawResponse;
+      if (auditData.providerReference) updateData.provider_reference = auditData.providerReference;
+      if (auditData.retry_count !== undefined) updateData.retry_count = auditData.retry_count;
+      if (auditData.uncertain) updateData.processing_uncertain_at = new Date().toISOString();
+      if (auditData.completed_at) updateData.completed_at = auditData.completed_at;
+
+      // Handle structured failures
+      if (status === 'FAILED' || status === 'FAILED_FINAL') {
           updateData.metadata = {
-              ...metadata,
-              failure_code: metadata.failure_code || "SYSTEM_ERROR",
-              failure_reason: metadata.failure_reason || metadata.error || "Unknown operational failure",
-              failure_stage: metadata.failure_stage || "EXECUTION",
-              is_retryable: metadata.is_retryable !== undefined ? metadata.is_retryable : false,
-              severity: metadata.severity || "HIGH",
-              owner: metadata.owner || "PAYMENT_PIPELINE"
+              ...(auditData.metadata || {}),
+              failure_code: auditData.failure_code || "EXECUTION_ERROR",
+              failure_reason: auditData.error || auditData.message || "Unknown failure",
+              is_retryable: auditData.is_retryable || false
           };
-      } else if (Object.keys(metadata).length > 0) {
-          updateData.metadata = metadata;
+      } else if (auditData.metadata) {
+          updateData.metadata = auditData.metadata;
       }
 
       const { data, error } = await supabase

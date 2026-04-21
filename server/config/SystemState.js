@@ -26,6 +26,7 @@ class SystemStateController {
         this.enterSafeTime = null; // Timestamp when SAFE mode was activated
         this.minSafeModeDuration = 120; // Hard dwell floor in seconds
         this.manualMode = false; // If true, auto-recovery is disabled
+        this.withdrawalMode = "NORMAL"; // NORMAL | DEGRADED | FROZEN
     }
 
 
@@ -87,6 +88,26 @@ class SystemStateController {
             return false;
         }
         return true;
+    }
+
+    /**
+     * Withdrawals Enabled Check (Operational Safety)
+     */
+    isWithdrawalsEnabled() {
+        return this.withdrawalMode !== "FROZEN";
+    }
+
+    getWithdrawalMode() {
+        return this.withdrawalMode;
+    }
+
+    setWithdrawalMode(mode, reason) {
+        if (["NORMAL", "DEGRADED", "FROZEN"].includes(mode)) {
+            const oldMode = this.withdrawalMode;
+            this.withdrawalMode = mode;
+            this.reason = reason || `Manual mode change to ${mode}`;
+            logger.warn(`[WITHDRAWAL_MODE_CHANGE] ${oldMode} -> ${mode}. Reason: ${this.reason}`);
+        }
     }
 
 
@@ -192,6 +213,7 @@ class SystemStateController {
             metrics: this.metrics,
             stable_for: Math.round((Date.now() - this.stableSince) / 1000),
             frozen_assets: Array.from(this.frozenAssets.keys()),
+            withdrawal_mode: this.withdrawalMode,
             allowed_operations: this.mode === "NORMAL" ? ["ALL"] : ["READ_ONLY", "AUTH", "RECOVERY_INGESTION"],
             blocked_operations: this.mode === "SAFE" ? ["ALL_MUTATIONS"] : (this.mode === "RECOVERY" ? ["THROTTLED_MUTATIONS"] : [])
         };
