@@ -23,8 +23,32 @@ const SUPPORTED_CURRENCIES = ['BTC', 'ETH', 'USD', 'NGN', 'EUR', 'GBP', 'JPY'];
 
 function WalletContent() {
     const { wallets, financialView, transactions, loading, refresh, createWallet } = useWallet();
-    // socket removed (unused)
-    
+
+    // Live market rates for the ticker (independent of wallet balance)
+    const [liveRates, setLiveRates] = useState<Record<string, number>>({});
+    const [ratesLoading, setRatesLoading] = useState(true);
+
+    useEffect(() => {
+        let active = true;
+        const fetchRates = async () => {
+            try {
+                setRatesLoading(true);
+                const data = await walletApi.getExchangeRates();
+                if (active && data?.rates) {
+                    setLiveRates(data.rates);
+                }
+            } catch {
+                // Silent — ticker stays loading
+            } finally {
+                if (active) setRatesLoading(false);
+            }
+        };
+        fetchRates();
+        // Refresh rates every 30s
+        const interval = setInterval(fetchRates, 30000);
+        return () => { active = false; clearInterval(interval); };
+    }, []);
+
     // Force-refresh service data on mount
     useEffect(() => {
         refresh();
@@ -153,22 +177,25 @@ function WalletContent() {
             <div className="max-w-7xl mx-auto space-y-8">
                 
                 {/* Market Price Ticker */}
-                {!loading && financialView.ratesReady && (
-                    <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-none no-scrollbar">
-                        {['BTC', 'ETH'].map(curr => {
-                            const walletView = financialView.wallets.find(w => w.asset === curr);
-                            return (
-                                <div key={curr} className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full shrink-0">
-                                    <span className={`w-2 h-2 rounded-full ${walletView?.mode === 'FRESH' ? 'bg-green-400' : 'bg-yellow-400'} animate-pulse`} />
-                                    <span className="text-xs font-bold text-gray-300">{curr}/USD</span>
-                                    <span className="text-xs font-black text-white">
-                                        {walletView?.valuationUsd || '...'}
-                                    </span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
+                <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-none no-scrollbar">
+                    {['BTC', 'ETH'].map(curr => {
+                        const price = liveRates[curr];
+                        const isReady = !ratesLoading && price && price > 0;
+                        const formattedPrice = isReady
+                            ? `$${Number(price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            : ratesLoading ? '...' : 'N/A';
+
+                        return (
+                            <div key={curr} className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full shrink-0">
+                                <span className={`w-2 h-2 rounded-full ${
+                                    isReady ? 'bg-green-400' : ratesLoading ? 'bg-yellow-400 animate-pulse' : 'bg-red-400'
+                                } animate-pulse`} />
+                                <span className="text-xs font-bold text-gray-300">{curr}/USD</span>
+                                <span className="text-xs font-black text-white">{formattedPrice}</span>
+                            </div>
+                        );
+                    })}
+                </div>
 
                 {/* Header */}
                 <div className="flex justify-between items-center">

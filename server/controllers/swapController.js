@@ -35,8 +35,12 @@ exports.executeSwap = async (req, res, next) => {
       });
     }
 
-    const result = await swapService.executeSwap(req.user.id, from, to, amount);
-    res.json(result);
+    // Legacy direct-execute path. The v6 flow is: POST /preview → POST /execute (with lockId)
+    // Reject old clients cleanly.
+    return res.status(400).json({
+      code: "USE_QUOTE_FLOW",
+      message: "Direct swap execution is not supported. Use POST /api/swap/preview to get a quote, then POST /api/swap/execute with the lockId.",
+    });
   } catch (err) {
     next(err);
   }

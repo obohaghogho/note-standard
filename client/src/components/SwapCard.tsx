@@ -4,9 +4,9 @@ import { Button } from './common/Button';
 import walletApi from '../api/walletApi';
 import { useWallet } from '../hooks/useWallet';
 import toast from 'react-hot-toast';
-// import type { WalletViewDTO } from '@/types/wallet';
 import { motion } from 'framer-motion';
 import ReCAPTCHA from 'react-google-recaptcha';
+import { normalizeAsset, parseOptionValue } from '../utils/assetUtils';
 
 interface SwapCardProps {
     initialFromCurrency?: string;
@@ -253,17 +253,20 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                                 name="fromCurrency"
                                 value={`${fromCurrency}_${fromNetwork}`}
                                 onChange={(e) => {
-                                    const [c, n] = e.target.value.split('_');
-                                    setFromCurrency(c);
-                                    setFromNetwork(n);
+                                    const { symbol, network } = parseOptionValue(e.target.value);
+                                    setFromCurrency(symbol);
+                                    setFromNetwork(network);
                                 }}
                                 className="bg-transparent text-xl font-bold text-white focus:outline-none cursor-pointer hover:text-purple-400 transition-colors w-full"
                             >
-                                 {financialView.wallets.map(w => (
-                                     <option key={`${w.asset}_${w.network}`} value={`${w.asset}_${w.network}`} className="bg-gray-800 text-base">
-                                         {w.asset} {w.network !== 'native' ? `(${w.network})` : ''}
+                                 {financialView.wallets.map(w => {
+                                 const norm = normalizeAsset(w);
+                                 return (
+                                     <option key={norm.optionValue} value={norm.optionValue} className="bg-gray-800 text-base">
+                                         {norm.displayLabel}
                                      </option>
-                                 ))}
+                                 );
+                             })}
                             </select>
                         </div>
                         <div className="flex-1 w-full relative flex flex-col group/input min-w-0">
@@ -318,17 +321,20 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                             name="toCurrency"
                             value={`${toCurrency}_${toNetwork}`}
                             onChange={(e) => {
-                                const [c, n] = e.target.value.split('_');
-                                setToCurrency(c);
-                                setToNetwork(n);
+                                const { symbol, network } = parseOptionValue(e.target.value);
+                                setToCurrency(symbol);
+                                setToNetwork(network);
                             }}
                             className="bg-transparent text-xl font-bold text-white focus:outline-none cursor-pointer hover:text-purple-400 transition-colors py-1"
                         >
-                             {financialView.wallets.filter(w => w.asset !== fromCurrency || w.network !== fromNetwork).map(w => (
-                                 <option key={`${w.asset}_${w.network}`} value={`${w.asset}_${w.network}`} className="bg-gray-800 text-base">
-                                     {w.asset} {w.network !== 'native' ? `(${w.network})` : ''}
-                                 </option>
-                             ))}
+                             {financialView.wallets.filter(w => w.asset !== fromCurrency || w.network !== fromNetwork).map(w => {
+                                 const norm = normalizeAsset(w);
+                                 return (
+                                     <option key={norm.optionValue} value={norm.optionValue} className="bg-gray-800 text-base">
+                                         {norm.displayLabel}
+                                     </option>
+                                 );
+                             })}
                         </select>
                         <div className="flex-1 min-w-0">
                             <input
@@ -397,14 +403,21 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                     {loading ? (
                         <Loader2 className="animate-spin" size={20} />
                     ) : !fromView?.canExecute ? (
-                        'Exchange Blocked'
+                        fromView?.isFrozen
+                            ? 'Account Frozen — Contact Support'
+                            : fromView?.mode === 'STALE'
+                                ? 'Price Feed Unavailable'
+                                : 'Exchange Suspended'
                     ) : (
                         `Exchange ${fromCurrency} → ${toCurrency}`
                     )}
                 </Button>
                 
                 {fromView?.mode === 'STALE' && (
-                    <p className="text-amber-400 text-[10px] text-center font-medium animate-pulse mt-2">Market volatility detected. Executions paused for safety.</p>
+                    <p className="text-amber-400 text-[10px] text-center font-medium animate-pulse mt-2">Price feed unavailable — quotes paused for safety.</p>
+                )}
+                {fromView?.isFrozen && (
+                    <p className="text-red-400 text-[10px] text-center font-medium mt-2">This account is frozen. Please contact support.</p>
                 )}
             </div>
         </motion.div>

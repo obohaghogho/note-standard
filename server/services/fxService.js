@@ -4,6 +4,10 @@ const ACE = require("./chaos/AntiConsensusEngine");
 const epistemicManager = require("./chaos/EpistemicManager");
 const logger = require("../utils/logger");
 const cache = require("../utils/cache");
+const supabase = require("../config/database");
+const coingeckoProvider = require("../providers/coingeckoProvider");
+const nowpaymentsProvider = require("../providers/nowpaymentsProvider");
+const exchangeRateProvider = require("../providers/exchangeRateProvider");
 
 /**
  * FX Service (Strict v6.0 Shadow Integrated)
@@ -56,6 +60,16 @@ class FXService {
     const age = (Date.now() - lkgTime) / 1000;
 
     if (!lkgValue) return { price: 0, mode: 'INVALID', stale: true };
+
+    // ── Staleness Threshold Enforcement ─────────────────────────
+    // If the cached price is older than STALE_THRESHOLD (1 hour), mark INVALID.
+    // Callers that need a clean price must use getValidatedRate() which
+    // will throw PRICE_TOO_STALE for execution paths.
+    const MAX_EXECUTION_STALE_SECS = 7200; // 2 hours — hard boundary for any trade
+    if (age > MAX_EXECUTION_STALE_SECS) {
+      logger.error(`[FXService] LKG for ${symbol} is ${(age/3600).toFixed(1)}h old — refusing to serve.`);
+      return { price: 0, mode: 'INVALID', stale: true, ageSeconds: age };
+    }
     
     const mode = age < this.STALE_THRESHOLD ? 'STALE' : 'INVALID';
 
@@ -64,7 +78,7 @@ class FXService {
         SystemState.enterSafeMode(`Pricing INVALID state: Feed stalled beyond recovery threshold for ${symbol}.`);
     }
 
-    return { price: lkgValue, mode, stale: true };
+    return { price: lkgValue, mode, stale: true, ageSeconds: age };
   }
 
   /**
@@ -347,6 +361,20 @@ class FXService {
     } catch (err) {
       logger.error(`[FXService] Shadow Recon Internal Error: ${err.message}`);
     }
+  }
+
+  /**
+   * Simple rate convenience method.
+   * Returns a plain numeric rate (from → to).
+   * Used by depositService, paymentService for conversion math.
+   * Throws 'PRICE_TOO_STALE' if rate cannot be determined from live or LKG src.
+   */
+  async getRate(from, to) {
+    const meta = await this.getValidatedRate(from, to);
+    if (meta.rate <= 0) {
+      throw new Error(`PRICE_TOO_STALE: No usable rate available for ${from}/${to}. Feed may be offline.`);
+    }
+    return meta.rate;
   }
 }
 

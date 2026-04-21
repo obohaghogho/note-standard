@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import type { WalletViewDTO } from '@/types/wallet';
 import toast from 'react-hot-toast';
+import { normalizeAsset } from '../../utils/assetUtils';
 
 interface CurrencyListProps {
     wallets: WalletViewDTO[];
@@ -50,7 +51,12 @@ export const CurrencyList: React.FC<CurrencyListProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {(Array.isArray(wallets) ? wallets : []).map((wallet, index) => {
                 const colorClass = getCurrencyColor(wallet.asset);
-                const hasLocked = wallet.balance !== wallet.available;
+                // Normalize the asset to prevent any undefined in network/symbol
+                const norm = normalizeAsset(wallet);
+                // hasLocked: compare available vs balance as parsed floats
+                const balNum = parseFloat(String(wallet.balance)) || 0;
+                const availNum = parseFloat(String(wallet.available)) || 0;
+                const hasLocked = Math.abs(balNum - availNum) > 0.000000001;
 
                 return (
                     <motion.div
@@ -69,10 +75,10 @@ export const CurrencyList: React.FC<CurrencyListProps> = ({
                                 <div className="min-w-0 flex-1">
                                     <div className="flex justify-between items-center gap-2">
                                         <h3 className="font-bold text-white truncate flex items-center gap-1.5">
-                                            {wallet.asset}
-                                            {wallet.network && wallet.network !== 'native' && wallet.network !== 'internal' && (
+                                            {norm.symbol}
+                                            {norm.network !== 'native' && norm.network !== 'internal' && (
                                                 <span className="text-[9px] bg-white/10 px-1 rounded uppercase tracking-tighter opacity-70">
-                                                    {wallet.network}
+                                                    {norm.networkLabel}
                                                 </span>
                                             )}
                                         </h3>
