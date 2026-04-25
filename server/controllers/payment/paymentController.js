@@ -76,7 +76,7 @@ exports.initialize = async (req, res) => {
  */
 exports.verifyPaystack = async (req, res) => {
   try {
-    const { reference } = req.body;
+    const reference = req.body.reference || req.params.reference;
     const userId = req.user.id;
 
     if (!reference) {
@@ -98,8 +98,8 @@ exports.verifyPaystack = async (req, res) => {
     }
 
     res.json({
-      success: tx.status === "COMPLETED",
-      status: tx.status,
+      success: tx.status === "SUCCESS" || tx.status === "COMPLETED",
+      status: tx.status === "COMPLETED" ? "SUCCESS" : tx.status,
       amount: tx.amount,
       currency: tx.currency,
       provider: tx.provider,
@@ -195,9 +195,18 @@ exports.checkStatus = async (req, res) => {
     const { reference } = req.params;
     const userId = req.user.id;
 
-    const tx = await paymentService.verifyPaymentStatus(reference);
+    // ── Task 4.d: O(1) Absolute Database Lookup ───────────────────
+    // We NEVER call verifyPaymentStatus or FXService here.
+    // This is a pure read from the transactions table truth anchor.
+    const { data: tx, error } = await supabase
+      .from("transactions")
+      .select("*")
+      .or(`reference_id.eq.${reference},provider_reference.eq.${reference}`)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (!tx) {
+    if (error || !tx) {
       return res.status(404).json({ error: "Transaction not found" });
     }
 
@@ -207,6 +216,7 @@ exports.checkStatus = async (req, res) => {
     }
 
     res.json({
+      success: tx.status === "SUCCESS" || tx.status === "COMPLETED",
       status: tx.status,
       amount: tx.amount,
       currency: tx.currency,

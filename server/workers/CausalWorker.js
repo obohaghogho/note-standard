@@ -64,10 +64,9 @@ class CausalWorker {
     }
 
     async processNextBatch() {
-        // 1. Check Policy (Fail-Open cache check)
-        const policy = await controlPlane.getPolicy();
-        if (policy.mode === 'SAFE') {
-            logger.warn(`[CausalWorker] System in ${policy.mode} mode. Shard ${this.shardId} execution suspended.`);
+        // 1. Governance Guard: Absolute Mutation Freeze
+        if (SystemState.mode === 'SAFE') {
+            logger.warn(`[CausalWorker] Shard ${this.shardId} execution HALTED: System in SAFE_MODE.`);
             return;
         }
 

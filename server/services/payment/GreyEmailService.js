@@ -64,6 +64,24 @@ class GreyEmailService {
    * @param {Object} brevoPayload - The raw Brevo inbound parse payload
    * @returns {Object} Parsed payment data
    */
+  static parseBrevoPayload(brevoPayload) {
+    if (!brevoPayload || !brevoPayload.Items || !brevoPayload.Items[0]) {
+      logger.error("[GreyEmailService] Empty or invalid Brevo payload");
+      return this._emptyResult("Empty payload");
+    }
+
+    const item = brevoPayload.Items[0];
+    const fullText = `${item.Subject || ""}\n${item.RawTextBody || this._htmlToText(item.RawHtmlBody)}`;
+
+    const result = this.parse(fullText);
+
+    // Extract sender from Brevo's 'Sender' object if not found in text
+    if (item.Sender && result.sender === "Unknown Sender") {
+      result.sender = this._sanitizeField(item.Sender.Name || item.Sender.Address, 100);
+    }
+
+    return result;
+  }
 
   /**
    * Parse raw email text from Grey to extract transaction data.
@@ -93,15 +111,15 @@ class GreyEmailService {
 
     // 2. Amount Extraction (ordered by specificity)
     const amountPatterns = [
-      // Grey-specific patterns
-      /(?:received|credited|deposited)\s+(?:\$|£|€|NGN|USD|GBP|EUR)?\s*([\d,]+(?:\.\d{1,2})?)/i,
+      // Grey-specific patterns (more flexible)
+      /(?:received|credited|deposited|transfer)\s+(?:of\s+)?(?:\$|£|€|NGN|USD|GBP|EUR)?\s*([\d,]+(?:\.\d{1,2})?)/i,
       /(?:amount|total)\s*(?::|of|is)?\s*(?:\$|£|€|NGN)?\s*([\d,]+(?:\.\d{1,2})?)/i,
       // Currency-symbol formats
       /(?:\$|£|€)\s*([\d,]+(?:\.\d{1,2})?)/,
       // Currency-code formats
       /([\d,]+(?:\.\d{1,2})?)\s*(?:USD|GBP|EUR|NGN)\b/i,
       // Generic large number in financial context
-      /(?:transfer|payment|deposit)\s+(?:of\s+)?(?:\$|£|€|NGN)?\s*([\d,]+(?:\.\d{1,2})?)/i,
+      /(?:payment|deposit)\s+(?:of\s+)?(?:\$|£|€|NGN)?\s*([\d,]+(?:\.\d{1,2})?)/i,
     ];
 
     let amount = null;
@@ -163,9 +181,9 @@ class GreyEmailService {
 
     // 5. Sender Extraction
     const senderPatterns = [
-      /(?:sender|from|payer|originator)\s*[:-]?\s*([^,.\n\r]{3,60}?)(?:\s+(?:at|on|via|sent)|\.|,|$)/i,
-      /(?:received|transfer)\s+from\s+([^,.\n\r]{3,60}?)(?:\s+(?:at|on|via)|\.|,|$)/i,
-      /(?:account\s+name|name)\s*[:-]?\s*([^,.\n\r]{3,60}?)(?:\s+(?:at|on)|\.|,|$)/i,
+      /(?:sender|from|payer|originator)\s*[:-]?\s*([^,.\n\r]{3,60}?)(?:\s+(?:at|on|via|sent)|\.|,|-|$)/i,
+      /(?:received|transfer)\s+from\s+([^,.\n\r]{3,60}?)(?:\s+(?:at|on|via)|\.|,|-|$)/i,
+      /(?:account\s+name|name)\s*[:-]?\s*([^,.\n\r]{3,60}?)(?:\s+(?:at|on)|\.|,|-|$)/i,
     ];
 
     let sender = "Unknown Sender";

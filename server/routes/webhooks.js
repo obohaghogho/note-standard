@@ -14,6 +14,7 @@ const webhookController = require("../controllers/payment/webhookController");
 const depositService = require("../services/depositService");
 const paymentService = require("../services/payment/paymentService");
 const supabase = require("../config/database");
+const logger = require("../utils/logger");
 const rateLimit = require("express-rate-limit");
 const multer = require("multer");
 const upload = multer(); // For parsing multipart/form-data from SendGrid
@@ -126,16 +127,39 @@ router.get("/status/:reference", async (req, res) => {
 
   try {
     const { transaction_id } = req.query;
-    const status = await paymentService.verifyPaymentStatus(
-      reference,
-      transaction_id
-    );
 
-    if (!status) {
+    // ── Task 4.e: O(1) Webhook Status Bridge ──────────────────────
+    // Resolve directly from DB. NEVER block on External Providers or FX here.
+    let query = supabase.from("transactions").select("*");
+    
+    // Build a safe OR filter
+    const filters = [
+      `reference_id.eq.${reference}`,
+      `provider_reference.eq.${reference}`
+    ];
+    if (transaction_id && transaction_id !== 'undefined') {
+      filters.push(`id.eq.${transaction_id}`);
+    }
+
+    const { data: tx, error } = await query
+      .or(filters.join(","))
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !tx) {
+      if (error) logger.error(`[WebhookStatus] DB Error: ${error.message}`);
       return res.status(404).json({ error: "Deposit not found" });
     }
 
-    res.json(status);
+    res.json({
+      success: tx.status === "SUCCESS" || tx.status === "COMPLETED",
+      status: tx.status,
+      amount: tx.amount,
+      currency: tx.currency,
+      provider: tx.provider,
+      reference: tx.reference_id
+    });
   } catch (err) {
     console.error("[Webhook] Status check error:", err);
     res.status(500).json({ error: "Failed to check status" });

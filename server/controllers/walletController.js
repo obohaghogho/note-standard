@@ -72,8 +72,7 @@ exports.depositCard = async (req, res, next) => {
     const statusCode = error.statusCode || 500;
     res.status(statusCode).json({
       error: error.message || "Internal Server Error",
-      stack: (process.env.NODE_ENV === "production" || statusCode === 401) ? undefined : error.stack,
-      details: error.details || error.response?.data || error.message || error,
+      details: error.response?.data || error.details || error.message,
       location: "walletController.depositCard"
     });
   }
@@ -112,10 +111,9 @@ exports.depositTransfer = async (req, res, next) => {
       return res.status(400).json({ error: error.message });
     }
 
-    // DEBUG: Return full error details
     res.status(500).json({
       error: error.message || "Internal Server Error",
-      details: error.response?.data || error.details || error,
+      details: error.response?.data || error.details || error.message,
       location: "walletController.depositTransfer"
     });
   }

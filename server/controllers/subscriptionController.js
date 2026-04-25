@@ -34,6 +34,15 @@ exports.createCheckoutSession = async (req, res) => {
     const isInternational = ["USD", "EUR", "GBP"].includes(upCurrency);
     const useFincra = (process.env.NODE_ENV === "production" || hasFincra) && isInternational;
 
+    let usedMethod = useFincra ? "fincra" : "paystack";
+    
+    // Allow frontend to explicitly override if they want Fincra (e.g. for NGN)
+    if (paymentMethod === "fincra" && hasFincra) {
+      usedMethod = "fincra";
+    } else if (paymentMethod === "paystack") {
+      usedMethod = "paystack";
+    }
+
     // 2. Handle Currency Conversion
     // For Fincra international, we always use USD to ensure checkout compatibility
     let processedCurrency = useFincra ? "USD" : "NGN"; 
@@ -71,7 +80,6 @@ exports.createCheckoutSession = async (req, res) => {
       reference: reference, // Store our internal ref in metadata too
     };
 
-    const usedMethod = useFincra ? "fincra" : "paystack";
     const provider = PaymentFactory.getProviderByName(usedMethod);
 
     const callbackUrl = getCallbackUrl("/dashboard/billing", {

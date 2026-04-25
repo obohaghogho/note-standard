@@ -1,11 +1,13 @@
 const supabase = require("../../config/database");
 const PaymentFactory = require("./PaymentFactory");
+const LockService = require("./LockService");
 const { v4: uuidv4 } = require("uuid");
 const logger = require("../../utils/logger");
 const mailService = require("../mailService");
 const math = require("../../utils/mathUtils");
 const { getCallbackUrl } = require("../../utils/url_utils");
 const realtime = require("../realtimeService");
+const SystemState = require("../../config/SystemState");
 
 class PaymentService {
   /**
@@ -334,7 +336,7 @@ class PaymentService {
     logger.info(`[DEBUG] Step 6: Initializing with provider ${providerName}`);
     let initData = {};
     
-    const callbackUrl = options.callbackUrl || getCallbackUrl("/payment/success", { reference }, providerName);
+    const callbackUrl = options.callbackUrl || getCallbackUrl("/activity/success", { reference }, providerName);
 
     console.time(`[PaymentService] ProviderInit:${providerName}`);
     try {
@@ -407,9 +409,11 @@ class PaymentService {
   }
 
   /**
-   * Verify and update a single transaction status
+   * Verify and update a single transaction status (STRICT CONTRACT v6.0)
    */
   async verifyPaymentStatus(reference, externalId = null) {
+    logger.info(`[PaymentService] VERIFY START for ${reference}`);
+    
     let query = supabase
       .from("transactions")
       .select("*")
@@ -422,58 +426,48 @@ class PaymentService {
     } else if (externalId) {
       query = query.or(`provider_reference.eq.${externalId},reference_id.eq.${externalId}`);
     } else {
-      return null;
+      return { status: "FAILED", error: "Missing reference" };
     }
 
     const { data: tx, error } = await query.maybeSingle();
 
-    if (error && error.code !== "PGRST116") {
-       // If multiple rows returned, maybeSingle might error. Let's handle it by taking the first one manually if needed.
-       console.error("[PaymentService] Lookup error:", error.message);
+    if (!tx || error) {
+      logger.warn(`[PaymentService] No transaction found for ref: ${reference}`);
+      return { status: "NOT_FOUND" };
     }
 
-    // fallback: if multiple matches, take latest
-    if (!tx) {
-        const { data: multiple } = await query.limit(1);
-        if (multiple && multiple.length > 0) return multiple[0];
+    // If already finalized, return normalized status immediately
+    const terminalStatus = tx.status?.toUpperCase();
+    if (["COMPLETED", "SUCCESS", "FAILED"].includes(terminalStatus)) {
+      return { 
+        status: terminalStatus === "SUCCESS" ? "COMPLETED" : terminalStatus,
+        transactionId: tx.id,
+        amount: tx.amount,
+        currency: tx.currency
+      };
     }
-
-    if (!tx) { // Changed from `if (error || !tx)`
-      console.log(`[PaymentService] No transaction found for ref: ${reference}, ext: ${externalId}`);
-      return null;
-    }
-
-    // If already completed or failed, just return
-    if (tx.status !== "PENDING") return tx;
 
     try {
       const provider = PaymentFactory.getProviderByName(tx.provider);
-      // Use externalId if provided, otherwise provider_reference, finally reference_id
       const queryRef = externalId || tx.provider_reference || tx.reference_id;
 
       const verification = await provider.verify(queryRef);
+      logger.info(`[PaymentService] PROVIDER VERIFIED SUCCESS: ${reference} -> ${verification.status}`);
 
-      let result;
       if (verification.status === "success") {
-        result = await this.finalizeTransaction(reference, verification);
-      } else if (verification.status === "failed") {
-        result = await this.failTransaction(reference, "Provider reported failure");
+        return await this.finalizeTransaction(reference, verification);
+      } else if (["failed", "abandoned", "expired"].includes(verification.status)) {
+        return await this.failTransaction(reference, `Provider reported failure: ${verification.status}`);
       }
 
-      // If we finalized/failed, return that result (which contains the updated transaction)
-      if (result) return result;
-
-      // Otherwise fetch updated record for pending/other
-      const { data: updatedTx } = await supabase
-        .from("transactions")
-        .select("*")
-        .eq("id", tx.id)
-        .single();
-
-      return updatedTx || tx;
+      // Default: Return current DB status if in-flight
+      return { 
+        status: (tx.status || "PENDING").toUpperCase(),
+        transactionId: tx.id
+      };
     } catch (err) {
-      logger.error(`Status verification failed for ${reference}:`, err.message);
-      return tx;
+      logger.error(`[PaymentService] Status verification failed for ${reference}:`, err.message);
+      return { status: (tx.status || "PENDING").toUpperCase(), error: err.message };
     }
   }
 
@@ -498,23 +492,49 @@ class PaymentService {
    * Tier 1 Mutex: Transaction-level lock.
    */
   async executeWebhookAction(event, body, providerName) {
-    const lockKey = event.transactionId || event.reference || "event_root";
+    const eventId = event.transactionId || event.reference || "event_root";
 
-    return await LockService.withLock(lockKey, async () => {
-        // ── Task 7: Final Idempotency Check inside the canonical lock ─────────
-        const { data: alreadyProcessed } = await supabase
+    return await LockService.withLock(eventId, async () => {
+        // 1. FINAL IDEMPOTENCY GUARD (Inside Mutex)
+        const { data: processedEvent } = await supabase
           .from("webhook_events")
-          .select("id")
-          .eq("external_id", lockKey)
+          .select("id, status")
+          .eq("external_id", eventId)
           .maybeSingle();
 
-        if (alreadyProcessed) {
-          logger.info(`[PaymentService] Mutex IDEMPOTENCY Win: Event ${lockKey} already recorded.`);
-          // If we have an external_id match, we skip to prevent double-processing
+        if (processedEvent && processedEvent.status === 'success') {
+          logger.info(`[PaymentService] Mutex IDEMPOTENCY Win: Event ${eventId} already SUCCESSFUL.`);
           return { status: "already_completed" };
         }
 
-        return await this._internalExecuteMutation(event, body, providerName);
+        // 2. EXECUTION KERNEL
+        // We perform the actual wallet/ledger mutation here.
+        const result = await this._internalExecuteMutation(event, body, providerName);
+
+        // 3. ENROLLMENT (Idempotency Record)
+        // Only if the mutation was successful, we "seal" the event.
+        if (result && result.status !== 'ignored' && result.status !== 'failed') {
+          try {
+            await supabase.from("webhook_events").upsert({
+              external_id: eventId,
+              provider: providerName,
+              status: 'success',
+              processed_at: new Date(),
+              metadata: { 
+                event_type: event.type,
+                result_status: result.status,
+                transaction_id: result.transactionId
+              }
+            }, { onConflict: 'external_id' });
+          } catch (enrollErr) {
+            // If enrollment fails, we have a critical "ghost settlement" risk.
+            // We log this as CRITICAL and return a signal.
+            logger.error(`[CRITICAL] Mutation Succeeded but Enrollment Failed: ${eventId}`, { error: enrollErr.message });
+            throw new Error(`ENROLLMENT_FAILURE: Mutation persisted but idempotency record failed. Manual audit required.`);
+          }
+        }
+
+        return result;
     }, { ttl: 45000, retryWindow: 10000 });
   }
 
@@ -580,11 +600,11 @@ class PaymentService {
       );
 
       if (rpcError) {
-        logger.error("Failed to finalize withdrawal", {
+        logger.error("Failed to finalize withdrawal (HARD_FAIL)", {
           error: rpcError.message,
           reference: event.reference,
         });
-        result = { error: rpcError.message };
+        throw new Error(`WITHDRAWAL_FINALIZATION_FAILED: ${rpcError.message}`);
       } else {
         result = { status: "success" };
       }
@@ -607,11 +627,11 @@ class PaymentService {
       );
 
       if (rpcError) {
-        logger.error("Failed to finalize conversion", {
+        logger.error("Failed to finalize conversion (HARD_FAIL)", {
           error: rpcError.message,
           reference: event.reference,
         });
-        result = { error: rpcError.message };
+        throw new Error(`CONVERSION_FINALIZATION_FAILED: ${rpcError.message}`);
       } else {
         result = { status: "success" };
       }
@@ -631,9 +651,11 @@ class PaymentService {
       // Default to Deposit Finalization
       if (
         event.status === "success" ||
-        body.event === "charge.completed" ||
-        body.event === "charge.successful" ||
-        body.data?.status === "successful"
+        body.event === "charge.success" ||      // Paystack canonical event name
+        body.event === "charge.completed" ||    // legacy / other providers
+        body.event === "charge.successful" ||   // legacy / other providers
+        body.data?.status === "successful" ||
+        body.data?.status === "success"         // Paystack uses lowercase "success"
       ) {
         result = await this.finalizeTransaction(event.reference, event);
       } else if (event.status === "failed") {
@@ -647,403 +669,178 @@ class PaymentService {
 
   /**
   /**
-   * Finalize transaction (Credit wallet, unlock ads, etc.)
+   * Finalize transaction (Strict v6.0 Consolidated Core Lane)
+   * This is the authoritative settlement engine.
    */
   async finalizeTransaction(reference, eventData = null) {
-    console.log(`\n--- START FINALIZE TRANSACTION [${reference}] ---`);
-    const rawData = eventData?.raw || eventData;
-
-    console.log("STEP 1: Found transaction");
-
-    // 1. Fetch transaction safely using unique reference_id OR provider_reference
-    const { data: tx, error: fetchError } = await supabase
-      .from("transactions")
-      .select("*")
-      .or(`reference_id.eq.${reference},provider_reference.eq.${reference}`)
-      .single();
-
-    if (fetchError || !tx) {
-      console.error(
-        `[Finalize] Transaction not found for reference: ${reference}`,
-        fetchError?.message,
-      );
-      return null; // Return null so verifyPaymentStatus can handle it
-    }
-
-    logger.info(`Found transaction ${tx.id} with status ${tx.status}`);
-
-    // 2. FINALIZED GUARD (Institutional Safety Tier 1)
-    const isFinalized = ["COMPLETED", "CANCELLED"].includes(tx.status?.toUpperCase());
-    if (isFinalized || payRecord?.credited || payRecord?.status === "CREDITED") {
-      console.log(`[Finalize] Transaction ${reference} already finalized or credited. Skipping.`);
-      return { status: "already_completed" };
-    }
-
-    // 2a. ATOMIC PROCESSING TRANSITION (Prevents duplicate queue worker races)
-    if (tx.status?.toUpperCase() === "PENDING") {
-        const { data: transitioned, error: transitionError } = await supabase
-            .from("transactions")
-            .update({ 
-                status: "PROCESSING", 
-                updated_at: new Date() 
-            })
-            .eq("id", tx.id)
-            .eq("status", "PENDING")
-            .select();
-
-        if (transitionError || !transitioned || transitioned.length === 0) {
-            logger.info(`[Finalize] Atomic Guard: Transaction ${tx.id} already picked up by another process.`);
-            return { status: "already_completed" };
-        }
-    }
-
-    // EXPIRATION ENFORCEMENT & LATE OVERRIDE PREP
-    const isFailed = tx.status?.toUpperCase() === "FAILED";
-    if (payRecord && payRecord.status === 'pending' && payRecord.expires_at) {
-        if (new Date(payRecord.expires_at) < new Date() && !isFailed) {
-            console.warn(`[Finalize] Payment ${reference} expired natively. Marking as FAILED.`);
-            await supabase.from('payments').update({ status: 'EXPIRED', updated_at: new Date() }).eq('reference', reference);
-            // We proceed to failTransaction if it's not already failed
-            return await this.failTransaction(reference, "Payment expired (60 minute window)");
-        }
-    }
-
-    console.log("STEP 2: Verification passed");
-
-    // 2a. Validate Verification Amount & Currency (if provided by eventData)
-    // Always prioritize the normalized eventData amount over rawData
-    const evAmount = eventData?.amount !== undefined ? eventData.amount : rawData?.amount;
-    const evCurrency = eventData?.currency || rawData?.currency ||
-      rawData?.currency_code || eventData?.payment_type;
-
-    if (evAmount !== undefined && evAmount !== null) {
-      // Amount Tolerance Validation (Currency-Isolated Rules)
-      const currency = String(tx.currency).toUpperCase();
-      let isWithinTolerance = false;
-      let toleranceMsg = "";
-
-      if (currency === 'NGN') {
-          // 1% relative scaling tolerance for NGN
-          const tolerance = Number(tx.amount) * 0.01;
-          isWithinTolerance = Math.abs(Number(tx.amount) - Number(evAmount)) <= tolerance;
-          toleranceMsg = `1% (${tolerance})`;
-      } else {
-          // ±5 Flat for GBP, USD, EUR, and others
-          const tolerance = 5;
-          isWithinTolerance = Math.abs(Number(tx.amount) - Number(evAmount)) <= tolerance;
-          toleranceMsg = `flat ${tolerance}`;
-      }
-
-      if (!isWithinTolerance) {
-        console.error(
-          `[Finalize] Amount mismatch for ${reference}. DB: ${tx.amount}, Provider: ${evAmount}. Tolerance: ${toleranceMsg}`,
-        );
-        await supabase.from('reconciliation_queue').insert({
-            payment_reference: reference,
-            raw_payload: rawData,
-            parsed_data: eventData,
-            reason: `amount_mismatch: expected ${tx.amount}, received ${evAmount}. Rule: ${toleranceMsg}`,
-            queue_type: 'ambiguous_match',
-            status: 'pending'
-        });
-        return {
-          status: "verification_failed",
-          error: "Amount mismatch between provider and database",
-        };
-      }
-    }
-
-    if (evCurrency) {
-      if (
-        String(tx.currency).toUpperCase() !== String(evCurrency).toUpperCase()
-      ) {
-        console.error(
-          `[Finalize] Currency mismatch for ${reference}. DB: ${tx.currency}, Provider: ${evCurrency}`,
-        );
-        return {
-          status: "verification_failed",
-          error: "Currency mismatch between provider and database",
-        };
-      }
-    }
-
-    // Define safeAmount for internal logic
-    const safeAmount = evAmount !== undefined && evAmount !== null ? evAmount : tx.amount;
-
-    const isDeposit = ["DEPOSIT", "FUNDING", "Digital Assets Purchase"]
-      .includes(tx.type?.toUpperCase() || tx.type);
-
-    if (isDeposit) {
-      console.log("STEP 3: Calling confirm_deposit");
-
-      let targetWalletId = tx.wallet_id;
-      let creditAmount = safeAmount;
-      let creditCurrency = tx.currency;
-
-      // Handle Direct Fiat-to-Crypto Purchase
-      if (tx.from_currency !== tx.to_currency && (tx.type === "Digital Assets Purchase" || tx.type === "DIGITAL ASSETS PURCHASE")) {
-        console.log(`[Finalize] Direct Purchase detected: ${tx.from_currency} -> ${tx.to_currency}`);
-        try {
-          const fxService = require("../fxService");
-          const walletService = require("../walletService");
-          
-          const rate = await fxService.getRate(tx.from_currency, tx.to_currency);
-          creditAmount = math.multiply(safeAmount, rate);
-          creditCurrency = tx.to_currency;
-
-          // Find or create the target wallet
-          const targetWallet = await walletService.createWallet(tx.user_id, tx.to_currency, tx.network);
-          targetWalletId = targetWallet.id;
-
-          console.log(`[Finalize] Converted ${safeAmount} ${tx.from_currency} to ${creditAmount} ${creditCurrency} at rate ${rate}`);
-          
-          // Update transaction with conversion details
-          await supabase.from("transactions").update({
-            amount_to: math.formatForCurrency(creditAmount, creditCurrency),
-            metadata: { 
-              ...tx.metadata, 
-              applied_rate: rate,
-              original_fiat_amount: safeAmount,
-              original_fiat_currency: tx.from_currency
-            }
-          }).eq("id", tx.id);
-
-        } catch (convErr) {
-          console.error(`[Finalize] Conversion failed for direct purchase: ${convErr.message}`);
-          return { status: "verification_failed", error: "Conversion failed during finalization" };
-        }
-      }
-
-      // ── Task 3.b: Canonical Tier 2 Mutex (Wallet Constraint) ───────
-      // DERIVATION: walletId is derived strictly from tx record fetched earlier (Line 665)
-      const walletMutexKey = `wallet:${targetWalletId}:mutex`;
-      
-      console.log(`STEP 3: Calling confirm_deposit (Entity Isolation: ${targetWalletId})`);
-
-      const result = await LockService.withLock(walletMutexKey, async () => {
-          // ── Task 9.1: Entity Freeze check ──
-          if (SystemState.isEntityFrozen(targetWalletId)) {
-              throw new Error(`ENTITY_ISOLATED: Wallet ${targetWalletId} is currently frozen.`);
-          }
-
-          const externalHash = rawData
-            ? (rawData.payment_id || rawData.id || rawData.tx_ref || null)
-            : null;
-
-          // ── USE confirm_deposit RPC (Hardenend v1.74) ──
-          const { error: rpcError } = await supabase.rpc("confirm_deposit", {
-            p_transaction_id: tx.id,
-            p_wallet_id: targetWalletId,
-            p_amount: math.formatForCurrency(creditAmount, creditCurrency),
-            p_external_hash: externalHash ? String(externalHash) : null,
-            p_override: isFailed, // Allow override if we are fixing a FAILED record
-            p_override_reason: isFailed ? "late_payment_rescue" : "standard_deposit"
-          });
-
-          if (rpcError) throw rpcError;
-
-          return { success: true };
-      }, { ttl: 20000, retryWindow: 5000 });
-
-      if (result.success) {
-          console.log("STEP 4: Wallet credited and payment marked successfully");
-      }
-
-    } else {
-      // ── NON-DEPOSIT types: manual update (subscriptions, ads, etc.) ──
-      console.log(`STEP 3: Updating Non-Deposit Transaction (${tx.type})`);
-
-      const externalHash = rawData ? (rawData.payment_id || rawData.id) : null;
-
-      const { data: updatedTx, error: updateError } = await supabase
-        .from("transactions")
-        .update({
-          status: "COMPLETED",
-          external_hash: externalHash ? String(externalHash) : null,
-          display_label: eventData?.display_label || tx.display_label ||
-            "Payment",
-          internal_coin: eventData?.internal_coin,
-          internal_amount: eventData?.internal_amount,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", tx.id)
-        .neq("status", "COMPLETED")
-        .select()
-        .single(); // Enforce we actually updated the row
-
-      if (updateError || !updatedTx) {
-        console.warn(
-          `[Finalize] Atomic update failed or skip for ${reference}. Concurrent process won.`,
-          updateError?.message,
-        );
-        return { status: "already_completed" };
-      }
-      console.log("STEP 4: Non-Deposit record updated successfully");
-    }
-
-    // 4. Perform business logic based on type (Side effects ONLY)
-    const metadata = tx.metadata || {};
-
-    switch (tx.type?.toUpperCase() || tx.type) {
-      case "DEPOSIT":
-      case "FUNDING":
-      case "Digital Assets Purchase":
-      case "DIGITAL ASSETS PURCHASE":
-        break; // Core processed via RPC
-      case "AD_PAYMENT":
-        await this.unlockAd(metadata.adId);
-        break;
-      case "SUBSCRIPTION_PAYMENT":
-      case "SUBSCRIPTION":
-        // Handle subscription activation (plan tiers, expiration, etc.)
-        try {
-          const newPlan = metadata.plan || "PRO";
-          const planTier = newPlan.toLowerCase();
-          const now = new Date();
-          const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
-
-          // 1. Upsert subscriptions table (this is what the frontend reads)
-          const { data: existingSub } = await supabase
-            .from("subscriptions")
-            .select("id")
-            .eq("user_id", tx.user_id)
-            .maybeSingle();
-
-          const subData = {
-            plan_tier: planTier,
-            plan_type: newPlan.toUpperCase(),
-            status: "active",
-            start_date: now.toISOString(),
-            end_date: endDate.toISOString(),
-            charged_amount_ngn: tx.amount,
-            exchange_rate: metadata.exchangeRate || 0,
-          };
-
-          if (existingSub) {
-            await supabase
-              .from("subscriptions")
-              .update(subData)
-              .eq("user_id", tx.user_id);
-          } else {
-            await supabase
-              .from("subscriptions")
-              .insert({ user_id: tx.user_id, ...subData });
-          }
-
-          // 2. Sync to profiles table for backward compatibility
-          await supabase
-            .from("profiles")
-            .update({ plan_tier: planTier })
-            .eq("id", tx.user_id);
-
-          // 3. Record in subscription_transactions if table exists
-          try {
-            await supabase.from("subscription_transactions").insert({
-              user_id: tx.user_id,
-              transaction_id: tx.id,
-              event_type: "upgrade",
-              plan_to: newPlan,
-              status: "completed",
-            });
-          } catch (stErr) {
-            // Table may not exist, non-critical
-            logger.warn("[PaymentService] subscription_transactions insert failed (non-critical)", { error: stErr.message });
-          }
-
-          logger.info(`[PaymentService] Subscription activated for user ${tx.user_id}: plan=${planTier}, ends=${endDate.toISOString()}`);
-        } catch (subErr) {
-          logger.error("Failed to update user subscription plan", {
-            error: subErr.message,
-            stack: subErr.stack,
-          });
-        }
-        break;
-      default:
-        logger.warn(
-          `[PaymentService] No additional logic for type: ${tx.type}`,
-          {
-            txId: tx.id,
-          },
-        );
-    }
-
-    // 3. Perform Post-Finalization Steps (Notify User)
-    // Fetch fresh transaction to get updated status, amounts, and metadata (especially after RPC/Conversion)
-    const { data: finalTx } = await supabase
-      .from("transactions")
-      .select("*")
-      .eq("id", tx.id)
-      .single();
+    logger.info(`[PaymentService] FINALIZATION START for ${reference}`);
     
-    const notifyTx = finalTx || tx;
+    return await LockService.withLock(reference, async () => {
+        // 1. Fetch transaction record
+        const { data: tx, error: fetchError } = await supabase
+          .from("transactions")
+          .select("*")
+          .or(`reference_id.eq.${reference},provider_reference.eq.${reference}`)
+          .single();
 
-    // ── Send email receipt ──
-    await this.sendReceipt(notifyTx.user_id, notifyTx);
+        if (fetchError || !tx) {
+          logger.error(`[Finalize] Transaction not found: ${reference}`);
+          return { status: "FAILED", error: "TRANSACTION_NOT_FOUND" };
+        }
 
-    // ── Send In-App Notification ──
-    try {
-      const { createNotification } = require("../notificationService");
-      
-      // Determine what to show in message based on type
-      let displayAmount = notifyTx.amount;
-      let displayCurrency = notifyTx.currency;
-      
-      if (notifyTx.amount_to && notifyTx.to_currency && notifyTx.amount_to !== notifyTx.amount) {
-        displayAmount = notifyTx.amount_to;
-        displayCurrency = notifyTx.to_currency;
-      }
+        // 2. IDEMPOTENCY GUARD
+        if (["COMPLETED", "SUCCESS"].includes(tx.status?.toUpperCase())) {
+          logger.info(`[Finalize] Idempotency Hit for ${reference}. Already COMPLETED.`);
+          return {
+            status: "COMPLETED",
+            transactionId: tx.id,
+            amount: tx.amount,
+            walletId: tx.wallet_id
+          };
+        }
 
-      await createNotification({
-        receiverId: notifyTx.user_id,
-        senderId: null, // System notification
-        type: "payment_success",
-        title: `Payment Confirmed (${notifyTx.reference_id?.substring(3, 10)})`,
-        message: `Your payment of ${displayAmount} ${displayCurrency} for ${
-          notifyTx.display_label || "your deposit"
-        } has been confirmed. (ID: ${notifyTx.id.substring(0, 5)})`,
-        link: `/dashboard/wallet`,
-      });
-    } catch (notifErr) {
-      logger.error("Failed to send payment notification:", notifErr.message);
-    }
+        // 3. CORE LANE SETTLEMENT (Strictly Fiat / Ledger Purity)
+        // Rule: Internal deposits/purchases use VERIFIED amount directly. No FX service.
+        const settlementAmount = eventData?.amount || tx.amount;
+        
+        logger.info(`[Finalize] Executing Journaled Settlement [confirm_deposit] for ${reference}`);
+        
+        const { data: rpcApplied, error: rpcError } = await supabase.rpc("confirm_deposit", {
+            p_transaction_id: tx.id,
+            p_wallet_id: tx.wallet_id,
+            p_amount: settlementAmount,
+            p_external_hash: eventData?.reference || reference
+        });
 
-    // ── Emit Real-time Balance Update ──
-    try {
-      await realtime.emitToUser(notifyTx.user_id, "balance_updated", {
-        userId: notifyTx.user_id,
-        transactionId: notifyTx.id,
-        amount: displayAmount,
-        currency: displayCurrency,
-        newStatus: notifyTx.status
-      });
-    } catch (realtimeErr) {
-      logger.error("Failed to emit real-time balance update:", realtimeErr.message);
-    }
+        if (rpcError) {
+            logger.error(`[Finalize] RPC FAILURE for ${reference}: ${rpcError.message}`);
+            throw rpcError;
+        }
 
-    return notifyTx;
+        logger.info(`[Finalize] RPC SUCCESS for ${reference} (Applied: ${rpcApplied})`);
+
+        // 4. ATOMIC STATE TERMINATION
+        const { data: finalizedTx, error: updateError } = await supabase
+          .from("transactions")
+          .update({ 
+            status: "COMPLETED",
+            updated_at: new Date(),
+            metadata: { 
+                ...tx.metadata, 
+                finalized_at: new Date(),
+                settlement_applied: rpcApplied,
+                locked: true
+            }
+          })
+          .eq("id", tx.id)
+          .select()
+          .single();
+
+        if (updateError) {
+            logger.error(`[Finalize] Status Update Failed for ${reference}: ${updateError.message}`);
+            throw updateError;
+        }
+
+        logger.info(`[Finalize] STATUS UPDATED TO COMPLETED for ${reference}`);
+
+        // 5. POST-SETTLEMENT SIDE EFFECTS (Non-blocking background chain)
+        // We do not await these to keep the mutex lock duration at minimum
+        setImmediate(async () => {
+            try {
+                // A. Handle Business logic (Ads, Subscriptions)
+                const type = finalizedTx.type?.toUpperCase();
+                if (type === "AD_PAYMENT" && finalizedTx.metadata?.adId) {
+                    await this.unlockAd(finalizedTx.metadata.adId);
+                } else if (type === "SUBSCRIPTION_PAYMENT" || type === "SUBSCRIPTION") {
+                    await this._activateSubscription(finalizedTx);
+                }
+
+                // B. Notifications & Receipts (Deferred for performance)
+                await this.sendReceipt(finalizedTx.user_id, finalizedTx);
+                
+                const { createNotification } = require("../notificationService");
+                await createNotification({
+                    receiverId: finalizedTx.user_id,
+                    type: "payment_success",
+                    title: `Payment Confirmed`,
+                    message: `Your payment for ${finalizedTx.display_label || "your deposit"} has been confirmed.`,
+                    link: `/dashboard/wallet`,
+                });
+
+                // C. Real-time Broadcast
+                await realtime.emitToUser(finalizedTx.user_id, "balance_updated", {
+                    userId: finalizedTx.user_id,
+                    transactionId: finalizedTx.id,
+                    amount: finalizedTx.amount,
+                    currency: finalizedTx.currency,
+                    newStatus: "COMPLETED"
+                });
+            } catch (sideEffectErr) {
+                logger.error(`[Finalize] Post-settlement side effects failed (Non-critical): ${sideEffectErr.message}`);
+            }
+        });
+
+        return {
+          status: "COMPLETED",
+          transactionId: finalizedTx.id,
+          amount: finalizedTx.amount,
+          walletId: finalizedTx.wallet_id
+        };
+    }, { ttl: 30000, retryWindow: 5000 });
   }
 
-  async failTransaction(reference, reason) {
-    await supabase
+  /**
+   * Helper: Activate Subscription after payment confirmation
+   */
+  async _activateSubscription(tx) {
+    const metadata = tx.metadata || {};
+    const newPlan = metadata.plan || "PRO";
+    const planTier = newPlan.toLowerCase();
+    const now = new Date();
+    const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    const subData = {
+      plan_tier: planTier,
+      plan_type: newPlan.toUpperCase(),
+      status: "active",
+      start_date: now.toISOString(),
+      end_date: endDate.toISOString(),
+      charged_amount_ngn: tx.amount,
+    };
+
+    await supabase.from("subscriptions").upsert({ 
+        user_id: tx.user_id, 
+        ...subData 
+    }, { onConflict: "user_id" });
+
+    await supabase.from("profiles").update({ 
+        plan_tier: planTier 
+    }).eq("id", tx.user_id);
+    
+    logger.info(`[PaymentService] Subscription activated for ${tx.user_id}`);
+  }
+
+  async failTransaction(referenceOrId, reason) {
+    const { data: returnedTx, error } = await supabase
       .from("transactions")
       .update({
         status: "FAILED",
-        metadata: { failReason: reason },
         updated_at: new Date().toISOString(),
       })
-      .eq("reference_id", reference);
+      .or(`id.eq.${referenceOrId},reference_id.eq.${referenceOrId},provider_reference.eq.${referenceOrId}`)
+      .select()
+      .maybeSingle();
 
     // Sync with payments table
     await supabase
       .from("payments")
       .update({
         status: "failed",
-        metadata: { failReason: reason },
         updated_at: new Date().toISOString(),
       })
-      .eq("reference", reference);
+      .or(`reference.eq.${referenceOrId}`);
 
-    return { status: "failed" };
+    return returnedTx || { status: "FAILED" };
   }
 
   /**

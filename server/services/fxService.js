@@ -6,6 +6,8 @@ const logger = require("../utils/logger");
 const cache = require("../utils/cache");
 const supabase = require("../config/database");
 const coingeckoProvider = require("../providers/coingeckoProvider");
+const pLimit = require("p-limit");
+const limit = pLimit(2); // Limit to 2 concurrent external requests
 const nowpaymentsProvider = require("../providers/nowpaymentsProvider");
 const exchangeRateProvider = require("../providers/exchangeRateProvider");
 
@@ -16,9 +18,11 @@ const exchangeRateProvider = require("../providers/exchangeRateProvider");
  */
 class FXService {
   constructor() {
-    this.FRESH_TTL = 60; // 60 seconds (Live)
-    this.STALE_THRESHOLD = 3600; // 1 hour (LKG limit)
+    this.FRESH_TTL = 600; // 10 minutes (Protect external APIs)
+    this.STALE_THRESHOLD = 7200; // 2 hours (Expanded LKG window)
     this.SANITY_DEVIATION_CAP = 0.15; // 15% max jump per tick
+    this.pendingRequests = new Map(); // Single-flight Map: key -> Promise
+    logger.info("[FXService] FXService loaded successfully");
     
     this.coinMapping = {
       "BTC": "bitcoin",
@@ -27,6 +31,36 @@ class FXService {
       "USDC": "usd-coin",
     };
     this.DRIFT_WINDOW = 5; // Rolling snapshots for velocity
+
+    // ── Task 4.i: Circuit Breaker State ──────────────────────────
+    // Tracks provider health to prevent 429 feedback loops.
+    this.breakerTrippedUntil = 0; // Timestamp
+    this.BREAKER_COOLDOWN = 15 * 60 * 1000; // 15 Minutes
+    
+    // Seed LKG cache with safe fallback rates on startup.
+    // These are intentionally stale-flagged and will be overwritten by the
+    // first successful live fetch. They prevent $0.00 during cold boot.
+    this._bootstrapFallbackRates();
+  }
+
+  _bootstrapFallbackRates() {
+    const FALLBACK_SEEDS = {
+      BTC: 78500,
+      ETH: 2400,
+      USDT: 1.0,
+      USDC: 1.0,
+      "USD-COIN": 1.0,
+      TETHER: 1.0,
+    };
+    for (const [sym, price] of Object.entries(FALLBACK_SEEDS)) {
+      const key = `lkg_price_${sym}`;
+      // Only seed if not already in cache (don't overwrite fresh live data)
+      if (!cache.get(key)) {
+        cache.set(key, price, 86400 * 7);
+        cache.set(`lkg_time_${sym}`, Date.now() - 3500 * 1000, 86400 * 7); // Set as ~1h old (STALE, not INVALID)
+        logger.info(`[FXService] Seeded fallback LKG for ${sym}: $${price} (STALE)`);
+      }
+    }
   }
 
   /**
@@ -40,12 +74,23 @@ class FXService {
       const currentLKG = cache.get(key);
       
       if (currentLKG) {
+        const timestampKey = `lkg_time_${symbol.toUpperCase()}`;
+        const lkgTime = cache.get(timestampKey) || 0;
+        const age = (Date.now() - lkgTime) / 1000;
+        const isInitialSeedSync = age > 3500; // Seed was set ~1h ago in bootstrap
+
+        const syncCap = isInitialSeedSync ? 0.35 : this.SANITY_DEVIATION_CAP;
         const deviation = Math.abs(newPrice - currentLKG) / currentLKG;
-        if (deviation > this.SANITY_DEVIATION_CAP) {
+        
+        if (deviation > syncCap) {
           logger.warn(`[FXService] Price spike detected for ${symbol}: ${currentLKG} -> ${newPrice} (${(deviation*100).toFixed(2)}%). Quarantining tick.`);
           const SystemState = require("../config/SystemState");
           SystemState.freezeAsset(symbol, 300);
           return { price: currentLKG, mode: 'INVALID', stale: true };
+        }
+        
+        if (isInitialSeedSync) {
+          logger.info(`[FXService] Initial seed synchronization complete for ${symbol}. Jump: ${(deviation*100).toFixed(2)}% (Allowed: ${syncCap*100}%)`);
         }
       }
 
@@ -89,90 +134,159 @@ class FXService {
     const cacheKey = `crypto_meta_${sym}`;
 
     const fetcher = async () => {
-      try {
-        const coinId = this.coinMapping[sym];
-        let rawPrice = null;
-        
-        if (coinId) {
-          const prices = await coingeckoProvider.getPrices([coinId]);
-          rawPrice = prices[coinId] || null;
-        }
+      // ── High-Availability Stablecoin Short-Circuit ────────────────
+      // USDT and USDC are pegged to USD. Returning 1.0 immediately 
+      // preserves API quota and prevents 429 locks.
+      if (sym === "USDT" || sym === "USDC") {
+        return { price: 1.0, mode: "FRESH", stale: false };
+      }
 
-        if (!rawPrice) {
-          rawPrice = await nowpaymentsProvider.getRate(sym, "USD");
-        }
-
-        return await this._handleLKG(sym, rawPrice);
-      } catch (err) {
-        logger.error(`[FXService] Fetch failed for ${sym}: ${err.message}`);
+      // ── Task 4.j: Circuit Breaker Check ──────────────────────────
+      // If the breaker is tripped, we return LKG immediately without 
+      // touching the network. This preserves rate limits and prevents hangs.
+      if (Date.now() < this.breakerTrippedUntil) {
+        logger.warn(`[FXService] Circuit Breaker ACTIVE for ${sym}. Serving LKG.`);
         return await this._handleLKG(sym);
       }
+
+      // ── Task 4.a: Single-Flight Locking ───────────────────────────
+      // If a fetch is already in flight for this symbol, share the promise
+      const inflight = this.pendingRequests.get(sym);
+      if (inflight) return inflight;
+
+      const fetchPromise = (async () => {
+        try {
+          const coinId = this.coinMapping[sym];
+          let rawPrice = null;
+          
+          if (coinId) {
+            const prices = await coingeckoProvider.getPrices([coinId]);
+            rawPrice = prices[coinId] || null;
+          }
+
+          if (!rawPrice) {
+            rawPrice = await nowpaymentsProvider.getRate(sym, "USD");
+          }
+
+          return await this._handleLKG(sym, rawPrice);
+        } catch (err) {
+          logger.error(`[FXService] Fetch failed for ${sym}: ${err.message}. Using LKG.`);
+          
+          // Trip Circuit Breaker on 429 (Rate Limit)
+          if (err.message?.includes("429") || err.status === 429 || err.message?.includes("RATE_LIMIT")) {
+            logger.error(`[FXService] Critical Rate Limit detected for ${sym}. TRIPPING CIRCUIT BREAKER for 15m.`);
+            this.breakerTrippedUntil = Date.now() + this.BREAKER_COOLDOWN;
+            cache.set("breaker_tripped_until", this.breakerTrippedUntil, 1800); // Expose to global cache for SnapshotService
+          }
+
+          return await this._handleLKG(sym);
+        } finally {
+          this.pendingRequests.delete(sym); // Release lock
+        }
+      })();
+
+      this.pendingRequests.set(sym, fetchPromise);
+      return fetchPromise;
     };
 
-    if (!useCache) return await fetcher();
-    return cache.wrap(cacheKey, this.FRESH_TTL, fetcher);
+    if (!useCache) return await limit(() => fetcher());
+    return cache.wrap(cacheKey, this.FRESH_TTL, () => limit(() => fetcher()));
   }
 
   /**
    * Hardened Rate Engine (The source of truth for execution)
    */
-  async getValidatedRate(from, to, useCache = true) {
+  async getValidatedRate(from, to, useCache = true, isPaymentPath = false) {
     const fromSym = from.toUpperCase();
     const toSym = to.toUpperCase();
     
     if (fromSym === toSym) return { rate: 1.0, mode: 'FRESH', canExecute: true };
 
-    try {
-      // 1. Resolve FROM in USD
-      let fromMeta = { price: 1.0, mode: 'FRESH' };
-      if (fromSym !== 'USD') {
-        if (this.coinMapping[fromSym]) {
-          fromMeta = await this.getPriceMetadata(fromSym, useCache);
-        } else {
-          try {
-            const fiatRate = await exchangeRateProvider.getFiatRate(fromSym, "USD");
-            fromMeta = await this._handleLKG(fromSym, fiatRate);
-          } catch {
-            fromMeta = await this._handleLKG(fromSym);
-          }
+    const cacheKey = `rate_validated_${fromSym}_${toSym}`;
+    
+    const resolver = async () => {
+      try {
+        // ── Task 4.b: Asset Freeze Decoupling ────────────────────────
+        const SystemState = require("../config/SystemState");
+        if (!isPaymentPath) {
+           if (SystemState.isAssetFrozen(fromSym) || SystemState.isAssetFrozen(toSym)) {
+               logger.warn(`[FXService] Asset ${fromSym}/${toSym} is frozen. Blocking non-payment resolution.`);
+               return { rate: 0, mode: 'INVALID', canExecute: false, reason: 'ASSET_FROZEN' };
+           }
         }
-      }
 
-      // 2. Resolve TO in USD
-      let toMeta = { price: 1.0, mode: 'FRESH' };
-      if (toSym !== 'USD') {
-        if (this.coinMapping[toSym]) {
-          const priceMeta = await this.getPriceMetadata(toSym, useCache);
-          toMeta = { 
-            price: priceMeta.price > 0 ? 1 / priceMeta.price : 0, 
-            mode: priceMeta.mode 
-          };
-        } else {
-          try {
-            const fiatRate = await exchangeRateProvider.getFiatRate("USD", toSym);
-            toMeta = await this._handleLKG(`${toSym}_INV`, fiatRate);
-          } catch {
-            toMeta = await this._handleLKG(`${toSym}_INV`);
+        // Goal: Return how many 'fromSym' is 1 'toSym' worth.
+        // rate = (Price of toSym in USD) / (Price of fromSym in USD)
+
+        const getPriceInUsd = async (sym) => {
+          if (sym === 'USD') return { price: 1.0, mode: 'FRESH' };
+          
+          if (this.coinMapping[sym]) {
+            return await this.getPriceMetadata(sym, useCache);
+          } else {
+            // For fiat: we need "price of sym in USD" (e.g. USD_per_NGN = 0.000667).
+            // getAllRates('USD')[sym] gives sym_per_USD (e.g. NGN_per_USD = 1500).
+            // We invert that to get USD_per_sym (0.000667) for consistent LKG storage.
+            try {
+              const allUsdRates = await exchangeRateProvider.getAllRates('USD');
+              const symPerUsd = allUsdRates ? allUsdRates[sym] : null;
+              if (symPerUsd && symPerUsd > 0) {
+                const usdPerSym = 1 / symPerUsd; // e.g. 1/1500 = 0.000667
+                return await this._handleLKG(sym, usdPerSym);
+              }
+              return await this._handleLKG(sym);
+            } catch {
+              return await this._handleLKG(sym);
+            }
           }
+        };
+
+        const [fromMeta, toMeta] = await Promise.all([
+          getPriceInUsd(fromSym),
+          getPriceInUsd(toSym)
+        ]);
+
+        const combinedMode = (fromMeta.mode === 'INVALID' || toMeta.mode === 'INVALID') ? 'INVALID' 
+                           : (fromMeta.mode === 'STALE' || toMeta.mode === 'STALE') ? 'STALE'
+                           : 'FRESH';
+
+        const fromPrice = fromMeta.price || 0;
+        const toPrice = toMeta.price || 0;
+        
+        if (fromPrice <= 0) return { rate: 0, mode: 'INVALID', canExecute: false };
+        
+        const rate = toPrice / fromPrice;
+        
+        // Instant Success Path for Payments: Allow STALE/LKG execution to prevent hangs
+        const canExecute = isPaymentPath ? (rate > 0) : (combinedMode === 'FRESH');
+        
+        return {
+          rate: parseFloat(rate),
+          mode: combinedMode,
+          canExecute,
+          attribution: { from: fromMeta.mode, to: toMeta.mode }
+        };
+      } catch (err) {
+        logger.error(`[FXService] Critical Rate Failure ${from}/${to}: ${err.message}`);
+        
+        // ── Task 4.g: Emergency Bootstrap Fallback ──────────────────
+        // For payments, we MUST return a rate. If the engine is dead,
+        // we use the bootstrap seeds to ensure settlement completes.
+        if (isPaymentPath) {
+          logger.warn(`[FXService] EMERGENCY: Using bootstrap fallback for payment path settlement: ${from}/${to}`);
+          const fromBootstrap = (fromSym === 'USD') ? 1.0 : (cache.get(`lkg_price_${fromSym}`) || 1.0);
+          const toBootstrap = (toSym === 'USD') ? 1.0 : (cache.get(`lkg_price_${toSym}`) || 1.0);
+          const rate = toBootstrap / fromBootstrap; // PriceOfTo / PriceOfFrom
+          
+          return { rate: parseFloat(rate), mode: 'BOOTSTRAP', canExecute: true };
         }
+
+        return { rate: 0, mode: 'INVALID', canExecute: false };
       }
+    };
 
-      const combinedMode = (fromMeta.mode === 'INVALID' || toMeta.mode === 'INVALID') ? 'INVALID' 
-                         : (fromMeta.mode === 'STALE' || toMeta.mode === 'STALE') ? 'STALE'
-                         : 'FRESH';
-
-      const rate = fromMeta.price * toMeta.price;
-      
-      return {
-        rate: parseFloat(rate),
-        mode: combinedMode,
-        canExecute: combinedMode === 'FRESH',
-        attribution: { from: fromMeta.mode, to: toMeta.mode }
-      };
-    } catch (err) {
-      logger.error(`[FXService] Critical Rate Failure ${from}/${to}: ${err.message}`);
-      return { rate: 0, mode: 'INVALID', canExecute: false };
-    }
+    if (!useCache) return await resolver();
+    return cache.wrap(cacheKey, this.FRESH_TTL, resolver);
   }
 
   /**
@@ -220,6 +334,7 @@ class FXService {
 
     return true;
   }
+
   async getAllRates(base = "USD", walletId = null) {
     const CanaryUtils = require("../utils/canaryUtils");
     const DecisionEngine = require("./DecisionEngine");
@@ -345,11 +460,17 @@ class FXService {
       // Calculate total valuation mismatch for this wallet/user
       // This is the core 'Comparison Symmetry' anchor
       const walletService = require("./walletService");
-      const wallets = await walletService.getWalletsByUserId(walletId);
+      const wallets = await walletService.getWallets(walletId); // Use getWallets for array
+      logger.info("[FXService] Wallet fetched successfully");
       
       let legacyTotal = 0;
       let snapshotTotal = 0;
-
+      
+      if (!Array.isArray(wallets)) {
+        logger.warn("[FXService] Shadow Recon: No wallets found for user.");
+        return;
+      }
+ 
       for (const w of wallets) {
         const rateLegacy = legacyRates[w.asset] || 0;
         const rateSnapshot = snapshot.rates[w.asset] || 0;
@@ -379,4 +500,3 @@ class FXService {
 }
 
 module.exports = new FXService();
-

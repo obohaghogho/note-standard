@@ -304,7 +304,7 @@ async function confirmDeposit(reference, externalHash = null) {
   if (findError || !tx) { throw new Error("Transaction not found"); }
   if (tx.status === "COMPLETED") { return { success: true, amount: tx.amount, currency: tx.currency, alreadyProcessed: true }; }
   
-  const { error: rpcError } = await supabase.rpc("confirm_deposit", {
+  const { data: applied, error: rpcError } = await supabase.rpc("confirm_deposit", {
     p_transaction_id: tx.id,
     p_wallet_id: tx.wallet_id,
     p_amount: tx.amount,
@@ -312,6 +312,11 @@ async function confirmDeposit(reference, externalHash = null) {
   });
 
   if (rpcError) { throw new Error(`Failed to confirm: ${rpcError.message}`); }
+
+  // If already processed (applied = false), we still return success but don't re-notify
+  if (applied === false) {
+    return { success: true, amount: tx.amount, currency: tx.currency, alreadyProcessed: true };
+  }
 
   try {
     const { createNotification } = require("./notificationService");

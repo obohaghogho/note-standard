@@ -18,7 +18,21 @@ class PaystackProvider extends BaseProvider {
   }
 
   async initialize(data) {
-    const { email, amount, currency, reference, callbackUrl, metadata } = data;
+    let { email, amount, currency, reference, callbackUrl, metadata } = data;
+
+    // Sandbox Auto-Conversion for unsupported currencies
+    // Paystack test accounts often only support NGN unless explicitly upgraded.
+    if (currency === "USD" && this.secretKey.includes("test")) {
+      const fxService = require("../../fxService");
+      try {
+        const rate = await fxService.getRate("USD", "NGN");
+        amount = amount * rate;
+        currency = "NGN";
+        metadata = { ...metadata, auto_converted_from: "USD" };
+      } catch (e) {
+        console.warn("[Paystack] FX conversion failed, attempting raw USD request", e.message);
+      }
+    }
 
     // Paystack uses smallest unit (kobo for NGN)
     const amountInSmallestUnit = Math.round(amount * 100);
@@ -131,7 +145,7 @@ class PaystackProvider extends BaseProvider {
       return {
         success: status === "success",
         status: status, // success, abandoned, failed
-        amount: math.divide(amount, 100, math.getDecimals(currency)),
+        amount: math.divide(amount, 100),
         currency: currency,
         reference: ref,
         provider: "paystack",
@@ -186,7 +200,7 @@ class PaystackProvider extends BaseProvider {
       display_label: "Digital Assets Purchase",
       reference: data.reference,
       status: status,
-      amount: math.divide(data.amount, 100, math.getDecimals(data.currency)),
+      amount: math.divide(data.amount, 100),
       currency: data.currency,
       userId: data.metadata?.userId || data.metadata?.user_id,
       raw: payload,

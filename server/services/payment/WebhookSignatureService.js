@@ -34,6 +34,33 @@ class WebhookSignatureService {
     return incomingSecret === secret;
   }
 
+  // ─── Brevo (Inbound Email) ───────────────────────────────────
+
+  /**
+   * Verify Brevo inbound email secret.
+   * Can be passed via header or query parameter.
+   */
+  static verifyBrevo(headers, body, query = {}) {
+    const secret = process.env.BREVO_INBOUND_SECRET;
+    if (!secret) return process.env.NODE_ENV !== "production";
+
+    const incomingSecret =
+      headers["x-brevo-inbound-secret"] ||
+      query.secret ||
+      body?.secret;
+
+    return incomingSecret === secret;
+  }
+
+  /**
+   * Check if an IP belongs to Brevo's known ranges.
+   */
+  static isBrevoIP(ip) {
+    if (!ip) return false;
+    const brevoIPs = ["185.107.232.", "1.179.112.", "51.38.99."];
+    return brevoIPs.some((range) => ip.startsWith(range));
+  }
+
   // ─── Paystack ─────────────────────────────────────────────────
 
   /**
@@ -53,16 +80,47 @@ class WebhookSignatureService {
     const signature = headers["x-paystack-signature"];
     if (!signature) return false;
 
-    const data =
-      rawBody instanceof Buffer ? rawBody : Buffer.from(String(rawBody));
+    const data = rawBody instanceof Buffer ? rawBody : Buffer.from(String(rawBody || ""));
 
     const hash = crypto
       .createHmac("sha512", secret)
       .update(data)
       .digest("hex");
 
-    // Guard: timingSafeEqual requires same-length buffers
-    if (hash.length !== signature.length) return false;
+    // Secure constant-time comparison
+    try {
+      return crypto.timingSafeEqual(
+        Buffer.from(hash, "utf8"),
+        Buffer.from(signature, "utf8")
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  // ─── NowPayments ─────────────────────────────────────────────
+
+  /**
+   * Verify NowPayments webhook signature (HMAC-SHA512)
+   * Note: NowPayments requires a specific alphabetical sorting of keys
+   */
+  static verifyNowPayments(headers, body) {
+    const secret = process.env.NOWPAYMENTS_IPN_SECRET;
+    const signature = headers["x-nowpayments-sig"];
+    
+    if (!secret || !signature) return false;
+
+    const orderedBody = Object.keys(body)
+      .sort()
+      .reduce((obj, key) => {
+        obj[key] = body[key];
+        return obj;
+      }, {});
+
+    const hash = crypto
+      .createHmac("sha512", secret)
+      .update(JSON.stringify(orderedBody))
+      .digest("hex");
 
     try {
       return crypto.timingSafeEqual(
@@ -78,21 +136,25 @@ class WebhookSignatureService {
 
   /**
    * Verify Generic Signature (HMAC-SHA256)
+   * Uses rawBody to ensure cryptographic integrity.
    */
   static verifyGeneric(
     headers,
-    body,
+    rawBody,
     secret,
-    headerName = "x-webhook-signature"
+    headerName = "x-webhook-signature",
+    algorithm = "sha256"
   ) {
     if (!secret) return true;
 
     const signature = headers[headerName];
     if (!signature) return false;
 
+    const data = rawBody instanceof Buffer ? rawBody : Buffer.from(String(rawBody || ""));
+
     const hash = crypto
-      .createHmac("sha256", secret)
-      .update(JSON.stringify(body))
+      .createHmac(algorithm, secret)
+      .update(data)
       .digest("hex");
 
     // Use timing-safe comparison to prevent timing attacks

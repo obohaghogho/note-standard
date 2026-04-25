@@ -5,6 +5,7 @@ const decisionEngine = require('../services/DecisionEngine');
 const logger = require('../utils/logger');
 const SystemState = require('../config/SystemState');
 const LockService = require('../services/payment/LockService');
+const supabase = require('../config/database');
 
 let intervalId = null;
 const RUN_INTERVAL = 5 * 60 * 1000; // 5 minutes
@@ -35,7 +36,7 @@ class ReconciliationWorker {
         
         try {
             this.isProcessingReplay = true;
-            const { paymentQueue } = require("../services/payment/paymentQueue");
+            const { paymentQueue } = require("./paymentQueue");
             if (!paymentQueue) return;
 
             const jobs = await paymentQueue.getJobs(["waiting"]);
@@ -164,30 +165,50 @@ class ReconciliationWorker {
     static async assertLedgerIntegrity() {
         try {
             logger.info("[ReconciliationWorker] Running Active Ledger Integrity Sweep...");
+            
+            // 1. Fetch Materialized Balances
             const { data: wallets, error } = await supabase.from('wallets_store').select('id, balance, user_id');
             if (error || !wallets) return;
 
+            // 2. Fetch Ledger Truth from v6 Consolidated View
+            // We join entries with transactions to ensure we only sum FINALIZED funds
+            const { data: ledgerTruth, error: ledgerError } = await supabase
+              .from('ledger_entries_v6')
+              .select(`
+                wallet_id,
+                amount,
+                side,
+                ledger_transactions_v6!inner(status)
+              `);
+
+            if (ledgerError) throw ledgerError;
+
+            // 3. Aggregate Journal Truth
+            const validStatuses = ['SETTLED', 'settled', 'LEDGER_COMMITTED', 'SUCCESS', 'completed', 'COMPLETED'];
+            const ledgerTruthMap = ledgerTruth.reduce((acc, curr) => {
+                const status = curr.ledger_transactions_v6.status;
+                if (!validStatuses.includes(status)) return acc;
+
+                const amount = Number(curr.amount);
+                acc[curr.wallet_id] = (acc[curr.wallet_id] || 0) + amount;
+                return acc;
+            }, {});
+
             let driftCount = 0;
+            const tolerance = 0.0000000001; // Tiny epsilon for floating point buffer
+
             for (const wallet of wallets) {
-                const { data: entries } = await supabase
-                    .from('ledger_entries')
-                    .select('amount, type')
-                    .eq('wallet_id', wallet.id)
-                    .in('status', ['confirmed', 'settled']);
+                // HARDENING: Ledger truth is floored at 0 for materialized comparison
+                // physical reality cannot store a negative coin balance.
+                const truthSum = Math.max(0, ledgerTruthMap[wallet.id] || 0);
+                const materialized = Number(wallet.balance) || 0;
+                const drift = Math.abs(materialized - truthSum);
 
-                if (entries) {
-                    const truthSum = entries.reduce((acc, curr) => {
-                        return curr.type === 'CREDIT' ? acc + Number(curr.amount) : acc - Number(curr.amount);
-                    }, 0);
-
-                    const drift = Math.abs(Number(wallet.balance) - truthSum);
-                    if (drift > this.driftTolerance) {
-                        logger.error(`[SYSTEM_DRIFT_DETECTED] Wallet ${wallet.id} (User: ${wallet.user_id}) drift: ${drift}. Materialized: ${wallet.balance}, Ledger Truth: ${truthSum}`);
-                        SystemState.updateMetrics({ hasDrift: true, drift: drift }); // Pass drift for epsilon check
-                        SystemState.enterSafeMode(`Ledger drift detected on Wallet ${wallet.id}`);
-                        driftCount++;
-                    }
-
+                if (drift > tolerance) {
+                    logger.error(`[SYSTEM_DRIFT_DETECTED] Wallet ${wallet.id} (User: ${wallet.user_id}) drift: ${drift.toFixed(8)}. Materialized: ${materialized}, Ledger Truth: ${truthSum}`);
+                    SystemState.updateMetrics({ hasDrift: true, drift: drift });
+                    SystemState.enterSafeMode(`Ledger drift detected on Wallet ${wallet.id}`);
+                    driftCount++;
                 }
             }
 

@@ -22,9 +22,13 @@ class PayoutWorker {
 
     static async dispatchPendingPayouts() {
         // Governance Check: Emergency Kill Switch
+        if (SystemState.mode === "SAFE") {
+            return; // Absolute Mutation Halt
+        }
+
         const mode = SystemState.getWithdrawalMode();
         if (mode === "FROZEN") {
-            return; // Absolute Halt
+            return; // Absolute Withdrawal Halt
         }
 
         try {

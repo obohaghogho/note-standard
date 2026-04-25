@@ -30,6 +30,14 @@ class WalletService {
   }
 
   /**
+   * Alias: Get single primary wallet for user (used by FXService)
+   */
+  async getWalletByUserId(userId) {
+    const wallets = await this.getWallets(userId);
+    return wallets.length > 0 ? wallets[0] : null;
+  }
+
+  /**
    * Helper to detect and upgrade mock addresses
    */
   async upgradeIfMock(userId, wallet, targetNetwork = null) {

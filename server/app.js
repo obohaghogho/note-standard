@@ -177,34 +177,32 @@ app.use((req, res, next) => {
 });
 
 // Legacy/Provider Specific Routes
-app.use("/api/paystack", require("./routes/paystackRoutes"));
-app.use("/api/webhooks", require("./routes/webhooks"));
-app.use("/webhook", require("./routes/webhooks"));
 app.use("/api/payment", require("./routes/payment"));
+app.use("/api/transactions", require("./routes/transactionRoutes"));
 
-// Dedicated Webhook Handlers
+// ─── Webhook Routes (ALL providers) ─────────────────────────
+// IMPORTANT: This MUST be mounted BEFORE the global mutation block (SystemState).
+// Paystack, Grey, Fincra, NowPayments, Flutterwave all route through here.
+app.use("/api/webhooks", require("./routes/webhooks"));
+
+// Alias: /api/nowpayments/webhook → /api/webhooks/nowpayments
 app.use("/api/nowpayments/webhook", (req, res, next) => {
   req.url = "/nowpayments";
   next();
 }, require("./routes/webhooks"));
 
+// Alias: /api/flutterwave/webhook → /api/webhooks/flutterwave
 app.use("/api/flutterwave/webhook", (req, res, next) => {
   req.url = "/flutterwave";
   next();
 }, require("./routes/webhooks"));
 
+
 app.post("/api/verify-payment", requireAuth, paymentController.verifyPayment);
 
-// Direct Flutterwave Webhook Route
-app.post("/api/flutterwave-webhook", async (req, res) => {
-  try {
-    logger.info("Webhook received from Flutterwave");
-    return res.status(200).send("Webhook received");
-  } catch (error) {
-    logger.error("Webhook Error:", error);
-    return res.status(500).send("Error");
-  }
-});
+// ─── Flutterwave (Legacy → Fincra) ───────────────────────────
+// DEPRECATED: Standard Flutterwave logic is now routed through the Fincra engine 
+// or the unified webhook router. Direct Flutterwave endpoints are being retired.
 
 app.use("/api/media", require("./routes/media"));
 app.use("/api/version", require("./routes/version"));

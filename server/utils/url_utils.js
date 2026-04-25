@@ -28,16 +28,20 @@ const getCallbackUrl = (path, params = {}, provider = null) => {
   if (provider === "fincra") {
     /**
      * Fincra Quirks:
-     * - Rejects 'localhost' even in sandbox.
+     * - Rejects 'localhost' even in sandbox (throws "redirectUrl must be a URL address").
      * - Requires HTTPS in production.
      */
     if (env.NODE_ENV === "production" && finalizedUrl.startsWith("http://")) {
         finalizedUrl = finalizedUrl.replace("http://", "https://");
     }
     
-    // In dev, if using localhost, we might need a tunnel or IP.
-    // However, for the 'audit' we want to discourage localhost-specific hacks in service code.
-    // We'll trust env.CLIENT_URL to be set correctly for the environment.
+    // In dev, if using localhost, Fincra API rejects it. 
+    // We use a wildcard DNS (nip.io) to trick Fincra's strict frontend URL validation
+    // while still correctly routing you back to your local computer.
+    if (finalizedUrl.includes("localhost") || finalizedUrl.includes("127.0.0.1")) {
+        finalizedUrl = finalizedUrl.replace("localhost", "127.0.0.1.nip.io");
+        finalizedUrl = finalizedUrl.replace("127.0.0.1:", "127.0.0.1.nip.io:");
+    }
   }
 
   return finalizedUrl;

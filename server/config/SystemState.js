@@ -125,12 +125,13 @@ class SystemStateController {
         // 2. Metric Stability Window (120s)
         const durationStable = (Date.now() - this.stableSince) / 1000;
         
-        // 3. Health check with Epsilon
+        // 3. Health check: Only require ZERO DRIFT and LOW QUEUE LAG to exit.
+        // priceHealth is NOT required — low crypto confidence does not mean the
+        // ledger is compromised, and should not permanently stall deposits.
         const driftEpsilon = 1e-6;
         const isHealthy = this.metrics.queueLag < 30 && 
                          this.metrics.growthRate <= 0 && 
-                         (!this.metrics.hasDrift || (this.metrics.drift < driftEpsilon)) &&
-                         this.metrics.priceHealth > 0.8;
+                         (!this.metrics.hasDrift || (this.metrics.drift < driftEpsilon));
 
         return isHealthy && durationStable >= 120;
     }

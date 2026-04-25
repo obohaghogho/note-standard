@@ -67,151 +67,106 @@ class BaseProvider {
    * 4. Always returns HTTP 200 OK (unless signature fails)
    */
   async processWebhook(req, res) {
-    // 1. ABSOLUTE EARLY RETURN: Guaranteed 200 OK to stop retries/timeouts
-    // Send this immediately before ANY database or logging logic.
-    if (!res.headersSent) {
-      res.status(200).json({ received: true });
-    }
-
+    const providerName = this.constructor.name.replace("Provider", "").toLowerCase();
+    
     try {
-      const providerName = this.constructor.name.replace("Provider", "")
-        .toLowerCase();
-      logger.info(`[${providerName}] Webhook Received`);
+      logger.info(`[${providerName}] Webhook Ingestion Start`);
 
-      // 3. Process the webhook asynchronously in the background
-      (async () => {
+      // 1. STAGE: VERIFY (Cryptographic Gatekeeper)
+      // We do this BEFORE acknowledging 200 OK. If the signature is wrong, 
+      // we WANT the provider to know via a 401 status.
+      if (!this.verifyWebhookSignature(req.headers, req.body, req.rawBody)) {
+        logger.warn(`[${providerName}] REJECTED: Invalid Cryptographic Signature.`);
+        return res.status(401).json({ 
+          success: false, 
+          error: "Invalid signature",
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      // 2. STAGE: NORMALIZE (Logic Bridge)
+      let event;
+      try {
+        event = this.parseWebhookEvent(req.body);
+      } catch (err) {
+        logger.error(`[${providerName}] REJECTED: Payload Normalization Failed: ${err.message}`);
+        return res.status(400).json({ 
+          success: false, 
+          error: "Malformed payload for provider contract",
+          details: err.message
+        });
+      }
+
+      const reference = event.reference || "unknown";
+      const eventId = event.transactionId || reference;
+
+      // 3. STAGE: AUDIT LOG (First Persistence)
+      let logId;
+      try {
+        const { data: logEntry } = await supabase
+          .from("webhook_logs")
+          .insert({
+            provider: providerName,
+            payload: req.body,
+            headers: req.headers,
+            reference: reference,
+            ip_address: req.headers["x-forwarded-for"] || req.socket.remoteAddress || "local",
+          })
+          .select("id")
+          .single();
+        logId = logEntry?.id;
+      } catch (err) {
+        // Non-blocking but logged
+        logger.error(`[${providerName}] Failed to log hit to webhook_logs: ${err.message}`);
+      }
+
+      // 4. STAGE: ACKNOWLEDGMENT (The 200 OK Handshake)
+      // At this point, we have verified the sender and parsed the intent.
+      // We are "legitimately" holding the ball.
+      res.status(200).json({ status: "received", eventId });
+
+      // 5. STAGE: BACKGROUND SETTLEMENT (Mutex-Locked)
+      // We move to a background execution to prevent provider timeouts during DB/Service contention.
+      setImmediate(async () => {
         try {
-          // Parse Event & Get Reference
-          let event = {};
-          let reference = null;
-          try {
-            event = this.parseWebhookEvent(req.body);
-            reference = event.reference || req.body.order_id ||
-              req.body.payment_id || req.body.data?.merchantReference ||
-              req.body.data?.reference || req.body.tx_ref;
-            
-            // ─── Task 4.a: Redis-Backed Idempotency Proof ─────────────────────
-            // This prevents duplicate hits from processing even if the DB check is slow
-            const eventId = event.transactionId || reference;
-            if (eventId && redis) {
-              const idempotencyKey = `webhook_proof:${eventId}`;
-              const exists = await redis.get(idempotencyKey);
-              if (exists) {
-                logger.info(`[${providerName}] Webhook Deduplicated (Redis Proof): ${eventId}`);
-                return; // Already acknowledged via 200 OK at start of method
-              }
-              await redis.set(idempotencyKey, "1", "EX", 3600); // 1 hour TTL
+          // ── Task 4.a: Redis-Backed Idempotency Guard ───
+          if (eventId && redis) {
+            const idempotencyKey = `webhook_proof:${eventId}`;
+            const exists = await redis.get(idempotencyKey);
+            if (exists) {
+              logger.info(`[${providerName}] Idempotency Deduplicated (Redis): ${eventId}`);
+              return;
             }
-
-            // ─── Task 4.b: Selective Safe Mode Deflection ──────────────────
-            if (SystemState.isSafe()) {
-              logger.warn(`[${providerName}] System in SAFE_MODE. Deflecting webhook to pending queue.`);
-              if (paymentQueue) {
-                await paymentQueue.add("pending_webhook_safe_mode", {
-                  provider: providerName,
-                  event,
-                  payload: req.body,
-                  deferred_at: new Date().toISOString()
-                }, { jobId: event.transactionId || reference });
-              } else {
-                logger.error(`[${providerName}] SAFE_MODE deflection failed: No Queue available.`);
-              }
-              return; // We already sent the 200 OK
-            }
-
-          } catch (err) {
-            logger.warn(
-              `[${providerName}] Could not parse webhook event cleanly.`,
-            );
+            await redis.set(idempotencyKey, "1", "EX", 3600);
           }
 
-          // Log Webhook for Audit Trail FIRST (so we can debug signature mismatches exactly)
-          let logId;
-          try {
-            const { data: logEntry } = await supabase
-              .from("webhook_logs")
-              .insert({
+          // ── Task 4.b: Safe Mode Deflection ───
+          const isCoreLane = ["DEPOSIT", "FUNDING", "DIGITAL ASSETS PURCHASE"].includes(event.type?.toUpperCase());
+          if (SystemState.isSafe() && !isCoreLane) {
+            logger.warn(`[${providerName}] System in SAFE_MODE. Deflecting to reconciliation queue.`);
+            if (paymentQueue) {
+              await paymentQueue.add("pending_webhook_safe_mode", {
                 provider: providerName,
+                event,
                 payload: req.body,
-                headers: req.headers,
-                reference: reference || "unknown",
-                ip_address: req.headers["x-forwarded-for"] || "unknown",
-              })
-              .select("id")
-              .single();
-            logId = logEntry?.id;
-          } catch (err) {
-            logger.error(`[${providerName}] Failed to log webhook`, {
-              error: err.message,
-            });
-          }
-
-          // 1. Verify Signature AFTER logging!
-          if (
-            !this.verifyWebhookSignature(req.headers, req.body, req.rawBody)
-          ) {
-            logger.warn(
-              `[${providerName}] Suspicious Webhook Attempt (Unauthorized signature) logged and dropped.`,
-            );
-            if (logId) {
-              await supabase.from("webhook_logs").update({
-                processed: false,
-                processing_error: "Invalid signature hook dropped anonymously",
-              }).eq("id", logId);
+                deferred_at: new Date().toISOString()
+              }, { jobId: eventId });
             }
-            return; // Secretly drop bad payloads
+            return;
           }
 
-          // Idempotency Check (status !== COMPLETED or payments.credited)
-          if (reference) {
-            const { data: tx } = await supabase
-              .from("transactions")
-              .select("status")
-              .eq("reference_id", reference)
-              .single();
-
-            const { data: payRecord } = await supabase
-              .from("payments")
-              .select("credited")
-              .eq("reference", reference)
-              .single();
-
-            if (
-              (tx &&
-                ["COMPLETED", "SUCCESS", "FAILED"].includes(
-                  tx.status?.toUpperCase(),
-                )) ||
-              payRecord?.credited
-            ) {
-              logger.info(
-                `[${providerName}] Idempotency Check: Transaction ${reference} already processed. Skipping.`,
-              );
-              if (logId) {
-                await supabase
-                  .from("webhook_logs")
-                  .update({
-                    processed: true,
-                    processing_error: "Already processed",
-                  })
-                  .eq("id", logId);
-              }
-              return; // Already sent 200 OK
-            }
-          }
-
-          // Hand Over to PaymentService Main Execution (Wrapped in Mutex)
           const paymentService = require("../paymentService");
           
-          const result = await LockService.withLock(eventId, async () => {
-              // ── Task 7: Re-check idempotency inside the lock ─────────────
+          await LockService.withLock(eventId, async () => {
+              // ── Final DB Idempotency Check inside Lock ───
               const { data: alreadyProcessed } = await supabase
                 .from("webhook_events")
                 .select("id")
-                .eq("event_id", eventId)
+                .eq("external_id", eventId)
                 .maybeSingle();
 
               if (alreadyProcessed) {
-                logger.info(`[${providerName}] Mutex Win: Event ${eventId} already processed inside lock.`);
+                logger.info(`[${providerName}] Mutex Win: Event ${eventId} already in webhook_events.`);
                 return { status: "already_completed" };
               }
 
@@ -220,33 +175,35 @@ class BaseProvider {
                 req.body,
                 providerName,
               );
-          }, { ttl: 30000, retryWindow: 5000 });
+          }, { ttl: 30000, retryWindow: 10000 });
 
-
+          // Mark log as successful
           if (logId) {
-            await supabase
-              .from("webhook_logs")
-              .update({
-                processed: true,
-                processing_error: result?.error || null,
-              })
-              .eq("id", logId);
+            await supabase.from("webhook_logs").update({ processed: true }).eq("id", logId);
           }
-        } catch (backgroundError) {
-          logger.error(
-            `[BaseProvider] Background Webhook Processing Error: ${backgroundError.message}`,
-          );
+
+        } catch (bgError) {
+          logger.error(`[${providerName}] Post-Ack Processing Failure: ${bgError.message}`, { eventId });
+          
+          // ── Task 5: Dead Letter Queue (DLQ) Fallback ───
+          try {
+            await supabase.from("dead_letter_webhooks").insert({
+              job_id: eventId,
+              event_id: eventId,
+              raw_payload: req.body,
+              reason: bgError.message,
+              failure_class: 'INFRA_TEMPORARY'
+            });
+          } catch (dlqErr) {
+            logger.error(`[CRITICAL] Failed to move failed webhook to DLQ: ${dlqErr.message}`);
+          }
         }
-      })();
-    } catch (error) {
-      logger.error(
-        `[BaseProvider] Critical Webhook Crash Caught: ${error.message}`,
-      );
+      });
+
+    } catch (criticalError) {
+      logger.error(`[${providerName}] Ingestion Pipeline Crash: ${criticalError.message}`);
       if (!res.headersSent) {
-        return res.status(200).json({
-          received: true,
-          error: "Internal processing error logged",
-        });
+        return res.status(500).json({ error: "System-level ingestion rejection. Please retry." });
       }
     }
   }

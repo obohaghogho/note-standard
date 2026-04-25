@@ -48,6 +48,10 @@ router.post("/verify-grey", requireAuth, paymentController.verifyGrey);
 // Generic status check by reference (works for any provider)
 router.get("/status/:reference", requireAuth, paymentController.checkStatus);
 
+// ─── Failsafe Verification ───────────────────────────────────
+// Manual fallback trigger for Paystack verification
+router.post("/verify/:reference", requireAuth, paymentController.verifyPaystack);
+
 // ─── Manual Payment Instructions ─────────────────────────────
 // Returns Grey bank account details for a given currency
 router.get(

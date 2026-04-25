@@ -90,11 +90,24 @@ class SnapshotService {
             confidence *= (1 - pcsScore); // Penalty for shared correlation
             confidence *= timeIntegrityScore; // Penalty for system desync
 
-            // 4. Emergency Stabilization Loop (Single-cycle locked)
-            // Phase 5: Re-poll is triggered by truth-adjusted confidence
-            if (confidence < 0.6 && !this.rePollCycleLock && !injectedResults) {
+            // ── Task 6.a: Final Confidence Normalization ────────────────
+            // If we are in a proactive breaker cooldown, we hard-pin the 
+            // score to 0.6 (Stable Survival) to prevent re-poll loops.
+            if (results.isThrottled) {
+                confidence = Math.max(confidence, 0.6);
+            }
+
+            // 4. Emergency Stabilization Loop (Single-cycle locked with 5m cooldown)
+            // Phase 5: Re-poll is triggered by truth-adjusted diet, but blocked during Breaker Cooldown
+            const breakerTrippedUntil = cache.get("breaker_tripped_until") || 0;
+            const isBreakerActive = Date.now() < breakerTrippedUntil;
+            const lastRePoll = cache.get("snapshot_last_emergency_repoll") || 0;
+            const rePollCooldownActive = (Date.now() - lastRePoll) < 300000; // 5 minute hard cooldown
+
+            if (confidence < 0.6 && !this.rePollCycleLock && !injectedResults && !isBreakerActive && !rePollCooldownActive) {
                 logger.warn(`[SnapshotService] Low Confidence (${confidence.toFixed(2)}) detected. Triggering Emergency Re-poll...`);
                 this.rePollCycleLock = true;
+                cache.set("snapshot_last_emergency_repoll", Date.now(), 600);
                 try {
                     return await this.generateMarketSnapshot(); // RECURSION POINT (Locked)
                 } finally {
@@ -225,19 +238,45 @@ class SnapshotService {
   }
 
   /**
-   * Internal Multiprovider Fetch
+   * Internal Multiprovider Fetch with Jittered Backoff (v6.0 Stability)
    */
-  async _fetchMultiSource(symbols) {
-    const [cgPrices, erpRates] = await Promise.all([
-      coingeckoProvider.getPrices(Object.values(this.coinMapping)),
-      exchangeRateProvider.getFiatRate("USD", "NGN")
-    ]);
+   async _fetchMultiSource(symbols, retryCount = 0) {
+    try {
+      const breakerTrippedUntil = cache.get("breaker_tripped_until") || 0;
+      if (Date.now() < breakerTrippedUntil) {
+          logger.warn(`[SnapshotService] Proactive Cooldown: Circuit Breaker is active. Serving LKG.`);
+          return { symbols, cgPrices: {}, erpRates: 0, nowRates: symbols.map(() => null), isThrottled: true };
+      }
 
-    const nowRates = await Promise.all(symbols.map(s => 
-      nowpaymentsProvider.getRate(s, "USD").catch(() => null)
-    ));
+      const [cgPrices, erpRates] = await Promise.all([
+        coingeckoProvider.getPrices(Object.values(this.coinMapping)),
+        exchangeRateProvider.getAllRates("USD")
+      ]);
 
-    return { symbols, cgPrices, erpRates, nowRates };
+      const nowRates = await Promise.all(symbols.map(s => 
+        nowpaymentsProvider.getRate(s, "USD").catch(() => null)
+      ));
+
+      // ── Task 429: Check for systemic rate limiting signals ─────────
+      const has429 = !cgPrices || Object.keys(cgPrices).length === 0;
+      
+      if (has429 && retryCount < 3) {
+        const delay = Math.pow(2, retryCount) * 2000 + Math.random() * 1000;
+        logger.warn(`[SnapshotService] Rate limit (429) suspected. Backing off for ${Math.round(delay)}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+        return this._fetchMultiSource(symbols, retryCount + 1);
+      }
+
+      return { symbols, cgPrices, erpRates, nowRates };
+    } catch (err) {
+      if (err.message?.includes('429') || err.status === 429 || err.message?.includes('RATE_LIMIT')) {
+        logger.error(`[SnapshotService] Systemic Throttling Detected via ${symbols}. TRIPPING GLOBAL BREAKER.`);
+        const breakerUntil = Date.now() + (15 * 60 * 1000);
+        cache.set("breaker_tripped_until", breakerUntil, 1800);
+        return { symbols, cgPrices: {}, erpRates: 0, nowRates: symbols.map(() => null), isThrottled: true };
+      }
+      throw err;
+    }
   }
 
   /**
@@ -271,9 +310,22 @@ class SnapshotService {
     const tolerance = regime === 'VOLATILE' ? 0.025 : 0.01; // 2.5% vs 1%
 
     symbols.forEach((sym, idx) => {
-      const p1 = cgPrices[this.coinMapping[sym]];
-      const p2 = nowRates[idx];
+      let p1 = cgPrices[this.coinMapping[sym]];
+      let p2 = nowRates[idx];
       
+      // ── Task 6.b: LKG Arbitration Seeding ───────────────────────
+      // If providers are missing (likely due to circuit breaker), 
+      // seed from LKG cache to maintain baseline confidence.
+      let lkgSeeded = false;
+      if (!p1 && !p2) {
+          const lkgKey = `lkg_price_${sym.toUpperCase()}`;
+          const cachedLKG = cache.get(lkgKey);
+          if (cachedLKG) {
+              p1 = cachedLKG; 
+              lkgSeeded = true;
+          }
+      }
+
       let consensus = 0;
       let bestPrice = p1 || p2 || 0;
       
@@ -288,17 +340,20 @@ class SnapshotService {
           bestPrice = p1; // Prefer primary source in disagreement
         }
       } else if (p1 || p2) {
-        consensus = 0.33;
+        consensus = lkgSeeded ? 0.5 : 0.33;
       }
 
       finalRates[sym] = bestPrice;
-      sourceTrace[sym] = { p1: !!p1, p2: !!p2, consensus };
+      sourceTrace[sym] = { p1: !!p1, p2: !!p2, consensus, lkgSeeded };
     });
 
     // Add Fiat (Stripe-grade deterministic expansion)
     const fiatTargets = ["NGN", "EUR", "GBP", "JPY"];
     fiatTargets.forEach(t => {
-      finalRates[t] = erpRates || 0; 
+      // erpRates contains NGN per 1 USD (e.g. 1350)
+      // To get USD value of 1 NGN, we must invert it: 1 / 1350 = 0.00074
+      const rateFromUsd = erpRates ? erpRates[t] : 0;
+      finalRates[t] = rateFromUsd > 0 ? (1 / rateFromUsd) : 0; 
       sourceTrace[t] = { consensus: 1.0 };
     });
 

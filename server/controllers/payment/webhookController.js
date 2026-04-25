@@ -22,9 +22,10 @@ const crypto = require("crypto");
  */
 
 // ─── Paystack Webhook ─────────────────────────────────────────
+// ─── Paystack Webhook (Institutional Robustness) ───────────────
 exports.handlePaystack = async (req, res) => {
   const provider = PaymentFactory.getProviderByName("paystack");
-  return provider.processWebhook(req, res);
+  return await provider.processWebhook(req, res);
 };
 
 // ─── Flutterwave (Legacy → Fincra) ───────────────────────────
