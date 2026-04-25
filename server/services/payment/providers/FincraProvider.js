@@ -69,14 +69,15 @@ class FincraProvider extends BaseProvider {
 
     this.client.interceptors.response.use(
       (response) => {
-        logger.info(`[Fincra] ← ${response.status} ${response.config.url}`, {
-          data: JSON.stringify(response.data).substring(0, 500),
+        logger.info(`[Fincra] API Success: ${response.config.method.toUpperCase()} ${response.config.url}`, {
+          status: response.status
         });
         return response;
       },
       (error) => {
-        logger.error(`[Fincra] ← ERROR ${error.response?.status || "NO_RESPONSE"} ${error.config?.url}`, {
-          errorData: JSON.stringify(error.response?.data || error.message).substring(0, 500),
+        logger.error(`[Fincra] API Error: ${error.config?.method?.toUpperCase()} ${error.config?.url}`, {
+          status: error.response?.status,
+          message: error.message
         });
         return Promise.reject(error);
       }
@@ -134,37 +135,33 @@ class FincraProvider extends BaseProvider {
     try {
       const response = await this.client.post("/checkout/payments", payload);
 
-      const respData   = response.data?.data || response.data || {};
-      // Fincra returns the link as 'link' field in data
-      const checkoutUrl = respData.link || respData.checkoutUrl || respData.checkout_url || respData.payment_link;
+      const resp = response.data || {};
+      const checkoutUrl = resp.link || resp.data?.link;
 
       // ── STRICT VALIDATION: Reject if no checkout URL ──────────────────
       if (!checkoutUrl) {
         logger.error("[Fincra] API returned 200 but checkout URL is missing", {
           reference,
-          fullResponse: JSON.stringify(response.data),
         });
         const missingUrlError = new Error(
-          `[Fincra] Checkout URL missing from API response for reference ${reference}. ` +
-          `Full response: ${JSON.stringify(response.data)}`
+          `[Fincra] Checkout URL missing from API response for reference ${reference}.`
         );
         missingUrlError.statusCode = 502;
-        missingUrlError.fincraResponse = response.data;
         throw missingUrlError;
       }
 
       logger.info(`[Fincra] ✅ Checkout session created`, {
         reference,
         checkoutUrl,
-        payCode:   respData.payCode   || respData.reference,
-        providerRef: respData.reference || reference,
+        payCode:   resp.payCode   || resp.reference,
+        providerRef: resp.reference || reference,
       });
 
       return {
         success:           true,
         checkoutUrl:       checkoutUrl,
-        providerReference: respData.reference || reference,
-        payCode:           respData.payCode   || null,
+        providerReference: resp.reference || reference,
+        payCode:           resp.payCode   || null,
       };
 
     } catch (error) {
