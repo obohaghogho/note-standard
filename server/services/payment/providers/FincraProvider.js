@@ -29,7 +29,8 @@ class FincraProvider extends BaseProvider {
     this.businessId  = (process.env.FINCRA_BUSINESS_ID  || "").trim();
     this.webhookSecret = (process.env.FINCRA_WEBHOOK_SECRET || "").trim();
 
-    const envFlag = (process.env.FINCRA_ENV || "").toLowerCase();
+    let rawEnv = (process.env.FINCRA_ENV || "sandbox").toLowerCase().trim();
+    const envFlag = rawEnv || "sandbox";
 
     if (envFlag === "production" || envFlag === "live") {
       this.baseUrl = "https://api.fincra.com";
