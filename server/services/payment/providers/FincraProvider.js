@@ -119,6 +119,7 @@ class FincraProvider extends BaseProvider {
       redirectUrl:    String(callbackUrl),
       paymentMethods: ["card"],
       metadata:       safeMetadata,
+      business:       this.businessId,
     };
 
     logger.info(`[Fincra] Creating checkout session`, {
