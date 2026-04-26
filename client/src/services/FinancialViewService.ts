@@ -27,8 +27,9 @@ export const FinancialViewService = {
         // Valuation Layer (Layer C): Derived only, never stored.
         const valuation = wallet.balance * rate;
         
-        // Final Execution Guard: Stale prices block financial actions
-        const canExecute = mode === ValuationMode.FRESH && !wallet.is_frozen;
+        // Execution gate: FRESH and STALE are both executable.
+        // Only INVALID (feed down >2h) is a hard block.
+        const canExecute = mode !== ValuationMode.INVALID && !wallet.is_frozen;
 
         return {
             id: wallet.id,

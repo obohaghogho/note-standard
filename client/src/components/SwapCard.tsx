@@ -378,7 +378,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                     ) : (
                         <div className="flex items-center justify-center h-full text-gray-600 text-xs gap-2 py-2">
                             <Info size={14} />
-                            {fromView?.mode === 'STALE' ? 'Prices are updating. Swaps temporarily blocked.' : 'Enter an amount to see quote'}
+                            {fromView?.mode === 'STALE' ? 'Using recent price data — quotes may vary slightly.' : 'Enter an amount to see quote'}
                         </div>
                     )}
                 </div>
@@ -405,16 +405,16 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                     ) : !fromView?.canExecute ? (
                         fromView?.isFrozen
                             ? 'Account Frozen — Contact Support'
-                            : fromView?.mode === 'STALE'
-                                ? 'Price Feed Unavailable'
-                                : 'Exchange Suspended'
+                            : 'Exchange Suspended (Feed Offline)'
                     ) : (
                         `Exchange ${fromCurrency} → ${toCurrency}`
                     )}
                 </Button>
                 
                 {fromView?.mode === 'STALE' && (
-                    <p className="text-amber-400 text-[10px] text-center font-medium animate-pulse mt-2">Price feed unavailable — quotes paused for safety.</p>
+                    <p className="text-amber-400/70 text-[10px] text-center font-medium mt-2">
+                        ⚠ Using cached price data (within 2h). Rate may differ slightly from live market.
+                    </p>
                 )}
                 {fromView?.isFrozen && (
                     <p className="text-red-400 text-[10px] text-center font-medium mt-2">This account is frozen. Please contact support.</p>
