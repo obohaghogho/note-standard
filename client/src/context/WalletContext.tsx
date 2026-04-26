@@ -73,9 +73,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 id: w.id,
                 asset: w.currency,
                 type: w.provider === 'nowpayments' ? 'external' : 'custodial',
-                balance: w.balance,
-                available: w.available_balance ?? w.balance,
-                locked: (w.balance - (w.available_balance ?? w.balance)),
+                balance: Math.max(0, Number(w.balance) || 0),
+                available: Math.max(0, Number(w.available_balance != null ? w.available_balance : w.balance) || 0),
+                locked: Math.max(0, (Number(w.balance) || 0) - (Number(w.available_balance != null ? w.available_balance : w.balance) || 0)),
                 source: w.provider === 'nowpayments' ? 'external_provider' : 'internal_ledger',
                 network: w.network,
                 address: w.address,
@@ -125,18 +125,18 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     useEffect(() => {
         if (!user) return;
 
-        // 1. Listen to Ledger Entries (Balance Source of Truth)
-        const ledgerChannel = supabase.channel(`ledger_realtime:${user.id}`)
+        // 1. Listen to wallet_store changes (Balance Source of Truth)
+        const ledgerChannel = supabase.channel(`wallets_realtime:${user.id}`)
             .on(
                 'postgres_changes',
                 {
-                    event: '*',
+                    event: 'UPDATE',
                     schema: 'public',
-                    table: 'ledger_entries',
+                    table: 'wallets_store',
                     filter: `user_id=eq.${user.id}`
                 },
                 (payload) => {
-                    console.log('Ledger update received (Balance Refresh):', payload.eventType);
+                    console.log('Wallet balance updated (Sovereign Ledger sync):', payload.eventType);
                     fetchData(); // Recalculate balances
                 }
             )

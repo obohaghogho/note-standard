@@ -6,8 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import { Input } from '../components/common/Input';
 import { Card } from '../components/common/Card';
 import { supabase } from '../lib/supabase';
-import { API_URL } from '../lib/api';
 import { toast } from 'react-hot-toast';
+import api from '../api/axiosInstance';
 import { saveAccount, clearAccountStale } from '../utils/accountManager';
 
 export const Login = () => {
@@ -141,18 +141,19 @@ export const Login = () => {
             toast.success('Successfully logged in!');
 
             // Trigger device notification (Security Alert)
-            fetch(`${API_URL}/api/notifications/login-notify`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${data.session?.access_token}`
-                }
-            }).catch(err => console.error('Failed to trigger login notification:', err));
+            api.post('/notifications/login-notify')
+               .catch(err => console.error('Failed to trigger login notification:', err));
 
             navigate('/dashboard');
 
         } catch (err: unknown) {
-            console.error('Login process failed:', err);
+            console.error('Login process failed. Detailed info:', {
+                error: err,
+                message: err instanceof Error ? err.message : 'Unknown',
+                stack: err instanceof Error ? err.stack : 'No stack',
+                online: navigator.onLine,
+                url: window.location.href
+            });
             const errMsg = err instanceof Error ? err.message : 'Login failed unexpectedly';
             setError(errMsg);
             toast.error(errMsg);

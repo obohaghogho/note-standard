@@ -14,6 +14,7 @@ export default defineConfig({
   server: {
     host: true,
     strictPort: true,
+    allowedHosts: ['127.0.0.1.nip.io'],
   },
   build: {
     sourcemap: 'hidden', // generates .map files for production debugging without exposing to users

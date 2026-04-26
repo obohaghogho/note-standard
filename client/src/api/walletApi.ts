@@ -95,13 +95,39 @@ export const walletApi = {
       return response.data;
   },
 
-  // Proactively verify payment status with external providers (Webhook trigger substitute)
-  async proactiveVerifyPayment(reference: string, transactionId?: string): Promise<{ success: boolean; status: string; data?: unknown }> {
+  // Proactively verify payment status with external providers (Truth anchor polling)
+  async proactiveVerifyPayment(reference: string, transactionId?: string): Promise<{ success: boolean; status: string; data?: any }> {
       const response = await api.get(`/webhooks/status/${reference}`, {
           params: { transaction_id: transactionId }
       });
+      
+      // Unwrap the nested data envelope for legacy compatibility with UI components
+      if (response.data && response.data.success) {
+          return {
+              success: true,
+              status: response.data.status,
+              ...response.data
+          };
+      }
       return response.data;
   },
+
+  // Trigger an explicit Paystack API verification (rate-limited server-side to 1/15s).
+  // Use this every ~20s during polling and on manual "Verify Now" user action.
+  async triggerVerification(reference: string): Promise<{ success: boolean; status: string; amount?: number; currency?: string; rateLimited?: boolean }> {
+      const response = await api.post(`/transactions/verify/${reference}`);
+      if (response.data && response.data.success) {
+          return {
+              success: true,
+              status: response.data.data.status,
+              amount: response.data.data.amount,
+              currency: response.data.data.currency,
+              rateLimited: response.data.data.rateLimited ?? false
+          };
+      }
+      return { success: false, status: 'PENDING' };
+  },
+
 
   // Card Deposit Initialization (Match UI signature)
   async depositCard(data: { 

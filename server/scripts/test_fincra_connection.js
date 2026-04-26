@@ -32,6 +32,7 @@ async function testConnection() {
         headers: {
             'api-key': secretKey,
             'x-pub-key': publicKey,
+            ...(businessId ? { 'x-business-id': businessId } : {}),
             'Content-Type': 'application/json',
             'accept': 'application/json'
         }

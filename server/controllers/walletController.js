@@ -57,7 +57,17 @@ exports.depositCard = async (req, res, next) => {
         { toCurrency, toNetwork }
       );
 
-    res.json(result);
+    // Prune result to prevent circular reference crashes on Windows
+    const cleanData = {
+      link: result?.link || result?.data?.link,
+      reference: result?.reference || result?.data?.reference,
+      status: result?.status || result?.data?.status
+    };
+
+    res.json({
+      success: true,
+      data: cleanData
+    });
   } catch (error) {
     console.error("[WalletController] Card Deposit Error:", error);
     const isValidationError = error.message.includes("limit") ||
@@ -100,7 +110,19 @@ exports.depositTransfer = async (req, res, next) => {
         { toCurrency, toNetwork }
       );
 
-    res.json(result);
+    // Prune result to prevent circular reference crashes on Windows
+    const cleanData = {
+      link: result?.link || result?.data?.link,
+      reference: result?.reference || result?.data?.reference,
+      status: result?.status || result?.data?.status,
+      account_number: result?.account_number || result?.data?.account_number,
+      bank_name: result?.bank_name || result?.data?.bank_name
+    };
+
+    res.json({
+      success: true,
+      data: cleanData
+    });
   } catch (error) {
     console.error("[WalletController] Bank Transfer Error:", error);
     const isValidationError = error.message.includes("limit") ||

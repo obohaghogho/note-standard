@@ -30,6 +30,13 @@ class CoinGeckoProvider {
       });
       return results;
     } catch (err) {
+      if (err.response?.status === 429) {
+          logger.error(`[CoinGeckoProvider] 429 Rate Limit Detected for ${coinIds}. Escalating.`);
+          const rateErr = new Error("RATE_LIMIT_EXCEEDED");
+          rateErr.status = 429;
+          throw rateErr;
+      }
+
       logger.error(
         `[CoinGeckoProvider] Batch Error for ${coinIds}: ${err.message}`,
       );

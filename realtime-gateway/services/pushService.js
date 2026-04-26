@@ -1,6 +1,7 @@
 const admin = require('firebase-admin');
 const apn = require('apn');
 const { createClient } = require('@supabase/supabase-js');
+const path = require('path');
 
 // Initialize Supabase for fetching tokens
 const supabase = createClient(
@@ -12,7 +13,8 @@ const supabase = createClient(
 let firebaseApp = null;
 if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
   try {
-    const serviceAccount = require(process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
+    const accountPath = path.resolve(process.cwd(), process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
+    const serviceAccount = require(accountPath);
     firebaseApp = admin.initializeApp({
       credential: admin.credential.cert(serviceAccount)
     });

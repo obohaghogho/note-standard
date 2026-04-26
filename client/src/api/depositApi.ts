@@ -155,8 +155,12 @@ const depositApi = {
    */
   checkStatus: async (reference: string): Promise<PaymentStatus> => {
     const response = await axiosInstance.get(
-      `/payment/status/${reference}`
+      `/transactions/status/${reference}`
     );
+    // Unwrap nested data envelope for legacy compatibility
+    if (response.data && response.data.success) {
+      return response.data.data;
+    }
     return response.data;
   },
 

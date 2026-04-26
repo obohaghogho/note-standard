@@ -224,10 +224,13 @@ export const FundModal: React.FC<FundModalProps> = ({
             localStorage.setItem('pendingDepositReference', result.reference);
             localStorage.setItem('pendingDepositTime', Date.now().toString());
             
-            if (result.checkoutUrl) {
-                // Redirect to Stripe Checkout
+            // Handle both legacy and new API response structures
+            const checkoutLink = result?.data?.link || result?.link || result?.checkoutUrl;
+            
+            if (checkoutLink) {
+                // Redirect to Fincra Checkout
                 toast.loading('Redirecting to secure gateway...', { duration: 2000 });
-                window.location.href = result.checkoutUrl;
+                window.location.href = checkoutLink;
             } else {
                 toast.error('Payment initialization failed - no checkout URL received');
                 setLoading(false);
@@ -371,7 +374,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                                             className={`flex items-center justify-between p-3 rounded-lg transition-all ${activeCurrency === w.currency ? 'bg-purple-600/20 border border-purple-500/30' : 'hover:bg-white/5 border border-transparent'}`}
                                         >
                                             <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-xs font-bold">{w.currency[0]}</div>
+                                                <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-xs font-bold">{w.currency?.[0] || '?'}</div>
                                                 <div className="text-left">
                                                     <div className="text-sm font-bold">{w.currency}</div>
                                                     <div className="text-[10px] text-gray-500">{w.network || 'Native'}</div>

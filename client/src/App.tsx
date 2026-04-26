@@ -174,6 +174,14 @@ function App() {
                             <Route path="/activity/success" element={<ActivitySuccess />} />
                             <Route path="/activity/cancel" element={<ActivityCancel />} />
                             <Route path="/activity" element={<Navigate to="/dashboard/activity" replace />} />
+                            
+                            <Route path="/" element={<LandingPage />} />
+                            
+                            {/* High-priority Payment Redirects (Move before catch-alls) */}
+                            <Route path="/payment/success/*" element={<Navigate to="/activity/success" replace />} />
+                            <Route path="/payment/cancel/*" element={<Navigate to="/activity/cancel" replace />} />
+                            
+                            <Route path="/login" element={<Login />} />
 
                             <Route element={<ProtectedRoute />}>
                               <Route path="/dashboard" element={<DashboardLayout />}>

@@ -18,10 +18,8 @@ const SUCCESS_STATES  = new Set(['COMPLETED', 'SUCCESS', 'SUCCESSFUL', 'ALREADY_
 const FAILURE_STATES  = new Set(['FAILED', 'CANCELLED', 'REJECTED', 'ABANDONED', 'EXPIRED']);
 
 // How often to call the fast DB-read status endpoint
-const STATUS_POLL_INTERVAL_MS = 3000;
-// How often to call the explicit Paystack verify endpoint
-const VERIFY_INTERVAL_MS = 20000;
-// Give up automatic polling after 2 minutes — then let user click "Verify Now"
+const STATUS_POLL_INTERVAL_MS = 2500;
+const VERIFY_INTERVAL_MS = 10000;
 const POLLING_TIMEOUT_MS = 120000;
 
 export const ActivitySuccess: React.FC = () => {

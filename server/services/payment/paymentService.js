@@ -397,9 +397,10 @@ class PaymentService {
     }
 
     return {
-      url: initData.checkoutUrl || null,
-      checkoutUrl: initData.checkoutUrl || null,
-      paymentUrl: initData.paymentUrl || initData.checkoutUrl || null,
+      url: initData.link || initData.checkoutUrl || null,
+      checkoutUrl: initData.link || initData.checkoutUrl || null,
+      paymentUrl: initData.paymentUrl || initData.link || initData.checkoutUrl || null,
+      link: initData.link || initData.checkoutUrl || null,
       payAddress: initData.payAddress || null,
       instructions: initData.instructions || null, // For manual providers like Grey
       reference: reference,
@@ -494,48 +495,44 @@ class PaymentService {
   async executeWebhookAction(event, body, providerName) {
     const eventId = event.transactionId || event.reference || "event_root";
 
-    return await LockService.withLock(eventId, async () => {
-        // 1. FINAL IDEMPOTENCY GUARD (Inside Mutex)
-        const { data: processedEvent } = await supabase
-          .from("webhook_events")
-          .select("id, status")
-          .eq("external_id", eventId)
-          .maybeSingle();
+    // 1. FINAL IDEMPOTENCY GUARD (DB Unique Index backup)
+    const { data: processedEvent } = await supabase
+      .from("webhook_events")
+      .select("id, status")
+      .eq("external_id", eventId)
+      .maybeSingle();
 
-        if (processedEvent && processedEvent.status === 'success') {
-          logger.info(`[PaymentService] Mutex IDEMPOTENCY Win: Event ${eventId} already SUCCESSFUL.`);
-          return { status: "already_completed" };
-        }
+    if (processedEvent && processedEvent.status === 'success') {
+      logger.info(`[PaymentService] Idempotency Win: Event ${eventId} already SUCCESSFUL.`);
+      return { status: "already_completed" };
+    }
 
-        // 2. EXECUTION KERNEL
-        // We perform the actual wallet/ledger mutation here.
-        const result = await this._internalExecuteMutation(event, body, providerName);
+    // 2. EXECUTION KERNEL
+    // We perform the actual wallet/ledger mutation here.
+    const result = await this._internalExecuteMutation(event, body, providerName);
 
-        // 3. ENROLLMENT (Idempotency Record)
-        // Only if the mutation was successful, we "seal" the event.
-        if (result && result.status !== 'ignored' && result.status !== 'failed') {
-          try {
-            await supabase.from("webhook_events").upsert({
-              external_id: eventId,
-              provider: providerName,
-              status: 'success',
-              processed_at: new Date(),
-              metadata: { 
-                event_type: event.type,
-                result_status: result.status,
-                transaction_id: result.transactionId
-              }
-            }, { onConflict: 'external_id' });
-          } catch (enrollErr) {
-            // If enrollment fails, we have a critical "ghost settlement" risk.
-            // We log this as CRITICAL and return a signal.
-            logger.error(`[CRITICAL] Mutation Succeeded but Enrollment Failed: ${eventId}`, { error: enrollErr.message });
-            throw new Error(`ENROLLMENT_FAILURE: Mutation persisted but idempotency record failed. Manual audit required.`);
+    // 3. ENROLLMENT (Idempotency Record)
+    // Only if the mutation was successful, we "seal" the event.
+    if (result && result.status !== 'ignored' && result.status !== 'failed') {
+      try {
+        await supabase.from("webhook_events").upsert({
+          external_id: eventId,
+          provider: providerName,
+          status: 'success',
+          processed_at: new Date(),
+          metadata: { 
+            event_type: event.type,
+            result_status: result.status,
+            transaction_id: result.transactionId
           }
-        }
+        }, { onConflict: 'external_id' });
+      } catch (enrollErr) {
+        logger.error(`[CRITICAL] Mutation Succeeded but Enrollment Failed: ${eventId}`, { error: enrollErr.message });
+        throw new Error(`ENROLLMENT_FAILURE: Mutation persisted but idempotency record failed. Manual audit required.`);
+      }
+    }
 
-        return result;
-    }, { ttl: 45000, retryWindow: 10000 });
+    return result;
   }
 
   async _internalExecuteMutation(event, body, providerName) {
@@ -701,7 +698,14 @@ class PaymentService {
 
         // 3. CORE LANE SETTLEMENT (Strictly Fiat / Ledger Purity)
         // Rule: Internal deposits/purchases use VERIFIED amount directly. No FX service.
-        const settlementAmount = eventData?.amount || tx.amount;
+        // Safety Guard: In sandbox, Paystack auto-converts USD -> NGN. 
+        // We must ensure we don't credit NGN amounts to a USD wallet.
+        let settlementAmount = tx.amount;
+        if (eventData?.amount && (!eventData.currency || eventData.currency === tx.currency)) {
+            settlementAmount = eventData.amount;
+        } else if (eventData?.amount && eventData.currency !== tx.currency) {
+            logger.warn(`[Finalize] Currency mismatch for ${reference}: Provider returned ${eventData.currency}, DB has ${tx.currency}. Fallback to DB amount: ${tx.amount}`);
+        }
         
         logger.info(`[Finalize] Executing Journaled Settlement [confirm_deposit] for ${reference}`);
         

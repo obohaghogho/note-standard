@@ -10,13 +10,23 @@ const api = axios.create({
 })
 
 // Add a request interceptor to include the auth token
+// Uses a retry loop to handle Supabase session hydration delay after Paystack redirect
 api.interceptors.request.use(
   async (config) => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (session?.access_token) {
-      config.headers.Authorization = `Bearer ${session.access_token}`
+    let session = null;
+    // Try up to 4 times (500ms apart) to get the session — handles post-redirect hydration delay
+    for (let i = 0; i < 4; i++) {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session?.access_token) {
+        session = data.session;
+        break;
+      }
+      if (i < 3) await new Promise(r => setTimeout(r, 500));
     }
-    return config
+    if (session?.access_token) {
+      config.headers.Authorization = `Bearer ${session.access_token}`;
+    }
+    return config;
   },
   (error) => {
     return Promise.reject(error)

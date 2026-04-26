@@ -155,27 +155,14 @@ class BaseProvider {
             return;
           }
 
+          // ── Background Processing ───
           const paymentService = require("../paymentService");
           
-          await LockService.withLock(eventId, async () => {
-              // ── Final DB Idempotency Check inside Lock ───
-              const { data: alreadyProcessed } = await supabase
-                .from("webhook_events")
-                .select("id")
-                .eq("external_id", eventId)
-                .maybeSingle();
-
-              if (alreadyProcessed) {
-                logger.info(`[${providerName}] Mutex Win: Event ${eventId} already in webhook_events.`);
-                return { status: "already_completed" };
-              }
-
-              return await paymentService.executeWebhookAction(
-                event,
-                req.body,
-                providerName,
-              );
-          }, { ttl: 30000, retryWindow: 10000 });
+          const result = await paymentService.executeWebhookAction(
+            event,
+            req.body,
+            providerName,
+          );
 
           // Mark log as successful
           if (logId) {

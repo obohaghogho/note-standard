@@ -123,29 +123,52 @@ class NowPaymentsProvider {
   }
 
   async getRate(fromCurrency, toCurrency, amount = 1) {
-    if (!this.apiKey) throw new Error("NOWPayments API key missing");
+    const from = String(fromCurrency).toUpperCase();
+    const to = String(toCurrency).toUpperCase();
 
-    const from = this.getTicker(fromCurrency);
-    const to = this.getTicker(toCurrency);
+    // ── High-Availability Short-Circuit ──────────────────────────
+    // USDT and USDC are pegged to USD. Returning 1:1 immediately saves 
+    // network latency and prevents irrelevant 'Rate Error' noise.
+    if ((from === "USDT" || from === "USDC") && to === "USD") {
+      return 1.0;
+    }
+
+    if (!this.apiKey) {
+      if (process.env.NODE_ENV === "production") throw new Error("NOWPayments API key missing");
+      return null;
+    }
+
+    const fromTicker = this.getTicker(fromCurrency);
+    const toTicker = this.getTicker(toCurrency);
 
     try {
       const response = await axios.get(
-        `${this.baseUrl}/estimate?amount=${amount}&currency_from=${from}&currency_to=${to}`,
+        `${this.baseUrl}/estimate?amount=${amount}&currency_from=${fromTicker}&currency_to=${toTicker}`,
         {
           headers: {
             "x-api-key": this.apiKey,
           },
-          timeout: 10000,
+          timeout: 5000, // Reduced timeout for faster fallbacks
         },
       );
 
-      return response.data.estimated_amount / amount;
+      return (response.data.estimated_amount || 0) / amount;
     } catch (error) {
-      logger.error(
-        `[NowPaymentsProvider] Rate Error for ${from}/${to}:`,
-        error.response?.data || error.message,
+      if (error.response?.status === 429) {
+          logger.error(`[NowPaymentsProvider] 429 Rate Limit Detected. Escalating to Circuit Breaker.`);
+          const rateErr = new Error("RATE_LIMIT_EXCEEDED");
+          rateErr.status = 429;
+          throw rateErr;
+      }
+
+      // ── Graceful Degradation ────────────────────────────────────
+      // For non-429 errors (timeouts, 500s), we return null instead of throwing.
+      // This allows FXService to use LKG cached rates.
+      logger.warn(
+        `[NowPaymentsProvider] Rate fetch stalled for ${fromTicker}/${toTicker}. Falling back to LKG.`,
+        { error: error.response?.data || error.message }
       );
-      throw error;
+      return null;
     }
   }
 }

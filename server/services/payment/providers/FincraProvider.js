@@ -29,6 +29,10 @@ class FincraProvider extends BaseProvider {
     this.businessId  = (process.env.FINCRA_BUSINESS_ID  || "").trim();
     this.webhookSecret = (process.env.FINCRA_WEBHOOK_SECRET || "").trim();
 
+    if (!this.secretKey || !this.publicKey || !this.businessId) {
+      throw new Error("[Fincra] Missing required environment variables");
+    }
+
     let rawEnv = (process.env.FINCRA_ENV || "sandbox").toLowerCase().trim();
     const envFlag = rawEnv || "sandbox";
 
@@ -52,9 +56,8 @@ class FincraProvider extends BaseProvider {
       headers: {
         "api-key":       this.secretKey,
         "x-pub-key":     this.publicKey,
-        "x-business-id": this.businessId,
         "Content-Type":  "application/json",
-        "accept":        "application/json",
+        "Accept":        "application/json",
       },
       maxRedirects: 0,
     });
@@ -95,6 +98,10 @@ class FincraProvider extends BaseProvider {
       throw new Error("[Fincra] initialize() called with missing required fields: email, amount, currency, reference, callbackUrl");
     }
 
+    if (typeof callbackUrl !== "string" || !callbackUrl.trim()) {
+      throw new Error("[Fincra] callbackUrl must be a valid non-empty string");
+    }
+
     // Fincra requires full name (First Last)
     const safeEmail = (email || "").trim();
     let safeName    = (name || metadata?.customerName || safeEmail.split("@")[0] || "Standard User").trim();
@@ -118,9 +125,6 @@ class FincraProvider extends BaseProvider {
       currency:       String(currency).toUpperCase(),
       reference:      String(reference),
       redirectUrl:    String(callbackUrl),
-      paymentMethods: ["card"],
-      metadata:       safeMetadata,
-      business:       this.businessId,
     };
 
     logger.info(`[Fincra] Creating checkout session`, {
@@ -159,7 +163,7 @@ class FincraProvider extends BaseProvider {
 
       return {
         success:           true,
-        checkoutUrl:       checkoutUrl,
+        link:              checkoutUrl,
         providerReference: resp.reference || reference,
         payCode:           resp.payCode   || null,
       };
@@ -171,6 +175,7 @@ class FincraProvider extends BaseProvider {
       const status    = error.response?.status || 500;
       const errorData = error.response?.data   || {};
       const message   = errorData.message || errorData.error || error.message || "Fincra initialization failed";
+      const requestId = error.response?.headers?.['x-request-id'] || error.response?.headers?.['request-id'] || "unknown";
 
       logger.error(`[Fincra] ❌ Checkout creation failed`, {
         reference,
@@ -178,6 +183,8 @@ class FincraProvider extends BaseProvider {
         message,
         currency,
         amount,
+        fincraRequestId: requestId,
+        requestPayload: JSON.stringify(payload),
         errorData: JSON.stringify(errorData),
       });
 
