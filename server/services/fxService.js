@@ -44,12 +44,17 @@ class FXService {
   }
 
   _bootstrapFallbackRates() {
-    // NOTE: Keep these seeds close to current market values.
-    // If they deviate too far from the live price (>35%), the sanity check
-    // will quarantine real prices as "spikes", keeping the mode STALE.
+    // IMPORTANT: Keep seed prices close to current market values.
+    // The sanity check quarantines any live price that deviates >15% from
+    // the stored LKG (or >35% on initial-seed-sync). An outdated seed will
+    // permanently block live prices from being accepted, pinning mode to INVALID.
+    //
+    // Seeds are stamped with the current time so they start STALE (within the
+    // 2h execution window) instead of appearing almost-expired from the start.
+    // The first successful live fetch will replace these with FRESH prices.
     const FALLBACK_SEEDS = {
-      BTC: 95000,
-      ETH: 1800,
+      BTC: 78000,
+      ETH: 2350,
       USDT: 1.0,
       USDC: 1.0,
       "USD-COIN": 1.0,
@@ -60,9 +65,9 @@ class FXService {
       // Only seed if not already in cache (don't overwrite fresh live data)
       if (!cache.get(key)) {
         cache.set(key, price, 86400 * 7);
-        // Set as ~50 minutes old — STALE but within the 2h execution window
-        cache.set(`lkg_time_${sym}`, Date.now() - 3000 * 1000, 86400 * 7);
-        logger.info(`[FXService] Seeded fallback LKG for ${sym}: $${price} (STALE)`);
+        // Stamp seeds as current time so they are within the 2h STALE window
+        cache.set(`lkg_time_${sym}`, Date.now(), 86400 * 7);
+        logger.info(`[FXService] Seeded fallback LKG for ${sym}: $${price} (STALE, fresh timestamp)`);
       }
     }
   }

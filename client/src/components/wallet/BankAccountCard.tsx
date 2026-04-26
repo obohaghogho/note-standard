@@ -258,8 +258,8 @@ export const BankAccountCard: React.FC = () => {
                     <div className="w-14 h-14 bg-white/5 rounded-full flex items-center justify-center mb-4">
                         <Plus className="text-gray-500" size={24} />
                     </div>
-                    <h3 className="text-sm font-bold mb-1">No {selectedCurrency} Account</h3>
-                    <p className="text-xs text-gray-500 max-w-[200px]">Link your banking details to enable localized settlements.</p>
+                    <h3 className="text-sm font-bold mb-1">{selectedCurrency} Banking Details</h3>
+                    <p className="text-xs text-gray-500 max-w-[200px]">Add your account details to unlock localized settlements.</p>
                 </div>
             )}
         </div>

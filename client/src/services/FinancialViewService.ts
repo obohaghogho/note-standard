@@ -59,13 +59,19 @@ export const FinancialViewService = {
     ): GlobalViewDTO {
         let totalValuation = 0;
         let totalAvailable = 0;
+        // systemStale: true only when ANY asset feed is completely INVALID (>2h stale).
+        // STALE mode (within the 2h LKG window) is still executable — do NOT block on it.
         let systemStale = false;
 
         const walletViews = wallets.map(wallet => {
-            const meta = rateMetadata[wallet.asset] || { mode: ValuationMode.INVALID, canExecute: false };
+            // Default to STALE (not INVALID) so wallets during initial load
+            // don't pre-emptively show as non-executable before rates arrive.
+            const meta = rateMetadata[wallet.asset] || { mode: ValuationMode.STALE, canExecute: true };
             const rate = rates[wallet.asset] || 0;
             
-            if (meta.mode !== ValuationMode.FRESH) systemStale = true;
+            // Only flag systemStale when the feed is truly down (INVALID = >2h stale).
+            // STALE is within the acceptable LKG window and should not block user actions.
+            if (meta.mode === ValuationMode.INVALID) systemStale = true;
 
             const view = this.computeWalletView(wallet, rate, meta.mode);
             
