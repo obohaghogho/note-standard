@@ -150,38 +150,14 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/bank-account", bankAccountRoutes);
 app.use("/api/limit-requests", requireAuth, require("./routes/limitRequests"));
 
-const SystemState = require('./config/SystemState');
-
-// ─── System Operational Governance Middleware ─────────────────────
-// 1. System Status Endpoint (Admin Only)
-app.get('/api/system-status', requireAdmin, (req, res) => {
-    res.json(SystemState.getStatusData());
-});
-
-// 2. Global Mutation Block (Tiered Safe Mode)
-app.use((req, res, next) => {
-    // We allow Auth and pure GETs even in SAFE MODE
-    if (req.originalUrl.startsWith('/api/auth')) return next();
-    if (req.method === 'GET') return next();
-    if (req.originalUrl.includes('/webhook')) return next(); // Webhooks allowed in, but conditionally paused at execution
-
-    // Any mutation on wallet, swap, system, payment is blocked
-    if (SystemState.isSafe()) {
-      return res.status(503).json({
-        code: "SYSTEM_SAFE_MODE",
-        message: "Transactions are temporarily paused while we verify system integrity. Your funds remain secure."
-      });
-    }
-
-    next();
-});
-
-// Legacy/Provider Specific Routes
+// ─── Payment, Transaction & Webhook Routes ────────────────────
+// CRITICAL: These MUST be mounted BEFORE the SystemState mutation block.
+// Payment initialization, verification, and webhook ingestion must always
+// be reachable — they are never subject to the global SAFE MODE gate.
 app.use("/api/payment", require("./routes/payment"));
 app.use("/api/transactions", require("./routes/transactionRoutes"));
 
-// ─── Webhook Routes (ALL providers) ─────────────────────────
-// IMPORTANT: This MUST be mounted BEFORE the global mutation block (SystemState).
+// Webhook Routes (ALL providers)
 // Paystack, Grey, Fincra, NowPayments, Flutterwave all route through here.
 app.use("/api/webhooks", require("./routes/webhooks"));
 
@@ -196,6 +172,34 @@ app.use("/api/flutterwave/webhook", (req, res, next) => {
   req.url = "/flutterwave";
   next();
 }, require("./routes/webhooks"));
+
+const SystemState = require('./config/SystemState');
+
+// ─── System Operational Governance Middleware ─────────────────────
+// 1. System Status Endpoint (Admin Only)
+app.get('/api/system-status', requireAdmin, (req, res) => {
+    res.json(SystemState.getStatusData());
+});
+
+// 2. Global Mutation Block (Tiered Safe Mode)
+// NOTE: Payment/transaction/webhook routes above are intentionally excluded.
+// This block only gates remaining mutation endpoints (swap, withdraw, etc.)
+app.use((req, res, next) => {
+    // We allow Auth and pure GETs even in SAFE MODE
+    if (req.originalUrl.startsWith('/api/auth')) return next();
+    if (req.method === 'GET') return next();
+    if (req.originalUrl.includes('/webhook')) return next();
+
+    // Any remaining mutation (swap, wallet ops) is blocked
+    if (SystemState.isSafe()) {
+      return res.status(503).json({
+        code: "SYSTEM_SAFE_MODE",
+        message: "Transactions are temporarily paused while we verify system integrity. Your funds remain secure."
+      });
+    }
+
+    next();
+});
 
 
 app.post("/api/verify-payment", requireAuth, paymentController.verifyPayment);
