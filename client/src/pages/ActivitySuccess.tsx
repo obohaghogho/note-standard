@@ -50,7 +50,7 @@ export const ActivitySuccess: React.FC = () => {
     }, [reference, txRef]);
 
     // ── Core finalization helper ──────────────────────────────────
-    const handleSuccess = useCallback(async (data: any) => {
+    const handleSuccess = useCallback(async (data: DepositStatus) => {
         stoppedRef.current = true;
         setDeposit(data);
         setUiStatus('success');
@@ -85,9 +85,10 @@ export const ActivitySuccess: React.FC = () => {
                 setUiStatus('timed_out');
                 setVerifyError('Payment is still processing on Paystack\'s side. Please wait a moment and try again.');
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
+            const error = err as { message?: string };
             setUiStatus('timed_out');
-            setVerifyError(err.message || 'Could not reach verification server. Check your connection.');
+            setVerifyError(error.message || 'Could not reach verification server. Check your connection.');
         }
     }, [resolveRef, handleSuccess, handleFailure]);
 
@@ -125,9 +126,10 @@ export const ActivitySuccess: React.FC = () => {
                     if (SUCCESS_STATES.has(upper)) { await handleSuccess(data); return; }
                     if (FAILURE_STATES.has(upper))  { handleFailure(); return; }
                 }
-            } catch (err: any) {
+            } catch (err: unknown) {
+                const error = err as { message?: string };
                 // Network error during status check — keep retrying
-                console.warn('[Polling] Status check error:', err.message);
+                console.warn('[Polling] Status check error:', error.message);
             }
 
             if (stoppedRef.current) return;
@@ -146,8 +148,9 @@ export const ActivitySuccess: React.FC = () => {
                         if (SUCCESS_STATES.has(upper)) { await handleSuccess(verified); return; }
                         if (FAILURE_STATES.has(upper))  { handleFailure(); return; }
                     }
-                } catch (err: any) {
-                    console.warn('[Polling] Verify attempt error:', err.message);
+                } catch (err: unknown) {
+                    const error = err as { message?: string };
+                    console.warn('[Polling] Verify attempt error:', error.message);
                 }
             }
 

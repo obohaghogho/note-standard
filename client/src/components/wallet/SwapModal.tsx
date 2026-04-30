@@ -26,7 +26,6 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
     const [toCurrency, setToCurrency] = useState<Currency>('USD');
     const [amount, setAmount] = useState('');
     const [loading, setLoading] = useState(false);
-    const [previewLoading, setPreviewLoading] = useState(false);
     const [slippage, setSlippage] = useState<number>(0.5); // Initial default, refined by useEffect
     const [showSlippageSettings, setShowSlippageSettings] = useState(false);
     const SAFETY_BUFFER = 0.000001;
@@ -93,7 +92,6 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
             return;
         }
 
-        setPreviewLoading(true);
         try {
             // Pass slippage as decimal (e.g., 0.5% -> 0.005)
             const slippageDecimal = slippage / 100;
@@ -108,8 +106,6 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
         } catch (err) {
             console.error('Preview error:', err);
             setPreview(null);
-        } finally {
-            setPreviewLoading(false);
         }
     }, [amount, fromCurrency, toCurrency, slippage]);
 

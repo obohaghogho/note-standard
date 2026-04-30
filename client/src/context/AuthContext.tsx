@@ -185,8 +185,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const currentSwitchId = switchIdRef.current;
       console.log(`[Auth] Switch #${currentSwitchId}: refreshing ${target.email}...`);
 
-      const previousId = accountManager.getActiveAccountId();
-
       // Rule 13: refresh if needed before setSession
       let freshSession = await refreshSessionIsolated(target);
       

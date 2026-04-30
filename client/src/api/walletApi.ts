@@ -96,7 +96,7 @@ export const walletApi = {
   },
 
   // Proactively verify payment status with external providers (Truth anchor polling)
-  async proactiveVerifyPayment(reference: string, transactionId?: string): Promise<{ success: boolean; status: string; data?: any }> {
+  async proactiveVerifyPayment(reference: string, transactionId?: string): Promise<{ success: boolean; status: string; data?: unknown }> {
       const response = await api.get(`/webhooks/status/${reference}`, {
           params: { transaction_id: transactionId }
       });

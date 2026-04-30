@@ -57,7 +57,11 @@ export default function DashboardHome() {
     const { notes, stats } = useNotes();
     const { transactions } = useWallet();
     const [greeting, setGreeting] = useState('');
-    const [trendData, setTrendData] = useState<any[]>([]);
+    interface TrendData {
+        date: string;
+        total_notes_created?: number;
+    }
+    const [trendData, setTrendData] = useState<TrendData[]>([]);
     
     // Combined Activity Feed Logic
     const recentNotes = useMemo(() => notes.slice(0, 5).map(n => ({
