@@ -251,11 +251,15 @@ class WalletService {
 
     // Intercept Internal Withdrawals (Zero-Fee Instant Routing)
     // destination may be a string (legacy) or a structured object {address, ...}
-    const destinationAddress = typeof data.destination === 'object'
+    let destinationAddress = typeof data.destination === 'object'
       ? (data.destination?.address || null)
       : data.destination;
 
     if (destinationAddress) {
+      destinationAddress = String(destinationAddress).trim();
+      let internalUserId = null;
+
+      // 1. Is it a known internal wallet address?
       const { data: internalWallet } = await supabase
         .from('wallets_store')
         .select('user_id')
@@ -263,10 +267,42 @@ class WalletService {
         .maybeSingle();
 
       if (internalWallet) {
+         internalUserId = internalWallet.user_id;
+      }
+
+      // 2. Is it a User ID (UUID)?
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(destinationAddress);
+      if (!internalUserId && isUUID) {
+         const { data: profile } = await supabase.from('profiles').select('id').eq('id', destinationAddress).maybeSingle();
+         if (profile) internalUserId = profile.id;
+      }
+
+      // 3. Is it an email?
+      if (!internalUserId && destinationAddress.includes('@')) {
+         const { data: profile } = await supabase.from('profiles').select('id').eq('email', destinationAddress.toLowerCase()).maybeSingle();
+         if (profile) internalUserId = profile.id;
+      }
+
+      // 4. Is it a username?
+      const isPossibleAddress = destinationAddress.startsWith('0x') || destinationAddress.startsWith('bc1') || destinationAddress.startsWith('T') || destinationAddress.length >= 30;
+      if (!internalUserId && !isUUID && !destinationAddress.includes('@') && !isPossibleAddress) {
+         const { data: profile } = await supabase.from('profiles').select('id').eq('username', destinationAddress).maybeSingle();
+         if (profile) internalUserId = profile.id;
+      }
+
+      // Handle obvious invalid external addresses immediately to give a clean error
+      if (!internalUserId) {
+         if (isUUID) throw new Error(`The provided User ID "${destinationAddress}" does not match any active user in our system.`);
+         if (destinationAddress.includes('@')) throw new Error(`The provided email "${destinationAddress}" does not match any active user in our system.`);
+         if (!isPossibleAddress) throw new Error(`User with username "${destinationAddress}" not found.`);
+      }
+
+      // If we resolved it to an internal user, route it!
+      if (internalUserId) {
         const logger = require("../utils/logger");
-        logger.info(`[WalletService] Intercepted withdrawal to internal address ${destinationAddress}. Routing to transferInternal.`);
+        logger.info(`[WalletService] Intercepted withdrawal to internal target ${destinationAddress} (User: ${internalUserId}). Routing to transferInternal.`);
         const transferResult = await this.transferInternal(userId, data.userPlan, {
-            recipientAddress: destinationAddress,
+            recipientId: internalUserId,
             amount: numAmount,
             currency: upCurrency
         });
@@ -333,6 +369,12 @@ class WalletService {
     }
 
     let { recipientId, recipientEmail, recipientAddress, amount, currency } = data;
+    
+    // Clean inputs
+    if (recipientId) recipientId = String(recipientId).trim();
+    if (recipientEmail) recipientEmail = String(recipientEmail).trim();
+    if (recipientAddress) recipientAddress = String(recipientAddress).trim();
+
     const causalGroupId = require('crypto').randomUUID();
     const upCurrency = currency.toUpperCase();
     
