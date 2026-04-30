@@ -3,6 +3,7 @@ const router = express.Router();
 const bankAccountController = require('../controllers/bankAccountController');
 const { requireAuth } = require('../middleware/authMiddleware');
 const bankSecurityLimiter = require('../middleware/bankRateLimiter');
+const { bankReadLimiter } = require('../middleware/bankRateLimiter');
 const timingShield = require('../middleware/timingShield');
 const responseGuard = require('../middleware/responseGuard');
 const securityMonitor = require('../services/securityMonitor');
@@ -30,27 +31,31 @@ const enforceLockout = async (req, res, next) => {
 };
 
 // ─── GLOBAL ROUTE GUARDS (Order matters — security chain) ────
-router.use(requireAuth);         // 1. Authentication gate
-router.use(enforceLockout);      // 2. Pre-existing lockout check (fail-closed)
-router.use(timingShield());      // 3. Timing normalization (must wrap all paths)
-router.use(bankSecurityLimiter); // 4. Multi-dimensional rate limiting
-
-/**
- * POST /api/bank-account — Save or update bank account
- * Allowlist: only serialized fields permitted through
- */
-router.post('/',
-    responseGuard('POST /api/bank-account'),
-    bankAccountController.saveBankAccount
-);
+router.use(requireAuth);         // 1. Authentication gate — all routes
 
 /**
  * GET /api/bank-account — Retrieve masked account (currency-scoped)
- * Anti-aggregation: currency query param is mandatory
+ * READ path: no timingShield (not a crypto/auth operation) and no lockout
+ * (user cannot be DoS-locked out of viewing their own info).
+ * Still rate-limited and response-guarded.
  */
 router.get('/',
+    bankReadLimiter,
     responseGuard('GET /api/bank-account'),
     bankAccountController.getBankAccount
+);
+
+/**
+ * POST /api/bank-account — Save or update bank account
+ * WRITE path: full security stack applies.
+ * Allowlist: only serialized fields permitted through
+ */
+router.post('/',
+    enforceLockout,              // Redis lockout check (write-only)
+    timingShield(),              // Timing normalization (write-only, anti-side-channel)
+    bankSecurityLimiter,
+    responseGuard('POST /api/bank-account'),
+    bankAccountController.saveBankAccount
 );
 
 /**

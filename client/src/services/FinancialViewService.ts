@@ -25,7 +25,7 @@ export const FinancialViewService = {
         mode: ValuationMode = ValuationMode.FRESH
     ): WalletViewDTO {
         // Valuation Layer (Layer C): Derived only, never stored.
-        const valuation = wallet.balance * rate;
+        const valuation = rate > 0 ? wallet.balance * rate : 0;
         
         // Execution gate: FRESH and STALE are both executable.
         // Only INVALID (feed down >2h) is a hard block.
@@ -76,8 +76,8 @@ export const FinancialViewService = {
             const view = this.computeWalletView(wallet, rate, meta.mode);
             
             // Aggregation Invariant: Total is Sum(Holdings * Price)
-            const usdValue = wallet.balance * rate;
-            const usdAvail = wallet.available * rate;
+            const usdValue = rate > 0 ? wallet.balance * rate : 0;
+            const usdAvail = rate > 0 ? wallet.available * rate : 0;
             
             totalValuation += usdValue;
             totalAvailable += usdAvail;

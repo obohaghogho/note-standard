@@ -225,25 +225,32 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
                                             {formatCurrency(tx.amount || tx.amount_from || 0, tx.currency || tx.from_currency || 'USD')}
                                         </td>
                                         <td className="py-4 pr-2 text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-sm ${getStatusColor(tx.status)}`}>
-                                                    {getStatusIcon(tx.status)}
-                                                    <span>{tx.status}</span>
+                                            <div className="flex flex-col items-end gap-1 justify-center">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-sm ${getStatusColor(tx.status)}`}>
+                                                        {getStatusIcon(tx.status)}
+                                                        <span>{tx.status}</span>
+                                                    </div>
+                                                    {tx.status === 'COMPLETED' && (
+                                                        <button 
+                                                            onClick={() => {
+                                                                toast.promise(walletApi.downloadInvoice(tx.id), {
+                                                                    loading: 'Fetching invoice...',
+                                                                    success: 'Invoice downloaded!',
+                                                                    error: 'Failed to download pdf'
+                                                                });
+                                                            }}
+                                                            className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/10 rounded-lg transition-all"
+                                                            title="Download Invoice"
+                                                        >
+                                                            <FileText size={14} />
+                                                        </button>
+                                                    )}
                                                 </div>
-                                                {tx.status === 'COMPLETED' && (
-                                                    <button 
-                                                        onClick={() => {
-                                                            toast.promise(walletApi.downloadInvoice(tx.id), {
-                                                                loading: 'Fetching invoice...',
-                                                                success: 'Invoice downloaded!',
-                                                                error: 'Failed to download pdf'
-                                                            });
-                                                        }}
-                                                        className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/10 rounded-lg transition-all"
-                                                        title="Download Invoice"
-                                                    >
-                                                        <FileText size={14} />
-                                                    </button>
+                                                {tx.status === 'FAILED' && tx.metadata?.error && (
+                                                    <p className="text-[9px] text-rose-500 italic pr-1">
+                                                        {tx.metadata.error}
+                                                    </p>
                                                 )}
                                             </div>
                                         </td>

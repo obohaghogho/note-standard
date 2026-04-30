@@ -7,7 +7,7 @@ const cache = require("../utils/cache");
 const supabase = require("../config/database");
 const coingeckoProvider = require("../providers/coingeckoProvider");
 const pLimit = require("p-limit");
-const limit = pLimit(2); // Limit to 2 concurrent external requests
+const limit = pLimit(5); // Increased to 5 to prevent serialization bottlenecks during dashboard load
 const nowpaymentsProvider = require("../providers/nowpaymentsProvider");
 const exchangeRateProvider = require("../providers/exchangeRateProvider");
 
@@ -59,6 +59,10 @@ class FXService {
       USDC: 1.0,
       "USD-COIN": 1.0,
       TETHER: 1.0,
+      NGN: 0.00074, // ~1350 NGN per USD fallback
+      JPY: 0.0067,  // ~149 JPY per USD fallback
+      EUR: 1.08,    // ~0.93 EUR per USD fallback
+      GBP: 1.27,    // ~0.79 GBP per USD fallback
     };
     for (const [sym, price] of Object.entries(FALLBACK_SEEDS)) {
       const key = `lkg_price_${sym}`;
@@ -224,8 +228,8 @@ class FXService {
            }
         }
 
-        // Goal: Return how many 'fromSym' is 1 'toSym' worth.
-        // rate = (Price of toSym in USD) / (Price of fromSym in USD)
+        // Goal: Return how many 'toSym' units 1 'fromSym' is worth.
+        // rate = (Price of fromSym in USD) / (Price of toSym in USD)
 
         const getPriceInUsd = async (sym) => {
           if (sym === 'USD') return { price: 1.0, mode: 'FRESH' };
@@ -264,7 +268,7 @@ class FXService {
         
         if (fromPrice <= 0) return { rate: 0, mode: 'INVALID', canExecute: false };
         
-        const rate = toPrice / fromPrice;
+        const rate = fromPrice / toPrice;
         
         // Execution gate: allow FRESH and STALE (within 2h LKG window).
         // INVALID means the feed has been down >2h — that's the only hard block.
@@ -451,7 +455,7 @@ class FXService {
     const metadata = {};
 
     await Promise.all(targets.map(async (sym) => {
-      const val = await this.getValidatedRate(base, sym);
+      const val = await this.getValidatedRate(sym, base);
       results[sym] = val.rate;
       metadata[sym] = { mode: val.mode, canExecute: val.canExecute };
     }));

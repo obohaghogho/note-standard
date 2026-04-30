@@ -4,6 +4,13 @@ const redis = require('../config/redis');
 const logger = require('../utils/logger');
 const crypto = require('crypto');
 
+// Hard cap on Redis operations in the hot path
+const REDIS_OP_TIMEOUT_MS = 500;
+const withTimeout = (promise, fallback) => Promise.race([
+    promise,
+    new Promise(resolve => setTimeout(() => resolve(fallback), REDIS_OP_TIMEOUT_MS))
+]);
+
 /**
  * MULTI-LAYERED PROGRESSIVE RATE LIMITER (Adversary-Resistant)
  *
@@ -22,15 +29,43 @@ const crypto = require('crypto');
 
 // ─── Progressive Escalation Tracking ─────────────────────────
 const escalateInRedis = async (compositeKey) => {
-    if (!redis) return;
-    const escKey = `ratelimit:esc:${compositeKey}`;
-    const count = await redis.incr(escKey);
-    if (count === 1) await redis.expire(escKey, 3600); // 1h TTL
-    return count;
+    if (!redis) return 0;
+    try {
+        const escKey = `ratelimit:esc:${compositeKey}`;
+        const count = await withTimeout(redis.incr(escKey), 0);
+        if (count === 1) await withTimeout(redis.expire(escKey, 3600), null);
+        return count || 0;
+    } catch (err) {
+        logger.warn('[BankLimiter] Redis escalation error (ignored):', err.message);
+        return 0;
+    }
 };
 
 /**
- * Bank-specific rate limiter (Fintech Grade)
+ * Bank READ rate limiter — relaxed, for GET requests.
+ * Allows up to 60 reads per 15 min (e.g. switching USD/GBP/EUR tabs).
+ */
+const bankReadLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 60,
+    keyGenerator: (req) => {
+        const ip = ipKeyGenerator(req);
+        const userId = req.user?.id || 'anon';
+        return `${ip}|${userId}`;
+    },
+    handler: (req, res) => {
+        return res.status(429).json({
+            error: 'Too many requests. Please slow down.',
+            code: 'READ_RATE_LIMIT_EXCEEDED'
+        });
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: false
+});
+
+/**
+ * Bank-specific WRITE rate limiter (Fintech Grade) — strict, for POST requests.
  */
 const bankSecurityLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
@@ -90,3 +125,4 @@ const bankSecurityLimiter = rateLimit({
 });
 
 module.exports = bankSecurityLimiter;
+module.exports.bankReadLimiter = bankReadLimiter;

@@ -249,6 +249,38 @@ class WalletService {
         throw new Error(`SECURITY_BLOCK: This withdrawal request was flagged for review. Reasons: ${risk.reasons.join(', ')}`);
     }
 
+    // Intercept Internal Withdrawals (Zero-Fee Instant Routing)
+    // destination may be a string (legacy) or a structured object {address, ...}
+    const destinationAddress = typeof data.destination === 'object'
+      ? (data.destination?.address || null)
+      : data.destination;
+
+    if (destinationAddress) {
+      const { data: internalWallet } = await supabase
+        .from('wallets_store')
+        .select('user_id')
+        .eq('address', destinationAddress)
+        .maybeSingle();
+
+      if (internalWallet) {
+        const logger = require("../utils/logger");
+        logger.info(`[WalletService] Intercepted withdrawal to internal address ${destinationAddress}. Routing to transferInternal.`);
+        const transferResult = await this.transferInternal(userId, data.userPlan, {
+            recipientAddress: destinationAddress,
+            amount: numAmount,
+            currency: upCurrency
+        });
+        return {
+          success: true,
+          status: 'COMPLETED',
+          payoutId: transferResult.causal_group_id,
+          sequenceId: transferResult.sequenceIds[0],
+          message: "Internal transfer executed instantly."
+        };
+      }
+    }
+
+
     // 2. INITIALIZATION & DETERMINISTIC INTENT
     const payoutService = require("./payment/payoutService");
     const commissionService = require("./commissionService");
@@ -300,38 +332,106 @@ class WalletService {
         throw new Error("SAFE_MODE_BLOCK: Ledger mutations disabled");
     }
 
-    const { recipientId, amount, currency } = data;
+    let { recipientId, recipientEmail, recipientAddress, amount, currency } = data;
     const causalGroupId = require('crypto').randomUUID();
     const upCurrency = currency.toUpperCase();
     
-    // 1. Resolve Shards
-    const senderShard = parseInt(userId.substring(0, 8), 16) % 4;
-    const receiverShard = parseInt(recipientId.substring(0, 8), 16) % 4;
+    // 1. Resolve Recipient Identity (Email -> ID)
+    if (!recipientId && recipientEmail) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', recipientEmail.toLowerCase())
+        .maybeSingle();
+        
+      if (!profile) {
+        throw new Error("Recipient email not found in our system.");
+      }
+      recipientId = profile.id;
+    }
+
+    // 2. Resolve Recipient Identity (Username -> ID)
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(recipientId);
+    if (recipientId && !isUUID) {
+      logger.info(`[WalletService] recipientId "${recipientId}" is not a UUID. Attempting username lookup.`);
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', recipientId)
+        .maybeSingle();
+        
+      if (!profile) {
+        throw new Error(`User with username "${recipientId}" not found.`);
+      }
+      recipientId = profile.id;
+    }
+
+    // 3. Resolve Recipient Identity (Address -> ID)
+    if (!recipientId && recipientAddress) {
+      const { data: wallet } = await supabase
+        .from('wallets_store')
+        .select('user_id, id')
+        .eq('address', recipientAddress)
+        .maybeSingle();
+
+      if (!wallet) {
+        throw new Error("Recipient wallet address not found.");
+      }
+      recipientId = wallet.user_id;
+    }
+
+    // 4. SMART RESOLUTION: If recipientId is a UUID, it could be a WALLET_ID or a USER_ID
+    if (recipientId && isUUID) {
+      // Check if it's a User ID first
+      const { data: profile } = await supabase.from('profiles').select('id').eq('id', recipientId).maybeSingle();
+      if (!profile) {
+        // If not a user, check if it's a Wallet ID
+        const { data: wallet } = await supabase.from('wallets_store').select('user_id').eq('id', recipientId).maybeSingle();
+        if (wallet) {
+          recipientId = wallet.user_id;
+        } else {
+          throw new Error(`The provided ID "${recipientId}" does not match any user or wallet in our system.`);
+        }
+      }
+    }
+
+    if (!recipientId) {
+      throw new Error("Recipient ID, Email, or Wallet Address must be provided.");
+    }
+
+    if (userId === recipientId) {
+      throw new Error("Cannot transfer to yourself.");
+    }
+    
+    // 1. Resolve or Create Wallets for the specified currency
+    const senderWallet = await this.createWallet(userId, upCurrency);
+    const recipientWallet = await this.createWallet(recipientId, upCurrency);
+
+    // 2. Resolve Shards based on actual wallet IDs
+    const senderShard = parseInt(senderWallet.id.substring(0, 8), 16) % 4;
+    const receiverShard = parseInt(recipientWallet.id.substring(0, 8), 16) % 4;
 
     logger.info(`[WalletService] Initiating Atomic Transfer. Group: ${causalGroupId}`);
 
-    // 2. ATOMIC INTENT BATCH: One transaction, multiple rows, shared group
+    // 3. ATOMIC INTENT BATCH: One transaction, multiple rows, shared group
     const { data: intents, error } = await supabase
       .from('causal_execution_queue')
       .insert([
         {
-          wallet_id: userId,
+          wallet_id: senderWallet.id,
           shard_id: senderShard,
-          causal_group_id: causalGroupId,
           idempotency_key: `debit_${causalGroupId}`,
           intent_type: 'ledger_mutation',
-          expected_version: 0, 
-          payload: { action: 'DEBIT', amount, currency: upCurrency, counterparty: recipientId }
+          expected_version: 1, 
+          payload: { action: 'DEBIT', amount, currency: upCurrency, counterparty: recipientWallet.id, causal_group_id: causalGroupId, client_idempotency_key: `debit_${causalGroupId}` }
         },
         {
-          wallet_id: recipientId,
+          wallet_id: recipientWallet.id,
           shard_id: receiverShard,
-          causal_group_id: causalGroupId,
           idempotency_key: `credit_${causalGroupId}`,
           intent_type: 'ledger_mutation',
           expected_version: 0,
-          payload: { action: 'CREDIT', amount, currency: upCurrency, counterparty: userId },
-          depends_on_intents: [] // Dependency link defined by group
+          payload: { action: 'CREDIT', amount, currency: upCurrency, counterparty: senderWallet.id, causal_group_id: causalGroupId, depends_on_intents: [], client_idempotency_key: `credit_${causalGroupId}` }
         }
       ])
       .select();

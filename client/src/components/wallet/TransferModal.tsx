@@ -23,7 +23,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
     selectedNetwork = 'native',
     onSuccess 
 }) => {
-    const { sendFunds, getCommissionRate, wallets } = useWallet();
+    const { sendFunds, getCommissionRate, wallets, withdraw } = useWallet();
     const [recipient, setRecipient] = useState('');
     const [amount, setAmount] = useState('');
     const [isSending, setIsSending] = useState(false);
@@ -31,8 +31,8 @@ export const TransferModal: React.FC<TransferModalProps> = ({
     const [captchaToken, setCaptchaToken] = useState<string | null>(null);
     const recaptchaRef = React.useRef<ReCAPTCHA>(null);
 
-    const wallet = wallets.find(w => w.currency === selectedCurrency && w.network === selectedNetwork);
-    const availableBalance = wallet ? (wallet.available_balance ?? wallet.balance) : 0;
+    const wallet = wallets.find(w => w.asset === selectedCurrency && w.network === selectedNetwork);
+    const availableBalance = wallet ? (wallet.available ?? wallet.balance) : 0;
 
     useEffect(() => {
         if (isOpen) {
@@ -43,11 +43,12 @@ export const TransferModal: React.FC<TransferModalProps> = ({
     }, [isOpen]);
 
     useEffect(() => {
-        const calculateFee = async () => {
+        const timer = setTimeout(async () => {
             if (!amount || isNaN(parseFloat(amount))) {
                 setTransferFee(null);
                 return;
             }
+            try {
                 const val = parseFloat(amount);
                 const isEmail = recipient.includes('@');
                 const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(recipient);
@@ -69,8 +70,12 @@ export const TransferModal: React.FC<TransferModalProps> = ({
                     if (s.max_fee && fee > s.max_fee) fee = s.max_fee;
                 }
                 setTransferFee({ fee, net: val + fee });
-        };
-        calculateFee();
+            } catch (err) {
+                console.error("Fee calculation failed:", err);
+            }
+        }, 500);
+
+        return () => clearTimeout(timer);
     }, [amount, recipient, selectedCurrency, getCommissionRate]);
 
     const handleSend = async (e: React.FormEvent) => {
@@ -90,14 +95,23 @@ export const TransferModal: React.FC<TransferModalProps> = ({
             const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(recipient);
             const isAddress = !isEmail && !isUUID && (recipient.startsWith('0x') || recipient.startsWith('bc1') || recipient.startsWith('T') || recipient.length > 30);
 
-            await sendFunds({
-                currency: selectedCurrency,
-                amount: parseFloat(amount),
-                recipientEmail: isEmail ? recipient : undefined,
-                recipientAddress: isAddress ? recipient : undefined,
-                recipientId: (!isEmail && !isAddress) ? recipient : undefined,
-                captchaToken: captchaToken || undefined
-            });
+            if (isAddress) {
+                await withdraw({
+                    currency: selectedCurrency,
+                    amount: parseFloat(amount),
+                    address: recipient,
+                    captchaToken: captchaToken || undefined
+                });
+            } else {
+                await sendFunds({
+                    currency: selectedCurrency,
+                    amount: parseFloat(amount),
+                    recipientEmail: isEmail ? recipient : undefined,
+                    recipientAddress: isAddress ? recipient : undefined,
+                    recipientId: (!isEmail && !isAddress) ? recipient : undefined,
+                    captchaToken: captchaToken || undefined
+                });
+            }
             onSuccess();
             onClose();
         } catch {
@@ -258,14 +272,16 @@ export const TransferModal: React.FC<TransferModalProps> = ({
                     </AnimatePresence>
 
                     {/* reCAPTCHA for Financial Security */}
-                    <div className="flex justify-center p-2 bg-gray-800/30 rounded-xl border border-gray-800">
-                        <ReCAPTCHA
-                            ref={recaptchaRef}
-                            sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI'}
-                            onChange={(token) => setCaptchaToken(token)}
-                            theme="dark"
-                        />
-                    </div>
+                    {import.meta.env.PROD && (
+                        <div className="flex justify-center p-2 bg-gray-800/30 rounded-xl border border-gray-800">
+                            <ReCAPTCHA
+                                ref={recaptchaRef}
+                                sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI'}
+                                onChange={(token) => setCaptchaToken(token)}
+                                theme="dark"
+                            />
+                        </div>
+                    )}
 
                     <div className="flex gap-3 justify-end mt-2">
                         <Button variant="ghost" onClick={onClose} type="button">

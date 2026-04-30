@@ -24,7 +24,7 @@ class SystemStateController {
         };
         this.stableSince = Date.now();
         this.enterSafeTime = null; // Timestamp when SAFE mode was activated
-        this.minSafeModeDuration = 120; // Hard dwell floor in seconds
+        this.minSafeModeDuration = 10; // Hard dwell floor in seconds
         this.manualMode = false; // If true, auto-recovery is disabled
         this.withdrawalMode = "NORMAL"; // NORMAL | DEGRADED | FROZEN
     }

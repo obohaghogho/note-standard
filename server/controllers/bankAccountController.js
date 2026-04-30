@@ -162,6 +162,8 @@ exports.getBankAccount = async (req, res) => {
             });
         }
 
+        console.time(`[AUDIT] BankFetch_${user_id}_${currency}`);
+
         // ── 2. Query with double-anchor (user_id + currency) ──
         const { data, error } = await supabase
             .from('bank_accounts')
@@ -171,18 +173,29 @@ exports.getBankAccount = async (req, res) => {
             .maybeSingle();
 
         if (error) {
+            console.timeEnd(`[AUDIT] BankFetch_${user_id}_${currency}`);
             logger.error('[Bank] Retrieval fault', { error: error.message });
             return res.status(500).json({ success: false, error: 'Retrieval failure.', code: 'DB_FAULT' });
         }
 
+        console.timeEnd(`[AUDIT] BankFetch_${user_id}_${currency}`);
+
+        // ── No record: return 200 with null payload (not 404).
+        // 404 means the ROUTE doesn't exist; a missing bank account is a normal
+        // new-user state. Returning 200 eliminates browser-console noise and
+        // avoids the need for validateStatus hacks on the client.
         if (!data) {
-            return res.status(404).json({ success: false, error: `No ${currency} account found.`, code: 'NOT_FOUND' });
+            return res.status(200).json({ data: null, found: false });
         }
+
+        console.time(`[AUDIT] BankDecrypt_${user_id}_${currency}`);
 
         // ── 3. Decrypt — FAIL-CLOSED on any integrity failure ──
         try {
             decrypted = decryptPayload(data.encrypted_payload, data.iv, data.auth_tag, data.key_id);
+            console.timeEnd(`[AUDIT] BankDecrypt_${user_id}_${currency}`);
         } catch (integrityErr) {
+            console.timeEnd(`[AUDIT] BankDecrypt_${user_id}_${currency}`);
             // HARD FAIL — tamper or corruption detected
             return await failClosed(res, 'INTEGRITY_FAILURE', {
                 userId: user_id,
@@ -242,8 +255,13 @@ exports.adminGetBankAccount = async (req, res) => {
             .eq('currency', currency.toUpperCase())
             .maybeSingle();
 
-        if (error || !data) {
-            return res.status(404).json({ success: false, error: 'Account not found.', code: 'NOT_FOUND' });
+        if (error) {
+            logger.error('[Bank] Admin retrieval fault', { error: error.message });
+            return res.status(500).json({ success: false, error: 'Retrieval failure.', code: 'DB_FAULT' });
+        }
+        if (!data) {
+            // Consistent with user-facing endpoint: 200 + null, not 404
+            return res.status(200).json({ data: null, found: false });
         }
 
         try {

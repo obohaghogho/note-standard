@@ -2,6 +2,20 @@ const supabase = require('../config/database');
 const redis = require('../config/redis');
 const logger = require('../utils/logger');
 
+// Hard cap on any single Redis operation to prevent stalling HTTP requests
+const REDIS_TIMEOUT_MS = 500;
+
+/**
+ * Wraps a Redis promise with a hard timeout.
+ * On timeout, resolves with the fallback value (fail-open for lockout checks).
+ */
+const withRedisTimeout = (promise, fallback = null) => {
+    return Promise.race([
+        promise,
+        new Promise(resolve => setTimeout(() => resolve(fallback), REDIS_TIMEOUT_MS))
+    ]);
+};
+
 // Lockout Configuration
 const LOCKOUT_DURATION_SEC = 1800; // 30 minutes
 const INCIDENT_WINDOW_SEC = 3600; // Count incidents within 1 hour
@@ -76,19 +90,30 @@ class SecurityMonitor {
     async isLockedOut(userId, ip) {
         if (!redis) return false;
 
-        const checks = [];
+        try {
+            const checks = [];
 
-        if (userId) checks.push(redis.get(`${USER_LOCK_NS}${userId}`));
-        if (ip) checks.push(redis.get(`${IP_LOCK_NS}${ip}`));
+            if (userId) checks.push(withRedisTimeout(redis.get(`${USER_LOCK_NS}${userId}`), null));
+            if (ip) checks.push(withRedisTimeout(redis.get(`${IP_LOCK_NS}${ip}`), null));
 
-        const results = await Promise.all(checks);
-        return results.some(r => r !== null);
+            const results = await Promise.all(checks);
+            return results.some(r => r !== null);
+        } catch (err) {
+            // Fail-open: Redis failure should not block user access
+            logger.warn('[SecurityMonitor] isLockedOut Redis error (fail-open):', err.message);
+            return false;
+        }
     }
 
     async _increment(key, ttlSec) {
-        const count = await redis.incr(key);
-        if (count === 1) await redis.expire(key, ttlSec);
-        return count;
+        try {
+            const count = await withRedisTimeout(redis.incr(key), 1);
+            if (count === 1) await withRedisTimeout(redis.expire(key, ttlSec), null);
+            return count;
+        } catch (err) {
+            logger.warn('[SecurityMonitor] _increment Redis error:', err.message);
+            return 1;
+        }
     }
 
     async _lock(key, ttlSec) {

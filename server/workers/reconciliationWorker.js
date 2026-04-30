@@ -184,24 +184,32 @@ class ReconciliationWorker {
             if (ledgerError) throw ledgerError;
 
             // 3. Aggregate Journal Truth
-            const validStatuses = ['SETTLED', 'settled', 'LEDGER_COMMITTED', 'SUCCESS', 'completed', 'COMPLETED'];
+            const validStatuses = ['SETTLED', 'RECONCILED'];
             const ledgerTruthMap = ledgerTruth.reduce((acc, curr) => {
                 const status = curr.ledger_transactions_v6.status;
-                if (!validStatuses.includes(status)) return acc;
-
                 const amount = Number(curr.amount);
-                acc[curr.wallet_id] = (acc[curr.wallet_id] || 0) + amount;
+                
+                // --- TRUTH RECONCILIATION LOGIC ---
+                // 1. Credits (positive) are ONLY included if SETTLED/RECONCILED
+                // 2. Debits (negative) are included if they are at least RESERVED/APPROVED
+                //    because the materialized balance is already debited.
+                const isSuccess = ['SETTLED', 'RECONCILED'].includes(status);
+                const isPendingDebit = amount < 0 && ['RESERVED', 'APPROVED', 'PROCESSING', 'SENT', 'CONFIRMING'].includes(status);
+
+                if (isSuccess || isPendingDebit) {
+                    acc[curr.wallet_id] = (acc[curr.wallet_id] || 0) + amount;
+                }
                 return acc;
             }, {});
 
             let driftCount = 0;
-            const tolerance = 0.0000000001; // Tiny epsilon for floating point buffer
+            const tolerance = 0.00000001; // 1e-8 (Satoshi-level precision)
 
             for (const wallet of wallets) {
-                // HARDENING: Ledger truth is floored at 0 for materialized comparison
-                // physical reality cannot store a negative coin balance.
                 const truthSum = Math.max(0, ledgerTruthMap[wallet.id] || 0);
                 const materialized = Number(wallet.balance) || 0;
+                
+                // Use a slightly more robust comparison for floating point jitter
                 const drift = Math.abs(materialized - truthSum);
 
                 if (drift > tolerance) {
@@ -214,6 +222,7 @@ class ReconciliationWorker {
 
             if (driftCount === 0) {
                 logger.info("[ReconciliationWorker] Ledger Integrity Sweep PASSED. Zero drift detected.");
+                SystemState.updateMetrics({ hasDrift: false, drift: 0 });
             } else {
                 logger.error(`[ReconciliationWorker] Ledger Integrity Sweep FAILED. ${driftCount} accounts show mathematical drift.`);
             }

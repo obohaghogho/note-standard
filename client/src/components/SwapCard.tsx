@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ArrowRightLeft, Loader2, RefreshCcw, Info, Clock } from 'lucide-react';
+import { ArrowRightLeft, Loader2, RefreshCcw, Info, Clock, TrendingUp, Zap } from 'lucide-react';
 import { Button } from './common/Button';
 import walletApi from '../api/walletApi';
 import { useWallet } from '../hooks/useWallet';
@@ -235,19 +235,49 @@ export const SwapCard: React.FC<SwapCardProps> = ({
 
             <div className="space-y-4">
                 {/* From Section */}
-                <div className={`bg-gray-800/50 border rounded-xl p-4 transition-all duration-200 focus-within:ring-2 focus-within:bg-gray-800/80 ${
+                <div className={`bg-gray-800/40 border-2 rounded-2xl p-4 transition-all duration-300 group/input ${
                     isError 
-                        ? 'border-red-500/50 focus-within:border-red-500 ring-red-500/10' 
-                        : 'border-gray-700/80 focus-within:border-purple-500/50 focus-within:ring-purple-500/10'
+                        ? 'border-red-500/50 bg-red-500/5 ring-4 ring-red-500/10' 
+                        : 'border-gray-700/50 hover:border-purple-500/30 focus-within:border-purple-500/50 focus-within:ring-4 focus-within:ring-purple-500/10 focus-within:bg-gray-800/80'
                 }`}>
-                    <div className="flex justify-between items-center mb-1">
-                        <label htmlFor="swap-card-from-currency" className="text-xs text-gray-400 font-medium uppercase tracking-wider">From</label>
-                        <span className={`text-xs font-medium text-gray-400`}>
-                            Balance: {fromView?.available || '...'}
-                        </span>
+                    <div className="flex justify-between items-center mb-3">
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">You Send</span>
+                        <div className="flex items-center gap-2">
+                            <span 
+                                onClick={handleMaxAmount}
+                                className="text-[10px] font-bold text-gray-400 hover:text-purple-400 cursor-pointer transition-colors"
+                            >
+                                Balance: <span className="text-gray-300 font-mono">{fromView?.available || '0.00'}</span>
+                            </span>
+                            <button
+                                onClick={handleMaxAmount}
+                                className="px-2 py-0.5 text-[10px] font-black text-purple-400 uppercase bg-purple-500/10 rounded-lg hover:bg-purple-500 hover:text-white transition-all active:scale-95 border border-purple-500/20"
+                            >
+                                Max
+                            </button>
+                        </div>
                     </div>
-                    <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-                        <div className="flex w-full sm:w-auto items-center">
+                    
+                    <div className="grid grid-cols-[1fr_100px] sm:grid-cols-[1fr_120px] gap-3 items-center w-full">
+                        <div className="min-w-0">
+                            <input
+                                id="swap-card-amount-in"
+                                name="amountIn"
+                                type="text"
+                                inputMode="decimal"
+                                value={amount}
+                                onBlur={() => setIsTouched(true)}
+                                onChange={(e) => {
+                                    const val = e.target.value.replace(/[^0-9.]/g, '');
+                                    const parts = val.split('.');
+                                    if (parts.length <= 2) setAmount(val);
+                                }}
+                                placeholder="0.00"
+                                className="w-full bg-transparent text-xl sm:text-2xl font-black text-white placeholder-gray-700 focus:outline-none transition-all caret-purple-500 block"
+                                autoComplete="off"
+                            />
+                        </div>
+                        <div className="min-w-0 h-full flex items-center">
                             <select
                                 id="swap-card-from-currency"
                                 name="fromCurrency"
@@ -257,43 +287,18 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                                     setFromCurrency(symbol);
                                     setFromNetwork(network);
                                 }}
-                                className="bg-transparent text-xl font-bold text-white focus:outline-none cursor-pointer hover:text-purple-400 transition-colors w-full"
+                                style={{ fontSize: '10px' }}
+                                className="w-full bg-gray-700/50 hover:bg-gray-700 border border-gray-600 rounded-xl px-1.5 py-1 text-white focus:outline-none cursor-pointer transition-all truncate font-bold uppercase tracking-tighter"
                             >
                                  {financialView.wallets.map(w => {
                                  const norm = normalizeAsset(w);
                                  return (
-                                     <option key={norm.optionValue} value={norm.optionValue} className="bg-gray-800 text-base">
+                                     <option key={norm.optionValue} value={norm.optionValue} className="bg-gray-800 text-sm">
                                          {norm.displayLabel}
                                      </option>
                                  );
                              })}
                             </select>
-                        </div>
-                        <div className="flex-1 w-full relative flex flex-col group/input min-w-0">
-                            <div className="relative flex items-center">
-                                <input
-                                    id="swap-card-amount-in"
-                                    name="amountIn"
-                                    type="text"
-                                    inputMode="decimal"
-                                    value={amount}
-                                    onBlur={() => setIsTouched(true)}
-                                    onChange={(e) => {
-                                        const val = e.target.value.replace(/[^0-9.]/g, '');
-                                        const parts = val.split('.');
-                                        if (parts.length <= 2) setAmount(val);
-                                    }}
-                                    placeholder="0.00"
-                                    className="w-full bg-transparent text-left sm:text-right text-2xl font-bold text-white placeholder-gray-600 focus:outline-none pr-12 transition-all caret-purple-500"
-                                    autoComplete="off"
-                                />
-                                <button
-                                    onClick={handleMaxAmount}
-                                    className="absolute right-0 px-2 py-1 text-[10px] text-purple-400 uppercase tracking-widest font-black hover:text-white hover:bg-purple-600 transition-all bg-purple-500/10 rounded-md border border-purple-500/30 hover:shadow-[0_0_15px_rgba(147,51,234,0.3)] active:scale-95 z-10"
-                                >
-                                    Max
-                                </button>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -310,81 +315,87 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                 </div>
 
                 {/* To Section */}
-                <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 transition-colors focus-within:border-purple-500/50">
-                    <div className="flex justify-between items-center mb-2">
-                        <label htmlFor="swap-card-to-currency" className="text-xs text-gray-400 font-medium uppercase tracking-wider">To</label>
-                        {previewLoading && <Loader2 className="animate-spin text-purple-400" size={14} />}
+                <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-4 transition-colors">
+                    <div className="flex justify-between items-center mb-3">
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 text-left">You Receive</span>
+                        {previewLoading && <Loader2 className="animate-spin text-purple-400" size={12} />}
                     </div>
-                    <div className="flex gap-3 items-center">
-                        <select
-                            id="swap-card-to-currency"
-                            name="toCurrency"
-                            value={`${toCurrency}_${toNetwork}`}
-                            onChange={(e) => {
-                                const { symbol, network } = parseOptionValue(e.target.value);
-                                setToCurrency(symbol);
-                                setToNetwork(network);
-                            }}
-                            className="bg-transparent text-xl font-bold text-white focus:outline-none cursor-pointer hover:text-purple-400 transition-colors py-1"
-                        >
-                             {financialView.wallets.filter(w => w.asset !== fromCurrency || w.network !== fromNetwork).map(w => {
-                                 const norm = normalizeAsset(w);
-                                 return (
-                                     <option key={norm.optionValue} value={norm.optionValue} className="bg-gray-800 text-base">
-                                         {norm.displayLabel}
-                                     </option>
-                                 );
-                             })}
-                        </select>
-                        <div className="flex-1 min-w-0">
+                    <div className="grid grid-cols-[1fr_100px] sm:grid-cols-[1fr_120px] gap-3 items-center w-full">
+                        <div className="min-w-0">
                             <input
                                 id="swap-card-amount-out"
                                 name="amountOut"
                                 type="text"
-                                value={preview ? Number(preview.amountOut || 0).toFixed(6) : ''}
+                                value={preview ? Number(preview.amountOut || 0).toLocaleString(undefined, { maximumFractionDigits: 8 }) : ''}
+                                title={preview ? (preview.amountOut || 0).toString() : ''}
                                 readOnly
                                 placeholder="0.00"
-                                className="w-full bg-transparent text-right text-2xl font-bold text-gray-300 placeholder-gray-600 focus:outline-none pr-2 caret-purple-500"
+                                className="w-full bg-transparent text-xl sm:text-2xl font-black text-gray-300 placeholder-gray-800 focus:outline-none block"
                             />
+                        </div>
+                        <div className="min-w-0 h-full flex items-center">
+                            <select
+                                id="swap-card-to-currency"
+                                name="toCurrency"
+                                value={`${toCurrency}_${toNetwork}`}
+                                onChange={(e) => {
+                                    const { symbol, network } = parseOptionValue(e.target.value);
+                                    setToCurrency(symbol);
+                                    setToNetwork(network);
+                                }}
+                                style={{ fontSize: '10px' }}
+                                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-1.5 py-1 text-white focus:outline-none cursor-pointer transition-all truncate font-bold uppercase tracking-tighter"
+                            >
+                                 {financialView.wallets.filter(w => w.asset !== fromCurrency || w.network !== fromNetwork).map(w => {
+                                     const norm = normalizeAsset(w);
+                                     return (
+                                         <option key={norm.optionValue} value={norm.optionValue} className="bg-gray-800 text-sm">
+                                             {norm.displayLabel}
+                                         </option>
+                                     );
+                                 })}
+                            </select>
                         </div>
                     </div>
                 </div>
 
-                {/* Info Section */}
-                <div className="min-h-[60px]">
+                {/* Info Panel */}
+                <div className="px-1 space-y-3">
                     {preview ? (
-                        <div className="bg-purple-900/10 border border-purple-500/10 rounded-lg p-3 text-xs space-y-1">
-                            <div className="flex justify-between text-gray-400">
-                                <span>Verified Rate</span>
-                                <span className="text-purple-300">1 {fromCurrency} ≈ {Number(preview.rate || 0).toFixed(6)} {toCurrency}</span>
-                            </div>
-                            <div className="flex justify-between text-gray-400">
-                                <div className="flex items-center gap-1.5">
-                                    <span>Exchange Fee ({((Number(preview.metadata?.fee_breakdown?.rates?.total) || 0.047) * 100).toFixed(1)}%)</span>
-                                </div>
-                                <span>{Number(preview.fee || 0).toFixed(6)} {fromCurrency}</span>
+                        <div className="space-y-2.5 py-2">
+                            <div className="flex justify-between items-center text-[11px] font-medium text-gray-500 uppercase tracking-tight">
+                                <span className="flex items-center gap-1.5"><TrendingUp size={12} className="text-gray-600" /> Rate</span>
+                                <span className="text-gray-300 font-mono">1 {fromCurrency} ≈ {Number(preview.rate || 0).toFixed(6)} {toCurrency}</span>
                             </div>
                             
-                            <div className="flex justify-between items-center pt-1 border-t border-purple-500/10 mt-1">
-                                <span className="text-gray-500 flex items-center gap-1">
-                                    <Clock size={10} />
-                                    Quote expires in
+                            <div className="flex justify-between items-center text-[11px] font-medium text-gray-500 uppercase tracking-tight">
+                                <span className="flex items-center gap-1.5"><Zap size={12} className="text-gray-600" /> Fee</span>
+                                <span className="text-gray-400">
+                                    {Number(preview.fee || 0).toLocaleString(undefined, { maximumFractionDigits: 6 })} {fromCurrency} 
+                                    <span className="ml-1 text-[10px] opacity-40">({((Number(preview.metadata?.fee_breakdown?.rates?.total) || 0.047) * 100).toFixed(1)}%)</span>
                                 </span>
-                                <span className={`font-mono font-bold ${Number(timeLeft || 0) < 10 ? 'text-red-400' : 'text-purple-400'}`}>
-                                    {timeLeft}s
+                            </div>
+
+                            <div className="pt-2.5 flex justify-between items-center border-t border-gray-800/40 mt-1">
+                                <div className="flex items-center gap-1.5 text-[10px] text-gray-600 uppercase font-black tracking-widest">
+                                    <Clock size={10} />
+                                    <span>Expires In</span>
+                                </div>
+                                <span className={`text-[10px] font-black font-mono px-2 py-0.5 rounded-md ${Number(timeLeft || 0) < 15 ? 'bg-red-500/10 text-red-400 animate-pulse' : 'bg-purple-500/10 text-purple-400'}`}>
+                                    {timeLeft}S
                                 </span>
                             </div>
                         </div>
                     ) : (
-                        <div className="flex items-center justify-center h-full text-gray-600 text-xs gap-2 py-2">
-                            <Info size={14} />
-                            {fromView?.mode === 'STALE' ? 'Using recent price data — quotes may vary slightly.' : 'Enter an amount to see quote'}
+                        <div className="flex items-center justify-center h-full text-gray-600 text-[10px] gap-2 py-6 opacity-50 uppercase tracking-widest font-bold">
+                            <Info size={12} />
+                            {fromView?.mode === 'STALE' ? 'Market volatility detected' : 'Enter amount to swap'}
                         </div>
                     )}
                 </div>
 
                 {/* reCAPTCHA */}
-                {preview && (
+                {preview && import.meta.env.PROD && (
                     <div className="flex justify-center p-2 bg-gray-800/30 rounded-xl border border-gray-800">
                         <ReCAPTCHA
                             ref={recaptchaRef}

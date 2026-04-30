@@ -25,7 +25,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
     const [hdLoading, setHdLoading] = useState(false);
 
     const isCrypto = ['BTC', 'ETH', 'USDT', 'USDC'].includes(selectedCurrency);
-    const currentWallet = wallets.find(w => w.currency === selectedCurrency && w.network === selectedNetwork);
+    const currentWallet = wallets.find(w => w.asset === selectedCurrency && w.network === selectedNetwork);
     // For fiat currencies, show user's email (what senders use) instead of internal wallet UUID
     const displayAddress = isCrypto
         ? (hdAddress || currentWallet?.address || '')
@@ -104,7 +104,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
         } else {
             setHdAddress(null);
         }
-        const exists = wallets.find(w => w.currency === currency && w.network === network);
+        const exists = wallets.find(w => w.asset === currency && w.network === network);
         if (!exists) {
             try {
                 toast.loading(`Creating ${currency} ${network !== 'native' ? `(${network})` : ''} service...`, { id: 'create-wallet' });
@@ -114,6 +114,14 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
                 toast.error(`Failed to create ${currency} wallet`, { id: 'create-wallet' });
             }
         }
+    };
+
+    const getQrValue = () => {
+        if (!displayAddress) return '';
+        if (selectedCurrency === 'BTC') return `bitcoin:${displayAddress}`;
+        if (selectedCurrency === 'ETH' || (isCrypto && selectedNetwork === 'ERC20')) return `ethereum:${displayAddress}`;
+        if (isCrypto && selectedNetwork === 'TRC20') return `tron:${displayAddress}`;
+        return displayAddress;
     };
 
     if (!isOpen) return null;
@@ -140,15 +148,15 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
                     <div className="flex gap-2 overflow-x-auto pb-4 mb-2 scrollbar-hide">
                         {wallets.map(w => (
                             <button
-                                key={`${w.currency}_${w.network}`}
-                                onClick={() => handleCurrencyChange(w.currency, w.network)}
+                                key={`${w.asset}_${w.network}`}
+                                onClick={() => handleCurrencyChange(w.asset, w.network)}
                                 className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all whitespace-nowrap flex flex-col items-center ${
-                                    selectedCurrency === w.currency && selectedNetwork === w.network
+                                    selectedCurrency === w.asset && selectedNetwork === w.network
                                     ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-500/20' 
                                     : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:text-white'
                                 }`}
                             >
-                                <span>{w.currency}</span>
+                                <span>{w.asset}</span>
                                 {w.network !== 'native' && <span className="text-[10px] opacity-70 uppercase">{w.network}</span>}
                             </button>
                         ))}
@@ -171,7 +179,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
                                         </div>
                                     ) : null}
                                     <QRCodeSVG 
-                                        value={displayAddress} 
+                                        value={getQrValue()} 
                                         size={200}
                                         level="H"
                                         includeMargin={false}

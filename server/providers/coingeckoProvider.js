@@ -13,14 +13,14 @@ class CoinGeckoProvider {
     return prices[coinId] || null;
   }
 
-  async getPrices(coinIds, vsCurrency = "usd") {
+  async getPrices(coinIds, vsCurrency = "usd", timeout = 10000) {
     try {
       const ids = coinIds.join(",");
       const response = await axios.get(
         `${this.baseUrl}/simple/price?ids=${ids}&vs_currencies=${vsCurrency}`,
         {
           headers: this.apiKey ? { "x-cg-demo-api-key": this.apiKey } : {},
-          timeout: 10000,
+          timeout: timeout,
         },
       );
 

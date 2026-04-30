@@ -122,7 +122,7 @@ class NowPaymentsProvider {
     }
   }
 
-  async getRate(fromCurrency, toCurrency, amount = 1) {
+  async getRate(fromCurrency, toCurrency, amount = 1, timeout = 5000) {
     const from = String(fromCurrency).toUpperCase();
     const to = String(toCurrency).toUpperCase();
 
@@ -148,7 +148,7 @@ class NowPaymentsProvider {
           headers: {
             "x-api-key": this.apiKey,
           },
-          timeout: 5000, // Reduced timeout for faster fallbacks
+          timeout: timeout, // Use passed timeout
         },
       );
 

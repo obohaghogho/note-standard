@@ -4,6 +4,7 @@ import { API_URL } from "../lib/api"
 
 const api = axios.create({
   baseURL: `${API_URL}/api`,
+  timeout: 15000, // 15s global timeout
   headers: {
     "Content-Type": "application/json",
   },
@@ -13,15 +14,15 @@ const api = axios.create({
 // Uses a retry loop to handle Supabase session hydration delay after Paystack redirect
 api.interceptors.request.use(
   async (config) => {
-    let session = null;
-    // Try up to 4 times (500ms apart) to get the session — handles post-redirect hydration delay
-    for (let i = 0; i < 4; i++) {
-      const { data } = await supabase.auth.getSession();
-      if (data?.session?.access_token) {
-        session = data.session;
-        break;
-      }
-      if (i < 3) await new Promise(r => setTimeout(r, 500));
+    // Attempt to get session (optimized: check immediately, then one short retry if missing)
+    const { data: immediate } = await supabase.auth.getSession();
+    let session = immediate?.session;
+
+    if (!session) {
+      // Small wait only if session might be hydrating (one-shot retry)
+      await new Promise(r => setTimeout(r, 300));
+      const { data: retry } = await supabase.auth.getSession();
+      session = retry?.session;
     }
     if (session?.access_token) {
       config.headers.Authorization = `Bearer ${session.access_token}`;

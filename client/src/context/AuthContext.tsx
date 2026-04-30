@@ -162,6 +162,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Rule 4: switchLock
     if (switchInProgress.current) return;
 
+    if (userId === user?.id) {
+      console.log(`[Auth] Already logged in as ${userId}. Skipping switch.`);
+      return;
+    }
+
     const target = accountManager.getAccount(userId);
     if (!target) {
       toast.error('Account not found.');
@@ -178,8 +183,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       switchIdRef.current += 1;
       setSwitchId(switchIdRef.current);
       const currentSwitchId = switchIdRef.current;
-
       console.log(`[Auth] Switch #${currentSwitchId}: refreshing ${target.email}...`);
+
+      const previousId = accountManager.getActiveAccountId();
 
       // Rule 13: refresh if needed before setSession
       let freshSession = await refreshSessionIsolated(target);
@@ -187,7 +193,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!freshSession) {
         // Retry if something changed in storage
         const latestFromStorage = accountManager.getAccount(userId);
-        if (latestFromStorage && latestFromStorage.tokens.refresh_token !== target.tokens.refresh_token) {
+        const latestToken = latestFromStorage?.tokens?.refresh_token || latestFromStorage?.session?.refresh_token;
+        const targetToken = target.tokens?.refresh_token || target.session?.refresh_token;
+
+        if (latestFromStorage && latestToken && latestToken !== targetToken) {
+          console.log(`[Auth] Token rotated in another tab while switching. Retrying...`);
           freshSession = await refreshSessionIsolated(latestFromStorage);
         }
       }
@@ -196,7 +206,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (currentSwitchId !== switchIdRef.current) return;
 
       if (!freshSession) {
-        throw new Error('Session expired. Please log in again.');
+        throw new Error(`Session for ${target.email} has expired. Please log in again to that account.`);
       }
 
       // Rule 3: Update active account ID FIRST
@@ -217,6 +227,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     } catch (err) {
       console.error('[Auth] Switch failed:', err);
+      
+      // Rollback active account ID if we were switching
+      const accounts = accountManager.getAllAccounts();
+      const currentActive = accountManager.getActiveAccountId();
+      const userIsStillInList = accounts.some(a => a.id === user?.id);
+      
+      if (user?.id && userIsStillInList && currentActive !== user.id) {
+        accountManager.setActiveAccountId(user.id);
+      }
+
       toast.error(err instanceof Error ? err.message : 'Switch failed', { id: toastId });
       setIsSwitching(false);
       switchInProgress.current = false;

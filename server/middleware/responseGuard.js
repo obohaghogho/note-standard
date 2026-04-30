@@ -12,11 +12,15 @@ const logger = require('../utils/logger');
 
 // Per-endpoint allowed output schemas (strict allowlist)
 const ENDPOINT_SCHEMAS = {
-    'GET /api/bank-account': ['id', 'currency', 'account_holder', 'account_number', 'iban_last4', 'bank_name', 'payment_schemes', 'settlement_info', 'updated_at'],
+    // `data` and `found` cover the 200+null "no account yet" response.
+    'GET /api/bank-account': ['id', 'currency', 'account_holder', 'account_number', 'iban_last4', 'bank_name', 'payment_schemes', 'settlement_info', 'updated_at', 'data', 'found'],
     'POST /api/bank-account': ['id', 'currency', 'account_holder', 'account_number', 'iban_last4', 'bank_name', 'payment_schemes', 'settlement_info', 'updated_at'],
     // Generic safe-response fields for error/message-only responses
     'GENERIC': ['error', 'message', 'code', 'success', 'timestamp', 'path']
 };
+
+// Fields always passed on any non-2xx response so error bodies are never swallowed
+const GENERIC_ERROR_FIELDS = new Set(['success', 'error', 'message', 'code', 'timestamp', 'path', 'details']);
 
 // Absolute hard-blocked keys — always detected and escalated regardless of schema
 const KNOWN_SENSITIVE_KEYS = new Set([
@@ -89,14 +93,28 @@ const responseGuard = (endpointKey) => (req, res, next) => {
         // Skip enforcement for non-object payloads (status-only)
         if (!body || typeof body !== 'object') return originalJson(body);
 
-        // Enforce allowlist
+        // On error responses (4xx/5xx) always allow generic error fields through
+        // so the client can display meaningful error messages. The allowlist still
+        // prevents leaking financial data on error paths.
+        const statusCode = res.statusCode || 200;
+        if (statusCode >= 400) {
+            const errorAllowed = [...allowedFields, ...GENERIC_ERROR_FIELDS];
+            const guarded = enforceAllowlist(body, errorAllowed, routeKey);
+            return originalJson(guarded);
+        }
+
+        // Enforce allowlist on success responses
         const guarded = enforceAllowlist(body, allowedFields, routeKey);
         return originalJson(guarded);
     };
 
     res.send = function (body) {
         if (body && typeof body === 'object') {
-            const guarded = enforceAllowlist(body, allowedFields, routeKey);
+            const statusCode = res.statusCode || 200;
+            const effective = statusCode >= 400
+                ? [...allowedFields, ...GENERIC_ERROR_FIELDS]
+                : allowedFields;
+            const guarded = enforceAllowlist(body, effective, routeKey);
             return originalSend(guarded);
         }
         return originalSend(body);

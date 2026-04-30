@@ -16,10 +16,12 @@ const api = axios.create({
   timeout: API_TIMEOUT,
 });
 
-// Dynamically set Fincra base URL based on key pattern
-const FINCRA_BASE_URL = (FINCRA_SECRET_KEY && FINCRA_SECRET_KEY.length < 40)
-  ? "https://sandboxapi.fincra.com"
-  : "https://api.fincra.com";
+// Dynamically set Fincra base URL based on FINCRA_ENV env var
+// NOTE: Do NOT use key length as a heuristic — key lengths vary between accounts.
+const _fincraEnv = (process.env.FINCRA_ENV || 'sandbox').toLowerCase().trim();
+const FINCRA_BASE_URL = (_fincraEnv === 'live' || _fincraEnv === 'production')
+  ? 'https://api.fincra.com'
+  : 'https://sandboxapi.fincra.com';
 
 class PayoutService {
   /**
@@ -105,6 +107,41 @@ class PayoutService {
   }
 
   /**
+   * Internal helper to obtain a Bearer JWT for Payouts
+   * Payouts require Bearer JWT (Auth handshake) whereas deposits use x-api-key
+   */
+  async getNowPaymentsAuthToken() {
+    const email = process.env.NOWPAYMENTS_EMAIL;
+    const password = process.env.NOWPAYMENTS_PASSWORD;
+
+    if (!email || !password) {
+      throw new Error("NOWPayments email/password missing in .env. Required for Payout JWT auth.");
+    }
+
+    try {
+      // Check cache first (tokens usually last 5 mins)
+      if (this._nowPaymentsToken && this._nowPaymentsTokenExpiry > Date.now()) {
+        return this._nowPaymentsToken;
+      }
+
+      const response = await api.post(
+        `${NOWPAYMENTS_API_URL}/auth`,
+        { email, password },
+        { headers: { "Content-Type": "application/json" } }
+      );
+
+      this._nowPaymentsToken = response.data.token;
+      // Expire in 4.5 minutes to be safe
+      this._nowPaymentsTokenExpiry = Date.now() + (4.5 * 60 * 1000);
+      
+      return this._nowPaymentsToken;
+    } catch (error) {
+      logger.error("[PayoutService] NOWPayments Auth Failed:", error.response?.data || error.message);
+      throw new Error(`NowPayments authentication failed: ${error.response?.data?.message || error.message}`);
+    }
+  }
+
+  /**
    * Initiate a crypto payout via NOWPayments
    * https://documenter.getpostman.com/view/7907941/S1a32n38?version=latest#12d83296-6e5a-4cb7-9952-bf60a1e053a2
    */
@@ -115,42 +152,55 @@ class PayoutService {
     reference,
     network = "native",
   ) {
+    // --- MOCK MODE FOR TESTING ---
+    if (process.env.MOCK_PAYOUT === 'true') {
+      logger.info(`[PayoutService] MOCK MODE: Simulating NOWPayments Payout for ${amount} ${currency}`);
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate network latency
+      return {
+        success: true,
+        payoutId: `mock_tx_${Date.now()}`,
+        status: 'FINISHED',
+        provider: "MOCK",
+        latency: 2000,
+        rawResponse: { message: "Simulated success" },
+        requestPayload: { address, amount, currency }
+      };
+    }
+    // ----------------------------
+
     if (!NOWPAYMENTS_API_KEY) {
       throw new Error("NOWPayments configuration missing");
     }
 
-    // Note: NOWPayments requires 2FA or IP whitelisting for payouts
-    // Ensure the production server IP is whitelisted in the NOWPayments dashboard under Store Settings -> Payouts
-
-    // Some NOWPayments endpoints expect 'btc' instead of 'BTC'
-    const payCurrencyMap = {
-      "BTC_BITCOIN": "btc",
-      "ETH_ETHEREUM": "eth",
-      "USDT_TRC20": "usdttrc20",
-      "USDT_ERC20": "usdterc20",
-      "USDT_BEP20": "usdtbsc",
-      "USDC_ERC20": "usdcerc20",
-      "USDC_POLYGON": "usdcmatictoken",
-    };
-
-    const lookupKey = `${currency.toUpperCase()}_${
-      (network || "native").toUpperCase()
-    }`;
-    const payCurrency = payCurrencyMap[lookupKey] || currency.toLowerCase();
-
     const startTime = Date.now();
     try {
-      // Step 1: Request withdrawal
+      // Step 1: Obtain JWT Token (Mandatory for Payouts)
+      const token = await this.getNowPaymentsAuthToken();
+
+      // Step 2: Map currency tickers
+      const payCurrencyMap = {
+        "BTC_BITCOIN": "btc",
+        "ETH_ETHEREUM": "eth",
+        "USDT_TRC20": "usdttrc20",
+        "USDT_ERC20": "usdterc20",
+        "USDT_BEP20": "usdtbsc",
+        "USDC_ERC20": "usdcerc20",
+        "USDC_POLYGON": "usdcmatictoken",
+      };
+
+      const lookupKey = `${currency.toUpperCase()}_${(network || "native").toUpperCase()}`;
+      const payCurrency = payCurrencyMap[lookupKey] || currency.toLowerCase();
+
+      // Step 3: Request withdrawal
       const payload = {
-          withdrawals: [
-            {
-              address: address,
-              currency: payCurrency,
-              amount: amount,
-              ipn_callback_url:
-                `${process.env.SERVER_URL}/api/webhooks/nowpayments`,
-            },
-          ],
+        withdrawals: [
+          {
+            address: address,
+            currency: payCurrency,
+            amount: amount,
+            ipn_callback_url: `${process.env.SERVER_URL || process.env.BACKEND_URL}/api/webhooks/nowpayments`,
+          },
+        ],
       };
 
       const response = await api.post(
@@ -158,6 +208,7 @@ class PayoutService {
         payload,
         {
           headers: {
+            "Authorization": `Bearer ${token}`,
             "x-api-key": NOWPAYMENTS_API_KEY,
             "Content-Type": "application/json",
           },
@@ -295,11 +346,12 @@ class PayoutService {
       .insert({
         wallet_id: walletId,
         shard_id: shardId,
-        causal_group_id: causalGroupId,
         idempotency_key: client_idempotency_key, // ENFORCED UUID
         intent_type: 'payout_create',
         expected_version: 1, 
         payload: {
+          causal_group_id: causalGroupId,
+          client_idempotency_key: client_idempotency_key,
           user_id: userId,
           amount: parseFloat(amount),
           currency,

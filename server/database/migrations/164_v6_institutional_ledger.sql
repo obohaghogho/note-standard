@@ -139,7 +139,11 @@ BEGIN
         VALUES 
             (uuid_generate_v4(), v_sys_id, 'USD', 'INTERNAL', 'SYSTEM_LP_USD', 'internal'),
             (uuid_generate_v4(), v_sys_id, 'BTC', 'BITCOIN', 'SYSTEM_LP_BTC', 'internal'),
-            (uuid_generate_v4(), v_sys_id, 'ETH', 'ETHEREUM', 'SYSTEM_LP_ETH', 'internal')
+            (uuid_generate_v4(), v_sys_id, 'ETH', 'ETHEREUM', 'SYSTEM_LP_ETH', 'internal'),
+            (uuid_generate_v4(), v_sys_id, 'NGN', 'INTERNAL', 'SYSTEM_LP_NGN', 'internal'),
+            (uuid_generate_v4(), v_sys_id, 'EUR', 'INTERNAL', 'SYSTEM_LP_EUR', 'internal'),
+            (uuid_generate_v4(), v_sys_id, 'GBP', 'INTERNAL', 'SYSTEM_LP_GBP', 'internal'),
+            (uuid_generate_v4(), v_sys_id, 'JPY', 'INTERNAL', 'SYSTEM_LP_JPY', 'internal')
         ON CONFLICT DO NOTHING;
         
         RAISE NOTICE 'System LP accounts bootstrapped successfully for identity %', v_sys_id;

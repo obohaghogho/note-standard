@@ -26,6 +26,7 @@ export const refreshSessionIsolated = async (account: StoredAccount, isRetry = f
       method: 'POST',
       headers: {
         'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -36,6 +37,13 @@ export const refreshSessionIsolated = async (account: StoredAccount, isRetry = f
     const data = await response.json();
 
     if (!response.ok || !data.access_token) {
+      const errorMsg = data.error_description || data.error || `Status ${response.status}`;
+      console.error(`[AuthUtils] Refresh failed for ${account.email}:`, { 
+        status: response.status, 
+        error: data.error, 
+        description: data.error_description 
+      });
+
       // Handle Case: Invalid Grant (400) - Likely token was already rotated elsewhere
       if (response.status === 400 && !isRetry) {
         console.warn(`[AuthUtils] Refresh failed (400) for ${account.email}. Checking for rotation race...`);
@@ -43,7 +51,9 @@ export const refreshSessionIsolated = async (account: StoredAccount, isRetry = f
         // Reload from storage to see if we have a NEW token now
         const latestAccount = getAccount(account.id);
         const latestToken = latestAccount?.tokens?.refresh_token || latestAccount?.session?.refresh_token;
-        if (latestAccount && latestToken && latestToken !== refreshToken) {
+        const currentToken = account.tokens?.refresh_token || account.session?.refresh_token;
+
+        if (latestAccount && latestToken && latestToken !== currentToken) {
           console.log(`[AuthUtils] Token was indeed rotated elsewhere. Retrying with latest...`);
           return refreshSessionIsolated(latestAccount, true);
         }
@@ -57,7 +67,7 @@ export const refreshSessionIsolated = async (account: StoredAccount, isRetry = f
         console.warn(`[AuthUtils] Refresh token permanently revoked for ${account.email}.`);
         return null;
       }
-      throw new Error(data.error_description || data.error || `Status ${response.status}`);
+      throw new Error(errorMsg);
     }
 
     console.log(`[AuthUtils] Token refreshed successfully for ${account.email}`);

@@ -48,8 +48,8 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
         b.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const wallet = wallets.find(w => w.currency === selectedCurrency && w.network === selectedNetwork);
-    const availableBalance = wallet ? (wallet.available_balance ?? wallet.balance) : 0;
+    const wallet = wallets.find(w => w.asset === selectedCurrency && w.network === selectedNetwork);
+    const availableBalance = wallet ? (wallet.available ?? wallet.balance) : 0;
 
     useEffect(() => {
         if (isOpen) {
@@ -68,25 +68,30 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
     }, [isOpen]);
 
     useEffect(() => {
-        const calculateFee = async () => {
+        const timer = setTimeout(async () => {
             if (!amount || isNaN(parseFloat(amount))) {
                 setWithdrawFee(null);
                 return;
             }
-            const val = parseFloat(amount);
-            const settings = await getCommissionRate('WITHDRAWAL', selectedCurrency);
-            
-            let fee = 0;
-            if (settings && settings.length > 0) {
-                const s = settings[0];
-                if (s.commission_type === 'PERCENTAGE') fee = val * s.value;
-                else fee = s.value;
-                if (s.min_fee && fee < s.min_fee) fee = s.min_fee;
-                if (s.max_fee && fee > s.max_fee) fee = s.max_fee;
+            try {
+                const val = parseFloat(amount);
+                const settings = await getCommissionRate('WITHDRAWAL', selectedCurrency);
+                
+                let fee = 0;
+                if (settings && settings.length > 0) {
+                    const s = settings[0];
+                    if (s.commission_type === 'PERCENTAGE') fee = val * s.value;
+                    else fee = s.value;
+                    if (s.min_fee && fee < s.min_fee) fee = s.min_fee;
+                    if (s.max_fee && fee > s.max_fee) fee = s.max_fee;
+                }
+                setWithdrawFee({ fee, net: val - fee });
+            } catch (err) {
+                console.error("Withdraw fee calculation failed:", err);
             }
-            setWithdrawFee({ fee, net: val - fee });
-        };
-        calculateFee();
+        }, 500);
+
+        return () => clearTimeout(timer);
     }, [amount, selectedCurrency, getCommissionRate]);
 
     const handleWithdraw = async (e: React.FormEvent) => {
@@ -460,14 +465,16 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                     </AnimatePresence>
 
                     {/* reCAPTCHA for Financial Security */}
-                    <div className="flex justify-center p-2 bg-gray-800/30 rounded-xl border border-gray-800">
-                        <ReCAPTCHA
-                            ref={recaptchaRef}
-                            sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI'}
-                            onChange={(token) => setCaptchaToken(token)}
-                            theme="dark"
-                        />
-                    </div>
+                    {import.meta.env.PROD && (
+                        <div className="flex justify-center p-2 bg-gray-800/30 rounded-xl border border-gray-800">
+                            <ReCAPTCHA
+                                ref={recaptchaRef}
+                                sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI'}
+                                onChange={(token) => setCaptchaToken(token)}
+                                theme="dark"
+                            />
+                        </div>
+                    )}
 
                     <div className="flex gap-3 justify-end mt-2">
                         <Button variant="ghost" onClick={onClose} type="button">

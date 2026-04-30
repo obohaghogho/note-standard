@@ -1,13 +1,13 @@
 import React, { useMemo } from 'react';
 import { Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
-import type { Wallet } from '@/types/wallet';
+import type { WalletEntry } from '@/types/wallet';
 import { formatCurrency } from '../../lib/CurrencyFormatter';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 interface WalletAllocationChartProps {
-    wallets: Wallet[];
+    wallets: WalletEntry[];
     rates: Record<string, number>;
 }
 
@@ -22,8 +22,8 @@ export const WalletAllocationChart: React.FC<WalletAllocationChartProps> = ({ wa
         // Sort wallets by value (highest first)
         const safeWallets = Array.isArray(wallets) ? wallets : [];
         const sortedWallets = [...safeWallets].sort((a, b) => {
-            const valA = a.balance * (rates[a.currency] || 0);
-            const valB = b.balance * (rates[b.currency] || 0);
+            const valA = (rates[a.asset] || 0) > 0 ? a.balance * rates[a.asset] : 0;
+            const valB = (rates[b.asset] || 0) > 0 ? b.balance * rates[b.asset] : 0;
             return valB - valA;
         });
 
@@ -39,9 +39,9 @@ export const WalletAllocationChart: React.FC<WalletAllocationChartProps> = ({ wa
         ];
 
         sortedWallets.forEach((wallet, index) => {
-            const usdValue = wallet.balance * (rates[wallet.currency] || 0);
+            const usdValue = (rates[wallet.asset] || 0) > 0 ? wallet.balance * rates[wallet.asset] : 0;
             if (usdValue > 0.01) { // Only show significant balances
-                labels.push(wallet.currency);
+                labels.push(wallet.asset);
                 dataPoints.push(usdValue);
                 backgroundColors.push(colorPalette[index % colorPalette.length]);
                 borderColors.push('#111827'); // gray-900 border for separation

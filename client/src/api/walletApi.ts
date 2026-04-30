@@ -225,7 +225,7 @@ export const walletApi = {
     return response.data;
   },
 
-  async getBankAccount(currency: string = 'USD'): Promise<{
+  async getBankAccount(currency: string = 'USD', signal?: AbortSignal): Promise<{
     currency: string;
     account_holder: string;
     account_number: string;
@@ -233,8 +233,17 @@ export const walletApi = {
     bank_name: string;
     payment_schemes: string[];
     settlement_info: string;
-  }> {
-    const response = await api.get(`/bank-account?currency=${currency}`);
+  } | null> {
+    // Server returns 200 in both cases:
+    //   • Account exists  → { currency, account_holder, ... }  (found: true)
+    //   • No account yet  → { data: null, found: false }        (new user, normal state)
+    // This eliminates browser-console 404 noise for new users.
+    const response = await api.get('/bank-account', {
+      params: { currency },
+      signal,
+    });
+    // Handle the "no account yet" envelope
+    if (response.data?.found === false || response.data?.data === null) return null;
     return response.data;
   }
 };

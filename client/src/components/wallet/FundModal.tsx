@@ -365,23 +365,23 @@ export const FundModal: React.FC<FundModalProps> = ({
                                 <div className="p-2 grid grid-cols-1 gap-1 max-h-60 overflow-y-auto custom-scrollbar">
                                     {wallets.map(w => (
                                         <button
-                                            key={`${w.currency}-${w.network}`}
+                                            key={`${w.asset}-${w.network}`}
                                             onClick={() => {
-                                                setActiveCurrency(w.currency as Currency);
+                                                setActiveCurrency(w.asset as Currency);
                                                 setActiveNetwork(w.network || 'native');
                                                 setShowAssetSelector(false);
                                             }}
-                                            className={`flex items-center justify-between p-3 rounded-lg transition-all ${activeCurrency === w.currency ? 'bg-purple-600/20 border border-purple-500/30' : 'hover:bg-white/5 border border-transparent'}`}
+                                            className={`flex items-center justify-between p-3 rounded-lg transition-all ${activeCurrency === w.asset ? 'bg-purple-600/20 border border-purple-500/30' : 'hover:bg-white/5 border border-transparent'}`}
                                         >
                                             <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-xs font-bold">{w.currency?.[0] || '?'}</div>
+                                                <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-xs font-bold">{w.asset?.[0] || '?'}</div>
                                                 <div className="text-left">
-                                                    <div className="text-sm font-bold">{w.currency}</div>
+                                                    <div className="text-sm font-bold">{w.asset}</div>
                                                     <div className="text-[10px] text-gray-500">{w.network || 'Native'}</div>
                                                 </div>
                                             </div>
                                             <div className="text-right">
-                                                <div className="text-xs font-bold">{(w.available_balance ?? w.balance).toLocaleString()}</div>
+                                                <div className="text-xs font-bold">{(w.available ?? w.balance).toLocaleString()}</div>
                                             </div>
                                         </button>
                                     ))}
@@ -772,8 +772,10 @@ export const FundModal: React.FC<FundModalProps> = ({
 
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-[10px] uppercase text-gray-500 mb-1 ml-1">Requested Daily Limit (USD)</label>
+                                    <label htmlFor="requested-limit" className="block text-[10px] uppercase text-gray-500 mb-1 ml-1">Requested Daily Limit (USD)</label>
                                     <input 
+                                        id="requested-limit"
+                                        name="requested_limit"
                                         type="number"
                                         value={requestedLimit}
                                         onChange={e => setRequestedLimit(e.target.value)}
@@ -782,8 +784,10 @@ export const FundModal: React.FC<FundModalProps> = ({
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-[10px] uppercase text-gray-500 mb-1 ml-1">Reason (Optional)</label>
+                                    <label htmlFor="limit-reason" className="block text-[10px] uppercase text-gray-500 mb-1 ml-1">Reason (Optional)</label>
                                     <textarea 
+                                        id="limit-reason"
+                                        name="reason"
                                         value={requestReason}
                                         onChange={e => setRequestReason(e.target.value)}
                                         placeholder="Why do you need an increase?"

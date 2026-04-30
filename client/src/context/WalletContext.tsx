@@ -1,5 +1,6 @@
 import React, { createContext, useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../lib/supabaseSafe';
+import { v4 as uuidv4 } from 'uuid';
 import walletApi from '../api/walletApi';
 import type { 
     WalletEntry, 
@@ -61,10 +62,10 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setError(null);
 
         try {
-            const [walletsData, transactionsData, ratesData] = await Promise.all([
+            // 1. Fetch Core Data (High Priority)
+            const [walletsData, transactionsData] = await Promise.all([
                 walletApi.getWallets(),
-                walletApi.getTransactions(),
-                walletApi.getExchangeRates()
+                walletApi.getTransactions()
             ]);
 
             // Map raw wallets to Unified Balance Model (WalletEntry)
@@ -85,26 +86,31 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             setWallets(mappedWallets);
             setTransactions(Array.isArray(transactionsData?.transactions) ? transactionsData.transactions : []);
-            
-            // Handle Rates & Metadata (Phase 3 Regime Aware)
-            if (ratesData?.rates) {
-                setRates(ratesData.rates);
-                setRateMeta(ratesData.metadata || {});
-                setEvaluationId(ratesData.evaluationId);
-                setFrozenAssets(ratesData.frozenAssets);
-                
-                // Extract regime from any metadata entry (global signal)
-                const firstMeta = Object.values(ratesData.metadata || {})[0] as Record<string, unknown> | undefined;
-                setRegime(firstMeta?.regime);
-            } else if (typeof ratesData === 'object') {
-                // Compatibility for old simple rate objects
-                setRates(ratesData as unknown as Record<string, number>);
+
+            // 2. Clear initial loading state once core data is ready
+            setLoading(false);
+
+            // 3. Fetch Rates (Secondary Priority - Non-blocking)
+            try {
+                const ratesData = await walletApi.getExchangeRates();
+                if (ratesData?.rates) {
+                    setRates(ratesData.rates);
+                    setRateMeta(ratesData.metadata || {});
+                    setEvaluationId(ratesData.evaluationId);
+                    setFrozenAssets(ratesData.frozenAssets);
+                    
+                    const firstMeta = Object.values(ratesData.metadata || {})[0] as Record<string, unknown> | undefined;
+                    setRegime(firstMeta?.regime);
+                } else if (typeof ratesData === 'object') {
+                    setRates(ratesData as unknown as Record<string, number>);
+                }
+            } catch (rateErr) {
+                console.warn('Failed to fetch latest rates, using LKG (if any):', rateErr);
             }
         } catch (err) {
             console.error('Error fetching wallet data:', err);
             setError(err instanceof Error ? err.message : 'Failed to load wallet data');
         } finally {
-            setLoading(false);
             fetchingRef.current = false;
         }
     }, [user, profile, authReady]);
@@ -238,11 +244,15 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const sendFunds = async (data: InternalTransferRequest & { captchaToken?: string }) => {
         try {
-            // Generate idempotency key if not provided
-            const idempotencyKey = data.idempotencyKey || `transfer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            // Generate idempotency key if not provided (Institutional Standard: UUID v4)
+            const idempotencyKey = data.idempotencyKey || uuidv4();
             await walletApi.internalTransfer({ ...data, idempotencyKey });
             toast.success(`Successfully sent ${data.amount} ${data.currency}`);
-            await fetchData(); // Refresh balances immediately
+            
+            // Background processing lag: Wait 2.5 seconds before refreshing to allow causal worker to settle
+            setTimeout(async () => {
+                await fetchData();
+            }, 2500);
         } catch (err: unknown) {
             console.error('Send funds error:', err);
             const message = err instanceof Error ? err.message : 'Failed to send funds';
@@ -253,8 +263,8 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const withdraw = async (data: WithdrawalRequest) => {
         try {
-            // Generate idempotency key if not provided
-            const idempotencyKey = data.idempotencyKey || `withdraw_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            // Generate idempotency key if not provided (Institutional Standard: UUID v4)
+            const idempotencyKey = data.idempotencyKey || uuidv4();
             await walletApi.withdraw({ ...data, idempotencyKey });
             toast.success(`Withdrawal request submitted for ${data.amount} ${data.currency}`);
             await fetchData();

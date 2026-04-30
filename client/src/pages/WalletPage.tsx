@@ -278,7 +278,7 @@ function WalletContent() {
 
                            <BankAccountCard />
                            
-                           <WalletAllocationChart wallets={wallets} rates={financialView.ratesReady ? {} : {}} /> 
+                           <WalletAllocationChart wallets={wallets} rates={liveRates} /> 
                            <LedgerTrail refreshKey={refreshKey} />
                         </div>
                     </div>

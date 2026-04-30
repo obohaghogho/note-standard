@@ -4,14 +4,6 @@ import { Button } from '../common/Button';
 import walletApi from '../../api/walletApi';
 import toast from 'react-hot-toast';
 
-interface ApiError {
-    response?: {
-        status: number;
-        data?: {
-            error?: string;
-        };
-    };
-}
 
 interface BankAccount {
     currency: string;
@@ -48,25 +40,38 @@ export const BankAccountCard: React.FC = () => {
         bank_address: ''
     });
 
-    const fetchAccount = async (currency: string) => {
+    const fetchAccount = async (currency: string, signal?: AbortSignal) => {
         try {
             setLoading(true);
-            const data = await walletApi.getBankAccount(currency);
-            setAccount(data);
-        } catch (err) {
-            const apiErr = err as ApiError;
-            if (apiErr.response?.status === 404) {
-                setAccount(null);
-            } else {
-                console.error('Failed to fetch bank account:', err);
-            }
+            // Returns null when no account found (404), data otherwise
+            const data = await walletApi.getBankAccount(currency, signal);
+            if (signal?.aborted) return;
+            setAccount(data);  // null = "Add your account" empty state
+        } catch (err: unknown) {
+            if (signal?.aborted) return;
+            // Ignore AbortError / CanceledError — expected when switching tabs quickly
+            const errName = (err as { name?: string })?.name;
+            const errCode = (err as { code?: string })?.code;
+            if (errName === 'AbortError' || errName === 'CanceledError' || errCode === 'ERR_CANCELED') return;
+
+            // Only genuine server errors reach here
+            console.error('Failed to fetch bank account:', err);
+            toast.error(`Connection issue while loading ${currency} details. Please refresh.`);
+            setAccount(null);
         } finally {
-            setLoading(false);
+            if (!signal?.aborted) {
+                setLoading(false);
+            }
         }
     };
 
     useEffect(() => {
-        fetchAccount(selectedCurrency);
+        const controller = new AbortController();
+        fetchAccount(selectedCurrency, controller.signal);
+        
+        return () => {
+            controller.abort();
+        };
     }, [selectedCurrency]);
 
     const handleCurrencyChange = (curr: string) => {
@@ -142,56 +147,56 @@ export const BankAccountCard: React.FC = () => {
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase">Account Holder</label>
-                                <input required value={formData.account_holder} onChange={e => setFormData({...formData, account_holder: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:border-purple-500/50 outline-none" />
+                                <label htmlFor="account_holder" className="text-[10px] font-bold text-gray-400 uppercase">Account Holder</label>
+                                <input id="account_holder" name="account_holder" required value={formData.account_holder} onChange={e => setFormData({...formData, account_holder: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:border-purple-500/50 outline-none" />
                             </div>
                             <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase">Bank Name</label>
-                                <input required value={formData.bank_name} onChange={e => setFormData({...formData, bank_name: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:border-purple-500/50 outline-none" />
+                                <label htmlFor="bank_name" className="text-[10px] font-bold text-gray-400 uppercase">Bank Name</label>
+                                <input id="bank_name" name="bank_name" required value={formData.bank_name} onChange={e => setFormData({...formData, bank_name: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:border-purple-500/50 outline-none" />
                             </div>
                         </div>
 
                         <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase">Account Number</label>
-                            <input required type="password" value={formData.account_number} onChange={e => setFormData({...formData, account_number: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:border-purple-500/50 outline-none" />
+                            <label htmlFor="account_number" className="text-[10px] font-bold text-gray-400 uppercase">Account Number</label>
+                            <input id="account_number" name="account_number" required type="password" value={formData.account_number} onChange={e => setFormData({...formData, account_number: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:border-purple-500/50 outline-none" />
                         </div>
 
                         {selectedCurrency !== 'USD' && (
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase">IBAN</label>
-                                    <input required value={formData.iban} onChange={e => setFormData({...formData, iban: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:border-purple-500/50 outline-none" />
+                                    <label htmlFor="iban" className="text-[10px] font-bold text-gray-400 uppercase">IBAN</label>
+                                    <input id="iban" name="iban" required value={formData.iban} onChange={e => setFormData({...formData, iban: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:border-purple-500/50 outline-none" />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase">SWIFT / BIC</label>
-                                    <input required value={formData.swift_code} onChange={e => setFormData({...formData, swift_code: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:border-purple-500/50 outline-none" />
+                                    <label htmlFor="swift_code" className="text-[10px] font-bold text-gray-400 uppercase">SWIFT / BIC</label>
+                                    <input id="swift_code" name="swift_code" required value={formData.swift_code} onChange={e => setFormData({...formData, swift_code: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:border-purple-500/50 outline-none" />
                                 </div>
                             </div>
                         )}
 
                         {selectedCurrency === 'GBP' && (
                             <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase">Sort Code</label>
-                                <input required value={formData.sort_code} onChange={e => setFormData({...formData, sort_code: e.target.value})} placeholder="6 digits" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:border-purple-500/50 outline-none" />
+                                <label htmlFor="sort_code" className="text-[10px] font-bold text-gray-400 uppercase">Sort Code</label>
+                                <input id="sort_code" name="sort_code" required value={formData.sort_code} onChange={e => setFormData({...formData, sort_code: e.target.value})} placeholder="6 digits" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:border-purple-500/50 outline-none" />
                             </div>
                         )}
 
                         {selectedCurrency === 'USD' && (
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase">ACH Routing</label>
-                                    <input required value={formData.ach_routing} onChange={e => setFormData({...formData, ach_routing: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:border-purple-500/50 outline-none" />
+                                    <label htmlFor="ach_routing" className="text-[10px] font-bold text-gray-400 uppercase">ACH Routing</label>
+                                    <input id="ach_routing" name="ach_routing" required value={formData.ach_routing} onChange={e => setFormData({...formData, ach_routing: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:border-purple-500/50 outline-none" />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase">Wire Routing</label>
-                                    <input required value={formData.wire_routing} onChange={e => setFormData({...formData, wire_routing: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:border-purple-500/50 outline-none" />
+                                    <label htmlFor="wire_routing" className="text-[10px] font-bold text-gray-400 uppercase">Wire Routing</label>
+                                    <input id="wire_routing" name="wire_routing" required value={formData.wire_routing} onChange={e => setFormData({...formData, wire_routing: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:border-purple-500/50 outline-none" />
                                 </div>
                             </div>
                         )}
 
                         <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase">Bank Address</label>
-                            <input required value={formData.bank_address} onChange={e => setFormData({...formData, bank_address: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:border-purple-500/50 outline-none" />
+                            <label htmlFor="bank_address" className="text-[10px] font-bold text-gray-400 uppercase">Bank Address</label>
+                            <input id="bank_address" name="bank_address" required value={formData.bank_address} onChange={e => setFormData({...formData, bank_address: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:border-purple-500/50 outline-none" />
                         </div>
 
                         <Button type="submit" disabled={submitting} className="w-full bg-purple-600 hover:bg-purple-500 h-11">

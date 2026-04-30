@@ -100,6 +100,11 @@ export default function DashboardHome() {
 
     // Fetch real trend data for the chart
     useEffect(() => {
+        if (!user) {
+            setTrendData([]);
+            return;
+        }
+
         const fetchTrends = async () => {
             try {
                 const api = (await import('../../api/axiosInstance')).default;
@@ -113,7 +118,7 @@ export default function DashboardHome() {
             }
         };
         fetchTrends();
-    }, []);
+    }, [user]);
 
     const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
 

@@ -39,7 +39,7 @@ function toDecimal(val) {
  * Safely parses a value into a precision string
  */
 function parseSafe(amount) {
-    return toDecimal(amount).toFixed(CALCULATION_DECIMALS);
+    return toDecimal(amount);
 }
 
 /**

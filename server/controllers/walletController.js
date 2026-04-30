@@ -160,20 +160,30 @@ exports.withdraw = async (req, res) => {
 
     const isCrypto = ["BTC", "ETH", "USDT", "USDC", "TRX", "POLYGON"].includes(String(currency).toUpperCase());
 
+    // Build a structured destination object so payoutWorker can extract
+    // bankCode, accountNumber, accountName etc. correctly when dispatching to Fincra.
+    const destination = isCrypto
+      ? { address: address, network: network || "native" }
+      : {
+          bankCode:      bank_code,
+          accountNumber: account_number,
+          accountName:   account_name,
+          bankName:      bank_name,
+          country:       country || (currency === "NGN" ? "NG" : "US"),
+          swiftCode:     swift_code,
+          branchCode:    branch_code,
+        };
+
     const mappedData = {
-      type: isCrypto ? "crypto" : "fiat",
+      // 'method' is what payoutService.createPayoutRequest reads for payout_method.
+      // 'type' is kept for backward-compat in walletService.
+      method: isCrypto ? "crypto" : "bank_transfer",
+      type:   isCrypto ? "crypto" : "fiat",
       currency,
       amount,
       network: network || "native",
-      destination: address || account_number,
-      bankId: account_number, 
-      bankCode: bank_code,
-      bankName: bank_name,
-      accountName: account_name,
-      country,
-      branchCode: branch_code,
-      swiftCode: swift_code,
-      idempotencyKey
+      destination,
+      client_idempotency_key: idempotencyKey,
     };
 
     const result = await walletService.withdraw(req.user.id, mappedData);
@@ -231,17 +241,54 @@ exports.getAddress = async (req, res) => {
 
 exports.getLedger = async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit) || 10;
+    const limit = parseInt(req.query.limit) || 20;
+    
+    // ── Task: V6 Ledger Activity Integration ─────────────────────
+    // Fetch directly from the sovereign v6 ledger to ensure 
+    // real-time activity reflection.
     const { data, error } = await supabase
-      .from("ledger_entries")
-      .select("*")
+      .from("ledger_entries_v6")
+      .select(`
+        id,
+        amount,
+        currency,
+        created_at,
+        side,
+        ledger_transactions_v6!inner(
+          type,
+          status,
+          idempotency_key
+        )
+      `)
       .eq("user_id", req.user.id)
       .order("created_at", { ascending: false })
       .limit(limit);
 
     if (error) throw error;
-    res.json({ entries: data || [] });
+
+    // Map to legacy format expected by the frontend
+    const entries = (data || []).map(item => {
+      const rawType = item.ledger_transactions_v6.type;
+      const displayType = (rawType === 'TRANSFER' || rawType === 'INTERNAL_TRANSFER') 
+        ? 'Digital Assets Purchase' 
+        : rawType;
+
+      return {
+        id: item.id,
+        user_id: req.user.id,
+        amount: item.amount,
+        currency: item.currency,
+        type: displayType,
+        activity_type: displayType, // UI uses this for filtering
+        status: item.ledger_transactions_v6.status,
+        reference: item.ledger_transactions_v6.idempotency_key,
+        created_at: item.created_at
+      };
+    });
+
+    res.json({ entries });
   } catch (err) {
+    console.error("[WalletController] getLedger Error:", err);
     res.status(500).json({ error: err.message });
   }
 };

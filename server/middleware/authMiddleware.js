@@ -1,5 +1,9 @@
 const supabase = require("../config/database");
 
+// Simple in-memory profile cache to reduce DB load
+const profileCache = new Map(); // userId -> { profile, expiresAt }
+const PROFILE_CACHE_TTL = 60000; // 60 seconds
+
 /**
  * Helper to fetch user with retry logic for Supabase Auth
  * Mitigates transient network/service availability issues
@@ -96,15 +100,24 @@ const requireAuth = async (req, res, next) => {
 
     req.user = data.user;
 
-    // Populate user profile for downstream use (plan, role, etc.)
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("id, role, status, plan, email, username")
-      .eq("id", data.user.id)
-      .single();
+    // Populate user profile for downstream use (plan, role, etc.) with caching
+    const cached = profileCache.get(data.user.id);
+    if (cached && cached.expiresAt > Date.now()) {
+      req.userProfile = cached.profile;
+    } else {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id, role, status, plan, email, username")
+        .eq("id", data.user.id)
+        .single();
 
-    if (profile) {
-      req.userProfile = profile;
+      if (profile) {
+        req.userProfile = profile;
+        profileCache.set(data.user.id, {
+          profile,
+          expiresAt: Date.now() + PROFILE_CACHE_TTL
+        });
+      }
     }
 
     next();

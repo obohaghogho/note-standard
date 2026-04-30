@@ -24,6 +24,7 @@ DROP TRIGGER IF EXISTS trg_wallets_upsert_logic ON public.wallets_store CASCADE;
 UPDATE public.wallets_store w
 SET 
     balance = GREATEST(0, sub.truth_sum),
+    available_balance = GREATEST(0, sub.truth_sum),
     updated_at = NOW()
 FROM (
     SELECT wallet_id, SUM(amount) as truth_sum
@@ -47,7 +48,16 @@ BEGIN
     WHERE wallet_id = p_wallet_id;
 
     UPDATE public.wallets_store
-    SET balance = GREATEST(0, v_true_balance), updated_at = NOW()
+    SET 
+        balance = GREATEST(0, v_true_balance),
+        available_balance = GREATEST(0, v_true_balance),
+        updated_at = NOW()
+    WHERE id = p_wallet_id;
+
+    UPDATE public.wallets_v6
+    SET 
+        balance = GREATEST(0, v_true_balance),
+        available_balance = GREATEST(0, v_true_balance)
     WHERE id = p_wallet_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

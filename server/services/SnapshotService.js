@@ -60,21 +60,17 @@ class SnapshotService {
     return crypto.createHash("sha256").update(JSON.stringify(sortedRates)).digest("hex");
   }
 
-    /**
-     * Main job: Atomic Snapshot generation (v6.x+ Truth Resilience)
-     * @param {Object} injectedResults - Phase 4 Chaos Injection (Optional)
-     */
-    async generateMarketSnapshot(injectedResults = null) {
+    async generateMarketSnapshot(injectedResults = null, context = 'EXECUTION') {
         try {
             const symbols = Object.keys(this.coinMapping);
             
             // 1a. Temporal Integrity Sampling (Phase 5)
             const temporal = await hybridTIM.sampleMetrics();
             const timeIntegrityScore = temporal.timeIntegrityScore;
-
+ 
             // 1b. Atomic Multi-Provider Fetch (CONSENSUS BASE)
             // Phase 4: Use injected results if provided (Chaos Kernel Path)
-            const results = injectedResults || await this._fetchMultiSource(symbols);
+            const results = injectedResults || await this._fetchMultiSource(symbols, 0, context);
             
             // 1c. Probabilistic Correlation Scoring (Phase 5 PCS)
             const pcsScore = await correlationPCS.calculatePCS(results, this.PCS_SEED);
@@ -104,12 +100,12 @@ class SnapshotService {
             const lastRePoll = cache.get("snapshot_last_emergency_repoll") || 0;
             const rePollCooldownActive = (Date.now() - lastRePoll) < 300000; // 5 minute hard cooldown
 
-            if (confidence < 0.6 && !this.rePollCycleLock && !injectedResults && !isBreakerActive && !rePollCooldownActive) {
+            if (confidence < 0.6 && !this.rePollCycleLock && !injectedResults && !isBreakerActive && !rePollCooldownActive && context !== 'DISPLAY') {
                 logger.warn(`[SnapshotService] Low Confidence (${confidence.toFixed(2)}) detected. Triggering Emergency Re-poll...`);
                 this.rePollCycleLock = true;
                 cache.set("snapshot_last_emergency_repoll", Date.now(), 600);
                 try {
-                    return await this.generateMarketSnapshot(); // RECURSION POINT (Locked)
+                    return await this.generateMarketSnapshot(null, context); // RECURSION POINT (Locked)
                 } finally {
                     this.rePollCycleLock = false;
                 }
@@ -182,6 +178,12 @@ class SnapshotService {
         .limit(1);
       
       snapshot = data?.[0];
+
+      // If still no snapshot, trigger an immediate generation
+      if (!snapshot) {
+          logger.info(`[SnapshotService] No snapshots in DB. Triggering first-run generation for context: ${context}`);
+          snapshot = await this.generateMarketSnapshot(null, context);
+      }
     }
 
     if (!snapshot) return { rates: {}, mode: 'INVALID', score: 0 };
@@ -240,7 +242,7 @@ class SnapshotService {
   /**
    * Internal Multiprovider Fetch with Jittered Backoff (v6.0 Stability)
    */
-   async _fetchMultiSource(symbols, retryCount = 0) {
+    async _fetchMultiSource(symbols, retryCount = 0, context = 'EXECUTION') {
     try {
       const breakerTrippedUntil = cache.get("breaker_tripped_until") || 0;
       if (Date.now() < breakerTrippedUntil) {
@@ -248,23 +250,28 @@ class SnapshotService {
           return { symbols, cgPrices: {}, erpRates: 0, nowRates: symbols.map(() => null), isThrottled: true };
       }
 
+      // Fast-Path: Reduced timeout for DISPLAY context to prevent dashboard hangs
+      const fetchTimeout = context === 'DISPLAY' ? 2500 : 10000;
+
       const [cgPrices, erpRates] = await Promise.all([
-        coingeckoProvider.getPrices(Object.values(this.coinMapping)),
-        exchangeRateProvider.getAllRates("USD")
+        coingeckoProvider.getPrices(Object.values(this.coinMapping), "usd", fetchTimeout),
+        // Fiat rates (Frankfurter/ER-API) usually fast, but we enforce speed for DISPLAY
+        exchangeRateProvider.getAllRates("USD") 
       ]);
 
       const nowRates = await Promise.all(symbols.map(s => 
-        nowpaymentsProvider.getRate(s, "USD").catch(() => null)
+        // NowPayments respects the fetchTimeout (e.g. 2.5s for DISPLAY)
+        nowpaymentsProvider.getRate(s, "USD", 1, fetchTimeout).catch(() => null)
       ));
 
       // ── Task 429: Check for systemic rate limiting signals ─────────
       const has429 = !cgPrices || Object.keys(cgPrices).length === 0;
       
-      if (has429 && retryCount < 3) {
-        const delay = Math.pow(2, retryCount) * 2000 + Math.random() * 1000;
+      if (has429 && retryCount < 3 && context !== 'DISPLAY') {
+        const delay = Math.pow(2, retryCount) * 1000 + Math.random() * 500;
         logger.warn(`[SnapshotService] Rate limit (429) suspected. Backing off for ${Math.round(delay)}ms...`);
         await new Promise(r => setTimeout(r, delay));
-        return this._fetchMultiSource(symbols, retryCount + 1);
+        return this._fetchMultiSource(symbols, retryCount + 1, context);
       }
 
       return { symbols, cgPrices, erpRates, nowRates };

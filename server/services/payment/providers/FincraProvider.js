@@ -55,7 +55,10 @@ class FincraProvider extends BaseProvider {
       timeout: 30000,
       headers: {
         "api-key":       this.secretKey,
+        "apiKey":        this.secretKey,
+        "Authorization": `Bearer ${this.secretKey}`,
         "x-pub-key":     this.publicKey,
+        "x-business-id": this.businessId,
         "Content-Type":  "application/json",
         "Accept":        "application/json",
       },
@@ -121,10 +124,16 @@ class FincraProvider extends BaseProvider {
         name:  safeName,
         email: safeEmail,
       },
-      amount:         Math.floor(amount),
+      amount:         Number(Number(amount).toFixed(2)),
       currency:       String(currency).toUpperCase(),
       reference:      String(reference),
       redirectUrl:    String(callbackUrl),
+      description:    metadata.description || "Digital Assets Purchase",
+      feeBearer:      "business", // Matched with scratch scripts for stability
+      settlementDestination: "wallet",
+      paymentMethods: ["card"],
+      business:       this.businessId,
+      metadata:       safeMetadata,
     };
 
     logger.info(`[Fincra] Creating checkout session`, {

@@ -40,8 +40,13 @@ class PayoutWorker {
                 .limit(10); // Batch size to prevent memory spikes
 
             if (error) throw error;
-            if (!pending || pending.length === 0) return;
+            if (!pending || pending.length === 0) {
+                // logger.info("[PayoutWorker] No approved payouts to dispatch.");
+                return;
+            }
 
+            logger.info(`[PayoutWorker] Found ${pending.length} approved payouts to dispatch.`);
+            
             for (const payout of pending) {
                 if (currentJobs.has(payout.id)) continue;
                 
@@ -51,7 +56,7 @@ class PayoutWorker {
                 }
 
                 currentJobs.add(payout.id);
-                this.executeDispatch(payout).finally(() => {
+                await this.executeDispatch(payout).finally(() => {
                     currentJobs.delete(payout.id);
                 });
             }
@@ -100,16 +105,24 @@ class PayoutWorker {
 
             // 4. STEP C: FINALITY PROMOTION (SENT -> CONFIRMING)
             if (result.success) {
-                await payoutService.updatePayoutState(payout.id, 'SENT', {
-                    latency: result.latency,
-                    rawResponse: result.rawResponse,
-                    providerReference: result.payoutId
-                });
+                if (result.status === 'FINISHED' || result.status === 'COMPLETED') {
+                    await payoutService.updatePayoutState(payout.id, 'COMPLETED', result);
+                } else if (result.status === 'PROCESSING' || result.status === 'SENDING') {
+                    await payoutService.updatePayoutState(payout.id, 'SENT', result);
+                } else if (result.status === 'WAITING_FOR_VERIFICATION') {
+                    logger.warn(`[PayoutWorker] Payout ${payout.id} requires 2FA Verification at NOWPayments Dashboard.`);
+                    await payoutService.updatePayoutState(payout.id, 'CONFIRMING', { ...result, message: '2FA Verification Required at NOWPayments' });
+                } else {
+                    await payoutService.updatePayoutState(payout.id, 'SENT', result);
+                }
                 
-                // Immediate promotion to CONFIRMING for deep finality sweep
-                await payoutService.updatePayoutState(payout.id, 'CONFIRMING');
+                // Immediate promotion to CONFIRMING for deep finality sweep if not already completed
+                const { data: current } = await supabase.from('payout_requests').select('status').eq('id', payout.id).single();
+                if (current && current.status !== 'COMPLETED') {
+                    await payoutService.updatePayoutState(payout.id, 'CONFIRMING');
+                }
                 
-                logger.info(`[PayoutWorker] Payout ${payout.id} successfully sent to provider. Reference: ${result.payoutId}`);
+                logger.info(`[PayoutWorker] Payout ${payout.id} successfully processed. Final Status: ${current?.status || 'SENT'}`);
             } else {
                 // If API rejected the call (e.g. 400 Bad Request)
                 await payoutService.updatePayoutState(payout.id, 'FAILED_FINAL', {

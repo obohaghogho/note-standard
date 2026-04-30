@@ -309,14 +309,16 @@ export const Signup = () => {
                                     </div>
 
                                     {/* reCAPTCHA Integration */}
-                                    <div className="flex justify-center pt-2 overflow-hidden rounded-xl">
-                                        <ReCAPTCHA
-                                            ref={recaptchaRef}
-                                            theme="dark"
-                                            sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || ""}
-                                            onChange={(token) => setCaptchaToken(token)}
-                                        />
-                                    </div>
+                                    {import.meta.env.PROD && (
+                                        <div className="flex justify-center pt-2 overflow-hidden rounded-xl">
+                                            <ReCAPTCHA
+                                                ref={recaptchaRef}
+                                                theme="dark"
+                                                sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || ""}
+                                                onChange={(token) => setCaptchaToken(token)}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -338,7 +340,7 @@ export const Signup = () => {
                                     fullWidth 
                                     className="h-12 text-sm font-bold rounded-xl active:scale-95 transition-all shadow-lg shadow-primary/20"
                                     loading={loading}
-                                    disabled={loading || (step === 'security' && (!termsAccepted || !captchaToken)) || step === 'success'}
+                                    disabled={loading || (step === 'security' && !termsAccepted) || (step === 'security' && import.meta.env.PROD && !captchaToken) || step === 'success'}
                                 >
                                     {loading ? (
                                         <div className="flex items-center gap-2">

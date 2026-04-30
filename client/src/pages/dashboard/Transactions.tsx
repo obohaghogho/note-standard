@@ -29,7 +29,7 @@ interface Transaction {
     display_label?: string;
     provider?: string;
     created_at: string;
-    metadata?: { to_currency?: string; sender_address?: string; receiver_address?: string };
+    metadata?: { to_currency?: string; sender_address?: string; receiver_address?: string; error?: string };
 }
 
 interface TransactionDetailModalProps {
@@ -61,11 +61,15 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({ tx, onC
                             tx.status === 'COMPLETED' || tx.status === 'confirmed' ? "text-green-500 bg-green-500/10 border-green-500/20" : 
                             tx.status === 'FAILED' ? "text-rose-500 bg-rose-500/10 border-rose-500/20" : "text-amber-500 bg-amber-500/10 border-amber-500/20"
                         )}>
-                            {tx.status === 'COMPLETED' || tx.status === 'confirmed' ? <CheckCircle2 size={12} /> : 
-                             tx.status === 'FAILED' ? <XCircle size={12} /> : <Clock size={12} className="animate-pulse" />}
+                            {tx.status === 'COMPLETED' || tx.status === 'confirmed' ? <CheckCircle2 size={12} /> : tx.status === 'FAILED' ? <XCircle size={12} /> : <Clock size={12} className="animate-pulse" />}
                             {tx.status}
                         </div>
                     </div>
+                    {tx.status === 'FAILED' && tx.metadata?.error && (
+                        <p className="text-[10px] text-rose-500/80 mt-[-15px] italic text-right px-1">
+                            {tx.metadata.error}
+                        </p>
+                    )}
 
                     <div className="flex justify-between items-center">
                         <span className="text-gray-500 text-sm">Amount</span>

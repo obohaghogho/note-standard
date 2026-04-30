@@ -144,7 +144,7 @@ async function createBankDeposit(
   try {
     const { data, error } = await supabase
       .from("profiles")
-      .select("email, full_name")
+      .select("email, full_name, preferences")
       .eq("id", userId)
       .single();
     profile = data;
@@ -181,52 +181,75 @@ async function createBankDeposit(
   };
 
   let liveDetails = { ...selectedDetails };
-  try {
-    if (upCurrency === "NGN") {
-      try {
-        const PaystackProvider = require("./payment/providers/PaystackProvider");
-        const paystack = new PaystackProvider();
-        const virtualAccount = await paystack.getDedicatedAccount(profile.email, firstName, lastName, userPhone);
-        
-        liveDetails = {
-          bankName: virtualAccount.bankName,
-          accountNumber: virtualAccount.accountNumber,
-          accountName: virtualAccount.accountName,
-          note: "Funds are credited instantly after transfer",
-        };
-      } catch (err) {
-        console.error("[DepositService] NGN Virtual account generation failed:", err.message);
-      }
-    } else if (["USD", "EUR", "GBP"].includes(upCurrency)) {
-      try {
-        const hasFincra = process.env.FINCRA_SECRET_KEY && process.env.FINCRA_PUBLIC_KEY;
-        if (hasFincra) {
-          const FincraProvider = require("./payment/providers/FincraProvider");
-          const fincra = new FincraProvider();
-          const va = await fincra.createVirtualAccount({
-            currency: upCurrency, 
-            email: profile.email, 
-            firstName, 
-            lastName, 
-            phone: userPhone 
-          });
+  
+  // ── Optimization: Cache Virtual Accounts in Profile Preferences ──
+  const preferences = profile.preferences || {};
+  const cachedVA = (preferences.virtual_accounts || {})[upCurrency];
 
-          if (va) {
-            liveDetails = {
-              bankName: va.bankName,
-              accountNumber: va.accountNumber,
-              accountName: va.accountName,
-              routingNumber: va.routingNumber || va.swiftCode,
-              note: `Funds are credited after ${upCurrency} settlement (1-3 days)`,
-            };
-          }
+  if (cachedVA) {
+      logger.info(`[DepositService] Using cached virtual account for ${upCurrency} (User: ${userId})`);
+      liveDetails = { ...cachedVA };
+  } else {
+    try {
+      if (upCurrency === "NGN") {
+        try {
+          const PaystackProvider = require("./payment/providers/PaystackProvider");
+          const paystack = new PaystackProvider();
+          const virtualAccount = await paystack.getDedicatedAccount(profile.email, firstName, lastName, userPhone);
+          
+          liveDetails = {
+            bankName: virtualAccount.bankName,
+            accountNumber: virtualAccount.accountNumber,
+            accountName: virtualAccount.accountName,
+            note: "Funds are credited instantly after transfer",
+          };
+
+          // Store in cache
+          const updatedVAs = { ...(preferences.virtual_accounts || {}), [upCurrency]: liveDetails };
+          await supabase.from("profiles").update({ 
+              preferences: { ...preferences, virtual_accounts: updatedVAs } 
+          }).eq("id", userId);
+          
+        } catch (err) {
+          console.error("[DepositService] NGN Virtual account generation failed:", err.message);
         }
-      } catch (err) {
-        console.error(`[DepositService] ${upCurrency} Virtual account generation error:`, err);
+      } else if (["USD", "EUR", "GBP"].includes(upCurrency)) {
+        try {
+          const hasFincra = process.env.FINCRA_SECRET_KEY && process.env.FINCRA_PUBLIC_KEY;
+          if (hasFincra) {
+            const FincraProvider = require("./payment/providers/FincraProvider");
+            const fincra = new FincraProvider();
+            const va = await fincra.createVirtualAccount({
+              currency: upCurrency, 
+              email: profile.email, 
+              firstName, 
+              lastName, 
+              phone: userPhone 
+            });
+
+            if (va) {
+              liveDetails = {
+                bankName: va.bankName,
+                accountNumber: va.accountNumber,
+                accountName: va.accountName,
+                routingNumber: va.routingNumber || va.swiftCode,
+                note: `Funds are credited after ${upCurrency} settlement (1-3 days)`,
+              };
+
+              // Store in cache
+              const updatedVAs = { ...(preferences.virtual_accounts || {}), [upCurrency]: liveDetails };
+              await supabase.from("profiles").update({ 
+                  preferences: { ...preferences, virtual_accounts: updatedVAs } 
+              }).eq("id", userId);
+            }
+          }
+        } catch (err) {
+          console.error(`[DepositService] ${upCurrency} Virtual account generation error:`, err);
+        }
       }
+    } catch (err) {
+      logger.warn(`[DepositService] Global virtual account generation fail: ${err.message}`);
     }
-  } catch (err) {
-    logger.warn(`[DepositService] Global virtual account generation fail: ${err.message}`);
   }
 
 

@@ -2,6 +2,8 @@ const supabase = require('../config/database');
 const logger = require('../utils/logger');
 const controlPlane = require('../services/payment/ControlPlaneService');
 const stateMachine = require('../services/payment/StateMachineKernel');
+const SystemState = require('../config/SystemState');
+const realtime = require('../services/realtimeService');
 
 /**
  * Causal Worker (Fenced Execution)
@@ -49,7 +51,7 @@ class CausalWorker {
         const { error } = await supabase
             .from('system_shard_leases')
             .update({ last_heartbeat: new Date().toISOString() })
-            .eq('lease_id', this.lease.lease_id);
+            .eq('shard_id', this.shardId);
 
         if (error) {
             logger.error(`[CausalWorker] Heartbeat failed for Shard ${this.shardId}. Stopping.`);
@@ -79,7 +81,17 @@ class CausalWorker {
             .order('sequence_id', { ascending: true })
             .limit(10);
 
-        if (error || !intents || intents.length === 0) return;
+        if (error) {
+            logger.error(`[CausalWorker] Shard ${this.shardId} fetch error:`, error.message);
+            return;
+        }
+        
+        if (!intents || intents.length === 0) {
+            logger.info(`[CausalWorker] Shard ${this.shardId} no pending intents.`);
+            return;
+        }
+
+        logger.info(`[CausalWorker] Shard ${this.shardId} found ${intents.length} intents.`);
 
         for (const intent of intents) {
             await this.executeIntent(intent);
@@ -107,7 +119,7 @@ class CausalWorker {
                     event_type: intent.intent_type,
                     expected_version: intent.expected_version,
                     intent_id: intent.sequence_id,
-                    causal_group_id: intent.causal_group_id,
+                    causal_group_id: intent.payload?.causal_group_id,
                     payload: intent.payload,
                     epoch_token: this.lease?.epoch_id, // Absolute Fencing Token
                 });
@@ -131,7 +143,26 @@ class CausalWorker {
                 })
                 .eq('sequence_id', intent.sequence_id);
 
-            logger.info(`[CausalWorker] Shard ${this.shardId} SUCCESS: Intent Seq:${intent.sequence_id} committed.`);
+            // 5. Instantly Sync Materialized Balance (Fixes UI Staleness)
+            const walletToSync = intent.entity_id || intent.wallet_id;
+            if (walletToSync) {
+                await supabase.rpc('sync_wallet_balance_from_ledger', { p_wallet_id: walletToSync });
+                
+                // 6. Proactive Real-time Push
+                // Find the user_id for this wallet to notify them
+                const { data: w } = await supabase.from('wallets_store').select('user_id, currency, balance').eq('id', walletToSync).single();
+                if (w) {
+                    await realtime.emitToUser(w.user_id, 'balance_updated', {
+                        userId: w.user_id,
+                        walletId: walletToSync,
+                        currency: w.currency,
+                        balance: w.balance,
+                        status: 'COMPLETED'
+                    });
+                }
+            }
+
+            logger.info(`[CausalWorker] Shard ${this.shardId} SUCCESS: Intent Seq:${intent.sequence_id} committed and synced.`);
 
         } catch (err) {
             logger.error(`[CausalWorker] Shard ${this.shardId} FAILURE for Intent Seq:${intent.sequence_id}:`, err.message);
