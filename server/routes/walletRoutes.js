@@ -8,6 +8,7 @@ const {
   transactionLimiter,
   withdrawalLimiter,
   apiLimiter,
+  previewLimiter,
 } = require("../middleware/rateLimiter");
 const { requireRecaptcha } = require("../middleware/securityMiddleware");
 
@@ -52,7 +53,7 @@ router.post(
 
 // Swap Endpoints (Consolidated)
 router.get("/exchange-rates", swapController.getRates);
-router.post("/swap/preview", transactionLimiter, swapController.preview);
+router.post("/swap/preview", previewLimiter, swapController.preview);
 router.post(
   "/swap",
   transactionLimiter,

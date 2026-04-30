@@ -19,12 +19,24 @@ exports.authLimiter = rateLimit({
 
 /**
  * Strict Transaction Limiter
- * 10 requests per window for high-value actions
+ * Increased for development/production balance (50 requests per window)
  */
 exports.transactionLimiter = rateLimit({
   windowMs: DEFAULT_WINDOW_MS,
-  max: 10,
+  max: 50,
   message: { error: "Too many transaction attempts. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
+ * Preview Limiter
+ * Higher limit for previews (100 per window) as they are called frequently during UI interaction
+ */
+exports.previewLimiter = rateLimit({
+  windowMs: DEFAULT_WINDOW_MS,
+  max: 100,
+  message: { error: "Too many preview attempts. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
 });
