@@ -3,10 +3,10 @@
 *.error.log
 error.txt
 err_stack.txt
-*plan*
-*task*
-*walkthrough*
-*debug*
+*plan*.md
+*task*.md
+*walkthrough*.md
+*debug*.txt
 result.txt
 
 # Environment variables

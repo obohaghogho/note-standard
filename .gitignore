@@ -31,10 +31,10 @@ WALLET_README.md
 # Logs and temporary files
 *.log
 *error*
-*plan*
-*task*
-*walkthrough*
-*debug*
+*plan*.md
+*task*.md
+*walkthrough*.md
+*debug*.txt
 !client/src/pages/admin/AdminDebugTools.tsx
 result.txt
 *.txt
