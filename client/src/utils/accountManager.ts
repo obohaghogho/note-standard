@@ -173,5 +173,6 @@ export const getActiveAccountId = accountManager.getActiveAccountId.bind(account
 export const updateAccountTokens = accountManager.updateAccountTokens.bind(accountManager);
 export const isAccountSessionValid = accountManager.isAccountSessionValid.bind(accountManager);
 export const clearAccountStale = accountManager.clearAccountStale.bind(accountManager);
+export const getAllAccounts = accountManager.getAllAccounts.bind(accountManager);
 // Compatibility aliases
 export const updateAccountSession = updateAccountTokens;
