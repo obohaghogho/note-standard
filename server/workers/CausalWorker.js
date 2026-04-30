@@ -165,6 +165,13 @@ class CausalWorker {
             logger.info(`[CausalWorker] Shard ${this.shardId} SUCCESS: Intent Seq:${intent.sequence_id} committed and synced.`);
 
         } catch (err) {
+            const isFencingError = err.message.includes('FENCING_ERROR');
+            
+            if (isFencingError) {
+                logger.warn(`[CausalWorker] Shard ${this.shardId} STOPPED processing Seq:${intent.sequence_id} due to FENCING_ERROR. Intent remains pending.`);
+                throw err; // Re-throw to stop batch and avoid marking as failed
+            }
+
             logger.error(`[CausalWorker] Shard ${this.shardId} FAILURE for Intent Seq:${intent.sequence_id}:`, err.message);
             
             await supabase
