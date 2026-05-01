@@ -63,6 +63,7 @@ export interface ManualDeposit {
   currency: string;
   reference: string;
   proof_url?: string;
+  isUnified?: boolean;
   status: "pending" | "approved" | "rejected";
   admin_notes?: string;
   created_at: string;
@@ -268,10 +269,12 @@ const depositApi = {
    */
   approve: async (
     id: string,
-    adminNotes?: string
+    adminNotes?: string,
+    isUnified?: boolean
   ): Promise<{ message: string }> => {
     const response = await axiosInstance.patch(`/deposit/${id}/approve`, {
       adminNotes,
+      isUnified,
     });
     return response.data;
   },
@@ -281,10 +284,12 @@ const depositApi = {
    */
   reject: async (
     id: string,
-    adminNotes?: string
+    adminNotes?: string,
+    isUnified?: boolean
   ): Promise<{ message: string }> => {
     const response = await axiosInstance.patch(`/deposit/${id}/reject`, {
       adminNotes,
+      isUnified,
     });
     return response.data;
   },

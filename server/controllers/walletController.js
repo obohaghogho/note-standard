@@ -72,7 +72,9 @@ exports.depositCard = async (req, res, next) => {
     console.error("[WalletController] Card Deposit Error:", error);
     const isValidationError = error.message.includes("limit") ||
       error.message.includes("Maximum") ||
-      error.message.includes("must not exceed");
+      error.message.includes("must not exceed") ||
+      error.message.includes("unavailable") ||
+      error.message.includes("not supported");
 
     if (isValidationError) {
       return res.status(400).json({ error: error.message });
@@ -127,7 +129,9 @@ exports.depositTransfer = async (req, res, next) => {
     console.error("[WalletController] Bank Transfer Error:", error);
     const isValidationError = error.message.includes("limit") ||
       error.message.includes("Maximum") ||
-      error.message.includes("must not exceed");
+      error.message.includes("must not exceed") ||
+      error.message.includes("unavailable") ||
+      error.message.includes("not supported");
 
     if (isValidationError) {
       return res.status(400).json({ error: error.message });
@@ -138,6 +142,63 @@ exports.depositTransfer = async (req, res, next) => {
       details: error.response?.data || error.details || error.message,
       location: "walletController.depositTransfer"
     });
+  }
+};
+
+exports.submitDepositProof = async (req, res) => {
+  try {
+    const { reference, proof_url } = req.body;
+
+    if (!reference || !proof_url) {
+      return res.status(400).json({ error: "Reference and Proof URL are required" });
+    }
+
+    const { data: tx, error: findError } = await supabase
+      .from("transactions")
+      .select("id, metadata")
+      .or(`reference_id.eq.${reference},metadata->>display_ref.eq.${reference}`)
+      .single();
+
+    if (findError || !tx) {
+      return res.status(404).json({ error: "Transaction not found" });
+    }
+
+    const { error: updateError } = await supabase
+      .from("transactions")
+      .update({
+        metadata: {
+          ...tx.metadata,
+          proof_url,
+          proof_submitted_at: new Date().toISOString(),
+          status_note: "User submitted proof of payment"
+        },
+        status: "PROCESSING" // Move from PENDING to PROCESSING to signal admin review
+      })
+      .eq("id", tx.id);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    // Notify Admin (Implementation depends on your notification system)
+    try {
+      const { createNotification } = require("../services/notificationService");
+      // Find an admin user or use a system channel
+      await createNotification({
+        receiverId: "SYSTEM_ADMIN", // Placeholder or actual admin ID
+        type: "deposit_proof_submitted",
+        title: "New Deposit Proof",
+        message: `User submitted proof for transaction ${reference}`,
+        link: `/admin/transactions`
+      });
+    } catch (nErr) {
+      console.warn("Admin notification failed:", nErr.message);
+    }
+
+    res.json({ success: true, message: "Proof submitted successfully. Our team will verify it shortly." });
+  } catch (err) {
+    console.error("[WalletController] Submit Proof Error:", err);
+    res.status(500).json({ error: err.message });
   }
 };
 

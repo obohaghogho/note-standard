@@ -24,8 +24,29 @@ async function createCardDeposit(
 ) {
   const { toCurrency, toNetwork } = options;
   const upCurrency = currency.toUpperCase();
-  if (upCurrency === "BTC" || upCurrency === "ETH") {
-    throw new Error("BTC and ETH deposits are not supported via payment");
+  // --- UNIVERSAL USD CARD SUPPORT (DFOS v6.1) ---
+  // If the user wants to pay with EUR or GBP card, we convert to USD
+  // because Paystack handles USD better for international cards.
+  let activeAmount = amount;
+  let activeCurrency = upCurrency;
+  let gatewayOptions = { isCrypto: false };
+
+  if (["EUR", "GBP"].includes(upCurrency)) {
+    try {
+      const rate = await fxService.getRate(upCurrency, "USD");
+      // Add a small 1% buffer for FX volatility
+      const bufferedRate = math.multiply(rate, 1.01); 
+      const amountInUsd = math.multiply(amount, bufferedRate);
+      
+      gatewayOptions.gatewayCurrency = "USD";
+      gatewayOptions.gatewayAmount = parseFloat(math.formatSafe(amountInUsd));
+      
+      logger.info(`[DepositService] Converting ${amount} ${upCurrency} to ${gatewayOptions.gatewayAmount} USD for gateway routing.`);
+    } catch (fxErr) {
+      logger.warn(`[DepositService] FX conversion for gateway failed: ${fxErr.message}. Proceeding with native currency.`);
+    }
+  } else if (upCurrency === "BTC" || upCurrency === "ETH") {
+    throw new Error(`${upCurrency} deposits are not supported via payment`);
   }
 
   // Fetch user profile for email (Robust lookup with production fallbacks)
@@ -109,9 +130,7 @@ async function createCardDeposit(
       targetNetwork: toNetwork,
       customerName: profile.full_name || profile.username || profile.email.split("@")[0],
     },
-    {
-      isCrypto: false,
-    },
+    gatewayOptions,
   );
 }
 
@@ -279,7 +298,9 @@ async function createBankDeposit(
         bankName: payment.instructions.bank_name,
         accountNumber: payment.instructions.account_number,
         accountName: payment.instructions.account_name,
-        routingNumber: payment.instructions.swift_code || payment.instructions.iban,
+        swiftCode: payment.instructions.swift_code || null,
+        iban: payment.instructions.iban || null,
+        routingNumber: payment.instructions.routing_number || payment.instructions.sort_code || null,
         note: payment.instructions.additional_info || "Include reference in transfer narration",
       };
     }

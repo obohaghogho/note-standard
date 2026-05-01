@@ -315,6 +315,10 @@ export const AdminDashboard = () => {
                             <Users />
                             <span>Manage Users</span>
                         </Link>
+                        <Link to="/admin/manual-deposits" className="action-card">
+                            <CheckCircle />
+                            <span>Review Manual Deposits</span>
+                        </Link>
                     </div>
                 </section>
             </div>

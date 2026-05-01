@@ -141,7 +141,6 @@ export const walletApi = {
       return response.data;
   },
 
-  // Bank Transfer Deposit Initialization (Match UI signature)
   async depositTransfer(data: { 
       amount: number, 
       currency: string, 
@@ -150,6 +149,15 @@ export const walletApi = {
       toNetwork?: string
   }): Promise<BankDepositResponse> {
       const response = await api.post('/wallet/deposit/transfer', data);
+      return response.data;
+  },
+
+  // Submit proof of payment for manual bank deposit
+  async submitDepositProof(data: {
+      reference: string,
+      proof_url: string
+  }): Promise<{ success: boolean; message: string }> {
+      const response = await api.post('/wallet/deposit/submit-proof', data);
       return response.data;
   },
   

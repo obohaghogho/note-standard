@@ -57,16 +57,22 @@ class PaymentFactory {
     }
 
     // Use Grey for core USD, EUR, GBP manual bank transfers
-    // Automated checkouts (Card) should still use Fincra or Paystack
     if (["USD", "EUR", "GBP"].includes(upCurrency)) {
       if (method === "bank_transfer" || method === "manual") {
         logger.info(`PaymentFactory: Selecting Grey provider for ${upCurrency} ${method}`);
         return new GreyProvider();
       }
       
-      // Card / Checkout flow for USD/EUR/GBP
-      logger.info(`PaymentFactory: Selecting Fincra for ${upCurrency} ${method}`);
-      return new FincraProvider();
+      // If card payment is requested for USD, try Paystack
+      if (upCurrency === "USD") {
+        logger.info(`PaymentFactory: Selecting Paystack for ${upCurrency} card payment`);
+        return new PaystackProvider();
+      }
+
+      // Card / Checkout flow is NOT supported for EUR/GBP at this time
+      const errorMsg = `[PaymentFactory] ${upCurrency} card payments are not supported. Use bank_transfer instead.`;
+      logger.error(errorMsg);
+      throw new Error(`${upCurrency} card payments are currently unavailable. Please use the "Bank Transfer" method.`);
     }
 
     if (

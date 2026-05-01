@@ -56,7 +56,6 @@ class FincraProvider extends BaseProvider {
       headers: {
         "api-key":       this.secretKey,
         "apiKey":        this.secretKey,
-        "Authorization": `Bearer ${this.secretKey}`,
         "x-pub-key":     this.publicKey,
         "x-business-id": this.businessId,
         "Content-Type":  "application/json",

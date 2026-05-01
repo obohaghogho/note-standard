@@ -7,6 +7,8 @@ import type { Currency, BankDepositResponse, CryptoDepositResponse } from '@/typ
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { useWallet } from '../../hooks/useWallet';
+import { supabase } from '@/lib/supabase';
+import { Upload, FileCheck } from 'lucide-react';
 
 interface FundModalProps {
     isOpen: boolean;
@@ -39,6 +41,9 @@ export const FundModal: React.FC<FundModalProps> = ({
     
     // Bank deposit state
     const [bankDetails, setBankDetails] = useState<BankDepositResponse | null>(null);
+    const [proofFile, setProofFile] = useState<File | null>(null);
+    const [uploadingProof, setUploadingProof] = useState(false);
+    const [proofSubmitted, setProofSubmitted] = useState(false);
 
     // Crypto deposit state
     const [cryptoAddress, setCryptoAddress] = useState<{
@@ -107,8 +112,24 @@ export const FundModal: React.FC<FundModalProps> = ({
             setActiveCurrency(selectedCurrency);
             setActiveNetwork(selectedNetwork);
             setAmount('');
+            
+            // Check if card is supported for the initial currency
+            const upCurr = selectedCurrency.toUpperCase();
+            if (['BTC', 'ETH'].includes(upCurr)) {
+                setMethod('crypto');
+            } else {
+                setMethod(selectedCurrency === 'BTC' || selectedCurrency === 'ETH' ? 'crypto' : 'card');
+            }
         }
     }, [isOpen, selectedCurrency, selectedNetwork]);
+
+    // Handle currency/fiat changes to ensure card isn't selected for unsupported currencies
+    useEffect(() => {
+        const upPayCurrency = effectivePayCurrency.toUpperCase();
+        if (method === 'card' && ['BTC', 'ETH'].includes(upPayCurrency)) {
+            setMethod('crypto');
+        }
+    }, [effectivePayCurrency, method]);
 
     // Polling for crypto status
     useEffect(() => {
@@ -282,15 +303,14 @@ export const FundModal: React.FC<FundModalProps> = ({
 
     const handleRequestLimitIncrease = async () => {
         if (!requestedLimit || parseFloat(requestedLimit) <= dailyLimit) {
-            toast.error('Please enter a limit higher than your current one');
+            toast.error('Requested limit must be greater than current limit');
             return;
         }
-
         setLoading(true);
         try {
             await walletApi.createLimitRequest({
-                requested_limit: parseFloat(requestedLimit),
-                reason: requestReason
+                requested_limit: Number(requestedLimit),
+                reason: requestReason || 'Business needs'
             });
             toast.success('Limit increase request submitted!');
             setIsRequestingLimit(false);
@@ -300,6 +320,39 @@ export const FundModal: React.FC<FundModalProps> = ({
             toast.error(err instanceof Error ? err.message : 'Failed to submit request');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleProofUpload = async () => {
+        if (!proofFile || !bankDetails) return;
+
+        setUploadingProof(true);
+        try {
+            const fileExt = proofFile.name.split('.').pop();
+            const fileName = `${bankDetails.bankDetails.reference}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+            const filePath = `deposit-proofs/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('receipts')
+                .upload(filePath, proofFile);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('receipts')
+                .getPublicUrl(filePath);
+
+            await walletApi.submitDepositProof({
+                reference: bankDetails.bankDetails.reference,
+                proof_url: publicUrl
+            });
+
+            setProofSubmitted(true);
+            toast.success("Proof of payment submitted successfully!");
+        } catch (err: any) {
+            toast.error(err.message || "Failed to upload proof");
+        } finally {
+            setUploadingProof(false);
         }
     };
 
@@ -461,15 +514,27 @@ export const FundModal: React.FC<FundModalProps> = ({
 
                 <div className="flex gap-2 mb-6 bg-gray-900/50 p-1 rounded-xl border border-gray-800">
                     <button
-                        onClick={() => setMethod('card')}
+                        onClick={() => {
+                            const upPayCurrency = effectivePayCurrency.toUpperCase();
+                            if (['BTC', 'ETH'].includes(upPayCurrency)) {
+                                toast.error(`${upPayCurrency} cannot be funded via card.`);
+                                return;
+                            }
+                            setMethod('card');
+                        }}
                         className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg transition-all ${
                             method === 'card' 
                                 ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' 
                                 : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                        }`}
+                        } ${['BTC', 'ETH'].includes(effectivePayCurrency.toUpperCase()) ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                         <CreditCard size={18} />
-                        <span className="text-sm font-medium">Card</span>
+                        <div className="flex flex-col items-center">
+                            <span className="text-sm font-medium">Card</span>
+                            {['BTC', 'ETH'].includes(effectivePayCurrency.toUpperCase()) && (
+                                <span className="text-[8px] opacity-70">Unavailable</span>
+                            )}
+                        </div>
                     </button>
                     <button
                         onClick={() => setMethod('bank')}
@@ -633,6 +698,42 @@ export const FundModal: React.FC<FundModalProps> = ({
                                             </button>
                                         </div>
                                     </div>
+
+                                    {bankDetails.bankDetails.iban && (
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-gray-400">IBAN</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-mono font-medium text-xs">{bankDetails.bankDetails.iban}</span>
+                                                <button onClick={() => copyToClipboard(bankDetails.bankDetails.iban)}>
+                                                    <Copy size={16} className="text-gray-400 hover:text-white" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {bankDetails.bankDetails.swiftCode && (
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-gray-400">SWIFT / BIC</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-mono font-medium">{bankDetails.bankDetails.swiftCode}</span>
+                                                <button onClick={() => copyToClipboard(bankDetails.bankDetails.swiftCode)}>
+                                                    <Copy size={16} className="text-gray-400 hover:text-white" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {bankDetails.bankDetails.routingNumber && (
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-gray-400">Routing / Sort Code</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-mono font-medium">{bankDetails.bankDetails.routingNumber}</span>
+                                                <button onClick={() => copyToClipboard(bankDetails.bankDetails.routingNumber)}>
+                                                    <Copy size={16} className="text-gray-400 hover:text-white" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
                                     <div className="flex justify-between items-center">
                                         <span className="text-gray-400">Account Reference</span>
                                         <span className="font-medium">{bankDetails.bankDetails.accountName}</span>
@@ -646,10 +747,72 @@ export const FundModal: React.FC<FundModalProps> = ({
                                             </button>
                                         </div>
                                     </div>
+                                    
+                                    {bankDetails.bankDetails.note && (
+                                        <div className="pt-2 border-t border-gray-700/50 mt-1">
+                                            <p className="text-[10px] text-gray-500 leading-relaxed italic">
+                                                {bankDetails.bankDetails.note}
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                                 <p className="text-sm text-yellow-400 text-center">
                                     Include the reference in your activity description
                                 </p>
+
+                                <div className="mt-4 p-4 bg-purple-600/10 border border-purple-500/20 rounded-xl space-y-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-purple-600 rounded-lg">
+                                            <Upload size={20} className="text-white" />
+                                        </div>
+                                        <div>
+                                            <h4 className="text-sm font-bold text-white">Direct Bank Deposit?</h4>
+                                            <p className="text-[10px] text-gray-400">If you paid at a physical bank branch, upload your deposit slip below.</p>
+                                        </div>
+                                    </div>
+
+                                    {!proofSubmitted ? (
+                                        <div className="space-y-3">
+                                            <input 
+                                                type="file" 
+                                                id="proof-upload" 
+                                                className="hidden" 
+                                                accept="image/*,.pdf"
+                                                onChange={(e) => setProofFile(e.target.files?.[0] || null)}
+                                            />
+                                            <label 
+                                                htmlFor="proof-upload" 
+                                                className="flex items-center justify-center gap-2 w-full p-3 bg-gray-900 border-2 border-dashed border-gray-700 rounded-lg cursor-pointer hover:border-purple-500 transition-colors"
+                                            >
+                                                {proofFile ? (
+                                                    <span className="text-xs text-purple-400 font-medium truncate max-w-[200px]">{proofFile.name}</span>
+                                                ) : (
+                                                    <>
+                                                        <Upload size={16} className="text-gray-400" />
+                                                        <span className="text-xs text-gray-400">Choose receipt image/PDF</span>
+                                                    </>
+                                                )}
+                                            </label>
+
+                                            {proofFile && (
+                                                <Button 
+                                                    onClick={handleProofUpload} 
+                                                    disabled={uploadingProof} 
+                                                    className="w-full h-10 text-xs bg-purple-600 hover:bg-purple-700"
+                                                >
+                                                    {uploadingProof ? <Loader2 size={16} className="animate-spin mr-2" /> : <FileCheck size={16} className="mr-2" />}
+                                                    Submit Proof for Verification
+                                                </Button>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center justify-center gap-2 p-3 bg-green-500/20 border border-green-500/30 rounded-lg">
+                                            <CheckCircle2 size={16} className="text-green-500" />
+                                            <span className="text-xs text-green-400 font-bold">Proof Submitted Successfully</span>
+                                        </div>
+                                    )}
+                                </div>
+
                                 <Button onClick={onClose} variant="secondary" className="w-full">
                                     Done
                                 </Button>

@@ -342,8 +342,8 @@ class PaymentService {
     try {
       initData = await provider.initialize({
         email,
-        amount,
-        currency,
+        amount: options.gatewayAmount || amount,
+        currency: options.gatewayCurrency || currency,
         network,
         reference,
         callbackUrl,
@@ -351,6 +351,9 @@ class PaymentService {
           ...metadata,
           transactionId: transaction.id,
           userId,
+          original_currency: currency,
+          original_amount: amount,
+          gateway_currency: options.gatewayCurrency || currency
         },
       });
       console.timeEnd(`[PaymentService] ProviderInit:${providerName}`);

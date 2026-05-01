@@ -29,11 +29,14 @@ const AdminDepositPanel: React.FC = () => {
   };
 
   const handleApprove = async (id: string) => {
+    const deposit = deposits.find(d => d.id === id);
+    if (!deposit) return;
+
     if (!window.confirm("Are you sure you want to approve this deposit and credit the user's wallet?")) return;
     
     setProcessingId(id);
     try {
-      await depositApi.approve(id, adminNotes[id]);
+      await depositApi.approve(id, adminNotes[id], !!deposit.isUnified);
       toast.success("Deposit approved successfully!");
       setDeposits(deposits.filter(d => d.id !== id));
     } catch (err: unknown) {
@@ -46,6 +49,9 @@ const AdminDepositPanel: React.FC = () => {
   };
 
   const handleReject = async (id: string) => {
+    const deposit = deposits.find(d => d.id === id);
+    if (!deposit) return;
+
     const reason = adminNotes[id];
     if (!reason) {
       return toast.error("Please provide a reason for rejection in the notes field.");
@@ -55,7 +61,7 @@ const AdminDepositPanel: React.FC = () => {
 
     setProcessingId(id);
     try {
-      await depositApi.reject(id, reason);
+      await depositApi.reject(id, reason, !!deposit.isUnified);
       toast.success("Deposit rejected.");
       setDeposits(deposits.filter(d => d.id !== id));
     } catch (err: unknown) {
@@ -129,7 +135,12 @@ const AdminDepositPanel: React.FC = () => {
                     </div>
                     <div>
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Reference</p>
-                        <p className="text-sm font-mono font-bold text-slate-700 dark:text-slate-300">{deposit.reference}</p>
+                        <div className="flex items-center gap-2">
+                            <p className="text-sm font-mono font-bold text-slate-700 dark:text-slate-300">{deposit.reference}</p>
+                            {deposit.isUnified && (
+                                <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 text-[8px] font-black rounded border border-purple-200 dark:border-purple-800">UNIFIED</span>
+                            )}
+                        </div>
                     </div>
                     <div className="col-span-2 pt-2 border-t border-slate-200/50 dark:border-slate-700/50">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Submitted On</p>
