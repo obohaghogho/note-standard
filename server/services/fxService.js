@@ -499,6 +499,22 @@ class FXService {
   }
 
   /**
+   * Convert amount from one currency to another
+   * @param {number} amount 
+   * @param {string} from 
+   * @param {string} to 
+   * @param {boolean} useCache 
+   * @returns {Object} { amount, rate }
+   */
+  async convert(amount, from, to, useCache = true) {
+    const rate = await this.getRate(from, to);
+    return {
+      amount: amount * rate,
+      rate: rate
+    };
+  }
+
+  /**
    * Simple rate convenience method.
    * Returns a plain numeric rate (from → to).
    * Used by depositService, paymentService for conversion math.

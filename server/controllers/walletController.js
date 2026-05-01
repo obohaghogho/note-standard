@@ -57,16 +57,11 @@ exports.depositCard = async (req, res, next) => {
         { toCurrency, toNetwork }
       );
 
-    // Prune result to prevent circular reference crashes on Windows
-    const cleanData = {
-      link: result?.link || result?.data?.link,
-      reference: result?.reference || result?.data?.reference,
-      status: result?.status || result?.data?.status
-    };
-
+    // Return the structure expected by the frontend
     res.json({
+      ...result,
       success: true,
-      data: cleanData
+      data: result // Legacy compatibility
     });
   } catch (error) {
     console.error("[WalletController] Card Deposit Error:", error);
@@ -112,18 +107,10 @@ exports.depositTransfer = async (req, res, next) => {
         { toCurrency, toNetwork }
       );
 
-    // Prune result to prevent circular reference crashes on Windows
-    const cleanData = {
-      link: result?.link || result?.data?.link,
-      reference: result?.reference || result?.data?.reference,
-      status: result?.status || result?.data?.status,
-      account_number: result?.account_number || result?.data?.account_number,
-      bank_name: result?.bank_name || result?.data?.bank_name
-    };
-
+    // Return the structure expected by the frontend BankDepositResponse interface
     res.json({
-      success: true,
-      data: cleanData
+      ...result,
+      success: true // Keep success for legacy catch-all checks
     });
   } catch (error) {
     console.error("[WalletController] Bank Transfer Error:", error);

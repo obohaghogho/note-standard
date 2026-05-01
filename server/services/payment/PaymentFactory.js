@@ -63,16 +63,9 @@ class PaymentFactory {
         return new GreyProvider();
       }
       
-      // If card payment is requested for USD, try Paystack
-      if (upCurrency === "USD") {
-        logger.info(`PaymentFactory: Selecting Paystack for ${upCurrency} card payment`);
-        return new PaystackProvider();
-      }
-
-      // Card / Checkout flow is NOT supported for EUR/GBP at this time
-      const errorMsg = `[PaymentFactory] ${upCurrency} card payments are not supported. Use bank_transfer instead.`;
-      logger.error(errorMsg);
-      throw new Error(`${upCurrency} card payments are currently unavailable. Please use the "Bank Transfer" method.`);
+      // Card / Checkout flow: Route to Paystack (will handle auto-conversion if needed)
+      logger.info(`PaymentFactory: Selecting Paystack for ${upCurrency} card payment`);
+      return new PaystackProvider();
     }
 
     if (
@@ -89,12 +82,12 @@ class PaymentFactory {
         "CAD",
       ].includes(upCurrency)
     ) {
-      // Use Fincra for other cross-border fiat since Paystack test account rejects them
-      return new FincraProvider();
+      // Route all supported cross-border fiat to Paystack (Fincra is deprecated)
+      return new PaystackProvider();
     }
 
     // 3. Fallback for other cross-border flows
-    return new FincraProvider();
+    return new PaystackProvider();
   }
 
   /**

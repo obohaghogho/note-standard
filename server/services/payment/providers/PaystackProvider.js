@@ -20,17 +20,29 @@ class PaystackProvider extends BaseProvider {
   async initialize(data) {
     let { email, amount, currency, reference, callbackUrl, metadata } = data;
 
-    // Sandbox Auto-Conversion for unsupported currencies
-    // Paystack test accounts often only support NGN unless explicitly upgraded.
-    if (currency === "USD" && this.secretKey.includes("test")) {
+    // Sandbox & Multi-Currency Auto-Conversion
+    // Paystack (especially Nigerian accounts) primarily supports NGN. 
+    // USD, EUR, GBP, and JPY are often unsupported unless explicitly enabled.
+    const crossBorderCurrencies = ["USD", "EUR", "GBP", "JPY"];
+    
+    if (crossBorderCurrencies.includes(currency)) {
       const fxService = require("../../fxService");
       try {
-        const rate = await fxService.getRate("USD", "NGN");
-        amount = amount * rate;
-        currency = "NGN";
-        metadata = { ...metadata, auto_converted_from: "USD" };
+        // We only auto-convert to NGN in TEST MODE to ensure the sandbox checkout doesn't fail.
+        // In LIVE MODE, we let the original currency pass through so the user sees EUR/GBP/etc.
+        const isTestKey = this.secretKey && this.secretKey.includes("test");
+        const shouldConvert = isTestKey && ["EUR", "GBP", "JPY"].includes(currency);
+        
+        if (shouldConvert) {
+          const rate = await fxService.getRate(currency, "NGN");
+          amount = amount * rate;
+          const originalCurrency = currency;
+          currency = "NGN";
+          metadata = { ...metadata, auto_converted_from: originalCurrency, conversion_rate: rate };
+          console.info(`[Paystack] Sandbox Auto-converted ${amount} ${originalCurrency} to NGN for checkout testing.`);
+        }
       } catch (e) {
-        console.warn("[Paystack] FX conversion failed, attempting raw USD request", e.message);
+        console.warn(`[Paystack] FX conversion failed for ${currency}, attempting raw request`, e.message);
       }
     }
 

@@ -24,28 +24,12 @@ async function createCardDeposit(
 ) {
   const { toCurrency, toNetwork } = options;
   const upCurrency = currency.toUpperCase();
-  // --- UNIVERSAL USD CARD SUPPORT (DFOS v6.1) ---
-  // If the user wants to pay with EUR or GBP card, we convert to USD
-  // because Paystack handles USD better for international cards.
-  let activeAmount = amount;
-  let activeCurrency = upCurrency;
+  // --- UNIVERSAL NATIVE CURRENCY SUPPORT (DFOS v6.2) ---
+  // We no longer force conversion to USD at the service level.
+  // This ensures the payment gateway shows the original currency (EUR, GBP, etc.)
+  // providing a better user experience without confusing conversions.
   let gatewayOptions = { isCrypto: false };
-
-  if (["EUR", "GBP"].includes(upCurrency)) {
-    try {
-      const rate = await fxService.getRate(upCurrency, "USD");
-      // Add a small 1% buffer for FX volatility
-      const bufferedRate = math.multiply(rate, 1.01); 
-      const amountInUsd = math.multiply(amount, bufferedRate);
-      
-      gatewayOptions.gatewayCurrency = "USD";
-      gatewayOptions.gatewayAmount = parseFloat(math.formatSafe(amountInUsd));
-      
-      logger.info(`[DepositService] Converting ${amount} ${upCurrency} to ${gatewayOptions.gatewayAmount} USD for gateway routing.`);
-    } catch (fxErr) {
-      logger.warn(`[DepositService] FX conversion for gateway failed: ${fxErr.message}. Proceeding with native currency.`);
-    }
-  } else if (upCurrency === "BTC" || upCurrency === "ETH") {
+  if (upCurrency === "BTC" || upCurrency === "ETH") {
     throw new Error(`${upCurrency} deposits are not supported via payment`);
   }
 

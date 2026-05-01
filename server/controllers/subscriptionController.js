@@ -27,39 +27,39 @@ exports.createCheckoutSession = async (req, res) => {
     const customerName = profile?.full_name || email.split("@")[0] || "Standard User";
     const reference = uuidv4();
 
-    // Dynamically choose Fincra natively for international payments if keys are available
-    const hasFincra = !!(process.env.FINCRA_SECRET_KEY && process.env.FINCRA_PUBLIC_KEY);
+    // Use Paystack as the primary provider (Fincra is deprecated for these currencies)
+    let usedMethod = "paystack";
     
-    // NGN stays on Paystack by default locally; USD, EUR, GBP use Fincra (USD) in production or if keys exist.
-    const isInternational = ["USD", "EUR", "GBP"].includes(upCurrency);
-    const useFincra = (process.env.NODE_ENV === "production" || hasFincra) && isInternational;
-
-    let usedMethod = useFincra ? "fincra" : "paystack";
-    
-    // Allow frontend to explicitly override if they want Fincra (e.g. for NGN)
-    if (paymentMethod === "fincra" && hasFincra) {
-      usedMethod = "fincra";
-    } else if (paymentMethod === "paystack") {
+    // Allow manual override but default to Paystack
+    if (paymentMethod === "paystack") {
       usedMethod = "paystack";
+    } else if (paymentMethod === "fincra") {
+      // Only use Fincra if explicitly requested and keys exist, but warn it's deprecated
+      const hasFincra = !!(process.env.FINCRA_SECRET_KEY && process.env.FINCRA_PUBLIC_KEY);
+      if (hasFincra) usedMethod = "fincra";
     }
 
     // 2. Handle Currency Conversion
-    // For Fincra international, we always use USD to ensure checkout compatibility
-    let processedCurrency = useFincra ? "USD" : "NGN"; 
-    let finalAmount = usdAmount; // Default to base USD amount for international
+    // For Paystack, we generally prefer NGN for settlement stability, 
+    // but PaystackProvider now handles auto-conversion for USD/EUR/GBP/JPY if needed.
+    let processedCurrency = upCurrency;
+    let finalAmount = usdAmount;
     let exchangeRate = 1;
 
-    if (!useFincra) {
-      // NGN Flow (Paystack)
-      const conversion = await fxService.convert(usdAmount, "USD", "NGN", true);
-      finalAmount = conversion.amount;
-      exchangeRate = conversion.rate;
-    } else {
-      // International Flow (Fincra USD)
-      // Since our base plan price is already in USD, we just use it directly.
-      // This avoids unnecessary FX conversion and precision errors.
-      finalAmount = usdAmount; 
-      exchangeRate = 1; 
+    if (usedMethod === "paystack") {
+      // If the user chose NGN, or we want to force NGN for settlement:
+      // For subscriptions, we often want to charge in NGN to use Paystack Plans.
+      if (upCurrency === "NGN" || ["USD", "EUR", "GBP", "JPY"].includes(upCurrency)) {
+        const conversion = await fxService.convert(usdAmount, "USD", "NGN", true);
+        finalAmount = conversion.amount;
+        processedCurrency = "NGN";
+        exchangeRate = conversion.rate;
+      }
+    } else if (usedMethod === "fincra") {
+      // Legacy Fincra flow (usually USD)
+      processedCurrency = "USD";
+      finalAmount = usdAmount;
+      exchangeRate = 1;
     }
 
     // Ensure finalAmount is rounded to 2 decimal places to avoid API errors
