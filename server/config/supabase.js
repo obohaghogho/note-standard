@@ -17,6 +17,8 @@ const supabase = (supabaseUrl && supabaseServiceKey)
   : { 
       from: () => ({ 
         select: () => ({ 
+          order: () => ({ limit: () => ({ data: null, error: null }) }),
+          limit: () => ({ data: null, error: null }),
           eq: () => ({ 
             single: () => ({ data: null, error: new Error('Supabase not initialized') }),
             maybeSingle: () => ({ data: null, error: new Error('Supabase not initialized') }) 

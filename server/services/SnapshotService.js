@@ -347,7 +347,7 @@ class SnapshotService {
           bestPrice = p1; // Prefer primary source in disagreement
         }
       } else if (p1 || p2) {
-        consensus = lkgSeeded ? 0.5 : 0.33;
+        consensus = lkgSeeded ? 0.65 : 0.33; // 0.65 prevents the emergency re-poll loop (threshold is 0.6)
       }
 
       finalRates[sym] = bestPrice;

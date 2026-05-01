@@ -19,7 +19,7 @@ const exchangeRateProvider = require("../providers/exchangeRateProvider");
 class FXService {
   constructor() {
     this.FRESH_TTL = 600; // 10 minutes (Protect external APIs)
-    this.STALE_THRESHOLD = 7200; // 2 hours (Expanded LKG window)
+    this.STALE_THRESHOLD = 21600; // 6 hours (Expanded LKG window for display visibility)
     this.SANITY_DEVIATION_CAP = 0.15; // 15% max jump per tick
     this.pendingRequests = new Map(); // Single-flight Map: key -> Promise
     logger.info("[FXService] FXService loaded successfully");
@@ -120,7 +120,7 @@ class FXService {
     if (!lkgValue) return { price: 0, mode: 'INVALID', stale: true };
 
     // ── Staleness Threshold Enforcement ─────────────────────────
-    // If the cached price is older than STALE_THRESHOLD (1 hour), mark INVALID.
+    // If the cached price is older than STALE_THRESHOLD (6 hours), mark INVALID.
     // Callers that need a clean price must use getValidatedRate() which
     // will throw PRICE_TOO_STALE for execution paths.
     const MAX_EXECUTION_STALE_SECS = 7200; // 2 hours — hard boundary for any trade
