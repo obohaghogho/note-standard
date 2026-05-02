@@ -137,10 +137,16 @@ const emit = async (type, room, event, payload, options = {}) => {
 const emitToUser = (userId, event, payload, options = {}) =>
     emit('to_user', userId, event, payload, options);
 
+const emitToConversation = (conversationId, event, payload, options = {}) =>
+    emit('to_room', conversationId, event, payload, options);
+
+const emitToAdmin = (event, payload, options = {}) =>
+    emit('to_room', 'admin', event, payload, options);
+
 const emitFinancialUpdate = (userId, event, payload) =>
     emitToUser(userId, event, payload, { isFinancial: true });
 
 const broadcast = (event, payload) =>
     emit('broadcast', '*', event, payload, { isFinancial: false });
 
-module.exports = { emit, emitToUser, emitFinancialUpdate, broadcast };
+module.exports = { emit, emitToUser, emitToConversation, emitToAdmin, emitFinancialUpdate, broadcast };

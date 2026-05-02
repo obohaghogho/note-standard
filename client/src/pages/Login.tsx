@@ -9,6 +9,7 @@ import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 import api from '../api/axiosInstance';
 import { saveAccount, clearAccountStale } from '../utils/accountManager';
+import { API_URL } from '../lib/api';
 
 export const Login = () => {
     const navigate = useNavigate();
