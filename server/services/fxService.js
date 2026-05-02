@@ -38,31 +38,48 @@ class FXService {
     this.BREAKER_COOLDOWN = 15 * 60 * 1000; // 15 Minutes
     
     // Seed LKG cache with safe fallback rates on startup.
-    // These are intentionally stale-flagged and will be overwritten by the
-    // first successful live fetch. They prevent $0.00 during cold boot.
     this._bootstrapFallbackRates();
+    
+    // Asynchronously try to recover actual LKG from database
+    this.initialize().catch(err => logger.error(`[FXService] Failed to initialize persistent LKG: ${err.message}`));
+  }
+
+  async initialize() {
+    try {
+      logger.info("[FXService] Initializing persistent LKG from database...");
+      const snapshot = await SnapshotService.getAuthoritativeRates('DISPLAY');
+      
+      if (snapshot && snapshot.rates) {
+        for (const [sym, price] of Object.entries(snapshot.rates)) {
+          const key = `lkg_price_${sym.toUpperCase()}`;
+          const timestampKey = `lkg_time_${sym.toUpperCase()}`;
+          
+          // Force overwrite seeds with actual DB truth
+          cache.set(key, price, 86400 * 7);
+          cache.set(timestampKey, new Date(snapshot.created_at).getTime(), 86400 * 7);
+          logger.info(`[FXService] Recovered persistent LKG for ${sym}: $${price} (Age: ${Math.round((Date.now() - new Date(snapshot.created_at).getTime())/3600000)}h)`);
+        }
+      }
+    } catch (err) {
+      logger.error(`[FXService] Critical initialization error: ${err.message}`);
+    }
   }
 
   _bootstrapFallbackRates() {
     // IMPORTANT: Keep seed prices close to current market values.
     // The sanity check quarantines any live price that deviates >15% from
-    // the stored LKG (or >35% on initial-seed-sync). An outdated seed will
-    // permanently block live prices from being accepted, pinning mode to INVALID.
-    //
-    // Seeds are stamped with the current time so they start STALE (within the
-    // 2h execution window) instead of appearing almost-expired from the start.
-    // The first successful live fetch will replace these with FRESH prices.
+    // the stored LKG (or >35% on initial-seed-sync). 
     const FALLBACK_SEEDS = {
-      BTC: 78000,
-      ETH: 2350,
+      BTC: 70000, // Updated to be closer to recent market
+      ETH: 2500,  // Updated to be closer to recent market
       USDT: 1.0,
       USDC: 1.0,
       "USD-COIN": 1.0,
       TETHER: 1.0,
-      NGN: 0.00074, // ~1350 NGN per USD fallback
-      JPY: 0.0067,  // ~149 JPY per USD fallback
-      EUR: 1.08,    // ~0.93 EUR per USD fallback
-      GBP: 1.27,    // ~0.79 GBP per USD fallback
+      NGN: 0.00066, // ~1500 NGN per USD fallback
+      JPY: 0.0067,  
+      EUR: 1.08,    
+      GBP: 1.27,    
     };
     for (const [sym, price] of Object.entries(FALLBACK_SEEDS)) {
       const key = `lkg_price_${sym}`;
@@ -85,14 +102,19 @@ class FXService {
     
     if (newPrice !== null && !isNaN(newPrice) && newPrice > 0) {
       const currentLKG = cache.get(key);
+      const lkgTime = cache.get(timestampKey) || 0;
+      const age = (Date.now() - lkgTime) / 1000;
       
       if (currentLKG) {
-        const timestampKey = `lkg_time_${symbol.toUpperCase()}`;
-        const lkgTime = cache.get(timestampKey) || 0;
-        const age = (Date.now() - lkgTime) / 1000;
-        const isInitialSeedSync = age > 3500; // Seed was set ~1h ago in bootstrap
+        // Dynamic Sanity Check: If the data is very old, allow larger deviation
+        // This prevents the "quarantine deadlock" when the market moves while the server was down.
+        let syncCap = this.SANITY_DEVIATION_CAP; // Default 15%
+        
+        if (age > 3600) { // Older than 1 hour
+           syncCap = 0.50; // Allow up to 50% jump to "catch up"
+           logger.info(`[FXService] Relaxing sanity cap to 50% for ${symbol} due to stale LKG age: ${(age/3600).toFixed(1)}h`);
+        }
 
-        const syncCap = isInitialSeedSync ? 0.35 : this.SANITY_DEVIATION_CAP;
         const deviation = Math.abs(newPrice - currentLKG) / currentLKG;
         
         if (deviation > syncCap) {
@@ -100,10 +122,6 @@ class FXService {
           const SystemState = require("../config/SystemState");
           SystemState.freezeAsset(symbol, 300);
           return { price: currentLKG, mode: 'INVALID', stale: true };
-        }
-        
-        if (isInitialSeedSync) {
-          logger.info(`[FXService] Initial seed synchronization complete for ${symbol}. Jump: ${(deviation*100).toFixed(2)}% (Allowed: ${syncCap*100}%)`);
         }
       }
 
@@ -120,23 +138,22 @@ class FXService {
     if (!lkgValue) return { price: 0, mode: 'INVALID', stale: true };
 
     // ── Staleness Threshold Enforcement ─────────────────────────
-    // If the cached price is older than STALE_THRESHOLD (6 hours), mark INVALID.
-    // Callers that need a clean price must use getValidatedRate() which
-    // will throw PRICE_TOO_STALE for execution paths.
-    const MAX_EXECUTION_STALE_SECS = 7200; // 2 hours — hard boundary for any trade
-    if (age > MAX_EXECUTION_STALE_SECS) {
-      logger.error(`[FXService] LKG for ${symbol} is ${(age/3600).toFixed(1)}h old — refusing to serve.`);
-      return { price: 0, mode: 'INVALID', stale: true, ageSeconds: age };
+    // We allow display up to STALE_THRESHOLD (6 hours).
+    // Execution (trades) will check for 'STALE' or 'INVALID' and block if needed.
+    let mode = 'FRESH';
+    if (age > this.STALE_THRESHOLD) {
+        mode = 'INVALID';
+    } else if (age > MAX_EXECUTION_STALE_SECS) {
+        mode = 'STALE';
     }
-    
-    const mode = age < this.STALE_THRESHOLD ? 'STALE' : 'INVALID';
 
     if (mode === 'INVALID') {
         const SystemState = require("../config/SystemState");
         SystemState.enterSafeMode(`Pricing INVALID state: Feed stalled beyond recovery threshold for ${symbol}.`);
+        return { price: 0, mode: 'INVALID', stale: true, ageSeconds: age };
     }
 
-    return { price: lkgValue, mode, stale: true, ageSeconds: age };
+    return { price: lkgValue, mode, stale: age > this.FRESH_TTL, ageSeconds: age };
   }
 
   /**

@@ -31,6 +31,10 @@ router.put(
   "/conversations/:conversationId/read",
   chatController.markConversationRead,
 );
+router.put(
+  "/conversations/:conversationId/deliver",
+  chatController.markConversationDelivered,
+);
 
 // Messages
 router.get(

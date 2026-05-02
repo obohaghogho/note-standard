@@ -1200,7 +1200,7 @@ exports.markConversationRead = async (req, res) => {
     // Mark all messages in this conversation as read, except own
     const { error } = await supabase
       .from("messages")
-      .update({ read_at: now })
+      .update({ read_at: now, delivered_at: now }) // If read, it must have been delivered
       .eq("conversation_id", conversationId)
       .neq("sender_id", userId)
       .is("read_at", null);
@@ -1222,6 +1222,41 @@ exports.markConversationRead = async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error("Error marking conversation read:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+exports.markConversationDelivered = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user.id;
+    const now = new Date().toISOString();
+
+    // Mark all messages in this conversation as delivered, except own
+    const { error } = await supabase
+      .from("messages")
+      .update({ delivered_at: now })
+      .eq("conversation_id", conversationId)
+      .neq("sender_id", userId)
+      .is("delivered_at", null);
+
+    if (error) {
+      if (error.code === "42703") {
+         return res.json({ success: true, note: "delivered_at column missing" });
+      }
+      throw error;
+    }
+
+    // Emit event to room
+    await realtime.emitToConversation(conversationId, "chat:conversation_delivered", {
+        conversationId,
+        userId: userId,
+        delivered_at: now
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error marking conversation delivered:", err.message);
     res.status(500).json({ error: "Server Error" });
   }
 };

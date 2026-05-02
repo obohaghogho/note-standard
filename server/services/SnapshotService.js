@@ -359,9 +359,25 @@ class SnapshotService {
     fiatTargets.forEach(t => {
       // erpRates contains NGN per 1 USD (e.g. 1350)
       // To get USD value of 1 NGN, we must invert it: 1 / 1350 = 0.00074
-      const rateFromUsd = erpRates ? erpRates[t] : 0;
-      finalRates[t] = rateFromUsd > 0 ? (1 / rateFromUsd) : 0; 
-      sourceTrace[t] = { consensus: 1.0 };
+      let rateFromUsd = erpRates ? erpRates[t] : 0;
+      let consensus = 1.0;
+
+      if (!rateFromUsd || rateFromUsd <= 0) {
+          // LKG Fallback for fiat
+          const lkgKey = `lkg_price_${t.toUpperCase()}`;
+          const cachedLKG = cache.get(lkgKey);
+          if (cachedLKG && cachedLKG > 0) {
+              finalRates[t] = cachedLKG; // Note: LKG for fiat is already stored as USD_per_SYM
+              consensus = 0.65;
+          } else {
+              finalRates[t] = 0;
+              consensus = 0;
+          }
+      } else {
+          finalRates[t] = 1 / rateFromUsd;
+      }
+      
+      sourceTrace[t] = { consensus };
     });
 
     const consensusAvg = Object.values(sourceTrace).reduce((a, b) => a + b.consensus, 0) / Object.keys(sourceTrace).length;

@@ -16,6 +16,7 @@ import { cn } from '../../utils/cn';
 import toast from 'react-hot-toast';
 import { QRCodeSVG } from 'qrcode.react';
 import { IOSInstallModal } from '../../components/common/IOSInstallModal';
+import { API_URL } from '../../lib/api';
 
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: string[];
@@ -79,9 +80,9 @@ export const DownloadPage: React.FC = () => {
         icon: '⚠️',
         duration: 8000,
       });
-      const filename = 'app-release.ipa';
+      const filename = 'NoteStandard.ipa';
       const link = document.createElement('a');
-      link.href = `/downloads/${filename}`;
+      link.href = `${API_URL}/downloads/${filename}`;
       link.download = filename;
       document.body.appendChild(link);
       link.click();
@@ -89,7 +90,7 @@ export const DownloadPage: React.FC = () => {
     } else {
       toast.success(`Starting Android (APK) download...`);
       // Redirect to the backend dynamic resolver
-      window.location.href = `/api/app/latest-apk`;
+      window.location.href = `${API_URL}/api/app/latest-apk`;
     }
   };
 

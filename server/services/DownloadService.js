@@ -8,7 +8,13 @@ const logger = require('../utils/logger');
 class DownloadService {
     constructor() {
         this.apkDir = path.join(__dirname, '..', 'uploads', 'versions');
-        this.fallbackPath = path.join(__dirname, '..', '..', 'client', 'public', 'downloads', 'app-release.apk');
+        this.fallbacks = [
+            path.join(__dirname, '..', '..', 'client', 'public', 'downloads', 'app-release.apk'),
+            path.join(__dirname, '..', '..', 'client', 'dist', 'downloads', 'app-release.apk'),
+            path.join(__dirname, '..', 'public', 'downloads', 'app-release.apk'),
+            path.join(process.cwd(), 'client', 'public', 'downloads', 'app-release.apk'),
+            path.join(process.cwd(), 'client', 'dist', 'downloads', 'app-release.apk'),
+        ];
     }
 
     /**
@@ -68,14 +74,18 @@ class DownloadService {
     }
 
     getFallback() {
-        if (fs.existsSync(this.fallbackPath)) {
-            logger.info('[DownloadService] Falling back to static app-release.apk');
-            return {
-                path: this.fallbackPath,
-                filename: 'app-release.apk',
-                version: 'unknown'
-            };
+        for (const fallbackPath of this.fallbacks) {
+            if (fs.existsSync(fallbackPath)) {
+                logger.info(`[DownloadService] Falling back to APK at: ${fallbackPath}`);
+                return {
+                    path: fallbackPath,
+                    filename: path.basename(fallbackPath),
+                    version: 'unknown'
+                };
+            }
         }
+        
+        logger.error('[DownloadService] No APK fallback found in any expected location');
         return null;
     }
 }

@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
 import { NotificationService } from '../services/NotificationService';
 import { API_URL } from '../lib/api';
+import toast from 'react-hot-toast';
 
 export interface Message {
     id: string;
@@ -88,6 +89,7 @@ export interface ChatContextValue {
     hasMore: Record<string, boolean>;
     sendMessageToConversation: (conversationId: string, content: string, type?: string, attachmentId?: string) => Promise<void>;
     markConversationRead: (conversationId: string) => Promise<void>;
+    markConversationDelivered: (conversationId: string) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -161,8 +163,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 }));
                 setConversations(mappedData);
                 setLoading(false);
-                // ✅ Join rooms immediately after conversations load — guaranteed timing
+                // ✅ Join rooms immediately after conversations load
                 joinAllRooms(mappedData);
+                
+                // Mark all unread conversations as delivered (since we just loaded them)
+                mappedData.forEach((conv: Conversation) => {
+                    if (conv.unreadCount && conv.unreadCount > 0) {
+                        markConversationDelivered(conv.id);
+                    }
+                });
             }
         } catch (e) {
             console.error('[Chat] Failed to load conversations:', e);
@@ -215,6 +224,37 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             if (msg.sender_id !== user?.id) {
                 const sender = conversationsRef.current.find(c => c.id === msg.conversation_id)?.members.find(m => m.user_id === msg.sender_id)?.profile?.username || 'Someone';
                 NotificationService.notifyNewMessage(sender, msg.content, msg.conversation_id);
+                
+                // Show in-app toast if document is visible but not in this specific chat
+                if (document.visibilityState === 'visible' && activeConversationIdRef.current !== msg.conversation_id) {
+                    toast.custom((t) => (
+                        <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-gray-900 shadow-2xl rounded-2xl pointer-events-auto flex ring-1 ring-white/10 border border-gray-800`}>
+                            <div className="flex-1 w-0 p-4">
+                                <div className="flex items-start">
+                                    <div className="ml-3 flex-1">
+                                        <p className="text-sm font-bold text-white">
+                                            {sender}
+                                        </p>
+                                        <p className="mt-1 text-sm text-gray-400 truncate">
+                                            {msg.content}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex border-l border-gray-800">
+                                <button
+                                    onClick={() => {
+                                        setActiveConversationId(msg.conversation_id);
+                                        toast.dismiss(t.id);
+                                    }}
+                                    className="w-full border border-transparent rounded-none rounded-r-2xl p-4 flex items-center justify-center text-sm font-bold text-blue-500 hover:text-blue-400 focus:outline-none"
+                                >
+                                    View
+                                </button>
+                            </div>
+                        </div>
+                    ), { duration: 4000, position: 'top-right' });
+                }
             }
 
             setMessages(prev => {
@@ -640,6 +680,27 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }, [session]);
 
+    const markConversationDelivered = useCallback(async (conversationId: string) => {
+        if (!session) return;
+        try {
+            await fetch(`${API_URL}/api/chat/conversations/${conversationId}/deliver`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${session.access_token}` }
+            });
+
+            // Optimistic local update
+            setMessages(prev => {
+                const current = prev[conversationId] || [];
+                return {
+                    ...prev,
+                    [conversationId]: current.map(m => m.sender_id !== user?.id ? { ...m, delivered_at: m.delivered_at || new Date().toISOString() } : m)
+                };
+            });
+        } catch (err) {
+            console.error('[Chat] Failed to mark conversation delivered:', err);
+        }
+    }, [session, user?.id]);
+
     const markConversationRead = useCallback(async (conversationId: string) => {
         if (!session) return;
         try {
@@ -985,10 +1046,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             connected,
             loadMoreMessages,
             markMessageRead,
+            markMessageDelivered,
             sendTypingStatus,
             typingUsers,
             hasMore,
-            markConversationRead
+            markConversationRead,
+            markConversationDelivered
         }}>
             {children}
         </ChatContext.Provider>
