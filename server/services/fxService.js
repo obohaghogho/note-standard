@@ -150,7 +150,9 @@ class FXService {
     if (mode === 'INVALID') {
         const SystemState = require("../config/SystemState");
         SystemState.enterSafeMode(`Pricing INVALID state: Feed stalled beyond recovery threshold for ${symbol}.`);
-        return { price: 0, mode: 'INVALID', stale: true, ageSeconds: age };
+        // We return the lkgValue anyway so the UI can show "Something" (stale price) 
+        // while the 'INVALID' mode ensures no trades can be executed.
+        return { price: lkgValue || 0, mode: 'INVALID', stale: true, ageSeconds: age };
     }
 
     return { price: lkgValue, mode, stale: age > this.FRESH_TTL, ageSeconds: age };

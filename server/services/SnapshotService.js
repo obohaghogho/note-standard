@@ -37,6 +37,16 @@ class SnapshotService {
     this.fiatCurrencies = ["NGN", "EUR", "GBP", "JPY", "USD"];
     this.rePollCycleLock = false; // Phase 3 Recursive Safety
     this.REGIME_THRESHOLD_VOLATILE = 0.02; // 2% 1-tick move = Volatile
+    
+    // Final defensive seeds if both live and LKG fail
+    this.FALLBACK_SEEDS = {
+      "BTC": 70000,
+      "ETH": 2500,
+      "NGN": 1500,
+      "EUR": 0.93,
+      "GBP": 0.79,
+      "JPY": 149
+    };
   }
 
   /**
@@ -336,6 +346,14 @@ class SnapshotService {
       let consensus = 0;
       let bestPrice = p1 || p2 || 0;
       
+      // ── Task 6.c: Final Defensive Seeding ───────────────────────
+      // If even LKG fails, we use the hardcoded seeds to ensure the UI
+      // never shows N/A for major assets.
+      if (bestPrice <= 0 && this.FALLBACK_SEEDS[sym]) {
+          bestPrice = this.FALLBACK_SEEDS[sym];
+          consensus = 0.5; // Mark as low confidence but usable for display
+      }
+
       if (p1 && p2) {
         const diff = Math.abs(p1 - p2) / Math.max(p1, p2);
         if (diff < tolerance) {
@@ -367,8 +385,12 @@ class SnapshotService {
           const lkgKey = `lkg_price_${t.toUpperCase()}`;
           const cachedLKG = cache.get(lkgKey);
           if (cachedLKG && cachedLKG > 0) {
-              finalRates[t] = cachedLKG; // Note: LKG for fiat is already stored as USD_per_SYM
+              finalRates[t] = cachedLKG; // Already stored as USD_per_SYM
               consensus = 0.65;
+          } else if (this.FALLBACK_SEEDS[t]) {
+              // Final defensive seed
+              finalRates[t] = 1 / this.FALLBACK_SEEDS[t];
+              consensus = 0.5;
           } else {
               finalRates[t] = 0;
               consensus = 0;
