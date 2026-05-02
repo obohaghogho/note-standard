@@ -249,19 +249,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(true);
 
         // Rule 10: Session Rehydration on App Load
-        const activeId = accountManager.getActiveAccountId();
-        if (activeId) {
-          const acc = accountManager.getAccount(activeId);
-          if (acc) {
-            console.log(`[Auth] Rehydrating active account: ${acc.email}`);
-            await supabase.auth.setSession({
-              access_token: acc.tokens.access_token,
-              refresh_token: acc.tokens.refresh_token
-            });
+        // First check native Supabase storage which handles cross-tab syncing and auto-refresh natively
+        let { data: { session: initialSession } } = await supabase.auth.getSession();
+
+        // If native storage lost the session (e.g. cleared somehow), try to rehydrate from our multi-account manager
+        if (!initialSession) {
+          const activeId = accountManager.getActiveAccountId();
+          if (activeId) {
+            const acc = accountManager.getAccount(activeId);
+            if (acc) {
+              console.log(`[Auth] Native session missing. Rehydrating active account from multi-account manager: ${acc.email}`);
+              const { data } = await supabase.auth.setSession({
+                access_token: acc.tokens.access_token,
+                refresh_token: acc.tokens.refresh_token
+              });
+              initialSession = data.session;
+            }
           }
         }
-
-        const { data: { session: initialSession } } = await supabase.auth.getSession();
         
         if (isMounted.current) {
           // Rule 9: Listener handles state, but we set initial once for loading sync

@@ -114,8 +114,12 @@ export const accountManager = {
     if (index !== -1) {
       const existing = accounts[index];
       const existingTokens = existing.tokens || existing.session;
-      // Only update if newer
-      if (session.expires_at && existingTokens && existingTokens.expires_at && session.expires_at < existingTokens.expires_at) {
+      // Update if tokens are different, don't rely purely on expires_at which can suffer from clock drift
+      if (
+        existingTokens && 
+        session.access_token === existingTokens.access_token && 
+        session.refresh_token === existingTokens.refresh_token
+      ) {
         return false;
       }
 
