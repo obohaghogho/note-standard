@@ -39,8 +39,8 @@ async function runDiagnostic() {
     try {
         const response = await axios.get(`${baseUrl}/profile/business/details`, {
             headers: {
+                "api-key": secretKey,
                 "Authorization": `Bearer ${secretKey}`,
-                ...(businessId ? { "x-business-id": businessId } : {}),
                 "Content-Type": "application/json",
                 "accept": "application/json"
             }

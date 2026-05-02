@@ -42,3 +42,40 @@ result.txt
 # Temporary processing files
 server/tmp/
 tmp/
+
+# ── Development Artifacts (NEVER commit these) ─────────────────
+# Scratch directories
+scratch/
+server/scratch/
+
+# Debug & one-off scripts in server root
+server/dbg*.js
+server/debug_*.js
+server/check_*.js
+server/test_*.js
+server/test.sql
+server/test_modulo.sql
+server/inspect_*.js
+server/force_*.js
+server/repair_*.js
+server/mass_*.js
+server/migrate_sync_function.js
+server/run_fix_sql.js
+server/schema_check.js
+server/scratch_*.js
+server/scratch_*.js
+server/fix_trigger*.sql
+server/fix_trigger_v2.sql
+server/audit_wallet_drift.js
+
+# Root-level test scripts
+test_*.js
+
+# Debug scripts inside server/scripts/ (migration scripts are kept)
+server/scripts/debug_*.js
+server/scripts/check_*.js
+server/scripts/test_*.js
+server/scripts/verify_*.js
+server/scripts/audit_drift.js
+server/scripts/live_payment_verify.js
+server/scripts/add_enum_values.js
