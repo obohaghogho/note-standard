@@ -54,6 +54,7 @@ router.delete(
   chatController.clearChatHistory,
 );
 router.put("/messages/:messageId/read", chatController.markMessageRead);
+router.put("/messages/:messageId/deliver", chatController.markMessageDelivered);
 router.delete("/messages/:messageId", chatController.deleteMessage);
 router.patch("/messages/:messageId", chatController.editMessage);
 

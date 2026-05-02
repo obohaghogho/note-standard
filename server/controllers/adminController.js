@@ -385,7 +385,7 @@ exports.getSupportChats = async (req, res) => {
                         is_online
                     )
                 ),
-                lastMessage:messages(content, created_at, sender_id)
+                lastMessage:messages(content, created_at, sender_id, read_at, delivered_at)
             `)
       .eq("chat_type", "support")
       .order("updated_at", { ascending: false });

@@ -129,9 +129,12 @@ export const ChatWidget = () => {
             setMessages(prev => prev.map(m => m.id === messageId ? { ...m, read_at: new Date().toISOString() } : m));
         };
         
-        socket.on('receive_message', onReceiveMessage);
-        socket.on('user_typing', onTyping);
-        socket.on('message_read', onMessageRead);
+        socket.on('chat:message', onReceiveMessage);
+        socket.on('chat:typing', onTyping);
+        socket.on('chat:message_read', onMessageRead);
+        socket.on('chat:message_delivered', ({ messageId }: { messageId: string }) => {
+            setMessages(prev => prev.map(m => m.id === messageId ? { ...m, delivered_at: new Date().toISOString() } : m));
+        });
 
         // Also listen via Supabase for direct DB updates to support_status
         const convChannel = supabase
@@ -155,9 +158,10 @@ export const ChatWidget = () => {
         }
 
         return () => {
-            socket.off('receive_message', onReceiveMessage);
-            socket.off('user_typing', onTyping);
-            socket.off('message_read', onMessageRead);
+            socket.off('chat:message', onReceiveMessage);
+            socket.off('chat:typing', onTyping);
+            socket.off('chat:message_read', onMessageRead);
+            socket.off('chat:message_delivered');
             supabase.removeChannel(convChannel);
         };
     }, [socket, connected, isOpen, supportChat, supportChat?.id, user?.id]);
@@ -442,8 +446,10 @@ export const ChatWidget = () => {
                                                                 <span className="ml-1 inline-block scale-75">
                                                                     {msg.read_at ? (
                                                                         <CheckCheck size={12} className="text-blue-300" />
+                                                                    ) : msg.delivered_at ? (
+                                                                        <CheckCheck size={12} className="text-gray-400 opacity-60" />
                                                                     ) : (
-                                                                        <Check size={12} />
+                                                                        <Check size={12} className="opacity-40" />
                                                                     )}
                                                                 </span>
                                                             )}

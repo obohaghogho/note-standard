@@ -90,10 +90,13 @@ export const AdminChat = () => {
             setMessages(prev => prev.map(m => m.id === messageId ? { ...m, read_at: new Date().toISOString() } : m));
         };
 
-        socket.on('receive_message', onReceiveMessage);
-        socket.on('new_support_chat', onNewSupportChat);
-        socket.on('message_read', onMessageRead);
-        socket.on('conversation_read', ({ conversationId, readAt }: { conversationId: string, readAt: string }) => {
+        socket.on('chat:message', onReceiveMessage);
+        socket.on('chat:new_conversation', onNewSupportChat);
+        socket.on('chat:message_read', onMessageRead);
+        socket.on('chat:message_delivered', ({ messageId, delivered_at }: { messageId: string, delivered_at?: string }) => {
+            setMessages(prev => prev.map(m => m.id === messageId ? { ...m, delivered_at: m.delivered_at || delivered_at || new Date().toISOString() } : m));
+        });
+        socket.on('chat:conversation_read', ({ conversationId, readAt }: { conversationId: string, readAt: string }) => {
             setMessages(prev => {
                 if (activeChat && conversationId === activeChat.id) {
                     return prev.map(m => m.sender_id === user?.id ? { ...m, read_at: m.read_at || readAt } : m);
@@ -104,10 +107,12 @@ export const AdminChat = () => {
         socket.on('admin_presence_update', onPresenceUpdate);
 
         return () => {
-            socket.off('receive_message', onReceiveMessage);
-            socket.off('new_support_chat', onNewSupportChat);
+            socket.off('chat:message', onReceiveMessage);
+            socket.off('chat:new_conversation', onNewSupportChat);
+            socket.off('chat:message_read', onMessageRead);
+            socket.off('chat:message_delivered');
+            socket.off('chat:conversation_read');
             socket.off('admin_presence_update', onPresenceUpdate);
-            socket.off('message_read', onMessageRead);
         };
     }, [socket, connected, isAdmin, user?.id, activeChat]);
 
@@ -524,6 +529,8 @@ export const AdminChat = () => {
                                                 <span className="status ml-1 scale-90 inline-block">
                                                     {msg.read_at ? (
                                                         <CheckCheck size={14} className="text-blue-300" />
+                                                    ) : msg.delivered_at ? (
+                                                        <CheckCheck size={14} className="text-gray-400" />
                                                     ) : (
                                                         <Check size={14} className="opacity-50" />
                                                     )}

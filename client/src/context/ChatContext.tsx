@@ -15,6 +15,7 @@ export interface Message {
     isOwn?: boolean;
     original_language?: string;
     read_at?: string;
+    delivered_at?: string;
     is_edited?: boolean;
     updated_at?: string;
     sentiment?: {
@@ -43,6 +44,7 @@ export interface Conversation {
         sender_id: string;
         created_at: string;
         read_at?: string;
+        delivered_at?: string;
     };
     unreadCount?: number;
     is_muted?: boolean;
@@ -73,6 +75,7 @@ export interface ChatContextValue {
     sendMessage: (content: string, type?: string, attachmentId?: string) => Promise<void>;
     loadMoreMessages: (conversationId: string) => Promise<void>;
     markMessageRead: (messageId: string) => Promise<void>;
+    markMessageDelivered: (messageId: string) => Promise<void>;
     startConversation: (username: string) => Promise<void>; 
     acceptConversation: (id: string) => Promise<void>;
     deleteConversation: (id: string) => Promise<void>;
@@ -249,7 +252,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     return {
                         ...conv,
                         updated_at: msg.created_at,
-                        lastMessage: { content: msg.content, sender_id: msg.sender_id, created_at: msg.created_at },
+                        lastMessage: { content: msg.content, sender_id: msg.sender_id, created_at: msg.created_at, delivered_at: msg.delivered_at, read_at: msg.read_at },
                         unreadCount: (conv.unreadCount || 0) + (isOtherMsg && !isActive ? 1 : 0)
                     };
                 }
@@ -258,6 +261,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
             if (msg.conversation_id === activeConversationIdRef.current && msg.sender_id !== user?.id) {
                 markMessageRead(msg.id);
+            } else if (msg.sender_id !== user?.id) {
+                // If not active window but received, it's delivered
+                markMessageDelivered(msg.id);
             }
         };
 
@@ -290,6 +296,32 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }));
         };
 
+        const onMessageDelivered = ({ messageId, conversationId, delivered_at }: { messageId: string; conversationId: string, delivered_at?: string }) => {
+            setMessages(prev => {
+                const convMessages = prev[conversationId] || [];
+                return {
+                    ...prev,
+                    [conversationId]: convMessages.map(m => 
+                        m.id === messageId ? { ...m, delivered_at: m.delivered_at || delivered_at || new Date().toISOString() } : m
+                    )
+                };
+            });
+
+            // Update conversation last message delivered status
+            setConversations(prev => prev.map(conv => {
+                if (conv.id === conversationId && conv.lastMessage && (conv.lastMessage as { id?: string }).id === messageId) {
+                    return {
+                        ...conv,
+                        lastMessage: {
+                            ...conv.lastMessage,
+                            delivered_at: delivered_at || new Date().toISOString()
+                        }
+                    };
+                }
+                return conv;
+            }));
+        };
+
         const onNewConversation = (newConv?: { id?: string }) => {
             loadConversations();
             if (newConv && newConv.id && socket && connected) {
@@ -315,6 +347,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         socket.on('chat:new_conversation', onNewConversation);
         socket.on('chat:conversation_updated', onNewConversation);
         socket.on('chat:message_read', onMessageRead);
+        socket.on('chat:message_delivered', onMessageDelivered);
         socket.on('chat:typing', ({ conversationId, userId, username, isTyping }: { conversationId: string, userId: string, username: string, isTyping?: boolean }) => {
             if (userId === user?.id) return;
             setTypingUsers(prev => {
@@ -402,6 +435,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             socket.off('chat:new_conversation', onNewConversation);
             socket.off('chat:conversation_updated', onNewConversation);
             socket.off('chat:message_read', onMessageRead);
+            socket.off('chat:message_delivered', onMessageDelivered);
             socket.off('chat:typing');
             socket.off('chat:conversation_read');
             socket.off('chat:conversation_deleted', onConversationDeleted);
@@ -591,6 +625,18 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             });
         } catch (err) {
             console.error('[Chat] Failed to mark read:', err);
+        }
+    }, [session]);
+
+    const markMessageDelivered = useCallback(async (messageId: string) => {
+        if (!session) return;
+        try {
+            await fetch(`${API_URL}/api/chat/messages/${messageId}/deliver`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${session.access_token}` }
+            });
+        } catch (err) {
+            console.error('[Chat] Failed to mark delivered:', err);
         }
     }, [session]);
 

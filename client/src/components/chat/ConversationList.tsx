@@ -109,9 +109,15 @@ const ConversationList: React.FC = () => {
                                     </span>
                                 )}
 
-                                {lastMsg && lastMsg.sender_id === user?.id && unreadCount === 0 && (
-                                    <div className="flex-shrink-0 opacity-40">
-                                        {lastMsg.read_at ? <CheckCheck size={12} className="text-blue-400" /> : <Check size={12} />}
+                                {lastMsg && lastMsg.sender_id === user?.id && (
+                                    <div className="flex-shrink-0 opacity-60 scale-75">
+                                        {lastMsg.read_at ? (
+                                            <CheckCheck size={14} className="text-blue-400 font-bold" />
+                                        ) : lastMsg.delivered_at ? (
+                                            <CheckCheck size={14} className="text-gray-400" />
+                                        ) : (
+                                            <Check size={14} className="text-gray-500" />
+                                        )}
                                     </div>
                                 )}
                             </div>

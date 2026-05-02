@@ -461,6 +461,49 @@ exports.markMessageRead = async (req, res) => {
   }
 };
 
+exports.markMessageDelivered = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user.id;
+
+    try {
+      const { data, error } = await supabase
+        .from("messages")
+        .update({ delivered_at: new Date().toISOString() })
+        .eq("id", messageId)
+        .neq("sender_id", userId) // Only mark as delivered if not the sender
+        .select()
+        .single();
+
+      if (error) {
+        if (error.code === "42703" || error.code === "PGRST204") {
+          console.warn(
+            "[Chat Controller] delivered_at column missing, skipping update",
+          );
+          return res.json({ success: true, note: "delivered_at column missing" });
+        }
+        throw error;
+      }
+
+      // Emit delivered receipt via gateway
+      await realtime.emitToConversation(data.conversation_id, "chat:message_delivered", {
+        messageId,
+        conversationId: data.conversation_id,
+        userId,
+        delivered_at: data.delivered_at
+      });
+
+      res.json({ success: true });
+    } catch (updateErr) {
+      console.warn("[Chat Controller] Failed to mark delivered:", updateErr.message);
+      res.json({ success: true, error: "Feature unavailable" });
+    }
+  } catch (err) {
+    console.error("Error marking message delivered:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
 exports.sendMessage = async (req, res) => {
   try {
     const { conversationId } = req.params;

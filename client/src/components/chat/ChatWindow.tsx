@@ -910,9 +910,11 @@ const ChatWindow: React.FC = () => {
                                                         </span>
                                                     )}
                                                     {msg.sender_id === user?.id && (
-                                                        <div className="text-white/80 scale-75 origin-right relative">
+                                                        <div className="text-white/80 scale-75 origin-right relative flex items-center justify-center">
                                                             {msg.read_at ? (
                                                                 <CheckCheck size={14} className="text-cyan-400 drop-shadow-[0_0_3px_rgba(34,211,238,0.8)] animate-in zoom-in-50 duration-300 transition-all font-extrabold" />
+                                                            ) : msg.delivered_at ? (
+                                                                <CheckCheck size={14} className="text-gray-300 animate-in fade-in duration-300 opacity-80" />
                                                             ) : (
                                                                 <Check size={14} className="animate-in fade-in duration-300 opacity-60" />
                                                             )}
@@ -967,9 +969,11 @@ const ChatWindow: React.FC = () => {
                                                         </span>
                                                     )}
                                                     {msg.sender_id === user?.id && (
-                                                        <div className="text-white/80 scale-75 origin-right relative">
+                                                        <div className="text-white/80 scale-75 origin-right relative flex items-center justify-center">
                                                             {msg.read_at ? (
                                                                 <CheckCheck size={14} className="text-cyan-400 drop-shadow-[0_0_3px_rgba(34,211,238,0.8)] animate-in zoom-in-50 duration-300 transition-all font-extrabold" />
+                                                            ) : msg.delivered_at ? (
+                                                                <CheckCheck size={14} className="text-gray-300 animate-in fade-in duration-300 opacity-80" />
                                                             ) : (
                                                                 <Check size={14} className="animate-in fade-in duration-300 opacity-60" />
                                                             )}
