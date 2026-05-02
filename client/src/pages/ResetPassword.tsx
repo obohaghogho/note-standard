@@ -48,35 +48,49 @@ export const ResetPassword = () => {
         const checkSession = async () => {
             try {
                 // First check immediate session
-                const { data: { session } } = await supabase.auth.getSession();
+                const { data: { session: existingSession } } = await supabase.auth.getSession();
                 if (!mounted) return;
-
-                if (session) {
+ 
+                if (existingSession) {
                     console.log('[ResetPassword] Session found');
                     setError(null);
                     setIsInitializing(false);
-                    if (session.user?.email) {
-                        setEmail(session.user.email);
+                    if (existingSession.user?.email) {
+                        setEmail(existingSession.user.email);
                     }
                     return;
                 }
 
-                // If no session, check for recovery hash (implicit flow helper)
+                // If no session, check for recovery tokens (hash or query)
                 const hash = window.location.hash;
-                if (hash && (hash.includes('type=recovery') || hash.includes('access_token='))) {
-                    console.log('[ResetPassword] Recovery hash detected, waiting for event...');
-                    // We stay in initializing state as the event listener above will catch it
-                    // But we add a safety timeout if the event NEVER fires
+                const code = searchParams.get('code');
+                const hasTokens = (hash && (hash.includes('type=recovery') || hash.includes('access_token='))) || code;
+
+                if (hasTokens) {
+                    console.log('[ResetPassword] Recovery tokens detected, waiting for session activation...');
+                    // If we have a 'code', Supabase handles it automatically since detectSessionInUrl is now true
                     setTimeout(() => {
                         if (mounted && isInitializing) {
                             setIsInitializing(false);
-                            setError('Reset process timed out. Please try again or refresh the page.');
+                            setError('Reset process timed out. Please try requesting a new link.');
                         }
-                    }, 8000);
+                    }, 10000);
                 } else {
-                    // No session and no hash? It's probably an invalid visit
+                    // No session and no tokens?
+                    // Final attempt: wait 1 second just in case of race condition in detection
+                    await new Promise(r => setTimeout(r, 1000));
+                    if (!mounted) return;
+                    
+                    const { data: { session: retrySession } } = await supabase.auth.getSession();
+                    if (retrySession) {
+                        setError(null);
+                        setIsInitializing(false);
+                        setEmail(retrySession.user?.email || '');
+                        return;
+                    }
+
                     setIsInitializing(false);
-                    setError('No active session found. Please try requesting a new password reset link.');
+                    setError('No active session found. This link may have expired or was already used.');
                 }
             } catch (err) {
                 if (!mounted) return;

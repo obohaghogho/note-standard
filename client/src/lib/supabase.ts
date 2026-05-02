@@ -33,7 +33,7 @@ export const supabase = createClient(supabaseUrl || '', supabaseKey || '', {
     auth: {
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: false, // Handle auth events manually via onAuthStateChange
+        detectSessionInUrl: true, // Allow Supabase to process recovery/signup tokens from URL automatically
         storage: window.localStorage
     },
     global: {
