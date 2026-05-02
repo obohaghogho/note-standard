@@ -145,7 +145,7 @@ class FXService {
     let mode = 'FRESH';
     if (age > this.STALE_THRESHOLD) {
         mode = 'INVALID';
-    } else if (age > MAX_EXECUTION_STALE_SECS) {
+    } else if (age > 7200) { // 2 hours = execution staleness limit
         mode = 'STALE';
     }
 
@@ -371,80 +371,85 @@ class FXService {
   }
 
   async getAllRates(base = "USD", walletId = null) {
-    let rates = {};
-    let metadata = {};
-    let evaluationId = null;
-    let frozenAssets = [];
-    let snapshotBase = null;
-
+    // ── SIMPLE, RELIABLE RATE RESOLUTION ────────────────────────
+    // Step 1: Always fetch directly from the proven legacy engine.
+    //         This calls CoinGecko → LKG fallback → seed fallback.
+    //         It NEVER depends on the database or snapshot system.
+    let legacy;
     try {
-      // 1. Fetch Snapshot (Truth Source)
-      snapshotBase = await SnapshotService.getAuthoritativeRates('DISPLAY');
-      
-      const CanaryUtils = require("../utils/canaryUtils");
-      const isCanary = CanaryUtils.isCanary(walletId);
-      
-      // 2. Decision Path
-      if (isCanary && snapshotBase && snapshotBase.mode !== 'INVALID' && snapshotBase.rates && Object.keys(snapshotBase.rates).length > 0) {
-        try {
-          const DecisionEngine = require("./DecisionEngine");
-          const legacyRaw = await this._getLegacyRates(base);
-          const decision = DecisionEngine.evaluate(snapshotBase, walletId, legacyRaw.rates);
-          
-          rates = snapshotBase.rates;
-          evaluationId = SnapshotService.generateEvaluationId(walletId || "global", snapshotBase.id, new Date());
-          
-          metadata = Object.keys(rates).reduce((acc, sym) => {
-            acc[sym] = { 
-              mode: snapshotBase.mode, 
-              canExecute: decision.state === 'ALLOWED' || decision.state === 'SOFT_WARN',
-              reason: decision.reason
-            };
-            return acc;
-          }, {});
-          
-          frozenAssets = decision.frozenAssets;
-          
-          // Successful Canary Path
-          return { rates, metadata, evaluationId, frozenAssets };
-        } catch (innerErr) {
-          logger.error(`[FXService] Canary Path Error: ${innerErr.message}. Falling back to legacy.`);
+      legacy = await this._getLegacyRates(base);
+    } catch (err) {
+      logger.error(`[FXService] _getLegacyRates failed: ${err.message}`);
+      legacy = { rates: {}, metadata: {} };
+    }
+
+    let rates = legacy.rates;
+    let metadata = legacy.metadata;
+    let evaluationId = 'LIVE';
+    let frozenAssets = [];
+
+    // ── Step 2: NON-NEGOTIABLE Ticker Integrity Check ────────────
+    // Guarantee major assets are never zero. If legacy returned 0 for
+    // BTC or ETH (e.g. circuit breaker active), force-fill from LKG cache.
+    const SEEDS = { BTC: 70000, ETH: 2500, USD: 1, NGN: 0.00066 };
+    for (const [ticker, seedPrice] of Object.entries(SEEDS)) {
+      if (!rates[ticker] || rates[ticker] <= 0) {
+        // Try LKG cache first (has real market data from before rate-limit)
+        const lkgVal = cache.get(`lkg_price_${ticker.toUpperCase()}`);
+        if (lkgVal && lkgVal > 0) {
+          rates[ticker] = ticker === 'USD' ? lkgVal : (lkgVal / (rates['USD'] || 1));
+          // For crypto: getValidatedRate already returns USD price directly
+          const rateResult = await this.getValidatedRate(ticker, base).catch(() => ({ rate: 0 }));
+          if (rateResult.rate > 0) rates[ticker] = rateResult.rate;
+          metadata[ticker] = { ...(metadata[ticker] || {}), mode: 'LKG', canExecute: false };
+          logger.warn(`[FXService] Filled ${ticker} from LKG cache: ${rates[ticker]}`);
+        } else {
+          // Last resort: use hardcoded seed
+          rates[ticker] = seedPrice;
+          metadata[ticker] = { ...(metadata[ticker] || {}), mode: 'SEED_FALLBACK', canExecute: false };
+          logger.warn(`[FXService] Filled ${ticker} from seed: ${seedPrice}`);
         }
       }
-    } catch (err) {
-      logger.error(`[FXService] Snapshot Path Error: ${err.message}`);
     }
 
-    // ── FALLBACK PATH: Legacy Engine ─────────────────────────────
-    // If the complex canary/snapshot logic fails, we use the hardened legacy logic
+    // ── Step 3: Enrichment from Snapshot (optional, non-blocking) ─
+    // Try to get a snapshot for the evaluationId and frozen assets.
+    // This does NOT overwrite rates — it only adds governance metadata.
     try {
-      const legacy = await this._getLegacyRates(base);
-      rates = legacy.rates;
-      metadata = legacy.metadata;
-      evaluationId = snapshotBase?.id ? SnapshotService.generateEvaluationId(walletId || "global", snapshotBase.id, new Date()) : 'LEGACY_FALLBACK';
-    } catch (fallbackErr) {
-      logger.error(`[FXService] Legacy Fallback Failed: ${fallbackErr.message}`);
-      // Final emergency return to prevent 500
-      return { rates: {}, metadata: {}, evaluationId: 'CRITICAL_FAILURE', frozenAssets: [] };
-    }
-
-    // ── FINAL SANITIZATION: Non-Negotiable Ticker Integrity ──────
-    // This is the "Nuclear Option" to ensure BTC/ETH never show N/A.
-    // If anything above failed or returned 0, we force-fill from Legacy LKG.
-    const coreTickers = ["BTC", "ETH", "USD", "NGN"];
-    for (const ticker of coreTickers) {
-        if (!rates[ticker] || rates[ticker] <= 0) {
-            const fallback = await this.getValidatedRate(ticker, base);
-            if (fallback.rate > 0) {
-                rates[ticker] = fallback.rate;
-                if (!metadata[ticker]) metadata[ticker] = { mode: 'EMERGENCY_RECOVERY', canExecute: false };
-                logger.warn(`[FXService] EMERGENCY_FILL triggered for ${ticker}: Ticker was missing or zero.`);
+      const snapshotBase = await SnapshotService.getAuthoritativeRates('DISPLAY');
+      if (snapshotBase && snapshotBase.id) {
+        evaluationId = SnapshotService.generateEvaluationId(walletId || "global", snapshotBase.id, new Date());
+        
+        // Only use snapshot rates if they are BETTER (non-zero) than what we have
+        if (snapshotBase.rates) {
+          for (const [sym, snapRate] of Object.entries(snapshotBase.rates)) {
+            if (snapRate > 0 && (!rates[sym] || rates[sym] <= 0)) {
+              rates[sym] = snapRate;
+              metadata[sym] = { mode: 'SNAPSHOT', canExecute: true };
             }
+          }
         }
+
+        // Get frozen assets from decision engine if canary
+        const CanaryUtils = require("../utils/canaryUtils");
+        if (CanaryUtils.isCanary(walletId) && snapshotBase.mode !== 'INVALID') {
+          try {
+            const DecisionEngine = require("./DecisionEngine");
+            const decision = DecisionEngine.evaluate(snapshotBase, walletId, rates);
+            frozenAssets = decision.frozenAssets || [];
+          } catch (deErr) {
+            logger.warn(`[FXService] DecisionEngine error (non-fatal): ${deErr.message}`);
+          }
+        }
+      }
+    } catch (snapErr) {
+      logger.warn(`[FXService] Snapshot enrichment skipped: ${snapErr.message}`);
+      // Rates already resolved above — this is purely additive
     }
 
     return { rates, metadata, evaluationId, frozenAssets };
   }
+
 
   /**
    * Internal Legacy Rate Fetcher
