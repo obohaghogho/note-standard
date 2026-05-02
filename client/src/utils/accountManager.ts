@@ -58,10 +58,21 @@ export const accountManager = {
   },
 
   /**
-   * Get the ID of the currently active account
+   * Get the ID of the currently active account.
+   * Cross-checks with list of available accounts to prevent rehydrating ghost accounts.
    */
   getActiveAccountId(): string | null {
-    return localStorage.getItem(ACTIVE_ACCOUNT_KEY);
+    const id = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
+    if (!id) return null;
+    
+    // Validate that this ID actually exists in our accounts list
+    const accounts = this.getAllAccounts();
+    if (!accounts.some(a => a.id === id)) {
+      console.warn(`[AccountManager] Active ID ${id} not found in accounts list. Clearing.`);
+      localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
+      return null;
+    }
+    return id;
   },
 
   /**
@@ -70,7 +81,15 @@ export const accountManager = {
    */
   saveAccount(session: { user: { id?: string; email?: string }; access_token: string; refresh_token: string; expires_at?: number }, profile: Profile) {
     const userId = session?.user?.id || profile?.id;
-    if (!userId || !profile) return;
+    if (!userId || !profile) {
+      console.warn('[AccountManager] Cannot save account: missing userId or profile');
+      return;
+    }
+
+    if (!session.refresh_token) {
+      console.warn(`[AccountManager] Cannot save account ${session?.user?.email}: missing refresh token`);
+      return;
+    }
 
     const accounts = this.getAllAccounts();
     const index = accounts.findIndex(a => a.id === userId);

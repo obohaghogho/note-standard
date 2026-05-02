@@ -5,21 +5,25 @@ import { updateAccountTokens, getAccount, type StoredAccount } from './accountMa
  * Performs a token refresh for a specific account without using the main Supabase singleton.
  * Includes a 'Stale Retry' mechanism to handle race conditions where another tab
  * might have already rotated the token.
+ * Added retry logic for transient failures (network/500s) to prevent false 'expired' reports.
  */
-export const refreshSessionIsolated = async (account: StoredAccount, isRetry = false): Promise<Session | null> => {
+export const refreshSessionIsolated = async (account: StoredAccount, retryCount = 0): Promise<Session | null> => {
+  const MAX_RETRIES = 3;
+  const isStaleRetry = retryCount > 0 && retryCount < 100; // Special flag for the auth rotation retry
+
   try {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
       console.error('[AuthUtils] Missing Supabase environment variables');
-      return null;
+      throw new Error('Configuration error');
     }
 
     const refreshToken = account.tokens?.refresh_token || account.session?.refresh_token;
     if (!refreshToken) {
-      console.error(`[AuthUtils] Missing refresh token for account: ${account.email}`);
-      return null;
+      console.warn(`[AuthUtils] Missing refresh token for account: ${account.email}`);
+      return null; // Terminal: Cannot refresh without token
     }
 
     const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
@@ -38,35 +42,40 @@ export const refreshSessionIsolated = async (account: StoredAccount, isRetry = f
 
     if (!response.ok || !data.access_token) {
       const errorMsg = data.error_description || data.error || `Status ${response.status}`;
-      console.error(`[AuthUtils] Refresh failed for ${account.email}:`, { 
-        status: response.status, 
-        error: data.error, 
-        description: data.error_description 
-      });
-
+      
       // Handle Case: Invalid Grant (400) - Likely token was already rotated elsewhere
-      if (response.status === 400 && !isRetry) {
+      if (response.status === 400 && !isStaleRetry) {
         console.warn(`[AuthUtils] Refresh failed (400) for ${account.email}. Checking for rotation race...`);
         
-        // Reload from storage to see if we have a NEW token now
         const latestAccount = getAccount(account.id);
         const latestToken = latestAccount?.tokens?.refresh_token || latestAccount?.session?.refresh_token;
         const currentToken = account.tokens?.refresh_token || account.session?.refresh_token;
 
         if (latestAccount && latestToken && latestToken !== currentToken) {
           console.log(`[AuthUtils] Token was indeed rotated elsewhere. Retrying with latest...`);
-          return refreshSessionIsolated(latestAccount, true);
+          return refreshSessionIsolated(latestAccount, 100); // 100 marks a stale retry
         }
       }
 
+      // Terminal Auth Errors
       if (
         response.status === 400 ||
+        response.status === 401 ||
+        response.status === 403 ||
         data.error === 'invalid_grant' ||
         data.error_description?.includes('Refresh Token Not Found')
       ) {
-        console.warn(`[AuthUtils] Refresh token permanently revoked for ${account.email}.`);
+        console.warn(`[AuthUtils] Refresh token permanently revoked for ${account.email}: ${errorMsg}`);
         return null;
       }
+
+      // Transient Errors (5xx or others)
+      if (response.status >= 500 && retryCount < MAX_RETRIES) {
+        console.warn(`[AuthUtils] Server error (${response.status}), retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, retryCount)));
+        return refreshSessionIsolated(account, retryCount + 1);
+      }
+
       throw new Error(errorMsg);
     }
 
@@ -84,7 +93,25 @@ export const refreshSessionIsolated = async (account: StoredAccount, isRetry = f
     updateAccountTokens(account.id, newSession);
     return newSession;
   } catch (err) {
+    // Handle Network Errors (Transient)
+    const isNetworkError = !navigator.onLine || 
+      err instanceof TypeError || 
+      (err instanceof Error && (
+        err.message.toLowerCase().includes('fetch') || 
+        err.message.toLowerCase().includes('network') ||
+        err.message.toLowerCase().includes('timeout')
+      ));
+
+    if (isNetworkError && retryCount < MAX_RETRIES) {
+      console.warn(`[AuthUtils] Network error for ${account.email}, retrying... (${retryCount + 1}/${MAX_RETRIES})`, err);
+      await new Promise(r => setTimeout(r, 1000 * Math.pow(2, retryCount)));
+      return refreshSessionIsolated(account, retryCount + 1);
+    }
+
     console.error(`[AuthUtils] Isolated refresh failed for ${account.email}:`, err);
-    return null;
+    
+    // If we reach here, it's a real failure. 
+    // We throw instead of returning null to prevent AuthContext from assuming 'expired session'.
+    throw err;
   }
 };

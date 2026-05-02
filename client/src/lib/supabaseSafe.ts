@@ -484,12 +484,6 @@ export async function ensureProfile(user: User): Promise<Profile | null> {
   // 1. Check if profile exists
   const profileResult = await safeProfile(user.id);
   
-  // If we got null, it could be a transient failure or missing profile.
-  // Rule: Profile must NEVER control auth decisions, so we just return null.
-  if (!profileResult) {
-    return null;
-  }
-
   // If we got an actual object, it's already there
   if (profileResult) return profileResult;
 
