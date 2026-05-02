@@ -76,10 +76,13 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const incomingRingtoneRef = useRef<HTMLAudioElement | null>(null);
 
     useEffect(() => {
-        dialToneRef.current = new Audio('/sounds/ringtone.wav');
+        // Use a cache-buster to prevent net::ERR_CACHE_OPERATION_NOT_SUPPORTED
+        // which often happens in Chrome with .wav files and Service Workers.
+        const cb = `?cb=${Date.now()}`;
+        dialToneRef.current = new Audio(`/sounds/ringtone.wav${cb}`);
         dialToneRef.current.loop = true;
         dialToneRef.current.volume = 0.5;
-        incomingRingtoneRef.current = new Audio('/sounds/ringing.wav');
+        incomingRingtoneRef.current = new Audio(`/sounds/ringing.wav${cb}`);
         incomingRingtoneRef.current.loop = true;
         incomingRingtoneRef.current.volume = 0.8;
 

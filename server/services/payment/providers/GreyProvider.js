@@ -183,12 +183,7 @@ class GreyProvider extends BaseProvider {
       return incomingSecret === secret;
     }
 
-    // In dev mode, allow through with warning
-    if (process.env.NODE_ENV !== "production") {
-      logger.warn("[GreyProvider] No verification secret configured. Dev mode: allowing through.");
-      return true;
-    }
-
+    // Always enforce security
     return false;
   }
 

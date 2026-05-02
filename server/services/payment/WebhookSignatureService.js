@@ -19,10 +19,7 @@ class WebhookSignatureService {
   static verifySendGrid(headers, body, query = {}) {
     const secret = process.env.SENDGRID_INBOUND_PARSE_SECRET;
     if (!secret) {
-      logger.warn(
-        "[SignatureService] SENDGRID_INBOUND_PARSE_SECRET missing. Skipping verification."
-      );
-      return process.env.NODE_ENV !== "production";
+      return false;
     }
 
     const incomingSecret =
@@ -42,7 +39,7 @@ class WebhookSignatureService {
    */
   static verifyBrevo(headers, body, query = {}) {
     const secret = process.env.BREVO_INBOUND_SECRET;
-    if (!secret) return process.env.NODE_ENV !== "production";
+    if (!secret) return false;
 
     const incomingSecret =
       headers["x-brevo-inbound-secret"] ||

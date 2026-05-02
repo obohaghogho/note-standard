@@ -43,8 +43,24 @@ class PayoutService {
 
     const startTime = Date.now();
     try {
-      const accountName = options.accountName || "Account Holder";
+      const accountName = options.accountName;
+      if (!accountName) {
+        throw new Error("accountName is required for bank transfers — it must match the exact name on the destination bank account.");
+      }
       const country = options.country || (currency === "NGN" ? "NG" : "US");
+
+      const beneficiary = {
+        firstName: accountName.split(" ")[0],
+        lastName: accountName.split(" ").slice(1).join(" ") || accountName.split(" ")[0],
+        type: "individual",
+        accountHolderName: accountName,
+        accountNumber: accountNumber,
+        bankCode: bankCode,
+        country: country,
+        sortCode: options.branchCode || options.swiftCode || undefined,
+      };
+      // Only include email if explicitly provided — do not use a fake fallback
+      if (options.email) beneficiary.email = options.email;
 
       const requestPayload = {
           sourceCurrency: currency,
@@ -53,17 +69,7 @@ class PayoutService {
           business: FINCRA_BUSINESS_ID,
           description: narration,
           customerReference: reference,
-          beneficiary: {
-            firstName: accountName.split(" ")[0] || "Account",
-            lastName: accountName.split(" ").slice(1).join(" ") || "Holder",
-            email: options.email || "user@notestandard.com",
-            type: "individual",
-            accountHolderName: accountName,
-            accountNumber: accountNumber,
-            bankCode: bankCode,
-            country: country,
-            sortCode: options.branchCode || options.swiftCode || undefined,
-          },
+          beneficiary,
           paymentDestination: "bank_account",
       };
 

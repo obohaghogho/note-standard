@@ -167,17 +167,25 @@ exports.submitDepositProof = async (req, res) => {
       throw updateError;
     }
 
-    // Notify Admin (Implementation depends on your notification system)
+    // Notify Admin — look up the real admin user ID dynamically
     try {
       const { createNotification } = require("../services/notificationService");
-      // Find an admin user or use a system channel
-      await createNotification({
-        receiverId: "SYSTEM_ADMIN", // Placeholder or actual admin ID
-        type: "deposit_proof_submitted",
-        title: "New Deposit Proof",
-        message: `User submitted proof for transaction ${reference}`,
-        link: `/admin/transactions`
-      });
+      const { data: adminProfile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("role", "admin")
+        .limit(1)
+        .single();
+
+      if (adminProfile?.id) {
+        await createNotification({
+          receiverId: adminProfile.id,
+          type: "deposit_proof_submitted",
+          title: "New Deposit Proof",
+          message: `User submitted proof for transaction ${reference}`,
+          link: `/admin/transactions`
+        });
+      }
     } catch (nErr) {
       console.warn("Admin notification failed:", nErr.message);
     }

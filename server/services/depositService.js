@@ -152,8 +152,10 @@ async function createBankDeposit(
 
   // Fetch bank details from settings
   const allBankDetails = await commissionService.getSetting("bank_deposit_details") || {
-      NGN: { bankName: "Manual Transfer", accountNumber: "Contact Support", accountName: "NoteStandard Admin" },
-      USD: { bankName: "Manual Transfer (USD)", accountNumber: "Pending Initialization", accountName: "NoteStandard Inc" }
+      NGN: { bankName: "Moniepoint", accountNumber: "Contact Support", accountName: "NoteStandard Admin" },
+      USD: { bankName: "Lead Bank (USD)", accountNumber: "210930905386", accountName: "tejiri jude oboh", swiftCode: "101019644" },
+      GBP: { bankName: "Clear Junction (GBP)", accountNumber: "42075582", accountName: "tejiri jude oboh", swiftCode: "CLJUGB21XXX" },
+      EUR: { bankName: "Clear Junction (EUR)", accountNumber: "GB87CLJU04130742075582", accountName: "tejiri jude oboh", swiftCode: "CLJUGB21XXX" }
   };
 
   let profile = null;
