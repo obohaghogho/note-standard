@@ -7,18 +7,13 @@ const router = express.Router();
  * No auth required — must be accessible to all clients including outdated ones.
  */
 const APP_CONFIG = {
-  latest_version: '1.1.6',
-  minimum_version: '1.1.6',
+  latest_version: '1.1.7',
+  minimum_version: '1.1.7',
   force_update: true,
-  update_message: 'Critical mobile compatibility fix: Resolved initialization crashes on Android and iOS.',
+  update_message: 'Critical fix: Resolved "something went wrong loading wallet" crash in the wallet dashboard.',
   changelog: [
-    'Fixed "Cannot access before initialization" crashes on mobile browsers',
-    'Converted core components to function declarations to prevent TDZ errors',
-    'Switched build minifier to Terser for safer production bundles',
-    'Lowered build target to ES2020 for broader Android WebView support',
-    'Enabled production source maps for better error tracing',
-    'Hardened DashboardLayout, Notes, Chat, Settings, and Wallet pages',
-    'Resolved "View blocked" errors on dashboard navigation'
+    'Fixed crash when loading wallet dashboard caused by missing payment schemes',
+    'Improved error handling and optional chaining in BankAccountCard'
   ]
 };
 

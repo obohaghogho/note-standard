@@ -218,7 +218,7 @@ export const BankAccountCard: React.FC = () => {
                                 <div className="flex items-center gap-2">
                                     <span className="text-[10px] text-purple-400 font-bold uppercase tracking-widest">{account.currency} • Checking</span>
                                     <div className="w-1 h-1 rounded-full bg-gray-700" />
-                                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{account.payment_schemes.join(', ')}</span>
+                                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{account.payment_schemes?.join(', ')}</span>
                                 </div>
                             </div>
                         </div>
