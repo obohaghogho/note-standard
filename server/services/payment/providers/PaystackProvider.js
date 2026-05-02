@@ -20,29 +20,34 @@ class PaystackProvider extends BaseProvider {
   async initialize(data) {
     let { email, amount, currency, reference, callbackUrl, metadata } = data;
 
-    // Sandbox & Multi-Currency Auto-Conversion
-    // Paystack (especially Nigerian accounts) primarily supports NGN. 
-    // USD, EUR, GBP, and JPY are often unsupported unless explicitly enabled.
-    const crossBorderCurrencies = ["USD", "EUR", "GBP", "JPY"];
-    
-    if (crossBorderCurrencies.includes(currency)) {
+    // --- PAYSTACK MULTI-CURRENCY ROUTING (DFOS v6.3) ---
+    // Paystack (especially Nigerian accounts) primarily supports NGN and USD.
+    // If the currency is not NGN or USD, we convert it to USD to ensure a
+    // professional international experience for the user.
+    if (!["NGN", "USD"].includes(currency)) {
       const fxService = require("../../fxService");
       try {
-        // We only auto-convert to NGN in TEST MODE to ensure the sandbox checkout doesn't fail.
-        // In LIVE MODE, we let the original currency pass through so the user sees EUR/GBP/etc.
-        const isTestKey = this.secretKey && this.secretKey.includes("test");
-        const shouldConvert = isTestKey && ["EUR", "GBP", "JPY"].includes(currency);
-        
-        if (shouldConvert) {
-          const rate = await fxService.getRate(currency, "NGN");
-          amount = amount * rate;
-          const originalCurrency = currency;
-          currency = "NGN";
-          metadata = { ...metadata, auto_converted_from: originalCurrency, conversion_rate: rate };
-          console.info(`[Paystack] Sandbox Auto-converted ${amount} ${originalCurrency} to NGN for checkout testing.`);
-        }
-      } catch (e) {
-        console.warn(`[Paystack] FX conversion failed for ${currency}, attempting raw request`, e.message);
+        const rate = await fxService.getRate(currency, "USD");
+        amount = amount * rate;
+        currency = "USD";
+        metadata = { ...metadata, paystack_converted: true, original_currency: data.currency };
+      } catch (fxErr) {
+        console.warn(`[Paystack] USD fallback failed: ${fxErr.message}. Attempting native initialization.`);
+      }
+    }
+
+    // Sandbox Safety: Paystack Sandbox often only supports NGN.
+    // If we are in test mode and the currency is USD, we convert to NGN for testing stability.
+    const isTestKey = this.secretKey && this.secretKey.includes("test");
+    if (isTestKey && currency === "USD") {
+      const fxService = require("../../fxService");
+      try {
+        const rate = await fxService.getRate("USD", "NGN");
+        amount = amount * rate;
+        currency = "NGN";
+        metadata = { ...metadata, sandbox_converted: true };
+      } catch (fxErr) {
+        console.warn(`[Paystack] Sandbox NGN fallback failed: ${fxErr.message}`);
       }
     }
 

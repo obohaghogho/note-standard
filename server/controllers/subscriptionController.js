@@ -47,14 +47,13 @@ exports.createCheckoutSession = async (req, res) => {
     let exchangeRate = 1;
 
     if (usedMethod === "paystack") {
-      // If the user chose NGN, or we want to force NGN for settlement:
-      // For subscriptions, we often want to charge in NGN to use Paystack Plans.
-      if (upCurrency === "NGN" || ["USD", "EUR", "GBP", "JPY"].includes(upCurrency)) {
-        const conversion = await fxService.convert(usdAmount, "USD", "NGN", true);
-        finalAmount = conversion.amount;
-        processedCurrency = "NGN";
-        exchangeRate = conversion.rate;
-      }
+      // We now charge in the user's selected currency (EUR, USD, GBP, etc.) 
+      // instead of forcing a conversion to NGN. This ensures the user sees 
+      // the same currency in the gateway that they selected on the platform.
+      const conversion = await fxService.convert(usdAmount, "USD", upCurrency, true);
+      finalAmount = conversion.amount;
+      processedCurrency = upCurrency;
+      exchangeRate = conversion.rate;
     } else if (usedMethod === "fincra") {
       // Legacy Fincra flow (usually USD)
       processedCurrency = "USD";

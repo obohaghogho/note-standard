@@ -24,12 +24,27 @@ async function createCardDeposit(
 ) {
   const { toCurrency, toNetwork } = options;
   const upCurrency = currency.toUpperCase();
-  // --- UNIVERSAL NATIVE CURRENCY SUPPORT (DFOS v6.2) ---
-  // We no longer force conversion to USD at the service level.
-  // This ensures the payment gateway shows the original currency (EUR, GBP, etc.)
-  // providing a better user experience without confusing conversions.
+  // --- UNIVERSAL USD FALLBACK FOR INTERNATIONAL (DFOS v6.3) ---
+  // Since Paystack primarily supports NGN and USD, we convert EUR/GBP/JPY
+  // to USD for the gateway. This provides a better experience than NGN
+  // while ensuring the transaction can be processed.
   let gatewayOptions = { isCrypto: false };
-  if (upCurrency === "BTC" || upCurrency === "ETH") {
+
+  if (["EUR", "GBP", "JPY"].includes(upCurrency)) {
+    try {
+      const rate = await fxService.getRate(upCurrency, "USD");
+      // Add a small 1% buffer for FX volatility
+      const bufferedRate = math.multiply(rate, 1.01); 
+      const amountInUsd = math.multiply(amount, bufferedRate);
+      
+      gatewayOptions.gatewayCurrency = "USD";
+      gatewayOptions.gatewayAmount = parseFloat(math.formatSafe(amountInUsd));
+      
+      logger.info(`[DepositService] Routing ${amount} ${upCurrency} via USD ($${gatewayOptions.gatewayAmount}) for Paystack compatibility.`);
+    } catch (fxErr) {
+      logger.warn(`[DepositService] USD fallback conversion failed: ${fxErr.message}. Proceeding natively.`);
+    }
+  } else if (upCurrency === "BTC" || upCurrency === "ETH") {
     throw new Error(`${upCurrency} deposits are not supported via payment`);
   }
 
