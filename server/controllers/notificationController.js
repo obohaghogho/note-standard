@@ -207,6 +207,76 @@ const registerNativeToken = async (req, res, next) => {
   }
 };
 
+/**
+ * Generic endpoint to send a notification from the frontend
+ */
+const sendNotification = async (req, res, next) => {
+  try {
+    const { id: senderId } = req.user;
+    const { receiverId, type, title, message, link } = req.body;
+
+    if (!receiverId || !type || !title) {
+      return res.status(400).json({ error: "receiverId, type, and title are required" });
+    }
+
+    await notificationService.createNotification({
+      receiverId,
+      senderId,
+      type,
+      title,
+      message,
+      link,
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Endpoint to notify all members of a team (except sender)
+ */
+const notifyTeam = async (req, res, next) => {
+  try {
+    const { id: senderId } = req.user;
+    const { teamId, type, title, message, link } = req.body;
+
+    if (!teamId || !type || !title) {
+      return res.status(400).json({ error: "teamId, type, and title are required" });
+    }
+
+    // Get all team members
+    const { data: members, error } = await supabase
+      .from("team_members")
+      .select("user_id")
+      .eq("team_id", teamId)
+      .neq("user_id", senderId);
+
+    if (error) throw error;
+
+    if (members && members.length > 0) {
+      // Send notifications in parallel
+      await Promise.all(
+        members.map(member => 
+          notificationService.createNotification({
+            receiverId: member.user_id,
+            senderId,
+            type,
+            title,
+            message,
+            link,
+          })
+        )
+      );
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getNotifications,
   getUnreadCount,
@@ -217,4 +287,6 @@ module.exports = {
   deleteAllNotifications,
   notifyLogin,
   registerNativeToken,
+  sendNotification,
+  notifyTeam,
 };

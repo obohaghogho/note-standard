@@ -11,6 +11,8 @@ const {
   deleteAllNotifications,
   notifyLogin,
   registerNativeToken,
+  sendNotification,
+  notifyTeam,
 } = require("../controllers/notificationController");
 
 router.use(requireAuth);
@@ -22,6 +24,8 @@ router.patch("/read-all", markAllAsRead);
 router.post("/subscribe", subscribeToNotifications);
 router.post("/register-native-token", registerNativeToken);
 router.post("/login-notify", notifyLogin);
+router.post("/send", sendNotification);
+router.post("/notify-team", notifyTeam);
 router.delete("/:id", deleteNotification);
 router.delete("/", deleteAllNotifications);
 

@@ -4,6 +4,7 @@
 // ====================================
 
 import { supabase, safeCall } from './supabaseSafe';
+import api from '../api/axiosInstance';
 import type {
   Team,
   TeamMember,
@@ -300,6 +301,15 @@ export async function inviteMember(teamId: string, req: InviteMemberRequest): Pr
         },
       });
 
+    // Send push notification
+    api.post('/notifications/send', {
+      receiverId: userId,
+      type: 'team_invite',
+      title: 'Team Invitation',
+      message: `You have been invited to join a team by ${sessionData.session.user.email}`,
+      link: '/dashboard/teams'
+    }).catch(err => console.error('[TeamsAPI] Failed to send invite notification:', err));
+
     return data;
   }, { minDelay: 500 });
 }
@@ -461,6 +471,16 @@ export async function sendMessage(teamId: string, req: SendMessageRequest): Prom
       .single();
 
     if (error) throw error;
+
+    // Trigger push notification to all team members
+    api.post('/notifications/notify-team', {
+      teamId,
+      type: 'team_message',
+      title: 'New Team Message',
+      message: `New message in your team chat: ${req.content?.substring(0, 50)}${req.content?.length > 50 ? '...' : ''}`,
+      link: '/dashboard/teams'
+    }).catch(err => console.error('[TeamsAPI] Failed to broadcast team message notification:', err));
+
     return data;
   }, { minDelay: 500 }); // Lower cooldown for chat
 }
@@ -529,6 +549,15 @@ export async function shareNote(teamId: string, req: ShareNoteRequest): Promise<
         .update({ message_id: message.id })
         .eq('id', sharedNote.id);
     }
+
+    // Trigger push notification to all team members
+    api.post('/notifications/notify-team', {
+      teamId,
+      type: 'note_share',
+      title: 'Note Shared',
+      message: `A note was shared with your team by ${session.session.user.email}`,
+      link: '/dashboard/teams'
+    }).catch(err => console.error('[TeamsAPI] Failed to broadcast note share notification:', err));
 
     return sharedNote;
   }, { minDelay: 1000 });
