@@ -122,6 +122,22 @@ class SnapshotService {
             }
 
             // 5. Persistence (DFOS v6.x+ Immutable Ledger)
+            // Validation: Ensure we don't persist "Broken" snapshots with missing core assets
+            const coreAssets = ["BTC", "ETH", "NGN", "USD"];
+            const isBroken = coreAssets.some(asset => !finalRates[asset] || finalRates[asset] <= 0);
+            
+            if (isBroken && !injectedResults) {
+                logger.error(`[SnapshotService] Refusing to persist broken snapshot. Rates: ${JSON.stringify(finalRates)}`);
+                // Return the object but don't save to DB. getAuthoritativeRates will handle it.
+                return { 
+                    id: 'EMERGENCY_RECOVERY', 
+                    rates: finalRates, 
+                    confidence_score: 0.1, 
+                    created_at: new Date().toISOString(),
+                    mode: 'INVALID' 
+                };
+            }
+
             if (injectedResults) {
                 // Phase 4/5: Shadow Simulation isolation
                 return { 
@@ -141,34 +157,51 @@ class SnapshotService {
                 };
             }
 
-            const checksum = this.generateChecksum(finalRates);
-            
-            const { data: snapshot, error } = await supabase
-                .from("market_snapshots")
-                .insert({
+            // ── DB Persistence (Non-Fatal) ──────────────────────────
+            // If the DB insert fails (e.g. mock stub, network issue), we still
+            // return a valid in-memory snapshot so the UI is never blocked.
+            let snapshot;
+            try {
+                const checksum = this.generateChecksum(finalRates);
+                const { data, error } = await supabase
+                    .from("market_snapshots")
+                    .insert({
+                        rates: finalRates,
+                        confidence_score: parseFloat(confidence.toFixed(4)),
+                        source_metadata: { 
+                            sourceTrace, 
+                            regime, 
+                            pcsScore,
+                            timeIntegrityScore,
+                            temporal,
+                            isEmergencyFixed: this.rePollCycleLock 
+                        },
+                        checksum
+                    })
+                    .select().single();
+
+                if (error) throw error;
+                snapshot = data;
+                cache.set("latest_market_snapshot", snapshot, 300);
+                logger.info(`[SnapshotService] Snapshot ${snapshot.id} [${regime}] persisted (Confidence: ${snapshot.confidence_score})`);
+            } catch (dbErr) {
+                // DB failed — build an in-memory snapshot so caller is never blocked
+                logger.warn(`[SnapshotService] DB persist failed (${dbErr.message}). Serving in-memory snapshot.`);
+                snapshot = {
+                    id: `mem_${Date.now()}`,
                     rates: finalRates,
                     confidence_score: parseFloat(confidence.toFixed(4)),
-                    source_metadata: { 
-                        sourceTrace, 
-                        regime, 
-                        pcsScore,
-                        timeIntegrityScore,
-                        temporal,
-                        isEmergencyFixed: this.rePollCycleLock 
-                    },
-                    checksum
-                })
-                .select().single();
-
-      if (error) throw error;
-
-      cache.set("latest_market_snapshot", snapshot, 300);
-      logger.info(`[SnapshotService] Snapshot ${snapshot.id} [${regime}] (Confidence: ${snapshot.confidence_score})`);
+                    created_at: new Date().toISOString(),
+                    mode: 'VALID'
+                };
+                cache.set("latest_market_snapshot", snapshot, 60); // Short TTL — retry DB next time
+            }
       
       return snapshot;
     } catch (err) {
       logger.error(`[SnapshotService] Generation Failed: ${err.message}`);
-      throw err;
+      // Return null — caller must handle gracefully
+      return null;
     }
   }
 
@@ -177,43 +210,52 @@ class SnapshotService {
    * @param {string} context - 'DISPLAY' | 'EXECUTION'
    */
   async getAuthoritativeRates(context = 'DISPLAY') {
-    let snapshot = cache.get("latest_market_snapshot");
+    try {
+      let snapshot = cache.get("latest_market_snapshot");
     
-    if (!snapshot) {
-      // Recovery Path: Attempt to find the latest valid snapshot in DB
-      const { data } = await supabase
-        .from("market_snapshots")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(1);
-      
-      snapshot = data?.[0];
-
-      // If still no snapshot, trigger an immediate generation
       if (!snapshot) {
-          logger.info(`[SnapshotService] No snapshots in DB. Triggering first-run generation for context: ${context}`);
-          snapshot = await this.generateMarketSnapshot(null, context);
+        // Recovery Path: Attempt to find the latest valid snapshot in DB
+        try {
+          const { data } = await supabase
+            .from("market_snapshots")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .limit(1);
+          snapshot = data?.[0];
+        } catch (dbErr) {
+          logger.warn(`[SnapshotService] DB query failed: ${dbErr.message}`);
+        }
+
+        // If still no snapshot, trigger an immediate generation
+        if (!snapshot) {
+            logger.info(`[SnapshotService] No cached/DB snapshot. Triggering generation for context: ${context}`);
+            snapshot = await this.generateMarketSnapshot(null, context);
+        }
       }
-    }
-
-    if (!snapshot) return { rates: {}, mode: 'INVALID', score: 0 };
-
-    const now = Date.now();
-    const age = now - new Date(snapshot.created_at).getTime();
     
-    // Tiered LKG Policy (v6.0 Refined)
-    if (age > 300000) { // Older than 5 minutes
-      if (context === 'EXECUTION') {
-        return { ...snapshot, mode: 'INVALID_STALE_BLOCKED', score: 0 };
-      }
-      return { 
-        ...snapshot, 
-        mode: 'STALE_EXPLICIT', 
-        score: Math.min(snapshot.confidence_score, 0.75) // Confidence Ceiling
-      };
-    }
+      if (!snapshot) return { rates: {}, mode: 'INVALID', score: 0 };
 
-    return { ...snapshot, mode: 'VALID', score: snapshot.confidence_score };
+      const now = Date.now();
+      const age = now - new Date(snapshot.created_at).getTime();
+      
+      // Tiered LKG Policy (v6.0 Refined)
+      if (age > 300000) { // Older than 5 minutes
+        if (context === 'EXECUTION') {
+          return { ...snapshot, mode: 'INVALID_STALE_BLOCKED', score: 0 };
+        }
+        return { 
+          ...snapshot, 
+          mode: 'STALE_EXPLICIT', 
+          score: Math.min(snapshot.confidence_score, 0.75) // Confidence Ceiling
+        };
+      }
+
+      return { ...snapshot, mode: 'VALID', score: snapshot.confidence_score };
+    } catch (err) {
+      logger.error(`[SnapshotService] getAuthoritativeRates failed: ${err.message}`);
+      // Return graceful invalid — FXService will use legacy path
+      return { rates: {}, mode: 'INVALID', score: 0 };
+    }
   }
 
   /**

@@ -51,10 +51,12 @@ class FXService {
       
       if (snapshot && snapshot.rates) {
         for (const [sym, price] of Object.entries(snapshot.rates)) {
+          if (!price || price <= 0) continue; // NEVER poison the cache with zero prices
+          
           const key = `lkg_price_${sym.toUpperCase()}`;
           const timestampKey = `lkg_time_${sym.toUpperCase()}`;
           
-          // Force overwrite seeds with actual DB truth
+          // Force overwrite seeds with actual DB truth if it's valid
           cache.set(key, price, 86400 * 7);
           cache.set(timestampKey, new Date(snapshot.created_at).getTime(), 86400 * 7);
           logger.info(`[FXService] Recovered persistent LKG for ${sym}: $${price} (Age: ${Math.round((Date.now() - new Date(snapshot.created_at).getTime())/3600000)}h)`);
@@ -369,94 +371,76 @@ class FXService {
   }
 
   async getAllRates(base = "USD", walletId = null) {
-    const CanaryUtils = require("../utils/canaryUtils");
-    const DecisionEngine = require("./DecisionEngine");
-    
-    // 1. Determine Authority (Canary vs Legacy)
-    const isCanary = CanaryUtils.isCanary(walletId);
     let rates = {};
     let metadata = {};
     let evaluationId = null;
     let frozenAssets = [];
+    let snapshotBase = null;
 
-    // 2. Fetch Truth (Snapshot Ledger)
-    const snapshotBase = await SnapshotService.getAuthoritativeRates('DISPLAY');
-    
-    if (isCanary && snapshotBase.mode !== 'INVALID') {
-      // CANARY PATH: Snapshot is the System of Record
-      rates = snapshotBase.rates;
-      evaluationId = SnapshotService.generateEvaluationId(walletId || "global", snapshotBase.id, new Date());
+    try {
+      // 1. Fetch Snapshot (Truth Source)
+      snapshotBase = await SnapshotService.getAuthoritativeRates('DISPLAY');
       
-      const legacyRaw = await this._getLegacyRates(base);
-      const decision = DecisionEngine.evaluate(snapshotBase, walletId, legacyRaw.rates);
+      const CanaryUtils = require("../utils/canaryUtils");
+      const isCanary = CanaryUtils.isCanary(walletId);
       
-      // Phase 5: Truth-Resilience Kernel
-      const maxDrift = decision.maxDrift || 0;
-      const driftFriction = ACE.calculateDriftFriction(walletId || "global", maxDrift);
-      const microstructureInconsistency = ACE.checkMicrostructureConsistency(
-          maxDrift * 10000, 
-          snapshotBase.source_metadata?.temporal?.loadMetrics?.cpu?.user / 1e5 || 5
-      );
-      
-      const isSuspicious = ACE.isConsensusSuspicious(
-          snapshotBase.confidence_score,
-          microstructureInconsistency,
-          driftFriction
-      );
-
-      const epistemic = epistemicManager.evaluateState(walletId || "global", decision.score, {
-          isSuspicious,
-          timeIntegrityScore: snapshotBase.source_metadata?.timeIntegrityScore || 1.0
-      });
-
-      // Phase 3: Drift Velocity Engine (Predictive Layer)
-      const driftRegime = await this.classifyDriftRegime(walletId || "global", maxDrift);
-
-      // Phase 3/5: Gated Self-Healing (Disbaled in uncertainty)
-      if (decision.score > 0.90 && epistemic.state === 'STABLE') {
-        for (const [sym, rate] of Object.entries(rates)) {
-          const legacyRate = legacyRaw.rates[sym];
-          if (legacyRate && Math.abs(rate - legacyRate) / legacyRate > 0.0075) {
-            await this.healLegacyBaseline(sym, rate, snapshotBase.score);
-          }
+      // 2. Decision Path
+      if (isCanary && snapshotBase && snapshotBase.mode !== 'INVALID' && snapshotBase.rates && Object.keys(snapshotBase.rates).length > 0) {
+        try {
+          const DecisionEngine = require("./DecisionEngine");
+          const legacyRaw = await this._getLegacyRates(base);
+          const decision = DecisionEngine.evaluate(snapshotBase, walletId, legacyRaw.rates);
+          
+          rates = snapshotBase.rates;
+          evaluationId = SnapshotService.generateEvaluationId(walletId || "global", snapshotBase.id, new Date());
+          
+          metadata = Object.keys(rates).reduce((acc, sym) => {
+            acc[sym] = { 
+              mode: snapshotBase.mode, 
+              canExecute: decision.state === 'ALLOWED' || decision.state === 'SOFT_WARN',
+              reason: decision.reason
+            };
+            return acc;
+          }, {});
+          
+          frozenAssets = decision.frozenAssets;
+          
+          // Successful Canary Path
+          return { rates, metadata, evaluationId, frozenAssets };
+        } catch (innerErr) {
+          logger.error(`[FXService] Canary Path Error: ${innerErr.message}. Falling back to legacy.`);
         }
       }
+    } catch (err) {
+      logger.error(`[FXService] Snapshot Path Error: ${err.message}`);
+    }
 
-      metadata = Object.keys(rates).reduce((acc, sym) => {
-        acc[sym] = { 
-          mode: snapshotBase.mode, 
-          canExecute: decision.state === 'ALLOWED' || decision.state === 'SOFT_WARN',
-          reason: decision.reason,
-          regime: driftRegime
-        };
-        return acc;
-      }, {});
-      
-      frozenAssets = decision.frozenAssets;
-    } else {
-      // LEGACY PATH (or Snapshot Failure)
+    // ── FALLBACK PATH: Legacy Engine ─────────────────────────────
+    // If the complex canary/snapshot logic fails, we use the hardened legacy logic
+    try {
       const legacy = await this._getLegacyRates(base);
       rates = legacy.rates;
       metadata = legacy.metadata;
-      
-      // If we are in Canary but failed to find a snapshot, flag the fallback
-      if (isCanary) {
-        Object.values(metadata).forEach(m => m.isFallback = true);
-      }
-      
-      if (snapshotBase.id) {
-        evaluationId = SnapshotService.generateEvaluationId(walletId || "global", snapshotBase.id, new Date());
-      }
+      evaluationId = snapshotBase?.id ? SnapshotService.generateEvaluationId(walletId || "global", snapshotBase.id, new Date()) : 'LEGACY_FALLBACK';
+    } catch (fallbackErr) {
+      logger.error(`[FXService] Legacy Fallback Failed: ${fallbackErr.message}`);
+      // Final emergency return to prevent 500
+      return { rates: {}, metadata: {}, evaluationId: 'CRITICAL_FAILURE', frozenAssets: [] };
     }
 
-    // 3. Shadow Reconciliation (Always run for forensics)
-    if (walletId) {
-      const liveSnapshot = snapshotBase.id ? snapshotBase : await cache.get("latest_market_snapshot");
-      if (liveSnapshot) {
-        this._triggerShadowReconciliation(walletId, rates, liveSnapshot).catch(e => 
-          logger.error(`[FXService] Shadow Recon Trigger Failed: ${e.message}`)
-        );
-      }
+    // ── FINAL SANITIZATION: Non-Negotiable Ticker Integrity ──────
+    // This is the "Nuclear Option" to ensure BTC/ETH never show N/A.
+    // If anything above failed or returned 0, we force-fill from Legacy LKG.
+    const coreTickers = ["BTC", "ETH", "USD", "NGN"];
+    for (const ticker of coreTickers) {
+        if (!rates[ticker] || rates[ticker] <= 0) {
+            const fallback = await this.getValidatedRate(ticker, base);
+            if (fallback.rate > 0) {
+                rates[ticker] = fallback.rate;
+                if (!metadata[ticker]) metadata[ticker] = { mode: 'EMERGENCY_RECOVERY', canExecute: false };
+                logger.warn(`[FXService] EMERGENCY_FILL triggered for ${ticker}: Ticker was missing or zero.`);
+            }
+        }
     }
 
     return { rates, metadata, evaluationId, frozenAssets };
