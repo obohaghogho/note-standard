@@ -148,7 +148,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         try {
             console.log('[Chat] FETCH: Loading conversations', { userId: user?.id });
             const res = await fetch(`${API_URL}/api/chat/conversations`, {
-                headers: { 'Authorization': `Bearer ${session.access_token}` }
+                headers: { 
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache'
+                },
+                cache: 'no-store'
             });
             
             if (!res.ok) throw new Error(`Failed to load conversations: ${res.status}`);
@@ -969,7 +974,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         if (!convId || !session) return;
         try {
             const res = await fetch(`${API_URL}/api/chat/conversations/${convId}/messages`, {
-                headers: { 'Authorization': `Bearer ${session.access_token}` }
+                headers: { 
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache'
+                },
+                cache: 'no-store'
             });
             
             if (!res.ok) return;
@@ -1010,21 +1020,46 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     // ✅ Mobile PWA rapid-sync on foreground (fixes lost sockets when device is locked)
     useEffect(() => {
-        const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible') {
-                console.log('[Chat] App resumed from background. Syncing...');
-                if (socketRef.current && socketRef.current.disconnected) {
-                    socketRef.current.connect();
+        let syncTimeout: ReturnType<typeof setTimeout>;
+
+        const handleForegroundSync = () => {
+            // Debounce to prevent multiple fires from visibilitychange + focus
+            clearTimeout(syncTimeout);
+            syncTimeout = setTimeout(() => {
+                if (document.visibilityState === 'visible') {
+                    console.log('[Chat] App resumed from background. Syncing...');
+                    
+                    if (socketRef.current) {
+                        // On iOS Safari, sockets become zombies when backgrounded.
+                        // Force a clean reconnect if it's been paused to ensure real-time events work.
+                        if (socketRef.current.disconnected) {
+                            socketRef.current.connect();
+                        } else {
+                            // Even if it thinks it's connected, the underlying TCP might be dead.
+                            // We trigger a manual disconnect and reconnect to be completely safe on iOS.
+                            socketRef.current.disconnect();
+                            setTimeout(() => socketRef.current?.connect(), 100);
+                        }
+                    }
+                    
+                    loadConversations();
+                    if (activeConversationIdRef.current) {
+                        fetchActiveMessages(activeConversationIdRef.current);
+                    }
                 }
-                loadConversations();
-                if (activeConversationIdRef.current) {
-                    fetchActiveMessages(activeConversationIdRef.current);
-                }
-            }
+            }, 300);
         };
         
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+        document.addEventListener('visibilitychange', handleForegroundSync);
+        window.addEventListener('focus', handleForegroundSync);
+        window.addEventListener('pageshow', handleForegroundSync);
+        
+        return () => {
+            clearTimeout(syncTimeout);
+            document.removeEventListener('visibilitychange', handleForegroundSync);
+            window.removeEventListener('focus', handleForegroundSync);
+            window.removeEventListener('pageshow', handleForegroundSync);
+        };
     }, [loadConversations, fetchActiveMessages]);
 
     return (

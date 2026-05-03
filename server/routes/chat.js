@@ -4,6 +4,9 @@ const chatController = require("../controllers/chatController");
 const translationController = require("../controllers/translationController");
 const { requireAuth } = require("../middleware/auth");
 
+// Public Webhooks
+router.post("/messages/:messageId/webhook-deliver", chatController.webhookDeliver);
+
 // All chat routes require authentication
 router.use(requireAuth);
 

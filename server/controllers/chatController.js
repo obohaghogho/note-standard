@@ -504,6 +504,34 @@ exports.markMessageDelivered = async (req, res) => {
   }
 };
 
+exports.webhookDeliver = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+
+    const { data, error } = await supabase
+      .from("messages")
+      .update({ delivered_at: new Date().toISOString() })
+      .eq("id", messageId)
+      .is("delivered_at", null)
+      .select()
+      .single();
+
+    if (!error && data) {
+      await realtime.emitToConversation(data.conversation_id, "chat:message_delivered", {
+        messageId,
+        conversationId: data.conversation_id,
+        userId: data.sender_id,
+        delivered_at: data.delivered_at
+      });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error in webhookDeliver:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
 exports.sendMessage = async (req, res) => {
   try {
     const { conversationId } = req.params;
@@ -548,6 +576,7 @@ exports.sendMessage = async (req, res) => {
     // Add optional columns only if they likely exist (based on logic or we can try/catch)
     // For production safety, we'll try a fail-safe insert pattern
     const selectQuery = "*, attachment:media_attachments(*)";
+    let createdMessageId = null;
 
     try {
       const { data, error } = await supabase
@@ -579,11 +608,13 @@ exports.sendMessage = async (req, res) => {
             .single();
 
           if (retryErr) throw retryErr;
+          createdMessageId = retryData.id;
           processAfterMsg(retryData);
         } else {
           throw error;
         }
       } else {
+        createdMessageId = data.id;
         processAfterMsg(data);
       }
     } catch (msgErr) {
@@ -644,6 +675,7 @@ exports.sendMessage = async (req, res) => {
               content.substring(0, 50)
             }${content.length > 50 ? "..." : ""}`,
             link: `/dashboard/chat?id=${conversationId}`,
+            messageId: createdMessageId,
           });
         }
       }

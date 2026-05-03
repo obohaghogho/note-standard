@@ -50,7 +50,9 @@ self.addEventListener('push', (event) => {
         vibrate: [100, 50, 100],
         data: {
             url: data.data?.url || data.url || '/dashboard',
-            type: data.data?.type || data.type || 'general'
+            type: data.data?.type || data.type || 'general',
+            messageId: data.data?.messageId,
+            apiUrl: data.data?.apiUrl || 'https://note-standard-api.onrender.com'
         },
         actions: [
             { action: 'open', title: 'View Now' },
@@ -67,7 +69,16 @@ self.addEventListener('push', (event) => {
         options.tag = `incoming-call-${Date.now()}`; // Unique tag so previous calls don't overwrite current ones
     }
 
-    event.waitUntil(self.registration.showNotification(title, options));
+    if (options.data.type === 'chat_message' && options.data.messageId) {
+        const targetApiUrl = options.data.apiUrl || 'https://note-standard-api.onrender.com';
+        event.waitUntil(
+            fetch(`${targetApiUrl}/api/chat/messages/${options.data.messageId}/webhook-deliver`, { method: 'POST' })
+                .catch(err => console.error('[SW] Delivery receipt failed:', err))
+                .finally(() => self.registration.showNotification(title, options))
+        );
+    } else {
+        event.waitUntil(self.registration.showNotification(title, options));
+    }
 });
 
 // Handle Notification Clicks
