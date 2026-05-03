@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import NotificationToast, { NotificationData } from '../components/NotificationToast';
+import NotificationToast, { type NotificationData } from '../components/NotificationToast';
 import EventEmitter from '../services/EventEmitter';
 
 interface NotificationContextValue {

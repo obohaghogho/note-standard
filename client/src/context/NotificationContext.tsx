@@ -4,7 +4,7 @@ import { useSocket } from './SocketContext';
 import { toast, type Toast } from 'react-hot-toast';
 import { API_URL } from '../lib/api';
 import { AnimatePresence } from 'framer-motion';
-import NotificationToast, { NotificationToastData } from '../components/common/NotificationToast';
+import NotificationToast, { type NotificationToastData } from '../components/common/NotificationToast';
 import { useNavigate } from 'react-router-dom';
 
 interface Notification {
