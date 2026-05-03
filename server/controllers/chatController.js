@@ -31,6 +31,13 @@ exports.getConversations = async (req, res) => {
                             is_verified,
                             plan_tier
                         )
+                    ),
+                    last_message:messages (
+                        content,
+                        sender_id,
+                        created_at,
+                        read_at,
+                        delivered_at
                     )
                 )
             `)
@@ -39,8 +46,20 @@ exports.getConversations = async (req, res) => {
 
     if (error) throw error;
 
-    // Transform structure for client
-    const conversations = data.map((item) => item.conversation);
+    // Transform structure for client: Flatten and pick latest message
+    const conversations = data.map((item) => {
+      const conv = item.conversation;
+      if (!conv) return null;
+      
+      const lastMessages = conv.last_message || [];
+      const sorted = [...lastMessages].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      
+      return {
+        ...conv,
+        last_message: sorted[0] || null
+      };
+    }).filter(Boolean);
+
     res.json(conversations);
   } catch (err) {
     console.error("Error fetching conversations:", err.message);
@@ -252,6 +271,7 @@ exports.acceptConversation = async (req, res) => {
 
         // Notify about the change in conversation status
         await realtime.emitToUser(m.user_id, "chat:conversation_updated", {
+          id: conversationId,
           conversationId,
           userId,
           status: "accepted",
@@ -261,6 +281,7 @@ exports.acceptConversation = async (req, res) => {
 
     // Also notify self across tabs
     await realtime.emitToUser(userId, "chat:conversation_updated", {
+      id: conversationId,
       conversationId,
       userId,
       status: "accepted",

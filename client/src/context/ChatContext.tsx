@@ -367,10 +367,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }));
         };
 
-        const onNewConversation = (newConv?: { id?: string }) => {
+        const onNewConversation = (newConv?: { id?: string; conversationId?: string }) => {
             loadConversations();
-            if (newConv && newConv.id && socket && connected) {
-                socket.emit('join_room', newConv.id);
+            const id = newConv?.id || newConv?.conversationId;
+            if (id && socket && connected) {
+                socket.emit('join_room', id);
             }
         };
 
@@ -768,16 +769,32 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         if (!session) throw new Error('No session');
         
         try {
+            // Optimistic update
+            setConversations(prev => prev.map(c => 
+                c.id === conversationId 
+                ? { 
+                    ...c, 
+                    members: c.members.map(m => m.user_id === user?.id ? { ...m, status: 'accepted' } : m) 
+                  } 
+                : c
+            ));
+
             const res = await fetch(`${API_URL}/api/chat/conversations/${conversationId}/accept`, {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${session.access_token}` }
             });
             
             if (res.ok) {
+                // Refresh to get full server state
                 loadConversations();
+            } else {
+                // Rollback
+                loadConversations();
+                throw new Error('Failed to accept conversation');
             }
         } catch (err) {
             console.error('[Chat] Failed to accept conversation:', err);
+            loadConversations(); // Rollback/Sync
             throw err;
         }
     };
