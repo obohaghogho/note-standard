@@ -7,13 +7,13 @@ const router = express.Router();
  * No auth required — must be accessible to all clients including outdated ones.
  */
 const APP_CONFIG = {
-  latest_version: '1.1.7',
-  minimum_version: '1.1.7',
+  latest_version: '1.1.8',
+  minimum_version: '1.1.8',
   force_update: true,
-  update_message: 'Critical fix: Resolved "something went wrong loading wallet" crash in the wallet dashboard.',
+  update_message: 'Critical fix: Resolved "Something went wrong" crash caused by initialization race condition in ChatProvider.',
   changelog: [
-    'Fixed crash when loading wallet dashboard caused by missing payment schemes',
-    'Improved error handling and optional chaining in BankAccountCard'
+    'Fixed ReferenceError in ChatProvider initialization',
+    'Improved app stability on boot'
   ]
 };
 

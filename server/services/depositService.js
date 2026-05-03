@@ -150,12 +150,36 @@ async function createBankDeposit(
     throw new Error("BTC and ETH deposits are not supported via bank transfer");
   }
 
-  // Fetch bank details from settings
-  const allBankDetails = await commissionService.getSetting("bank_deposit_details") || {
+  // Fetch bank details from settings or grey_instructions table
+  let allBankDetails = await commissionService.getSetting("bank_deposit_details");
+  
+  if (!allBankDetails) {
+      try {
+          const { data: greyData } = await supabase.from("grey_instructions").select("*");
+          if (greyData && greyData.length > 0) {
+              allBankDetails = greyData.reduce((acc, curr) => {
+                  acc[curr.currency] = {
+                      bankName: curr.bank_name,
+                      accountNumber: curr.account_number,
+                      accountName: curr.account_name,
+                      swiftCode: curr.swift_code,
+                      iban: curr.iban,
+                      instructions: curr.instructions
+                  };
+                  return acc;
+              }, {});
+          }
+      } catch (err) {
+          logger.warn("[DepositService] Failed to fetch from grey_instructions table:", err.message);
+      }
+  }
+
+  // Final hardcoded fallback (Grey details)
+  allBankDetails = allBankDetails || {
       NGN: { bankName: "Moniepoint", accountNumber: "Contact Support", accountName: "NoteStandard Admin" },
-      USD: { bankName: "Lead Bank (USD)", accountNumber: "210930905386", accountName: "tejiri jude oboh", swiftCode: "101019644" },
-      GBP: { bankName: "Clear Junction (GBP)", accountNumber: "42075582", accountName: "tejiri jude oboh", swiftCode: "CLJUGB21XXX" },
-      EUR: { bankName: "Clear Junction (EUR)", accountNumber: "GB87CLJU04130742075582", accountName: "tejiri jude oboh", swiftCode: "CLJUGB21XXX" }
+      USD: { bankName: "Lead Bank (USD) - Grey", accountNumber: "210930905386", accountName: "tejiri jude oboh", swiftCode: "101019644", note: "Include reference in narration" },
+      GBP: { bankName: "Clear Junction (GBP) - Grey", accountNumber: "42075582", accountName: "tejiri jude oboh", swiftCode: "CLJUGB21XXX", note: "Include reference in narration" },
+      EUR: { bankName: "Clear Junction (EUR) - Grey", accountNumber: "GB87CLJU04130742075582", accountName: "tejiri jude oboh", swiftCode: "CLJUGB21XXX", note: "Include reference in narration" }
   };
 
   let profile = null;
@@ -236,7 +260,9 @@ async function createBankDeposit(
       } else if (["USD", "EUR", "GBP"].includes(upCurrency)) {
         try {
           const hasFincra = process.env.FINCRA_SECRET_KEY && process.env.FINCRA_PUBLIC_KEY;
-          if (hasFincra) {
+          const isFincraDisabled = process.env.FINCRA_VIRTUAL_ACCOUNTS_DISABLED === "true";
+
+          if (hasFincra && !isFincraDisabled) {
             const FincraProvider = require("./payment/providers/FincraProvider");
             const fincra = new FincraProvider();
             const va = await fincra.createVirtualAccount({
@@ -302,8 +328,14 @@ async function createBankDeposit(
         swiftCode: payment.instructions.swift_code || null,
         iban: payment.instructions.iban || null,
         routingNumber: payment.instructions.routing_number || payment.instructions.sort_code || null,
-        note: payment.instructions.additional_info || "Include reference in transfer narration",
+        note: payment.instructions.additional_info || payment.instructions.critical_warning || "Include reference in transfer narration",
       };
+    } else if (payment.provider === "grey" || payment.provider === "manual") {
+        // Explicitly map Grey details for manual flow
+        liveDetails = {
+            ...selectedDetails,
+            note: selectedDetails.instructions || selectedDetails.note || "Include reference in transfer narration"
+        };
     }
   } catch (payErr) {
     payment = { reference: idempotencyKey || `manual_${uuidv4().substring(0, 8)}`, provider: "manual" };

@@ -132,6 +132,80 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, [socket]);
 
 
+    const markMessageRead = useCallback(async (messageId: string) => {
+        if (!session) return;
+        try {
+            await fetch(`${API_URL}/api/chat/messages/${messageId}/read`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${session.access_token}` }
+            });
+        } catch (err) {
+            console.error('[Chat] Failed to mark read:', err);
+        }
+    }, [session]);
+
+    const markMessageDelivered = useCallback(async (messageId: string) => {
+        if (!session) return;
+        try {
+            await fetch(`${API_URL}/api/chat/messages/${messageId}/deliver`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${session.access_token}` }
+            });
+        } catch (err) {
+            console.error('[Chat] Failed to mark delivered:', err);
+        }
+    }, [session]);
+
+    const markConversationDelivered = useCallback(async (conversationId: string) => {
+        if (!session) return;
+        try {
+            await fetch(`${API_URL}/api/chat/conversations/${conversationId}/deliver`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${session.access_token}` }
+            });
+
+            // Optimistic local update
+            setMessages(prev => {
+                const current = prev[conversationId] || [];
+                return {
+                    ...prev,
+                    [conversationId]: current.map(m => m.sender_id !== user?.id ? { ...m, delivered_at: m.delivered_at || new Date().toISOString() } : m)
+                };
+            });
+        } catch (err) {
+            console.error('[Chat] Failed to mark conversation delivered:', err);
+        }
+    }, [session, user?.id]);
+
+    const markConversationRead = useCallback(async (conversationId: string) => {
+        if (!session) return;
+        try {
+            await fetch(`${API_URL}/api/chat/conversations/${conversationId}/read`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${session.access_token}` }
+            });
+
+            // Optimistic local update
+            
+            setMessages(prev => {
+                const current = prev[conversationId] || [];
+                return {
+                    ...prev,
+                    [conversationId]: current.map(m => m.sender_id !== user?.id ? { ...m, read_at: m.read_at || new Date().toISOString() } : m)
+                };
+            });
+
+            setConversations(prev => prev.map(conv => {
+                if (conv.id === conversationId) {
+                    return { ...conv, unreadCount: 0 };
+                }
+                return conv;
+            }));
+        } catch (err) {
+            console.error('[Chat] Failed to mark conversation read:', err);
+        }
+    }, [session, user?.id]);
+
     const joinAllRooms = useCallback((convList: Conversation[]) => {
         const s = socketRef.current;
         if (!s || !s.connected || convList.length === 0) return;
@@ -659,79 +733,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     };
 
-    const markMessageRead = useCallback(async (messageId: string) => {
-        if (!session) return;
-        try {
-            await fetch(`${API_URL}/api/chat/messages/${messageId}/read`, {
-                method: 'PUT',
-                headers: { 'Authorization': `Bearer ${session.access_token}` }
-            });
-        } catch (err) {
-            console.error('[Chat] Failed to mark read:', err);
-        }
-    }, [session]);
-
-    const markMessageDelivered = useCallback(async (messageId: string) => {
-        if (!session) return;
-        try {
-            await fetch(`${API_URL}/api/chat/messages/${messageId}/deliver`, {
-                method: 'PUT',
-                headers: { 'Authorization': `Bearer ${session.access_token}` }
-            });
-        } catch (err) {
-            console.error('[Chat] Failed to mark delivered:', err);
-        }
-    }, [session]);
-
-    const markConversationDelivered = useCallback(async (conversationId: string) => {
-        if (!session) return;
-        try {
-            await fetch(`${API_URL}/api/chat/conversations/${conversationId}/deliver`, {
-                method: 'PUT',
-                headers: { 'Authorization': `Bearer ${session.access_token}` }
-            });
-
-            // Optimistic local update
-            setMessages(prev => {
-                const current = prev[conversationId] || [];
-                return {
-                    ...prev,
-                    [conversationId]: current.map(m => m.sender_id !== user?.id ? { ...m, delivered_at: m.delivered_at || new Date().toISOString() } : m)
-                };
-            });
-        } catch (err) {
-            console.error('[Chat] Failed to mark conversation delivered:', err);
-        }
-    }, [session, user?.id]);
-
-    const markConversationRead = useCallback(async (conversationId: string) => {
-        if (!session) return;
-        try {
-            await fetch(`${API_URL}/api/chat/conversations/${conversationId}/read`, {
-                method: 'PUT',
-                headers: { 'Authorization': `Bearer ${session.access_token}` }
-            });
-
-            // Optimistic local update
-            
-            setMessages(prev => {
-                const current = prev[conversationId] || [];
-                return {
-                    ...prev,
-                    [conversationId]: current.map(m => m.sender_id !== user?.id ? { ...m, read_at: m.read_at || new Date().toISOString() } : m)
-                };
-            });
-
-            setConversations(prev => prev.map(conv => {
-                if (conv.id === conversationId) {
-                    return { ...conv, unreadCount: 0 };
-                }
-                return conv;
-            }));
-        } catch (err) {
-            console.error('[Chat] Failed to mark conversation read:', err);
-        }
-    }, [session, user?.id]);
 
     const startConversation = async (username: string) => {
         if (!user || !session) throw new Error('Must be logged in');
