@@ -1085,8 +1085,7 @@ const ChatWindow: React.FC = () => {
                                                 type="text" 
                                                 value={inputValue} 
                                                 onChange={handleInputChange} 
-                                                placeholder={isWaitingForOthers ? "Waiting for acceptance..." : "Type a message..."} 
-                                                disabled={isWaitingForOthers} 
+                                                placeholder="Type a message..." 
                                                 autoComplete="off" 
                                                 spellCheck={true}
                                                 autoCapitalize="sentences"
@@ -1133,9 +1132,9 @@ const ChatWindow: React.FC = () => {
                                     
                                     <button 
                                         type="submit" 
-                                        disabled={!inputValue.trim() || isWaitingForOthers} 
+                                        disabled={!inputValue.trim()} 
                                         className={`w-11 h-11 md:w-12 md:h-12 flex items-center justify-center rounded-full transition-all duration-300 shadow-xl active:scale-90 flex-shrink-0 ${
-                                            inputValue.trim() && !isWaitingForOthers 
+                                            inputValue.trim() 
                                             ? 'bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500 hover:-translate-y-0.5' 
                                             : 'bg-gray-800 text-gray-500 opacity-50 cursor-not-allowed'
                                         }`}
