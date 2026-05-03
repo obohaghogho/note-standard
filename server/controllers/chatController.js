@@ -44,25 +44,117 @@ exports.getConversations = async (req, res) => {
       .eq("user_id", userId)
       .order("joined_at", { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.error("[Chat] Query error in getConversations:", error);
+      throw error;
+    }
+
+    console.log(`[Chat] getConversations: Found ${data?.length || 0} memberships for user ${userId}`);
 
     // Transform structure for client: Flatten and pick latest message
-    const conversations = data.map((item) => {
+    const conversations = (data || []).map((item) => {
       const conv = item.conversation;
-      if (!conv) return null;
+      if (!conv) {
+        console.warn("[Chat] getConversations: Membership has no associated conversation record", item);
+        return null;
+      }
       
       const lastMessages = conv.last_message || [];
       const sorted = [...lastMessages].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       
-      return {
+      const result = {
         ...conv,
         last_message: sorted[0] || null
       };
+      
+      return result;
     }).filter(Boolean);
 
     res.json(conversations);
   } catch (err) {
     console.error("Error fetching conversations:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+exports.createSupportChat = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { message } = req.body;
+
+    console.log(`[Chat Support] Creating support chat for user ${userId}`);
+
+    // 1. Create a new support conversation
+    const { data: conv, error: convError } = await supabase
+      .from("conversations")
+      .select()
+      .eq("type", "direct")
+      .eq("chat_type", "support")
+      .eq("support_status", "open")
+      .single(); // Actually, users should usually have only one open support chat?
+    
+    let conversationId;
+
+    if (conv) {
+      conversationId = conv.id;
+    } else {
+      const { data: newConv, error: newConvError } = await supabase
+        .from("conversations")
+        .insert([{ 
+          type: "direct", 
+          chat_type: "support", 
+          support_status: "open",
+          name: "Support Chat"
+        }])
+        .select()
+        .single();
+      
+      if (newConvError) throw newConvError;
+      conversationId = newConv.id;
+
+      // Add user as member
+      await supabase.from("conversation_members").insert({
+        conversation_id: conversationId,
+        user_id: userId,
+        role: "admin", // User is "admin" of their own support chat in this context?
+        status: "accepted"
+      });
+
+      // Find all system admins to add as support agents
+      const { data: admins } = await supabase
+        .from("profiles")
+        .select("id")
+        .in("role", ["admin", "support"]);
+      
+      if (admins) {
+        const adminMembers = admins.map(a => ({
+          conversation_id: conversationId,
+          user_id: a.id,
+          role: "support",
+          status: "pending"
+        }));
+        await supabase.from("conversation_members").insert(adminMembers);
+        
+        // Notify admins
+        for (const admin of admins) {
+           await realtime.emitToUser(admin.id, "chat:new_conversation", newConv);
+        }
+      }
+    }
+
+    // 2. If initial message provided, send it
+    if (message) {
+      await supabase.from("messages").insert({
+        conversation_id: conversationId,
+        sender_id: userId,
+        content: message,
+        type: "text"
+      });
+    }
+
+    res.json({ success: true, conversationId });
+  } catch (err) {
+    console.error("Error creating support chat:", err.message);
     res.status(500).json({ error: "Server Error" });
   }
 };
