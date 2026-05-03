@@ -76,6 +76,7 @@ const corsOptions = {
     "Cache-Control",
     "X-Client-Info",
     "apikey",
+    "Pragma",
     "x-device-id",
   ],
   exposedHeaders: ["X-Total-Count", "Content-Disposition"],

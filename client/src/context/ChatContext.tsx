@@ -149,11 +149,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             console.log('[Chat] FETCH: Loading conversations', { userId: user?.id });
             const res = await fetch(`${API_URL}/api/chat/conversations`, {
                 headers: { 
-                    'Authorization': `Bearer ${session.access_token}`,
-                    'Cache-Control': 'no-cache, no-store, must-revalidate',
-                    'Pragma': 'no-cache'
-                },
-                cache: 'no-store'
+                    'Authorization': `Bearer ${session.access_token}`
+                }
             });
             
             if (!res.ok) throw new Error(`Failed to load conversations: ${res.status}`);
