@@ -1,7 +1,7 @@
 import React, { createContext, useEffect, useRef, useState, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
-import { toast, type Toast } from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
 import { API_URL } from '../lib/api';
 import { AnimatePresence } from 'framer-motion';
 import NotificationToast, { type NotificationToastData } from '../components/common/NotificationToast';

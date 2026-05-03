@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, CreditCard, Bitcoin, Copy, Loader2, ShieldCheck, CheckCircle2, Landmark, Zap, Lock, ChevronDown } from 'lucide-react';
+import { X, CreditCard, Bitcoin, Copy, Loader2, ShieldCheck, CheckCircle2, Landmark, Zap, Lock, ChevronDown, Upload, FileCheck } from 'lucide-react';
 import { Button } from '../common/Button';
 import walletApi from '../../api/walletApi';
 import toast from 'react-hot-toast';
@@ -8,7 +8,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { useWallet } from '../../hooks/useWallet';
 import { supabase } from '@/lib/supabase';
-import { Upload, FileCheck } from 'lucide-react';
 
 interface FundModalProps {
     isOpen: boolean;
@@ -349,8 +348,8 @@ export const FundModal: React.FC<FundModalProps> = ({
 
             setProofSubmitted(true);
             toast.success("Proof of payment submitted successfully!");
-        } catch (err: any) {
-            toast.error(err.message || "Failed to upload proof");
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : "Failed to upload proof");
         } finally {
             setUploadingProof(false);
         }

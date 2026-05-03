@@ -181,7 +181,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         } finally {
             conversationsFetchRef.current = false;
         }
-    }, [session, user, isSwitching, joinAllRooms]);
+    }, [session, user, isSwitching, joinAllRooms, markConversationDelivered]);
 
     // Initial load / Identity Switch Reset
     useEffect(() => {
