@@ -85,11 +85,14 @@ export function DashboardLayout() {
     };
 
     return (
-        <div className="h-screen-safe pt-safe pb-safe text-white flex relative overflow-hidden w-full max-w-full bg-crystal">
+        <div className={cn(
+            "h-screen-safe text-white flex relative overflow-hidden w-full max-w-full",
+            isChatActiveOnMobile ? "bg-gray-950" : "bg-crystal pt-safe pb-safe"
+        )}>
             {!isChatActiveOnMobile && <BroadcastBanner />}
             
             {/* Inner ambient glow for dashboard depth */}
-            <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 via-transparent to-purple-500/5 pointer-events-none -z-10" />
+            {!isChatActiveOnMobile && <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 via-transparent to-purple-500/5 pointer-events-none -z-10" />}
 
             <Sidebar 
                 onCreateNote={() => setIsCreateNoteModalOpen(true)} 
@@ -98,15 +101,15 @@ export function DashboardLayout() {
             />
             
             <main className={cn(
-                "flex-1 transition-all duration-300 min-w-0 flex flex-col w-full h-full relative pb-safe",
-                !isChatActiveOnMobile && "md:ml-64",
-                isChatActiveOnMobile && "fixed inset-0 z-[60] bg-gray-900 md:relative md:inset-auto md:z-0 md:bg-transparent md:ml-64"
+                "flex-1 transition-all duration-300 min-w-0 flex flex-col w-full h-full relative",
+                !isChatActiveOnMobile && "pb-safe md:ml-64",
+                isChatActiveOnMobile && "fixed inset-0 z-[60] bg-gray-950 h-[100dvh] w-screen m-0 p-0 md:relative md:inset-auto md:z-0 md:bg-transparent md:ml-64 overscroll-none"
             )}>
                 {renderHeader()}
 
                 <div className={cn(
-                    "flex-1 w-full flex flex-col min-w-0 overflow-y-auto relative h-full",
-                    isChatActiveOnMobile ? "p-0" : "p-4 md:p-8 max-w-7xl mx-auto"
+                    "flex-1 w-full flex flex-col min-w-0 relative h-full",
+                    isChatActiveOnMobile ? "p-0 overflow-hidden" : "p-4 md:p-8 max-w-7xl mx-auto overflow-y-auto"
                 )}>
                     <ErrorBoundary fallback={
                         <div className="p-8 text-center bg-red-500/10 rounded-xl border border-red-500/20 m-4">

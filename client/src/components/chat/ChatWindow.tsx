@@ -568,7 +568,7 @@ const ChatWindow: React.FC = () => {
     }
 
     return (
-        <div className="flex-1 flex flex-col h-full min-h-0 bg-gray-950 text-white overflow-hidden relative max-w-[1100px] mx-auto w-full md:shadow-2xl md:border-x md:border-gray-800">
+        <div className="flex-1 flex flex-col h-full min-h-0 bg-gray-950 text-white overflow-hidden relative w-full shadow-none rounded-none md:max-w-[1100px] md:mx-auto md:shadow-2xl md:border-x md:border-gray-800">
             {/* ── Selection Action Bar (WhatsApp-style) ── */}
             {isSelectionMode ? (
                 <div className="pt-safe flex-shrink-0 border-b border-blue-500/30 bg-blue-600/10 backdrop-blur-md sticky top-0 z-10 animate-in slide-in-from-top-2 duration-200">
@@ -644,15 +644,15 @@ const ChatWindow: React.FC = () => {
                     </div>
                 </div>
             ) : (
-            <div className="flex-shrink-0 border-b border-white/5 bg-gray-950/80 backdrop-blur-xl sticky top-0 z-10">
+            <div className="flex-shrink-0 border-b border-white/5 bg-gray-950/80 backdrop-blur-xl sticky top-0 z-10 pt-safe">
                 <div className="p-2 md:p-4 flex items-center justify-between gap-4 w-full">
                     <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                         <button 
                             onClick={() => setActiveConversationId(null)}
-                            className="p-1.5 -ml-1 text-gray-400 hover:text-white md:hidden"
+                            className="p-2 -ml-2 text-gray-400 hover:text-white md:hidden active:scale-90 transition-transform"
                             aria-label="Back to conversations"
                         >
-                            <ArrowLeft size={22} />
+                            <ArrowLeft size={24} />
                         </button>
                         <button 
                             onClick={openMobileMenu}
@@ -677,7 +677,7 @@ const ChatWindow: React.FC = () => {
 
                             return (
                                 <>
-                                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center overflow-hidden border border-white/10 shadow-lg flex-shrink-0">
+                                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center overflow-hidden border border-white/10 shadow-lg flex-shrink-0">
                                         {displayAvatar ? (
                                             <SecureImage src={displayAvatar} alt={displayName} className="w-full h-full object-cover" fallbackType="profile" />
                                         ) : (
@@ -698,10 +698,10 @@ const ChatWindow: React.FC = () => {
                                         </h2>
                                         {activeConversationId && typingUsers[activeConversationId]?.length > 0 ? (
                                             <p className="text-[10px] text-blue-400 animate-pulse font-medium flex items-center gap-1">
-                                                <span className="flex gap-0.5">
-                                                    <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></span>
-                                                    <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
-                                                    <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+                                                <span className="flex gap-1">
+                                                    <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></span>
+                                                    <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                                                    <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
                                                 </span>
                                                 Typing...
                                             </p>
@@ -792,7 +792,7 @@ const ChatWindow: React.FC = () => {
             )}
 
             <div 
-                className="flex-1 overflow-y-auto p-2 md:p-4 space-y-3 md:space-y-4 scroll-smooth overscroll-contain transition-all scrollbar-hide"
+                className="flex-1 overflow-y-auto p-3 md:p-6 space-y-4 md:space-y-6 scroll-smooth overscroll-contain transition-all scrollbar-hide"
                 style={{ 
                     WebkitOverflowScrolling: 'touch'
                 }}
@@ -850,10 +850,10 @@ const ChatWindow: React.FC = () => {
                                             </div>
                                         </div>
                                     )}
-                                    <div className={`max-w-[92%] md:max-w-[70%] ${isGrouped ? 'rounded-2xl' : (msg.sender_id === user?.id ? 'rounded-2xl rounded-br-sm' : 'rounded-2xl rounded-bl-sm')} p-3 shadow-md border ${
+                                    <div className={`max-w-[92%] md:max-w-[75%] ${isGrouped ? 'rounded-[20px]' : (msg.sender_id === user?.id ? 'rounded-[20px] rounded-br-md' : 'rounded-[20px] rounded-bl-md')} p-3.5 md:p-4 shadow-lg border ${
                                         isSelected
-                                            ? 'bg-blue-600/30 border-blue-400/50 ring-1 ring-blue-500/30'
-                                            : (msg.sender_id === user?.id ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-blue-500/50' : 'bg-gray-800 text-gray-200 border-gray-700')
+                                            ? 'bg-blue-600/40 border-blue-400/50 ring-1 ring-blue-500/30'
+                                            : (msg.sender_id === user?.id ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-blue-500/50' : 'bg-gray-800/90 text-gray-200 border-gray-700/50')
                                     } relative group transition-all duration-200 ${isSelectionMode ? 'cursor-pointer' : ''}`}>
                                         {msg.attachment && msg.type !== 'audio' && (
                                             <div className="mb-2 rounded-lg overflow-hidden border border-black/20 bg-black/10">
@@ -1040,8 +1040,8 @@ const ChatWindow: React.FC = () => {
 
 
             {!isPending ? (
-                <div className="flex-shrink-0 bg-gray-950 border-t border-white/5 z-20">
-                    <div className="max-w-[800px] mx-auto p-2 md:p-4 pb-[max(env(safe-area-inset-bottom,8px),8px)]">
+                <div className="flex-shrink-0 bg-gray-950/95 backdrop-blur-2xl border-t border-white/10 z-20">
+                    <div className="max-w-[900px] mx-auto p-3 md:p-4 pb-[max(env(safe-area-inset-bottom,20px),20px)]">
                         <form onSubmit={handleSend} className="flex flex-col gap-2 md:gap-3 max-w-full">
                             {isVoiceRecording ? (
                                 <div className="flex justify-center p-3 bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700/50 animate-in slide-in-from-bottom-4 duration-300">
@@ -1049,7 +1049,7 @@ const ChatWindow: React.FC = () => {
                                 </div>
                             ) : (
                                 <div className="flex items-center gap-2 md:gap-3">
-                                    <div className="flex-1 min-w-0 flex items-center gap-1 md:gap-2 bg-white/[0.03] hover:bg-white/[0.05] border border-white/[0.08] focus-within:border-blue-500/50 focus-within:bg-white/[0.06] rounded-[22px] p-1.5 px-3 md:px-4 transition-all duration-300 shadow-inner group/input">
+                                    <div className="flex-1 min-w-0 flex items-center gap-1 md:gap-2 bg-white/[0.05] hover:bg-white/[0.08] border border-white/[0.1] focus-within:border-blue-500/60 focus-within:bg-white/[0.1] rounded-[24px] p-2 px-4 md:px-5 transition-all duration-300 shadow-xl group/input">
                                         <button 
                                             type="button" 
                                             onClick={() => setShowMediaUpload(!showMediaUpload)} 

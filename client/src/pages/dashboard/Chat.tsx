@@ -6,6 +6,7 @@ import NewChatModal from '../../components/chat/NewChatModal';
 import { Plus, MessageSquare, Menu } from 'lucide-react';
 import { useSearchParams, useOutletContext } from 'react-router-dom';
 import { useChat } from '../../context/ChatContext';
+import { motion, AnimatePresence } from 'framer-motion';
 
 function ChatContent() {
     const [isNewChatOpen, setIsNewChatOpen] = useState(false);
@@ -21,41 +22,61 @@ function ChatContent() {
     }, [searchParams, setActiveConversationId]);
 
     return (
-        <div className="flex h-full bg-gray-950 md:border md:border-gray-800 md:rounded-xl overflow-hidden shadow-xl">
-            {/* Sidebar - Visible on large screens, or on mobile when no conversation is active */}
-            <div className={`${activeConversationId ? 'hidden md:flex' : 'flex'} w-full md:w-80 border-r border-gray-800 flex-col bg-gray-900`}>
-                <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900">
-                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                        <button 
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                openMobileMenu?.();
-                            }}
-                            className="p-1 -ml-1 text-gray-400 hover:text-white md:hidden mr-1"
-                        >
-                            <Menu size={24} />
-                        </button>
-                        <MessageSquare size={24} className="text-blue-500 hidden sm:block" />
-                        Messages
-                    </h2>
-                    <button
-                        onClick={() => setIsNewChatOpen(true)}
-                        className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                        title="New Chat"
+        <div className="flex h-full bg-gray-950 shadow-none rounded-none md:border md:border-gray-800 md:rounded-2xl overflow-hidden md:shadow-2xl relative">
+            <AnimatePresence mode="wait" initial={false}>
+                {/* Sidebar - Visible on large screens, or on mobile when no conversation is active */}
+                {(!activeConversationId || window.innerWidth >= 768) && (
+                    <motion.div 
+                        key="sidebar"
+                        initial={{ x: -20, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        exit={{ x: -20, opacity: 0 }}
+                        transition={{ duration: 0.2, ease: "easeOut" }}
+                        className={`${activeConversationId ? 'hidden md:flex' : 'flex'} w-full md:w-80 border-r border-gray-800 flex-col bg-gray-900 absolute md:relative inset-0 md:inset-auto z-10`}
                     >
-                        <Plus size={20} />
-                    </button>
-                </div>
+                        <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900">
+                            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                                <button 
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        openMobileMenu?.();
+                                    }}
+                                    className="p-1 -ml-1 text-gray-400 hover:text-white md:hidden mr-1"
+                                >
+                                    <Menu size={24} />
+                                </button>
+                                <MessageSquare size={24} className="text-blue-500 hidden sm:block" />
+                                Messages
+                            </h2>
+                            <button
+                                onClick={() => setIsNewChatOpen(true)}
+                                className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                                title="New Chat"
+                            >
+                                <Plus size={20} />
+                            </button>
+                        </div>
 
-                <div className="flex-1 overflow-hidden">
-                    <ConversationList />
-                </div>
-            </div>
+                        <div className="flex-1 overflow-hidden">
+                            <ConversationList />
+                        </div>
+                    </motion.div>
+                )}
 
-            {/* Main Area - Visible on large screens, or on mobile when a conversation is active */}
-            <div className={`${activeConversationId ? 'flex' : 'hidden md:flex'} flex-1 flex flex-col min-w-0 relative`}>
-                <ChatWindow />
-            </div>
+                {/* Main Area - Visible on large screens, or on mobile when a conversation is active */}
+                {(activeConversationId || window.innerWidth >= 768) && (
+                    <motion.div 
+                        key="chat"
+                        initial={{ x: 20, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        exit={{ x: 20, opacity: 0 }}
+                        transition={{ duration: 0.2, ease: "easeOut" }}
+                        className={`${activeConversationId ? 'flex' : 'hidden md:flex'} flex-1 flex flex-col min-w-0 relative z-20 h-full`}
+                    >
+                        <ChatWindow />
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             <NewChatModal isOpen={isNewChatOpen} onClose={() => setIsNewChatOpen(false)} />
         </div>

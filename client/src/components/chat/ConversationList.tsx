@@ -43,13 +43,13 @@ const ConversationList: React.FC = () => {
                     <div
                         key={conv.id}
                         onClick={() => setActiveConversationId(conv.id)}
-                        className={`p-3 md:p-4 cursor-pointer hover:bg-white/5 transition-all flex items-center gap-2 md:gap-4 relative group ${
-                            activeConversationId === conv.id ? 'bg-white/5 border-r-4 border-blue-500' : ''
+                        className={`p-4 md:p-5 cursor-pointer hover:bg-white/5 transition-all flex items-center gap-3 md:gap-5 relative group ${
+                            activeConversationId === conv.id ? 'bg-white/8 border-r-[3px] border-blue-500' : ''
                         }`}
                     >
                         {/* Avatar Container */}
                         <div className="relative flex-shrink-0">
-                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center overflow-hidden shadow-lg group-hover:scale-105 transition-transform">
+                            <div className="w-14 h-14 rounded-[18px] bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center overflow-hidden shadow-xl group-hover:scale-105 transition-transform duration-300">
                                 {displayAvatar ? (
                                     <SecureImage src={displayAvatar} alt={displayName} className="w-full h-full object-cover" fallbackType="profile" />
                                 ) : (
@@ -82,7 +82,7 @@ const ConversationList: React.FC = () => {
                                         </span>
                                     )}
                                 </h3>
-                                <span className="text-[10px] text-gray-500 font-medium">
+                                <span className="text-[11px] text-gray-500 font-bold uppercase tracking-tight">
                                     {conv.updated_at ? formatDistanceToNow(new Date(conv.updated_at), { addSuffix: false }).replace('about ', '') : ''}
                                 </span>
                             </div>
@@ -104,7 +104,7 @@ const ConversationList: React.FC = () => {
                                 </p>
                                 
                                 {unreadCount > 0 && (
-                                    <span className="bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-lg animate-pulse">
+                                    <span className="bg-blue-600 text-white text-[11px] font-extrabold px-2 py-0.5 rounded-full shadow-lg shadow-blue-900/40 animate-in zoom-in-0 duration-300">
                                         {unreadCount}
                                     </span>
                                 )}
