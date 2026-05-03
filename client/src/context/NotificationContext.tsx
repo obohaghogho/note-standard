@@ -3,6 +3,9 @@ import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
 import { toast, type Toast } from 'react-hot-toast';
 import { API_URL } from '../lib/api';
+import { AnimatePresence } from 'framer-motion';
+import NotificationToast, { NotificationToastData } from '../components/common/NotificationToast';
+import { useNavigate } from 'react-router-dom';
 
 interface Notification {
     id: string;
@@ -38,6 +41,32 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
     const { socket, connected } = useSocket();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [loading, setLoading] = useState(true);
+    const [currentToast, setCurrentToast] = useState<NotificationToastData | null>(null);
+    const [queue, setQueue] = useState<NotificationToastData[]>([]);
+    const dismissTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const navigate = useNavigate();
+
+    const dismissCurrent = useCallback(() => {
+        if (dismissTimerRef.current) {
+            clearTimeout(dismissTimerRef.current);
+            dismissTimerRef.current = null;
+        }
+        setCurrentToast(null);
+    }, []);
+
+    // Queue processor
+    useEffect(() => {
+        if (!currentToast && queue.length > 0) {
+            const next = queue[0];
+            setQueue(prev => prev.slice(1));
+            setCurrentToast(next);
+
+            // Auto dismiss after 5s
+            dismissTimerRef.current = setTimeout(() => {
+                dismissCurrent();
+            }, 5000);
+        }
+    }, [currentToast, queue, dismissCurrent]);
 
     const isMounted = useRef(true);
     const notificationsFetchRef = useRef(false);
@@ -212,42 +241,58 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             
             setNotifications(prev => [notification, ...prev]);
 
-            toast.custom((t: Toast) => (
-                <div 
-                    className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-[#1a1a1a] shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5 border border-white/10 cursor-pointer`}
-                    onClick={() => {
-                        markAsRead(notification.id);
-                        toast.dismiss(t.id);
-                    }}
-                >
-                    <div className="flex-1 w-0 p-4">
-                        <div className="flex items-start">
-                            <div className="ml-3 flex-1">
-                                <p className="text-sm font-medium text-white">{notification.title}</p>
-                                <p className="mt-1 text-sm text-gray-400">{notification.message}</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="flex border-l border-white/10">
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                toast.dismiss(t.id);
-                            }}
-                            className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-primary hover:text-primary/80 focus:outline-none"
-                        >
-                            Close
-                        </button>
-                    </div>
-                </div>
-            ), { duration: 4000 });
+            const toastData: NotificationToastData = {
+                id: notification.id,
+                title: notification.title,
+                message: notification.message,
+                type: notification.type,
+                link: notification.link,
+                sender: notification.sender,
+                count: 1
+            };
+
+            // Grouping logic for messages
+            if (notification.type === 'chat_message' || notification.type === 'message') {
+                // Check current toast
+                if (currentToast && (currentToast.sender?.username === notification.sender?.username || currentToast.title === notification.title)) {
+                    setCurrentToast(prev => prev ? {
+                        ...prev,
+                        message: notification.message,
+                        count: (prev.count || 1) + 1
+                    } : null);
+                    
+                    // Reset timer
+                    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+                    dismissTimerRef.current = setTimeout(dismissCurrent, 5000);
+                    return;
+                }
+
+                // Check queue
+                const queueIndex = queue.findIndex(q => q.sender?.username === notification.sender?.username || q.title === notification.title);
+                if (queueIndex !== -1) {
+                    setQueue(prev => {
+                        const newQueue = [...prev];
+                        newQueue[queueIndex] = {
+                            ...newQueue[queueIndex],
+                            message: notification.message,
+                            count: (newQueue[queueIndex].count || 1) + 1
+                        };
+                        return newQueue;
+                    });
+                    return;
+                }
+            }
+
+            // Otherwise add to queue
+            setQueue(prev => [...prev, toastData]);
         };
 
         socket.on('notification', onNotification);
         return () => {
             socket.off('notification', onNotification);
+            if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
         };
-    }, [socket, connected, markAsRead]);
+    }, [socket, connected, markAsRead, currentToast, queue, dismissCurrent]);
 
     const clearAllNotifications = useCallback(async () => {
         if (!session) return;
@@ -279,6 +324,22 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             loading 
         }}>
             {children}
+            <AnimatePresence>
+                {currentToast && (
+                    <NotificationToast 
+                        key={currentToast.id}
+                        notification={currentToast} 
+                        onDismiss={dismissCurrent}
+                        onClick={() => {
+                            if (currentToast.link) {
+                                navigate(currentToast.link);
+                            }
+                            markAsRead(currentToast.id);
+                            dismissCurrent();
+                        }}
+                    />
+                )}
+            </AnimatePresence>
         </NotificationContext.Provider>
     );
 };

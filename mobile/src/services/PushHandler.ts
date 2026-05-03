@@ -1,14 +1,22 @@
 import * as Notifications from 'expo-notifications';
 import CallService, { CallData } from './CallService';
 import { Platform } from 'react-native';
+import EventEmitter from './EventEmitter';
 
 // Configure how notifications are handled when the app is in the foreground
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async (notification) => {
+    const { data } = notification.request.content;
+    
+    // Suppress system alert for messages in foreground to use custom UI
+    const isMessage = data?.type === 'message' || data?.type === 'chat_message';
+    
+    return {
+      shouldShowAlert: !isMessage, // Only show system alert if it's NOT a message
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    };
+  },
 });
 
 export class PushHandler {
@@ -44,7 +52,7 @@ export class PushHandler {
 
     // 3. High-Priority Background Listener
     Notifications.addNotificationReceivedListener(notification => {
-      const { data } = notification.request.content;
+      const { data, title, body } = notification.request.content;
       console.log('[PushHandler] 🔔 Push Received:', JSON.stringify(data));
       
       if (data.type === 'incoming_call') {
@@ -53,6 +61,13 @@ export class PushHandler {
       } else if (data.type === 'call_cancelled') {
         console.log('[PushHandler] 🛑 Call Cancellation detected. Dismissing CallService...');
         CallService.rejectCall(); // This will end the native ringing UI
+      } else if (data.type === 'message' || data.type === 'chat_message') {
+        // Emit for custom in-app notification
+        EventEmitter.emit('notification', {
+          title: title || data.title || 'New Message',
+          message: body || data.message || '',
+          type: data.type
+        });
       }
     });
 

@@ -10,6 +10,8 @@ import BatteryOptimizationModal from './src/components/BatteryOptimizationModal'
 // Ignore specific warnings for clean dev experience
 LogBox.ignoreLogs(['Setting a timer']);
 
+import { NotificationProvider } from './src/context/NotificationContext';
+
 export default function App() {
   const [batteryModalVisible, setBatteryModalVisible] = useState(false);
 
@@ -57,7 +59,8 @@ export default function App() {
   };
 
   return (
-    <View style={styles.container}>
+    <NotificationProvider>
+      <View style={styles.container}>
       <Text style={styles.title}>NoteStandard</Text>
       <Text style={styles.subtitle}>Native High-Reliability Signaling Active</Text>
       <StatusBar style="auto" />
@@ -68,6 +71,7 @@ export default function App() {
         onConfirm={handleAllowCalls}
       />
     </View>
+    </NotificationProvider>
   );
 }
 
