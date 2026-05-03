@@ -1,6 +1,6 @@
 {
   "name": "note-standard",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Root package for note-standard monorepo",
   "scripts": {
     "install:all": "npm install && npm install -w client && npm install -w server && npm install -w realtime-gateway",
