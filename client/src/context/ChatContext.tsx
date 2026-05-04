@@ -86,6 +86,8 @@ export interface ChatContextValue {
     clearChatHistory: (id: string) => Promise<void>;
     sendTypingStatus: (isTyping: boolean) => void;
     typingUsers: Record<string, string[]>;
+    drafts: Record<string, string>;
+    setDraft: (conversationId: string, content: string) => void;
     hasMore: Record<string, boolean>;
     sendMessageToConversation: (conversationId: string, content: string, type?: string, attachmentId?: string) => Promise<void>;
     markConversationRead: (conversationId: string) => Promise<void>;
@@ -109,6 +111,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const [loading, setLoading] = useState(true);
     const [hasMore, setHasMore] = useState<Record<string, boolean>>({});
     const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
+    const [drafts, setDrafts] = useState<Record<string, string>>({});
 
     const isMounted = useRef(true);
     const conversationsFetchRef = useRef(false);
@@ -302,7 +305,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 NotificationService.notifyNewMessage(sender, msg.content, msg.conversation_id);
                 
                 // Show in-app toast if document is visible but not in this specific chat
-                if (document.visibilityState === 'visible' && activeConversationIdRef.current !== msg.conversation_id) {
+                const isActiveChat = activeConversationIdRef.current && 
+                                    msg.conversation_id && 
+                                    activeConversationIdRef.current.toString().toLowerCase() === msg.conversation_id.toString().toLowerCase();
+
+                if (document.visibilityState === 'visible' && !isActiveChat) {
                     toast.custom((t) => (
                         <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-gray-900 shadow-2xl rounded-2xl pointer-events-auto flex ring-1 ring-white/10 border border-gray-800`}>
                             <div className="flex-1 w-0 p-4">
@@ -705,6 +712,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         });
     }, [socket, connected, activeConversationId, user, profile?.username]);
 
+    const setDraft = useCallback((conversationId: string, content: string) => {
+        setDrafts(prev => ({ ...prev, [conversationId]: content }));
+    }, []);
+
     const loadMoreMessages = async (conversationId: string) => {
         const currentM = messages[conversationId] || [];
         if (currentM.length === 0 || !session) return;
@@ -757,6 +768,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }
             await loadConversations();
             setActiveConversationId(data.conversation.id);
+            return data.conversation.id;
         } else {
             const err = await res.json();
             throw new Error(err.error || 'Failed to start chat');
@@ -1099,6 +1111,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             markMessageDelivered,
             sendTypingStatus,
             typingUsers,
+            drafts,
+            setDraft,
             hasMore,
             markConversationRead,
             markConversationDelivered
@@ -1107,6 +1121,5 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         </ChatContext.Provider>
     );
 };
-
 
 

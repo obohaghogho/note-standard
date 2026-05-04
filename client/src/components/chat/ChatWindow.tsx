@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useChat } from '../../context/ChatContext';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
 import type { Message } from '../../context/ChatContext';
 import { usePresence } from '../../context/PresenceContext';
 import { formatDistanceToNow } from 'date-fns';
@@ -28,8 +28,10 @@ const ChatWindow: React.FC = () => {
         activeConversationId, setActiveConversationId, messages, sendMessage, loading, 
         conversations, acceptConversation, deleteConversation, deleteMessage, editMessage,
         muteConversation, clearChatHistory, loadMoreMessages, hasMore,
-        sendTypingStatus, typingUsers, sendMessageToConversation 
+        sendTypingStatus, typingUsers, sendMessageToConversation,
+        drafts, setDraft
     } = useChat();
+    const [searchParams, setSearchParams] = useSearchParams();
     const { isUserOnline, getUserLastSeen } = usePresence();
     const { user, profile, session, isAdmin } = useAuth();
     const { startCall } = useWebRTC();
@@ -159,9 +161,10 @@ const ChatWindow: React.FC = () => {
     const [isAccepting, setIsAccepting] = useState(false);
     
     // Mentions state
-    const [mentionSearch, setMentionSearch] = useState('');
-    const [mentionParticipants, setMentionParticipants] = useState<{id: string, username: string, full_name?: string, avatar_url?: string}[]>([]);
     const [showMentions, setShowMentions] = useState(false);
+    
+    // Ref to prevent translation loops
+    const translatingRef = useRef<Set<string>>(new Set());
     
     const emojis = ['😀', '😂', '😍', '🙌', '🔥', '👍', '🙏', '💯', '✨', '❤️', '🎉', '😊', '✅', '🚀', '👀', '💡'];
 
@@ -195,17 +198,30 @@ const ChatWindow: React.FC = () => {
         if (isAtBottom) scrollToBottom();
     }, [currentMessages, isAtBottom]);
 
+    // Initialize input from draft
+    useEffect(() => {
+        if (activeConversationId) {
+            setInputValue(drafts[activeConversationId] || '');
+        }
+    }, [activeConversationId]);
+
     useEffect(() => {
         const translateNewMessages = async () => {
-            if (!activeConversationId || !preferredLanguage) return;
+            if (!activeConversationId || !preferredLanguage || !session?.access_token) return;
 
             const messagesToTranslate = currentMessages.filter(msg => {
                 const sourceLang = msg.original_language || 'en';
                 const isDifferent = sourceLang !== preferredLanguage;
                 const notOwn = msg.sender_id !== user?.id;
                 const notTranslated = !translations[msg.id];
-                return notOwn && isDifferent && notTranslated && msg.type === 'text';
+                const notInFlight = !translatingRef.current.has(msg.id);
+                return notOwn && isDifferent && notTranslated && notInFlight && msg.type === 'text';
             });
+
+            if (messagesToTranslate.length === 0) return;
+
+            // Mark as in-flight before starting
+            messagesToTranslate.forEach(m => translatingRef.current.add(m.id));
 
             for (const msg of messagesToTranslate) {
                 try {
@@ -214,7 +230,7 @@ const ChatWindow: React.FC = () => {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${session?.access_token}`
+                            'Authorization': `Bearer ${session.access_token}`
                         },
                         body: JSON.stringify({
                             text: msg.content,
@@ -231,12 +247,14 @@ const ChatWindow: React.FC = () => {
                     }
                 } catch {
                     setTranslations(prev => ({ ...prev, [msg.id]: '[Translation Error]' }));
+                } finally {
+                    translatingRef.current.delete(msg.id);
                 }
             }
         };
 
         translateNewMessages();
-    }, [currentMessages, activeConversationId, preferredLanguage, user, session?.access_token, translations]);
+    }, [currentMessages, activeConversationId, preferredLanguage, user?.id, session?.access_token, translations]);
 
     const handleManualTranslate = async (msgId: string, content: string, sourceLang?: string) => {
         if (!preferredLanguage || !session?.access_token) return;
@@ -346,6 +364,7 @@ const ChatWindow: React.FC = () => {
                 await sendMessage(inputValue);
             }
             setInputValue('');
+            if (activeConversationId) setDraft(activeConversationId, '');
             setShowMentions(false);
         } catch {
             toast.error(editingMessageId ? 'Failed to edit message' : 'Failed to send message');
@@ -498,6 +517,11 @@ const ChatWindow: React.FC = () => {
             sendTypingStatus(false);
         }, 3000);
 
+        // Update draft
+        if (activeConversationId) {
+            setDraft(activeConversationId, val);
+        }
+
         // Mention detection
         const lastAtPos = val.lastIndexOf('@');
         // ... (rest of the logic)
@@ -648,7 +672,10 @@ const ChatWindow: React.FC = () => {
                 <div className="px-3 py-3 md:px-5 md:py-4 flex items-center justify-between gap-4 w-full">
                     <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                         <button 
-                            onClick={() => setActiveConversationId(null)}
+                            onClick={() => {
+                                setActiveConversationId(null);
+                                setSearchParams({});
+                            }}
                             className="p-2 -ml-2 text-gray-400 hover:text-white md:hidden active:scale-90 transition-transform"
                             aria-label="Back to conversations"
                         >

@@ -19,22 +19,27 @@ function ChatContent() {
         const username = searchParams.get('username');
 
         if (id) {
-            setActiveConversationId(id);
+            if (activeConversationId !== id) {
+                setActiveConversationId(id);
+            }
         } else if (username) {
             const initiateChat = async () => {
                 try {
-                    await startConversation(username);
-                    // Clear the username param but keep the ID once it's set by startConversation
-                    const newParams = new URLSearchParams(searchParams);
-                    newParams.delete('username');
-                    setSearchParams(newParams, { replace: true });
+                    const newId = await startConversation(username);
+                    if (newId) {
+                        setSearchParams({ id: newId }, { replace: true });
+                    }
                 } catch (err) {
                     console.error('Failed to auto-start chat:', err);
                 }
             };
             initiateChat();
+        } else if (activeConversationId) {
+            // URL has no id/username, but context has activeConversationId
+            // This happens on browser back button. Sync context to URL.
+            setActiveConversationId(null);
         }
-    }, [searchParams, setActiveConversationId, startConversation, setSearchParams]);
+    }, [searchParams, activeConversationId, setActiveConversationId, startConversation, setSearchParams]);
 
     return (
         <div className="flex h-full bg-gray-950 shadow-none rounded-none md:border md:border-gray-800 md:rounded-2xl overflow-hidden md:shadow-2xl relative">

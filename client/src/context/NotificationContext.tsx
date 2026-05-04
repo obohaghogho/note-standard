@@ -5,7 +5,7 @@ import { toast } from 'react-hot-toast';
 import { API_URL } from '../lib/api';
 import { AnimatePresence } from 'framer-motion';
 import NotificationToast, { type NotificationToastData } from '../components/common/NotificationToast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface Notification {
     id: string;
@@ -45,6 +45,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
     const [queue, setQueue] = useState<NotificationToastData[]>([]);
     const dismissTimerRef = useRef<NodeJS.Timeout | null>(null);
     const navigate = useNavigate();
+    const location = useLocation();
 
     const dismissCurrent = useCallback(() => {
         if (dismissTimerRef.current) {
@@ -239,6 +240,25 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         const onNotification = (notification: Notification) => {
             if (!isMounted.current) return;
             
+            // Suppress chat notifications if we're already in that chat
+            if (notification.type === 'chat_message' || notification.type === 'message') {
+                const searchParams = new URLSearchParams(location.search);
+                const activeChatId = searchParams.get('id');
+                const isChatPage = location.pathname.includes('/chat');
+                
+                // If notification has a link like /dashboard/chat?id=XXX, extract ID
+                if (isChatPage && notification.link && activeChatId) {
+                    const notifyUrl = new URL(notification.link, window.location.origin);
+                    const notifyId = notifyUrl.searchParams.get('id');
+                    if (notifyId === activeChatId) {
+                        console.log('[Notifications] Suppressing notification for active chat');
+                        // We still add to notifications list but don't toast
+                        setNotifications(prev => [notification, ...prev]);
+                        return;
+                    }
+                }
+            }
+
             setNotifications(prev => [notification, ...prev]);
 
             const toastData: NotificationToastData = {

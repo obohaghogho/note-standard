@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Check, CheckCheck } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { usePresence } from '../../context/PresenceContext';
+import { useSearchParams } from 'react-router-dom';
 import SecureImage from '../common/SecureImage';
 import { UserBadge } from '../common/UserBadge';
 
@@ -10,6 +11,7 @@ const ConversationList: React.FC = () => {
     const { conversations, activeConversationId, setActiveConversationId, loading, typingUsers } = useChat();
     const { user } = useAuth();
     const { isUserOnline } = usePresence();
+    const [searchParams, setSearchParams] = useSearchParams();
 
     if (loading) return <div className="p-4 text-gray-400">Loading chats...</div>;
 
@@ -40,7 +42,10 @@ const ConversationList: React.FC = () => {
                 return (
                     <div
                         key={conv.id}
-                        onClick={() => setActiveConversationId(conv.id)}
+                        onClick={() => {
+                            setActiveConversationId(conv.id);
+                            setSearchParams({ id: conv.id });
+                        }}
                         className={`p-4 md:p-5 cursor-pointer hover:bg-white/[0.02] transition-all flex items-center gap-4 relative group ${
                             activeConversationId === conv.id ? 'bg-white/[0.04]' : ''
                         }`}
