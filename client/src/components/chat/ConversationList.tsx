@@ -18,9 +18,7 @@ const ConversationList: React.FC = () => {
     }
 
     return (
-        <div className="flex flex-col h-full overflow-y-auto bg-gray-900 border-r border-gray-800 scrollbar-thin scrollbar-thumb-gray-800">
-
-
+        <div className="flex flex-col h-full overflow-y-auto bg-gray-950 border-r border-white/5 scrollbar-hide pb-safe">
             {conversations.map((conv) => {
                 let displayName = conv.name;
                 let displayAvatar = null;
@@ -43,30 +41,30 @@ const ConversationList: React.FC = () => {
                     <div
                         key={conv.id}
                         onClick={() => setActiveConversationId(conv.id)}
-                        className={`p-4 md:p-5 cursor-pointer hover:bg-white/5 transition-all flex items-center gap-3 md:gap-5 relative group ${
-                            activeConversationId === conv.id ? 'bg-white/8 border-r-[3px] border-blue-500' : ''
+                        className={`p-4 md:p-5 cursor-pointer hover:bg-white/[0.02] transition-all flex items-center gap-4 relative group ${
+                            activeConversationId === conv.id ? 'bg-white/[0.04]' : ''
                         }`}
                     >
                         {/* Avatar Container */}
                         <div className="relative flex-shrink-0">
-                            <div className="w-14 h-14 rounded-[18px] bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center overflow-hidden shadow-xl group-hover:scale-105 transition-transform duration-300">
+                            <div className="w-14 h-14 rounded-[20px] bg-gradient-to-br from-blue-600/20 to-indigo-600/20 border border-white/10 flex items-center justify-center overflow-hidden shadow-xl group-hover:scale-105 transition-transform duration-300">
                                 {displayAvatar ? (
                                     <SecureImage src={displayAvatar} alt={displayName} className="w-full h-full object-cover" fallbackType="profile" />
                                 ) : (
-                                    <span className="text-white font-bold text-lg">
+                                    <span className="text-white font-bold text-xl">
                                         {displayName?.charAt(0).toUpperCase() || '?'}
                                     </span>
                                 )}
                             </div>
                             {isOnline && (
-                                <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 border-2 border-gray-900 rounded-full"></span>
+                                <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 border-[3px] border-gray-950 rounded-full shadow-lg"></span>
                             )}
                         </div>
 
                         {/* Text Info */}
                         <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-baseline mb-1">
-                                <h3 className={`text-sm font-semibold truncate flex items-center gap-1 ${unreadCount > 0 ? 'text-white' : 'text-gray-300'}`}>
+                            <div className="flex justify-between items-baseline mb-0.5">
+                                <h3 className={`text-[15px] font-bold truncate flex items-center gap-1.5 ${unreadCount > 0 ? 'text-white' : 'text-gray-200'}`}>
                                     {displayName || 'Untitled Chat'}
                                     {conv.type === 'direct' && (
                                         <UserBadge 
@@ -82,13 +80,13 @@ const ConversationList: React.FC = () => {
                                         </span>
                                     )}
                                 </h3>
-                                <span className="text-[11px] text-gray-500 font-bold uppercase tracking-tight">
+                                <span className="text-[11px] text-gray-500 font-bold uppercase tracking-tight ml-2">
                                     {conv.updated_at ? formatDistanceToNow(new Date(conv.updated_at), { addSuffix: false }).replace('about ', '') : ''}
                                 </span>
                             </div>
 
                             <div className="flex items-center justify-between gap-2">
-                                <p className={`text-xs truncate flex-1 ${unreadCount > 0 ? 'text-white font-semibold' : 'text-gray-500'}`}>
+                                <p className={`text-[13px] truncate flex-1 leading-relaxed ${unreadCount > 0 ? 'text-gray-100 font-semibold' : 'text-gray-500'}`}>
                                     {typingUsers[conv.id]?.length > 0 ? (
                                         <span className="text-blue-400 animate-pulse font-medium italic">
                                             {typingUsers[conv.id].length > 1 ? 'People are typing...' : `${typingUsers[conv.id][0]} is typing...`}
@@ -96,15 +94,15 @@ const ConversationList: React.FC = () => {
                                     ) : lastMsg ? (
                                         <>
                                             {lastMsg.sender_id === user?.id && <span className="mr-1 text-blue-500 font-medium">You:</span>}
-                                            <span className={unreadCount > 0 ? 'text-gray-100' : ''}>{lastMsg.content}</span>
+                                            <span>{lastMsg.content}</span>
                                         </>
                                     ) : (
-                                        <span className="italic opacity-60">No messages yet</span>
+                                        <span className="opacity-40 font-medium">No messages yet</span>
                                     )}
                                 </p>
                                 
                                 {unreadCount > 0 && (
-                                    <span className="bg-blue-600 text-white text-[11px] font-extrabold px-2 py-0.5 rounded-full shadow-lg shadow-blue-900/40 animate-in zoom-in-0 duration-300">
+                                    <span className="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-lg shadow-blue-900/40 animate-in zoom-in-0 duration-300">
                                         {unreadCount}
                                     </span>
                                 )}
@@ -123,12 +121,10 @@ const ConversationList: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Active Call Indicator */}
-                        {/* {conv.activeCall && (
-                            <div className="absolute top-4 right-4 animate-bounce">
-                                <Phone size={14} className="text-green-500" />
-                            </div>
-                        )} */}
+                        {/* Selection Indicator (Active State) */}
+                        {activeConversationId === conv.id && (
+                            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-l-full shadow-[0_0_15px_rgba(59,130,246,0.5)]"></div>
+                        )}
                     </div>
                 );
             })}

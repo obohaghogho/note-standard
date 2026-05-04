@@ -10,16 +10,31 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 function ChatContent() {
     const [isNewChatOpen, setIsNewChatOpen] = useState(false);
-    const [searchParams] = useSearchParams();
-    const { activeConversationId, setActiveConversationId } = useChat();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const { activeConversationId, setActiveConversationId, startConversation } = useChat();
     const { openMobileMenu } = useOutletContext<{ openMobileMenu?: () => void }>() || {};
 
     useEffect(() => {
         const id = searchParams.get('id');
+        const username = searchParams.get('username');
+
         if (id) {
             setActiveConversationId(id);
+        } else if (username) {
+            const initiateChat = async () => {
+                try {
+                    await startConversation(username);
+                    // Clear the username param but keep the ID once it's set by startConversation
+                    const newParams = new URLSearchParams(searchParams);
+                    newParams.delete('username');
+                    setSearchParams(newParams, { replace: true });
+                } catch (err) {
+                    console.error('Failed to auto-start chat:', err);
+                }
+            };
+            initiateChat();
         }
-    }, [searchParams, setActiveConversationId]);
+    }, [searchParams, setActiveConversationId, startConversation, setSearchParams]);
 
     return (
         <div className="flex h-full bg-gray-950 shadow-none rounded-none md:border md:border-gray-800 md:rounded-2xl overflow-hidden md:shadow-2xl relative">
@@ -32,29 +47,34 @@ function ChatContent() {
                         animate={{ x: 0, opacity: 1 }}
                         exit={{ x: -20, opacity: 0 }}
                         transition={{ duration: 0.2, ease: "easeOut" }}
-                        className={`${activeConversationId ? 'hidden md:flex' : 'flex'} w-full md:w-80 border-r border-gray-800 flex-col bg-gray-900 absolute md:relative inset-0 md:inset-auto z-10`}
+                        className={`${activeConversationId ? 'hidden md:flex' : 'flex'} w-full md:w-80 border-r border-gray-800 flex-col bg-gray-950 absolute md:relative inset-0 md:inset-auto z-10`}
                     >
-                        <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900">
-                            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                                <button 
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        openMobileMenu?.();
-                                    }}
-                                    className="p-1 -ml-1 text-gray-400 hover:text-white md:hidden mr-1"
+                        {/* Header with Safe Area Handling */}
+                        <div className="pt-safe flex-shrink-0 bg-gray-950/80 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20">
+                            <div className="p-4 md:p-5 flex justify-between items-center">
+                                <h2 className="text-xl md:text-2xl font-extrabold text-white flex items-center gap-3 tracking-tight">
+                                    <button 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            openMobileMenu?.();
+                                        }}
+                                        className="p-2 -ml-2 text-gray-400 hover:text-white md:hidden transition-colors active:scale-90"
+                                    >
+                                        <Menu size={24} />
+                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <MessageSquare size={22} className="text-blue-500 hidden sm:block" />
+                                        Messages
+                                    </div>
+                                </h2>
+                                <button
+                                    onClick={() => setIsNewChatOpen(true)}
+                                    className="w-10 h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all shadow-lg shadow-blue-900/20 active:scale-95"
+                                    title="New Chat"
                                 >
-                                    <Menu size={24} />
+                                    <Plus size={22} strokeWidth={2.5} />
                                 </button>
-                                <MessageSquare size={24} className="text-blue-500 hidden sm:block" />
-                                Messages
-                            </h2>
-                            <button
-                                onClick={() => setIsNewChatOpen(true)}
-                                className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                                title="New Chat"
-                            >
-                                <Plus size={20} />
-                            </button>
+                            </div>
                         </div>
 
                         <div className="flex-1 overflow-hidden">

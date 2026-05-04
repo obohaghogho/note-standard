@@ -568,7 +568,7 @@ const ChatWindow: React.FC = () => {
     }
 
     return (
-        <div className="flex-1 flex flex-col h-full min-h-0 bg-gray-950 text-white overflow-hidden relative w-full shadow-none rounded-none md:max-w-[1100px] md:mx-auto md:shadow-2xl md:border-x md:border-gray-800">
+        <div className="flex-1 flex flex-col h-full min-h-0 bg-gray-950 text-white overflow-hidden relative w-full shadow-none rounded-none md:max-w-[1200px] md:mx-auto md:shadow-2xl md:border-x md:border-white/5">
             {/* ── Selection Action Bar (WhatsApp-style) ── */}
             {isSelectionMode ? (
                 <div className="pt-safe flex-shrink-0 border-b border-blue-500/30 bg-blue-600/10 backdrop-blur-md sticky top-0 z-10 animate-in slide-in-from-top-2 duration-200">
@@ -644,8 +644,8 @@ const ChatWindow: React.FC = () => {
                     </div>
                 </div>
             ) : (
-            <div className="flex-shrink-0 border-b border-white/5 bg-gray-950/80 backdrop-blur-xl sticky top-0 z-10 pt-safe">
-                <div className="p-2 md:p-4 flex items-center justify-between gap-4 w-full">
+            <div className="flex-shrink-0 bg-gray-950/80 backdrop-blur-2xl border-b border-white/5 sticky top-0 z-10 pt-safe shadow-sm">
+                <div className="px-3 py-3 md:px-5 md:py-4 flex items-center justify-between gap-4 w-full">
                     <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                         <button 
                             onClick={() => setActiveConversationId(null)}

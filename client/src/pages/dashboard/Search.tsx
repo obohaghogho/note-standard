@@ -3,7 +3,7 @@ import { Card } from '../../components/common/Card';
 import { Input } from '../../components/common/Input';
 import { Search as SearchIcon, User, FileText, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import SecureImage from '../../components/common/SecureImage';
 import { ViewNoteModal } from '../../components/dashboard/ViewNoteModal';
 
@@ -42,6 +42,7 @@ export const Search = () => {
     const [loading, setLoading] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
     const [viewingNote, setViewingNote] = useState<NoteResult | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     const handleSearch = useCallback(async (explicitQuery?: string) => {
         const queryToUse = explicitQuery || searchTerm;
@@ -49,6 +50,7 @@ export const Search = () => {
 
         setLoading(true);
         setHasSearched(true);
+        setError(null);
 
         try {
             // 1. Search users
@@ -77,8 +79,9 @@ export const Search = () => {
             if (notesError) throw notesError;
             setNotes((notesData as unknown as NoteResult[]) || []);
 
-        } catch (error) {
+        } catch (error: any) {
             console.error('Search error:', error);
+            setError(error.message || 'Search failed. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -121,9 +124,12 @@ export const Search = () => {
 
     return (
         <div className="space-y-6 max-w-4xl mx-auto">
-            <div className="space-y-1">
-                <h1 className="text-3xl font-bold">Search</h1>
-                <p className="text-gray-400">Find users and accessible notes (yours, public, or shared)</p>
+            <div className="space-y-2">
+                <h1 className="text-4xl font-black tracking-tight text-white flex items-center gap-3">
+                    <SearchIcon size={32} className="text-primary" />
+                    Search
+                </h1>
+                <p className="text-gray-400 text-lg">Find users and explore accessible notes</p>
             </div>
 
             <Card variant="glass" className="p-4">
@@ -136,7 +142,7 @@ export const Search = () => {
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             placeholder="Search for users or notes..."
-                            className="bg-white/5"
+                            className="bg-white/5 border-white/10 focus:border-primary/50 text-lg py-6"
                             aria-label="Search for users or accessible notes"
                         />
                     </div>
@@ -167,6 +173,12 @@ export const Search = () => {
                 </div>
             )}
 
+            {error && (
+                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-center animate-in fade-in slide-in-from-top-2 duration-200">
+                    {error}
+                </div>
+            )}
+
             {loading ? (
                 <div className="flex items-center justify-center py-20">
                     <Loader2 className="animate-spin text-primary" size={32} />
@@ -183,10 +195,9 @@ export const Search = () => {
                                 {filteredUsers?.map((u) => (
                                     <Card
                                         key={u.id}
-                                        hoverEffect
-                                        className="p-4 flex items-center gap-3 cursor-pointer"
-                                        onClick={() => navigate(`/dashboard/chat?email=${u.email}`)}
+                                        className="p-4 flex items-center justify-between gap-4 group hover:border-primary/50 transition-all duration-300 bg-white/5"
                                     >
+                                        <div className="flex items-center gap-3 min-w-0">
                                         {u.avatar_url ? (
                                             <SecureImage
                                                 src={u.avatar_url}
@@ -207,6 +218,15 @@ export const Search = () => {
                                                 @{u.username}
                                             </div>
                                         </div>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                navigate(`/dashboard/chat?username=${u.username}`);
+                                            }}
+                                            className="px-4 py-2 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-lg text-sm font-semibold transition-all flex-shrink-0"
+                                        >
+                                            Message
+                                        </button>
                                     </Card>
                                 ))}
                             </div>
@@ -226,8 +246,7 @@ export const Search = () => {
                                 {filteredNotes?.map((note) => (
                                     <Card
                                         key={note.id}
-                                        hoverEffect
-                                        className="p-4 cursor-pointer"
+                                        className="p-5 cursor-pointer group hover:border-primary/50 transition-all duration-300 bg-white/5"
                                         onClick={() => setViewingNote(note)}
                                     >
                                         <div className="flex items-start gap-3">
@@ -270,9 +289,9 @@ export const Search = () => {
                     )}
 
                     {filteredUsers.length === 0 && filteredNotes.length === 0 && (
-                        <div className="text-center py-20">
-                            <div className="text-gray-500 mb-2">No results found for "{searchTerm}"</div>
-                            <div className="text-sm text-gray-600">Try a different search term</div>
+                        <div className="text-center py-20 bg-white/5 rounded-3xl border border-dashed border-white/10">
+                            <div className="text-gray-400 text-xl font-medium mb-2">No results found for "{searchTerm}"</div>
+                            <div className="text-sm text-gray-500">Try a different name, username, or note title</div>
                         </div>
                     )}
                 </div>
