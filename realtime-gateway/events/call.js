@@ -15,14 +15,44 @@ if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
   );
 }
 
+// Global state to track active calls for late-joiner sync
+// Key: targetUserId, Value: { from, fromName, fromAvatar, type, conversationId, peerId, startTime }
+const activeCalls = new Map();
+
 module.exports = (io, socket) => {
-  // ─── WebRTC Signaling ───────────────────────────────────────────
-  
+  const userId = socket.userId;
+
+  // 0. Sync on connect: If someone is calling this user, notify them immediately
+  const pendingCall = activeCalls.get(userId);
+  if (pendingCall) {
+    console.log(`[Call] 🔄 Syncing pending call for late-joiner: ${userId} (from: ${pendingCall.from})`);
+    socket.emit('call:incoming', {
+      from: pendingCall.from,
+      fromName: pendingCall.fromName,
+      fromAvatar: pendingCall.fromAvatar,
+      type: pendingCall.type,
+      conversationId: pendingCall.conversationId,
+      peerId: pendingCall.peerId,
+      isSync: true // Flag to indicate this is a late-join sync
+    });
+  }
+
   // 1. Initiate Call
   socket.on('call:initiate', async (data) => {
     const { to, type, conversationId, peerId } = data;
     console.log(`[Call] 📞 ${socket.userId} → ${to} (${type})`);
     
+    // Store in active calls map
+    activeCalls.set(to, {
+      from: socket.userId,
+      fromName: socket.userName,
+      fromAvatar: socket.userAvatar,
+      type,
+      conversationId,
+      peerId,
+      startTime: Date.now()
+    });
+
     io.to(`user:${to}`).emit('call:incoming', {
       from: socket.userId,
       fromName: socket.userName,
@@ -69,7 +99,7 @@ module.exports = (io, socket) => {
             body: `${socket.userName || 'Someone'} is calling you. Tap to answer!`,
             icon: socket.userAvatar || '/icon-192.png',
             data: {
-              url: `/dashboard/chat?conversation=${conversationId}`,
+              url: `/dashboard/chat?id=${conversationId}`, // Fixed param to match our new sync
               type: 'call_incoming'
             }
           });
@@ -113,10 +143,16 @@ module.exports = (io, socket) => {
     });
   });
 
-  // 3. Reject Call (Send Push to stop ringing)
+  // 3. Reject Call
   socket.on('call:reject', async (data) => {
     const { to } = data;
     console.log(`[Call] ✗ ${socket.userId} rejected call from ${to}`);
+    
+    // Clear from active calls (if this user was the target)
+    if (activeCalls.get(socket.userId)?.from === to) {
+        activeCalls.delete(socket.userId);
+    }
+
     io.to(`user:${to}`).emit('call:rejected', { from: socket.userId });
 
     // Send push to cancel UI on other devices
@@ -135,10 +171,19 @@ module.exports = (io, socket) => {
     }
   });
 
-  // 4. End Call (Send Push to stop ringing)
+  // 4. End Call
   socket.on('call:end', async (data) => {
     const { to, conversationId } = data;
     console.log(`[Call] 🏁 ${socket.userId} ended call with ${to}`);
+    
+    // Clear from active calls (try both directions)
+    if (activeCalls.get(to)?.from === socket.userId) {
+        activeCalls.delete(to);
+    }
+    if (activeCalls.get(socket.userId)?.from === to) {
+        activeCalls.delete(socket.userId);
+    }
+
     io.to(`user:${to}`).emit('call:ended', {
       from: socket.userId,
       conversationId
@@ -164,6 +209,12 @@ module.exports = (io, socket) => {
   socket.on('call:timeout', async (data) => {
     const { to } = data;
     console.log(`[Call] 🕒 Timeout for call to ${to}`);
+    
+    // Clear from active calls
+    if (activeCalls.get(to)?.from === socket.userId) {
+        activeCalls.delete(to);
+    }
+
     io.to(`user:${to}`).emit('call:timeout', { from: socket.userId });
 
     // Send missed call push
@@ -173,7 +224,7 @@ module.exports = (io, socket) => {
         title: 'Missed Call',
         body: `You missed a call from ${socket.userName || 'Unknown'}`,
         payload: {
-          type: 'call_cancelled', // This will dismiss the ringing UI
+          type: 'call_cancelled',
           reason: 'timeout',
           callerId: socket.userId
         }
@@ -181,5 +232,19 @@ module.exports = (io, socket) => {
     } catch (e) {
       console.error('[Call] Failed to send timeout push:', e.message);
     }
+  });
+
+  // 6. Disconnect Cleanup
+  socket.on('disconnect', () => {
+    // If this user was calling someone, clear it
+    activeCalls.forEach((call, targetId) => {
+        if (call.from === socket.userId) {
+            console.log(`[Call] 🧹 Cleaning up active call from disconnected user: ${socket.userId}`);
+            activeCalls.delete(targetId);
+            io.to(`user:${targetId}`).emit('call:ended', { from: socket.userId });
+        }
+    });
+    // If this user was being called, just leave it? 
+    // Actually, if the target disconnects, the caller should probably be notified or just wait for timeout.
   });
 };
