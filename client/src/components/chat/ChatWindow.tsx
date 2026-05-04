@@ -31,7 +31,7 @@ const ChatWindow: React.FC = () => {
         sendTypingStatus, typingUsers, sendMessageToConversation,
         drafts, setDraft
     } = useChat();
-    const [searchParams, setSearchParams] = useSearchParams();
+    const [, setSearchParams] = useSearchParams();
     const { isUserOnline, getUserLastSeen } = usePresence();
     const { user, profile, session, isAdmin } = useAuth();
     const { startCall } = useWebRTC();
@@ -203,7 +203,7 @@ const ChatWindow: React.FC = () => {
         if (activeConversationId) {
             setInputValue(drafts[activeConversationId] || '');
         }
-    }, [activeConversationId]);
+    }, [activeConversationId, drafts]);
 
     useEffect(() => {
         const translateNewMessages = async () => {

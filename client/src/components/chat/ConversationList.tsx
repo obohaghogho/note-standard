@@ -11,7 +11,7 @@ const ConversationList: React.FC = () => {
     const { conversations, activeConversationId, setActiveConversationId, loading, typingUsers } = useChat();
     const { user } = useAuth();
     const { isUserOnline } = usePresence();
-    const [searchParams, setSearchParams] = useSearchParams();
+    const [, setSearchParams] = useSearchParams();
 
     if (loading) return <div className="p-4 text-gray-400">Loading chats...</div>;
 

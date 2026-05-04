@@ -312,7 +312,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             socket.off('notification', onNotification);
             if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
         };
-    }, [socket, connected, markAsRead, currentToast, queue, dismissCurrent]);
+    }, [socket, connected, markAsRead, currentToast, queue, dismissCurrent, location.pathname, location.search]);
 
     const clearAllNotifications = useCallback(async () => {
         if (!session) return;
