@@ -121,6 +121,19 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
     }, [callState.status, playAudio]);
 
+    const optimizeSDP = (sdp: string) => {
+        return sdp.split('\r\n').map(line => {
+            if (line.includes('a=fmtp:111')) {
+                // Force mono (stereo=0) and enable DTX (usedtx=1) for noise suppression during silence
+                let newLine = line;
+                if (!line.includes('usedtx=1')) newLine += ';usedtx=1';
+                if (!line.includes('stereo=0')) newLine += ';stereo=0';
+                return newLine;
+            }
+            return line;
+        }).join('\r\n');
+    };
+
     const cleanup = useCallback(() => {
         if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
         
@@ -200,7 +213,14 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false },
+                audio: {
+                    echoCancellation: { ideal: true },
+                    noiseSuppression: { ideal: true },
+                    autoGainControl: { ideal: true },
+                    channelCount: { ideal: 1 },
+                    sampleRate: { ideal: 48000 },
+                    latency: { ideal: 0 }
+                },
                 video: type === 'video' ? { facingMode: "user" } : false,
             });
 
@@ -231,7 +251,14 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false },
+                audio: {
+                    echoCancellation: { ideal: true },
+                    noiseSuppression: { ideal: true },
+                    autoGainControl: { ideal: true },
+                    channelCount: { ideal: 1 },
+                    sampleRate: { ideal: 48000 },
+                    latency: { ideal: 0 }
+                },
                 video: callState.type === 'video' ? { facingMode: "user" } : false,
             });
 
@@ -305,9 +332,14 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
                 const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
+                // Optimize SDP for iOS (Force Mono, Enable DTX for noise suppression)
+                const optimizedOffer = {
+                    ...offer,
+                    sdp: optimizeSDP(offer.sdp || '')
+                };
+                await pc.setLocalDescription(optimizedOffer);
 
-                socket.emit('call:signal', { to: targetUserId, signal: { offer } });
+                socket.emit('call:signal', { to: targetUserId, signal: { offer: optimizedOffer } });
                 setCallState(p => ({ ...p, status: 'connected', connectedAt: Date.now() }));
                 
             } catch (err) {
@@ -334,8 +366,13 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     }
                     await pc.setRemoteDescription(new RTCSessionDescription(signal.offer));
                     const answer = await pc.createAnswer();
-                    await pc.setLocalDescription(answer);
-                    socket.emit('call:signal', { to: data.from, signal: { answer } });
+                    // Optimize SDP for iOS
+                    const optimizedAnswer = {
+                        ...answer,
+                        sdp: optimizeSDP(answer.sdp || '')
+                    };
+                    await pc.setLocalDescription(optimizedAnswer);
+                    socket.emit('call:signal', { to: data.from, signal: { answer: optimizedAnswer } });
                     flushSignalQueue(pc);
                 } else if (signal.answer) {
                     if (pc) {

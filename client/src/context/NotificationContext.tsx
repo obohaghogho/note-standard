@@ -240,22 +240,15 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         const onNotification = (notification: Notification) => {
             if (!isMounted.current) return;
             
-            // Suppress chat notifications if we're already in that chat
+            // Suppress chat notifications if we're in the chat workspace (redundant toasts)
             if (notification.type === 'chat_message' || notification.type === 'message') {
-                const searchParams = new URLSearchParams(location.search);
-                const activeChatId = searchParams.get('id');
                 const isChatPage = location.pathname.includes('/chat');
                 
-                // If notification has a link like /dashboard/chat?id=XXX, extract ID
-                if (isChatPage && notification.link && activeChatId) {
-                    const notifyUrl = new URL(notification.link, window.location.origin);
-                    const notifyId = notifyUrl.searchParams.get('id');
-                    if (notifyId === activeChatId) {
-                        console.log('[Notifications] Suppressing notification for active chat');
-                        // We still add to notifications list but don't toast
-                        setNotifications(prev => [notification, ...prev]);
-                        return;
-                    }
+                if (isChatPage) {
+                    console.log('[Notifications] Suppressing chat notification while on chat page');
+                    // We still add to notifications list (for the badge/list) but don't show the toast
+                    setNotifications(prev => [notification, ...prev]);
+                    return;
                 }
             }
 

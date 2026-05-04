@@ -309,7 +309,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                                     msg.conversation_id && 
                                     activeConversationIdRef.current.toString().toLowerCase() === msg.conversation_id.toString().toLowerCase();
 
-                if (document.visibilityState === 'visible' && !isActiveChat) {
+                const isChatPage = window.location.pathname.includes('/chat');
+
+                if (document.visibilityState === 'visible' && !isActiveChat && !isChatPage) {
                     toast.custom((t) => (
                         <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-gray-900 shadow-2xl rounded-2xl pointer-events-auto flex ring-1 ring-white/10 border border-gray-800`}>
                             <div className="flex-1 w-0 p-4">
