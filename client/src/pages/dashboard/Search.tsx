@@ -3,7 +3,7 @@ import { Card } from '../../components/common/Card';
 import { Input } from '../../components/common/Input';
 import { Search as SearchIcon, User, FileText, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import SecureImage from '../../components/common/SecureImage';
 import { ViewNoteModal } from '../../components/dashboard/ViewNoteModal';
 
@@ -79,9 +79,9 @@ export const Search = () => {
             if (notesError) throw notesError;
             setNotes((notesData as unknown as NoteResult[]) || []);
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Search error:', error);
-            setError(error.message || 'Search failed. Please try again.');
+            setError(error instanceof Error ? error.message : 'Search failed. Please try again.');
         } finally {
             setLoading(false);
         }
