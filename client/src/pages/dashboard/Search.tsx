@@ -218,6 +218,7 @@ export const Search = () => {
                                                 @{u.username}
                                             </div>
                                         </div>
+                                        </div>
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
