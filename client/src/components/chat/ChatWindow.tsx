@@ -7,7 +7,7 @@ import { usePresence } from '../../context/PresenceContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../common/SecureImage';
-import { Send, Languages, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Maximize, Trash2, Share2, X, Copy, Menu } from 'lucide-react';
+import { Send, Languages, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Maximize, Trash2, Share2, X, Copy, Menu, Pencil } from 'lucide-react';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { MediaUpload } from './MediaUpload';
 import { VoiceRecorder } from './VoiceRecorder';
@@ -638,7 +638,7 @@ const ChatWindow: React.FC = () => {
         <div className="flex-1 flex flex-col h-full min-h-0 bg-gray-950 text-white overflow-hidden relative w-full shadow-none rounded-none md:max-w-[1200px] md:mx-auto md:shadow-2xl md:border-x md:border-white/5">
             {/* ── Selection Action Bar (WhatsApp-style) ── */}
             {isSelectionMode ? (
-                <div className="pt-safe flex-shrink-0 border-b border-blue-500/30 bg-blue-600/10 backdrop-blur-md sticky top-0 z-10 animate-in slide-in-from-top-2 duration-200">
+                <div className="pt-safe flex-shrink-0 border-b border-blue-500/30 bg-blue-600/10 backdrop-blur-md z-20" onClick={(e) => e.stopPropagation()}>
                     <div className="p-2 md:p-4 flex items-center justify-between gap-4 w-full">
                         <div className="flex items-center gap-3">
                             <button 
@@ -653,14 +653,14 @@ const ChatWindow: React.FC = () => {
                             </span>
                         </div>
                         <div className="flex items-center gap-1 md:gap-2">
-                            <button 
+                             <button 
                                 onClick={() => {
                                     const selectedMsgs = currentMessages
                                         .filter(m => selectedMessages.has(m.id))
                                         .map(m => ({ id: m.id, content: m.content, type: m.type }));
                                     setForwardModal({ isOpen: true, messages: selectedMsgs });
                                 }}
-                                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-blue-300 hover:text-blue-200 hover:bg-blue-500/15 rounded-xl transition-all active:scale-95"
+                                className="flex items-center gap-2 px-3 md:px-4 py-2 text-sm font-semibold text-blue-300 hover:text-blue-200 hover:bg-blue-500/15 rounded-xl transition-all"
                             >
                                 <Share2 size={18} />
                                 <span className="hidden sm:inline">Forward</span>
@@ -679,9 +679,9 @@ const ChatWindow: React.FC = () => {
                                                     }
                                                     clearSelection();
                                                 }}
-                                                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-green-400 hover:text-green-300 hover:bg-green-500/15 rounded-xl transition-all active:scale-95"
+                                                className="flex items-center gap-2 px-3 md:px-4 py-2 text-sm font-semibold text-green-400 hover:text-green-300 hover:bg-green-500/15 rounded-xl transition-all"
                                             >
-                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                                <Pencil size={18} />
                                                 <span className="hidden sm:inline">Edit</span>
                                             </button>
                                         );
@@ -689,19 +689,19 @@ const ChatWindow: React.FC = () => {
                                     return null;
                                 })()
                             )}
-                            <button 
+                             <button 
                                 onClick={handleCopy}
-                                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-gray-300 hover:text-white hover:bg-white/10 rounded-xl transition-all active:scale-95"
+                                className="flex items-center gap-2 px-3 md:px-4 py-2 text-sm font-semibold text-gray-300 hover:text-white hover:bg-white/10 rounded-xl transition-all"
                             >
                                 <Copy size={18} />
                                 <span className="hidden sm:inline">Copy</span>
                             </button>
                             {(isAdmin || currentMessages.filter(m => selectedMessages.has(m.id)).every(m => m.sender_id === user?.id)) && (
-                                <button 
+                                 <button 
                                     onClick={() => {
                                         setConfirmModal({ isOpen: true, type: 'message', messageId: Array.from(selectedMessages)[0] });
                                     }}
-                                    className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/15 rounded-xl transition-all active:scale-95"
+                                    className="flex items-center gap-2 px-3 md:px-4 py-2 text-sm font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/15 rounded-xl transition-all"
                                 >
                                     <Trash2 size={18} />
                                     <span className="hidden sm:inline">Delete</span>
@@ -711,7 +711,7 @@ const ChatWindow: React.FC = () => {
                     </div>
                 </div>
             ) : (
-            <div className="flex-shrink-0 bg-gray-950/80 backdrop-blur-2xl border-b border-white/5 sticky top-0 z-10 pt-safe shadow-sm">
+            <div className="flex-shrink-0 bg-gray-950/80 backdrop-blur-2xl border-b border-white/5 z-20 pt-safe shadow-sm">
                 <div className="px-3 py-3 md:px-5 md:py-4 flex items-center justify-between gap-4 w-full">
                     <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                         <button 
