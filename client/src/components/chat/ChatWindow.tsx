@@ -69,13 +69,17 @@ const ChatWindow: React.FC = () => {
     };
 
     const handleLongPressStart = (msgId: string) => {
+        // If already in selection mode, don't start another long press timer
+        // Just let the onClick handle the toggle
+        if (isSelectionMode) return;
+
         longPressTriggeredRef.current = false;
         longPressTimerRef.current = setTimeout(() => {
             longPressTriggeredRef.current = true;
             // Haptic feedback for mobile
             if (navigator.vibrate) navigator.vibrate(30);
             toggleMessageSelection(msgId);
-        }, 350);
+        }, 700); // Increased to 700ms to prevent accidental triggers
     };
 
     const handleLongPressEnd = () => {
@@ -184,7 +188,15 @@ const ChatWindow: React.FC = () => {
     const isWaitingForOthers = myMember?.status === 'accepted' && otherMember?.status === 'pending';
 
     const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
-        messagesEndRef.current?.scrollIntoView({ behavior });
+        if (scrollContainerRef.current) {
+            const { scrollHeight } = scrollContainerRef.current;
+            scrollContainerRef.current.scrollTo({
+                top: scrollHeight,
+                behavior
+            });
+            // Force set state to avoid lag in UI update
+            setIsAtBottom(true);
+        }
     };
 
     const handleLoadMore = async () => {
@@ -886,13 +898,15 @@ const ChatWindow: React.FC = () => {
                                     key={msg.id || `msg-temp-${index}`} 
                                     className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'} ${isGrouped ? '-mt-2 md:-mt-3' : 'mt-4'} animate-in fade-in slide-in-from-bottom-2 duration-300`}
                                     onTouchStart={() => handleLongPressStart(msg.id)}
+                                    onTouchMove={handleLongPressEnd}
                                     onTouchEnd={handleLongPressEnd}
                                     onTouchCancel={handleLongPressEnd}
                                     onMouseDown={() => handleLongPressStart(msg.id)}
+                                    onMouseMove={handleLongPressEnd}
                                     onMouseUp={handleLongPressEnd}
                                     onMouseLeave={handleLongPressEnd}
                                     onClick={() => handleMessageClick(msg.id)}
-                                    style={{ userSelect: 'text', WebkitUserSelect: 'text' }}
+                                    style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
                                 >
                                     {/* Selection checkbox indicator */}
                                     {isSelectionMode && (
