@@ -32,14 +32,35 @@ if ('serviceWorker' in navigator) {
             </div>
             <p className="text-xs text-gray-400">Please update to get the latest features and stability fixes.</p>
             <button
-              onClick={() => {
-                if (newWorker) {
-                    newWorker.postMessage({ type: 'SKIP_WAITING' });
-                } else {
-                    caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k))))
-                        .then(() => window.location.reload());
-                }
+              onClick={async () => {
+                // Stamp the attempt so VersionGuard + checkForAppUpdate skip
+                // re-triggering for 45 s after this reload.
+                sessionStorage.setItem('vg_update_attempt', String(Date.now()));
                 toast.dismiss(t.id);
+
+                if (newWorker) {
+                  // SW path: tell the waiting worker to activate, then reload.
+                  // controllerchange listener below handles the actual reload.
+                  newWorker.postMessage({ type: 'SKIP_WAITING' });
+                } else {
+                  // API-only path: activate any waiting SW, clear caches, reload.
+                  try {
+                    if ('serviceWorker' in navigator) {
+                      const regs = await navigator.serviceWorker.getRegistrations();
+                      for (const reg of regs) {
+                        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                        try { await reg.update(); } catch { /* non-critical */ }
+                      }
+                    }
+                  } catch { /* non-critical */ }
+
+                  try {
+                    const keys = await caches.keys();
+                    await Promise.all(keys.map((k) => caches.delete(k)));
+                  } catch { /* non-critical */ }
+
+                  setTimeout(() => window.location.reload(), 400);
+                }
               }}
               className="mt-1 bg-primary text-white text-xs font-bold py-2 px-4 rounded-lg shadow-lg hover:bg-primary/90 transition-all active:scale-95"
             >
@@ -72,6 +93,12 @@ if ('serviceWorker' in navigator) {
 
       // 3. DETERMINISTIC BACKGROUND VERSION CHECK via API
       const checkForAppUpdate = async () => {
+          // Don't re-show the toast for 45 s after the user clicked "Update Now".
+          // This prevents the update prompt from reappearing immediately while the
+          // new service worker is still activating and the new bundle is loading.
+          const lastAttempt = Number(sessionStorage.getItem('vg_update_attempt') || 0);
+          if (Date.now() - lastAttempt < 45_000) return;
+
           try {
               const res = await fetch(`${API_URL}/api/version/check?v=${APP_VERSION}`);
               if (!res.ok) return;

@@ -10,6 +10,40 @@ interface VersionStatus {
   changelog: string[];
 }
 
+/** How long (ms) to suppress the update screen after the user clicks Update Now */
+const UPDATE_COOLDOWN_MS = 45_000;
+
+/** Clears all SW caches and posts SKIP_WAITING to any waiting worker, then reloads */
+async function triggerHardUpdate(): Promise<void> {
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const reg of regs) {
+        // Activate the waiting worker so it can serve fresh assets
+        if (reg.waiting) {
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        }
+        // Also force the browser to re-fetch sw.js itself
+        try { await reg.update(); } catch { /* non-critical */ }
+      }
+    }
+  } catch { /* non-critical */ }
+
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+  } catch { /* non-critical */ }
+
+  // Record the attempt so VersionGuard doesn't re-block for 45 s after reload
+  sessionStorage.setItem('vg_update_attempt', String(Date.now()));
+
+  // Brief pause lets the new SW take control before reload
+  await new Promise((r) => setTimeout(r, 400));
+  window.location.reload();
+}
+
 /**
  * VersionGuard — checks the server for version compatibility on mount.
  * If force_update is true, renders a blocking update screen.
@@ -17,10 +51,36 @@ interface VersionStatus {
  */
 export const VersionGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [status, setStatus] = useState<VersionStatus | null>(null);
-  const [dismissed, setDismissed] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  // Persist dismiss per-version so it survives soft reloads
+  const dismissedKey = `vg_dismissed_${APP_VERSION}`;
+  const [dismissed, setDismissed] = useState(
+    () => sessionStorage.getItem(dismissedKey) === '1'
+  );
+
+  const handleDismiss = () => {
+    sessionStorage.setItem(dismissedKey, '1');
+    setDismissed(true);
+  };
+
+  const handleUpdate = async () => {
+    if (isUpdating) return;
+    setIsUpdating(true);
+    await triggerHardUpdate(); // noreturn — page reloads inside
+  };
 
   useEffect(() => {
     const checkVersion = async () => {
+      // Suppress the check for UPDATE_COOLDOWN_MS after the user clicked "Update Now".
+      // This prevents the blocking screen from reappearing immediately after reload
+      // while the new service worker is still activating / caches are still warming.
+      const lastAttempt = Number(sessionStorage.getItem('vg_update_attempt') || 0);
+      if (Date.now() - lastAttempt < UPDATE_COOLDOWN_MS) {
+        console.log('[VersionGuard] Skipping check — update was just triggered.');
+        return;
+      }
+
       try {
         const res = await fetch(`${API_URL}/api/version/check?v=${APP_VERSION}`);
         if (!res.ok) return; // Fail open — don't block the app if version check fails
@@ -32,7 +92,7 @@ export const VersionGuard: React.FC<{ children: React.ReactNode }> = ({ children
         // Fail open — let users use the app if the server is unreachable
       }
     };
-    
+
     checkVersion();
     // Re-check every 30 minutes
     const interval = setInterval(checkVersion, 1000 * 60 * 30);
@@ -65,10 +125,19 @@ export const VersionGuard: React.FC<{ children: React.ReactNode }> = ({ children
           )}
           
           <button
-            onClick={() => window.location.reload()}
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 px-6 rounded-xl transition-all active:scale-95 shadow-lg shadow-blue-600/30"
+            onClick={handleUpdate}
+            disabled={isUpdating}
+            className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-3.5 px-6 rounded-xl transition-all active:scale-95 shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2"
           >
-            Update Now
+            {isUpdating ? (
+              <>
+                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                </svg>
+                Updating…
+              </>
+            ) : 'Update Now'}
           </button>
           <p className="text-xs text-gray-600 mt-4">
             Current: v{APP_VERSION} → Latest: v{status.latest_version}
@@ -85,13 +154,14 @@ export const VersionGuard: React.FC<{ children: React.ReactNode }> = ({ children
         <div className="fixed top-0 left-0 right-0 z-[9998] bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-center py-2.5 px-4 text-sm flex items-center justify-center gap-3 shadow-lg">
           <span>🚀 <strong>v{status.latest_version}</strong> is available!</span>
           <button 
-            onClick={() => window.location.reload()} 
-            className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded-lg text-xs font-bold transition-all"
+            onClick={handleUpdate}
+            disabled={isUpdating}
+            className="bg-white/20 hover:bg-white/30 disabled:opacity-60 px-3 py-1 rounded-lg text-xs font-bold transition-all"
           >
-            Update
+            {isUpdating ? 'Updating…' : 'Update'}
           </button>
           <button 
-            onClick={() => setDismissed(true)} 
+            onClick={handleDismiss} 
             className="text-white/60 hover:text-white ml-2 text-lg leading-none"
           >
             ×
