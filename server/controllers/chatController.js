@@ -38,7 +38,7 @@ exports.getConversations = async (req, res) => {
                         created_at,
                         read_at,
                         delivered_at
-                    ).order('created_at', { ascending: false }).limit(1)
+                    )
                 )
             `)
       .eq("user_id", userId)

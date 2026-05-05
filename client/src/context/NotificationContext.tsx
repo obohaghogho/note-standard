@@ -109,6 +109,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             console.error('[Notifications] Fetch failed:', err);
         } finally {
             if (isMounted.current) setLoading(false);
+            notificationsFetchRef.current = false;
         }
     }, [session, isSwitching]);
 
