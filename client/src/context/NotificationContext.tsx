@@ -61,13 +61,29 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             const next = queue[0];
             setQueue(prev => prev.slice(1));
             setCurrentToast(next);
+        }
+    }, [currentToast, queue]);
 
-            // Auto dismiss after 5s
+    // Dedicated Auto-dismiss timer manager
+    useEffect(() => {
+        if (currentToast) {
+            // Clear any existing timer
+            if (dismissTimerRef.current) {
+                clearTimeout(dismissTimerRef.current);
+            }
+            
+            // Set a new 5s timer
             dismissTimerRef.current = setTimeout(() => {
                 dismissCurrent();
             }, 5000);
         }
-    }, [currentToast, queue, dismissCurrent]);
+        
+        return () => {
+            if (dismissTimerRef.current) {
+                clearTimeout(dismissTimerRef.current);
+            }
+        };
+    }, [currentToast, dismissCurrent]);
 
     const isMounted = useRef(true);
     const notificationsFetchRef = useRef(false);
@@ -299,12 +315,9 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                         message: notification.message,
                         count: (prev.count || 1) + 1
                     } : null);
-                    
-                    // Reset timer
-                    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
-                    dismissTimerRef.current = setTimeout(dismissCurrent, 5000);
                     return;
                 }
+
 
                 // Check queue
                 const queueIndex = queue.findIndex(q => q.sender?.username === notification.sender?.username || q.title === notification.title);
@@ -329,7 +342,6 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         socket.on('notification', onNotification);
         return () => {
             socket.off('notification', onNotification);
-            if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
         };
     }, [socket, connected, markAsRead, currentToast, queue, dismissCurrent, location.pathname, location.search]);
 

@@ -759,7 +759,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         const oldest = currentM[0].created_at;
         
         try {
-            const res = await fetch(`${API_URL}/api/chat/conversations/${conversationId}/messages?before=${oldest}&limit=30`, {
+            const encodedBefore = encodeURIComponent(oldest);
+            const res = await fetch(`${API_URL}/api/chat/conversations/${conversationId}/messages?before=${encodedBefore}&limit=30`, {
                 headers: { 'Authorization': `Bearer ${session.access_token}` }
             });
             
@@ -1107,8 +1108,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 };
             });
             
-            // Adjust hasMore logic if we fetched a full page, but keep true if we already had hasMore = true
-            setHasMore(prev => ({ ...prev, [convId]: prev[convId] || rawMessages.length >= 50 }));
+            // Adjust hasMore logic if we fetched a full page
+            // We set it to true if we got 50 messages, otherwise false
+            setHasMore(prev => ({ 
+                ...prev, 
+                [convId]: rawMessages.length >= 50 
+            }));
 
             if (hasUnread) {
                 markConversationRead(convId);

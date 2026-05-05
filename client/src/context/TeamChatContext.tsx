@@ -230,6 +230,13 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
         return merged;
       });
 
+      // Update hasMore based on sync result
+      if (messagesData.length < 50) {
+        setHasMore(false);
+      } else {
+        setHasMore(true);
+      }
+
       // Also refresh stats/members in background
       const [membersData, statsData] = await Promise.all([
         getTeamMembers(teamId),
