@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ShieldAlert, CheckCircle, Clock, XCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 
 import toast from 'react-hot-toast';
+import { useAuth } from '../../context/AuthContext';
+import { API_URL } from '../../lib/api';
 
 // Helper to format distance to now natively
 function getDistanceToNow(dateObj: Date): string {
@@ -30,18 +32,20 @@ interface Proposal {
 }
 
 export const ReconciliationDashboard: React.FC = () => {
+    const { session } = useAuth();
     const [proposals, setProposals] = useState<Proposal[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<'ALL' | 'AUDITING' | 'APPLIED' | 'INVALIDATED'>('ALL');
     const [now, setNow] = useState(new Date());
 
     const fetchProposals = useCallback(async () => {
+        if (!session?.access_token) return;
         setLoading(true);
         try {
             const statusQ = filter === 'ALL' ? '' : `?status=${filter}`;
             // We use the raw fetch here since backend method adminApi might not have this yet
-            const response = await fetch(`/api/admin/reconciliation/proposals${statusQ}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            const response = await fetch(`${API_URL}/api/admin/reconciliation/proposals${statusQ}`, {
+                headers: { 'Authorization': `Bearer ${session.access_token}` }
             });
             const data = await response.json();
             if (data.success) {
@@ -52,7 +56,7 @@ export const ReconciliationDashboard: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [filter]);
+    }, [filter, session?.access_token]);
 
     useEffect(() => {
         fetchProposals();
@@ -63,12 +67,13 @@ export const ReconciliationDashboard: React.FC = () => {
 
     const handleInvalidate = async (id: string) => {
         if (!confirm('Are you sure you want to hard-invalidate this proposal?')) return;
+        if (!session?.access_token) return;
         
         try {
-            const response = await fetch(`/api/admin/reconciliation/proposals/${id}/invalidate`, {
+            const response = await fetch(`${API_URL}/api/admin/reconciliation/proposals/${id}/invalidate`, {
                 method: 'POST',
                 headers: { 
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Authorization': `Bearer ${session.access_token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ reason: 'Admin Rejected' })
@@ -92,11 +97,12 @@ export const ReconciliationDashboard: React.FC = () => {
         }
 
         if (!confirm(`WARNING: You are about to bypass the time-lock for a ${severity} drift proposal. Proceed?`)) return;
+        if (!session?.access_token) return;
 
         try {
-            const response = await fetch(`/api/admin/reconciliation/proposals/${id}/approve`, {
+            const response = await fetch(`${API_URL}/api/admin/reconciliation/proposals/${id}/approve`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                headers: { 'Authorization': `Bearer ${session.access_token}` }
             });
             const data = await response.json();
             if (data.success) {

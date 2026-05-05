@@ -121,6 +121,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const activeConversationIdRef = useRef<string | null>(null);
     const isFetchingMoreRef = useRef<Record<string, boolean>>({});
     const lastUserIdRef = useRef<string | null>(null);
+    const pendingDeliveriesRef = useRef<Record<string, string>>({});
+    const pendingReadsRef = useRef<Record<string, string>>({});
 
 
     // Keep refs in sync
@@ -405,6 +407,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         };
 
         const onMessageRead = ({ messageId, conversationId }: { messageId: string; conversationId: string }) => {
+            const now = new Date().toISOString();
+            pendingReadsRef.current[messageId] = now;
             
             setMessages(prev => {
                 const convMessages = prev[conversationId] || [];
@@ -412,7 +416,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 return {
                     ...prev,
                     [conversationId]: convMessages.map(m => 
-                        m.id === messageId ? { ...m, read_at: m.read_at || new Date().toISOString() } : m
+                        m.id === messageId ? { ...m, read_at: m.read_at || now } : m
                     )
                 };
             });
@@ -434,12 +438,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         };
 
         const onMessageDelivered = ({ messageId, conversationId, delivered_at }: { messageId: string; conversationId: string, delivered_at?: string }) => {
+            const now = delivered_at || new Date().toISOString();
+            pendingDeliveriesRef.current[messageId] = now;
+
             setMessages(prev => {
                 const convMessages = prev[conversationId] || [];
                 return {
                     ...prev,
                     [conversationId]: convMessages.map(m => 
-                        m.id === messageId ? { ...m, delivered_at: m.delivered_at || delivered_at || new Date().toISOString() } : m
+                        m.id === messageId ? { ...m, delivered_at: m.delivered_at || now } : m
                     )
                 };
             });
@@ -677,6 +684,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             const data = await res.json();
             
             // Replace optimistic message with real one
+            const finalDeliveredAt = pendingDeliveriesRef.current[data.id] || data.delivered_at;
+            const finalReadAt = pendingReadsRef.current[data.id] || data.read_at;
+
+            if (pendingDeliveriesRef.current[data.id]) delete pendingDeliveriesRef.current[data.id];
+            if (pendingReadsRef.current[data.id]) delete pendingReadsRef.current[data.id];
             
             setMessages(prev => {
                 const current = prev[conversationId] || [];
@@ -684,10 +696,16 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const alreadyExists = current.some(m => m.id === data.id);
                 
                 if (alreadyExists) {
-                    // Just remove the temporary optimistic message
+                    // Update the message with the latest delivery/read statuses
                     return {
                         ...prev,
-                        [conversationId]: current.filter(m => m.id !== tempId)
+                        [conversationId]: current.filter(m => m.id !== tempId).map(m => 
+                            m.id === data.id ? {
+                                ...m,
+                                delivered_at: m.delivered_at || finalDeliveredAt,
+                                read_at: m.read_at || finalReadAt
+                            } : m
+                        )
                     };
                 }
 
@@ -700,7 +718,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         created_at: data.created_at,
                         original_language: data.original_language,
                         attachment: data.attachment,
-                        read_at: data.read_at
+                        read_at: finalReadAt,
+                        delivered_at: finalDeliveredAt
                     } : m)
                 };
             });

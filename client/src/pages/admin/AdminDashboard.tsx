@@ -13,7 +13,8 @@ import {
     Cpu,
     Database,
     Trophy,
-    Wifi
+    Wifi,
+    CheckCircle
 } from 'lucide-react';
 import { API_URL } from '../../lib/api';
 import { Card } from '../../components/common/Card';
