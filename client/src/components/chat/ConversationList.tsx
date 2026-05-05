@@ -14,8 +14,6 @@ const ConversationList: React.FC = () => {
     const { isUserOnline } = usePresence();
     const [, setSearchParams] = useSearchParams();
 
-    if (loading) return <div className="p-4 text-gray-400">Loading chats...</div>;
-
     const sortedConversations = useMemo(() => {
         return [...conversations].sort((a, b) => {
             const timeA = new Date(a.lastMessage?.created_at || a.updated_at || 0).getTime();
@@ -23,6 +21,8 @@ const ConversationList: React.FC = () => {
             return timeB - timeA;
         });
     }, [conversations]);
+
+    if (loading) return <div className="p-4 text-gray-400">Loading chats...</div>;
 
     if (conversations.length === 0) {
         return <div className="p-4 text-gray-500">No conversations yet.</div>;
