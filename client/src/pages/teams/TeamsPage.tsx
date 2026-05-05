@@ -342,10 +342,17 @@ export function TeamsPage() {
     const toastId = toast.loading('Sending invitation...');
 
     try {
-      const member = await inviteMember(selectedTeamId, {
-        email: inviteEmail,
+      const isEmail = inviteEmail.includes('@');
+      const payload: { role: 'member' | 'admin'; email?: string; username?: string } = {
         role: inviteRole,
-      });
+      };
+      if (isEmail) {
+        payload.email = inviteEmail.trim();
+      } else {
+        payload.username = inviteEmail.trim();
+      }
+
+      const member = await inviteMember(selectedTeamId, payload);
 
       if (member) {
         toast.success('Member invited successfully!', { id: toastId });

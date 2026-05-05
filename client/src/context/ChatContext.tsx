@@ -1051,8 +1051,34 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 };
             });
 
-            setMessages(prev => ({ ...prev, [convId]: messageList }));
-            setHasMore(prev => ({ ...prev, [convId]: rawMessages.length >= 50 }));
+            setMessages(prev => {
+                const existing = prev[convId] || [];
+                if (messageList.length === 0) return { ...prev, [convId]: existing };
+
+                const fetchedDates = messageList.map(m => new Date(m.created_at).getTime());
+                const oldestFetchedDate = Math.min(...fetchedDates);
+
+                // Keep existing messages that are older than the oldest fetched message
+                // This preserves chat history when returning to the app
+                const olderExisting = existing.filter(m => new Date(m.created_at).getTime() < oldestFetchedDate);
+                
+                // Keep any optimistic messages
+                const optimisticMessages = existing.filter(m => m.id.startsWith('temp-'));
+
+                const mergedMap = new Map<string, Message>();
+                
+                olderExisting.forEach(m => mergedMap.set(m.id, m));
+                messageList.forEach(m => mergedMap.set(m.id, m));
+                optimisticMessages.forEach(m => mergedMap.set(m.id, m));
+
+                return { 
+                    ...prev, 
+                    [convId]: Array.from(mergedMap.values()).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) 
+                };
+            });
+            
+            // Adjust hasMore logic if we fetched a full page, but keep true if we already had hasMore = true
+            setHasMore(prev => ({ ...prev, [convId]: prev[convId] || rawMessages.length >= 50 }));
 
             if (hasUnread) {
                 markConversationRead(convId);
