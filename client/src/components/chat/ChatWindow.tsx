@@ -210,6 +210,7 @@ const ChatWindow: React.FC = () => {
         setIsAtBottom(reachedBottom);
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         if (isAtBottom) scrollToBottom('smooth');
     }, [currentMessages]);
