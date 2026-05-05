@@ -119,6 +119,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const conversationsRef = useRef<Conversation[]>([]);
     const socketRef = useRef<Socket | null>(null);
     const activeConversationIdRef = useRef<string | null>(null);
+    const isFetchingMoreRef = useRef<Record<string, boolean>>({});
 
 
     // Keep refs in sync
@@ -719,9 +720,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     const loadMoreMessages = async (conversationId: string) => {
+        if (isFetchingMoreRef.current[conversationId]) return;
+
         const currentM = messages[conversationId] || [];
         if (currentM.length === 0 || !session) return;
 
+        isFetchingMoreRef.current[conversationId] = true;
         const oldest = currentM[0].created_at;
         
         try {
@@ -731,18 +735,36 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             
             if (res.ok) {
                 const data = await res.json();
+                
+                const messageList: Message[] = data.map((msg: Message) => {
+                    return {
+                        ...msg,
+                        isOwn: msg.sender_id === user?.id
+                    };
+                });
+
                 if (data.length < 30) {
                     setHasMore(prev => ({ ...prev, [conversationId]: false }));
                 } else {
                     setHasMore(prev => ({ ...prev, [conversationId]: true }));
                 }
-                setMessages(prev => ({
-                    ...prev,
-                    [conversationId]: [...data, ...(prev[conversationId] || [])]
-                }));
+                
+                setMessages(prev => {
+                    const existing = prev[conversationId] || [];
+                    // Deduplicate
+                    const existingIds = new Set(existing.map(m => m.id));
+                    const newMessages = messageList.filter(m => !existingIds.has(m.id));
+                    
+                    return {
+                        ...prev,
+                        [conversationId]: [...newMessages, ...existing]
+                    };
+                });
             }
         } catch (err) {
             console.error('[Chat] Load more failed:', err);
+        } finally {
+            isFetchingMoreRef.current[conversationId] = false;
         }
     };
 

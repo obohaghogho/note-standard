@@ -183,8 +183,24 @@ const ChatWindow: React.FC = () => {
 
     const isWaitingForOthers = myMember?.status === 'accepted' && otherMember?.status === 'pending';
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+        messagesEndRef.current?.scrollIntoView({ behavior });
+    };
+
+    const handleLoadMore = async () => {
+        if (!activeConversationId || !scrollContainerRef.current) return;
+        
+        const scrollNode = scrollContainerRef.current;
+        const previousScrollHeight = scrollNode.scrollHeight;
+        
+        await loadMoreMessages(activeConversationId);
+        
+        setTimeout(() => {
+            if (scrollContainerRef.current) {
+                const newScrollHeight = scrollContainerRef.current.scrollHeight;
+                scrollContainerRef.current.scrollTop = newScrollHeight - previousScrollHeight;
+            }
+        }, 0);
     };
 
     const handleScroll = () => {
@@ -195,8 +211,18 @@ const ChatWindow: React.FC = () => {
     };
 
     useEffect(() => {
-        if (isAtBottom) scrollToBottom();
-    }, [currentMessages, isAtBottom]);
+        if (isAtBottom) scrollToBottom('smooth');
+    }, [currentMessages]);
+
+    useEffect(() => {
+        if (activeConversationId) {
+            // Use setTimeout to ensure DOM has updated before scrolling
+            setTimeout(() => {
+                scrollToBottom('auto');
+                setIsAtBottom(true);
+            }, 0);
+        }
+    }, [activeConversationId]);
 
     // Initialize input from draft
     useEffect(() => {
@@ -204,6 +230,11 @@ const ChatWindow: React.FC = () => {
             setInputValue(drafts[activeConversationId] || '');
         }
     }, [activeConversationId, drafts]);
+
+    const translationsRef = useRef(translations);
+    useEffect(() => {
+        translationsRef.current = translations;
+    }, [translations]);
 
     useEffect(() => {
         const translateNewMessages = async () => {
@@ -213,7 +244,7 @@ const ChatWindow: React.FC = () => {
                 const sourceLang = msg.original_language || 'en';
                 const isDifferent = sourceLang !== preferredLanguage;
                 const notOwn = msg.sender_id !== user?.id;
-                const notTranslated = !translations[msg.id];
+                const notTranslated = !translationsRef.current[msg.id];
                 const notInFlight = !translatingRef.current.has(msg.id);
                 return notOwn && isDifferent && notTranslated && notInFlight && msg.type === 'text';
             });
@@ -254,7 +285,7 @@ const ChatWindow: React.FC = () => {
         };
 
         translateNewMessages();
-    }, [currentMessages, activeConversationId, preferredLanguage, user?.id, session?.access_token, translations]);
+    }, [currentMessages, activeConversationId, preferredLanguage, user?.id, session?.access_token]);
 
     const handleManualTranslate = async (msgId: string, content: string, sourceLang?: string) => {
         if (!preferredLanguage || !session?.access_token) return;
@@ -814,7 +845,7 @@ const ChatWindow: React.FC = () => {
 
             {activeConversationId && hasMore[activeConversationId] && (
                 <div className="flex justify-center py-2 bg-gray-950">
-                    <button onClick={() => activeConversationId && loadMoreMessages(activeConversationId)} className="text-xs font-medium text-blue-400 hover:text-blue-300">Load older messages</button>
+                    <button onClick={handleLoadMore} className="text-xs font-medium text-blue-400 hover:text-blue-300">Load older messages</button>
                 </div>
             )}
 

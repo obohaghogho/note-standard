@@ -1,3 +1,4 @@
+import React, { useMemo } from 'react';
 import { useChat } from '../../context/ChatContext';
 import { useAuth } from '../../context/AuthContext';
 import { Check, CheckCheck } from 'lucide-react';
@@ -19,9 +20,17 @@ const ConversationList: React.FC = () => {
         return <div className="p-4 text-gray-500">No conversations yet.</div>;
     }
 
+    const sortedConversations = useMemo(() => {
+        return [...conversations].sort((a, b) => {
+            const timeA = new Date(a.lastMessage?.created_at || a.updated_at || 0).getTime();
+            const timeB = new Date(b.lastMessage?.created_at || b.updated_at || 0).getTime();
+            return timeB - timeA;
+        });
+    }, [conversations]);
+
     return (
         <div className="flex flex-col h-full overflow-y-auto bg-gray-950 border-r border-white/5 scrollbar-hide pb-safe">
-            {conversations.map((conv) => {
+            {sortedConversations.map((conv) => {
                 let displayName = conv.name;
                 let displayAvatar = null;
                 let isOnline = false;
