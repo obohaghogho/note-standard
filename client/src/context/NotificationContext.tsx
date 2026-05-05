@@ -240,15 +240,41 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         const onNotification = (notification: Notification) => {
             if (!isMounted.current) return;
             
-            // Suppress chat notifications if we're in the chat workspace (redundant toasts)
+            // Suppress chat notifications if the user is actively viewing that specific conversation
             if (notification.type === 'chat_message' || notification.type === 'message') {
                 const isChatPage = location.pathname.includes('/chat');
                 
                 if (isChatPage) {
-                    console.log('[Notifications] Suppressing chat notification while on chat page');
-                    // We still add to notifications list (for the badge/list) but don't show the toast
-                    setNotifications(prev => [notification, ...prev]);
-                    return;
+                    // Extract the conversation ID from the notification link (e.g. /dashboard/chat?id=<uuid>)
+                    let notifConversationId: string | null = null;
+                    if (notification.link) {
+                        try {
+                            const linkUrl = new URL(notification.link, window.location.origin);
+                            notifConversationId = linkUrl.searchParams.get('id');
+                        } catch {
+                            // If parsing fails, fall back to string extraction
+                            const match = notification.link.match(/[?&]id=([^&]+)/);
+                            notifConversationId = match ? match[1] : null;
+                        }
+                    }
+
+                    // Extract the currently active conversation ID from the browser URL
+                    const currentParams = new URLSearchParams(location.search);
+                    const activeConversationId = currentParams.get('id');
+
+                    // If user is already looking at this exact conversation → fully suppress the toast
+                    // AND mark it as read immediately so no badge accumulates
+                    if (notifConversationId && activeConversationId && notifConversationId === activeConversationId) {
+                        console.log('[Notifications] Suppressing chat notification — user is already in this conversation:', notifConversationId);
+                        // Silently mark as read on the server (fire-and-forget)
+                        markAsRead(notification.id);
+                        // Still add to list (silently marked read) so history is intact
+                        setNotifications(prev => [{ ...notification, is_read: true }, ...prev]);
+                        return;
+                    }
+
+                    // User is on the chat page but in a DIFFERENT conversation → show the toast
+                    console.log('[Notifications] Showing chat notification — user is in a different conversation');
                 }
             }
 

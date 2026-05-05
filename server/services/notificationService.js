@@ -31,6 +31,7 @@ const createNotification = async ({
   message,
   link,
   messageId,
+  conversationId,
 }) => {
   try {
     // 1. Persist to Database
@@ -63,7 +64,7 @@ const createNotification = async ({
     });
 
     // 3. Optional: Send Push Notification (PWA)
-    await sendPushNotification(receiverId, { title, message, link, type, messageId });
+    await sendPushNotification(receiverId, { title, message, link, type, messageId, conversationId });
 
     return true;
   } catch (err) {
@@ -92,6 +93,7 @@ const sendPushNotification = async (userId, payload) => {
         url: payload.link,
         type: payload.type,
         messageId: payload.messageId,
+        conversationId: payload.conversationId || null,
         apiUrl: process.env.BACKEND_URL || (process.env.NODE_ENV === 'production' ? 'https://note-standard-api.onrender.com' : 'http://127.0.0.1:5001')
       },
     });

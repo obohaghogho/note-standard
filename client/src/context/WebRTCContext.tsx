@@ -6,7 +6,7 @@ import { CallOverlay } from '../components/chat/CallOverlay';
 
 interface CallState {
     type: 'voice' | 'video' | null;
-    status: 'idle' | 'calling' | 'incoming' | 'connected' | 'ended';
+    status: 'idle' | 'calling' | 'incoming' | 'connecting' | 'connected' | 'ended';
     otherUser: {
         id: string;
         full_name: string;
@@ -38,7 +38,7 @@ export const useWebRTC = () => {
     return context;
 };
 
-// Use STUN+TURN fallback per strict instructions
+// STUN + TURN fallback for NAT traversal
 const iceServers = [
     { urls: "stun:stun.l.google.com:19302" },
     {
@@ -70,14 +70,14 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const remoteStreamRef = useRef<MediaStream | null>(null);
     const callTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const currentCallStatus = useRef<CallState['status']>('idle');
-    const incomingSignalQueue = useRef<unknown[]>([]);
+    // Stable ref for otherUser so socket handlers can read it without stale closure
+    const otherUserRef = useRef<CallState['otherUser']>(null);
+    const incomingSignalQueue = useRef<{ candidate?: RTCIceCandidateInit }[]>([]);
 
     const dialToneRef = useRef<HTMLAudioElement | null>(null);
     const incomingRingtoneRef = useRef<HTMLAudioElement | null>(null);
 
     useEffect(() => {
-        // Use a cache-buster to prevent net::ERR_CACHE_OPERATION_NOT_SUPPORTED
-        // which often happens in Chrome with .wav files and Service Workers.
         const cb = `?cb=${Date.now()}`;
         dialToneRef.current = new Audio(`/sounds/ringtone.wav${cb}`);
         dialToneRef.current.loop = true;
@@ -92,7 +92,9 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         };
     }, []);
 
+    // Keep refs in sync with state
     useEffect(() => { currentCallStatus.current = callState.status; }, [callState.status]);
+    useEffect(() => { otherUserRef.current = callState.otherUser; }, [callState.otherUser]);
 
     const playAudio = useCallback((audio: HTMLAudioElement | null) => {
         if (!audio) return;
@@ -124,7 +126,6 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const optimizeSDP = (sdp: string) => {
         return sdp.split('\r\n').map(line => {
             if (line.includes('a=fmtp:111')) {
-                // Force mono (stereo=0) and enable DTX (usedtx=1) for noise suppression during silence
                 let newLine = line;
                 if (!line.includes('usedtx=1')) newLine += ';usedtx=1';
                 if (!line.includes('stereo=0')) newLine += ';stereo=0';
@@ -147,6 +148,8 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             localStreamRef.current = null;
         }
 
+        // FIX: also clear remote stream ref to prevent stale stream reference
+        remoteStreamRef.current = null;
         incomingSignalQueue.current = [];
         
         dialToneRef.current?.pause();
@@ -174,7 +177,6 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
         };
 
-        // RULE 8: Track reception mapped strictly to avoid flickering
         pc.ontrack = (event) => {
             console.log('[WebRTC] Received remote track', event.streams[0]);
             remoteStreamRef.current = event.streams[0];
@@ -186,6 +188,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
                 cleanup();
             }
+            // FIX: 'connected' state is ONLY set here — after ICE negotiation completes
             if (pc.connectionState === 'connected') {
                 setCallState(p => ({ ...p, status: 'connected', connectedAt: p.connectedAt || Date.now() }));
             }
@@ -199,10 +202,11 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return pc;
     }, [socket, cleanup]);
 
+    // FIX: typed signal queue items
     const flushSignalQueue = async (pc: RTCPeerConnection) => {
         while (incomingSignalQueue.current.length > 0) {
             const signal = incomingSignalQueue.current.shift();
-            if (signal.candidate) {
+            if (signal?.candidate) {
                 await pc.addIceCandidate(new RTCIceCandidate(signal.candidate)).catch(e => console.error('ICE Add err', e));
             }
         }
@@ -227,7 +231,6 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             localStreamRef.current = stream;
             setLocalStream(stream);
 
-            // Signal ring instantly without wait for peer media
             socket?.emit('call:initiate', { to: targetUserId, type, conversationId });
             sendMessageToConversation(conversationId, `Started a ${type} call`, 'call');
 
@@ -240,7 +243,8 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }, 60000);
 
         } catch (err) {
-            console.error('[WebRTC] Camera Error:', err);
+            console.error('[WebRTC] Camera/Mic Error:', err);
+            toast.error('Could not access camera/microphone. Check permissions.');
             cleanup();
         }
     };
@@ -267,10 +271,13 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             socket?.emit('call:ready', { to: targetUserId });
 
-            setCallState(p => ({ ...p, status: 'connected', connectedAt: Date.now() }));
+            // FIX: Set 'connecting' (not 'connected') — actual 'connected' fires via
+            // pc.onconnectionstatechange once ICE negotiation completes
+            setCallState(p => ({ ...p, status: 'connecting' }));
 
         } catch (err) {
             console.error('[WebRTC] Accept Error:', err);
+            toast.error('Could not access camera/microphone. Check permissions.');
             cleanup();
         }
     };
@@ -281,7 +288,9 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     const endCall = () => {
-        socket?.emit('call:end', { to: callState.otherUser?.id, conversationId: callState.conversationId });
+        if (callState.otherUser?.id) {
+            socket?.emit('call:end', { to: callState.otherUser.id, conversationId: callState.conversationId });
+        }
         cleanup();
     };
 
@@ -317,33 +326,28 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         };
 
         const handleCallReady = async (data: { from: string }) => {
-            // Caller side: Receiver said ready, let's create Offer
+            // Caller side: receiver said ready → create and send the offer
             if (currentCallStatus.current !== 'calling') return;
             const targetUserId = data.from;
             
             try {
-                // RULE: Media was ALREADY fetched in startCall
                 const stream = localStreamRef.current;
-                if (!stream) throw new Error("Local stream not found before offer");
+                if (!stream) throw new Error('Local stream not found before offer');
 
                 const pc = createPeerConnection(targetUserId);
-                
-                // RULE: ADD TRACKS BEFORE OFFER
                 stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
                 const offer = await pc.createOffer();
-                // Optimize SDP for iOS (Force Mono, Enable DTX for noise suppression)
-                const optimizedOffer = {
-                    ...offer,
-                    sdp: optimizeSDP(offer.sdp || '')
-                };
+                const optimizedOffer = { ...offer, sdp: optimizeSDP(offer.sdp || '') };
                 await pc.setLocalDescription(optimizedOffer);
 
                 socket.emit('call:signal', { to: targetUserId, signal: { offer: optimizedOffer } });
-                setCallState(p => ({ ...p, status: 'connected', connectedAt: Date.now() }));
+
+                // FIX: Set 'connecting' here — 'connected' fires via onconnectionstatechange
+                setCallState(p => ({ ...p, status: 'connecting' }));
                 
             } catch (err) {
-                console.error('[WebRTC] Caller Media/Offer Error', err);
+                console.error('[WebRTC] Caller Offer Error', err);
                 socket.emit('call:end', { to: targetUserId });
                 cleanup();
             }
@@ -356,32 +360,26 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             try {
                 if (signal.offer) {
                     if (!pc) {
-                         // Receiver side initializing PC on incoming offer
-                         pc = createPeerConnection(data.from);
-                         const stream = localStreamRef.current;
-                         if (stream) {
-                             // RULE: ADD TRACKS BEFORE OFFER OR ANSWER, NEVER RE-ADD
-                             stream.getTracks().forEach(track => pc!.addTrack(track, stream));
-                         }
+                        pc = createPeerConnection(data.from);
+                        const stream = localStreamRef.current;
+                        if (stream) {
+                            stream.getTracks().forEach(track => pc!.addTrack(track, stream));
+                        }
                     }
                     await pc.setRemoteDescription(new RTCSessionDescription(signal.offer));
                     const answer = await pc.createAnswer();
-                    // Optimize SDP for iOS
-                    const optimizedAnswer = {
-                        ...answer,
-                        sdp: optimizeSDP(answer.sdp || '')
-                    };
+                    const optimizedAnswer = { ...answer, sdp: optimizeSDP(answer.sdp || '') };
                     await pc.setLocalDescription(optimizedAnswer);
                     socket.emit('call:signal', { to: data.from, signal: { answer: optimizedAnswer } });
-                    flushSignalQueue(pc);
+                    await flushSignalQueue(pc);
                 } else if (signal.answer) {
                     if (pc) {
                         await pc.setRemoteDescription(new RTCSessionDescription(signal.answer));
-                        flushSignalQueue(pc);
+                        await flushSignalQueue(pc);
                     }
                 } else if (signal.candidate) {
                     if (!pc) {
-                        incomingSignalQueue.current.push(signal);
+                        incomingSignalQueue.current.push({ candidate: signal.candidate });
                         return;
                     }
                     await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
@@ -391,20 +389,29 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
         };
 
+        // FIX: Show missed-call toast when caller hangs up/times out while we're ringing
+        const handleCallEndedOrTimeout = () => {
+            if (currentCallStatus.current === 'incoming') {
+                const name = otherUserRef.current?.full_name || 'Unknown';
+                toast(`📞 Missed call from ${name}`, { duration: 5000 });
+            }
+            cleanup();
+        };
+
         socket.on('call:incoming', handleCallIncoming);
         socket.on('call:ready', handleCallReady);
         socket.on('call:signal', handleCallSignal);
         socket.on('call:rejected', cleanup);
-        socket.on('call:ended', cleanup);
-        socket.on('call:timeout', cleanup);
+        socket.on('call:ended', handleCallEndedOrTimeout);
+        socket.on('call:timeout', handleCallEndedOrTimeout);
 
         return () => {
             socket.off('call:incoming', handleCallIncoming);
             socket.off('call:ready', handleCallReady);
             socket.off('call:signal', handleCallSignal);
             socket.off('call:rejected', cleanup);
-            socket.off('call:ended', cleanup);
-            socket.off('call:timeout', cleanup);
+            socket.off('call:ended', handleCallEndedOrTimeout);
+            socket.off('call:timeout', handleCallEndedOrTimeout);
         };
     }, [socket, socketConnected, cleanup, callState.type, createPeerConnection]);
 
@@ -418,7 +425,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 <CallOverlay 
                     callState={{
                         type: callState.type,
-                        status: callState.status as 'calling' | 'incoming' | 'connected',
+                        status: callState.status as 'calling' | 'incoming' | 'connecting' | 'connected',
                         connectedAt: callState.connectedAt
                     }}
                     localStream={localStream}

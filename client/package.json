@@ -1,7 +1,7 @@
 {
   "name": "client",
   "private": true,
-  "version": "0.0.3",
+  "version": "0.0.4",
   "type": "module",
   "scripts": {
     "start": "vite preview",
@@ -58,7 +58,7 @@
   },
   "engines": {
     "node": "24.x",
-    "npm": "10.x"
+    "npm": ">=10"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-arm64-gnu": "4.24.0",

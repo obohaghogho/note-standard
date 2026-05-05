@@ -71,10 +71,48 @@ self.addEventListener('push', (event) => {
 
     if (options.data.type === 'chat_message' && options.data.messageId) {
         const targetApiUrl = options.data.apiUrl || 'https://note-standard-api.onrender.com';
+
+        // Prefer the explicit conversationId from the payload; fall back to parsing the URL
+        let notifConversationId = options.data.conversationId || null;
+        if (!notifConversationId && options.data.url) {
+            try {
+                const notifUrl = new URL(options.data.url, self.location.origin);
+                notifConversationId = notifUrl.searchParams.get('id');
+            } catch (_) {
+                const match = (options.data.url || '').match(/[?&]id=([^&]+)/);
+                notifConversationId = match ? match[1] : null;
+            }
+        }
+
         event.waitUntil(
-            fetch(`${targetApiUrl}/api/chat/messages/${options.data.messageId}/webhook-deliver`, { method: 'POST' })
-                .catch(err => console.error('[SW] Delivery receipt failed:', err))
-                .finally(() => self.registration.showNotification(title, options))
+            // First check if the user is already viewing this exact conversation
+            clients.matchAll({ type: 'window', includeUncontrolled: true })
+                .then(windowClients => {
+                    // Check if any open window is already on this conversation
+                    const isUserAlreadyViewing = notifConversationId && windowClients.some(client => {
+                        try {
+                            const clientUrl = new URL(client.url);
+                            const clientConvId = clientUrl.searchParams.get('id');
+                            const isOnChatPage = clientUrl.pathname.includes('/chat');
+                            // Consider "viewing" if tab is on the chat page with matching conversation
+                            return isOnChatPage && clientConvId === notifConversationId;
+                        } catch (_) {
+                            return false;
+                        }
+                    });
+
+                    if (isUserAlreadyViewing) {
+                        console.log('[SW] Suppressing push — user is already viewing conversation:', notifConversationId);
+                        // Still fire the delivery receipt but skip showing the notification
+                        return fetch(`${targetApiUrl}/api/chat/messages/${options.data.messageId}/webhook-deliver`, { method: 'POST' })
+                            .catch(err => console.error('[SW] Delivery receipt failed:', err));
+                    }
+
+                    // User is NOT in this conversation → show the push notification
+                    return fetch(`${targetApiUrl}/api/chat/messages/${options.data.messageId}/webhook-deliver`, { method: 'POST' })
+                        .catch(err => console.error('[SW] Delivery receipt failed:', err))
+                        .finally(() => self.registration.showNotification(title, options));
+                })
         );
     } else {
         event.waitUntil(self.registration.showNotification(title, options));

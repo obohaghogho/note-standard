@@ -41,7 +41,7 @@
   ],
   "engines": {
     "node": "24.x",
-    "npm": "10.x"
+    "npm": ">=10"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-arm64-gnu": "4.24.0",

@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Phone, Video, Mic, MicOff, VideoOff } from 'lucide-react';
 import SecureImage from '../common/SecureImage';
 
 interface CallOverlayProps {
     callState: {
         type: 'voice' | 'video' | null;
+        // FIX: 'connecting' added to match WebRTCContext state
         status: 'idle' | 'calling' | 'incoming' | 'connecting' | 'connected';
         connectedAt?: number | null;
     };
@@ -44,21 +45,24 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
         return () => clearInterval(interval);
     }, [callState.status, callState.connectedAt]);
 
-    const remoteVideoRef = React.useRef<HTMLVideoElement>(null);
-    const remoteAudioRef = React.useRef<HTMLAudioElement>(null);
-    const localVideoRef = React.useRef<HTMLVideoElement>(null);
+    const remoteVideoRef = useRef<HTMLVideoElement>(null);
+    const remoteAudioRef = useRef<HTMLAudioElement>(null);
+    const localVideoRef = useRef<HTMLVideoElement>(null);
 
+    // FIX: Use reference equality (srcObject !== stream) instead of truthiness check
+    // so the element re-binds correctly if the stream object is replaced
     useEffect(() => {
         if (callState.type === 'video') {
             if (remoteVideoRef.current && remoteStream) {
-                if (!remoteVideoRef.current.srcObject) {
+                if (remoteVideoRef.current.srcObject !== remoteStream) {
                     remoteVideoRef.current.srcObject = remoteStream;
                     remoteVideoRef.current.play().catch(e => console.error('Remote video play err:', e));
                 }
             }
         } else {
+            // Voice call: bind to audio element for correct OS-level media routing
             if (remoteAudioRef.current && remoteStream) {
-                if (!remoteAudioRef.current.srcObject) {
+                if (remoteAudioRef.current.srcObject !== remoteStream) {
                     remoteAudioRef.current.srcObject = remoteStream;
                     remoteAudioRef.current.play().catch(e => console.error('Remote audio play err:', e));
                 }
@@ -68,18 +72,31 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
 
     useEffect(() => {
         if (localVideoRef.current && localStream) {
-            if (!localVideoRef.current.srcObject) {
+            // FIX: same reference equality fix for local preview
+            if (localVideoRef.current.srcObject !== localStream) {
                 localVideoRef.current.srcObject = localStream;
                 localVideoRef.current.play().catch(e => console.error('Local play err:', e));
             }
         }
     }, [localStream]);
 
+    const statusLabel = () => {
+        switch (callState.status) {
+            case 'connected':   return callState.type === 'voice' ? 'In Voice Call' : 'Video Connected';
+            case 'connecting':  return 'Connecting...';
+            case 'calling':     return 'Ringing...';
+            case 'incoming':    return `${callState.type === 'video' ? 'Video' : 'Voice'} Call Incoming`;
+            default:            return 'Connecting...';
+        }
+    };
+
+    const isVideoCall = callState.type === 'video';
+
     return (
         <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center backdrop-blur-xl animate-in fade-in duration-300">
             <div className="relative w-full h-full md:w-[90vw] md:h-[80vh] bg-gray-900 md:rounded-3xl overflow-hidden shadow-2xl border border-white/5">
                 <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
-                    {remoteStream && callState.type === 'video' ? (
+                    {remoteStream && isVideoCall ? (
                         <video 
                             ref={remoteVideoRef} 
                             autoPlay 
@@ -88,9 +105,8 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
                         />
                     ) : (
                         <div className="flex flex-col items-center gap-6">
-                            {remoteStream && callState.type === 'voice' && (
-                                <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
-                            )}
+                            {/* FIX: Audio element always rendered for voice calls so audio routes correctly */}
+                            <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
                             <div className="relative">
                                 <div className="absolute -inset-4 bg-blue-500/20 rounded-full animate-ping"></div>
                                 <div className="absolute -inset-8 bg-blue-500/10 rounded-full animate-pulse"></div>
@@ -110,36 +126,34 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
                                     </div>
                                 )}
                                 <p className="text-blue-400 font-medium animate-pulse">
-                                    {callState.status === 'connected' ? (callState.type === 'voice' ? 'In Voice Call' : 'Video Connected') :
-                                     callState.status === 'connecting' ? 'Joining Chat...' :
-                                     callState.status === 'calling' ? (localStream ? 'Connecting...' : 'Ringing...') : 
-                                     callState.status === 'incoming' ? `${callState.type === 'video' ? 'Video' : 'Voice'} Call Incoming` : 
-                                     'Connecting...'}
+                                    {statusLabel()}
                                 </p>
                             </div>
                         </div>
                     )}
                 </div>
                 
-                {/* Local View */}
-                <div className="absolute top-8 right-8 w-40 h-56 md:w-48 md:h-64 bg-gray-950 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl z-10 transition-all">
-                    {localStream ? (
-                        <video 
-                            ref={localVideoRef} 
-                            autoPlay 
-                            muted 
-                            playsInline
-                            className={`w-full h-full object-cover ${!isVideoEnabled ? 'hidden' : ''}`} 
-                        />
-                    ) : null}
-                    {!isVideoEnabled && (
-                        <div className="w-full h-full flex items-center justify-center bg-gray-800">
-                            <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center">
-                                <VideoOff size={20} className="text-gray-500" />
+                {/* FIX: Only show local video PiP for video calls */}
+                {isVideoCall && (
+                    <div className="absolute top-8 right-8 w-40 h-56 md:w-48 md:h-64 bg-gray-950 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl z-10 transition-all">
+                        {localStream ? (
+                            <video 
+                                ref={localVideoRef} 
+                                autoPlay 
+                                muted 
+                                playsInline
+                                className={`w-full h-full object-cover ${!isVideoEnabled ? 'hidden' : ''}`} 
+                            />
+                        ) : null}
+                        {!isVideoEnabled && (
+                            <div className="w-full h-full flex items-center justify-center bg-gray-800">
+                                <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center">
+                                    <VideoOff size={20} className="text-gray-500" />
+                                </div>
                             </div>
-                        </div>
-                    )}
-                </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Control Buttons */}
                 <div className="absolute inset-x-0 bottom-12 flex flex-col items-center gap-8 z-20">
@@ -181,7 +195,7 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
                                 <Phone size={34} className="rotate-[135deg]" />
                             </button>
                             
-                            {callState.type === 'video' && (
+                            {isVideoCall && (
                                 <button 
                                     onClick={toggleVideo} 
                                     className={`p-5 rounded-full transition-all ${!isVideoEnabled ? 'bg-red-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`} 

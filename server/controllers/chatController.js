@@ -789,6 +789,7 @@ exports.sendMessage = async (req, res) => {
             }${content.length > 50 ? "..." : ""}`,
             link: `/dashboard/chat?id=${conversationId}`,
             messageId: createdMessageId,
+            conversationId: conversationId,
           });
         }
       }

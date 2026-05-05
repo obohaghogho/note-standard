@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
-import toast from 'react-hot-toast';
 
 // ─── Config ──────────────────────────────────────────────────────
 // Vite loads the correct URL from .env.development or .env.production
@@ -114,21 +113,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
         });
 
-        // ── Global Real-time Notifications ───────────────────
+        // NOTE: Notification toasts are handled exclusively by NotificationContext
+        // to avoid duplicate popups. Only log here for debugging.
         socket.on('notification', (data: RealtimeNotification) => {
-            console.log('[Socket] Global notification received:', data);
-            if (data?.title) {
-                toast.success(`${data.title}: ${data.message || ''}`, {
-                    duration: 5000,
-                    icon: '🔔',
-                    style: {
-                        background: '#1a1a1a',
-                        color: '#fff',
-                        borderRadius: '10px',
-                        border: '1px solid rgba(255,255,255,0.1)'
-                    }
-                });
-            }
+            console.log('[Socket] Notification event received (handled by NotificationContext):', data?.type);
         });
 
         socketRef.current = socket;

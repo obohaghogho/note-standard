@@ -7,13 +7,19 @@ const router = express.Router();
  * No auth required — must be accessible to all clients including outdated ones.
  */
 const APP_CONFIG = {
-  latest_version: '1.1.8',
-  minimum_version: '1.1.8',
+  latest_version: '1.1.9',
+  minimum_version: '1.1.9',
   force_update: true,
-  update_message: 'Critical fix: Resolved "Something went wrong" crash caused by initialization race condition in ChatProvider.',
+  update_message: 'Important update: Fixed in-room chat notifications, call connection timing, missed-call alerts, and duplicate notification toasts.',
   changelog: [
-    'Fixed ReferenceError in ChatProvider initialization',
-    'Improved app stability on boot'
+    'Fixed: Chat room notifications no longer appear when user is already in the conversation',
+    'Fixed: Web push notifications suppressed when conversation is actively open',
+    'Fixed: Audio/video call now correctly waits for ICE negotiation before showing connected state',
+    'Fixed: Missed call toast shown when caller hangs up before answer',
+    'Fixed: Voice calls no longer show empty video PiP box',
+    'Fixed: Remote stream correctly re-binds on stream replacement during calls',
+    'Fixed: Duplicate notification toasts eliminated (was firing twice per event)',
+    'Fixed: Service worker correctly marks messages as read when chat is open'
   ]
 };
 
