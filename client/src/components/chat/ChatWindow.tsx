@@ -79,7 +79,7 @@ const ChatWindow: React.FC = () => {
             // Haptic feedback for mobile
             if (navigator.vibrate) navigator.vibrate(30);
             toggleMessageSelection(msgId);
-        }, 700); // Increased to 700ms to prevent accidental triggers
+        }, 500); // Set to 500ms for a more responsive long-press
     };
 
     const handleLongPressEnd = () => {
@@ -898,11 +898,9 @@ const ChatWindow: React.FC = () => {
                                     key={msg.id || `msg-temp-${index}`} 
                                     className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'} ${isGrouped ? '-mt-2 md:-mt-3' : 'mt-4'} animate-in fade-in slide-in-from-bottom-2 duration-300`}
                                     onTouchStart={() => handleLongPressStart(msg.id)}
-                                    onTouchMove={handleLongPressEnd}
                                     onTouchEnd={handleLongPressEnd}
                                     onTouchCancel={handleLongPressEnd}
                                     onMouseDown={() => handleLongPressStart(msg.id)}
-                                    onMouseMove={handleLongPressEnd}
                                     onMouseUp={handleLongPressEnd}
                                     onMouseLeave={handleLongPressEnd}
                                     onClick={() => handleMessageClick(msg.id)}
