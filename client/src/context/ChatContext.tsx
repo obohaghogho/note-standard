@@ -120,6 +120,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const socketRef = useRef<Socket | null>(null);
     const activeConversationIdRef = useRef<string | null>(null);
     const isFetchingMoreRef = useRef<Record<string, boolean>>({});
+    const lastUserIdRef = useRef<string | null>(null);
 
 
     // Keep refs in sync
@@ -269,20 +270,30 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         
         // If we have a session but haven't fetched OR if the identity has changed
         if (session && user) {
-            console.log(`[Chat] Identity change or initial load detect: ${user.id}`);
-            
-            // Clear old data immediately to prevent identity leaks
-            setConversations([]);
-            setMessages({});
-            setLoading(true);
-            hasInitialFetched.current = true;
-            
-            loadConversations();
+            // ONLY wipe data if the User ID has actually changed to prevent "wipe-on-refresh"
+            if (lastUserIdRef.current !== user.id) {
+                console.log(`[Chat] Identity change detected: ${user.id} (was ${lastUserIdRef.current})`);
+                
+                // Clear old data immediately to prevent identity leaks
+                setConversations([]);
+                setMessages({});
+                setLoading(true);
+                hasInitialFetched.current = true;
+                lastUserIdRef.current = user.id;
+                
+                loadConversations();
+            } else {
+                // Same user, just a session update/refresh. 
+                // We DON'T wipe state, but we might want to refresh conversations list in background
+                console.log(`[Chat] Session refresh for same user: ${user.id}`);
+                loadConversations();
+            }
         } else if (!session) {
             setConversations([]);
             setMessages({});
             setLoading(false);
             hasInitialFetched.current = false;
+            lastUserIdRef.current = null;
         }
 
         return () => { 

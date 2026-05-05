@@ -116,6 +116,8 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
   // handleReconnect calls setupRealtimeRef.current() instead of setupRealtime() directly,
   // allowing handleReconnect to be declared BEFORE setupRealtime without a TDZ error.
   const setupRealtimeRef = useRef<() => void>(() => {});
+  const lastUserIdRef = useRef<string | null>(null);
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ====================================
   // LOAD INITIAL DATA
@@ -127,8 +129,23 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
   const loadInitialData = useCallback(async () => {
     if (loadingRef.current || !teamId || !user || !profile || !authReady) return;
     
+    // Identity change check
+    if (lastUserIdRef.current !== user.id) {
+      console.log(`[TeamChat] Identity change detected: ${user.id}`);
+      setMessages([]);
+      setMembers([]);
+      setTeamStats(null);
+      lastUserIdRef.current = user.id;
+      messagesCountRef.current = 0;
+    }
+
     // If we already loaded this team and have data, only reload if forced or empty
-    if (lastLoadedTeamId.current === teamId && messagesCountRef.current > 0) return;
+    // On re-sync, we want to proceed to fetch latest and merge.
+    if (lastLoadedTeamId.current === teamId && messagesCountRef.current > 0) {
+       // Manual sync call - don't show full-page loading
+       syncLatestMessages();
+       return;
+    }
 
     loadingRef.current = true;
     setLoading(true);
@@ -175,6 +192,58 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
     }
    
   }, [teamId, user, profile, authReady]);
+
+  // ====================================
+  // SYNC LATEST MESSAGES (RESUME FROM BACKGROUND)
+  // ====================================
+
+  const syncLatestMessages = useCallback(async () => {
+    if (!teamId || !user || !authReady) return;
+    
+    console.log('[TeamChat] Syncing latest messages for team:', teamId);
+    
+    try {
+      const messagesData = await getTeamMessages(teamId, 50);
+      
+      if (!isMounted.current) return;
+
+      setMessages(prev => {
+        if (messagesData.length === 0) return prev;
+
+        const fetchedDates = messagesData.map(m => new Date(m.created_at).getTime());
+        const oldestFetchedDate = Math.min(...fetchedDates);
+
+        // Keep existing messages that are older than the oldest fetched message
+        const olderExisting = prev.filter(m => new Date(m.created_at).getTime() < oldestFetchedDate);
+        
+        // Keep any optimistic messages
+        const optimisticMessages = prev.filter(m => m.id.startsWith('temp-'));
+
+        const mergedMap = new Map<string, TeamMessage>();
+        
+        olderExisting.forEach(m => mergedMap.set(m.id, m));
+        messagesData.forEach(m => mergedMap.set(m.id, { ...m, isOwn: m.sender_id === user.id }));
+        optimisticMessages.forEach(m => mergedMap.set(m.id, m));
+
+        const merged = Array.from(mergedMap.values()).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        messagesCountRef.current = merged.length;
+        return merged;
+      });
+
+      // Also refresh stats/members in background
+      const [membersData, statsData] = await Promise.all([
+        getTeamMembers(teamId),
+        getTeamStats(teamId)
+      ]);
+
+      if (isMounted.current) {
+        setMembers(membersData);
+        setTeamStats(statsData);
+      }
+    } catch (err) {
+      console.error('[TeamChat] Background sync failed:', err);
+    }
+  }, [teamId, user, authReady]);
 
   // ====================================
   // LOAD MORE MESSAGES (PAGINATION)
@@ -587,7 +656,6 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
       isMounted.current = false;
     };
   }, [loadInitialData]);
-
   // Setup realtime as soon as we have a teamId and auth
   useEffect(() => {
     if (teamId && user && profile && authReady) {
@@ -605,6 +673,34 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
       }
     };
   }, [loading, teamId, user, profile, authReady, setupRealtime]);
+
+  // Foreground sync logic for mobile/PWA
+  useEffect(() => {
+    const handleForegroundSync = () => {
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+      
+      syncTimeoutRef.current = setTimeout(() => {
+        if (document.visibilityState === 'visible' && isMounted.current) {
+          console.log('[TeamChat] App resumed. Re-connecting realtime and syncing...');
+          
+          // Force a realtime re-check/reconnect
+          setupRealtime();
+          
+          // Fetch latest data to cover any gaps
+          syncLatestMessages();
+        }
+      }, 500);
+    };
+
+    document.addEventListener('visibilitychange', handleForegroundSync);
+    window.addEventListener('focus', handleForegroundSync);
+
+    return () => {
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+      document.removeEventListener('visibilitychange', handleForegroundSync);
+      window.removeEventListener('focus', handleForegroundSync);
+    };
+  }, [setupRealtime, syncLatestMessages]);
 
   // ====================================
   // CONTEXT VALUE
