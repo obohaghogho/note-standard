@@ -96,11 +96,14 @@ async function sendCallPush(params) {
         notification.topic = (process.env.APNS_BUNDLE_ID || 'com.notestandard.app') + '.voip';
         notification.priority = 10;
         notification.pushType = 'voip';
+        notification.expiry = 0; // Immediate delivery, do not store
         notification.payload = {
           ...payload,
-          aps: {
-            'content-available': 1 // Wake up app/PushKit delegate
-          }
+          uuid: payload.peerId || payload.callId, // Essential for tracking
+        };
+        // VoIP pushes must NOT have an 'alert' property in aps to work correctly with PushKit
+        notification.aps = {
+          'content-available': 1
         };
         
         console.log(`[PushService] 📤 Sending VoIP Push (iOS) to topic: ${notification.topic}`);

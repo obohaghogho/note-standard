@@ -20,6 +20,12 @@ class CallService {
     const options = {
       ios: {
         appName: 'NoteStandard',
+        imageName: 'sim_icon',
+        supportsVideo: true,
+        maximumCallGroups: '1',
+        maximumCallsPerCallGroup: '1',
+        includesCallsInRecents: true,
+        ringtoneSound: 'Ringtone.caf', // Ensure this file exists in your app bundle if you want custom
       },
       android: {
         alertTitle: 'Permissions required',
@@ -32,6 +38,7 @@ class CallService {
           channelId: 'com.notestandard.app.calls',
           channelName: 'Incoming Calls',
           notificationTitle: 'Incoming Call',
+          notificationIcon: 'phone_account_icon',
         },
       },
     };
@@ -39,8 +46,17 @@ class CallService {
     try {
       await RNCallKeep.setup(options);
       RNCallKeep.setAvailable(true);
+      
+      // Setup listeners for audio session (iOS specific)
+      if (Platform.OS === 'ios') {
+          RNCallKeep.addEventListener('didActivateAudioSession', () => {
+              console.log('[CallService] 🔊 Audio Session Activated');
+              // This is where you'd start your WebRTC audio stream
+          });
+      }
+
       this.isInitialized = true;
-      console.log('[CallService] RNCallKeep setup complete.');
+      console.log('[CallService] RNCallKeep setup complete with iOS CallKit optimizations.');
     } catch (err) {
       console.error('[CallService] Setup error:', err);
     }
@@ -50,25 +66,26 @@ class CallService {
     const callId = uuidv4();
     this.currentCallId = callId;
 
-    console.log(`[CallService] 📞 PRE-DISPLAY: Displaying incoming call for ${data.callerName} (ID: ${data.callerId})`);
-    console.log(`[CallService] 🕒 Timestamp: ${new Date().toISOString()}`);
+    console.log(`[CallService] 📞 Incoming call from ${data.callerName}`);
 
     try {
       RNCallKeep.displayIncomingCall(
         callId,
-        data.callerId, // number or identifier
-        data.callerName, // name
-        'generic', // numberType
+        data.callerId,
+        data.callerName,
+        'generic',
         data.callType === 'video'
       );
-      console.log(`[CallService] ✅ POS-DISPLAY: displayIncomingCall invoked successfully.`);
+      
+      // On iOS, displayIncomingCall triggers the system ringtone automatically 
+      // if the audio session is managed correctly by the OS.
     } catch (err) {
-      console.error(`[CallService] ❌ DISPLAY ERROR:`, err);
+      console.error(`[CallService] ❌ Display error:`, err);
     }
   }
 
   answerCall() {
-    console.log(`[CallService] 📲 User Answered Call (ID: ${this.currentCallId})`);
+    console.log(`[CallService] 📲 Answering Call (ID: ${this.currentCallId})`);
     if (this.currentCallId) {
       RNCallKeep.answerCall(this.currentCallId);
     }
@@ -83,7 +100,7 @@ class CallService {
   }
 
   rejectCall() {
-    console.log(`[CallService] 🚫 User Rejected/Missed Call (ID: ${this.currentCallId})`);
+    console.log(`[CallService] 🚫 Rejecting/Ending Call UI (ID: ${this.currentCallId})`);
     if (this.currentCallId) {
       RNCallKeep.rejectCall(this.currentCallId);
       this.currentCallId = null;
@@ -99,6 +116,14 @@ class CallService {
 
   onReject(callback: (callId: string) => void) {
     RNCallKeep.addEventListener('endCall', ({ callUUID }) => {
+      callback(callUUID);
+    });
+  }
+  
+  // Important for iOS: Handle the system telling the app to end the call
+  onEndCall(callback: (callId: string) => void) {
+    RNCallKeep.addEventListener('endCall', ({ callUUID }) => {
+      this.currentCallId = null;
       callback(callUUID);
     });
   }
