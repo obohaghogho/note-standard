@@ -326,15 +326,15 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
     const showAvatar = !isGrouped && !isOwn && msg.message_type !== 'system';
     const showName = showAvatar;
 
-    // Get sender info
-    const sender = msg.sender || members.find((m) => m.user_id === msg.sender_id)?.profile;
-    const senderName = sender?.full_name || sender?.username || sender?.email || 'Unknown';
+    // Get sender info with fallback
+    const sender = msg?.sender || members?.find((m) => m?.user_id === msg?.sender_id)?.profile;
+    const senderName = String(sender?.full_name || sender?.username || sender?.email || 'Unknown');
     const senderAvatar = sender?.avatar_url;
 
     // Different rendering based on message type
-    if (msg.message_type === 'system') {
-      const inviterName = String(msg.sender?.full_name || msg.sender?.username || 'Some member');
-      const inviteeName = String(msg.metadata?.user_name || 'a new member');
+    if (msg?.message_type === 'system') {
+      const inviterName = String(msg?.sender?.full_name || msg?.sender?.username || 'Some member');
+      const inviteeName = String(msg?.metadata?.user_name || 'a new member');
 
       return (
         <div key={msg.id} className="team-chat__message--system">
@@ -358,7 +358,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
               </>
             )}
           </span>
-          <span className="team-chat__message-time">{formatTime(msg.created_at)}</span>
+          <span className="team-chat__message-time">{formatTime(msg?.created_at || new Date().toISOString())}</span>
         </div>
       );
     }
@@ -486,7 +486,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
               {msg.isOptimistic && <Loader2 size={12} className="animate-spin mr-1" />}
               {msg.failed && <AlertCircle size={12} className="text-red-400 mr-1" />}
               {msg.is_edited && <span className="italic mr-1">(edited)</span>}
-              {formatTime(msg.created_at)}
+              {formatTime(msg?.created_at || new Date().toISOString())}
             </div>
           </div>
         </div>

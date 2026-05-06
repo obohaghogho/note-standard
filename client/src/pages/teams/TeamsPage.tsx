@@ -68,7 +68,7 @@ const TeamHeader: React.FC<{
          </div>
          <div className="min-w-0">
             <h1 className="text-sm md:text-base font-black text-white truncate group-hover:text-primary transition-colors flex items-center gap-2">
-              {team.name}
+              {team?.name || 'Unnamed Team'}
               {(myRole === 'owner' || myRole === 'admin') && <Shield size={12} className="text-primary hidden md:inline" />}
             </h1>
             <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest truncate mt-0.5">View team information</p>
@@ -153,8 +153,8 @@ const TeamInfoSidebar: React.FC<{
              )}
           </div>
           <div>
-             <h2 className="text-2xl font-black text-white uppercase tracking-tighter italic">{team.name}</h2>
-             <p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mt-3">{team.description || 'Verified Team Workspace'}</p>
+             <h2 className="text-2xl font-black text-white uppercase tracking-tighter italic">{team?.name || 'Unnamed Team'}</h2>
+             <p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mt-3">{team?.description || 'Verified Team Workspace'}</p>
           </div>
        </div>
 
@@ -174,7 +174,7 @@ const TeamInfoSidebar: React.FC<{
                 <Users size={18} />
              </div>
              <div>
-                <div className="text-2xl font-black text-white tracking-tighter italic">{team.member_count}</div>
+                <div className="text-2xl font-black text-white tracking-tighter italic">{team?.member_count ?? 0}</div>
                 <div className="text-[9px] font-black text-gray-600 uppercase tracking-widest mt-1">Active Members</div>
              </div>
           </div>

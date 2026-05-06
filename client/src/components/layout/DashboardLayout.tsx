@@ -78,7 +78,7 @@ export function DashboardLayout() {
                         className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs ring-1 ring-primary/20 hover:bg-primary/30 transition-colors"
                         title="View Settings"
                     >
-                        {user?.email?.[0].toUpperCase()}
+                        {user?.email?.[0]?.toUpperCase() || '?'}
                     </button>
                 </div>
             </header>

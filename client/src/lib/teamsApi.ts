@@ -133,7 +133,11 @@ export async function getMyTeams(): Promise<TeamWithUnreadCount[]> {
       })
     );
 
-    return teamsWithDetails.filter(Boolean) as TeamWithUnreadCount[];
+    return (teamsWithDetails.filter(Boolean) as TeamWithUnreadCount[]).map(t => ({
+      ...t,
+      name: t.name || 'Unnamed Team',
+      avatar_url: t.avatar_url || undefined,
+    }));
   }, { minDelay: 500 });
 
   return result ?? [];
@@ -221,12 +225,14 @@ export async function getTeamMembers(teamId: string): Promise<TeamMember[]> {
 
     if (error) throw error;
 
-    // Map profiles to proper structure
-    return (data as unknown as Array<TeamMember & { profiles?: TeamMember['profile'] }> ?? []).map((member) => ({
-      ...member,
-      profile: member.profiles,
-      profiles: undefined
-    }));
+    // Map profiles to proper structure and filter nulls
+    return (data as unknown as Array<TeamMember & { profiles?: TeamMember['profile'] }> ?? [])
+      .filter(member => member !== null)
+      .map((member) => ({
+        ...member,
+        profile: member.profiles || undefined,
+        profiles: undefined
+      }));
   }, { minDelay: 1500 });
 
   return result ?? [];
