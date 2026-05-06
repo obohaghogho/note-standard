@@ -87,15 +87,15 @@ const getAudioConstraints = (): MediaTrackConstraints => {
         noiseSuppression: true,
         autoGainControl: true,
         // Chromium-specific aggressive processing
-        // @ts-ignore
+        // @ts-expect-error
         googEchoCancellation: true,
-        // @ts-ignore
+        // @ts-expect-error
         googAutoGainControl: true,
-        // @ts-ignore
+        // @ts-expect-error
         googNoiseSuppression: true,
-        // @ts-ignore
+        // @ts-expect-error
         googHighpassFilter: true,
-        // @ts-ignore
+        // @ts-expect-error
         googTypingNoiseDetection: true,
         channelCount: { ideal: 1 },
         sampleRate: { ideal: 48000 }

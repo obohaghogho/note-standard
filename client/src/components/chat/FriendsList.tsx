@@ -5,7 +5,6 @@ import { usePresence } from '../../context/PresenceContext';
 import { UserBadge } from '../common/UserBadge';
 import SecureImage from '../common/SecureImage';
 import { Users, UserPlus, Check, X, MessageSquare, Clock, ArrowRight } from 'lucide-react';
-import { cn } from '../../utils/cn';
 import { useNavigate } from 'react-router-dom';
 
 export const FriendsList: React.FC<{ limit?: number; showRequestsOnly?: boolean }> = ({ limit, showRequestsOnly }) => {
