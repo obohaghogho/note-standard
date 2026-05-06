@@ -191,7 +191,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
       }
     }
    
-  }, [teamId, user, profile, authReady]);
+  }, [teamId, user, profile, authReady, syncLatestMessages]);
 
   // ====================================
   // SYNC LATEST MESSAGES (RESUME FROM BACKGROUND)

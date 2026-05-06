@@ -54,8 +54,7 @@ export const IOSInstallPrompt: React.FC = () => {
         if (!isIOSBrowserNotInstalled()) return;
 
         // Only show the push notification tip on iOS 16.4+ (where it actually works)
-        const iosVersion = getIOSVersion();
-
+        
         // Delay showing so it doesn't interrupt page load
         const timer = setTimeout(() => {
             setVisible(true);
