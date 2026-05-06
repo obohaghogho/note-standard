@@ -46,37 +46,59 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
     }, [callState.status, callState.connectedAt]);
 
     const remoteVideoRef = useRef<HTMLVideoElement>(null);
+    // BUG FIX: remoteAudioRef is always rendered and used for BOTH voice AND video calls.
+    // On iOS, routing audio through the <video> element triggers the wrong AVAudioSession
+    // category (video), causing background noise. A dedicated <audio> element forces iOS
+    // to use the voice-processing category, eliminating the noise.
     const remoteAudioRef = useRef<HTMLAudioElement>(null);
     const localVideoRef = useRef<HTMLVideoElement>(null);
 
-    // FIX: Use reference equality (srcObject !== stream) instead of truthiness check
-    // so the element re-binds correctly if the stream object is replaced
+    const isVideoCall = callState.type === 'video';
+
+    // BUG FIX: Separate the remote stream into audio-only and video-only streams.
+    // Previously the entire stream was attached to the video element, causing iOS to
+    // route audio incorrectly. Now:
+    //   - Video tracks → <video> element (muted, so no audio comes from it)
+    //   - Audio tracks → <audio> element (always, even during video calls)
+    // This guarantees correct OS-level audio session routing on iOS.
     useEffect(() => {
-        if (callState.type === 'video') {
-            if (remoteVideoRef.current && remoteStream) {
-                if (remoteVideoRef.current.srcObject !== remoteStream) {
-                    remoteVideoRef.current.srcObject = remoteStream;
-                    remoteVideoRef.current.play().catch(e => console.error('Remote video play err:', e));
-                }
-            }
-        } else {
-            // Voice call: bind to audio element for correct OS-level media routing
-            if (remoteAudioRef.current && remoteStream) {
-                if (remoteAudioRef.current.srcObject !== remoteStream) {
-                    remoteAudioRef.current.srcObject = remoteStream;
-                    remoteAudioRef.current.play().catch(e => console.error('Remote audio play err:', e));
-                }
+        if (!remoteStream) {
+            if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+            if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
+            return;
+        }
+
+        // Bind video tracks to <video> element (video calls only)
+        if (isVideoCall && remoteVideoRef.current) {
+            const videoTracks = remoteStream.getVideoTracks();
+            if (videoTracks.length > 0) {
+                const videoOnlyStream = new MediaStream(videoTracks);
+                remoteVideoRef.current.srcObject = videoOnlyStream;
+                remoteVideoRef.current.play().catch(e => console.error('[CallOverlay] Remote video play err:', e));
             }
         }
-    }, [remoteStream, callState.type]);
 
+        // ALWAYS bind audio tracks to dedicated <audio> element
+        // This is the key fix for iOS audio noise during video calls
+        if (remoteAudioRef.current) {
+            const audioTracks = remoteStream.getAudioTracks();
+            const audioStream = audioTracks.length > 0
+                ? new MediaStream(audioTracks)
+                : remoteStream; // fallback for voice-only streams
+            remoteAudioRef.current.srcObject = audioStream;
+            remoteAudioRef.current.play().catch(e => console.error('[CallOverlay] Remote audio play err:', e));
+        }
+    }, [remoteStream, isVideoCall]);
+
+    // Bind local video preview (PiP) — video tracks only so muted has no audio feedback
     useEffect(() => {
         if (localVideoRef.current && localStream) {
-            // FIX: same reference equality fix for local preview
-            if (localVideoRef.current.srcObject !== localStream) {
-                localVideoRef.current.srcObject = localStream;
-                localVideoRef.current.play().catch(e => console.error('Local play err:', e));
-            }
+            const videoTracks = localStream.getVideoTracks();
+            const streamForPreview = videoTracks.length > 0
+                ? new MediaStream(videoTracks)
+                : localStream;
+            localVideoRef.current.srcObject = streamForPreview;
+            localVideoRef.current.play().catch(e => console.error('[CallOverlay] Local video play err:', e));
         }
     }, [localStream]);
 
@@ -90,50 +112,59 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
         }
     };
 
-    const isVideoCall = callState.type === 'video';
+    // Whether to show the remote video feed
+    const showRemoteVideo = isVideoCall && !!remoteStream;
 
     return (
         <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center backdrop-blur-xl animate-in fade-in duration-300">
             <div className="relative w-full h-full md:w-[90vw] md:h-[80vh] bg-gray-900 md:rounded-3xl overflow-hidden shadow-2xl border border-white/5">
                 <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
-                    {remoteStream && isVideoCall ? (
-                        <video 
-                            ref={remoteVideoRef} 
-                            autoPlay 
-                            playsInline
-                            className="w-full h-full object-cover" 
-                        />
-                    ) : (
-                        <div className="flex flex-col items-center gap-6">
-                            {/* FIX: Audio element always rendered for voice calls so audio routes correctly */}
-                            <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
-                            <div className="relative">
-                                <div className="absolute -inset-4 bg-blue-500/20 rounded-full animate-ping"></div>
-                                <div className="absolute -inset-8 bg-blue-500/10 rounded-full animate-pulse"></div>
-                                <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-4xl font-bold border-4 border-white/10 shadow-2xl overflow-hidden">
-                                    {otherUserAvatar ? (
-                                        <SecureImage src={otherUserAvatar} alt={otherUserName} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <span className="text-white">{otherUserName?.charAt(0).toUpperCase()}</span>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="text-center">
-                                <h3 className="text-2xl font-bold text-white mb-2">{otherUserName}</h3>
-                                {callState.status === 'connected' && (
-                                    <div className="text-blue-400 font-mono text-lg mb-2 tabular-nums">
-                                        {timer}
-                                    </div>
+
+                    {/* BUG FIX: Remote video is ALWAYS in the DOM so the ref is always valid.
+                        Previously it was conditionally rendered, making remoteVideoRef.current 
+                        null when the stream arrived and the srcObject assignment silently failed. */}
+                    <video
+                        ref={remoteVideoRef}
+                        autoPlay
+                        playsInline
+                        // Video element is muted — audio comes from the dedicated <audio> element below
+                        muted
+                        className={`w-full h-full object-cover ${showRemoteVideo ? '' : 'hidden'}`}
+                    />
+
+                    {/* BUG FIX: Dedicated audio element always present.
+                        On iOS, this forces the voice audio session category instead of the
+                        video session category, preventing background noise on video calls. */}
+                    <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
+
+                    {/* Avatar / status view — shown for voice calls or while waiting for remote video */}
+                    <div className={`flex flex-col items-center gap-6 ${showRemoteVideo ? 'hidden' : ''}`}>
+                        <div className="relative">
+                            <div className="absolute -inset-4 bg-blue-500/20 rounded-full animate-ping"></div>
+                            <div className="absolute -inset-8 bg-blue-500/10 rounded-full animate-pulse"></div>
+                            <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-4xl font-bold border-4 border-white/10 shadow-2xl overflow-hidden">
+                                {otherUserAvatar ? (
+                                    <SecureImage src={otherUserAvatar} alt={otherUserName} className="w-full h-full object-cover" />
+                                ) : (
+                                    <span className="text-white">{otherUserName?.charAt(0).toUpperCase()}</span>
                                 )}
-                                <p className="text-blue-400 font-medium animate-pulse">
-                                    {statusLabel()}
-                                </p>
                             </div>
                         </div>
-                    )}
+                        <div className="text-center">
+                            <h3 className="text-2xl font-bold text-white mb-2">{otherUserName}</h3>
+                            {callState.status === 'connected' && (
+                                <div className="text-blue-400 font-mono text-lg mb-2 tabular-nums">
+                                    {timer}
+                                </div>
+                            )}
+                            <p className="text-blue-400 font-medium animate-pulse">
+                                {statusLabel()}
+                            </p>
+                        </div>
+                    </div>
                 </div>
                 
-                {/* FIX: Only show local video PiP for video calls */}
+                {/* Local video PiP — video calls only */}
                 {isVideoCall && (
                     <div className="absolute top-8 right-8 w-40 h-56 md:w-48 md:h-64 bg-gray-950 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl z-10 transition-all">
                         {localStream ? (

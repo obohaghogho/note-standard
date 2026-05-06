@@ -63,8 +63,32 @@ const createNotification = async ({
       is_read: false,
     });
 
-    // 3. Optional: Send Push Notification (PWA)
+    // 3. Web Push (PWA — VAPID — works for installed PWA on iOS 16.4+ and all desktop browsers)
     await sendPushNotification(receiverId, { title, message, link, type, messageId, conversationId });
+
+    // 4. Native Push (FCM for Android, APNs for iOS) via the realtime-gateway.
+    //    The gateway already holds Firebase Admin and APNs credentials (used for call push).
+    //    For chat messages, we route through the gateway's /internal/push endpoint.
+    //    This ensures iOS users receive push notifications even when the PWA is closed.
+    if (type === 'chat_message' || type === 'mention') {
+      const gatewayUrl = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
+      const body = message || title;
+      fetch(`${gatewayUrl}/internal/push`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: receiverId,
+          title,
+          body,
+          payload: {
+            type,
+            conversationId: conversationId || null,
+            messageId: messageId || null,
+            url: link || '/dashboard/chat',
+          },
+        }),
+      }).catch(err => console.error('[NotificationService] Native push via gateway failed:', err.message));
+    }
 
     return true;
   } catch (err) {

@@ -116,6 +116,96 @@ async function sendCallPush(params) {
   }
 }
 
+/**
+ * Sends chat message push notifications to native apps.
+ * Uses FCM notification messages (Android) and APNs alert push (iOS).
+ * NOTE: This is separate from sendCallPush which uses VoIP-only channels.
+ *
+ * @param {Object} params - { userId, title, body, payload }
+ */
+async function sendChatPush(params) {
+  const { userId, title, body, payload } = params;
+
+  try {
+    const { data: tokens, error } = await supabase
+      .from('native_device_tokens')
+      .select('token, platform, type')
+      .eq('user_id', userId);
+
+    if (error || !tokens || tokens.length === 0) {
+      console.log(`[PushService] No native tokens found for user ${userId} (chat push)`);
+      return;
+    }
+
+    const pushPromises = tokens.map(async (t) => {
+      // Android FCM — notification + data message shows in system tray when app is closed
+      if (t.platform === 'android' && t.type === 'fcm' && firebaseApp) {
+        const message = {
+          token: t.token,
+          notification: {
+            title: title,
+            body: body,
+          },
+          data: {
+            type: 'chat_message',
+            conversationId: String(payload.conversationId || ''),
+            messageId: String(payload.messageId || ''),
+            url: String(payload.url || '/dashboard/chat'),
+          },
+          android: {
+            priority: 'high',
+            notification: {
+              sound: 'default',
+              channelId: 'chat_messages',
+            },
+          },
+        };
+        console.log(`[PushService] 📤 Sending FCM chat notification (Android) to: ${t.token.substring(0, 10)}...`);
+        return admin.messaging().send(message)
+          .catch(err => console.error(`[PushService] ❌ FCM chat fail:`, err.message));
+      }
+
+      // iOS APNs — alert push (NOT voip) for regular chat notifications
+      // voip push is reserved for calls only (PushKit)
+      if (t.platform === 'ios' && t.type === 'apns' && apnProvider) {
+        const notification = new apn.Notification();
+        notification.topic = process.env.APNS_BUNDLE_ID || 'com.notestandard.app'; // Standard bundle, NOT .voip
+        notification.priority = 10;
+        notification.pushType = 'alert';
+        notification.alert = { title, body };
+        notification.sound = 'default';
+        notification.badge = 1;
+        notification.payload = {
+          conversationId: payload.conversationId,
+          messageId: payload.messageId,
+          url: payload.url || '/dashboard/chat',
+          aps: {
+            alert: { title, body },
+            sound: 'default',
+            badge: 1,
+            'mutable-content': 1,
+          },
+        };
+
+        console.log(`[PushService] 📤 Sending APNs alert (iOS chat) to topic: ${notification.topic}`);
+        return apnProvider.send(notification, t.token)
+          .then(result => {
+            if (result.failed && result.failed.length > 0) {
+              console.error('[PushService] ❌ APNs chat fail:', JSON.stringify(result.failed));
+            }
+          })
+          .catch(err => console.error(`[PushService] ❌ APNs chat fail:`, err.message));
+      }
+    });
+
+    await Promise.all(pushPromises.filter(Boolean));
+    console.log(`[PushService] ✅ Chat push completed for user ${userId}.`);
+  } catch (err) {
+    console.error('[PushService] sendChatPush error:', err.message);
+  }
+}
+
 module.exports = {
-  sendCallPush
+  sendCallPush,
+  sendChatPush,
 };

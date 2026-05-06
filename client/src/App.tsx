@@ -18,6 +18,7 @@ import { NotesProvider } from './context/NotesContext';
 import { ChatWidget } from './components/chat/ChatWidget';
 import { ErrorBoundary } from 'react-error-boundary';
 import { VersionGuard } from './components/common/VersionGuard';
+import { IOSInstallPrompt } from './components/common/IOSInstallPrompt';
 import DashboardHome from './pages/dashboard/DashboardHome';
 import Notes from './pages/dashboard/Notes';
 import Chat from './pages/dashboard/Chat';
@@ -224,6 +225,8 @@ function App() {
                           </Routes>
                           {/* Global Chat Widget - visible on all authenticated pages */}
                           <ChatWidget />
+                          {/* iOS install prompt — shown after 8s to iOS Safari users not running as PWA */}
+                          <IOSInstallPrompt />
                         </NotesProvider>
                       </WalletProvider>
                     </WebRTCProvider>

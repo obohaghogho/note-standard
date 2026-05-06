@@ -7,19 +7,17 @@ const router = express.Router();
  * No auth required — must be accessible to all clients including outdated ones.
  */
 const APP_CONFIG = {
-  latest_version: '1.1.9',
-  minimum_version: '1.1.9',
+  latest_version: '1.2.0',
+  minimum_version: '1.2.0',
   force_update: true,
-  update_message: 'Important update: Fixed in-room chat notifications, call connection timing, missed-call alerts, and duplicate notification toasts.',
+  update_message: 'Critical update: Fixed iOS WebRTC audio noise, chat delivery status tracking, and iOS PWA push notifications.',
   changelog: [
-    'Fixed: Chat room notifications no longer appear when user is already in the conversation',
-    'Fixed: Web push notifications suppressed when conversation is actively open',
-    'Fixed: Audio/video call now correctly waits for ICE negotiation before showing connected state',
-    'Fixed: Missed call toast shown when caller hangs up before answer',
-    'Fixed: Voice calls no longer show empty video PiP box',
-    'Fixed: Remote stream correctly re-binds on stream replacement during calls',
-    'Fixed: Duplicate notification toasts eliminated (was firing twice per event)',
-    'Fixed: Service worker correctly marks messages as read when chat is open'
+    'Fixed: iOS background audio noise during WebRTC calls',
+    'Fixed: Video calls not showing remote video due to DOM render race condition',
+    'Fixed: Single-tick (sent) message status now correctly updates to double-tick (delivered)',
+    'Fixed: Added iOS PWA push notification support (no developer account needed)',
+    'Improved: WebRTC connection stability and remote stream handling',
+    'New: Built-in iOS install prompt for users to easily enable push notifications'
   ]
 };
 

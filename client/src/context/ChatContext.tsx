@@ -466,6 +466,45 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }));
         };
 
+        // BUG FIX — Delivery Status (single ✓ never upgrades to double ✓✓):
+        // The server calls markConversationDelivered() when a recipient loads their
+        // conversations (i.e. comes back online). It emits "chat:conversation_delivered"
+        // to the conversation room. However the client previously had NO handler for
+        // this event — only "chat:message_delivered" (per-message) was handled.
+        // This meant the sender's UI never received the bulk delivery receipt and the
+        // single-tick never upgraded to double-tick until the recipient actively opened
+        // the conversation. This handler fixes that.
+        const onConversationDelivered = ({ conversationId, delivered_at }: { conversationId: string; delivered_at?: string }) => {
+            const now = delivered_at || new Date().toISOString();
+
+            setMessages(prev => {
+                const convMessages = prev[conversationId] || [];
+                // Only update own messages that haven't been marked delivered yet
+                const hasUndelivered = convMessages.some(m => m.sender_id === user?.id && !m.delivered_at);
+                if (!hasUndelivered) return prev;
+
+                return {
+                    ...prev,
+                    [conversationId]: convMessages.map(m =>
+                        m.sender_id === user?.id && !m.delivered_at
+                            ? { ...m, delivered_at: now }
+                            : m
+                    )
+                };
+            });
+
+            // Also update the lastMessage delivered_at on the conversation list
+            setConversations(prev => prev.map(conv => {
+                if (conv.id === conversationId && conv.lastMessage && !conv.lastMessage.delivered_at) {
+                    return {
+                        ...conv,
+                        lastMessage: { ...conv.lastMessage, delivered_at: now }
+                    };
+                }
+                return conv;
+            }));
+        };
+
         const onNewConversation = (newConv?: { id?: string; conversationId?: string }) => {
             loadConversations();
             const id = newConv?.id || newConv?.conversationId;
@@ -493,6 +532,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         socket.on('chat:conversation_updated', onNewConversation);
         socket.on('chat:message_read', onMessageRead);
         socket.on('chat:message_delivered', onMessageDelivered);
+        // BUG FIX: Register handler for bulk delivery receipts
+        socket.on('chat:conversation_delivered', onConversationDelivered);
         socket.on('chat:typing', ({ conversationId, userId, username, isTyping }: { conversationId: string, userId: string, username: string, isTyping?: boolean }) => {
             if (userId === user?.id) return;
             setTypingUsers(prev => {
@@ -581,6 +622,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             socket.off('chat:conversation_updated', onNewConversation);
             socket.off('chat:message_read', onMessageRead);
             socket.off('chat:message_delivered', onMessageDelivered);
+            socket.off('chat:conversation_delivered', onConversationDelivered);
             socket.off('chat:typing');
             socket.off('chat:conversation_read');
             socket.off('chat:conversation_deleted', onConversationDeleted);

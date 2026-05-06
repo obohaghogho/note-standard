@@ -53,6 +53,46 @@ const iceServers = [
     }
 ];
 
+/**
+ * BUG FIX — iOS Audio Noise:
+ * iOS Safari ignores the `{ ideal: ... }` constraint format for basic boolean audio
+ * properties (echoCancellation, noiseSuppression, autoGainControl). When these are
+ * passed as objects, iOS falls back to its default stereo video-audio session which
+ * causes the noisy background audio. Using plain boolean values forces iOS to apply
+ * the constraints correctly and use the voice-call audio processing pipeline.
+ */
+const isIOSDevice = (): boolean => {
+    if (typeof navigator === 'undefined') return false;
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+};
+
+const getAudioConstraints = (): MediaTrackConstraints => {
+    if (isIOSDevice()) {
+        // iOS: use plain booleans — object format is silently ignored
+        return {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+        };
+    }
+    // Desktop/Android: full constraint objects supported
+    return {
+        echoCancellation: { ideal: true },
+        noiseSuppression: { ideal: true },
+        autoGainControl: { ideal: true },
+        channelCount: { ideal: 1 },
+        sampleRate: { ideal: 48000 },
+        latency: { ideal: 0 }
+    };
+};
+
+const getVideoConstraints = (): MediaTrackConstraints => ({
+    facingMode: 'user',
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+});
+
 export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { socket, connected: socketConnected } = useSocket();
     const { sendMessageToConversation } = useChat();
@@ -216,16 +256,10 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setCallState({ type, status: 'calling', otherUser, conversationId, connectedAt: null });
 
         try {
+            // BUG FIX: Use platform-aware audio constraints. iOS ignores { ideal: ... } format.
             const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: { ideal: true },
-                    noiseSuppression: { ideal: true },
-                    autoGainControl: { ideal: true },
-                    channelCount: { ideal: 1 },
-                    sampleRate: { ideal: 48000 },
-                    latency: { ideal: 0 }
-                },
-                video: type === 'video' ? { facingMode: "user" } : false,
+                audio: getAudioConstraints(),
+                video: type === 'video' ? getVideoConstraints() : false,
             });
 
             localStreamRef.current = stream;
@@ -254,16 +288,10 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (!targetUserId) return cleanup();
 
         try {
+            // BUG FIX: Use platform-aware audio constraints. iOS ignores { ideal: ... } format.
             const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: { ideal: true },
-                    noiseSuppression: { ideal: true },
-                    autoGainControl: { ideal: true },
-                    channelCount: { ideal: 1 },
-                    sampleRate: { ideal: 48000 },
-                    latency: { ideal: 0 }
-                },
-                video: callState.type === 'video' ? { facingMode: "user" } : false,
+                audio: getAudioConstraints(),
+                video: callState.type === 'video' ? getVideoConstraints() : false,
             });
 
             localStreamRef.current = stream;

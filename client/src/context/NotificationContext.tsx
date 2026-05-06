@@ -130,8 +130,16 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         // Rule 7 & 12: Remove profile identity check. Respect isSwitching.
         if (!session || isSwitching || pushSubscribeRef.current) return;
         if (!('serviceWorker' in navigator && 'PushManager' in window)) {
-            console.warn('[Notifications] Push NOT supported on this browser');
+            // iOS Safari in browser (non-installed) does NOT support Web Push.
+            // We rely on the IOSInstallPrompt component to guide users to install the PWA.
+            console.warn('[Notifications] Push NOT supported — user may need to install the PWA');
             return;
+        }
+        
+        // Detect iOS running as installed PWA (navigator.standalone === true)
+        const isIOSPWA = (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+        if (isIOSPWA) {
+            console.log('[Notifications] Running as iOS PWA — Web Push is supported on this device');
         }
         
         pushSubscribeRef.current = true;
@@ -142,10 +150,12 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             let subscription = await registration.pushManager.getSubscription();
             
             if (!subscription) {
-                // Request permission if needed
+                // Request permission if needed.
+                // On iOS PWA: this shows the native iOS notification permission dialog.
+                // On iOS browser: Notification API exists but subscribing will fail — handled above.
                 const permission = await Notification.requestPermission();
                 if (permission !== 'granted') {
-                    console.warn('[Notifications] Permission denied');
+                    console.warn('[Notifications] Permission denied by user');
                     return;
                 }
 
@@ -171,12 +181,17 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                 body: JSON.stringify({ subscription })
             });
 
+            if (isIOSPWA) {
+                console.log('[Notifications] ✅ iOS PWA push subscription registered successfully');
+            }
+
         } catch (err) {
             console.error('[Notifications] Push subscription failed:', err);
         } finally {
             pushSubscribeRef.current = false;
         }
     }, [session, isSwitching]);
+
 
     // Initial Fetch / Identity Switch Reset
     useEffect(() => {

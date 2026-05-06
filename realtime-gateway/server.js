@@ -76,6 +76,26 @@ app.post('/internal/emit', (req, res) => {
   }
 });
 
+// ✅ 5b. INTERNAL NATIVE PUSH ENDPOINT
+// Called by the API server to send FCM/APNs push for chat messages.
+// The gateway holds the Firebase Admin and APNs credentials.
+const pushService = require('./services/pushService');
+app.post('/internal/push', async (req, res) => {
+  try {
+    const { userId, title, body, payload } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+
+    // Fire-and-forget so the API server isn't blocked waiting for APNs/FCM
+    pushService.sendChatPush({ userId, title, body: body || '', payload: payload || {} })
+      .catch(err => console.error('[Gateway] /internal/push error:', err.message));
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 /**
  * Global Dispatcher for Socket Events
  * Standardized envelope: { type: string, room: string, event: string, payload: any }

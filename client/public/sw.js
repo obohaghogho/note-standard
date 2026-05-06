@@ -43,6 +43,23 @@ self.addEventListener('push', (event) => {
     }
 
     const title = data.title || 'NoteStandard Notification';
+
+    // BUG FIX: Extract conversationId from payload for proper tag scoping.
+    // Previously all notifications shared the tag 'notestandard-push', meaning
+    // each new push silently replaced the previous one instead of stacking.
+    // Now: each conversation gets its own tag (stacks per-conversation),
+    // but new messages in the same conversation update the existing notification.
+    let notifConversationId = data.data?.conversationId || null;
+    if (!notifConversationId && data.data?.url) {
+        try {
+            const notifUrl = new URL(data.data.url, self.location.origin);
+            notifConversationId = notifUrl.searchParams.get('id');
+        } catch (_) {
+            const match = (data.data?.url || '').match(/[?&]id=([^&]+)/);
+            notifConversationId = match ? match[1] : null;
+        }
+    }
+
     const options = {
         body: data.body || 'You have a new update.',
         icon: data.icon || '/icon-192.png',
@@ -52,14 +69,18 @@ self.addEventListener('push', (event) => {
             url: data.data?.url || data.url || '/dashboard',
             type: data.data?.type || data.type || 'general',
             messageId: data.data?.messageId,
+            conversationId: notifConversationId,
             apiUrl: data.data?.apiUrl || 'https://note-standard-api.onrender.com'
         },
         actions: [
             { action: 'open', title: 'View Now' },
             { action: 'close', title: 'Dismiss' }
         ],
-        tag: data.tag || 'notestandard-push', // Prevents duplicates
-        renotify: true
+        // BUG FIX: Scope notification tag by conversationId.
+        // Different conversations get different tags (they stack in notification center).
+        // Same conversation updates the single existing notification (no spam).
+        tag: notifConversationId ? `chat-${notifConversationId}` : (data.tag || `ns-${Date.now()}`),
+        renotify: true,  // Always alert even when updating an existing tag
     };
 
     // If it's an incoming call, we explicitly enforce high-urgency ringing mappings natively
@@ -72,18 +93,6 @@ self.addEventListener('push', (event) => {
     if (options.data.type === 'chat_message' && options.data.messageId) {
         const targetApiUrl = options.data.apiUrl || 'https://note-standard-api.onrender.com';
 
-        // Prefer the explicit conversationId from the payload; fall back to parsing the URL
-        let notifConversationId = options.data.conversationId || null;
-        if (!notifConversationId && options.data.url) {
-            try {
-                const notifUrl = new URL(options.data.url, self.location.origin);
-                notifConversationId = notifUrl.searchParams.get('id');
-            } catch (_) {
-                const match = (options.data.url || '').match(/[?&]id=([^&]+)/);
-                notifConversationId = match ? match[1] : null;
-            }
-        }
-
         event.waitUntil(
             // First check if the user is already viewing this exact conversation
             clients.matchAll({ type: 'window', includeUncontrolled: true })
@@ -94,8 +103,8 @@ self.addEventListener('push', (event) => {
                             const clientUrl = new URL(client.url);
                             const clientConvId = clientUrl.searchParams.get('id');
                             const isOnChatPage = clientUrl.pathname.includes('/chat');
-                            // Consider "viewing" if tab is on the chat page with matching conversation
-                            return isOnChatPage && clientConvId === notifConversationId;
+                            // Consider "viewing" if tab is focused, on the chat page, and has matching conversation
+                            return isOnChatPage && clientConvId === notifConversationId && document.visibilityState !== 'hidden';
                         } catch (_) {
                             return false;
                         }
@@ -108,7 +117,7 @@ self.addEventListener('push', (event) => {
                             .catch(err => console.error('[SW] Delivery receipt failed:', err));
                     }
 
-                    // User is NOT in this conversation → show the push notification
+                    // User is NOT in this conversation → fire delivery receipt AND show notification
                     return fetch(`${targetApiUrl}/api/chat/messages/${options.data.messageId}/webhook-deliver`, { method: 'POST' })
                         .catch(err => console.error('[SW] Delivery receipt failed:', err))
                         .finally(() => self.registration.showNotification(title, options));
