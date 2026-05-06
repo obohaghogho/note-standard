@@ -93,13 +93,16 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
                     console.error('[CallOverlay] Remote audio initial play err:', e);
                     // Retry on interaction if needed
                     const retry = () => {
-                        remoteAudioRef.current?.play();
+                        remoteAudioRef.current?.play().catch(console.error);
                         window.removeEventListener('click', retry);
+                        window.removeEventListener('touchstart', retry);
                     };
                     window.addEventListener('click', retry);
+                    window.addEventListener('touchstart', retry);
                 });
             }
         }
+
     }, [remoteStream, isVideoCall]);
 
     // Bind local video preview (PiP)
@@ -143,8 +146,16 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
 
                     {/* BUG FIX: Dedicated audio element always present.
                         On iOS, this forces the voice audio session category instead of the
-                        video session category, preventing background noise on video calls. */}
-                    <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
+                        video session category, preventing background noise on video calls. 
+                        Using opacity-0 instead of 'hidden' because Safari sometimes suppresses 
+                        audio from elements with display: none. */}
+                    <audio 
+                        ref={remoteAudioRef} 
+                        autoPlay 
+                        playsInline 
+                        muted={false}
+                        className="opacity-0 pointer-events-none absolute" 
+                    />
 
                     {/* Avatar / status view — shown for voice calls or while waiting for remote video */}
                     <div className={`flex flex-col items-center gap-6 ${showRemoteVideo ? 'hidden' : ''}`}>

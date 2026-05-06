@@ -99,11 +99,18 @@ async function sendCallPush(params) {
         notification.expiry = 0; // Immediate delivery, do not store
         notification.payload = {
           ...payload,
-          uuid: payload.peerId || payload.callId, // Essential for tracking
+          uuid: payload.peerId || payload.callId,
+          callerName: payload.callerName, // Duplicate for root access
         };
-        // VoIP pushes must NOT have an 'alert' property in aps to work correctly with PushKit
+        // VoIP pushes should ideally only have content-available, but adding 
+        // a fallback alert can help if CallKit takes too long to wake up.
         notification.aps = {
-          'content-available': 1
+          'content-available': 1,
+          alert: {
+            title: `Incoming ${payload.callType} call`,
+            body: `${payload.callerName} is calling you...`
+          },
+          sound: 'default'
         };
         
         console.log(`[PushService] 📤 Sending VoIP Push (iOS) to topic: ${notification.topic}`);

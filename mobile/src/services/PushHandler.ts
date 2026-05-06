@@ -79,20 +79,27 @@ export class PushHandler {
     
     VoipPushNotification.addEventListener('register', (token) => {
       console.log('[PushHandler] 🔑 iOS VoIP Token Received:', token);
-      this.registerTokenWithBackend(token, 'voip');
+      this.registerTokenWithBackend(token, 'voip', 0); // Start with 0 retries
     });
 
     VoipPushNotification.addEventListener('notification', (notification) => {
       console.log('[PushHandler] 📞 iOS VoIP Push Received:', JSON.stringify(notification));
       
       // VoIP notifications on iOS MUST trigger CallKit immediately
-      if (notification.type === 'incoming_call') {
-        this.handleIncomingCall(notification as unknown as CallData);
+      const callData = {
+        callerId: notification.callerId || notification.from,
+        callerName: notification.callerName || notification.fromName,
+        callType: notification.callType || notification.type,
+        conversationId: notification.conversationId,
+        peerId: notification.peerId || notification.from
+      };
+
+      if (notification.type === 'incoming_call' || notification.type === 'call_incoming') {
+        this.handleIncomingCall(callData as unknown as CallData);
       } else if (notification.type === 'call_cancelled') {
         CallService.rejectCall();
       }
       
-      // VoIP notifications must be marked as finished to avoid system termination
       VoipPushNotification.onFinishNotification(notification.uuid);
     });
 
@@ -100,33 +107,38 @@ export class PushHandler {
     VoipPushNotification.registerVoipToken();
   }
 
-  static async registerTokenWithBackend(token: string, type: 'fcm' | 'voip' | 'apns') {
-    console.log(`[PushHandler] 📡 Registering ${type} token with backend...`);
+  static async registerTokenWithBackend(token: string, type: 'fcm' | 'voip' | 'apns', retryCount = 0) {
+    console.log(`[PushHandler] 📡 Registering ${type} token with backend (Try: ${retryCount + 1})...`);
     try {
       const authHeader = await AuthService.getToken();
-      
-      // Use the correct API URL from Config if available, otherwise fallback
-      const baseUrl = 'https://note-standard-api.onrender.com'; // Adjust to your actual production URL
-      
+      if (!authHeader) {
+          console.warn('[PushHandler] ⚠️ No auth token available for push registration, will retry...');
+          if (retryCount < 3) setTimeout(() => this.registerTokenWithBackend(token, type, retryCount + 1), 5000);
+          return;
+      }
+
+      const baseUrl = 'https://note-standard-api.onrender.com';
       const response = await fetch(`${baseUrl}/api/notifications/register-native-token`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${authHeader}`
         },
-        body: JSON.stringify({
-          token,
-          platform: Platform.OS,
-          type: type,
-        })
+        body: JSON.stringify({ token, platform: Platform.OS, type })
       });
       
       const resData = await response.json();
       if (resData.success) {
         console.log(`[PushHandler] ✅ ${type} token registered successfully.`);
+      } else {
+        throw new Error(resData.error || 'Unknown error');
       }
     } catch (err) {
       console.warn(`[PushHandler] ⚠️ ${type} token registration failed:`, err);
+      if (retryCount < 3) {
+          console.log(`[PushHandler] 🔄 Retrying ${type} registration in 5s...`);
+          setTimeout(() => this.registerTokenWithBackend(token, type, retryCount + 1), 5000);
+      }
     }
   }
 

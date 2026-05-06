@@ -117,6 +117,12 @@ class CallService {
     console.log(`[CallService] 📲 Answering Call (ID: ${this.currentCallId})`);
     if (this.currentCallId) {
       RNCallKeep.answerCall(this.currentCallId);
+      // Ensure audio is routed to speaker by default for best echo cancellation hardware usage
+      if (Platform.OS === 'ios') {
+          setTimeout(() => {
+              RNCallKeep.setAudioRoute(this.currentCallId!, 'Speaker');
+          }, 1000);
+      }
     }
   }
 

@@ -69,18 +69,18 @@ const isIOSDevice = (): boolean => {
 
 const getAudioConstraints = (): MediaTrackConstraints => {
     if (isIOSDevice()) {
-        // iOS: use plain booleans — object format is often ignored or causes stereo fallback
+        // iOS: use plain booleans for noise/echo properties.
+        // Using { exact: true } or { ideal: ... } can sometimes bypass hardware AEC on Safari.
         return {
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
             // @ts-expect-error
             latency: 0,
-            // iOS 15+ works best with 48kHz and lets the OS handle voice processing
             sampleRate: 48000,
             channelCount: 1,
-            // @ts-expect-error - Safari proprietary hint
-            whiteListing: true 
+            // @ts-expect-error
+            voiceActivityDetection: true
         };
     }
     
@@ -146,7 +146,24 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         incomingRingtoneRef.current.loop = true;
         incomingRingtoneRef.current.volume = 0.8;
 
+        // BUG FIX — iOS Ringtones:
+        // Unlock audio elements on first user interaction to satisfy iOS autoplay policy.
+        const unlock = () => {
+            if (dialToneRef.current) {
+                dialToneRef.current.play().then(() => dialToneRef.current?.pause()).catch(() => {});
+            }
+            if (incomingRingtoneRef.current) {
+                incomingRingtoneRef.current.play().then(() => incomingRingtoneRef.current?.pause()).catch(() => {});
+            }
+            window.removeEventListener('click', unlock);
+            window.removeEventListener('touchstart', unlock);
+        };
+        window.addEventListener('click', unlock);
+        window.addEventListener('touchstart', unlock);
+
         return () => {
+            window.removeEventListener('click', unlock);
+            window.removeEventListener('touchstart', unlock);
             if (dialToneRef.current) { dialToneRef.current.pause(); dialToneRef.current = null; }
             if (incomingRingtoneRef.current) { incomingRingtoneRef.current.pause(); incomingRingtoneRef.current = null; }
         };
@@ -187,12 +204,14 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return sdp.split('\r\n').map(line => {
             if (line.includes('a=fmtp:111')) {
                 let newLine = line;
-                // Prefer voice parameters for Opus
+                // Force mono and high-quality voice parameters for Opus
                 if (!line.includes('usedtx=1')) newLine += ';usedtx=1';
                 if (!line.includes('stereo=0')) newLine += ';stereo=0';
                 if (!line.includes('sprop-stereo=0')) newLine += ';sprop-stereo=0';
                 if (!line.includes('useinbandfec=1')) newLine += ';useinbandfec=1';
                 if (!line.includes('cbr=0')) newLine += ';cbr=0';
+                if (!line.includes('minptime=10')) newLine += ';minptime=10';
+                if (!line.includes('maxaveragebitrate=40000')) newLine += ';maxaveragebitrate=40000';
                 return newLine;
             }
             return line;
