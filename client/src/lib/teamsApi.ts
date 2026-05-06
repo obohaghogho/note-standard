@@ -82,9 +82,16 @@ export async function getMyTeams(): Promise<TeamWithUnreadCount[]> {
 
     // 2. Fetch unread counts and member counts for each team
     const teamsWithDetails = await Promise.all(
-      (memberships as unknown as Array<{ team_id: string; role: string; teams: Team | null }>).map(async (membership) => {
-        const team = membership.teams;
-        if (!team) return null;
+      (memberships as unknown as Array<{ team_id: string; role: string; teams: Team | Team[] | null }>).map(async (membership) => {
+        // Handle case where PostgREST might return an array for the foreign key
+        const teamObj = Array.isArray(membership.teams) ? membership.teams[0] : membership.teams;
+        if (!teamObj) return null;
+        
+        // Ensure name is always a string to prevent charAt crashes
+        const team = {
+          ...teamObj,
+          name: teamObj.name || 'Unnamed Team',
+        };
 
         // Use the RPC for unread count - much more stable than subqueries
         const { data: unreadCount, error: unreadError } = await supabase.rpc('get_unread_count', {

@@ -7,17 +7,13 @@ const router = express.Router();
  * No auth required — must be accessible to all clients including outdated ones.
  */
 const APP_CONFIG = {
-  latest_version: '1.2.0',
-  minimum_version: '1.2.0',
+  latest_version: '1.2.1',
+  minimum_version: '1.2.1',
   force_update: true,
-  update_message: 'Critical update: Fixed iOS WebRTC audio noise, chat delivery status tracking, and iOS PWA push notifications.',
+  update_message: 'Critical update: Fixed team dashboard crash and iOS WebRTC video rendering issue.',
   changelog: [
-    'Fixed: iOS background audio noise during WebRTC calls',
-    'Fixed: Video calls not showing remote video due to DOM render race condition',
-    'Fixed: Single-tick (sent) message status now correctly updates to double-tick (delivered)',
-    'Fixed: Added iOS PWA push notification support (no developer account needed)',
-    'Improved: WebRTC connection stability and remote stream handling',
-    'New: Built-in iOS install prompt for users to easily enable push notifications'
+    'Fixed: iOS WebRTC remote video rendering as a black screen during video calls',
+    'Fixed: Team dashboard crashing with "View blocked" error when team name is undefined'
   ]
 };
 

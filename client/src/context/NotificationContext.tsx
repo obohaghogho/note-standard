@@ -150,12 +150,10 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             let subscription = await registration.pushManager.getSubscription();
             
             if (!subscription) {
-                // Request permission if needed.
-                // On iOS PWA: this shows the native iOS notification permission dialog.
-                // On iOS browser: Notification API exists but subscribing will fail — handled above.
-                const permission = await Notification.requestPermission();
-                if (permission !== 'granted') {
-                    console.warn('[Notifications] Permission denied by user');
+                // We MUST NOT request permission automatically on load, especially on iOS.
+                // iOS strictly requires Notification.requestPermission() to be called from a direct user gesture (e.g., button click).
+                if (Notification.permission !== 'granted') {
+                    console.log('[Notifications] Push permission not granted. Skipping automatic subscription.');
                     return;
                 }
 

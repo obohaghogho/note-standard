@@ -29,14 +29,14 @@ export function usePushNotifications() {
     }
 
     try {
-      const registration = await navigator.serviceWorker.ready;
-      
-      // Request permission if not already granted
+      // Request permission if not already granted FIRST (crucial for iOS user-gesture requirement)
       if (Notification.permission !== 'granted') {
         const newPermission = await Notification.requestPermission();
         setPermission(newPermission);
         if (newPermission !== 'granted') return;
       }
+
+      const registration = await navigator.serviceWorker.ready;
 
       // Check for existing subscription
       let sub = await registration.pushManager.getSubscription();

@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { Sidebar } from './Sidebar';
 import { CreateNoteModal } from '../dashboard/CreateNoteModal';
 import { BroadcastBanner } from '../chat/BroadcastBanner';
+import { PushNotificationBanner } from '../common/PushNotificationBanner';
 import { useAuth } from '../../context/AuthContext';
 import { NotificationBell } from '../dashboard/NotificationBell';
 import { Menu, Plus } from 'lucide-react';
@@ -90,6 +91,7 @@ export function DashboardLayout() {
             isChatActiveOnMobile ? "bg-gray-950" : "bg-crystal pt-safe pb-safe"
         )}>
             {!isChatActiveOnMobile && <BroadcastBanner />}
+            {!isChatActiveOnMobile && <PushNotificationBanner />}
             
             {/* Inner ambient glow for dashboard depth */}
             {!isChatActiveOnMobile && <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 via-transparent to-purple-500/5 pointer-events-none -z-10" />}

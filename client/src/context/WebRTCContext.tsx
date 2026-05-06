@@ -218,9 +218,21 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         };
 
         pc.ontrack = (event) => {
-            console.log('[WebRTC] Received remote track', event.streams[0]);
-            remoteStreamRef.current = event.streams[0];
-            setRemoteStream(event.streams[0]);
+            console.log('[WebRTC] Received remote track', event.track.kind);
+            if (event.streams && event.streams[0]) {
+                remoteStreamRef.current = event.streams[0];
+                setRemoteStream(event.streams[0]);
+            } else {
+                // Fallback: If no stream is provided, create one or use existing
+                const stream = remoteStreamRef.current || new MediaStream();
+                stream.addTrack(event.track);
+                remoteStreamRef.current = stream;
+                setRemoteStream(stream);
+            }
+            
+            // Force a state update to ensure UI re-renders if a new track arrives 
+            // but the MediaStream reference is the same (e.g., audio then video)
+            setCallState(prev => ({ ...prev }));
         };
 
         pc.onconnectionstatechange = () => {

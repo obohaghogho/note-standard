@@ -68,14 +68,13 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
             return;
         }
 
-        // Bind video tracks to <video> element (video calls only)
+        // Bind original stream to <video> element (video calls only)
+        // BUG FIX: iOS Safari fails to render remote video if we construct a `new MediaStream(videoTracks)`.
+        // We must pass the original `remoteStream` to the video element. The `muted={true}` attribute 
+        // ensures it won't play audio, leaving audio routing to the dedicated <audio> element.
         if (isVideoCall && remoteVideoRef.current) {
-            const videoTracks = remoteStream.getVideoTracks();
-            if (videoTracks.length > 0) {
-                const videoOnlyStream = new MediaStream(videoTracks);
-                remoteVideoRef.current.srcObject = videoOnlyStream;
-                remoteVideoRef.current.play().catch(e => console.error('[CallOverlay] Remote video play err:', e));
-            }
+            remoteVideoRef.current.srcObject = remoteStream;
+            remoteVideoRef.current.play().catch(e => console.error('[CallOverlay] Remote video play err:', e));
         }
 
         // ALWAYS bind audio tracks to dedicated <audio> element
@@ -90,14 +89,11 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
         }
     }, [remoteStream, isVideoCall]);
 
-    // Bind local video preview (PiP) — video tracks only so muted has no audio feedback
+    // Bind local video preview (PiP)
+    // BUG FIX: iOS Safari may fail to render local video if we use `new MediaStream(videoTracks)`.
     useEffect(() => {
         if (localVideoRef.current && localStream) {
-            const videoTracks = localStream.getVideoTracks();
-            const streamForPreview = videoTracks.length > 0
-                ? new MediaStream(videoTracks)
-                : localStream;
-            localVideoRef.current.srcObject = streamForPreview;
+            localVideoRef.current.srcObject = localStream;
             localVideoRef.current.play().catch(e => console.error('[CallOverlay] Local video play err:', e));
         }
     }, [localStream]);

@@ -103,8 +103,8 @@ self.addEventListener('push', (event) => {
                             const clientUrl = new URL(client.url);
                             const clientConvId = clientUrl.searchParams.get('id');
                             const isOnChatPage = clientUrl.pathname.includes('/chat');
-                            // Consider "viewing" if tab is focused, on the chat page, and has matching conversation
-                            return isOnChatPage && clientConvId === notifConversationId && document.visibilityState !== 'hidden';
+                            // Consider "viewing" if tab is focused/visible, on the chat page, and has matching conversation
+                            return isOnChatPage && clientConvId === notifConversationId && client.visibilityState !== 'hidden';
                         } catch (_) {
                             return false;
                         }
@@ -120,7 +120,7 @@ self.addEventListener('push', (event) => {
                     // User is NOT in this conversation → fire delivery receipt AND show notification
                     return fetch(`${targetApiUrl}/api/chat/messages/${options.data.messageId}/webhook-deliver`, { method: 'POST' })
                         .catch(err => console.error('[SW] Delivery receipt failed:', err))
-                        .finally(() => self.registration.showNotification(title, options));
+                        .then(() => self.registration.showNotification(title, options));
                 })
         );
     } else {

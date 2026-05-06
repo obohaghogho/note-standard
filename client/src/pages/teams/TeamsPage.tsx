@@ -63,7 +63,7 @@ const TeamHeader: React.FC<{
             {team.avatar_url ? (
               <SecureImage src={team.avatar_url} alt="" className="w-full h-full object-cover" />
             ) : (
-              <span className="text-white font-black text-lg">{team.name.charAt(0).toUpperCase()}</span>
+              <span className="text-white font-black text-lg">{(team.name || 'T').charAt(0).toUpperCase()}</span>
             )}
          </div>
          <div className="min-w-0">
@@ -148,7 +148,7 @@ const TeamInfoSidebar: React.FC<{
                <SecureImage src={team.avatar_url} alt="" className="w-full h-full rounded-[2.25rem] object-cover" />
              ) : (
                <div className="w-full h-full rounded-[2.25rem] flex items-center justify-center text-5xl font-black text-white">
-                  {team.name.charAt(0).toUpperCase()}
+                  {(team.name || 'T').charAt(0).toUpperCase()}
                </div>
              )}
           </div>
@@ -463,7 +463,7 @@ export function TeamsPage() {
                     {team.avatar_url ? (
                       <SecureImage src={team.avatar_url} alt="" className="w-full h-full object-cover rounded-xl" fallbackType="default" />
                     ) : (
-                      <span className="text-white font-black text-lg">{team.name.charAt(0).toUpperCase()}</span>
+                      <span className="text-white font-black text-lg">{(team.name || 'T').charAt(0).toUpperCase()}</span>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
