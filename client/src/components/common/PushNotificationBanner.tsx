@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, X, ShieldCheck } from 'lucide-react';
+import { Bell, X } from 'lucide-react';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { toast } from 'react-hot-toast';
 
