@@ -52,6 +52,29 @@ class SignalingService {
     }
   }
 
+  async startCall(targetUserId: string, targetName: string, type: 'audio' | 'video', conversationId: string) {
+    console.log(`[Signaling] Initiating ${type} call to ${targetUserId}`);
+    
+    // 1. Notify Native Call UI
+    const callId = await CallService.startCall({
+      callerId: targetUserId,
+      callerName: targetName,
+      callType: type,
+      conversationId,
+      peerId: this.userId || '' // We pass our ID as the peer for the other side
+    });
+
+    // 2. Emit to Gateway
+    this.emit('call:initiate', {
+      to: targetUserId,
+      type,
+      conversationId,
+      peerId: this.userId
+    });
+
+    return callId;
+  }
+
   rejectCall(targetUserId: string) {
     this.emit('call:reject', { to: targetUserId });
     CallService.rejectCall();

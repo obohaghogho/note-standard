@@ -25,7 +25,12 @@ class CallService {
         maximumCallGroups: '1',
         maximumCallsPerCallGroup: '1',
         includesCallsInRecents: true,
-        ringtoneSound: 'Ringtone.caf', // Ensure this file exists in your app bundle if you want custom
+        // Advanced iOS configurations for echo reduction
+        audioSession: {
+            category: 'PlayAndRecord',
+            mode: 'VoiceChat',
+            options: ['AllowBluetooth', 'DefaultToSpeaker'],
+        }
       },
       android: {
         alertTitle: 'Permissions required',
@@ -60,6 +65,30 @@ class CallService {
     } catch (err) {
       console.error('[CallService] Setup error:', err);
     }
+  }
+
+  async startCall(data: CallData) {
+    const callId = uuidv4();
+    this.currentCallId = callId;
+    
+    console.log(`[CallService] 📞 Starting outgoing call to ${data.callerName}`);
+    
+    try {
+      RNCallKeep.startCall(
+        callId,
+        data.callerId,
+        data.callerName,
+        'generic',
+        data.callType === 'video'
+      );
+      
+      // For outgoing calls, you might want to play a local dial tone
+      // until the other side answers.
+    } catch (err) {
+      console.error(`[CallService] ❌ Start call error:`, err);
+    }
+    
+    return callId;
   }
 
   displayIncomingCall(data: CallData) {

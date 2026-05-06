@@ -69,23 +69,28 @@ const isIOSDevice = (): boolean => {
 
 const getAudioConstraints = (): MediaTrackConstraints => {
     if (isIOSDevice()) {
-        // iOS: use plain booleans — object format is silently ignored
+        // iOS: use plain booleans — object format is often ignored or causes stereo fallback
         return {
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
-            // iOS specific: 16kHz is the standard for Voice processing on iOS
-            // Using a higher rate (48kHz) often disables hardware noise suppression
+            // @ts-expect-error
+            latency: 0,
+            // iOS 15+ works best with 48kHz and lets the OS handle voice processing
+            sampleRate: 48000,
             channelCount: 1,
-            sampleRate: 16000,
+            // @ts-expect-error - Safari proprietary hint
+            whiteListing: true 
         };
     }
     
     // Desktop/Android: robust constraints for noise and echo reduction
     return {
-        echoCancellation: true, // Use boolean for better compatibility
+        echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true,
+        // @ts-expect-error
+        latency: 0,
         // Chromium-specific aggressive processing
         // @ts-expect-error
         googEchoCancellation: true,
@@ -425,15 +430,26 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                             stream.getTracks().forEach(track => pc!.addTrack(track, stream));
                         }
                     }
-                    await pc.setRemoteDescription(new RTCSessionDescription(signal.offer));
+                    const optimizedOffer = { 
+                        type: signal.offer.type, 
+                        sdp: optimizeSDP(signal.offer.sdp || '') 
+                    } as RTCSessionDescriptionInit;
+                    await pc.setRemoteDescription(new RTCSessionDescription(optimizedOffer));
                     const answer = await pc.createAnswer();
-                    const optimizedAnswer = { ...answer, sdp: optimizeSDP(answer.sdp || '') };
+                    const optimizedAnswer = { 
+                        type: answer.type, 
+                        sdp: optimizeSDP(answer.sdp || '') 
+                    } as RTCSessionDescriptionInit;
                     await pc.setLocalDescription(optimizedAnswer);
                     socket.emit('call:signal', { to: data.from, signal: { answer: optimizedAnswer } });
                     await flushSignalQueue(pc);
                 } else if (signal.answer) {
                     if (pc) {
-                        await pc.setRemoteDescription(new RTCSessionDescription(signal.answer));
+                        const optimizedAnswer = { 
+                            type: signal.answer.type, 
+                            sdp: optimizeSDP(signal.answer.sdp || '') 
+                        } as RTCSessionDescriptionInit;
+                        await pc.setRemoteDescription(new RTCSessionDescription(optimizedAnswer));
                         await flushSignalQueue(pc);
                     }
                 } else if (signal.candidate) {
