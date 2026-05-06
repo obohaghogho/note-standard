@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
-import { Plus, FileText, Star, Activity, Sparkles, TrendingUp, Zap, ChevronRight } from 'lucide-react';
+import { Plus, FileText, Star, Activity, Sparkles, TrendingUp, Zap, ChevronRight, Users } from 'lucide-react';
+import { FriendsList } from '../../components/chat/FriendsList';
 import { useAuth } from '../../context/AuthContext';
 import { useNotes } from '../../context/NotesContext';
 import { useWallet } from '../../hooks/useWallet';
@@ -298,48 +299,47 @@ export default function DashboardHome() {
                     </Card>
                 </motion.div>
 
-                {/* Recent Items / Grid Bento Continued */}
-                <motion.div variants={itemVariants} className="md:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    <Card variant="glass-premium" className="p-8 flex flex-col justify-between group h-[240px]" hoverEffect onClick={() => navigate('/dashboard/notes')}>
-                        <div className="flex justify-between items-start">
-                            <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400 group-hover:bg-emerald-500 group-hover:text-black transition-all">
-                                <FileText size={20} />
-                            </div>
-                            <Star size={20} className="text-gray-700 hover:text-yellow-500 transition-colors" />
+                {/* Social Hub & Quick Actions */}
+                <motion.div variants={itemVariants} className="md:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-6 h-[504px]">
+                    {/* Social Hub */}
+                    <Card variant="glass-premium" className="sm:col-span-2 p-0 flex flex-col overflow-hidden border-blue-500/10 h-[350px]">
+                        <div className="p-6 border-b border-white/5 flex items-center justify-between bg-blue-500/5">
+                            <h3 className="text-lg font-bold flex items-center gap-2">
+                                <Users size={18} className="text-blue-400" />
+                                Social Hub
+                            </h3>
+                            <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/chat')} className="text-[10px] text-gray-500 hover:text-blue-400">View Chat</Button>
                         </div>
-                        <div>
-                            <h4 className="text-xl font-bold mb-1">Open Workspace</h4>
-                            <p className="text-gray-500 text-xs">Jump back into your last {notes.length} notes instantly.</p>
-                        </div>
-                    </Card>
-
-                    <Card variant="glass-premium" className="p-8 flex flex-col justify-between group h-[240px]" hoverEffect onClick={() => navigate('/dashboard/chat')}>
-                        <div className="flex justify-between items-start">
-                            <div className="p-3 bg-blue-500/10 rounded-xl text-blue-400 group-hover:bg-blue-500 group-hover:text-black transition-all">
-                                <Activity size={20} />
-                            </div>
-                        </div>
-                        <div>
-                            <h4 className="text-xl font-bold mb-1">Secure Chats</h4>
-                            <p className="text-gray-500 text-xs">Zero-trust messaging with your team and clients.</p>
+                        <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
+                            <FriendsList limit={5} />
                         </div>
                     </Card>
 
-                    {/* Quick Preview of a Random Note */}
-                    <motion.div className="sm:col-span-2" variants={itemVariants}>
-                         <Card variant="glass-premium" className="p-8 hover:border-primary/20 transition-all cursor-pointer h-[130px] flex items-center justify-between" onClick={() => navigate('/dashboard/notes')}>
-                           <div className="flex items-center gap-6">
-                                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-emerald-700 flex items-center justify-center shadow-lg shadow-primary/20">
-                                    <Sparkles className="text-black" size={24} />
-                                </div>
-                                <div>
-                                    <p className="text-white font-bold text-lg">Did You Know?</p>
-                                    <p className="text-gray-500 text-sm italic">"Organization is the mother of performance." — Keep it up!</p>
-                                </div>
-                           </div>
-                           <ChevronRight className="text-gray-500" />
-                         </Card>
-                    </motion.div>
+                    {/* Quick Access Cards */}
+                    <Card variant="glass-premium" className="p-6 flex flex-col justify-between group h-[130px] hover:border-emerald-500/30" hoverEffect onClick={() => navigate('/dashboard/notes')}>
+                        <div className="flex justify-between items-start">
+                            <div className="p-2.5 bg-emerald-500/10 rounded-xl text-emerald-400 group-hover:bg-emerald-500 group-hover:text-black transition-all">
+                                <FileText size={18} />
+                            </div>
+                            <Star size={18} className="text-gray-700 hover:text-yellow-500 transition-colors" />
+                        </div>
+                        <div>
+                            <h4 className="text-base font-bold">Notes</h4>
+                            <p className="text-gray-500 text-[10px] uppercase tracking-widest font-black">Open Workspace</p>
+                        </div>
+                    </Card>
+
+                    <Card variant="glass-premium" className="p-6 flex flex-col justify-between group h-[130px] hover:border-blue-500/30" hoverEffect onClick={() => navigate('/dashboard/chat')}>
+                        <div className="flex justify-between items-start">
+                            <div className="p-2.5 bg-blue-500/10 rounded-xl text-blue-400 group-hover:bg-blue-500 group-hover:text-black transition-all">
+                                <Activity size={18} />
+                            </div>
+                        </div>
+                        <div>
+                            <h4 className="text-base font-bold">Messenger</h4>
+                            <p className="text-gray-500 text-[10px] uppercase tracking-widest font-black">Secure Hub</p>
+                        </div>
+                    </Card>
                 </motion.div>
             </div>
         </motion.div>

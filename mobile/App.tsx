@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, LogBox, Platform } from 'react-native';
+import { StyleSheet, Text, View, LogBox, Platform, SafeAreaView } from 'react-native';
 import CallService from './src/services/CallService';
 import { PushHandler } from './src/services/PushHandler';
 import SignalingService from './src/services/SignalingService';
 import BatteryService from './src/services/BatteryService';
 import BatteryOptimizationModal from './src/components/BatteryOptimizationModal';
+import { FriendsList } from './src/components/FriendsList';
+import { AuthService } from './src/services/AuthService';
 
 // Ignore specific warnings for clean dev experience
 LogBox.ignoreLogs(['Setting a timer']);
@@ -14,11 +16,26 @@ import { NotificationProvider } from './src/context/NotificationContext';
 
 export default function App() {
   const [batteryModalVisible, setBatteryModalVisible] = useState(false);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     const bootstrap = async () => {
       console.log('[App] 🚀 Bootstrapping high-reliability services...');
       
+      // Temporary Auth Simulation for Testing
+      const hasToken = await AuthService.isAuthenticated();
+      if (!hasToken) {
+        console.log('[App] 🔐 Simulating Auth for onomejohn107@gmail.com...');
+        // In a real app, this would be a login screen. 
+        // For now, we'll assume the user is logged in if we are in this test environment.
+        await AuthService.setToken('SIMULATED_TOKEN'); // Replace with real token if testing with backend
+        await AuthService.setUser({
+          id: 'onome-uid-123',
+          email: 'onomejohn107@gmail.com',
+          full_name: 'Onome John'
+        });
+      }
+
       // 1. Setup Native Call UI
       await CallService.setup();
 
@@ -39,14 +56,13 @@ export default function App() {
       // 4. Setup Call Event Listeners
       CallService.onAnswer((callId) => {
         console.log('[App] ✅ Call Answered:', callId);
-        // SignalingService.answerCall(...)
       });
 
       CallService.onReject((callId) => {
         console.log('[App] 🚫 Call Rejected/Ended:', callId);
-        // SignalingService.rejectCall(...)
       });
 
+      setIsReady(true);
       console.log('[App] ✅ Bootstrap complete.');
     };
 
@@ -58,24 +74,37 @@ export default function App() {
     await BatteryService.requestIgnoreBatteryOptimization();
   };
 
+  if (!isReady) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>Initializing...</Text>
+      </View>
+    );
+  }
+
   return (
     <NotificationProvider>
-      <View style={styles.container}>
-      <Text style={styles.title}>NoteStandard</Text>
-      <Text style={styles.subtitle}>Native High-Reliability Signaling Active</Text>
-      <StatusBar style="auto" />
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <FriendsList />
+          <StatusBar style="light" />
 
-      <BatteryOptimizationModal 
-        visible={batteryModalVisible}
-        onClose={() => setBatteryModalVisible(false)}
-        onConfirm={handleAllowCalls}
-      />
-    </View>
+          <BatteryOptimizationModal 
+            visible={batteryModalVisible}
+            onClose={() => setBatteryModalVisible(false)}
+            onConfirm={handleAllowCalls}
+          />
+        </View>
+      </SafeAreaView>
     </NotificationProvider>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#0a0a0a',
+  },
   container: {
     flex: 1,
     backgroundColor: '#0a0a0a',
@@ -87,11 +116,5 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#ffffff',
     marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#a0a0a0',
-    textAlign: 'center',
-    paddingHorizontal: 20,
   },
 });
