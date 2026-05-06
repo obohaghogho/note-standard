@@ -68,24 +68,37 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
             return;
         }
 
-        // Bind original stream to <video> element (video calls only)
-        // BUG FIX: iOS Safari fails to render remote video if we construct a `new MediaStream(videoTracks)`.
-        // We must pass the original `remoteStream` to the video element. The `muted={true}` attribute 
-        // ensures it won't play audio, leaving audio routing to the dedicated <audio> element.
+        // Bind video-only stream to <video> element (video calls only)
+        // BUG FIX: On iOS, the video element MUST NOT have audio tracks, 
+        // otherwise Safari switches to the noisy 'Video' category.
         if (isVideoCall && remoteVideoRef.current) {
-            remoteVideoRef.current.srcObject = remoteStream;
-            remoteVideoRef.current.play().catch(e => console.error('[CallOverlay] Remote video play err:', e));
+            const videoTracks = remoteStream.getVideoTracks();
+            if (videoTracks.length > 0) {
+                // We create a video-only stream for the video element
+                const videoOnlyStream = new MediaStream(videoTracks);
+                remoteVideoRef.current.srcObject = videoOnlyStream;
+                remoteVideoRef.current.play().catch(e => console.error('[CallOverlay] Remote video play err:', e));
+            }
         }
 
         // ALWAYS bind audio tracks to dedicated <audio> element
         // This is the key fix for iOS audio noise during video calls
         if (remoteAudioRef.current) {
             const audioTracks = remoteStream.getAudioTracks();
-            const audioStream = audioTracks.length > 0
-                ? new MediaStream(audioTracks)
-                : remoteStream; // fallback for voice-only streams
-            remoteAudioRef.current.srcObject = audioStream;
-            remoteAudioRef.current.play().catch(e => console.error('[CallOverlay] Remote audio play err:', e));
+            if (audioTracks.length > 0) {
+                const audioOnlyStream = new MediaStream(audioTracks);
+                remoteAudioRef.current.srcObject = audioOnlyStream;
+                remoteAudioRef.current.volume = 1.0; // Ensure full volume
+                remoteAudioRef.current.play().catch(e => {
+                    console.error('[CallOverlay] Remote audio initial play err:', e);
+                    // Retry on interaction if needed
+                    const retry = () => {
+                        remoteAudioRef.current?.play();
+                        window.removeEventListener('click', retry);
+                    };
+                    window.addEventListener('click', retry);
+                });
+            }
         }
     }, [remoteStream, isVideoCall]);
 

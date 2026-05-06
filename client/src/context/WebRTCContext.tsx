@@ -74,16 +74,31 @@ const getAudioConstraints = (): MediaTrackConstraints => {
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
+            // iOS specific: 16kHz is the standard for Voice processing on iOS
+            // Using a higher rate (48kHz) often disables hardware noise suppression
+            channelCount: 1,
+            sampleRate: 16000,
         };
     }
-    // Desktop/Android: full constraint objects supported
+    
+    // Desktop/Android: robust constraints for noise and echo reduction
     return {
-        echoCancellation: { ideal: true },
-        noiseSuppression: { ideal: true },
-        autoGainControl: { ideal: true },
+        echoCancellation: true, // Use boolean for better compatibility
+        noiseSuppression: true,
+        autoGainControl: true,
+        // Chromium-specific aggressive processing
+        // @ts-ignore
+        googEchoCancellation: true,
+        // @ts-ignore
+        googAutoGainControl: true,
+        // @ts-ignore
+        googNoiseSuppression: true,
+        // @ts-ignore
+        googHighpassFilter: true,
+        // @ts-ignore
+        googTypingNoiseDetection: true,
         channelCount: { ideal: 1 },
-        sampleRate: { ideal: 48000 },
-        latency: { ideal: 0 }
+        sampleRate: { ideal: 48000 }
     };
 };
 
@@ -167,8 +182,12 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return sdp.split('\r\n').map(line => {
             if (line.includes('a=fmtp:111')) {
                 let newLine = line;
+                // Prefer voice parameters for Opus
                 if (!line.includes('usedtx=1')) newLine += ';usedtx=1';
                 if (!line.includes('stereo=0')) newLine += ';stereo=0';
+                if (!line.includes('sprop-stereo=0')) newLine += ';sprop-stereo=0';
+                if (!line.includes('useinbandfec=1')) newLine += ';useinbandfec=1';
+                if (!line.includes('cbr=0')) newLine += ';cbr=0';
                 return newLine;
             }
             return line;

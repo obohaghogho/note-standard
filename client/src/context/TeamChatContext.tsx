@@ -120,6 +120,65 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ====================================
+  // SYNC LATEST MESSAGES (RESUME FROM BACKGROUND)
+  // ====================================
+
+  const syncLatestMessages = useCallback(async () => {
+    if (!teamId || !user || !authReady) return;
+    
+    console.log('[TeamChat] Syncing latest messages for team:', teamId);
+    
+    try {
+      const messagesData = await getTeamMessages(teamId, 50);
+      
+      if (!isMounted.current) return;
+
+      setMessages(prev => {
+        if (messagesData.length === 0) return prev;
+
+        const fetchedDates = messagesData.map(m => new Date(m.created_at).getTime());
+        const oldestFetchedDate = Math.min(...fetchedDates);
+
+        // Keep existing messages that are older than the oldest fetched message
+        const olderExisting = prev.filter(m => new Date(m.created_at).getTime() < oldestFetchedDate);
+        
+        // Keep any optimistic messages
+        const optimisticMessages = prev.filter(m => m.id.startsWith('temp-'));
+
+        const mergedMap = new Map<string, TeamMessage>();
+        
+        olderExisting.forEach(m => mergedMap.set(m.id, m));
+        messagesData.forEach(m => mergedMap.set(m.id, { ...m, isOwn: m.sender_id === user.id }));
+        optimisticMessages.forEach(m => mergedMap.set(m.id, m));
+
+        const merged = Array.from(mergedMap.values()).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        messagesCountRef.current = merged.length;
+        return merged;
+      });
+
+      // Update hasMore based on sync result
+      if (messagesData.length < 50) {
+        setHasMore(false);
+      } else {
+        setHasMore(true);
+      }
+
+      // Also refresh stats/members in background
+      const [membersData, statsData] = await Promise.all([
+        getTeamMembers(teamId),
+        getTeamStats(teamId)
+      ]);
+
+      if (isMounted.current) {
+        setMembers(membersData);
+        setTeamStats(statsData);
+      }
+    } catch (err) {
+      console.error('[TeamChat] Background sync failed:', err);
+    }
+  }, [teamId, user, authReady]);
+
+  // ====================================
   // LOAD INITIAL DATA
   // ====================================
 
@@ -193,64 +252,6 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
    
   }, [teamId, user, profile, authReady, syncLatestMessages]);
 
-  // ====================================
-  // SYNC LATEST MESSAGES (RESUME FROM BACKGROUND)
-  // ====================================
-
-  const syncLatestMessages = useCallback(async () => {
-    if (!teamId || !user || !authReady) return;
-    
-    console.log('[TeamChat] Syncing latest messages for team:', teamId);
-    
-    try {
-      const messagesData = await getTeamMessages(teamId, 50);
-      
-      if (!isMounted.current) return;
-
-      setMessages(prev => {
-        if (messagesData.length === 0) return prev;
-
-        const fetchedDates = messagesData.map(m => new Date(m.created_at).getTime());
-        const oldestFetchedDate = Math.min(...fetchedDates);
-
-        // Keep existing messages that are older than the oldest fetched message
-        const olderExisting = prev.filter(m => new Date(m.created_at).getTime() < oldestFetchedDate);
-        
-        // Keep any optimistic messages
-        const optimisticMessages = prev.filter(m => m.id.startsWith('temp-'));
-
-        const mergedMap = new Map<string, TeamMessage>();
-        
-        olderExisting.forEach(m => mergedMap.set(m.id, m));
-        messagesData.forEach(m => mergedMap.set(m.id, { ...m, isOwn: m.sender_id === user.id }));
-        optimisticMessages.forEach(m => mergedMap.set(m.id, m));
-
-        const merged = Array.from(mergedMap.values()).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-        messagesCountRef.current = merged.length;
-        return merged;
-      });
-
-      // Update hasMore based on sync result
-      if (messagesData.length < 50) {
-        setHasMore(false);
-      } else {
-        setHasMore(true);
-      }
-
-      // Also refresh stats/members in background
-      const [membersData, statsData] = await Promise.all([
-        getTeamMembers(teamId),
-        getTeamStats(teamId)
-      ]);
-
-      if (isMounted.current) {
-        setMembers(membersData);
-        setTeamStats(statsData);
-      }
-    } catch (err) {
-      console.error('[TeamChat] Background sync failed:', err);
-    }
-  }, [teamId, user, authReady]);
 
   // ====================================
   // LOAD MORE MESSAGES (PAGINATION)
