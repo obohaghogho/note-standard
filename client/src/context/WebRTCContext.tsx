@@ -3,7 +3,7 @@ import { useSocket } from './SocketContext';
 import { useChat } from './ChatContext';
 import toast from 'react-hot-toast';
 import { CallOverlay } from '../components/chat/CallOverlay';
-import AgoraRTC, { IAgoraRTCClient, ILocalVideoTrack, ILocalAudioTrack, IRemoteVideoTrack, IRemoteAudioTrack } from "agora-rtc-sdk-ng";
+import AgoraRTC, { IAgoraRTCClient, ILocalVideoTrack, ILocalAudioTrack } from "agora-rtc-sdk-ng";
 import axios from 'axios';
 
 interface CallState {
@@ -79,11 +79,11 @@ const getAudioConstraints = (): MediaTrackConstraints => {
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
-            // @ts-expect-error
+            // @ts-expect-error: latency is a non-standard constraint for WebRTC
             latency: 0,
             sampleRate: 48000,
             channelCount: 1,
-            // @ts-expect-error
+            // @ts-expect-error: voiceActivityDetection is a non-standard constraint
             voiceActivityDetection: true
         };
     }
@@ -93,18 +93,18 @@ const getAudioConstraints = (): MediaTrackConstraints => {
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true,
-        // @ts-expect-error
+        // @ts-expect-error: latency is non-standard
         latency: 0,
         // Chromium-specific aggressive processing
-        // @ts-expect-error
+        // @ts-expect-error: googEchoCancellation is a Chromium-only legacy constraint
         googEchoCancellation: true,
-        // @ts-expect-error
+        // @ts-expect-error: googAutoGainControl is a Chromium-only legacy constraint
         googAutoGainControl: true,
-        // @ts-expect-error
+        // @ts-expect-error: googNoiseSuppression is a Chromium-only legacy constraint
         googNoiseSuppression: true,
-        // @ts-expect-error
+        // @ts-expect-error: googHighpassFilter is a Chromium-only legacy constraint
         googHighpassFilter: true,
-        // @ts-expect-error
+        // @ts-expect-error: googTypingNoiseDetection is a Chromium-only legacy constraint
         googTypingNoiseDetection: true,
         channelCount: { ideal: 1 },
         sampleRate: { ideal: 48000 }
@@ -345,7 +345,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
     };
 
-    const initAgoraCall = async (conversationId: string, type: 'voice' | 'video', isCaller: boolean) => {
+    const initAgoraCall = async (conversationId: string, type: 'voice' | 'video') => {
         console.log('[Agora] Initializing Agora Call...');
         const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
         agoraClientRef.current = client;
@@ -417,7 +417,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         // TRY AGORA FIRST (Highly recommended for iOS)
         try {
-            await initAgoraCall(conversationId, type, true);
+            await initAgoraCall(conversationId, type);
             socket?.emit('call:initiate', { to: targetUserId, type, conversationId, useAgora: true });
             sendMessageToConversation(conversationId, `Started a ${type} call`, 'call');
 
@@ -471,7 +471,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         // Check if the caller is using Agora (this would be sent in the incoming signal, but here we prioritize it anyway)
         // If it's iOS, we DEFINITELY want Agora if possible.
         try {
-            await initAgoraCall(conversationId, callState.type || 'voice', false);
+            await initAgoraCall(conversationId, callState.type || 'voice');
             socket?.emit('call:ready', { to: targetUserId, useAgora: true });
             setCallState(p => ({ ...p, status: 'connecting' }));
             return;
