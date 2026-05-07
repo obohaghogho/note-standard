@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import CallService from './CallService';
 import axios from 'axios';
+import AgoraService from './AgoraService';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
 const GATEWAY_URL = process.env.EXPO_PUBLIC_GATEWAY_URL || 'http://localhost:5001';
@@ -34,6 +35,7 @@ class SignalingService {
     });
 
     this.socket.on('call:ended', () => {
+      AgoraService.leaveChannel();
       CallService.endCall();
     });
 
@@ -61,15 +63,23 @@ class SignalingService {
       callerName: targetName,
       callType: type,
       conversationId,
-      peerId: this.userId || '' // We pass our ID as the peer for the other side
+      peerId: this.userId || ''
     });
 
-    // 2. Emit to Gateway
+    // 2. Start Agora
+    try {
+      await AgoraService.joinChannel(conversationId);
+    } catch (err) {
+      console.error('[Signaling] Agora join failed:', err);
+    }
+
+    // 3. Emit to Gateway
     this.emit('call:initiate', {
       to: targetUserId,
       type,
       conversationId,
-      peerId: this.userId
+      peerId: this.userId,
+      useAgora: true
     });
 
     return callId;
@@ -77,12 +87,19 @@ class SignalingService {
 
   rejectCall(targetUserId: string) {
     this.emit('call:reject', { to: targetUserId });
+    AgoraService.leaveChannel();
     CallService.rejectCall();
   }
 
-  answerCall(targetUserId: string, peerId: string) {
-    this.emit('call:ready', { to: targetUserId, peerId });
-    // Connect WebRTC here
+  async answerCall(targetUserId: string, peerId: string, conversationId: string) {
+    this.emit('call:ready', { to: targetUserId, peerId, useAgora: true });
+    
+    // 1. Join Agora Channel
+    try {
+      await AgoraService.joinChannel(conversationId);
+    } catch (err) {
+      console.error('[Signaling] Agora join failed during answer:', err);
+    }
   }
 }
 
