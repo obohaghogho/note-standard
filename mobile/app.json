@@ -16,7 +16,12 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.notestandard.app",
       "infoPlist": {
-        "UIBackgroundModes": ["voip", "remote-notification", "audio", "processing"]
+        "UIBackgroundModes": [
+          "voip",
+          "remote-notification",
+          "audio",
+          "processing"
+        ]
       }
     },
     "android": {
@@ -32,7 +37,11 @@
         "ANDROID.PERMISSION.READ_PHONE_STATE",
         "ANDROID.PERMISSION.MANAGE_OWN_CALLS",
         "ANDROID.PERMISSION.FOREGROUND_SERVICE",
-        "ANDROID.PERMISSION.USE_FULL_SCREEN_INTENT"
+        "ANDROID.PERMISSION.USE_FULL_SCREEN_INTENT",
+        "android.permission.BIND_TELECOM_CONNECTION_SERVICE",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.READ_PHONE_STATE",
+        "android.permission.CALL_PHONE"
       ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
@@ -61,6 +70,11 @@
     ],
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "54cb5fe8-62ac-4709-ac38-987b46f7ebcc"
+      }
     }
   }
 }

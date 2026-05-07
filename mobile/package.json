@@ -9,23 +9,26 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "@config-plugins/react-native-callkeep": "^13.0.0",
-    "@react-native-async-storage/async-storage": "^3.0.2",
+    "@config-plugins/react-native-callkeep": "^12.0.0",
+    "@react-native-async-storage/async-storage": "2.2.0",
     "axios": "^1.15.0",
-    "expo": "~54.0.33",
-    "expo-notifications": "^55.0.18",
+    "expo": "~54.0.34",
+    "expo-notifications": "~0.32.17",
     "expo-status-bar": "~3.0.9",
     "peerjs": "^1.5.5",
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-agora": "^4.6.2",
     "react-native-callkeep": "^4.3.16",
+    "react-native-get-random-values": "^2.0.0",
     "react-native-url-polyfill": "^3.0.0",
     "react-native-voip-push-notification": "^3.3.3",
-    "socket.io-client": "^4.8.3"
+    "socket.io-client": "^4.8.3",
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "@types/uuid": "^10.0.0",
     "typescript": "~5.9.2"
   },
   "private": true
