@@ -18,6 +18,7 @@
   "dependencies": {
     "@sendgrid/mail": "^8.1.6",
     "@supabase/supabase-js": "^2.46.1",
+    "agora-access-token": "^2.0.4",
     "axios": "^1.13.5",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.72.1",

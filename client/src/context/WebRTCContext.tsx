@@ -3,6 +3,8 @@ import { useSocket } from './SocketContext';
 import { useChat } from './ChatContext';
 import toast from 'react-hot-toast';
 import { CallOverlay } from '../components/chat/CallOverlay';
+import AgoraRTC, { IAgoraRTCClient, ILocalVideoTrack, ILocalAudioTrack, IRemoteVideoTrack, IRemoteAudioTrack } from "agora-rtc-sdk-ng";
+import axios from 'axios';
 
 interface CallState {
     type: 'voice' | 'video' | null;
@@ -52,6 +54,8 @@ const iceServers = [
       credential: "openrelayproject"
     }
 ];
+
+const AGORA_APP_ID = "652459c783604367857bc602fc8faae5";
 
 /**
  * BUG FIX — iOS Audio Noise:
@@ -133,6 +137,12 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // Stable ref for otherUser so socket handlers can read it without stale closure
     const otherUserRef = useRef<CallState['otherUser']>(null);
     const incomingSignalQueue = useRef<{ candidate?: RTCIceCandidateInit }[]>([]);
+
+    // Agora Refs
+    const agoraClientRef = useRef<IAgoraRTCClient | null>(null);
+    const localAudioTrackRef = useRef<ILocalAudioTrack | null>(null);
+    const localVideoTrackRef = useRef<ILocalVideoTrack | null>(null);
+    const isUsingAgora = useRef<boolean>(false);
 
     const dialToneRef = useRef<HTMLAudioElement | null>(null);
     const incomingRingtoneRef = useRef<HTMLAudioElement | null>(null);
@@ -218,13 +228,31 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }).join('\r\n');
     };
 
-    const cleanup = useCallback(() => {
+    const cleanup = useCallback(async () => {
         if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
         
+        // Cleanup standard WebRTC
         if (pcRef.current) {
             pcRef.current.close();
             pcRef.current = null;
         }
+
+        // Cleanup Agora
+        if (agoraClientRef.current) {
+            try {
+                localAudioTrackRef.current?.stop();
+                localAudioTrackRef.current?.close();
+                localVideoTrackRef.current?.stop();
+                localVideoTrackRef.current?.close();
+                await agoraClientRef.current.leave();
+            } catch (err) {
+                console.error('[Agora] Cleanup error:', err);
+            }
+            agoraClientRef.current = null;
+            localAudioTrackRef.current = null;
+            localVideoTrackRef.current = null;
+        }
+        isUsingAgora.current = false;
 
         if (localStreamRef.current) {
             localStreamRef.current.getTracks().forEach(t => t.stop());
@@ -307,11 +335,108 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
     };
 
+    const fetchAgoraToken = async (channel: string) => {
+        try {
+            const response = await axios.get(`/api/agora?channel=${channel}`);
+            return response.data.token;
+        } catch (err) {
+            console.error('[Agora] Token fetch failed:', err);
+            throw err;
+        }
+    };
+
+    const initAgoraCall = async (conversationId: string, type: 'voice' | 'video', isCaller: boolean) => {
+        console.log('[Agora] Initializing Agora Call...');
+        const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+        agoraClientRef.current = client;
+        isUsingAgora.current = true;
+
+        const token = await fetchAgoraToken(conversationId);
+        await client.join(AGORA_APP_ID, conversationId, token, null);
+
+        // Create local tracks
+        const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+            AEC: true, ANS: true, AGC: true
+        });
+        localAudioTrackRef.current = audioTrack;
+
+        let videoTrack: ILocalVideoTrack | null = null;
+        if (type === 'video') {
+            videoTrack = await AgoraRTC.createCameraVideoTrack();
+            localVideoTrackRef.current = videoTrack;
+        }
+
+        // Sync with existing MediaStream state for UI compatibility
+        const localStream = new MediaStream();
+        localStream.addTrack(audioTrack.getMediaStreamTrack());
+        if (videoTrack) localStream.addTrack(videoTrack.getMediaStreamTrack());
+        localStreamRef.current = localStream;
+        setLocalStream(localStream);
+
+        // Publish tracks
+        await client.publish(videoTrack ? [audioTrack, videoTrack] : [audioTrack]);
+
+        // Handle remote tracks
+        client.on("user-published", async (user, mediaType) => {
+            await client.subscribe(user, mediaType);
+            console.log("[Agora] Subscribed to remote user:", user.uid, mediaType);
+
+            if (mediaType === "video") {
+                const remoteVideoTrack = user.videoTrack;
+                const remoteAudioTrack = user.audioTrack;
+                
+                const remoteStream = remoteStreamRef.current || new MediaStream();
+                if (remoteVideoTrack) remoteStream.addTrack(remoteVideoTrack.getMediaStreamTrack());
+                if (remoteAudioTrack) remoteStream.addTrack(remoteAudioTrack.getMediaStreamTrack());
+                
+                remoteStreamRef.current = remoteStream;
+                setRemoteStream(remoteStream);
+            }
+
+            if (mediaType === "audio") {
+                const remoteAudioTrack = user.audioTrack;
+                const remoteStream = remoteStreamRef.current || new MediaStream();
+                if (remoteAudioTrack) remoteStream.addTrack(remoteAudioTrack.getMediaStreamTrack());
+                
+                remoteStreamRef.current = remoteStream;
+                setRemoteStream(remoteStream);
+            }
+            
+            setCallState(p => ({ ...p, status: 'connected', connectedAt: p.connectedAt || Date.now() }));
+        });
+
+        client.on("user-unpublished", (user) => {
+            console.log("[Agora] User unpublished:", user.uid);
+            // In a 1-to-1 call, this usually means the call ended
+            cleanup();
+        });
+    };
+
     const startCall = async (targetUserId: string, conversationId: string, type: 'voice' | 'video', otherUser: CallState['otherUser']) => {
         setCallState({ type, status: 'calling', otherUser, conversationId, connectedAt: null });
 
+        // TRY AGORA FIRST (Highly recommended for iOS)
         try {
-            // BUG FIX: Use platform-aware audio constraints. iOS ignores { ideal: ... } format.
+            await initAgoraCall(conversationId, type, true);
+            socket?.emit('call:initiate', { to: targetUserId, type, conversationId, useAgora: true });
+            sendMessageToConversation(conversationId, `Started a ${type} call`, 'call');
+
+            callTimeoutRef.current = setTimeout(() => {
+                if (currentCallStatus.current === 'calling') {
+                    toast.error('No answer');
+                    socket?.emit('call:timeout', { to: targetUserId });
+                    cleanup();
+                }
+            }, 60000);
+            return;
+        } catch (agoraErr) {
+            console.warn('[WebRTC] Agora failed or free tier over, falling back to standard WebRTC:', agoraErr);
+            // Fallback to standard WebRTC implementation
+            isUsingAgora.current = false;
+        }
+
+        try {
+            // Standard WebRTC Implementation
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: getAudioConstraints(),
                 video: type === 'video' ? getVideoConstraints() : false,
@@ -320,7 +445,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             localStreamRef.current = stream;
             setLocalStream(stream);
 
-            socket?.emit('call:initiate', { to: targetUserId, type, conversationId });
+            socket?.emit('call:initiate', { to: targetUserId, type, conversationId, useAgora: false });
             sendMessageToConversation(conversationId, `Started a ${type} call`, 'call');
 
             callTimeoutRef.current = setTimeout(() => {
@@ -340,10 +465,23 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const acceptCall = async () => {
         const targetUserId = callState.otherUser?.id;
-        if (!targetUserId) return cleanup();
+        const conversationId = callState.conversationId;
+        if (!targetUserId || !conversationId) return cleanup();
+
+        // Check if the caller is using Agora (this would be sent in the incoming signal, but here we prioritize it anyway)
+        // If it's iOS, we DEFINITELY want Agora if possible.
+        try {
+            await initAgoraCall(conversationId, callState.type || 'voice', false);
+            socket?.emit('call:ready', { to: targetUserId, useAgora: true });
+            setCallState(p => ({ ...p, status: 'connecting' }));
+            return;
+        } catch (agoraErr) {
+            console.warn('[WebRTC] Agora Accept failed, falling back to standard WebRTC:', agoraErr);
+            isUsingAgora.current = false;
+        }
 
         try {
-            // BUG FIX: Use platform-aware audio constraints. iOS ignores { ideal: ... } format.
+            // Standard WebRTC Fallback
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: getAudioConstraints(),
                 video: callState.type === 'video' ? getVideoConstraints() : false,
@@ -352,7 +490,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             localStreamRef.current = stream;
             setLocalStream(stream);
 
-            socket?.emit('call:ready', { to: targetUserId });
+            socket?.emit('call:ready', { to: targetUserId, useAgora: false });
 
             // FIX: Set 'connecting' (not 'connected') — actual 'connected' fires via
             // pc.onconnectionstatechange once ICE negotiation completes
@@ -378,6 +516,12 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     const toggleMute = () => {
+        if (isUsingAgora.current && localAudioTrackRef.current) {
+            const nextMute = !isMuted;
+            localAudioTrackRef.current.setEnabled(!nextMute);
+            setIsMuted(nextMute);
+            return;
+        }
         if (localStreamRef.current) {
             localStreamRef.current.getAudioTracks().forEach(t => t.enabled = isMuted);
             setIsMuted(!isMuted);
@@ -385,6 +529,12 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     const toggleVideo = () => {
+        if (isUsingAgora.current && localVideoTrackRef.current) {
+            const nextVideo = !isVideoEnabled;
+            localVideoTrackRef.current.setEnabled(nextVideo);
+            setIsVideoEnabled(nextVideo);
+            return;
+        }
         if (localStreamRef.current) {
             localStreamRef.current.getVideoTracks().forEach(t => t.enabled = !isVideoEnabled);
             setIsVideoEnabled(!isVideoEnabled);
@@ -394,11 +544,13 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     useEffect(() => {
         if (!socket || !socketConnected) return;
 
-        const handleCallIncoming = (data: { from: string; fromName?: string; fromAvatar?: string; type?: 'voice' | 'video'; conversationId: string }) => {
+        const handleCallIncoming = (data: { from: string; fromName?: string; fromAvatar?: string; type?: 'voice' | 'video'; conversationId: string; useAgora?: boolean }) => {
             if (currentCallStatus.current !== 'idle') {
                 socket.emit('call:reject', { to: data.from });
                 return;
             }
+            // If caller says they are using Agora, we should prepare for it.
+            // But our acceptCall logic already prioritizes it.
             setCallState({
                 type: data.type || 'voice',
                 status: 'incoming',
@@ -408,10 +560,16 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             });
         };
 
-        const handleCallReady = async (data: { from: string }) => {
-            // Caller side: receiver said ready → create and send the offer
+        const handleCallReady = async (data: { from: string; useAgora?: boolean }) => {
+            // Caller side: receiver said ready → create and send the offer (if not using Agora)
             if (currentCallStatus.current !== 'calling') return;
             const targetUserId = data.from;
+
+            if (isUsingAgora.current || data.useAgora) {
+                console.log('[Agora] Receiver is ready, Agora session active.');
+                // No need for WebRTC signaling here, Agora handles it.
+                return;
+            }
             
             try {
                 const stream = localStreamRef.current;

@@ -149,6 +149,7 @@ app.use("/api/broadcasts", broadcastsRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/bank-account", bankAccountRoutes);
 app.use("/api/limit-requests", requireAuth, require("./routes/limitRequests"));
+app.use("/api/agora", require("./routes/agora"));
 
 // ─── Payment, Transaction & Webhook Routes ────────────────────
 // CRITICAL: These MUST be mounted BEFORE the SystemState mutation block.
