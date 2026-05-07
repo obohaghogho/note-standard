@@ -44,7 +44,9 @@ module.exports = function withAndroidNativeCall(config) {
       'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
       'android.permission.USE_FULL_SCREEN_INTENT',
       'android.permission.FOREGROUND_SERVICE',
-      'android.permission.FOREGROUND_SERVICE_PHONE_CALL'
+      'android.permission.FOREGROUND_SERVICE_PHONE_CALL',
+      'android.permission.FOREGROUND_SERVICE_MICROPHONE',
+      'android.permission.FOREGROUND_SERVICE_CAMERA'
     ];
 
     permissions.forEach(perm => {
