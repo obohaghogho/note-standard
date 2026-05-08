@@ -397,20 +397,28 @@ const ChatWindow: React.FC = () => {
 
     const handleSend = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
-        if (!inputValue.trim() || !activeConversationId) return;
+        const textToSend = inputValue.trim();
+        if (!textToSend || !activeConversationId) return;
+
+        // Clear UI state synchronously for instant feedback
+        setInputValue('');
+        if (activeConversationId) setDraft(activeConversationId, '');
+        setShowMentions(false);
+        
+        const currentEditingId = editingMessageId;
+        setEditingMessageId(null);
 
         try {
-            if (editingMessageId) {
-                await editMessage(editingMessageId, inputValue);
-                setEditingMessageId(null);
+            if (currentEditingId) {
+                await editMessage(currentEditingId, textToSend);
             } else {
-                await sendMessage(inputValue);
+                await sendMessage(textToSend);
             }
-            setInputValue('');
-            if (activeConversationId) setDraft(activeConversationId, '');
-            setShowMentions(false);
         } catch {
-            toast.error(editingMessageId ? 'Failed to edit message' : 'Failed to send message');
+            // Restore state if network request fails
+            setInputValue(textToSend);
+            setEditingMessageId(currentEditingId);
+            toast.error(currentEditingId ? 'Failed to edit message' : 'Failed to send message');
         }
     };
 

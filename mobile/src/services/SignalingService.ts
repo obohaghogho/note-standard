@@ -9,6 +9,8 @@ const GATEWAY_URL = process.env.EXPO_PUBLIC_GATEWAY_URL || 'http://localhost:500
 class SignalingService {
   private socket: Socket | null = null;
   private userId: string | null = null;
+  public activeTargetId: string | null = null;
+  public activeConversationId: string | null = null;
 
   async init(userToken: string, userId: string) {
     this.userId = userId;
@@ -39,6 +41,16 @@ class SignalingService {
       CallService.endCall();
     });
 
+    this.socket.on('call:rejected', () => {
+      AgoraService.leaveChannel();
+      CallService.endCall();
+    });
+
+    this.socket.on('call:timeout', () => {
+      AgoraService.leaveChannel();
+      CallService.endCall();
+    });
+
     // 2. Register native token for this user
     try {
       // In a real app, you'd get the actual token from PushHandler
@@ -56,6 +68,8 @@ class SignalingService {
 
   async startCall(targetUserId: string, targetName: string, type: 'audio' | 'video', conversationId: string) {
     console.log(`[Signaling] Initiating ${type} call to ${targetUserId}`);
+    this.activeTargetId = targetUserId;
+    this.activeConversationId = conversationId;
     
     // 1. Notify Native Call UI
     const callId = await CallService.startCall({
@@ -83,6 +97,17 @@ class SignalingService {
     });
 
     return callId;
+  }
+
+  cancelActiveCall() {
+    if (this.activeTargetId) {
+      console.log(`[Signaling] Cancelling active call to ${this.activeTargetId}`);
+      this.emit('call:end', { to: this.activeTargetId, conversationId: this.activeConversationId });
+    }
+    AgoraService.leaveChannel();
+    CallService.endCall();
+    this.activeTargetId = null;
+    this.activeConversationId = null;
   }
 
   rejectCall(targetUserId: string) {

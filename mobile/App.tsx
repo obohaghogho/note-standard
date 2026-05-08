@@ -9,6 +9,7 @@ import { NotificationProvider } from './src/context/NotificationContext';
 import CallService from './src/services/CallService';
 import { PushHandler } from './src/services/PushHandler';
 import BatteryService from './src/services/BatteryService';
+import SignalingService from './src/services/SignalingService';
 
 // Suppress noisy dev-only warnings
 LogBox.ignoreLogs(['Setting a timer', 'VirtualizedLists should never be nested']);
@@ -39,6 +40,11 @@ export default function App() {
       });
       CallService.onReject((callId: string) => {
         console.log('[App] Call Rejected:', callId);
+        SignalingService.cancelActiveCall();
+      });
+      CallService.onEndCall((callId: string) => {
+        console.log('[App] Call Ended from System:', callId);
+        SignalingService.cancelActiveCall();
       });
 
       console.log('[App] Bootstrap complete.');

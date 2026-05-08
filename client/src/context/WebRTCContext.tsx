@@ -354,10 +354,13 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const token = await fetchAgoraToken(conversationId);
         await client.join(AGORA_APP_ID, conversationId, token, null);
 
-        // Create local tracks
-        const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
-            AEC: true, ANS: true, AGC: true
-        });
+        // Create local tracks. 
+        // iOS Safari hardware AEC works best when software AEC is disabled.
+        const audioTrack = await AgoraRTC.createMicrophoneAudioTrack(
+            isIOSDevice() 
+                ? { AEC: false, ANS: false, AGC: false } 
+                : { AEC: true, ANS: true, AGC: true }
+        );
         localAudioTrackRef.current = audioTrack;
 
         let videoTrack: ILocalVideoTrack | null = null;
