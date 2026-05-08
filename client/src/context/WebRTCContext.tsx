@@ -386,11 +386,9 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             if (mediaType === "video") {
                 const remoteVideoTrack = user.videoTrack;
-                const remoteAudioTrack = user.audioTrack;
                 
                 const remoteStream = remoteStreamRef.current || new MediaStream();
                 if (remoteVideoTrack) remoteStream.addTrack(remoteVideoTrack.getMediaStreamTrack());
-                if (remoteAudioTrack) remoteStream.addTrack(remoteAudioTrack.getMediaStreamTrack());
                 
                 remoteStreamRef.current = remoteStream;
                 setRemoteStream(remoteStream);
@@ -398,11 +396,11 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             if (mediaType === "audio") {
                 const remoteAudioTrack = user.audioTrack;
-                const remoteStream = remoteStreamRef.current || new MediaStream();
-                if (remoteAudioTrack) remoteStream.addTrack(remoteAudioTrack.getMediaStreamTrack());
-                
-                remoteStreamRef.current = remoteStream;
-                setRemoteStream(remoteStream);
+                // CRITICAL: Call play() directly so Agora uses its own optimized hidden <audio> tag with AEC enabled.
+                // Do NOT attach this to our custom CallOverlay MediaStream.
+                if (remoteAudioTrack) {
+                    remoteAudioTrack.play();
+                }
             }
             
             setCallState(p => ({ ...p, status: 'connected', connectedAt: p.connectedAt || Date.now() }));

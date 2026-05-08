@@ -4,6 +4,8 @@ import createAgoraRtcEngine, {
   ClientRoleType,
   RtcConnection,
   IRtcEngineEventHandler,
+  AudioProfileType,
+  AudioScenarioType,
 } from 'react-native-agora';
 import { Platform, PermissionsAndroid } from 'react-native';
 import axios from 'axios';
@@ -27,6 +29,12 @@ class AgoraService {
       appId: AGORA_APP_ID,
       channelProfile: ChannelProfileType.ChannelProfileCommunication,
     });
+
+    this.engine.setAudioProfile(
+      AudioProfileType.AudioProfileSpeechStandard,
+      AudioScenarioType.AudioScenarioChatroom
+    );
+    this.engine.enableAudio();
 
     this.isInitialized = true;
     console.log('[AgoraService] Native Engine Initialized');
