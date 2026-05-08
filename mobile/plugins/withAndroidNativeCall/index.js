@@ -83,10 +83,9 @@ module.exports = function withAndroidNativeCall(config) {
       mainApplication.service = [];
     }
 
-    // Remove existing if any (to avoid duplicates)
+    // Remove existing if any (to avoid duplicates of OUR service)
     mainApplication.service = mainApplication.service.filter(
-      s => s.$['android:name'] !== '.MyFirebaseMessagingService' && 
-           s.$['android:name'] !== 'io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService'
+      s => s.$['android:name'] !== '.MyFirebaseMessagingService'
     );
 
     mainApplication.service.push({

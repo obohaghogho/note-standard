@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
-    "version": "1.2.0",
+    "name": "NoteStandard",
+    "slug": "notestandard",
+    "version": "1.3.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -27,21 +27,19 @@
     "android": {
       "package": "com.notestandard.app",
       "googleServicesFile": "./google-services.json",
+      "minSdkVersion": 23,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "permissions": [
-        "ANDROID.PERMISSION.RECORD_AUDIO",
-        "ANDROID.PERMISSION.CALL_PHONE",
-        "ANDROID.PERMISSION.READ_PHONE_STATE",
-        "ANDROID.PERMISSION.MANAGE_OWN_CALLS",
-        "ANDROID.PERMISSION.FOREGROUND_SERVICE",
-        "ANDROID.PERMISSION.USE_FULL_SCREEN_INTENT",
-        "android.permission.BIND_TELECOM_CONNECTION_SERVICE",
-        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CALL_PHONE",
         "android.permission.READ_PHONE_STATE",
-        "android.permission.CALL_PHONE"
+        "android.permission.MANAGE_OWN_CALLS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.USE_FULL_SCREEN_INTENT",
+        "android.permission.BIND_TELECOM_CONNECTION_SERVICE"
       ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
