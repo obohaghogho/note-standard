@@ -347,7 +347,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const initAgoraCall = async (conversationId: string, type: 'voice' | 'video') => {
         console.log('[Agora] Initializing Agora Call...');
-        const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+        const client = AgoraRTC.createClient({ mode: "rtc", codec: "h264" });
         agoraClientRef.current = client;
         isUsingAgora.current = true;
 
