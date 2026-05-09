@@ -6,6 +6,9 @@ import {
 import axios from 'axios';
 import { AuthService } from '../services/AuthService';
 import { API_URL } from '../Config';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { MainStackParamList } from '../navigation/MainStack';
 
 interface Note {
   id: string;
@@ -16,6 +19,8 @@ interface Note {
 }
 
 export default function NotesScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
+  const isFocused = useIsFocused();
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -34,7 +39,7 @@ export default function NotesScreen() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, isFocused]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -49,7 +54,11 @@ export default function NotesScreen() {
     });
 
     return (
-      <TouchableOpacity style={styles.noteCard} activeOpacity={0.7}>
+      <TouchableOpacity 
+        style={styles.noteCard} 
+        activeOpacity={0.7}
+        onPress={() => navigation.navigate('NoteEditor', { noteId: item.id })}
+      >
         <View style={styles.noteAccent} />
         <View style={styles.noteContent}>
           <Text style={styles.noteTitle} numberOfLines={1}>{item.title || 'Untitled Note'}</Text>
@@ -75,6 +84,12 @@ export default function NotesScreen() {
           <Text style={styles.title}>Notes</Text>
           <Text style={styles.subtitle}>{notes.length} note{notes.length !== 1 ? 's' : ''}</Text>
         </View>
+        <TouchableOpacity 
+          style={styles.createBtn}
+          onPress={() => navigation.navigate('NoteEditor', {})}
+        >
+          <Text style={styles.createBtnText}>+ New Note</Text>
+        </TouchableOpacity>
       </View>
 
       <FlatList
@@ -101,6 +116,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16, borderBottomWidth: 1, borderColor: '#111133' },
   title: { color: '#fff', fontSize: 26, fontWeight: '800' },
   subtitle: { color: '#666', fontSize: 13, marginTop: 2 },
+  createBtn: { backgroundColor: '#10b981', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+  createBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   list: { padding: 16 },
   noteCard: { flexDirection: 'row', backgroundColor: '#0d0d1e', borderRadius: 16, marginBottom: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#111133' },
   noteAccent: { width: 4, backgroundColor: '#10b981' },

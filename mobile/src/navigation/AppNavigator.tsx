@@ -3,7 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import AuthStack from './AuthStack';
-import MainTabs from './MainTabs';
+import MainStack from './MainStack';
 
 export default function AppNavigator() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -18,7 +18,7 @@ export default function AppNavigator() {
 
   return (
     <NavigationContainer>
-      {isAuthenticated ? <MainTabs /> : <AuthStack />}
+      {isAuthenticated ? <MainStack /> : <AuthStack />}
     </NavigationContainer>
   );
 }

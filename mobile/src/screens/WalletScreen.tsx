@@ -8,6 +8,9 @@ import axios from 'axios';
 import { API_URL } from '../Config';
 import { AuthService } from '../services/AuthService';
 import { WalletService } from '../services/WalletService';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { MainStackParamList } from '../navigation/MainStack';
 
 interface Wallet {
   id: string;
@@ -27,6 +30,7 @@ interface LedgerEntry {
 }
 
 export default function WalletScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -135,13 +139,13 @@ export default function WalletScreen() {
             {mainWallet ? `${mainWallet.balance} ${mainWallet.currency}` : '0.00'}
           </Text>
           <View style={styles.actionRow}>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => Alert.alert('Deposit', 'Please use the web app for deposits.')}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('WalletAction', { type: 'deposit', currency: mainWallet?.currency || 'USD' })}>
               <Text style={styles.actionBtnText}>Deposit</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionBtn} onPress={() => setShowTransfer(true)}>
               <Text style={styles.actionBtnText}>Send</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => Alert.alert('Withdraw', 'Please use the web app for withdrawals.')}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('WalletAction', { type: 'withdraw', currency: mainWallet?.currency || 'USD' })}>
               <Text style={styles.actionBtnText}>Withdraw</Text>
             </TouchableOpacity>
           </View>

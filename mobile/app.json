@@ -2,7 +2,7 @@
   "expo": {
     "name": "NoteStandard",
     "slug": "mobile",
-    "version": "1.4.0",
+    "version": "1.4.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#060611"
     },
     "ios": {
       "supportsTablet": true,
@@ -30,7 +30,7 @@
       "minSdkVersion": 23,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#060611"
       },
       "permissions": [
         "android.permission.RECORD_AUDIO",

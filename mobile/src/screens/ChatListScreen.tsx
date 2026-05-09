@@ -75,6 +75,12 @@ export default function ChatListScreen({ navigation }: Props) {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Messages</Text>
+        <TouchableOpacity 
+          style={styles.searchIconBtn} 
+          onPress={() => navigation.navigate('FriendSearch')}
+        >
+          <Text style={styles.searchEmoji}>🔍</Text>
+        </TouchableOpacity>
         <View style={styles.headerBadge}>
           <Text style={styles.headerBadgeText}>{conversations.length}</Text>
         </View>
@@ -111,6 +117,8 @@ const styles = StyleSheet.create({
   title: { color: '#fff', fontSize: 26, fontWeight: '800', flex: 1 },
   headerBadge: { backgroundColor: '#6366f1', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
   headerBadgeText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  searchIconBtn: { marginRight: 15, padding: 8, backgroundColor: '#111133', borderRadius: 12 },
+  searchEmoji: { fontSize: 18 },
   list: { padding: 16 },
   item: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0d0d1e', borderRadius: 18, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#111133' },
   avatarWrap: { position: 'relative', marginRight: 14 },

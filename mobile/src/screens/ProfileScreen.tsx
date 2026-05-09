@@ -17,7 +17,12 @@ const MenuItem = ({ icon, label, value, onPress, danger }: { icon: string; label
 );
 
 export default function ProfileScreen() {
+  const navigation = useNavigation<any>();
   const { user, logout } = useAuth();
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [updatingPassword, setUpdatingPassword] = useState(false);
   const name = user?.full_name || user?.username || 'User';
   const email = user?.email || '';
   const plan = user?.plan_tier || 'FREE';
@@ -32,6 +37,31 @@ export default function ProfileScreen() {
         { text: 'Sign Out', style: 'destructive', onPress: logout },
       ],
     );
+  };
+
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword) {
+      Alert.alert('Error', 'Please fill in both fields');
+      return;
+    }
+    setUpdatingPassword(true);
+    try {
+      const token = await AuthService.getToken();
+      await axios.post(`${API_URL}/api/auth/change-password`, {
+        currentPassword,
+        newPassword
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      Alert.alert('Success', 'Password changed successfully');
+      setShowPasswordModal(false);
+      setCurrentPassword('');
+      setNewPassword('');
+    } catch (e: any) {
+      Alert.alert('Error', e.response?.data?.error || 'Failed to change password');
+    } finally {
+      setUpdatingPassword(false);
+    }
   };
 
   return (
@@ -52,15 +82,13 @@ export default function ProfileScreen() {
       <Text style={styles.sectionLabel}>Account</Text>
       <View style={styles.section}>
         <MenuItem icon="👤" label="Full Name" value={name} />
-        <MenuItem icon="✉️" label="Email" value={email} />
-        <MenuItem icon="🔒" label="Change Password" />
+        <MenuItem icon="📧" label="Email" value={email} />
+        <MenuItem icon="🔒" label="Change Password" onPress={() => setShowPasswordModal(true)} />
       </View>
-
-      {/* App Section */}
-      <Text style={styles.sectionLabel}>App</Text>
+ 
       <View style={styles.section}>
-        <MenuItem icon="🔔" label="Notifications" />
-        <MenuItem icon="🎨" label="Appearance" value="Dark" />
+        <MenuItem icon="🔔" label="Notifications" onPress={() => Alert.alert('Notifications', 'Push notifications are managed in your device settings.')} />
+        <MenuItem icon="🎨" label="Appearance" value="Dark" onPress={() => Alert.alert('Appearance', 'The app follows your system appearance (Dark mode is recommended).')} />
         <MenuItem icon="📱" label="App Version" value="1.4.0" />
       </View>
 
@@ -71,6 +99,39 @@ export default function ProfileScreen() {
       </View>
 
       <Text style={styles.footer}>NoteStandard v1.4.0 • Made with ❤️</Text>
+
+      {/* Password Modal */}
+      <Modal visible={showPasswordModal} transparent animationType="fade" onRequestClose={() => setShowPasswordModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Change Password</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Current Password"
+              placeholderTextColor="#444"
+              secureTextEntry
+              value={currentPassword}
+              onChangeText={setCurrentPassword}
+            />
+            <TextInput
+              style={[styles.input, { marginTop: 12 }]}
+              placeholder="New Password"
+              placeholderTextColor="#444"
+              secureTextEntry
+              value={newPassword}
+              onChangeText={setNewPassword}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowPasswordModal(false)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmBtn} onPress={handleChangePassword} disabled={updatingPassword}>
+                {updatingPassword ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmBtnText}>Update</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -86,7 +147,7 @@ const styles = StyleSheet.create({
   planBadge: { marginTop: 12, backgroundColor: '#6366f122', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 6, borderWidth: 1, borderColor: '#6366f144' },
   planText: { color: '#6366f1', fontSize: 13, fontWeight: '700' },
   sectionLabel: { color: '#444', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, paddingHorizontal: 20, marginBottom: 8, marginTop: 16 },
-  section: { backgroundColor: '#0d0d1e', marginHorizontal: 16, borderRadius: 18, borderWidth: 1, borderColor: '#111133', overflow: 'hidden' },
+  section: { backgroundColor: '#0d0d1e', marginHorizontal: 16, borderRadius: 18, borderWidth: 1, borderColor: '#111133', overflow: 'hidden', marginBottom: 16 },
   menuItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 16, borderBottomWidth: 1, borderColor: '#111133' },
   menuLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   menuIcon: { fontSize: 18 },
@@ -94,5 +155,14 @@ const styles = StyleSheet.create({
   menuValue: { color: '#555', fontSize: 12, marginTop: 2 },
   menuChevron: { color: '#333', fontSize: 22 },
   dangerText: { color: '#ef4444' },
-  footer: { color: '#333', fontSize: 12, textAlign: 'center', marginTop: 32 },
+  footer: { color: '#444', fontSize: 11, textAlign: 'center', marginTop: 40, marginBottom: 40 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', padding: 20 },
+  modalContent: { backgroundColor: '#0d0d1e', borderRadius: 24, padding: 24, borderWidth: 1, borderColor: '#111133' },
+  modalTitle: { color: '#fff', fontSize: 20, fontWeight: '800', marginBottom: 20 },
+  input: { backgroundColor: '#060611', color: '#fff', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#111133' },
+  modalActions: { flexDirection: 'row', gap: 12, marginTop: 32 },
+  cancelBtn: { flex: 1, padding: 16, alignItems: 'center' },
+  cancelBtnText: { color: '#666', fontWeight: '600' },
+  confirmBtn: { flex: 2, backgroundColor: '#6366f1', padding: 16, borderRadius: 12, alignItems: 'center' },
+  confirmBtnText: { color: '#fff', fontWeight: '700' },
 });

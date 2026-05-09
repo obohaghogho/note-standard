@@ -243,9 +243,36 @@ const forgotPassword = async (req, res) => {
   }
 };
 
+const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user.id;
+
+    if (!newPassword) {
+      return res.status(400).json({ error: "New password is required" });
+    }
+
+    // Supabase Auth change password
+    const { error } = await supabase.auth.admin.updateUserById(userId, {
+      password: newPassword
+    });
+
+    if (error) {
+      console.error("[AUTH-ERROR] Change password failed:", error.message);
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.json({ success: true, message: "Password updated successfully" });
+  } catch (err) {
+    console.error("[ChangePassword Error]:", err.message);
+    res.status(500).json({ error: "Failed to change password" });
+  }
+};
+
 module.exports = {
   register,
   login,
+  changePassword,
   verifyEmail,
   verifyOtp,
   resendOtp,
