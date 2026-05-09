@@ -65,3 +65,50 @@ exports.getTeamMessages = async (req, res, next) => {
     next(err);
   }
 };
+exports.sendTeamMessage = async (req, res, next) => {
+  try {
+    const { teamId } = req.params;
+    const { content } = req.body;
+    const senderId = req.user.id;
+
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: 'Message content is required' });
+    }
+
+    // Verify user is a member of this team
+    const { data: membership, error: memberError } = await supabase
+      .from('team_members')
+      .select('role')
+      .eq('team_id', teamId)
+      .eq('user_id', senderId)
+      .single();
+
+    if (memberError || !membership) {
+      return res.status(403).json({ error: 'You are not a member of this team' });
+    }
+
+    const { data, error } = await supabase
+      .from('team_messages')
+      .insert({
+        team_id: teamId,
+        sender_id: senderId,
+        content: content.trim(),
+        is_deleted: false,
+      })
+      .select(`
+        *,
+        profiles:sender_id (
+          id,
+          username,
+          full_name,
+          avatar_url
+        )
+      `)
+      .single();
+
+    if (error) throw error;
+    res.status(201).json(data);
+  } catch (err) {
+    next(err);
+  }
+};

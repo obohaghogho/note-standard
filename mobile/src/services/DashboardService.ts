@@ -23,7 +23,7 @@ export class DashboardService {
       const headers = await this.getHeaders();
       
       const [wallets, notes, conversations] = await Promise.all([
-        axios.get(`${API_URL}/api/wallets`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API_URL}/api/wallet`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API_URL}/api/notes`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API_URL}/api/chat/conversations`, { headers }).catch(() => ({ data: [] })),
       ]);

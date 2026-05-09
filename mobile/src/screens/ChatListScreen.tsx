@@ -11,34 +11,54 @@ import { ChatStackParamList } from '../navigation/ChatStack';
 
 type Props = { navigation: NativeStackNavigationProp<ChatStackParamList, 'ChatList'> };
 
-function ConversationItem({ item, userId, onPress }: { item: Conversation; userId: string; onPress: () => void }) {
+function ConversationItem({
+  item, userId, onPress, onAccept
+}: {
+  item: Conversation;
+  userId: string;
+  onPress: () => void;
+  onAccept?: () => void;
+}) {
   const otherMember = item.members.find(m => m.user_id !== userId);
   const myMember = item.members.find(m => m.user_id === userId);
   const profile = otherMember?.profile;
   const name = profile?.full_name || profile?.username || 'Unknown User';
   const isPending = myMember?.status === 'pending';
+  const otherPending = otherMember?.status === 'pending';
   const initial = name.charAt(0).toUpperCase();
 
   return (
-    <TouchableOpacity style={styles.item} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity
+      style={[styles.item, isPending && styles.itemPending]}
+      onPress={onPress}
+      activeOpacity={0.75}
+    >
       <View style={styles.avatarWrap}>
         {profile?.avatar_url ? (
           <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
         ) : (
-          <LinearGradient colors={['#6366f1', '#4f46e5']} style={styles.avatarGrad}>
+          <LinearGradient colors={isPending ? ['#3b82f6', '#1d4ed8'] : ['#6366f1', '#4f46e5']} style={styles.avatarGrad}>
             <Text style={styles.avatarInitial}>{initial}</Text>
           </LinearGradient>
         )}
-        <View style={[styles.onlineDot, { backgroundColor: '#10b981' }]} />
+        {/* Online dot placeholder */}
+        <View style={[styles.onlineDot, { backgroundColor: isPending ? '#3b82f6' : '#10b981' }]} />
       </View>
+
       <View style={styles.itemInfo}>
-        <Text style={styles.itemName}>{name}</Text>
+        <Text style={styles.itemName} numberOfLines={1}>{name}</Text>
         <Text style={styles.itemSub} numberOfLines={1}>
-          {isPending ? '📩 Wants to chat with you' : 'Tap to open chat'}
+          {isPending ? '📩 Wants to connect with you' : otherPending ? '⏳ Waiting for their acceptance' : 'Tap to open chat'}
         </Text>
       </View>
-      {isPending && <View style={styles.badge}><Text style={styles.badgeText}>New</Text></View>}
-      <Text style={styles.chevron}>›</Text>
+
+      {isPending && onAccept ? (
+        <TouchableOpacity style={styles.acceptBtn} onPress={onAccept}>
+          <Text style={styles.acceptBtnText}>Accept</Text>
+        </TouchableOpacity>
+      ) : (
+        <Text style={styles.chevron}>›</Text>
+      )}
     </TouchableOpacity>
   );
 }
@@ -51,9 +71,17 @@ export default function ChatListScreen({ navigation }: Props) {
 
   const load = useCallback(async () => {
     const data = await ChatService.getConversations();
-    setConversations(data);
+    // Sort: accepted first, then pending
+    const sorted = [...data].sort((a, b) => {
+      const myA = a.members.find(m => m.user_id === user?.id);
+      const myB = b.members.find(m => m.user_id === user?.id);
+      const aAccepted = myA?.status === 'accepted' ? 0 : 1;
+      const bAccepted = myB?.status === 'accepted' ? 0 : 1;
+      return aAccepted - bAccepted;
+    });
+    setConversations(sorted);
     setLoading(false);
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -62,6 +90,16 @@ export default function ChatListScreen({ navigation }: Props) {
     await load();
     setRefreshing(false);
   };
+
+  const handleAccept = async (conversationId: string) => {
+    await ChatService.acceptConversation(conversationId);
+    load();
+  };
+
+  const pendingCount = conversations.filter(c => {
+    const my = c.members.find(m => m.user_id === user?.id);
+    return my?.status === 'pending';
+  }).length;
 
   if (loading) {
     return (
@@ -74,15 +112,24 @@ export default function ChatListScreen({ navigation }: Props) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Messages</Text>
-        <TouchableOpacity 
-          style={styles.searchIconBtn} 
-          onPress={() => navigation.navigate('FriendSearch')}
-        >
-          <Text style={styles.searchEmoji}>🔍</Text>
-        </TouchableOpacity>
-        <View style={styles.headerBadge}>
-          <Text style={styles.headerBadgeText}>{conversations.length}</Text>
+        <View>
+          <Text style={styles.title}>Messages</Text>
+          {pendingCount > 0 && (
+            <Text style={styles.pendingHint}>{pendingCount} pending request{pendingCount !== 1 ? 's' : ''}</Text>
+          )}
+        </View>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={styles.searchIconBtn}
+            onPress={() => navigation.navigate('FriendSearch')}
+          >
+            <Text style={styles.searchEmoji}>🔍</Text>
+          </TouchableOpacity>
+          {conversations.length > 0 && (
+            <View style={styles.headerBadge}>
+              <Text style={styles.headerBadgeText}>{conversations.length}</Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -94,6 +141,7 @@ export default function ChatListScreen({ navigation }: Props) {
             item={item}
             userId={user?.id || ''}
             onPress={() => navigation.navigate('Chat', { conversationId: item.id, conversation: item })}
+            onAccept={() => handleAccept(item.id)}
           />
         )}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366f1" />}
@@ -102,7 +150,13 @@ export default function ChatListScreen({ navigation }: Props) {
           <View style={styles.empty}>
             <Text style={styles.emptyIcon}>💬</Text>
             <Text style={styles.emptyTitle}>No conversations yet</Text>
-            <Text style={styles.emptySub}>Go to Social to connect with friends</Text>
+            <Text style={styles.emptySub}>Tap 🔍 to find and message someone</Text>
+            <TouchableOpacity
+              style={styles.startChatBtn}
+              onPress={() => navigation.navigate('FriendSearch')}
+            >
+              <Text style={styles.startChatBtnText}>Find People</Text>
+            </TouchableOpacity>
           </View>
         }
       />
@@ -113,27 +167,51 @@ export default function ChatListScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#060611' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#060611' },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16, borderBottomWidth: 1, borderColor: '#111133' },
-  title: { color: '#fff', fontSize: 26, fontWeight: '800', flex: 1 },
-  headerBadge: { backgroundColor: '#6366f1', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16,
+    borderBottomWidth: 1, borderColor: '#111133',
+  },
+  title: { color: '#fff', fontSize: 26, fontWeight: '800' },
+  pendingHint: { color: '#3b82f6', fontSize: 12, marginTop: 2, fontWeight: '600' },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerBadge: {
+    backgroundColor: '#6366f1', borderRadius: 12,
+    paddingHorizontal: 10, paddingVertical: 4,
+  },
   headerBadgeText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  searchIconBtn: { marginRight: 15, padding: 8, backgroundColor: '#111133', borderRadius: 12 },
+  searchIconBtn: { padding: 8, backgroundColor: '#111133', borderRadius: 12 },
   searchEmoji: { fontSize: 18 },
   list: { padding: 16 },
-  item: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0d0d1e', borderRadius: 18, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#111133' },
+  item: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#0d0d1e',
+    borderRadius: 18, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#111133',
+  },
+  itemPending: { borderColor: '#3b82f644', backgroundColor: '#0a0a20' },
   avatarWrap: { position: 'relative', marginRight: 14 },
   avatar: { width: 52, height: 52, borderRadius: 26 },
   avatarGrad: { width: 52, height: 52, borderRadius: 26, justifyContent: 'center', alignItems: 'center' },
   avatarInitial: { color: '#fff', fontSize: 20, fontWeight: '800' },
-  onlineDot: { position: 'absolute', bottom: 2, right: 2, width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: '#060611' },
+  onlineDot: {
+    position: 'absolute', bottom: 2, right: 2,
+    width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: '#060611',
+  },
   itemInfo: { flex: 1 },
   itemName: { color: '#fff', fontSize: 15, fontWeight: '700' },
   itemSub: { color: '#666', fontSize: 12, marginTop: 3 },
-  badge: { backgroundColor: '#6366f122', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3, marginRight: 8 },
-  badgeText: { color: '#6366f1', fontSize: 11, fontWeight: '700' },
-  chevron: { color: '#444', fontSize: 24 },
-  empty: { alignItems: 'center', paddingTop: 80 },
+  acceptBtn: {
+    backgroundColor: '#3b82f6', borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 8,
+  },
+  acceptBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  chevron: { color: '#333', fontSize: 24 },
+  empty: { alignItems: 'center', paddingTop: 80, paddingHorizontal: 32 },
   emptyIcon: { fontSize: 48, marginBottom: 16 },
   emptyTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  emptySub: { color: '#666', fontSize: 14, marginTop: 6 },
+  emptySub: { color: '#666', fontSize: 14, marginTop: 6, textAlign: 'center' },
+  startChatBtn: {
+    marginTop: 20, backgroundColor: '#6366f1',
+    paddingHorizontal: 24, paddingVertical: 12, borderRadius: 14,
+  },
+  startChatBtnText: { color: '#fff', fontWeight: '700' },
 });

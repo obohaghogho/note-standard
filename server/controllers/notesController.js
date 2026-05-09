@@ -33,6 +33,28 @@ const getNotes = async (req, res) => {
   }
 };
 
+// Get a single note by ID
+const getNote = async (req, res) => {
+  try {
+    const { id: userId } = req.user;
+    const { id: noteId } = req.params;
+
+    const { data, error } = await supabase
+      .from("notes")
+      .select("*")
+      .eq("id", noteId)
+      .eq("owner_id", userId)
+      .single();
+
+    if (error || !data) {
+      return res.status(404).json({ error: "Note not found" });
+    }
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 // Create a new note
 const createNote = async (req, res) => {
   try {
@@ -275,6 +297,7 @@ const shareNote = async (req, res) => {
 
 module.exports = {
   getNotes,
+  getNote,
   createNote,
   updateNote,
   deleteNote,

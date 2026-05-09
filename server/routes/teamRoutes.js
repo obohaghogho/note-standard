@@ -7,5 +7,6 @@ router.use(requireAuth);
 
 router.get("/my-teams", teamController.getMyTeams);
 router.get("/:teamId/messages", teamController.getTeamMessages);
+router.post("/:teamId/messages", teamController.sendTeamMessage);
 
 module.exports = router;

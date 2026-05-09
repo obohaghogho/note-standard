@@ -13,6 +13,13 @@ const requireRecaptcha = async (req, res, next) => {
     return next();
   }
 
+  // Skip for mobile app clients — reCAPTCHA is web-only.
+  // Mobile requests are still protected by JWT auth (requireAuth runs first).
+  const isMobile = req.headers["x-client-type"] === "mobile";
+  if (isMobile) {
+    return next();
+  }
+
   const token = req.body.captchaToken || req.headers["x-captcha-token"];
 
   if (!token) {

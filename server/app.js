@@ -140,6 +140,7 @@ app.use("/api/wallet", walletRoutes);
 app.use("/api/deposit", manualDepositRoutes);
 app.use("/api/notes", notesRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/users", require("./routes/usersRoutes"));
 app.use("/api/upload", uploadRoutes);
 app.use("/api/subscription", subscriptionRoutes);
 app.use("/api/admin", adminRoutes);
