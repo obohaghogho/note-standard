@@ -71,6 +71,14 @@ export const Hero = () => {
                         >
                             View Features
                         </button>
+                        <a 
+                            href="https://expo.dev/artifacts/eas/cDeaKst4KG3UP2jiPqQH3H.apk"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-8 py-4 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl font-medium transition-all shadow-[0_0_20px_rgba(59,130,246,0.3)] flex items-center justify-center gap-2 border border-white/10"
+                        >
+                            Download APK (v1.4.0)
+                        </a>
                     </div>
 
                     <div className="mt-8 sm:mt-12 flex flex-wrap items-center gap-4 sm:gap-8 text-gray-400">
