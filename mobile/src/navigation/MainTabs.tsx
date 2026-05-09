@@ -4,14 +4,16 @@ import { Text, View } from 'react-native';
 import FeedScreen from '../screens/FeedScreen';
 import ChatStack from './ChatStack';
 import NotesScreen from '../screens/NotesScreen';
-import { FriendsList } from '../components/FriendsList';
+import WalletScreen from '../screens/WalletScreen';
+import TeamsScreen from '../screens/TeamsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 
 export type MainTabParamList = {
   Home: undefined;
   Chat: undefined;
+  Wallet: undefined;
+  Teams: undefined;
   Notes: undefined;
-  Social: undefined;
   Profile: undefined;
 };
 
@@ -54,14 +56,19 @@ export default function MainTabs() {
         options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="💬" label="Chat" focused={focused} /> }}
       />
       <Tab.Screen
+        name="Wallet"
+        component={WalletScreen}
+        options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="💳" label="Wallet" focused={focused} /> }}
+      />
+      <Tab.Screen
+        name="Teams"
+        component={TeamsScreen}
+        options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="👥" label="Teams" focused={focused} /> }}
+      />
+      <Tab.Screen
         name="Notes"
         component={NotesScreen}
         options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="📝" label="Notes" focused={focused} /> }}
-      />
-      <Tab.Screen
-        name="Social"
-        component={FriendsList}
-        options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="👥" label="Social" focused={focused} /> }}
       />
       <Tab.Screen
         name="Profile"

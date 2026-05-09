@@ -60,7 +60,7 @@ export default function ProfileScreen() {
       <View style={styles.section}>
         <MenuItem icon="🔔" label="Notifications" />
         <MenuItem icon="🎨" label="Appearance" value="Dark" />
-        <MenuItem icon="📱" label="App Version" value="1.1.13" />
+        <MenuItem icon="📱" label="App Version" value="1.4.0" />
       </View>
 
       {/* Danger Zone */}
@@ -69,7 +69,7 @@ export default function ProfileScreen() {
         <MenuItem icon="🚪" label="Sign Out" onPress={handleLogout} danger />
       </View>
 
-      <Text style={styles.footer}>NoteStandard v1.1.13 • Made with ❤️</Text>
+      <Text style={styles.footer}>NoteStandard v1.4.0 • Made with ❤️</Text>
     </ScrollView>
   );
 }

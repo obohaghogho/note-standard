@@ -132,6 +132,7 @@ const broadcastsRoutes = require("./routes/broadcasts");
 const analyticsRoutes = require("./routes/analytics");
 const manualDepositRoutes = require("./routes/manualDepositRoutes");
 const bankAccountRoutes = require("./routes/bankAccountRoutes");
+const teamRoutes = require("./routes/teamRoutes");
 
 // API Mounts
 app.use("/api/auth", authRoutes);
@@ -150,6 +151,7 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/bank-account", bankAccountRoutes);
 app.use("/api/limit-requests", requireAuth, require("./routes/limitRequests"));
 app.use("/api/agora", require("./routes/agora"));
+app.use("/api/teams", teamRoutes);
 
 // ─── Payment, Transaction & Webhook Routes ────────────────────
 // CRITICAL: These MUST be mounted BEFORE the SystemState mutation block.
