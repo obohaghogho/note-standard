@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, 
-  ActivityIndicator, RefreshControl, FlatList
+  ActivityIndicator, RefreshControl, Modal, TextInput, Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import axios from 'axios';
 import { API_URL } from '../Config';
 import { AuthService } from '../services/AuthService';
+import { WalletService } from '../services/WalletService';
 
 interface Wallet {
   id: string;
@@ -30,6 +31,12 @@ export default function WalletScreen() {
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Transfer Modal State
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [recipient, setRecipient] = useState('');
+  const [amount, setAmount] = useState('');
+  const [transferLoading, setTransferLoading] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -56,6 +63,32 @@ export default function WalletScreen() {
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
+  };
+
+  const handleTransfer = async () => {
+    if (!recipient || !amount) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    setTransferLoading(true);
+    const mainWallet = wallets[0];
+    const res = await WalletService.transferInternal({
+      recipient_username: recipient,
+      amount: parseFloat(amount),
+      currency: mainWallet?.currency || 'USD'
+    });
+
+    setTransferLoading(false);
+    if (res.success) {
+      Alert.alert('Success', res.message || 'Transfer completed successfully');
+      setShowTransfer(false);
+      setRecipient('');
+      setAmount('');
+      loadData();
+    } else {
+      Alert.alert('Error', res.message);
+    }
   };
 
   const renderTransaction = ({ item }: { item: LedgerEntry }) => (
@@ -102,13 +135,13 @@ export default function WalletScreen() {
             {mainWallet ? `${mainWallet.balance} ${mainWallet.currency}` : '0.00'}
           </Text>
           <View style={styles.actionRow}>
-            <TouchableOpacity style={styles.actionBtn}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => Alert.alert('Deposit', 'Please use the web app for deposits.')}>
               <Text style={styles.actionBtnText}>Deposit</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => setShowTransfer(true)}>
               <Text style={styles.actionBtnText}>Send</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => Alert.alert('Withdraw', 'Please use the web app for withdrawals.')}>
               <Text style={styles.actionBtnText}>Withdraw</Text>
             </TouchableOpacity>
           </View>
@@ -150,6 +183,45 @@ export default function WalletScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Transfer Modal */}
+      <Modal visible={showTransfer} transparent animationType="slide" onRequestClose={() => setShowTransfer(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Send Funds</Text>
+            <Text style={styles.modalLabel}>Recipient Username</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. jdoe"
+              placeholderTextColor="#444"
+              value={recipient}
+              onChangeText={setRecipient}
+              autoCapitalize="none"
+            />
+            <Text style={styles.modalLabel}>Amount ({mainWallet?.currency})</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="0.00"
+              placeholderTextColor="#444"
+              value={amount}
+              onChangeText={setAmount}
+              keyboardType="numeric"
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowTransfer(false)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmBtn} onPress={handleTransfer} disabled={transferLoading}>
+                {transferLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.confirmBtnText}>Send Now</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -180,5 +252,15 @@ const styles = StyleSheet.create({
   amountText: { fontSize: 14, fontWeight: '700' },
   txStatus: { fontSize: 10, color: '#666', marginTop: 4, textTransform: 'capitalize' },
   empty: { padding: 40, alignItems: 'center' },
-  emptyText: { color: '#444', fontSize: 14 }
+  emptyText: { color: '#444', fontSize: 14 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', padding: 20 },
+  modalContent: { backgroundColor: '#0d0d1e', borderRadius: 24, padding: 24, borderWidth: 1, borderColor: '#111133' },
+  modalTitle: { color: '#fff', fontSize: 20, fontWeight: '800', marginBottom: 20 },
+  modalLabel: { color: '#666', fontSize: 12, fontWeight: '600', marginBottom: 8, marginTop: 12 },
+  input: { backgroundColor: '#060611', color: '#fff', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#111133' },
+  modalActions: { flexDirection: 'row', gap: 12, marginTop: 32 },
+  cancelBtn: { flex: 1, padding: 16, alignItems: 'center' },
+  cancelBtnText: { color: '#666', fontWeight: '600' },
+  confirmBtn: { flex: 2, backgroundColor: '#6366f1', padding: 16, borderRadius: 12, alignItems: 'center' },
+  confirmBtnText: { color: '#fff', fontWeight: '700' },
 });

@@ -6,8 +6,10 @@ const USER_KEY = 'user_data';
 export interface User {
     id: string;
     email: string;
+    username: string;
     full_name?: string;
     avatar_url?: string;
+    plan_tier?: string;
 }
 
 export class AuthService {

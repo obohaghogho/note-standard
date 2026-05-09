@@ -92,7 +92,10 @@ const register = async (req, res) => {
       message: "Registration successful! You can now log in.",
       user: {
         id: authData.user.id,
-        email: authData.user.email
+        email: authData.user.email,
+        username: username,
+        full_name: fullName,
+        plan_tier: 'FREE'
       }
     });
   } catch (err) {
@@ -122,14 +125,23 @@ const login = async (req, res) => {
       return res.status(401).json({ error: error.message });
     }
 
+    // Fetch real profile data to get plan_tier and username
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("username, full_name, avatar_url, plan")
+      .eq("id", data.user.id)
+      .single();
+
     res.status(200).json({
       success: true,
       token: data.session.access_token,
       user: {
         id: data.user.id,
         email: data.user.email,
-        full_name: data.user.user_metadata?.full_name,
-        avatar_url: data.user.user_metadata?.avatar_url,
+        username: profile?.username || data.user.user_metadata?.username,
+        full_name: profile?.full_name || data.user.user_metadata?.full_name,
+        avatar_url: profile?.avatar_url || data.user.user_metadata?.avatar_url,
+        plan_tier: profile?.plan || 'FREE'
       }
     });
   } catch (err) {

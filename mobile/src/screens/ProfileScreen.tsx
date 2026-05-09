@@ -18,8 +18,9 @@ const MenuItem = ({ icon, label, value, onPress, danger }: { icon: string; label
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
-  const name = user?.full_name || 'User';
+  const name = user?.full_name || user?.username || 'User';
   const email = user?.email || '';
+  const plan = user?.plan_tier || 'FREE';
   const initial = name.charAt(0).toUpperCase();
 
   const handleLogout = () => {
@@ -43,7 +44,7 @@ export default function ProfileScreen() {
         <Text style={styles.name}>{name}</Text>
         <Text style={styles.email}>{email}</Text>
         <View style={styles.planBadge}>
-          <Text style={styles.planText}>✦ Free Plan</Text>
+          <Text style={styles.planText}>✦ {plan.toUpperCase()} PLAN</Text>
         </View>
       </LinearGradient>
 
