@@ -35,10 +35,11 @@ const isOriginAllowed = (origin) => {
     origin.endsWith(".notestandard.com");
 
   if (isProd) {
-    if (!isNoteStandard && origin !== "http://localhost:5173" && origin !== "http://localhost:4173") {
+    const isMobileLocal = origin === "http://localhost" || origin === "http://127.0.0.1" || origin.startsWith("exp://");
+    if (!isNoteStandard && !isMobileLocal && origin !== "http://localhost:5173" && origin !== "http://localhost:4173") {
         console.warn(`[CORS] Blocked production access from: ${origin}`);
     }
-    return isNoteStandard || origin === "http://localhost:5173" || origin === "http://localhost:4173";
+    return isNoteStandard || isMobileLocal || origin === "http://localhost:5173" || origin === "http://localhost:4173";
   }
 
   // 2. Local Development Allowed Domains (only if not in production)

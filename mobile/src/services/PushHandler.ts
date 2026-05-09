@@ -17,7 +17,7 @@ Notifications.setNotificationHandler({
       shouldShowAlert: !isMessage,
       shouldPlaySound: true,
       shouldSetBadge: false,
-    };
+    } as any;
   },
 });
 
@@ -82,7 +82,7 @@ export class PushHandler {
       this.registerTokenWithBackend(token, 'voip', 0); // Start with 0 retries
     });
 
-    VoipPushNotification.addEventListener('notification', (notification) => {
+    VoipPushNotification.addEventListener('notification', (notification: any) => {
       console.log('[PushHandler] 📞 iOS VoIP Push Received:', JSON.stringify(notification));
       
       // VoIP notifications on iOS MUST trigger CallKit immediately
@@ -100,7 +100,7 @@ export class PushHandler {
         CallService.rejectCall();
       }
       
-      VoipPushNotification.onFinishNotification(notification.uuid);
+      (VoipPushNotification as any).onFinishNotification(notification.uuid);
     });
 
     // Request VoIP token

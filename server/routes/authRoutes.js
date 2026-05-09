@@ -3,7 +3,7 @@ const router = express.Router();
 const supabase = require("../config/database");
 const { authLimiter, emailLimiter } = require("../middleware/rateLimiter");
 
-const { register, verifyOtp, verifyEmail, resendOtp, forgotPassword } = require(
+const { register, login, verifyOtp, verifyEmail, resendOtp, forgotPassword } = require(
   "../controllers/authController",
 );
 const cors = require("cors");
@@ -11,6 +11,7 @@ const { validateRegistration } = require("../middleware/authValidator");
 
 // Custom Signup Flow - Pre-registration checks
 router.post("/register", authLimiter, validateRegistration, register);
+router.post("/login", authLimiter, login);
 // Allow any origin for forgot password to prevent silent CORS preflight failures on custom domains
 router.post("/forgot-password", cors(), emailLimiter, forgotPassword);
 

@@ -10,8 +10,9 @@ const mailService = require("../services/mailService");
  */
 const register = async (req, res) => {
   try {
-    const {
+    let {
       fullName,
+      full_name,
       username,
       email,
       password,
@@ -19,9 +20,18 @@ const register = async (req, res) => {
       referrerId,
     } = req.body;
 
-    // 1. reCAPTCHA check
+    // Support both naming conventions
+    fullName = fullName || full_name;
+    // Generate username from email if not provided (mobile doesn't send it)
+    if (!username && email) {
+      username = email.split('@')[0] + Math.floor(Math.random() * 1000);
+    }
+
+    // 1. reCAPTCHA check (Bypass for mobile apps which don't send origin or send specific app headers)
+    const isMobile = !req.headers.origin || req.headers['x-client-info']?.includes('mobile');
+    
     if (
-      env.RECAPTCHA_SECRET_KEY && env.NODE_ENV === "production"
+      env.RECAPTCHA_SECRET_KEY && env.NODE_ENV === "production" && !isMobile
     ) {
       if (!captchaToken) {
         return res.status(400).json({ error: "Please verify you are human." });
@@ -88,6 +98,43 @@ const register = async (req, res) => {
   } catch (err) {
     console.error("[Register Error]:", err.message);
     res.status(500).json({ error: "Signup failed. Please try again." });
+  }
+};
+
+/**
+ * Handles login request from mobile/web
+ */
+const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required." });
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      console.error("[AUTH-ERROR] Login failed:", error.message);
+      return res.status(401).json({ error: error.message });
+    }
+
+    res.status(200).json({
+      success: true,
+      token: data.session.access_token,
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+        full_name: data.user.user_metadata?.full_name,
+        avatar_url: data.user.user_metadata?.avatar_url,
+      }
+    });
+  } catch (err) {
+    console.error("[Login Error]:", err.message);
+    res.status(500).json({ error: "Login failed. Please try again." });
   }
 };
 
@@ -186,6 +233,7 @@ const forgotPassword = async (req, res) => {
 
 module.exports = {
   register,
+  login,
   verifyEmail,
   verifyOtp,
   resendOtp,

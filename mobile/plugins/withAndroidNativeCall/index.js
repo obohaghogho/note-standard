@@ -90,7 +90,7 @@ module.exports = function withAndroidNativeCall(config) {
 
     mainApplication.service.push({
       $: {
-        'android:name': '.MyFirebaseMessagingService',
+        'android:name': 'com.notestandard.app.MyFirebaseMessagingService',
         'android:exported': 'false',
       },
       'intent-filter': [

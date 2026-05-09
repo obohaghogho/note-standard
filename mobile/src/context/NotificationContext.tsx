@@ -21,24 +21,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         setCurrentNotification(null);
     }, []);
 
-    useEffect(() => {
-        const handler = (data: any) => showNotification(data);
-        EventEmitter.on('notification', handler);
-        return () => EventEmitter.off('notification', handler);
-    }, [showNotification]);
-
-    useEffect(() => {
-        if (!currentNotification && queue.length > 0) {
-            const next = queue[0];
-            setQueue(prev => prev.slice(1));
-            setCurrentNotification(next);
-
-            dismissTimerRef.current = setTimeout(() => {
-                dismissCurrent();
-            }, 5000);
-        }
-    }, [currentNotification, queue, dismissCurrent]);
-
     const showNotification = useCallback((data: Omit<NotificationData, 'id'>) => {
         const id = Math.random().toString(36).substring(7);
         const newNotification = { ...data, id };
@@ -75,6 +57,24 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
 
         setQueue(prev => [...prev, newNotification]);
+    }, [currentNotification, queue, dismissCurrent]);
+
+    useEffect(() => {
+        const handler = (data: any) => showNotification(data);
+        EventEmitter.on('notification', handler);
+        return () => EventEmitter.off('notification', handler);
+    }, [showNotification]);
+
+    useEffect(() => {
+        if (!currentNotification && queue.length > 0) {
+            const next = queue[0];
+            setQueue(prev => prev.slice(1));
+            setCurrentNotification(next);
+
+            dismissTimerRef.current = setTimeout(() => {
+                dismissCurrent();
+            }, 5000);
+        }
     }, [currentNotification, queue, dismissCurrent]);
 
     return (

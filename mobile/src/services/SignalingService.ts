@@ -2,9 +2,7 @@ import { io, Socket } from 'socket.io-client';
 import CallService from './CallService';
 import axios from 'axios';
 import AgoraService from './AgoraService';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
-const GATEWAY_URL = process.env.EXPO_PUBLIC_GATEWAY_URL || 'http://localhost:5001';
+import { API_URL, GATEWAY_URL } from '../Config';
 
 class SignalingService {
   private socket: Socket | null = null;

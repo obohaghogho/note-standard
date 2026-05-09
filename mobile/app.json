@@ -39,7 +39,9 @@
         "android.permission.MANAGE_OWN_CALLS",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.USE_FULL_SCREEN_INTENT",
-        "android.permission.BIND_TELECOM_CONNECTION_SERVICE"
+        "android.permission.BIND_TELECOM_CONNECTION_SERVICE",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
       ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
@@ -73,8 +75,9 @@
     },
     "extra": {
       "eas": {
-        "projectId": "54cb5fe8-62ac-4709-ac38-987b46f7ebcc"
+        "projectId": "d032f715-83d2-4fd6-9f43-d0d4d1764072"
       }
-    }
+    },
+    "owner": "onomejohn107"
   }
 }
