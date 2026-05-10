@@ -59,6 +59,13 @@ export class PushHandler {
         // Android handles call signaling via standard high-priority FCM
         this.handleIncomingCall(data as unknown as CallData);
       } else if (data.type === 'message' || data.type === 'chat_message') {
+        // Trigger delivery receipt if messageId is available
+        if (data.messageId) {
+          apiClient.post(`/chat/messages/${data.messageId}/webhook-deliver`).catch(e => {
+            console.error('[PushHandler] Foreground delivery receipt failed:', e);
+          });
+        }
+        
         EventEmitter.emit('notification', {
           title: title || data.title || 'New Message',
           message: body || data.message || '',

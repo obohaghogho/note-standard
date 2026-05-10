@@ -93,11 +93,12 @@ export default function WalletScreen() {
     }
     setTransferLoading(true);
     try {
-      const res = await apiClient.post(`/wallet/transfer`, {
-        recipient_username: recipient.trim(),
+      const payload = {
+        recipientId: recipient.trim(),
         amount: parseFloat(transferAmount),
         currency: selectedWallet?.currency || selectedWallet?.asset || 'USD',
-      });
+      };
+      const res = await apiClient.post(`/wallet/transfer`, payload);
       Alert.alert('✅ Success', res.data?.message || 'Transfer completed successfully');
       setShowTransfer(false);
       setRecipient('');
@@ -110,8 +111,8 @@ export default function WalletScreen() {
     }
   };
 
-  const totalBalance = wallets.reduce((sum, w) => sum + (w.balance || 0), 0);
   const primaryCurrency = selectedWallet?.currency || selectedWallet?.asset || 'USD';
+  const currentBalance = selectedWallet?.balance || 0;
 
   if (loading) {
     return (
@@ -136,12 +137,12 @@ export default function WalletScreen() {
       >
         {/* Balance Card */}
         <LinearGradient colors={['#6366f1', '#4f46e5']} style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>Total Portfolio Value</Text>
+          <Text style={styles.balanceLabel}>{primaryCurrency} Wallet Balance</Text>
           <Text style={styles.balanceValue}>
-            {totalBalance.toFixed(2)} {primaryCurrency}
+            {currentBalance.toFixed(4)} {primaryCurrency}
           </Text>
           <Text style={styles.subBalance}>
-            Available: {(selectedWallet?.available_balance || selectedWallet?.balance || 0).toFixed(2)} {primaryCurrency}
+            Available: {(selectedWallet?.available_balance || selectedWallet?.balance || 0).toFixed(4)} {primaryCurrency}
           </Text>
           <View style={styles.actionRow}>
             <TouchableOpacity

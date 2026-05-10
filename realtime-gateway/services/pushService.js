@@ -194,6 +194,7 @@ async function sendChatPush(params) {
             sound: 'default',
             badge: 1,
             'mutable-content': 1,
+            'content-available': 1,
           },
         };
 

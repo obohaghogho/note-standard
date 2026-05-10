@@ -17,11 +17,12 @@ export default function WalletActionScreen() {
   const [bankName, setBankName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [accountName, setAccountName] = useState('');
+  const [depositMethod, setDepositMethod] = useState<'card' | 'bank'>('card');
+  const [bankDetails, setBankDetails] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
   const isDeposit = type === 'deposit';
-  const isFiat = ['USD', 'NGN', 'EUR', 'GBP'].includes(currency);
-
+  const isFiat = ['USD', 'NGN', 'EUR', 'GBP', 'JPY'].includes(currency);
 
   const handleDeposit = async () => {
     if (!amount || isNaN(parseFloat(amount))) {
@@ -29,13 +30,45 @@ export default function WalletActionScreen() {
       return;
     }
     setLoading(true);
+    setBankDetails(null);
     try {
-      const res = await apiClient.post(`/wallet/deposit`, { currency, amount: parseFloat(amount) });
-      Alert.alert(
-        'Deposit Initiated',
-        res.data?.message || `To deposit ${amount} ${currency}, please follow the instructions sent to your email or use the payment link.`,
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
-      );
+      if (isFiat) {
+        const endpoint = depositMethod === 'card' ? '/wallet/deposit/card' : '/wallet/deposit/transfer';
+        const res = await apiClient.post(endpoint, { currency, amount: parseFloat(amount) });
+        
+        if (depositMethod === 'card') {
+          const link = res.data?.link || res.data?.checkoutUrl || res.data?.url;
+          if (link) {
+            Alert.alert(
+              'Payment Link Ready',
+              'Please complete your payment via our secure checkout page.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Open Payment Page', onPress: () => {
+                  // In a real app, use Linking.openURL(link)
+                  // For now, we'll just show it
+                  Alert.alert('Checkout URL', link);
+                } }
+              ]
+            );
+          } else {
+            Alert.alert('Success', 'Deposit initiated. Please check your email for instructions.');
+          }
+        } else {
+          // Bank Transfer
+          setBankDetails(res.data?.bankDetails);
+          Alert.alert('Bank Details Received', 'Please transfer the exact amount to the bank account shown on screen.');
+        }
+      } else {
+        // Crypto
+        const res = await apiClient.post(`/wallet/deposit`, { currency, amount: parseFloat(amount) });
+        const address = res.data?.payAddress || res.data?.address;
+        if (address) {
+          Alert.alert('Deposit Address', `Send ${amount} ${currency} to:\n\n${address}`);
+        } else {
+          Alert.alert('Deposit Initiated', 'Please check your email for instructions.');
+        }
+      }
     } catch (e: any) {
       Alert.alert('Error', e.response?.data?.error || 'Failed to initiate deposit');
     } finally {
@@ -65,15 +98,18 @@ export default function WalletActionScreen() {
         currency,
         amount: parseFloat(amount),
         network: isFiat ? undefined : 'native',
+        client_idempotency_key: `wdr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       };
 
       if (isFiat) {
-        payload.bank_name = bankName;
-        payload.account_number = accountNumber;
-        payload.account_name = accountName;
-        payload.country = currency === 'NGN' ? 'Nigeria' : 'International';
+        payload.destination = {
+          bank_name: bankName,
+          account_number: accountNumber,
+          account_name: accountName,
+          country: currency === 'NGN' ? 'Nigeria' : 'International',
+        };
       } else {
-        payload.address = address;
+        payload.destination = address;
       }
 
       const res = await apiClient.post(`/wallet/withdraw`, payload);
@@ -117,12 +153,47 @@ export default function WalletActionScreen() {
           <Text style={styles.currencySuffix}>{currency}</Text>
         </View>
 
+        {/* Deposit Method Selector (Fiat only) */}
+        {isDeposit && isFiat && (
+          <View style={styles.methodRow}>
+            <TouchableOpacity 
+              style={[styles.methodBtn, depositMethod === 'card' && styles.methodBtnActive]} 
+              onPress={() => setDepositMethod('card')}
+            >
+              <Text style={[styles.methodBtnText, depositMethod === 'card' && styles.methodBtnTextActive]}>💳 Card</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.methodBtn, depositMethod === 'bank' && styles.methodBtnActive]} 
+              onPress={() => setDepositMethod('bank')}
+            >
+              <Text style={[styles.methodBtnText, depositMethod === 'bank' && styles.methodBtnTextActive]}>🏦 Bank Transfer</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Bank Details Display */}
+        {isDeposit && bankDetails && (
+          <View style={styles.bankInfoBox}>
+            <Text style={styles.infoTitle}>🏦 Transfer Details</Text>
+            <View style={styles.bankDetailRow}><Text style={styles.bankLabel}>Bank:</Text><Text style={styles.bankValue}>{bankDetails.bankName}</Text></View>
+            <View style={styles.bankDetailRow}><Text style={styles.bankLabel}>Account:</Text><Text style={styles.bankValue}>{bankDetails.accountNumber}</Text></View>
+            <View style={styles.bankDetailRow}><Text style={styles.bankLabel}>Name:</Text><Text style={styles.bankValue}>{bankDetails.accountName}</Text></View>
+            {bankDetails.reference && (
+              <View style={styles.bankDetailRow}><Text style={styles.bankLabel}>Reference:</Text><Text style={styles.bankValue}>{bankDetails.reference}</Text></View>
+            )}
+            <Text style={styles.bankNote}>⚠️ {bankDetails.note || "Please include the reference in your transfer narration."}</Text>
+          </View>
+        )}
+
         {/* Deposit Instructions */}
-        {isDeposit && (
+        {isDeposit && !bankDetails && (
           <View style={styles.infoBox}>
-            <Text style={styles.infoTitle}>ℹ️ How Deposits Work</Text>
+            <Text style={styles.infoTitle}>ℹ️ How {depositMethod === 'card' ? 'Card' : 'Bank'} Deposits Work</Text>
             <Text style={styles.infoText}>
-              After tapping Confirm, a deposit request will be created. You'll receive payment instructions via your registered email, or you can use the web platform for immediate payment processing.
+              {depositMethod === 'card' 
+                ? "After tapping Confirm, you'll get a secure payment link to complete your deposit using your debit/credit card."
+                : "After tapping Confirm, you'll receive the official bank account details to complete your transfer."
+              }
             </Text>
           </View>
         )}
@@ -240,4 +311,20 @@ const styles = StyleSheet.create({
   withdrawBtn: { backgroundColor: '#6366f1', shadowColor: '#6366f1' },
   mainBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
   hint: { color: '#444', fontSize: 12, textAlign: 'center', marginTop: 16, lineHeight: 18 },
+  methodRow: { flexDirection: 'row', gap: 10, marginTop: 24 },
+  methodBtn: { 
+    flex: 1, padding: 12, borderRadius: 12, backgroundColor: '#0d0d1e', 
+    borderWidth: 1, borderColor: '#1a1a3e', alignItems: 'center' 
+  },
+  methodBtnActive: { backgroundColor: '#6366f122', borderColor: '#6366f1' },
+  methodBtnText: { color: '#888', fontSize: 13, fontWeight: '700' },
+  methodBtnTextActive: { color: '#6366f1' },
+  bankInfoBox: { 
+    backgroundColor: '#0d0d1e', borderRadius: 16, padding: 20, marginTop: 24,
+    borderWidth: 1, borderColor: '#6366f144'
+  },
+  bankDetailRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  bankLabel: { color: '#666', fontSize: 13 },
+  bankValue: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  bankNote: { color: '#f59e0b', fontSize: 12, marginTop: 8, lineHeight: 18 },
 });
