@@ -8,10 +8,9 @@ import createAgoraRtcEngine, {
   AudioScenarioType,
 } from 'react-native-agora';
 import { Platform, PermissionsAndroid } from 'react-native';
-import axios from 'axios';
+import apiClient from '../api/apiClient';
 
 const AGORA_APP_ID = "652459c783604367857bc602fc8faae5";
-const API_URL = 'https://note-standard-api.onrender.com';
 
 class AgoraService {
   private engine: IRtcEngine | null = null;
@@ -49,7 +48,7 @@ class AgoraService {
 
   async fetchToken(channel: string) {
     try {
-      const response = await axios.get(`${API_URL}/api/agora?channel=${channel}`);
+      const response = await apiClient.get(`/agora?channel=${channel}`);
       return response.data.token;
     } catch (err) {
       console.error('[AgoraService] Token fetch failed:', err);

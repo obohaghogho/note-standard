@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import EventEmitter from './EventEmitter';
 import VoipPushNotification from 'react-native-voip-push-notification';
 import { AuthService } from './AuthService';
+import apiClient from '../api/apiClient';
 
 // Configure how notifications are handled when the app is in the foreground
 Notifications.setNotificationHandler({
@@ -110,32 +111,22 @@ export class PushHandler {
   static async registerTokenWithBackend(token: string, type: 'fcm' | 'voip' | 'apns', retryCount = 0) {
     console.log(`[PushHandler] 📡 Registering ${type} token with backend (Try: ${retryCount + 1})...`);
     try {
-      const authHeader = await AuthService.getToken();
-      if (!authHeader) {
-          console.warn('[PushHandler] ⚠️ No auth token available for push registration, will retry...');
-          if (retryCount < 3) setTimeout(() => this.registerTokenWithBackend(token, type, retryCount + 1), 5000);
-          return;
-      }
-
-      const baseUrl = 'https://note-standard-api.onrender.com';
-      const response = await fetch(`${baseUrl}/api/notifications/register-native-token`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authHeader}`
-        },
-        body: JSON.stringify({ token, platform: Platform.OS, type })
+      const response = await apiClient.post(`/notifications/register-native-token`, {
+        token,
+        platform: Platform.OS,
+        type
       });
       
-      const resData = await response.json();
+      const resData = response.data;
       if (resData.success) {
         console.log(`[PushHandler] ✅ ${type} token registered successfully.`);
       } else {
         throw new Error(resData.error || 'Unknown error');
       }
-    } catch (err) {
-      console.warn(`[PushHandler] ⚠️ ${type} token registration failed:`, err);
-      if (retryCount < 3) {
+    } catch (err: any) {
+      console.warn(`[PushHandler] ⚠️ ${type} token registration failed:`, err?.response?.data || err.message || err);
+      // Only retry on network errors or 500s, not 401s (since apiClient handles 401s globally)
+      if (retryCount < 3 && (!err.response || err.response.status >= 500)) {
           console.log(`[PushHandler] 🔄 Retrying ${type} registration in 5s...`);
           setTimeout(() => this.registerTokenWithBackend(token, type, retryCount + 1), 5000);
       }

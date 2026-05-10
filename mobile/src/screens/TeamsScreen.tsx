@@ -4,10 +4,9 @@ import {
   ActivityIndicator, RefreshControl, Image, Alert, Modal,
   TextInput, ScrollView, KeyboardAvoidingView, Platform
 } from 'react-native';
-import axios from 'axios';
 import { TeamsService, Team } from '../services/TeamsService';
 import { AuthService } from '../services/AuthService';
-import { API_URL } from '../Config';
+import apiClient from '../api/apiClient';
 
 interface TeamMessage {
   id: string;
@@ -33,10 +32,7 @@ function TeamChatModal({
 
   const loadMessages = useCallback(async () => {
     try {
-      const token = await AuthService.getToken();
-      const res = await axios.get(`${API_URL}/api/teams/${team.id}/messages`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiClient.get(`/teams/${team.id}/messages`);
       setMessages(res.data || []);
     } catch (e) {
       console.error('[TeamChat] Failed to load:', e);
@@ -51,12 +47,7 @@ function TeamChatModal({
     if (!newMessage.trim()) return;
     setSending(true);
     try {
-      const token = await AuthService.getToken();
-      await axios.post(
-        `${API_URL}/api/teams/${team.id}/messages`,
-        { content: newMessage.trim() },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await apiClient.post(`/teams/${team.id}/messages`, { content: newMessage.trim() });
       setNewMessage('');
       loadMessages();
     } catch (e) {

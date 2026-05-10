@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import EventEmitter from './EventEmitter';
 
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'user_data';
@@ -33,6 +34,7 @@ export class AuthService {
     static async logout() {
         await AsyncStorage.removeItem(TOKEN_KEY);
         await AsyncStorage.removeItem(USER_KEY);
+        EventEmitter.emit('auth:logout', null);
     }
 
     static async isAuthenticated() {

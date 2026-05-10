@@ -3,9 +3,7 @@ import {
   View, Text, TextInput, StyleSheet, TouchableOpacity,
   ActivityIndicator, Alert, ScrollView, KeyboardAvoidingView, Platform
 } from 'react-native';
-import axios from 'axios';
-import { AuthService } from '../services/AuthService';
-import { API_URL } from '../Config';
+import apiClient from '../api/apiClient';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
 export default function NoteEditorScreen() {
@@ -27,10 +25,7 @@ export default function NoteEditorScreen() {
   const loadNote = async () => {
     setLoading(true);
     try {
-      const token = await AuthService.getToken();
-      const res = await axios.get(`${API_URL}/api/notes/${noteId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiClient.get(`/notes/${noteId}`);
       setTitle(res.data.title || '');
       setContent(res.data.content || '');
     } catch (e) {
@@ -49,14 +44,12 @@ export default function NoteEditorScreen() {
 
     setSaving(true);
     try {
-      const token = await AuthService.getToken();
-      const headers = { Authorization: `Bearer ${token}` };
       const payload = { title, content };
 
       if (noteId) {
-        await axios.put(`${API_URL}/api/notes/${noteId}`, payload, { headers });
+        await apiClient.put(`/notes/${noteId}`, payload);
       } else {
-        await axios.post(`${API_URL}/api/notes`, payload, { headers });
+        await apiClient.post(`/notes`, payload);
       }
       
       Alert.alert('Success', 'Note saved successfully');
@@ -79,10 +72,7 @@ export default function NoteEditorScreen() {
           style: 'destructive', 
           onPress: async () => {
             try {
-              const token = await AuthService.getToken();
-              await axios.delete(`${API_URL}/api/notes/${noteId}`, {
-                headers: { Authorization: `Bearer ${token}` },
-              });
+              await apiClient.delete(`/notes/${noteId}`);
               navigation.goBack();
             } catch (e) {
               Alert.alert('Error', 'Failed to delete note');

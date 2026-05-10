@@ -6,8 +6,11 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import { ChatService, Conversation } from '../services/ChatService';
+import { AuthService } from '../services/AuthService';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ChatStackParamList } from '../navigation/ChatStack';
+import { io, Socket } from 'socket.io-client';
+import { GATEWAY_URL } from '../Config';
 
 type Props = { navigation: NativeStackNavigationProp<ChatStackParamList, 'ChatList'> };
 
@@ -83,7 +86,26 @@ export default function ChatListScreen({ navigation }: Props) {
     setLoading(false);
   }, [user?.id]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { 
+    load(); 
+
+    // Realtime connection for list
+    let socket: Socket;
+    const initSocket = async () => {
+      const token = await AuthService.getToken();
+      socket = io(GATEWAY_URL, {
+        auth: { token },
+        transports: ['websocket'],
+      });
+      socket.on('chat:new_conversation', load);
+      socket.on('chat:conversation_updated', load);
+    };
+    initSocket();
+
+    return () => {
+      if (socket) socket.disconnect();
+    };
+  }, [load]);
 
   const onRefresh = async () => {
     setRefreshing(true);

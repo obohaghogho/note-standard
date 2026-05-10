@@ -3,9 +3,7 @@ import {
   View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet,
   ActivityIndicator, Image, Alert
 } from 'react-native';
-import axios from 'axios';
-import { AuthService } from '../services/AuthService';
-import { API_URL } from '../Config';
+import apiClient from '../api/apiClient';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -19,10 +17,7 @@ export default function FriendSearchScreen() {
     if (!query.trim()) return;
     setLoading(true);
     try {
-      const token = await AuthService.getToken();
-      const res = await axios.get(`${API_URL}/api/users/search?q=${query}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiClient.get(`/users/search?q=${query}`);
       setResults(res.data || []);
     } catch (e) {
       console.error('[Search] Failed:', e);
@@ -35,12 +30,9 @@ export default function FriendSearchScreen() {
   const startChat = async (username: string) => {
     setLoading(true);
     try {
-      const token = await AuthService.getToken();
-      const res = await axios.post(`${API_URL}/api/chat/conversations`, {
+      const res = await apiClient.post(`/chat/conversations`, {
         type: 'direct',
         participants: [username]
-      }, {
-        headers: { Authorization: `Bearer ${token}` },
       });
       
       // Navigate to chat

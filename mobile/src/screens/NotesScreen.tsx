@@ -6,6 +6,7 @@ import {
 import axios from 'axios';
 import { AuthService } from '../services/AuthService';
 import { API_URL } from '../Config';
+import apiClient from '../api/apiClient';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList } from '../navigation/MainStack';
@@ -27,13 +28,10 @@ export default function NotesScreen() {
 
   const load = useCallback(async () => {
     try {
-      const token = await AuthService.getToken();
-      const res = await axios.get(`${API_URL}/api/notes`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiClient.get(`/notes`);
       setNotes(res.data || []);
-    } catch (e) {
-      console.error('[NotesScreen] Failed to load notes:', e);
+    } catch (e: any) {
+      console.error('[NotesScreen] Failed to load notes:', e?.message || e);
     } finally {
       setLoading(false);
     }

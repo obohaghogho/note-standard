@@ -1,6 +1,5 @@
 import { io, Socket } from 'socket.io-client';
 import CallService from './CallService';
-import axios from 'axios';
 import AgoraService from './AgoraService';
 import { API_URL, GATEWAY_URL } from '../Config';
 

@@ -9,6 +9,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { AuthService } from '../services/AuthService';
 import { API_URL } from '../Config';
+import apiClient from '../api/apiClient';
 
 const MenuItem = ({
   icon, label, value, onPress, danger
@@ -57,17 +58,7 @@ export default function ProfileScreen() {
     }
     setUpdatingPassword(true);
     try {
-      const token = await AuthService.getToken();
-      await axios.post(
-        `${API_URL}/api/auth/change-password`,
-        { currentPassword, newPassword },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'x-client-type': 'mobile',
-          },
-        }
-      );
+      await apiClient.post(`/auth/change-password`, { currentPassword, newPassword });
       Alert.alert('Success', 'Password changed successfully');
       setShowPasswordModal(false);
       setCurrentPassword('');

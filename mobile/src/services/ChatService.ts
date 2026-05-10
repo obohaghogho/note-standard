@@ -1,6 +1,4 @@
-import axios from 'axios';
-import { API_URL } from '../Config';
-import { AuthService } from './AuthService';
+import apiClient from '../api/apiClient';
 
 export interface Profile {
     username: string;
@@ -26,18 +24,9 @@ export interface Conversation {
 }
 
 export class ChatService {
-    private static async getHeaders() {
-        const token = await AuthService.getToken();
-        return {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-        };
-    }
-
     static async getConversations(): Promise<Conversation[]> {
         try {
-            const headers = await this.getHeaders();
-            const response = await axios.get(`${API_URL}/api/chat/conversations`, { headers });
+            const response = await apiClient.get(`/chat/conversations`);
             return response.data;
         } catch (err) {
             console.error('[ChatService] Failed to fetch conversations:', err);
@@ -47,8 +36,7 @@ export class ChatService {
 
     static async acceptConversation(conversationId: string): Promise<boolean> {
         try {
-            const headers = await this.getHeaders();
-            const response = await axios.put(`${API_URL}/api/chat/conversations/${conversationId}/accept`, {}, { headers });
+            const response = await apiClient.put(`/chat/conversations/${conversationId}/accept`, {});
             return response.status === 200;
         } catch (err) {
             console.error('[ChatService] Failed to accept conversation:', err);

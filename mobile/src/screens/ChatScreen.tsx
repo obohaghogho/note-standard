@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { io, Socket } from 'socket.io-client';
-import axios from 'axios';
+import apiClient from '../api/apiClient';
 import { useAuth } from '../context/AuthContext';
 import { AuthService } from '../services/AuthService';
 import { Conversation } from '../services/ChatService';
@@ -43,10 +43,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const fetchMessages = useCallback(async () => {
     try {
-      const token = await AuthService.getToken();
-      const res = await axios.get(`${API_URL}/api/chat/conversations/${conversationId}/messages`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiClient.get(`/chat/conversations/${conversationId}/messages`);
       setMessages(res.data.reverse());
     } catch (e) {
       console.error('[ChatScreen] Failed to load messages:', e);
@@ -84,11 +81,9 @@ export default function ChatScreen({ navigation, route }: Props) {
     setText('');
     setSending(true);
     try {
-      const token = await AuthService.getToken();
-      await axios.post(
-        `${API_URL}/api/chat/conversations/${conversationId}/messages`,
-        { content },
-        { headers: { Authorization: `Bearer ${token}` } },
+      await apiClient.post(
+        `/chat/conversations/${conversationId}/messages`,
+        { content }
       );
     } catch (e) {
       console.error('[ChatScreen] Send failed:', e);

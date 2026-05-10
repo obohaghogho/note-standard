@@ -4,9 +4,7 @@ import {
   ActivityIndicator, Alert, ScrollView, KeyboardAvoidingView, Platform
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import axios from 'axios';
-import { AuthService } from '../services/AuthService';
-import { API_URL } from '../Config';
+import apiClient from '../api/apiClient';
 import { LinearGradient } from 'expo-linear-gradient';
 
 export default function WalletActionScreen() {
@@ -24,14 +22,6 @@ export default function WalletActionScreen() {
   const isDeposit = type === 'deposit';
   const isFiat = ['USD', 'NGN', 'EUR', 'GBP'].includes(currency);
 
-  const getHeaders = async () => {
-    const token = await AuthService.getToken();
-    return {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'x-client-type': 'mobile', // bypass reCAPTCHA
-    };
-  };
 
   const handleDeposit = async () => {
     if (!amount || isNaN(parseFloat(amount))) {
@@ -40,12 +30,7 @@ export default function WalletActionScreen() {
     }
     setLoading(true);
     try {
-      const headers = await getHeaders();
-      const res = await axios.post(
-        `${API_URL}/api/wallet/deposit`,
-        { currency, amount: parseFloat(amount) },
-        { headers }
-      );
+      const res = await apiClient.post(`/wallet/deposit`, { currency, amount: parseFloat(amount) });
       Alert.alert(
         'Deposit Initiated',
         res.data?.message || `To deposit ${amount} ${currency}, please follow the instructions sent to your email or use the payment link.`,
@@ -76,7 +61,6 @@ export default function WalletActionScreen() {
 
     setLoading(true);
     try {
-      const headers = await getHeaders();
       const payload: any = {
         currency,
         amount: parseFloat(amount),
@@ -92,7 +76,7 @@ export default function WalletActionScreen() {
         payload.address = address;
       }
 
-      const res = await axios.post(`${API_URL}/api/wallet/withdraw`, payload, { headers });
+      const res = await apiClient.post(`/wallet/withdraw`, payload);
       Alert.alert(
         '✅ Withdrawal Submitted',
         res.data?.message || 'Your withdrawal request has been submitted and will be processed within 1-24 hours.',

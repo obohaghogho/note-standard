@@ -1,6 +1,4 @@
-import axios from 'axios';
-import { API_URL } from '../Config';
-import { AuthService } from './AuthService';
+import apiClient from '../api/apiClient';
 
 export interface Team {
   id: string;
@@ -11,18 +9,9 @@ export interface Team {
 }
 
 export class TeamsService {
-  private static async getHeaders() {
-    const token = await AuthService.getToken();
-    return {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    };
-  }
-
   static async getMyTeams(): Promise<Team[]> {
     try {
-      const headers = await this.getHeaders();
-      const response = await axios.get(`${API_URL}/api/teams/my-teams`, { headers });
+      const response = await apiClient.get(`/teams/my-teams`);
       return response.data;
     } catch (err) {
       console.error('[TeamsService] Failed to fetch teams:', err);

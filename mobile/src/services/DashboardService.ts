@@ -1,6 +1,4 @@
-import axios from 'axios';
-import { API_URL } from '../Config';
-import { AuthService } from './AuthService';
+import apiClient from '../api/apiClient';
 
 export interface DashboardStats {
   messages: number;
@@ -10,22 +8,12 @@ export interface DashboardStats {
 }
 
 export class DashboardService {
-  private static async getHeaders() {
-    const token = await AuthService.getToken();
-    return {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    };
-  }
-
   static async getStats(): Promise<DashboardStats> {
     try {
-      const headers = await this.getHeaders();
-      
       const [wallets, notes, conversations] = await Promise.all([
-        axios.get(`${API_URL}/api/wallet`, { headers }).catch(() => ({ data: [] })),
-        axios.get(`${API_URL}/api/notes`, { headers }).catch(() => ({ data: [] })),
-        axios.get(`${API_URL}/api/chat/conversations`, { headers }).catch(() => ({ data: [] })),
+        apiClient.get(`/wallet`),
+        apiClient.get(`/notes`),
+        apiClient.get(`/chat/conversations`),
       ]);
 
       // Calculate total balance in a primary currency (e.g., USD or NGN)
@@ -40,8 +28,8 @@ export class DashboardService {
         calls: 0, // Placeholder for calls
         balance: balanceStr
       };
-    } catch (err) {
-      console.error('[DashboardService] Failed to fetch stats:', err);
+    } catch (err: any) {
+      console.error('[DashboardService] Failed to fetch stats:', err?.message || err);
       return { messages: 0, notes: 0, calls: 0, balance: '0.00' };
     }
   }

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+import apiClient from '../api/apiClient';
 import { AuthService, User } from '../services/AuthService';
-import { API_URL } from '../Config';
+import EventEmitter from '../services/EventEmitter';
 
 interface AuthContextType {
   user: User | null;
@@ -25,11 +25,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(false);
   }, []);
 
-  useEffect(() => { loadUser(); }, [loadUser]);
+  useEffect(() => { 
+    loadUser(); 
+    
+    // Listen for global logout events (e.g. from 401 interceptor)
+    const handleLogout = () => setUser(null);
+    EventEmitter.on('auth:logout', handleLogout);
+    
+    return () => {
+      EventEmitter.off('auth:logout', handleLogout);
+    };
+  }, [loadUser]);
 
   const login = async (email: string, password: string) => {
     try {
-      const res = await axios.post(`${API_URL}/api/auth/login`, { email, password });
+      const res = await apiClient.post(`/auth/login`, { email, password });
       const { token, user: userData } = res.data;
       await AuthService.setToken(token);
       await AuthService.setUser(userData);
@@ -43,7 +53,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const register = async (fullName: string, email: string, password: string) => {
     try {
-      const res = await axios.post(`${API_URL}/api/auth/register`, { full_name: fullName, email, password });
+      const res = await apiClient.post(`/auth/register`, { full_name: fullName, email, password });
       const { token, user: userData } = res.data;
       await AuthService.setToken(token);
       await AuthService.setUser(userData);

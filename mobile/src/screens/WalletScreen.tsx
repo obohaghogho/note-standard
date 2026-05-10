@@ -4,9 +4,7 @@ import {
   ActivityIndicator, RefreshControl, Modal, TextInput, Alert, FlatList
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import axios from 'axios';
-import { API_URL } from '../Config';
-import { AuthService } from '../services/AuthService';
+import apiClient from '../api/apiClient';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList } from '../navigation/MainStack';
@@ -60,22 +58,11 @@ export default function WalletScreen() {
   const [transferAmount, setTransferAmount] = useState('');
   const [transferLoading, setTransferLoading] = useState(false);
 
-  const getHeaders = async () => {
-    const token = await AuthService.getToken();
-    return {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'x-client-type': 'mobile', // bypasses reCAPTCHA on server
-    };
-  };
-
   const loadData = useCallback(async () => {
     try {
-      const headers = await getHeaders();
-
       const [wRes, lRes] = await Promise.all([
-        axios.get(`${API_URL}/api/wallet`, { headers }),          // FIXED: was /api/wallets
-        axios.get(`${API_URL}/api/wallet/ledger`, { headers }),   // FIXED: was /api/wallets/ledger
+        apiClient.get(`/wallet`),
+        apiClient.get(`/wallet/ledger`),
       ]);
 
       const walletsData = wRes.data || [];
@@ -84,8 +71,8 @@ export default function WalletScreen() {
         setSelectedWallet(walletsData[0]);
       }
       setLedger(lRes.data?.entries || lRes.data || []);
-    } catch (e) {
-      console.error('[WalletScreen] Failed to load wallet data:', e);
+    } catch (e: any) {
+      console.error('[WalletScreen] Failed to load wallet data:', e?.message || e);
     } finally {
       setLoading(false);
     }
@@ -106,16 +93,11 @@ export default function WalletScreen() {
     }
     setTransferLoading(true);
     try {
-      const headers = await getHeaders();
-      const res = await axios.post(
-        `${API_URL}/api/wallet/transfer`,
-        {
-          recipient_username: recipient.trim(),
-          amount: parseFloat(transferAmount),
-          currency: selectedWallet?.currency || selectedWallet?.asset || 'USD',
-        },
-        { headers }
-      );
+      const res = await apiClient.post(`/wallet/transfer`, {
+        recipient_username: recipient.trim(),
+        amount: parseFloat(transferAmount),
+        currency: selectedWallet?.currency || selectedWallet?.asset || 'USD',
+      });
       Alert.alert('✅ Success', res.data?.message || 'Transfer completed successfully');
       setShowTransfer(false);
       setRecipient('');
