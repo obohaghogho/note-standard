@@ -4,7 +4,7 @@ import { AuthService } from '../services/AuthService';
 import { Alert } from 'react-native';
 
 const apiClient = axios.create({
-  baseURL: API_URL,
+  baseURL: `${API_URL}/api`,
   timeout: 15000, // 15 seconds
   headers: {
     'Content-Type': 'application/json',
