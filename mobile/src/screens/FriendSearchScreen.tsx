@@ -35,13 +35,19 @@ export default function FriendSearchScreen() {
         participants: [username]
       });
       
+      if (!res.data.conversation) {
+        throw new Error('Server returned no conversation object');
+      }
+
       // Navigate to chat
       navigation.navigate('Chat', { 
         conversationId: res.data.conversation.id, 
         conversation: res.data.conversation 
       });
-    } catch (e) {
-      Alert.alert('Error', 'Failed to start chat');
+    } catch (e: any) {
+      console.error('[StartChat] Error:', e);
+      const msg = e.response?.data?.error || e.message || 'Failed to start chat';
+      Alert.alert('Error', msg);
     } finally {
       setLoading(false);
     }

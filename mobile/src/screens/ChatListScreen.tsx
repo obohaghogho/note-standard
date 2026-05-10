@@ -11,6 +11,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ChatStackParamList } from '../navigation/ChatStack';
 import { io, Socket } from 'socket.io-client';
 import { GATEWAY_URL } from '../Config';
+import { useIsFocused } from '@react-navigation/native';
+import { FriendsList } from '../components/FriendsList';
 
 type Props = { navigation: NativeStackNavigationProp<ChatStackParamList, 'ChatList'> };
 
@@ -69,26 +71,34 @@ function ConversationItem({
 export default function ChatListScreen({ navigation }: Props) {
   const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const isFocused = useIsFocused();
 
   const load = useCallback(async () => {
-    const data = await ChatService.getConversations();
-    // Sort: accepted first, then pending
-    const sorted = [...data].sort((a, b) => {
-      const myA = a.members.find(m => m.user_id === user?.id);
-      const myB = b.members.find(m => m.user_id === user?.id);
-      const aAccepted = myA?.status === 'accepted' ? 0 : 1;
-      const bAccepted = myB?.status === 'accepted' ? 0 : 1;
-      return aAccepted - bAccepted;
-    });
-    setConversations(sorted);
-    setLoading(false);
+    try {
+      const data = await ChatService.getConversations();
+      // Sort: accepted first, then pending
+      const sorted = [...data].sort((a, b) => {
+        const myA = a.members.find(m => m.user_id === user?.id);
+        const myB = b.members.find(m => m.user_id === user?.id);
+        const aAccepted = myA?.status === 'accepted' ? 0 : 1;
+        const bAccepted = myB?.status === 'accepted' ? 0 : 1;
+        return aAccepted - bAccepted;
+      });
+      setConversations(sorted);
+    } catch (e) {
+      console.error('[ChatList] Load failed:', e);
+    } finally {
+      setLoading(false);
+    }
   }, [user?.id]);
 
   useEffect(() => { 
-    load(); 
+    if (isFocused) {
+      load();
+    }
+  }, [isFocused, load]);
 
+  useEffect(() => {
     // Realtime connection for list
     let socket: Socket;
     const initSocket = async () => {
@@ -123,7 +133,7 @@ export default function ChatListScreen({ navigation }: Props) {
     return my?.status === 'pending';
   }).length;
 
-  if (loading) {
+  if (loading && !refreshing) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#6366f1" />
@@ -158,6 +168,12 @@ export default function ChatListScreen({ navigation }: Props) {
       <FlatList
         data={conversations}
         keyExtractor={i => i.id}
+        ListHeaderComponent={
+          <View style={styles.socialHeader}>
+            <FriendsList />
+            {conversations.length > 0 && <Text style={styles.sectionTitle}>Recent Conversations</Text>}
+          </View>
+        }
         renderItem={({ item }) => (
           <ConversationItem
             item={item}
@@ -172,13 +188,7 @@ export default function ChatListScreen({ navigation }: Props) {
           <View style={styles.empty}>
             <Text style={styles.emptyIcon}>💬</Text>
             <Text style={styles.emptyTitle}>No conversations yet</Text>
-            <Text style={styles.emptySub}>Tap 🔍 to find and message someone</Text>
-            <TouchableOpacity
-              style={styles.startChatBtn}
-              onPress={() => navigation.navigate('FriendSearch')}
-            >
-              <Text style={styles.startChatBtnText}>Find People</Text>
-            </TouchableOpacity>
+            <Text style={styles.emptySub}>Connect with people above or tap 🔍 to find someone</Text>
           </View>
         }
       />
@@ -201,13 +211,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#6366f1', borderRadius: 12,
     paddingHorizontal: 10, paddingVertical: 4,
   },
-  headerBadgeText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  headerBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
   searchIconBtn: { padding: 8, backgroundColor: '#111133', borderRadius: 12 },
   searchEmoji: { fontSize: 18 },
-  list: { padding: 16 },
+  list: { paddingBottom: 40 },
+  socialHeader: { marginBottom: 20 },
+  sectionTitle: { color: '#666', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', paddingHorizontal: 20, marginTop: 24, marginBottom: 12 },
   item: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#0d0d1e',
-    borderRadius: 18, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#111133',
+    flexDirection: 'row', alignItems: 'center', padding: 16,
+    marginHorizontal: 16, marginBottom: 12, borderRadius: 20,
+    backgroundColor: '#0d0d1e', borderWidth: 1, borderColor: '#111133',
   },
   itemPending: { borderColor: '#3b82f644', backgroundColor: '#0a0a20' },
   avatarWrap: { position: 'relative', marginRight: 14 },

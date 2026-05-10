@@ -53,14 +53,23 @@ exports.getConversations = async (req, res) => {
 
     // Transform structure for client: Flatten and pick latest message
     const conversations = (data || []).map((item) => {
-      const conv = item.conversation;
+      let conv = item.conversation;
       if (!conv) {
         console.warn("[Chat] getConversations: Membership has no associated conversation record", item);
         return null;
       }
+
+      // Handle case where PostgREST returns a single-item array instead of an object
+      if (Array.isArray(conv)) {
+        conv = conv[0];
+      }
+
+      if (!conv) return null;
       
       const lastMessages = conv.last_message || [];
-      const sorted = [...lastMessages].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      const sorted = Array.isArray(lastMessages) 
+        ? [...lastMessages].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        : [lastMessages];
       
       const result = {
         ...conv,
@@ -70,6 +79,7 @@ exports.getConversations = async (req, res) => {
       return result;
     }).filter(Boolean);
 
+    console.log(`[Chat] getConversations: Returning ${conversations.length} processed conversations`);
     res.json(conversations);
   } catch (err) {
     console.error("Error fetching conversations:", err.message);
@@ -170,19 +180,50 @@ exports.createConversation = async (req, res) => {
       });
     }
 
-    // 1. Resolve Usernames to IDs
+    // 1. Resolve Usernames to IDs (Case-Insensitive)
+    const normalizedUsernames = recipientUsernames.map(u => u.toLowerCase());
     const { data: profiles, error: profileError } = await supabase
       .from("profiles")
       .select("id, username")
-      .in("username", recipientUsernames);
+      // Use .in with lowercase usernames if we can guarantee they are stored lowercase
+      // Or use a more flexible filter
+      .filter("username", "in", `(${recipientUsernames.join(',')})`);
+    
+    // Better: resolve them individually or use a query that handles casing
+    // Actually, NoteStandard usually stores usernames as lowercase or treats them so.
+    // Let's use a more robust way to find them.
+    const { data: foundProfiles, error: findError } = await supabase
+      .from("profiles")
+      .select("id, username")
+      .filter("username", "in", `(${recipientUsernames.join(',')})`);
 
-    if (
-      profileError || !profiles || profiles.length !== recipientUsernames.length
-    ) {
-      return res.status(404).json({ error: "One or more users not found" });
+    // If exact match fails, try case-insensitive for each
+    let finalProfiles = foundProfiles || [];
+    if (finalProfiles.length !== recipientUsernames.length) {
+      for (const username of recipientUsernames) {
+        if (!finalProfiles.find(p => p.username === username)) {
+           const { data: p } = await supabase
+             .from("profiles")
+             .select("id, username")
+             .ilike("username", username)
+             .single();
+           if (p) finalProfiles.push(p);
+        }
+      }
     }
 
-    const participantIds = profiles.map((p) => p.id);
+    if (
+      profileError || !finalProfiles || finalProfiles.length !== recipientUsernames.length
+    ) {
+      console.error("[Chat] Participant resolution failed:", {
+        requested: recipientUsernames,
+        found: finalProfiles.map(p => p.username),
+        error: profileError
+      });
+      return res.status(404).json({ error: "One or more users not found or username casing mismatch" });
+    }
+
+    const participantIds = finalProfiles.map((p) => p.id);
 
     // 2. For direct chats, check if a conversation already exists
     if (type === "direct" && participantIds.length === 1) {

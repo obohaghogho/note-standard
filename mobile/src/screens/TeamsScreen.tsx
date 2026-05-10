@@ -61,8 +61,8 @@ function TeamChatModal({
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={styles.chatContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 90}
       >
         <View style={styles.chatHeader}>
           <TouchableOpacity onPress={onClose} style={styles.chatBackBtn}>
@@ -271,8 +271,15 @@ const styles = StyleSheet.create({
   emptyMsg: { alignItems: 'center', paddingTop: 80 },
   emptyMsgText: { color: '#555', fontSize: 14 },
   inputRow: {
-    flexDirection: 'row', alignItems: 'flex-end', padding: 12,
-    borderTopWidth: 1, borderColor: '#111133', gap: 10,
+    flexDirection: 'row', 
+    alignItems: 'flex-end', 
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 25,
+    backgroundColor: '#0d0d1e',
+    borderTopWidth: 1, 
+    borderColor: '#111133', 
+    gap: 10,
   },
   messageInput: {
     flex: 1, backgroundColor: '#0d0d1e', color: '#fff', padding: 14, borderRadius: 20,

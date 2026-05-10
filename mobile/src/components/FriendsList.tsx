@@ -9,6 +9,7 @@ import {
     ActivityIndicator,
     RefreshControl
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { ChatService, Conversation } from '../services/ChatService';
 import { AuthService, User } from '../services/AuthService';
 
@@ -45,42 +46,34 @@ export const FriendsList: React.FC = () => {
         }
     };
 
+    const navigation = useNavigation<any>();
+
     const renderItem = ({ item }: { item: Conversation }) => {
         const myMember = item.members.find(m => m.user_id === user?.id);
         const otherMember = item.members.find(m => m.user_id !== user?.id);
         const isPending = myMember?.status === 'pending';
         const profile = otherMember?.profile;
-        const name = profile?.full_name || profile?.username || 'Unknown User';
+        const name = profile?.full_name || profile?.username || 'User';
+        const initial = name.charAt(0).toUpperCase();
 
         return (
-            <View style={[styles.itemContainer, isPending && styles.pendingItem]}>
-                <View style={styles.leftContent}>
-                    <View style={styles.avatarContainer}>
-                        {profile?.avatar_url ? (
-                            <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
-                        ) : (
-                            <View style={styles.avatarPlaceholder}>
-                                <Text style={styles.avatarText}>{name.charAt(0).toUpperCase()}</Text>
-                            </View>
-                        )}
-                    </View>
-                    <View style={styles.infoContainer}>
-                        <Text style={styles.name}>{name}</Text>
-                        <Text style={styles.status}>
-                            {isPending ? 'Wants to chat' : 'Friend'}
-                        </Text>
-                    </View>
+            <TouchableOpacity 
+                style={styles.compactItem} 
+                activeOpacity={0.7}
+                onPress={() => navigation.navigate('Chat', { conversationId: item.id, conversation: item })}
+            >
+                <View style={styles.compactAvatarWrap}>
+                    {profile?.avatar_url ? (
+                        <Image source={{ uri: profile.avatar_url }} style={styles.compactAvatar} />
+                    ) : (
+                        <View style={[styles.compactAvatarPlaceholder, isPending && styles.pendingAvatar]}>
+                            <Text style={styles.compactAvatarText}>{initial}</Text>
+                        </View>
+                    )}
+                    {isPending && <View style={styles.pendingBadge}><Text style={styles.pendingBadgeText}>!</Text></View>}
                 </View>
-                
-                {isPending && (
-                    <TouchableOpacity 
-                        style={styles.acceptButton}
-                        onPress={() => handleAccept(item.id)}
-                    >
-                        <Text style={styles.acceptButtonText}>Accept</Text>
-                    </TouchableOpacity>
-                )}
-            </View>
+                <Text style={styles.compactName} numberOfLines={1}>{name.split(' ')[0]}</Text>
+            </TouchableOpacity>
         );
     };
 
@@ -100,22 +93,18 @@ export const FriendsList: React.FC = () => {
     });
 
     return (
-        <View style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.headerTitle}>Social Hub</Text>
-            </View>
-            
+        <View style={styles.compactContainer}>
+            <Text style={styles.sectionTitle}>Social Hub</Text>
             <FlatList
+                horizontal
+                showsHorizontalScrollIndicator={false}
                 data={[...pendingRequests, ...friends]}
                 keyExtractor={(item) => item.id}
                 renderItem={renderItem}
-                contentContainerStyle={styles.listContent}
-                refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3b82f6" />
-                }
+                contentContainerStyle={styles.compactListContent}
                 ListEmptyComponent={
-                    <View style={styles.emptyContainer}>
-                        <Text style={styles.emptyText}>No friends or requests found.</Text>
+                    <View style={styles.emptyCompact}>
+                        <Text style={styles.emptyTextCompact}>No active contacts</Text>
                     </View>
                 }
             />
@@ -124,106 +113,92 @@ export const FriendsList: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#0a0a0a',
-        width: '100%',
+    compactContainer: {
+        paddingTop: 10,
+        backgroundColor: 'transparent',
+    },
+    sectionTitle: {
+        color: '#666',
+        fontSize: 12,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+        paddingHorizontal: 20,
+        marginBottom: 12,
+    },
+    compactListContent: {
+        paddingHorizontal: 15,
+    },
+    compactItem: {
+        alignItems: 'center',
+        marginRight: 15,
+        width: 70,
+    },
+    compactAvatarWrap: {
+        position: 'relative',
+        marginBottom: 6,
+    },
+    compactAvatar: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        borderWidth: 2,
+        borderColor: '#6366f133',
+    },
+    compactAvatarPlaceholder: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        backgroundColor: '#111122',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: '#111133',
+    },
+    pendingAvatar: {
+        borderColor: '#3b82f688',
+    },
+    compactAvatarText: {
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    pendingBadge: {
+        position: 'absolute',
+        top: -2,
+        right: -2,
+        backgroundColor: '#3b82f6',
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: '#060611',
+    },
+    pendingBadgeText: {
+        color: '#fff',
+        fontSize: 10,
+        fontWeight: '900',
+    },
+    compactName: {
+        color: '#eee',
+        fontSize: 11,
+        fontWeight: '500',
+        textAlign: 'center',
+    },
+    emptyCompact: {
+        paddingHorizontal: 5,
+        justifyContent: 'center',
+    },
+    emptyTextCompact: {
+        color: '#333',
+        fontSize: 12,
+        fontStyle: 'italic',
     },
     centerContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#0a0a0a',
-    },
-    header: {
-        paddingHorizontal: 20,
-        paddingTop: 20,
-        paddingBottom: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: '#1a1a1a',
-    },
-    headerTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#ffffff',
-    },
-    listContent: {
-        padding: 15,
-    },
-    itemContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#111111',
-        padding: 15,
-        borderRadius: 15,
-        marginBottom: 10,
-        borderWidth: 1,
-        borderColor: '#1a1a1a',
-    },
-    pendingItem: {
-        borderColor: '#3b82f644',
-        backgroundColor: '#3b82f611',
-    },
-    leftContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-    },
-    avatarContainer: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        overflow: 'hidden',
-        marginRight: 15,
-    },
-    avatar: {
-        width: '100%',
-        height: '100%',
-    },
-    avatarPlaceholder: {
-        width: '100%',
-        height: '100%',
-        backgroundColor: '#222',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    avatarText: {
-        color: '#fff',
-        fontSize: 20,
-        fontWeight: 'bold',
-    },
-    infoContainer: {
-        flex: 1,
-    },
-    name: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#fff',
-    },
-    status: {
-        fontSize: 12,
-        color: '#666',
-        marginTop: 2,
-    },
-    acceptButton: {
-        backgroundColor: '#3b82f6',
-        paddingHorizontal: 15,
-        paddingVertical: 8,
-        borderRadius: 10,
-    },
-    acceptButtonText: {
-        color: '#fff',
-        fontSize: 14,
-        fontWeight: 'bold',
-    },
-    emptyContainer: {
-        padding: 40,
-        alignItems: 'center',
-    },
-    emptyText: {
-        color: '#444',
-        fontSize: 16,
-        textAlign: 'center',
+        paddingVertical: 20,
     },
 });
