@@ -17,9 +17,7 @@ exports.getConversations = async (req, res) => {
       .select(`
         conversation_id,
         role,
-        status,
-        cleared_at,
-        joined_at
+        status
       `)
       .eq("user_id", userId);
 
@@ -79,7 +77,6 @@ exports.getConversations = async (req, res) => {
           .from("messages")
           .select("id, content, sender_id, created_at, type, read_at, delivered_at")
           .eq("conversation_id", conv.id)
-          .eq("is_deleted", false)
           .order("created_at", { ascending: false })
           .limit(1);
 
@@ -110,8 +107,8 @@ exports.getConversations = async (req, res) => {
           membership: {
             role: membership?.role,
             status: membership?.status,
-            cleared_at: membership?.cleared_at,
-            joined_at: membership?.joined_at
+            cleared_at: null,
+            joined_at: null
           },
           members: members || [],
           last_message: lastMsgs?.[0] || null
@@ -515,7 +512,6 @@ exports.getMessages = async (req, res) => {
                     attachment:media_attachments(*)
                 `)
         .eq("conversation_id", conversationId)
-        .eq("is_deleted", false)
         .order("created_at", { ascending: false })
         .limit(parseInt(limit));
 
@@ -543,7 +539,6 @@ exports.getMessages = async (req, res) => {
             .from("messages")
             .select("*")
             .eq("conversation_id", conversationId)
-            .eq("is_deleted", false)
             .order("created_at", { ascending: false })
             .limit(parseInt(limit));
           
@@ -565,7 +560,6 @@ exports.getMessages = async (req, res) => {
         .from("messages")
         .select("*")
         .eq("conversation_id", conversationId)
-        .eq("is_deleted", false)
         .order("created_at", { ascending: false })
         .limit(parseInt(limit));
       if (error) throw error;
@@ -593,7 +587,6 @@ exports.searchMessages = async (req, res) => {
                     attachment:media_attachments(*)
                 `)
         .eq("conversation_id", conversationId)
-        .eq("is_deleted", false)
         .ilike("content", `%${q}%`)
         .order("created_at", { ascending: false })
         .limit(100);
@@ -610,7 +603,6 @@ exports.searchMessages = async (req, res) => {
             .from("messages")
             .select("*")
             .eq("conversation_id", conversationId)
-            .eq("is_deleted", false)
             .ilike("content", `%${q}%`)
             .order("created_at", { ascending: false })
             .limit(100);
@@ -627,7 +619,6 @@ exports.searchMessages = async (req, res) => {
         .from("messages")
         .select("*")
         .eq("conversation_id", conversationId)
-        .eq("is_deleted", false)
         .ilike("content", `%${q}%`)
         .order("created_at", { ascending: false })
         .limit(100);

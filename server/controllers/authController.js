@@ -125,12 +125,16 @@ const login = async (req, res) => {
       return res.status(401).json({ error: error.message });
     }
 
-    // Fetch real profile data to get plan_tier and username
-    const { data: profile } = await supabase
+    // Fetch real profile data to get plan_tier and username (with fallback)
+    const { data: profile, error: pError } = await supabase
       .from("profiles")
       .select("username, full_name, avatar_url, plan_tier")
       .eq("id", data.user.id)
       .single();
+
+    if (pError) {
+      console.warn("[Auth] Profile enrichment failed, using metadata:", pError.message);
+    }
 
     res.status(200).json({
       success: true,

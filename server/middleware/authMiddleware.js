@@ -105,11 +105,28 @@ const requireAuth = async (req, res, next) => {
     if (cached && cached.expiresAt > Date.now()) {
       req.userProfile = cached.profile;
     } else {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("id, role, status, plan_tier, email, username")
-        .eq("id", data.user.id)
-        .single();
+      let profile = null;
+      try {
+        const { data: p, error: pError } = await supabase
+          .from("profiles")
+          .select("id, role, status, plan_tier, email, username")
+          .eq("id", data.user.id)
+          .single();
+        
+        if (pError) {
+          console.warn("[Auth] Preferred columns fetch failed, falling back:", pError.message);
+          const { data: fallbackP } = await supabase
+            .from("profiles")
+            .select("id, role, status, email, username")
+            .eq("id", data.user.id)
+            .single();
+          profile = fallbackP;
+        } else {
+          profile = p;
+        }
+      } catch (e) {
+        console.error("[Auth] Profile fetch crashed:", e.message);
+      }
 
       if (profile) {
         req.userProfile = profile;
