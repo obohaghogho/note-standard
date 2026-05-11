@@ -157,84 +157,86 @@ export const FriendsList: React.FC<{ limit?: number; showRequestsOnly?: boolean 
                             </div>
                         </div>
                     ) : (
-                    {/* Sent Requests Section */}
-                    {socialData.sentRequests.length > 0 && (
-                        <div className="mb-6">
-                            <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
-                                Sent Requests
-                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                            </h3>
+                        <>
+                            {/* Sent Requests Section */}
+                            {socialData.sentRequests.length > 0 && (
+                                <div className="mb-6">
+                                    <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+                                        Sent Requests
+                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                                    </h3>
+                                    <div className="grid gap-2">
+                                        {socialData.sentRequests.map((conv) => {
+                                            const otherMember = conv.members.find(m => m.user_id !== user?.id);
+                                            const profile = otherMember?.profile;
+                                            const name = profile?.full_name || profile?.username || 'Unknown User';
+                                            return (
+                                                <div key={conv.id} className="flex items-center justify-between p-3 rounded-2xl bg-white/[0.02] border border-white/5 opacity-60">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden border border-white/10">
+                                                            {profile?.avatar_url ? (
+                                                                <SecureImage src={profile.avatar_url} alt={name} className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <span className="text-gray-400 font-bold text-xs">{name.charAt(0).toUpperCase()}</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <span className="text-xs font-bold text-gray-300 block truncate">{name}</span>
+                                                            <span className="text-[9px] text-gray-500 font-medium uppercase tracking-tighter">Waiting for acceptance...</span>
+                                                        </div>
+                                                    </div>
+                                                    <Clock size={14} className="text-gray-600" />
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="grid gap-2">
-                                {socialData.sentRequests.map((conv) => {
+                                {socialData.friends.map((conv) => {
                                     const otherMember = conv.members.find(m => m.user_id !== user?.id);
                                     const profile = otherMember?.profile;
                                     const name = profile?.full_name || profile?.username || 'Unknown User';
+                                    const online = otherMember ? isUserOnline(otherMember.user_id) : false;
+
                                     return (
-                                        <div key={conv.id} className="flex items-center justify-between p-3 rounded-2xl bg-white/[0.02] border border-white/5 opacity-60">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden border border-white/10">
-                                                    {profile?.avatar_url ? (
-                                                        <SecureImage src={profile.avatar_url} alt={name} className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        <span className="text-gray-400 font-bold text-xs">{name.charAt(0).toUpperCase()}</span>
+                                        <div 
+                                            key={conv.id}
+                                            onClick={() => handleChat(conv.id)}
+                                            className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/5 hover:border-primary/30 hover:bg-white/[0.08] transition-all cursor-pointer group"
+                                        >
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <div className="relative">
+                                                    <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden border border-white/10">
+                                                        {profile?.avatar_url ? (
+                                                            <SecureImage src={profile.avatar_url} alt={name} className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            <span className="text-gray-400 font-bold">{name.charAt(0).toUpperCase()}</span>
+                                                        )}
+                                                    </div>
+                                                    {online && (
+                                                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-gray-900 rounded-full shadow-sm" />
                                                     )}
                                                 </div>
                                                 <div className="min-w-0">
-                                                    <span className="text-xs font-bold text-gray-300 block truncate">{name}</span>
-                                                    <span className="text-[9px] text-gray-500 font-medium uppercase tracking-tighter">Waiting for acceptance...</span>
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-sm font-bold text-white truncate group-hover:text-primary transition-colors">{name}</span>
+                                                        <UserBadge planTier={profile?.plan_tier} isVerified={profile?.is_verified} />
+                                                    </div>
+                                                    <p className="text-[10px] text-gray-500 font-medium truncate uppercase tracking-tighter">
+                                                        {online ? 'Active Now' : 'Offline'}
+                                                    </p>
                                                 </div>
                                             </div>
-                                            <Clock size={14} className="text-gray-600" />
+                                            <button className="p-2 text-gray-500 group-hover:text-primary transition-colors opacity-0 group-hover:opacity-100">
+                                                <MessageSquare size={16} />
+                                            </button>
                                         </div>
                                     );
                                 })}
                             </div>
-                        </div>
-                    )}
-
-                    <div className="grid gap-2">
-                            {socialData.friends.map((conv) => {
-                                const otherMember = conv.members.find(m => m.user_id !== user?.id);
-                                const profile = otherMember?.profile;
-                                const name = profile?.full_name || profile?.username || 'Unknown User';
-                                const online = otherMember ? isUserOnline(otherMember.user_id) : false;
-
-                                return (
-                                    <div 
-                                        key={conv.id}
-                                        onClick={() => handleChat(conv.id)}
-                                        className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/5 hover:border-primary/30 hover:bg-white/[0.08] transition-all cursor-pointer group"
-                                    >
-                                        <div className="flex items-center gap-3 min-w-0">
-                                            <div className="relative">
-                                                <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden border border-white/10">
-                                                    {profile?.avatar_url ? (
-                                                        <SecureImage src={profile.avatar_url} alt={name} className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        <span className="text-gray-400 font-bold">{name.charAt(0).toUpperCase()}</span>
-                                                    )}
-                                                </div>
-                                                {online && (
-                                                    <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-gray-900 rounded-full shadow-sm" />
-                                                )}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <div className="flex items-center gap-1">
-                                                    <span className="text-sm font-bold text-white truncate group-hover:text-primary transition-colors">{name}</span>
-                                                    <UserBadge planTier={profile?.plan_tier} isVerified={profile?.is_verified} />
-                                                </div>
-                                                <p className="text-[10px] text-gray-500 font-medium truncate uppercase tracking-tighter">
-                                                    {online ? 'Active Now' : 'Offline'}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <button className="p-2 text-gray-500 group-hover:text-primary transition-colors opacity-0 group-hover:opacity-100">
-                                            <MessageSquare size={16} />
-                                        </button>
-                                    </div>
-                                );
-                            })}
-                        </div>
+                        </>
                     )}
                 </div>
             )}
