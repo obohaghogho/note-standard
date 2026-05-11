@@ -43,6 +43,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   const members = conversation?.members ?? [];
   const otherMember = members.find(m => m.user_id !== user?.id);
   const profile = otherMember?.profile;
+  const [isOtherOnline, setIsOtherOnline] = useState(profile?.is_online || false);
   const recipientName = profile?.full_name || profile?.username || 'Chat';
 
   const fetchMessages = useCallback(async () => {
@@ -65,7 +66,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     const initSocket = async () => {
       try {
         const token = await AuthService.getToken();
-        // GATEWAY_URL = https://realtime-gateway-gsb5.onrender.com
+        console.log('[ChatScreen] Connecting to gateway:', GATEWAY_URL);
         const socket = io(GATEWAY_URL, {
           auth: { token },
           transports: ['websocket'],
@@ -76,7 +77,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         socketRef.current = socket;
 
         socket.on('connect', () => {
-          console.log('[ChatScreen] Socket connected to gateway');
+          console.log('[ChatScreen] Socket connected to gateway successfully');
           socket.emit('chat:join', conversationId);
         });
 
@@ -84,8 +85,17 @@ export default function ChatScreen({ navigation, route }: Props) {
           console.error('[ChatScreen] Socket connection error:', err.message);
         });
 
+        // Presence Update
+        socket.on('user_online', ({ userId, online }) => {
+          if (userId === otherMember?.user_id) {
+            console.log(`[ChatScreen] Presence change: ${userId} is now ${online ? 'ONLINE' : 'OFFLINE'}`);
+            setIsOtherOnline(online);
+          }
+        });
+
         // Incoming real-time message from another user
         socket.on('chat:message', (msg: Message) => {
+          console.log('[ChatScreen] Received realtime message:', msg.id);
           // Avoid duplicates — ignore if we sent this (optimistic already added)
           setMessages(prev => {
             const isDuplicate = prev.some(m => m.id === msg.id);
@@ -108,7 +118,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       socketRef.current?.disconnect();
       socketRef.current = null;
     };
-  }, [conversationId, fetchMessages]);
+  }, [conversationId, fetchMessages, otherMember?.user_id]);
 
   const sendMessage = async () => {
     if (!text.trim() || sending) return;
@@ -196,7 +206,9 @@ export default function ChatScreen({ navigation, route }: Props) {
         )}
         <View style={styles.headerInfo}>
           <Text style={styles.headerName}>{recipientName}</Text>
-          <Text style={styles.headerStatus}>● Online</Text>
+          <Text style={[styles.headerStatus, { color: isOtherOnline ? '#10b981' : '#666' }]}>
+            ● {isOtherOnline ? 'Online' : 'Offline'}
+          </Text>
         </View>
       </View>
 

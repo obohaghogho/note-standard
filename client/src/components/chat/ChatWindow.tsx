@@ -1362,11 +1362,24 @@ const SearchMessageItem = ({
     fetchUrl: (p: string) => Promise<string | null>, 
     onPreviewMedia: (data: { url: string; type: 'image' | 'video'; fileName?: string; isSender?: boolean }) => void 
 }) => {
-    const highlight = (text: string) => {
+    const highlight = (text: string | null | undefined) => {
+        if (!text) return '';
         if (!query) return text;
-        const parts = text.split(new RegExp(`(${query})`, 'gi'));
-        return parts.map((part, i) => part.toLowerCase() === query.toLowerCase() ? <span key={i} className="bg-yellow-500/30 text-yellow-200 rounded-sm px-0.5">{part}</span> : part);
+        try {
+            const parts = text.split(new RegExp(`(${query})`, 'gi'));
+            return parts.map((part, i) => part.toLowerCase() === query.toLowerCase() ? <span key={i} className="bg-yellow-500/30 text-yellow-200 rounded-sm px-0.5">{part}</span> : part);
+        } catch (e) {
+            console.error('[Chat] Highlight error:', e);
+            return text;
+        }
     };
+    
+    const formatDate = (dateStr: string | null | undefined) => {
+        if (!dateStr) return '';
+        const d = new Date(dateStr);
+        return isNaN(d.getTime()) ? '' : d.toLocaleString();
+    };
+
     return (
         <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} opacity-90 hover:opacity-100 transition-opacity`}>
             <div className={`max-w-[85%] rounded-xl p-3 border ${isOwn ? 'bg-blue-600/20 border-blue-500/30' : 'bg-gray-800 border-gray-700'}`}>
@@ -1394,7 +1407,7 @@ const SearchMessageItem = ({
                 )}
                 <p className="text-xs text-blue-400 font-bold mb-1">{isOwn ? 'You' : 'Matched Message'}</p>
                 <p className="text-sm text-gray-200">{highlight(msg.content)}</p>
-                <p className="text-[10px] text-gray-500 mt-2">{new Date(msg.created_at).toLocaleString()}</p>
+                <p className="text-[10px] text-gray-500 mt-2">{formatDate(msg.created_at)}</p>
             </div>
         </div>
     );

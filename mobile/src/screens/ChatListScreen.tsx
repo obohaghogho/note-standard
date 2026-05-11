@@ -53,7 +53,10 @@ function ConversationItem({
             <Text style={styles.avatarInitial}>{initial}</Text>
           </LinearGradient>
         )}
-        <View style={[styles.onlineDot, { backgroundColor: isPending ? '#3b82f6' : '#10b981' }]} />
+        <View style={[
+          styles.onlineDot, 
+          { backgroundColor: isPending ? '#3b82f6' : (profile?.is_online ? '#10b981' : '#444') }
+        ]} />
       </View>
 
       <View style={styles.itemInfo}>
@@ -120,13 +123,29 @@ export default function ChatListScreen({ navigation }: Props) {
         reconnection: true,
         reconnectionAttempts: 5,
       });
-      socket.on('connect', () => console.log('[ChatList] Socket connected'));
-      socket.on('chat:new_conversation', () => load());
-      socket.on('chat:conversation_updated', () => load());
-    };
-    initSocket();
-    return () => { if (socket) socket.disconnect(); };
-  }, [load]);
+        socket.on('connect', () => console.log('[ChatList] Socket connected'));
+        socket.on('chat:new_conversation', () => load());
+        socket.on('chat:conversation_updated', () => load());
+        
+        // Real-time presence updates for the list
+        socket.on('user_online', ({ userId, online }) => {
+          setConversations(prev => prev.map(conv => {
+            const hasUser = conv.members?.some(m => m.user_id === userId);
+            if (!hasUser) return conv;
+            return {
+              ...conv,
+              members: conv.members.map(m => 
+                m.user_id === userId 
+                  ? { ...m, profile: m.profile ? { ...m.profile, is_online: online } : m.profile } 
+                  : m
+              )
+            };
+          }));
+        });
+      };
+      initSocket();
+      return () => { if (socket) socket.disconnect(); };
+    }, [load]);
 
   const onRefresh = async () => {
     setRefreshing(true);
