@@ -128,7 +128,7 @@ const login = async (req, res) => {
     // Fetch real profile data to get plan_tier and username
     const { data: profile } = await supabase
       .from("profiles")
-      .select("username, full_name, avatar_url, plan")
+      .select("username, full_name, avatar_url, plan_tier")
       .eq("id", data.user.id)
       .single();
 
@@ -142,7 +142,7 @@ const login = async (req, res) => {
         username: profile?.username || data.user.user_metadata?.username,
         full_name: profile?.full_name || data.user.user_metadata?.full_name,
         avatar_url: profile?.avatar_url || data.user.user_metadata?.avatar_url,
-        plan_tier: profile?.plan || 'FREE'
+        plan_tier: profile?.plan_tier || 'FREE'
       }
     });
   } catch (err) {
