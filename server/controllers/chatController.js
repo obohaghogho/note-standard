@@ -8,33 +8,52 @@ const realtime = require("../services/realtimeService");
 exports.getConversations = async (req, res) => {
   try {
     const userId = req.user.id;
+    console.log(`[Chat] Fetching conversations for user: ${userId}`);
 
-    // 1. Fetch conversations where user is a member
-    // Simplified select to avoid complex join errors in production
+    // 1. Fetch memberships with basic conversation data
+    // We use a simpler select first to ensure we get the list of IDs
     const { data: memberships, error: memError } = await supabase
       .from("conversation_members")
       .select(`
         conversation_id,
         role,
         status,
-        conversation:conversations (*)
+        cleared_at,
+        joined_at
       `)
       .eq("user_id", userId);
 
     if (memError) {
       console.error("[Chat] Membership fetch error:", memError.message);
-      return res.status(500).json({ error: "Failed to load chats" });
+      return res.status(500).json({ error: "Failed to load chat memberships", details: memError.message });
     }
 
-    // 2. Normalize and fetch members separately to be safe
-    const processed = await Promise.all((memberships || []).map(async (m) => {
-      let conv = m.conversation;
-      if (!conv) return null;
-      if (Array.isArray(conv)) conv = conv[0];
+    if (!memberships || memberships.length === 0) {
+      return res.json([]);
+    }
 
+    const conversationIds = memberships.map(m => m.conversation_id);
+
+    // 2. Fetch conversations data in batch
+    const { data: conversations, error: convError } = await supabase
+      .from("conversations")
+      .select("*")
+      .in("id", conversationIds);
+
+    if (convError) {
+      console.error("[Chat] Conversations fetch error:", convError.message);
+      return res.status(500).json({ error: "Failed to load conversation details" });
+    }
+
+    // 3. Enrich conversations with members and last message
+    // To keep it simple and avoid complex joins that might fail in production,
+    // we'll do this in parallel but with careful error handling.
+    const enriched = await Promise.all(conversations.map(async (conv) => {
       try {
-        // Fetch members for this conversation separately
-        const { data: members } = await supabase
+        const membership = memberships.find(m => m.conversation_id === conv.id);
+        
+        // Fetch all members for this conversation
+        const { data: members, error: memberError } = await supabase
           .from("conversation_members")
           .select(`
             user_id,
@@ -45,52 +64,79 @@ exports.getConversations = async (req, res) => {
               username,
               full_name,
               avatar_url,
-              is_verified
+              is_verified,
+              plan_tier
             )
           `)
           .eq("conversation_id", conv.id);
-        
-        return {
-          ...conv,
-          unreadCount: m.unread_count || 0,
-          membership: {
-            role: m.role,
-            status: m.status
-          },
-          members: members || []
-        };
-      } catch (e) {
-        console.error(`[Chat] Error fetching members for ${conv.id}:`, e.message);
-        return { ...conv, members: [] };
-      }
-    }));
 
-    const finalConversations = processed.filter(Boolean);
+        if (memberError) {
+          console.warn(`[Chat] Member fetch error for ${conv.id}:`, memberError.message);
+        }
 
-    // 3. Fetch last message for each conversation
-    const conversationsWithLastMsg = await Promise.all(finalConversations.map(async (conv) => {
-      try {
-        const { data: lastMsgs } = await supabase
+        // Fetch last message
+        const { data: lastMsgs, error: msgError } = await supabase
           .from("messages")
           .select("id, content, sender_id, created_at, type, read_at, delivered_at")
           .eq("conversation_id", conv.id)
+          .eq("is_deleted", false)
           .order("created_at", { ascending: false })
           .limit(1);
 
+        if (msgError) {
+          console.warn(`[Chat] Last msg fetch error for ${conv.id}:`, msgError.message);
+        }
+
+        // Fetch unread count for the user in this conversation
+        // If we have an unread_count column in conversation_members, we use it, 
+        // otherwise we fallback to a query.
+        let unreadCount = 0;
+        try {
+          const { count, error: countError } = await supabase
+            .from("messages")
+            .select("*", { count: 'exact', head: true })
+            .eq("conversation_id", conv.id)
+            .neq("sender_id", userId)
+            .is("read_at", null);
+          
+          if (!countError) unreadCount = count || 0;
+        } catch (e) {
+          console.warn(`[Chat] Unread count query failed for ${conv.id}:`, e.message);
+        }
+
         return {
           ...conv,
+          unreadCount,
+          membership: {
+            role: membership?.role,
+            status: membership?.status,
+            cleared_at: membership?.cleared_at,
+            joined_at: membership?.joined_at
+          },
+          members: members || [],
           last_message: lastMsgs?.[0] || null
         };
       } catch (e) {
-        console.error(`[Chat] Last message fetch error for ${conv.id}:`, e.message);
-        return { ...conv, last_message: null };
+        console.error(`[Chat] Enrichment failed for conv ${conv.id}:`, e.message);
+        return { ...conv, members: [], last_message: null, unreadCount: 0 };
       }
     }));
 
-    res.json(conversationsWithLastMsg);
+    // Sort by updated_at or created_at
+    const sorted = enriched.sort((a, b) => {
+      const timeA = new Date(a.last_message?.created_at || a.updated_at || a.created_at).getTime();
+      const timeB = new Date(b.last_message?.created_at || b.updated_at || b.created_at).getTime();
+      return timeB - timeA;
+    });
+
+    res.json(sorted);
   } catch (err) {
-    console.error("[Chat] getConversations 500:", err.message);
-    res.status(500).json({ error: "Server Error", details: err.message });
+    console.error("[Chat] getConversations Critical Error:", err.message, err.stack);
+    res.status(500).json({ 
+      error: "Internal Server Error", 
+      details: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
   }
 };
 
@@ -181,16 +227,16 @@ exports.createConversation = async (req, res) => {
     const userId = req.user.id;
     const { type, name, participants: recipientUsernames } = req.body;
 
+    console.log(`[Chat] createConversation request from ${userId} for participants:`, recipientUsernames);
+
     if (!recipientUsernames || recipientUsernames.length === 0) {
-      return res.status(400).json({
-        error: "Participants (usernames) required",
-      });
+      return res.status(400).json({ error: "Participants (usernames) required" });
     }
 
     // 1. Resolve Usernames to IDs (Case-Insensitive)
     const normalizedUsernames = recipientUsernames.map(u => u.trim().toLowerCase());
     
-    // Use .in() for efficiency
+    // Attempt batch resolution first
     const { data: profiles, error: profileError } = await supabase
       .from("profiles")
       .select("id, username")
@@ -198,21 +244,16 @@ exports.createConversation = async (req, res) => {
     
     let finalProfiles = profiles || [];
 
-    // If exact match doesn't find all, try case-insensitive individually
+    // Fallback for case-insensitive if some were not found
     if (finalProfiles.length !== recipientUsernames.length) {
       for (const username of recipientUsernames) {
         if (!finalProfiles.find(p => p.username?.toLowerCase() === username.toLowerCase())) {
-          const { data: p, error: singleError } = await supabase
+          const { data: p } = await supabase
             .from("profiles")
             .select("id, username")
             .ilike("username", username)
             .maybeSingle();
-          
-          if (p) {
-            finalProfiles.push(p);
-          } else if (singleError) {
-            console.error(`[Chat] Error resolving user ${username}:`, singleError.message);
-          }
+          if (p) finalProfiles.push(p);
         }
       }
     }
@@ -221,80 +262,78 @@ exports.createConversation = async (req, res) => {
       return res.status(404).json({ error: "No valid participants found" });
     }
 
-    if (finalProfiles.length !== recipientUsernames.length) {
-      console.warn("[Chat] Some participants could not be resolved:", {
-        requested: recipientUsernames,
-        found: finalProfiles.map(p => p.username)
-      });
-      // Optionally continue with found profiles or fail
-      // For direct chat, we need exactly 1 recipient
-      if (type === 'direct' && finalProfiles.length === 0) {
-        return res.status(404).json({ error: "Recipient not found" });
-      }
-    }
-
     const participantIds = finalProfiles.map((p) => p.id);
 
-    // 2. For direct chats, check if a conversation already exists
+    // 2. Check for existing direct conversation
     if (type === "direct" && participantIds.length === 1) {
       const recipientId = participantIds[0];
 
-      // Query to find if these two users already share a direct conversation
-      const { data: existingMembers, error: checkError } = await supabase
+      // Find conversations the current user is in
+      const { data: myMemberships } = await supabase
         .from("conversation_members")
-        .select("conversation_id, conversation:conversations!inner(type)")
-        .eq("user_id", userId)
-        .eq("conversation.type", "direct");
+        .select("conversation_id")
+        .eq("user_id", userId);
 
-      if (!checkError && existingMembers && existingMembers.length > 0) {
-        const convIds = existingMembers.map((m) => m.conversation_id);
-
-        const { data: commonMember, error: commonError } = await supabase
+      if (myMemberships && myMemberships.length > 0) {
+        const convIds = myMemberships.map(m => m.conversation_id);
+        
+        // Find if the recipient is in any of those same conversations
+        const { data: commonMemberships } = await supabase
           .from("conversation_members")
           .select("conversation_id")
           .in("conversation_id", convIds)
-          .eq("user_id", recipientId)
-          .maybeSingle();
+          .eq("user_id", recipientId);
 
-        if (commonMember) {
-          // Found existing conversation, fetch it and return
-          const { data: fullConv } = await supabase
+        if (commonMemberships && commonMemberships.length > 0) {
+          // Check if any of these common conversations are 'direct'
+          const finalConvIds = commonMemberships.map(m => m.conversation_id);
+          const { data: existingConvs } = await supabase
             .from("conversations")
-            .select(`
-              *,
-              members:conversation_members (
-                user_id,
-                role,
-                status,
-                profile:profiles (
-                  username,
-                  full_name,
-                  avatar_url
-                )
-              )
-            `)
-            .eq("id", commonMember.conversation_id)
-            .single();
+            .select("id, type")
+            .in("id", finalConvIds)
+            .eq("type", "direct");
 
-          return res.json({
-            conversation: fullConv,
-            isExisting: true,
-          });
+          if (existingConvs && existingConvs.length > 0) {
+            const existingId = existingConvs[0].id;
+            
+            const { data: conv } = await supabase
+              .from("conversations")
+              .select("*")
+              .eq("id", existingId)
+              .single();
+
+            const { data: members } = await supabase
+              .from("conversation_members")
+              .select(`
+                user_id, role, status,
+                profile:profiles (id, username, full_name, avatar_url, is_verified)
+              `)
+              .eq("conversation_id", existingId);
+
+            return res.json({
+              conversation: { ...conv, members: members || [] },
+              isExisting: true
+            });
+          }
         }
       }
     }
 
-    // 3. Create Conversation
+    // 3. Create New Conversation
     const { data: convData, error: convError } = await supabase
       .from("conversations")
-      .insert([{ type, name }])
+      .insert([{ type: type || 'direct', name }])
       .select()
       .single();
 
-    if (convError) throw convError;
+    if (convError) {
+      console.error("[Chat] Error creating conversation entry:", convError.message);
+      throw convError;
+    }
+
     const conversationId = convData.id;
 
-    // 4. Prepare Members Payload
+    // 4. Add Members
     const membersPayload = [
       {
         conversation_id: conversationId,
@@ -302,51 +341,63 @@ exports.createConversation = async (req, res) => {
         role: "admin",
         status: "accepted",
       },
-    ];
-
-    for (const pId of participantIds) {
-      membersPayload.push({
+      ...participantIds.map((pId) => ({
         conversation_id: conversationId,
         user_id: pId,
         role: "member",
         status: "pending",
-      });
-    }
+      })),
+    ];
 
     const { error: memberError } = await supabase
       .from("conversation_members")
       .insert(membersPayload);
 
-    if (memberError) throw memberError;
-
-    // 5. Send notifications
-    const { data: creator } = await supabase.from("profiles").select(
-      "username",
-    ).eq("id", userId).single();
-    for (const p of profiles) {
-      await createNotification({
-        receiverId: p.id,
-        senderId: userId,
-        type: "chat_request",
-        title: "New Chat Request",
-        message: `${
-          creator?.username || "Someone"
-        } wants to start a chat with you`,
-        link: `/dashboard/chat?id=${conversationId}`,
-      });
-
-      // Notify recipient of new conversation
-      await realtime.emitToUser(p.id, "chat:new_conversation", convData);
+    if (memberError) {
+      console.error("[Chat] Error adding members:", memberError.message);
+      await supabase.from("conversations").delete().eq("id", conversationId);
+      throw memberError;
     }
 
-    res.json({
-      conversation: convData,
-      members: membersPayload,
-      resolvedParticipants: profiles,
-    });
+    // 5. Return complete conversation object
+    const { data: finalMembers } = await supabase
+      .from("conversation_members")
+      .select(`
+        user_id, role, status,
+        profile:profiles (id, username, full_name, avatar_url, is_verified)
+      `)
+      .eq("conversation_id", conversationId);
+
+    const result = {
+      conversation: { ...convData, members: finalMembers || [] },
+      isExisting: false
+    };
+
+    // Notify participants via Gateway and Database
+    try {
+      const { data: creator } = await supabase.from("profiles").select("username").eq("id", userId).single();
+      
+      await realtime.emitToUser(userId, "chat:new_conversation", result.conversation);
+      
+      for (const pId of participantIds) {
+        await createNotification({
+          receiverId: pId,
+          senderId: userId,
+          type: "chat_request",
+          title: "New Chat Request",
+          message: `${creator?.username || "Someone"} wants to start a chat with you`,
+          link: `/dashboard/chat?id=${conversationId}`,
+        });
+        await realtime.emitToUser(pId, "chat:new_conversation", result.conversation);
+      }
+    } catch (e) {
+      console.warn("[Chat] Notification/Socket emission failed in createConversation:", e.message);
+    }
+
+    res.json(result);
   } catch (err) {
-    console.error("Error creating conversation:", err.message);
-    res.status(500).json({ error: "Server Error" });
+    console.error("[Chat] createConversation Fatal Error:", err.message);
+    res.status(500).json({ error: "Failed to create conversation", details: err.message });
   }
 };
 
@@ -379,61 +430,56 @@ exports.acceptConversation = async (req, res) => {
     }
 
     // Update status to accepted
-    const { data, error } = await supabase
+    const { data: updatedMember, error: updateError } = await supabase
       .from("conversation_members")
       .update({ status: "accepted" })
       .eq("conversation_id", conversationId)
       .eq("user_id", userId)
-      .select();
+      .select()
+      .single();
 
-    if (error) throw error;
-
-    // Notify other members
-    const { data: members } = await supabase
-      .from("conversation_members")
-      .select("user_id")
-      .eq("conversation_id", conversationId)
-      .neq("user_id", userId);
-
-    const { data: accepter } = await supabase.from("profiles").select(
-      "username",
-    ).eq("id", userId).single();
-
-    if (members) {
-      for (const m of members) {
-        await createNotification({
-          receiverId: m.user_id,
-          senderId: userId,
-          type: "chat_accepted",
-          title: "Chat Request Accepted",
-          message: `${
-            accepter?.username || "A user"
-          } accepted your chat request`,
-          link: `/dashboard/chat?id=${conversationId}`,
-        });
-
-        // Notify about the change in conversation status
-        await realtime.emitToUser(m.user_id, "chat:conversation_updated", {
-          id: conversationId,
-          conversationId,
-          userId,
-          status: "accepted",
-        });
-      }
+    if (updateError) {
+      console.error("[Chat] Error updating member status:", updateError.message);
+      throw updateError;
     }
 
-    // Also notify self across tabs
+    // Notify other members
+    try {
+      const { data: members } = await supabase
+        .from("conversation_members")
+        .select("user_id")
+        .eq("conversation_id", conversationId)
+        .neq("user_id", userId);
+
+      const { data: accepter } = await supabase.from("profiles").select("username").eq("id", userId).single();
+
+      if (members) {
+        for (const m of members) {
+          await createNotification({
+            receiverId: m.user_id,
+            senderId: userId,
+            type: "chat_accepted",
+            title: "Chat Request Accepted",
+            message: `${accepter?.username || "Someone"} accepted your chat request!`,
+            link: `/dashboard/chat?id=${conversationId}`,
+          });
+          await realtime.emitToUser(m.user_id, "chat:conversation_updated", { conversationId, status: "accepted" });
+        }
+      }
+    } catch (notifErr) {
+      console.warn("[Chat] Notification failure in acceptConversation:", notifErr.message);
+    }
+
+    // Also notify self across other tabs/devices
     await realtime.emitToUser(userId, "chat:conversation_updated", {
-      id: conversationId,
       conversationId,
-      userId,
       status: "accepted",
     });
 
-    res.json({ success: true, member: data });
+    res.json({ success: true, member: updatedMember });
   } catch (err) {
-    console.error("Error accepting conversation:", err.message);
-    res.status(500).json({ error: "Server Error" });
+    console.error("[Chat] Error accepting conversation:", err.message);
+    res.status(500).json({ error: "Server Error", details: err.message });
   }
 };
 

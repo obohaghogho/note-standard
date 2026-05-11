@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#060611"
+      "backgroundColor": "#1E40AF"
     },
     "ios": {
       "supportsTablet": true,
@@ -30,7 +30,7 @@
       "minSdkVersion": 23,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#060611"
+        "backgroundColor": "#1E40AF"
       },
       "permissions": [
         "android.permission.RECORD_AUDIO",
