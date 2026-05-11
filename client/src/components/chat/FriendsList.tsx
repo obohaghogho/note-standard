@@ -14,13 +14,19 @@ export const FriendsList: React.FC<{ limit?: number; showRequestsOnly?: boolean 
     const navigate = useNavigate();
 
     const socialData = useMemo(() => {
-        if (!conversations || !user) return { friends: [], requests: [] };
+        if (!conversations || !user) return { friends: [], requests: [], sentRequests: [] };
 
         const directChats = conversations.filter(c => c.type === 'direct');
         
         const requests = directChats.filter(c => {
             const myMember = c.members.find(m => m.user_id === user.id);
             return myMember?.status === 'pending';
+        });
+
+        const sentRequests = directChats.filter(c => {
+            const myMember = c.members.find(m => m.user_id === user.id);
+            const otherMember = c.members.find(m => m.user_id !== user.id);
+            return myMember?.status === 'accepted' && otherMember?.status === 'pending';
         });
 
         const friends = directChats.filter(c => {
@@ -31,7 +37,8 @@ export const FriendsList: React.FC<{ limit?: number; showRequestsOnly?: boolean 
 
         return { 
             friends: limit ? friends.slice(0, limit) : friends, 
-            requests 
+            requests,
+            sentRequests
         };
     }, [conversations, user, limit]);
 
@@ -150,7 +157,42 @@ export const FriendsList: React.FC<{ limit?: number; showRequestsOnly?: boolean 
                             </div>
                         </div>
                     ) : (
-                        <div className="grid gap-2">
+                    {/* Sent Requests Section */}
+                    {socialData.sentRequests.length > 0 && (
+                        <div className="mb-6">
+                            <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+                                Sent Requests
+                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                            </h3>
+                            <div className="grid gap-2">
+                                {socialData.sentRequests.map((conv) => {
+                                    const otherMember = conv.members.find(m => m.user_id !== user?.id);
+                                    const profile = otherMember?.profile;
+                                    const name = profile?.full_name || profile?.username || 'Unknown User';
+                                    return (
+                                        <div key={conv.id} className="flex items-center justify-between p-3 rounded-2xl bg-white/[0.02] border border-white/5 opacity-60">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden border border-white/10">
+                                                    {profile?.avatar_url ? (
+                                                        <SecureImage src={profile.avatar_url} alt={name} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <span className="text-gray-400 font-bold text-xs">{name.charAt(0).toUpperCase()}</span>
+                                                    )}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <span className="text-xs font-bold text-gray-300 block truncate">{name}</span>
+                                                    <span className="text-[9px] text-gray-500 font-medium uppercase tracking-tighter">Waiting for acceptance...</span>
+                                                </div>
+                                            </div>
+                                            <Clock size={14} className="text-gray-600" />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="grid gap-2">
                             {socialData.friends.map((conv) => {
                                 const otherMember = conv.members.find(m => m.user_id !== user?.id);
                                 const profile = otherMember?.profile;

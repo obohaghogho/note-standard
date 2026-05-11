@@ -61,8 +61,8 @@ function TeamChatModal({
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={styles.chatContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 90}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         <View style={styles.chatHeader}>
           <TouchableOpacity onPress={onClose} style={styles.chatBackBtn}>
@@ -272,18 +272,26 @@ const styles = StyleSheet.create({
   emptyMsgText: { color: '#555', fontSize: 14 },
   inputRow: {
     flexDirection: 'row', 
-    alignItems: 'flex-end', 
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: Platform.OS === 'ios' ? 30 : 25,
+    alignItems: 'center', 
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 12,
     backgroundColor: '#0d0d1e',
     borderTopWidth: 1, 
     borderColor: '#111133', 
-    gap: 10,
+    gap: 8,
   },
   messageInput: {
-    flex: 1, backgroundColor: '#0d0d1e', color: '#fff', padding: 14, borderRadius: 20,
-    maxHeight: 100, fontSize: 15, borderWidth: 1, borderColor: '#1a1a3e',
+    flex: 1, 
+    backgroundColor: '#16162a', 
+    color: '#fff', 
+    paddingHorizontal: 16,
+    paddingVertical: 10, 
+    borderRadius: 24,
+    maxHeight: 120, 
+    fontSize: 15, 
+    borderWidth: 1, 
+    borderColor: '#1e1e3a',
   },
   sendBtn: {
     width: 46, height: 46, borderRadius: 23, backgroundColor: '#f59e0b',

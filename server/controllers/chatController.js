@@ -55,7 +55,6 @@ exports.getConversations = async (req, res) => {
     const conversations = (data || []).map((item) => {
       let conv = item.conversation;
       if (!conv) {
-        console.warn("[Chat] getConversations: Membership has no associated conversation record", item);
         return null;
       }
 
@@ -68,7 +67,7 @@ exports.getConversations = async (req, res) => {
       
       const lastMessages = conv.last_message || [];
       const sorted = Array.isArray(lastMessages) 
-        ? [...lastMessages].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        ? [...lastMessages].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         : [lastMessages];
       
       const result = {
@@ -79,7 +78,7 @@ exports.getConversations = async (req, res) => {
       return result;
     }).filter(Boolean);
 
-    console.log(`[Chat] getConversations: Returning ${conversations.length} processed conversations`);
+    console.log(`[Chat] getConversations: Returning ${conversations.length} processed conversations for user ${userId}`);
     res.json(conversations);
   } catch (err) {
     console.error("Error fetching conversations:", err.message);

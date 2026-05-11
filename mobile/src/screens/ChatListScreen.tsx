@@ -24,8 +24,8 @@ function ConversationItem({
   onPress: () => void;
   onAccept?: () => void;
 }) {
-  const otherMember = item.members.find(m => m.user_id !== userId);
-  const myMember = item.members.find(m => m.user_id === userId);
+  const otherMember = item.members?.find(m => m.user_id !== userId);
+  const myMember = item.members?.find(m => m.user_id === userId);
   const profile = otherMember?.profile;
   const name = profile?.full_name || profile?.username || 'Unknown User';
   const isPending = myMember?.status === 'pending';
@@ -71,6 +71,8 @@ function ConversationItem({
 export default function ChatListScreen({ navigation }: Props) {
   const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const isFocused = useIsFocused();
 
   const load = useCallback(async () => {
@@ -78,8 +80,8 @@ export default function ChatListScreen({ navigation }: Props) {
       const data = await ChatService.getConversations();
       // Sort: accepted first, then pending
       const sorted = [...data].sort((a, b) => {
-        const myA = a.members.find(m => m.user_id === user?.id);
-        const myB = b.members.find(m => m.user_id === user?.id);
+        const myA = a.members?.find(m => m.user_id === user?.id);
+        const myB = b.members?.find(m => m.user_id === user?.id);
         const aAccepted = myA?.status === 'accepted' ? 0 : 1;
         const bAccepted = myB?.status === 'accepted' ? 0 : 1;
         return aAccepted - bAccepted;
@@ -129,7 +131,7 @@ export default function ChatListScreen({ navigation }: Props) {
   };
 
   const pendingCount = conversations.filter(c => {
-    const my = c.members.find(m => m.user_id === user?.id);
+    const my = c.members?.find(m => m.user_id === user?.id);
     return my?.status === 'pending';
   }).length;
 
