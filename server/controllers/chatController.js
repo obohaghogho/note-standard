@@ -9,72 +9,81 @@ exports.getConversations = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // Fetch conversations where user is a member
-    const { data, error } = await supabase
+    // 1. Fetch conversations where user is a member
+    // We use a simpler select to avoid join errors
+    const { data: memberships, error: memError } = await supabase
       .from("conversation_members")
       .select(`
-                conversation_id,
-                role,
-                status,
-                unread_count,
-                conversation:conversations (
-                    id,
-                    type,
-                    name,
-                    created_at,
-                    updated_at,
-                    members:conversation_members (
-                        user_id,
-                        role,
-                        status,
-                        profile:profiles (
-                            id,
-                            username,
-                            full_name,
-                            avatar_url,
-                            is_verified,
-                            plan_tier
-                        )
-                    )
-                )
+        conversation_id,
+        role,
+        status,
+        conversation:conversations (
+          id,
+          type,
+          name,
+          updated_at,
+          members:conversation_members (
+            user_id,
+            role,
+            status,
+            profile:profiles (
+              id,
+              username,
+              full_name,
+              avatar_url,
+              is_verified,
+              plan_tier
+            )
+          )
+        )
       `)
       .eq("user_id", userId);
 
-    if (error) {
-      console.error("[Chat] Query error in getConversations:", error.message);
-      throw error;
+    if (memError) {
+      console.error("[Chat] Membership fetch error:", memError.message);
+      return res.status(500).json({ error: "Failed to load chats" });
     }
 
-    const conversations = (data || []).map((item) => {
-      let conv = item.conversation;
-      if (!conv) {
-        return null;
-      }
-
-      // Handle case where PostgREST returns a single-item array instead of an object
-      if (Array.isArray(conv)) {
-        conv = conv[0];
-      }
-
+    // 2. Normalize data
+    const processed = (memberships || []).map(m => {
+      let conv = m.conversation;
       if (!conv) return null;
-      
-      const lastMessages = conv.last_message || [];
-      const sorted = Array.isArray(lastMessages) 
-        ? [...lastMessages].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        : [lastMessages];
-      
-      const result = {
+      if (Array.isArray(conv)) conv = conv[0]; // PostgREST array handling
+      if (!conv) return null;
+
+      return {
         ...conv,
-        last_message: sorted[0] || null
+        unreadCount: m.unread_count || 0, // Fallback if missing
+        membership: {
+          role: m.role,
+          status: m.status
+        }
       };
-      
-      return result;
     }).filter(Boolean);
 
-    console.log(`[Chat] getConversations: Returning ${conversations.length} processed conversations for user ${userId}`);
-    res.json(conversations);
+    // 3. Fetch last message for each conversation
+    const conversationsWithLastMsg = await Promise.all(processed.map(async (conv) => {
+      try {
+        const { data: lastMsgs } = await supabase
+          .from("messages")
+          .select("id, content, sender_id, created_at, type, read_at, delivered_at")
+          .eq("conversation_id", conv.id)
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        return {
+          ...conv,
+          last_message: lastMsgs?.[0] || null
+        };
+      } catch (e) {
+        console.error(`[Chat] Last message fetch error for ${conv.id}:`, e.message);
+        return { ...conv, last_message: null };
+      }
+    }));
+
+    res.json(conversationsWithLastMsg);
   } catch (err) {
-    console.error("Error fetching conversations:", err.message);
+    console.error("[Chat] getConversations 500:", err.message);
     res.status(500).json({ error: "Server Error" });
   }
 };

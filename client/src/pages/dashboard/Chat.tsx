@@ -43,7 +43,7 @@ function ChatContent() {
 
     return (
         <div className="flex h-full bg-gray-950 shadow-none rounded-none md:border md:border-gray-800 md:rounded-2xl overflow-hidden md:shadow-2xl relative">
-            <AnimatePresence mode="wait" initial={false}>
+            <AnimatePresence initial={false}>
                 {/* Sidebar - Visible on large screens, or on mobile when no conversation is active */}
                 {(!activeConversationId || window.innerWidth >= 768) && (
                     <motion.div 
