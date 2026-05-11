@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import EventEmitter from './EventEmitter';
 
 const TOKEN_KEY = 'auth_token';
+const REFRESH_TOKEN_KEY = 'refresh_token';
 const USER_KEY = 'user_data';
 
 export interface User {
@@ -22,6 +23,14 @@ export class AuthService {
         return await AsyncStorage.getItem(TOKEN_KEY);
     }
 
+    static async setRefreshToken(token: string) {
+        await AsyncStorage.setItem(REFRESH_TOKEN_KEY, token);
+    }
+
+    static async getRefreshToken() {
+        return await AsyncStorage.getItem(REFRESH_TOKEN_KEY);
+    }
+
     static async setUser(user: User) {
         await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
     }
@@ -33,6 +42,7 @@ export class AuthService {
 
     static async logout() {
         await AsyncStorage.removeItem(TOKEN_KEY);
+        await AsyncStorage.removeItem(REFRESH_TOKEN_KEY);
         await AsyncStorage.removeItem(USER_KEY);
         EventEmitter.emit('auth:logout', null);
     }

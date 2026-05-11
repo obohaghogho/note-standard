@@ -13,45 +13,38 @@ exports.getConversations = async (req, res) => {
     const { data, error } = await supabase
       .from("conversation_members")
       .select(`
+                conversation_id,
+                role,
+                status,
+                unread_count,
                 conversation:conversations (
                     id,
                     type,
-                    chat_type,
-                    support_status,
                     name,
+                    created_at,
                     updated_at,
                     members:conversation_members (
                         user_id,
                         role,
                         status,
                         profile:profiles (
+                            id,
                             username,
                             full_name,
                             avatar_url,
                             is_verified,
                             plan_tier
                         )
-                    ),
-                    last_message:messages (
-                        content,
-                        sender_id,
-                        created_at,
-                        read_at,
-                        delivered_at
                     )
                 )
-            `)
-      .eq("user_id", userId)
-      .order("joined_at", { ascending: false });
+      `)
+      .eq("user_id", userId);
 
     if (error) {
-      console.error("[Chat] Query error in getConversations:", error);
+      console.error("[Chat] Query error in getConversations:", error.message);
       throw error;
     }
 
-    console.log(`[Chat] getConversations: Found ${data?.length || 0} memberships for user ${userId}`);
-
-    // Transform structure for client: Flatten and pick latest message
     const conversations = (data || []).map((item) => {
       let conv = item.conversation;
       if (!conv) {
@@ -180,46 +173,49 @@ exports.createConversation = async (req, res) => {
     }
 
     // 1. Resolve Usernames to IDs (Case-Insensitive)
-    const normalizedUsernames = recipientUsernames.map(u => u.toLowerCase());
+    const normalizedUsernames = recipientUsernames.map(u => u.trim().toLowerCase());
+    
+    // Use .in() for efficiency
     const { data: profiles, error: profileError } = await supabase
       .from("profiles")
       .select("id, username")
-      // Use .in with lowercase usernames if we can guarantee they are stored lowercase
-      // Or use a more flexible filter
-      .filter("username", "in", `(${recipientUsernames.join(',')})`);
+      .in("username", recipientUsernames);
     
-    // Better: resolve them individually or use a query that handles casing
-    // Actually, NoteStandard usually stores usernames as lowercase or treats them so.
-    // Let's use a more robust way to find them.
-    const { data: foundProfiles, error: findError } = await supabase
-      .from("profiles")
-      .select("id, username")
-      .filter("username", "in", `(${recipientUsernames.join(',')})`);
+    let finalProfiles = profiles || [];
 
-    // If exact match fails, try case-insensitive for each
-    let finalProfiles = foundProfiles || [];
+    // If exact match doesn't find all, try case-insensitive individually
     if (finalProfiles.length !== recipientUsernames.length) {
       for (const username of recipientUsernames) {
-        if (!finalProfiles.find(p => p.username === username)) {
-           const { data: p } = await supabase
-             .from("profiles")
-             .select("id, username")
-             .ilike("username", username)
-             .single();
-           if (p) finalProfiles.push(p);
+        if (!finalProfiles.find(p => p.username?.toLowerCase() === username.toLowerCase())) {
+          const { data: p, error: singleError } = await supabase
+            .from("profiles")
+            .select("id, username")
+            .ilike("username", username)
+            .maybeSingle();
+          
+          if (p) {
+            finalProfiles.push(p);
+          } else if (singleError) {
+            console.error(`[Chat] Error resolving user ${username}:`, singleError.message);
+          }
         }
       }
     }
 
-    if (
-      profileError || !finalProfiles || finalProfiles.length !== recipientUsernames.length
-    ) {
-      console.error("[Chat] Participant resolution failed:", {
+    if (finalProfiles.length === 0) {
+      return res.status(404).json({ error: "No valid participants found" });
+    }
+
+    if (finalProfiles.length !== recipientUsernames.length) {
+      console.warn("[Chat] Some participants could not be resolved:", {
         requested: recipientUsernames,
-        found: finalProfiles.map(p => p.username),
-        error: profileError
+        found: finalProfiles.map(p => p.username)
       });
-      return res.status(404).json({ error: "One or more users not found or username casing mismatch" });
+      // Optionally continue with found profiles or fail
+      // For direct chat, we need exactly 1 recipient
+      if (type === 'direct' && finalProfiles.length === 0) {
+        return res.status(404).json({ error: "Recipient not found" });
+      }
     }
 
     const participantIds = finalProfiles.map((p) => p.id);

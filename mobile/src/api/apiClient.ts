@@ -32,25 +32,55 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const config = error.config;
+    const originalRequest = error.config;
     
     if (error.response) {
       const status = error.response.status;
       
-      console.error(`[apiClient] API Error ${status} on ${config?.url}:`, error.response.data);
+      console.error(`[apiClient] API Error ${status} on ${originalRequest?.url}:`, error.response.data);
 
-      if (status === 401) {
+      if (status === 401 && !originalRequest._retry) {
         // Unauthorized - Token likely expired
-        console.warn('[apiClient] Token expired or invalid. Logging out...');
-        await AuthService.logout();
-        Alert.alert('Session Expired', 'Your session has expired. Please log in again.');
+        originalRequest._retry = true;
+        
+        try {
+          console.log('[apiClient] Attempting token refresh...');
+          const refreshToken = await AuthService.getRefreshToken();
+          
+          if (!refreshToken) {
+            console.warn('[apiClient] No refresh token available');
+            throw new Error('No refresh token');
+          }
+
+          // Request a new access token from our backend
+          const res = await axios.post(`${API_URL}/api/auth/refresh-token`, { 
+            refresh_token: refreshToken 
+          });
+
+          const { token: newToken, refresh_token: newRefreshToken } = res.data;
+          
+          // Save new tokens
+          await AuthService.setToken(newToken);
+          if (newRefreshToken) await AuthService.setRefreshToken(newRefreshToken);
+          
+          console.log('[apiClient] Token refreshed successfully');
+
+          // Retry the original request with the new token
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          return apiClient(originalRequest);
+        } catch (refreshError) {
+          console.error('[apiClient] Refresh failed. Logging out...', refreshError);
+          await AuthService.logout();
+          Alert.alert('Session Expired', 'Your session has expired. Please log in again.');
+          return Promise.reject(error);
+        }
       } else if (status >= 500) {
         // Server Error
         console.error('[apiClient] Server error encountered');
       }
     } else if (error.request) {
       // Network Error
-      console.error(`[apiClient] Network Error on ${config?.url}:`, error.message);
+      console.error(`[apiClient] Network Error on ${originalRequest?.url}:`, error.message);
     } else {
       console.error('[apiClient] Request setup error:', error.message);
     }

@@ -12,6 +12,7 @@ const { validateRegistration } = require("../middleware/authValidator");
 // Custom Signup Flow - Pre-registration checks
 router.post("/register", authLimiter, validateRegistration, register);
 router.post("/login", authLimiter, login);
+router.post("/refresh-token", require("../controllers/authController").refreshToken);
 router.post("/change-password", authLimiter, require("../middleware/authMiddleware").requireAuth, require("../controllers/authController").changePassword);
 // Allow any origin for forgot password to prevent silent CORS preflight failures on custom domains
 router.post("/forgot-password", cors(), emailLimiter, forgotPassword);

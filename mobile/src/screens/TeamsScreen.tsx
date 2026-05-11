@@ -61,8 +61,8 @@ function TeamChatModal({
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={styles.chatContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <View style={styles.chatHeader}>
           <TouchableOpacity onPress={onClose} style={styles.chatBackBtn}>
@@ -105,22 +105,25 @@ function TeamChatModal({
           />
         )}
 
-        <View style={styles.inputRow}>
-          <TextInput
-            style={styles.messageInput}
-            placeholder="Type a message..."
-            placeholderTextColor="#555"
-            value={newMessage}
-            onChangeText={setNewMessage}
-            multiline
-          />
-          <TouchableOpacity
-            style={[styles.sendBtn, !newMessage.trim() && styles.sendBtnDisabled]}
-            onPress={sendMessage}
-            disabled={sending || !newMessage.trim()}
-          >
-            {sending ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.sendBtnText}>↑</Text>}
-          </TouchableOpacity>
+        <View style={styles.inputContainer}>
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.messageInput}
+              placeholder="Type a message..."
+              placeholderTextColor="#555"
+              value={newMessage}
+              onChangeText={setNewMessage}
+              multiline
+              textAlignVertical="center"
+            />
+            <TouchableOpacity
+              style={[styles.sendBtn, !newMessage.trim() && styles.sendBtnDisabled]}
+              onPress={sendMessage}
+              disabled={sending || !newMessage.trim()}
+            >
+              {sending ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.sendBtnText}>↑</Text>}
+            </TouchableOpacity>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -270,15 +273,17 @@ const styles = StyleSheet.create({
   messageTime: { color: 'rgba(255,255,255,0.4)', fontSize: 10, marginTop: 4, alignSelf: 'flex-end' },
   emptyMsg: { alignItems: 'center', paddingTop: 80 },
   emptyMsgText: { color: '#555', fontSize: 14 },
+  inputContainer: {
+    backgroundColor: '#0d0d1e',
+    borderTopWidth: 1, 
+    borderColor: '#111133', 
+    paddingBottom: Platform.OS === 'ios' ? 34 : 12,
+  },
   inputRow: {
     flexDirection: 'row', 
     alignItems: 'center', 
     paddingHorizontal: 12,
     paddingTop: 10,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 12,
-    backgroundColor: '#0d0d1e',
-    borderTopWidth: 1, 
-    borderColor: '#111133', 
     gap: 8,
   },
   messageInput: {

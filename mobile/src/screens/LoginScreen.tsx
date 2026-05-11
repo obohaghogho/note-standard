@@ -15,6 +15,7 @@ export default function LoginScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -73,6 +74,22 @@ export default function LoginScreen({ navigation }: Props) {
               />
             </View>
 
+            <View style={styles.authOptions}>
+              <TouchableOpacity 
+                style={styles.rememberMe} 
+                onPress={() => setRememberMe(!rememberMe)}
+              >
+                <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+                  {rememberMe && <Text style={styles.checkboxTick}>✓</Text>}
+                </View>
+                <Text style={styles.rememberMeText}>Remember me</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword' as any)}>
+                <Text style={styles.forgotText}>Forgot Password?</Text>
+              </TouchableOpacity>
+            </View>
+
             <TouchableOpacity style={styles.loginBtn} onPress={handleLogin} disabled={loading}>
               <LinearGradient colors={['#6366f1', '#4f46e5']} style={styles.loginGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
                 {loading ? (
@@ -126,4 +143,44 @@ const styles = StyleSheet.create({
   registerLink: { marginTop: 24, alignItems: 'center' },
   registerLinkText: { color: '#666', fontSize: 14 },
   registerLinkAccent: { color: '#6366f1', fontWeight: '700' },
+  authOptions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    marginTop: 4,
+  },
+  rememberMe: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: '#333',
+    backgroundColor: '#0a0a16',
+    marginRight: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#6366f1',
+    borderColor: '#6366f1',
+  },
+  checkboxTick: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  rememberMeText: {
+    color: '#666',
+    fontSize: 13,
+  },
+  forgotText: {
+    color: '#6366f1',
+    fontSize: 13,
+    fontWeight: '600',
+  },
 });

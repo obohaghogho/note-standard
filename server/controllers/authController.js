@@ -135,6 +135,7 @@ const login = async (req, res) => {
     res.status(200).json({
       success: true,
       token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
       user: {
         id: data.user.id,
         email: data.user.email,
@@ -147,6 +148,40 @@ const login = async (req, res) => {
   } catch (err) {
     console.error("[Login Error]:", err.message);
     res.status(500).json({ error: "Login failed. Please try again." });
+  }
+};
+
+/**
+ * Refreshes the access token using the refresh token
+ */
+const refreshToken = async (req, res) => {
+  try {
+    const { refresh_token } = req.body;
+    if (!refresh_token) {
+      return res.status(400).json({ error: "Refresh token is required." });
+    }
+
+    const { data, error } = await supabase.auth.refreshSession({
+      refresh_token: refresh_token,
+    });
+
+    if (error) {
+      console.error("[AUTH-ERROR] Token refresh failed:", error.message);
+      return res.status(401).json({ error: error.message });
+    }
+
+    res.status(200).json({
+      success: true,
+      token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+      }
+    });
+  } catch (err) {
+    console.error("[Refresh Error]:", err.message);
+    res.status(500).json({ error: "Failed to refresh token." });
   }
 };
 
@@ -277,4 +312,5 @@ module.exports = {
   verifyOtp,
   resendOtp,
   forgotPassword,
+  refreshToken,
 };
