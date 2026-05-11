@@ -10,32 +10,14 @@ exports.getConversations = async (req, res) => {
     const userId = req.user.id;
 
     // 1. Fetch conversations where user is a member
-    // We use a simpler select to avoid join errors
+    // Simplified select to avoid complex join errors in production
     const { data: memberships, error: memError } = await supabase
       .from("conversation_members")
       .select(`
         conversation_id,
         role,
         status,
-        conversation:conversations (
-          id,
-          type,
-          name,
-          updated_at,
-          members:conversation_members (
-            user_id,
-            role,
-            status,
-            profile:profiles (
-              id,
-              username,
-              full_name,
-              avatar_url,
-              is_verified,
-              plan_tier
-            )
-          )
-        )
+        conversation:conversations (*)
       `)
       .eq("user_id", userId);
 
@@ -44,25 +26,49 @@ exports.getConversations = async (req, res) => {
       return res.status(500).json({ error: "Failed to load chats" });
     }
 
-    // 2. Normalize data
-    const processed = (memberships || []).map(m => {
+    // 2. Normalize and fetch members separately to be safe
+    const processed = await Promise.all((memberships || []).map(async (m) => {
       let conv = m.conversation;
       if (!conv) return null;
-      if (Array.isArray(conv)) conv = conv[0]; // PostgREST array handling
-      if (!conv) return null;
+      if (Array.isArray(conv)) conv = conv[0];
 
-      return {
-        ...conv,
-        unreadCount: m.unread_count || 0, // Fallback if missing
-        membership: {
-          role: m.role,
-          status: m.status
-        }
-      };
-    }).filter(Boolean);
+      try {
+        // Fetch members for this conversation separately
+        const { data: members } = await supabase
+          .from("conversation_members")
+          .select(`
+            user_id,
+            role,
+            status,
+            profile:profiles (
+              id,
+              username,
+              full_name,
+              avatar_url,
+              is_verified
+            )
+          `)
+          .eq("conversation_id", conv.id);
+        
+        return {
+          ...conv,
+          unreadCount: m.unread_count || 0,
+          membership: {
+            role: m.role,
+            status: m.status
+          },
+          members: members || []
+        };
+      } catch (e) {
+        console.error(`[Chat] Error fetching members for ${conv.id}:`, e.message);
+        return { ...conv, members: [] };
+      }
+    }));
+
+    const finalConversations = processed.filter(Boolean);
 
     // 3. Fetch last message for each conversation
-    const conversationsWithLastMsg = await Promise.all(processed.map(async (conv) => {
+    const conversationsWithLastMsg = await Promise.all(finalConversations.map(async (conv) => {
       try {
         const { data: lastMsgs } = await supabase
           .from("messages")
@@ -84,7 +90,7 @@ exports.getConversations = async (req, res) => {
     res.json(conversationsWithLastMsg);
   } catch (err) {
     console.error("[Chat] getConversations 500:", err.message);
-    res.status(500).json({ error: "Server Error" });
+    res.status(500).json({ error: "Server Error", details: err.message });
   }
 };
 
@@ -439,15 +445,20 @@ exports.getMessages = async (req, res) => {
     const { limit = 50, before } = req.query;
     const userId = req.user.id;
 
-    // Fetch cleared_at for the user
-    const { data: member } = await supabase
-      .from("conversation_members")
-      .select("cleared_at")
-      .eq("conversation_id", conversationId)
-      .eq("user_id", userId)
-      .single();
+    let clearedAt = null;
+    try {
+      // Fetch cleared_at for the user - wrap in try-catch as column might be missing
+      const { data: member } = await supabase
+        .from("conversation_members")
+        .select("cleared_at")
+        .eq("conversation_id", conversationId)
+        .eq("user_id", userId)
+        .maybeSingle();
 
-    const clearedAt = member?.cleared_at;
+      clearedAt = member?.cleared_at;
+    } catch (e) {
+      console.warn("[Chat] Could not fetch cleared_at (column might be missing):", e.message);
+    }
 
     // Try full query with attachments first
     try {
@@ -476,18 +487,24 @@ exports.getMessages = async (req, res) => {
         // If the error is about missing relationship/table, fallback to basic query
         if (
           error.code === "PGRST200" ||
+          error.code === "42703" ||
           error.message.includes("media_attachments")
         ) {
           console.warn(
-            "[Chat Controller] Falling back to basic messages query (media_attachments missing)",
+            "[Chat Controller] Falling back to basic messages query",
           );
-          const { data: simpleData, error: simpleError } = await supabase
+          let fallbackQuery = supabase
             .from("messages")
             .select("*")
             .eq("conversation_id", conversationId)
             .eq("is_deleted", false)
             .order("created_at", { ascending: false })
             .limit(parseInt(limit));
+          
+          if (before) fallbackQuery = fallbackQuery.lt("created_at", before);
+          if (clearedAt) fallbackQuery = fallbackQuery.gt("created_at", clearedAt);
+
+          const { data: simpleData, error: simpleError } = await fallbackQuery;
 
           if (simpleError) throw simpleError;
           return res.json((simpleData || []).reverse());
@@ -510,7 +527,7 @@ exports.getMessages = async (req, res) => {
     }
   } catch (err) {
     console.error("Error fetching messages:", err.message);
-    res.status(500).json({ error: "Server Error" });
+    res.status(500).json({ error: "Server Error", details: err.message });
   }
 };
 
