@@ -612,10 +612,7 @@ exports.searchMessages = async (req, res) => {
     try {
       const { data, error } = await supabase
         .from("messages")
-        .select(`
-                    *,
-                    attachment:media_attachments(*)
-                `)
+        .select("*, attachment:media_attachments(*)")
         .eq("conversation_id", conversationId)
         .ilike("content", `%${q}%`)
         .order("created_at", { ascending: false })
@@ -805,7 +802,20 @@ exports.sendMessage = async (req, res) => {
       // Detect Language
       detectedLang = await detectLanguage(content);
     }
-
+    let createdMessageId = null;
+    try {
+      const { data, error } = await supabase
+        .from("messages")
+        .insert([{
+          conversation_id: conversationId,
+          sender_id: userId,
+          content: content,
+          type: type || "text",
+          sentiment,
+          detected_language: detectedLang
+        }])
+        .select("*, attachment:media_attachments(*), sender:profiles!messages_sender_id_fkey(id, username, full_name, avatar_url), reply_to:messages!messages_reply_to_id_fkey(id, content, sender_id)")
+        .single();
 
       if (error) {
         // If it's a "column does not exist" error (42703 for Postgres)
