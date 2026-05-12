@@ -211,7 +211,7 @@ function TeamChatModal({
           ) : (
             <FlatList
               ref={flatListRef}
-              data={messages}
+              data={Array.isArray(messages) ? messages : []}
               keyExtractor={m => m.id}
               contentContainerStyle={styles.messagesList}
               onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
@@ -326,7 +326,7 @@ export default function TeamsScreen() {
     setChatLoading(true);
     try {
       const res = await apiClient.get(`/teams/${teamId}/messages`);
-      setTeamMessages(prev => ({ ...prev, [teamId]: res.data || [] }));
+      setTeamMessages(prev => ({ ...prev, [teamId]: Array.isArray(res.data) ? res.data : [] }));
     } catch (e) {
       console.error('[TeamsScreen] Load messages error:', e);
     } finally {
