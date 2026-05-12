@@ -196,8 +196,8 @@ function TeamChatModal({
             <Text style={styles.chatBackText}>← Back</Text>
           </TouchableOpacity>
           <View style={styles.chatHeaderInfo}>
-            <Text style={styles.chatHeaderTitle} numberOfLines={1}>{team.name}</Text>
-            <Text style={styles.chatHeaderSub}>{team.my_role?.toUpperCase()}</Text>
+            <Text style={styles.chatHeaderTitle} numberOfLines={1}>{team.name || 'Team Chat'}</Text>
+            <Text style={styles.chatHeaderSub}>{team.my_role?.toUpperCase() || 'MEMBER'}</Text>
           </View>
         </View>
 
@@ -475,7 +475,7 @@ export default function TeamsScreen() {
           <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
         ) : (
           <View style={styles.avatarPlaceholder}>
-            <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
+            <Text style={styles.avatarText}>{(item.name || 'T').charAt(0).toUpperCase()}</Text>
           </View>
         )}
       </View>
