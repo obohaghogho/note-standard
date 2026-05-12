@@ -14,6 +14,9 @@ import { API_URL, GATEWAY_URL } from '../Config';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { ChatStackParamList } from '../navigation/ChatStack';
+import { MediaService } from '../services/MediaService';
+import VoiceService from '../services/VoiceService';
+import { Audio } from 'expo-av';
 
 type Props = {
   navigation: NativeStackNavigationProp<ChatStackParamList, 'Chat'>;
@@ -26,6 +29,13 @@ interface Message {
   sender_id: string;
   created_at: string;
   sender?: { full_name?: string; avatar_url?: string };
+  attachment?: {
+    id: string;
+    file_type: string;
+    storage_path: string;
+    file_name: string;
+  };
+  type?: string;
   _optimistic?: boolean; // local-only flag for optimistic messages
 }
 
@@ -36,8 +46,10 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   const flatRef = useRef<FlatList>(null);
+  const [audioPlayer, setAudioPlayer] = useState<Audio.Sound | null>(null);
 
   // Safe member access — conversation.members may be partial (no profile) when coming from createConversation
   const members = conversation?.members ?? [];
@@ -120,17 +132,19 @@ export default function ChatScreen({ navigation, route }: Props) {
     };
   }, [conversationId, fetchMessages, otherMember?.user_id]);
 
-  const sendMessage = async () => {
-    if (!text.trim() || sending) return;
-    const content = text.trim();
-    setText('');
+  const sendMessage = async (overrideContent?: string, attachmentId?: string) => {
+    const contentToSend = overrideContent || text.trim();
+    if (!contentToSend && !attachmentId) return;
+    if (sending) return;
+    
+    if (!overrideContent) setText('');
     setSending(true);
 
-    // FIX: Optimistic update — add message to local state immediately so the sender sees it
+    // FIX: Optimistic update
     const optimisticId = `opt-${Date.now()}`;
     const optimisticMsg: Message = {
       id: optimisticId,
-      content,
+      content: contentToSend,
       sender_id: user?.id ?? '',
       created_at: new Date().toISOString(),
       _optimistic: true,
@@ -140,10 +154,9 @@ export default function ChatScreen({ navigation, route }: Props) {
     try {
       const res = await apiClient.post(
         `/chat/conversations/${conversationId}/messages`,
-        { content }
+        { content: contentToSend, attachmentId }
       );
 
-      // Replace optimistic message with the confirmed server message
       const serverMsg: Message = res.data;
       if (serverMsg?.id) {
         setMessages(prev =>
@@ -152,12 +165,72 @@ export default function ChatScreen({ navigation, route }: Props) {
       }
     } catch (e: any) {
       console.error('[ChatScreen] Send failed:', e);
-      // Remove the optimistic message on failure and restore text input
       setMessages(prev => prev.filter(m => m.id !== optimisticId));
-      setText(content);
-      Alert.alert('Send Failed', 'Could not send your message. Please try again.');
+      if (!overrideContent) setText(contentToSend);
+      Alert.alert('Send Failed', 'Could not send your message.');
     } finally {
       setSending(false);
+    }
+  };
+
+  const handlePickMedia = async () => {
+    try {
+      const asset = await MediaService.pickImage();
+      if (!asset) return;
+
+      setLoading(true);
+      const attachment = await MediaService.uploadMedia(
+        asset.uri,
+        asset.fileName || 'upload.jpg',
+        asset.mimeType || 'image/jpeg',
+        conversationId
+      );
+      
+      await sendMessage(`Sent ${attachment.file_type}`, attachment.id);
+    } catch (err: any) {
+      Alert.alert('Upload Error', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVoiceNote = async () => {
+    if (isRecording) {
+      setIsRecording(false);
+      try {
+        setLoading(true);
+        const attachment = await VoiceService.stopRecording(conversationId);
+        if (attachment) {
+          await sendMessage('Voice Note', attachment.id);
+        }
+      } catch (err: any) {
+        Alert.alert('Voice Note Error', err.message);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      try {
+        await VoiceService.startRecording();
+        setIsRecording(true);
+      } catch (err: any) {
+        Alert.alert('Recording Error', err.message);
+      }
+    }
+  };
+
+  const playVoiceNote = async (path: string) => {
+    try {
+      if (audioPlayer) {
+        await audioPlayer.unloadAsync();
+      }
+
+      // Get signed URL
+      const res = await apiClient.get(`/media/signed-url?path=${path}`);
+      const { sound } = await Audio.Sound.createAsync({ uri: res.data.url });
+      setAudioPlayer(sound);
+      await sound.playAsync();
+    } catch (err) {
+      console.error('Failed to play audio', err);
     }
   };
 
@@ -175,6 +248,22 @@ export default function ChatScreen({ navigation, route }: Props) {
           isMe ? styles.bubbleMe : styles.bubbleThem,
           item._optimistic && styles.bubbleOptimistic,
         ]}>
+          {item.attachment && (
+            <View style={styles.attachmentContainer}>
+              {item.attachment.file_type.startsWith('image') ? (
+                <Image 
+                  source={{ uri: `https://tngcvgisfctggvivcnva.supabase.co/storage/v1/object/public/chat-media/${item.attachment.storage_path}` }} 
+                  style={styles.attachmentImage as any} 
+                />
+              ) : item.attachment.file_type.startsWith('audio') ? (
+                <TouchableOpacity onPress={() => playVoiceNote(item.attachment!.storage_path)} style={styles.voiceNoteBtn}>
+                  <Text style={styles.voiceNoteText}>▶ Voice Note</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={styles.attachmentFile}>📎 {item.attachment.file_name}</Text>
+              )}
+            </View>
+          )}
           <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.content}</Text>
           <Text style={styles.bubbleTime}>
             {item._optimistic
@@ -210,6 +299,34 @@ export default function ChatScreen({ navigation, route }: Props) {
             ● {isOtherOnline ? 'Online' : 'Offline'}
           </Text>
         </View>
+
+        {/* Call Buttons */}
+        <View style={styles.headerActions}>
+          <TouchableOpacity 
+            onPress={() => navigation.navigate('Call', { 
+              type: 'audio', 
+              conversationId, 
+              targetUserId: otherMember?.user_id || '', 
+              targetName: recipientName,
+              isIncoming: false 
+            })} 
+            style={styles.headerActionBtn}
+          >
+            <Text style={styles.headerActionIcon}>📞</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => navigation.navigate('Call', { 
+              type: 'video', 
+              conversationId, 
+              targetUserId: otherMember?.user_id || '', 
+              targetName: recipientName,
+              isIncoming: false 
+            })} 
+            style={styles.headerActionBtn}
+          >
+            <Text style={styles.headerActionIcon}>📹</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Messages */}
@@ -233,6 +350,10 @@ export default function ChatScreen({ navigation, route }: Props) {
 
       {/* Input */}
       <View style={styles.inputRow}>
+        <TouchableOpacity style={styles.attachBtn} onPress={handlePickMedia}>
+          <Text style={styles.attachIcon}>📎</Text>
+        </TouchableOpacity>
+
         <TextInput
           style={styles.input}
           placeholder="Type a message..."
@@ -243,18 +364,30 @@ export default function ChatScreen({ navigation, route }: Props) {
           maxLength={2000}
           returnKeyType="default"
         />
-        <TouchableOpacity
-          style={[styles.sendBtn, (!text.trim() || sending) && styles.sendBtnDisabled]}
-          onPress={sendMessage}
-          disabled={sending || !text.trim()}
-        >
-          <LinearGradient
-            colors={sending ? ['#333', '#222'] : ['#6366f1', '#4f46e5']}
-            style={styles.sendGrad}
+
+        {text.trim() ? (
+          <TouchableOpacity
+            style={[styles.sendBtn, (!text.trim() || sending) && styles.sendBtnDisabled]}
+            onPress={() => sendMessage()}
+            disabled={sending || !text.trim()}
           >
-            <Text style={styles.sendIcon}>{sending ? '…' : '➤'}</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+            <LinearGradient
+              colors={sending ? ['#333', '#222'] : ['#6366f1', '#4f46e5']}
+              style={styles.sendGrad}
+            >
+              <Text style={styles.sendIcon}>{sending ? '…' : '➤'}</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.micBtn} onPress={handleVoiceNote}>
+            <LinearGradient 
+              colors={isRecording ? ['#ef4444', '#dc2626'] : ['#6366f1', '#4f46e5']} 
+              style={styles.sendGrad}
+            >
+              <Text style={styles.sendIcon}>{isRecording ? '⏹' : '🎤'}</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -278,6 +411,9 @@ const styles = StyleSheet.create({
   headerInfo: { flex: 1 },
   headerName: { color: '#fff', fontSize: 17, fontWeight: '700' },
   headerStatus: { color: '#10b981', fontSize: 12, marginTop: 2 },
+  headerActions: { flexDirection: 'row', gap: 12 },
+  headerActionBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#111133', justifyContent: 'center', alignItems: 'center' },
+  headerActionIcon: { fontSize: 18 },
   msgList: { padding: 16, paddingBottom: 8 },
   msgRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 12 },
   msgRowMe: { justifyContent: 'flex-end' },
@@ -293,6 +429,11 @@ const styles = StyleSheet.create({
   bubbleText: { color: '#ccc', fontSize: 15, lineHeight: 21 },
   bubbleTextMe: { color: '#fff' },
   bubbleTime: { color: 'rgba(255,255,255,0.4)', fontSize: 10, marginTop: 4, textAlign: 'right' },
+  attachmentContainer: { marginBottom: 8, borderRadius: 8, overflow: 'hidden' },
+  attachmentImage: { width: 200, height: 150, borderRadius: 8, backgroundColor: '#222' },
+  voiceNoteBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', padding: 8, borderRadius: 8 },
+  voiceNoteText: { color: '#fff', fontSize: 14 },
+  attachmentFile: { color: '#6366f1', fontSize: 14, textDecorationLine: 'underline' },
   emptyChat: { alignItems: 'center', paddingTop: 60 },
   emptyChatText: { color: '#444', fontSize: 14 },
   inputRow: {
@@ -306,6 +447,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#060611',
     gap: 8,
   },
+  attachBtn: { width: 44, height: 48, justifyContent: 'center', alignItems: 'center' },
+  attachIcon: { fontSize: 24, color: '#6366f1' },
   input: {
     flex: 1,
     backgroundColor: '#0d0d1e',
@@ -319,6 +462,7 @@ const styles = StyleSheet.create({
     maxHeight: 120,
     minHeight: 48,
   },
+  micBtn: { borderRadius: 24, overflow: 'hidden' },
   sendBtn: { borderRadius: 24, overflow: 'hidden' },
   sendBtnDisabled: { opacity: 0.5 },
   sendGrad: { width: 48, height: 48, justifyContent: 'center', alignItems: 'center', borderRadius: 24 },

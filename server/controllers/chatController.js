@@ -11,15 +11,26 @@ exports.getConversations = async (req, res) => {
     console.log(`[Chat] Fetching conversations for user: ${userId}`);
 
     // 1. Fetch memberships with basic conversation data
-    // We use a simpler select first to ensure we get the list of IDs
-    const { data: memberships, error: memError } = await supabase
-      .from("conversation_members")
-      .select(`
-        conversation_id,
-        role,
-        status
-      `)
-      .eq("user_id", userId);
+    // We try to fetch with status/role, but fallback if they don't exist
+    let memberships = [];
+    let memError = null;
+
+    try {
+      const { data, error } = await supabase
+        .from("conversation_members")
+        .select("conversation_id, role, status")
+        .eq("user_id", userId);
+      memberships = data;
+      memError = error;
+    } catch (e) {
+      console.warn("[Chat] Detailed membership fetch failed, falling back to basic", e.message);
+      const { data, error } = await supabase
+        .from("conversation_members")
+        .select("conversation_id")
+        .eq("user_id", userId);
+      memberships = data;
+      memError = error;
+    }
 
     if (memError) {
       console.error("[Chat] Membership fetch error:", memError.message);
@@ -44,32 +55,50 @@ exports.getConversations = async (req, res) => {
     }
 
     // 3. Enrich conversations with members and last message
-    // To keep it simple and avoid complex joins that might fail in production,
-    // we'll do this in parallel but with careful error handling.
     const enriched = await Promise.all(conversations.map(async (conv) => {
       try {
         const membership = memberships.find(m => m.conversation_id === conv.id);
         
         // Fetch all members for this conversation
-        const { data: members, error: memberError } = await supabase
-          .from("conversation_members")
-          .select(`
-            user_id,
-            role,
-            status,
-            profile:profiles (
-              id,
-              username,
-              full_name,
-              avatar_url,
-              is_verified,
-              plan_tier
-            )
-          `)
-          .eq("conversation_id", conv.id);
-
-        if (memberError) {
-          console.warn(`[Chat] Member fetch error for ${conv.id}:`, memberError.message);
+        let members = [];
+        try {
+          const { data, error } = await supabase
+            .from("conversation_members")
+            .select(`
+              user_id,
+              role,
+              status,
+              profile:profiles (
+                id,
+                username,
+                full_name,
+                avatar_url,
+                is_verified,
+                plan_tier
+              )
+            `)
+            .eq("conversation_id", conv.id);
+          
+          if (error) {
+            // Fallback for missing profile columns or status/role
+            const { data: fallbackData } = await supabase
+              .from("conversation_members")
+              .select(`
+                user_id,
+                profile:profiles (
+                  id,
+                  username,
+                  full_name,
+                  avatar_url
+                )
+              `)
+              .eq("conversation_id", conv.id);
+            members = fallbackData || [];
+          } else {
+            members = data || [];
+          }
+        } catch (e) {
+          console.warn(`[Chat] Member enrichment failed for ${conv.id}:`, e.message);
         }
 
         // Fetch last message
@@ -85,8 +114,6 @@ exports.getConversations = async (req, res) => {
         }
 
         // Fetch unread count for the user in this conversation
-        // If we have an unread_count column in conversation_members, we use it, 
-        // otherwise we fallback to a query.
         let unreadCount = 0;
         try {
           const { count, error: countError } = await supabase
@@ -105,8 +132,8 @@ exports.getConversations = async (req, res) => {
           ...conv,
           unreadCount,
           membership: {
-            role: membership?.role,
-            status: membership?.status,
+            role: membership?.role || "member",
+            status: membership?.status || "accepted",
             cleared_at: null,
             joined_at: null
           },
@@ -131,8 +158,7 @@ exports.getConversations = async (req, res) => {
     console.error("[Chat] getConversations Critical Error:", err.message, err.stack);
     res.status(500).json({ 
       error: "Internal Server Error", 
-      details: err.message,
-      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+      details: err.message
     });
   }
 };
