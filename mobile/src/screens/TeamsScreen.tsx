@@ -101,7 +101,9 @@ const TeamMessageBubble = React.memo(({
       <View style={styles.bubbleFooter}>
         {item.is_edited && <Text style={styles.editedTag}>edited</Text>}
         <Text style={styles.messageTime}>
-          {new Date(item.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+          {item.created_at && !isNaN(new Date(item.created_at).getTime()) 
+            ? new Date(item.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) 
+            : ''}
         </Text>
       </View>
     </TouchableOpacity>
