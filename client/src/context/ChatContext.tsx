@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
 import { NotificationService } from '../services/NotificationService';
 import { API_URL } from '../lib/api';
+import api from '../api/axiosInstance';
 import toast from 'react-hot-toast';
 
 export interface Message {
@@ -228,29 +229,29 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         
         try {
             console.log('[Chat] FETCH: Loading conversations', { userId: user?.id });
-            const res = await fetch(`${API_URL}/api/chat/conversations`, {
-                headers: { 
-                    'Authorization': `Bearer ${session.access_token}`
-                }
-            });
-            
-            if (!res.ok) throw new Error(`Failed to load conversations: ${res.status}`);
-            
-            const data = await res.json();
+            const response = await api.get('/chat/conversations');
+            const data = response.data;
             
             if (isMounted.current) {
+                if (!Array.isArray(data)) {
+                    console.error('[Chat] Unexpected response format for conversations:', data);
+                    setLoading(false);
+                    return;
+                }
+
                 // Map backend last_message object to lastMessage
-                const mappedData = data.map((conv: Conversation & { last_message?: Conversation['lastMessage'] }) => ({
+                const mappedData = data.map((conv: any) => ({
                     ...conv,
                     lastMessage: conv.last_message 
                 }));
                 setConversations(mappedData);
                 setLoading(false);
+                
                 // ✅ Join rooms immediately after conversations load
                 joinAllRooms(mappedData);
                 
                 // Mark all unread conversations as delivered (since we just loaded them)
-                mappedData.forEach((conv: Conversation) => {
+                mappedData.forEach((conv: any) => {
                     if (conv.unreadCount && conv.unreadCount > 0) {
                         markConversationDelivered(conv.id);
                     }
@@ -272,17 +273,19 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         
         // If we have a session but haven't fetched OR if the identity has changed
         if (session && user) {
-            // ONLY wipe data if the User ID has actually changed to prevent "wipe-on-refresh"
+            // ONLY wipe data if the User ID has actually changed (from one valid user to another)
             if (lastUserIdRef.current !== user.id) {
-                console.log(`[Chat] Identity change detected: ${user.id} (was ${lastUserIdRef.current})`);
+                const isFirstLoad = lastUserIdRef.current === null;
+                console.log(`[Chat] Identity logic triggered: ${user.id} (was ${lastUserIdRef.current}). First load: ${isFirstLoad}`);
                 
-                // Clear old data immediately to prevent identity leaks
-                setConversations([]);
-                setMessages({});
+                if (!isFirstLoad) {
+                    // Only wipe if it's a real switch between users
+                    setConversations([]);
+                    setMessages({});
+                }
+
                 setLoading(true);
-                hasInitialFetched.current = true;
                 lastUserIdRef.current = user.id;
-                
                 loadConversations();
             } else {
                 // Same user, just a session update/refresh. 

@@ -4,11 +4,7 @@ import {
   Alert, Modal, TextInput, ActivityIndicator
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
-import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { AuthService } from '../services/AuthService';
-import { API_URL } from '../Config';
 import apiClient from '../api/apiClient';
 
 const MenuItem = ({
@@ -29,7 +25,7 @@ const MenuItem = ({
 );
 
 export default function ProfileScreen() {
-  const { user, logout } = useAuth();
+  const { user, accounts, logout, switchAccount, removeAccount, addAccount } = useAuth();
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -43,10 +39,10 @@ export default function ProfileScreen() {
   const handleLogout = () => {
     Alert.alert(
       'Sign Out',
-      'Are you sure you want to sign out?',
+      'This will clear all saved accounts. Are you sure?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign Out', style: 'destructive', onPress: logout },
+        { text: 'Clear All', style: 'destructive', onPress: logout },
       ],
     );
   };
@@ -85,11 +81,41 @@ export default function ProfileScreen() {
       </LinearGradient>
 
       {/* Account Section */}
-      <Text style={styles.sectionLabel}>Account</Text>
+      <Text style={styles.sectionLabel}>Account Settings</Text>
       <View style={styles.section}>
         <MenuItem icon="👤" label="Full Name" value={name} />
         <MenuItem icon="📧" label="Email" value={email} />
         <MenuItem icon="🔒" label="Change Password" onPress={() => setShowPasswordModal(true)} />
+      </View>
+
+      {/* Multi-Account Management */}
+      <Text style={styles.sectionLabel}>Switch Account</Text>
+      <View style={styles.section}>
+        {accounts.map(acc => (
+          <View key={acc.id} style={styles.accountItem}>
+            <TouchableOpacity 
+              style={styles.accountInfo} 
+              onPress={() => acc.id !== user?.id && switchAccount(acc.id)}
+            >
+              <LinearGradient colors={['#6366f1', '#4f46e5']} style={styles.miniAvatar}>
+                <Text style={styles.miniAvatarText}>{acc.full_name?.charAt(0) || acc.username.charAt(0)}</Text>
+              </LinearGradient>
+              <View style={styles.accountText}>
+                <Text style={styles.accountName}>{acc.full_name || acc.username}</Text>
+                <Text style={styles.accountEmail}>{acc.email}</Text>
+              </View>
+              {acc.id === user?.id && <Text style={styles.activeTag}>Active</Text>}
+            </TouchableOpacity>
+            {acc.id !== user?.id && (
+              <TouchableOpacity onPress={() => removeAccount(acc.id)} style={styles.removeBtn}>
+                <Text style={styles.removeBtnText}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ))}
+        <TouchableOpacity style={styles.addAccountBtn} onPress={addAccount}>
+          <Text style={styles.addAccountText}>+ Add another account</Text>
+        </TouchableOpacity>
       </View>
 
       <Text style={styles.sectionLabel}>Preferences</Text>
@@ -98,24 +124,24 @@ export default function ProfileScreen() {
           icon="🔔"
           label="Notifications"
           value="Device Settings"
-          onPress={() => Alert.alert('Notifications', 'Push notification preferences are managed in your device Settings > NoteStandard > Notifications.')}
+          onPress={() => Alert.alert('Notifications', 'Managed in device Settings')}
         />
         <MenuItem
           icon="🎨"
           label="Appearance"
           value="Dark Theme"
-          onPress={() => Alert.alert('Appearance', 'The app uses a dark theme optimized for your comfort.')}
+          onPress={() => Alert.alert('Appearance', 'Optimized for comfort')}
         />
-        <MenuItem icon="📱" label="App Version" value="1.4.1" />
+        <MenuItem icon="📱" label="App Version" value="1.4.2" />
       </View>
 
       {/* Session */}
       <Text style={styles.sectionLabel}>Session</Text>
       <View style={styles.section}>
-        <MenuItem icon="🚪" label="Sign Out" onPress={handleLogout} danger />
+        <MenuItem icon="🚪" label="Sign Out & Clear All" onPress={handleLogout} danger />
       </View>
 
-      <Text style={styles.footer}>NoteStandard v1.4.1 • Made with ❤️</Text>
+      <Text style={styles.footer}>NoteStandard v1.4.2 • Made with ❤️</Text>
 
       {/* Password Change Modal */}
       <Modal
@@ -208,24 +234,31 @@ const styles = StyleSheet.create({
   menuValue: { color: '#555', fontSize: 12, marginTop: 2 },
   menuChevron: { color: '#333', fontSize: 22 },
   dangerText: { color: '#ef4444' },
+  accountItem: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 18, paddingVertical: 14,
+    borderBottomWidth: 1, borderColor: '#111133',
+  },
+  accountInfo: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  miniAvatar: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  miniAvatarText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  accountText: { flex: 1 },
+  accountName: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  accountEmail: { color: '#555', fontSize: 12 },
+  activeTag: { color: '#10b981', fontSize: 10, fontWeight: '800', backgroundColor: '#10b98122', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
+  removeBtn: { padding: 8, marginLeft: 8 },
+  removeBtnText: { color: '#444', fontSize: 16 },
+  addAccountBtn: { padding: 18, alignItems: 'center' },
+  addAccountText: { color: '#6366f1', fontSize: 14, fontWeight: '600' },
   footer: { color: '#444', fontSize: 11, textAlign: 'center', marginTop: 40, marginBottom: 40 },
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.85)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#0d0d1e', borderTopLeftRadius: 28, borderTopRightRadius: 28,
-    padding: 28, borderWidth: 1, borderColor: '#1a1a3e',
-  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#0d0d1e', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 28, borderWidth: 1, borderColor: '#1a1a3e' },
   modalTitle: { color: '#fff', fontSize: 20, fontWeight: '800', marginBottom: 24 },
   modalLabel: { color: '#888', fontSize: 12, fontWeight: '600', marginBottom: 8, marginTop: 16 },
-  input: {
-    backgroundColor: '#060611', color: '#fff', padding: 16,
-    borderRadius: 12, borderWidth: 1, borderColor: '#1a1a3e', fontSize: 15,
-  },
+  input: { backgroundColor: '#060611', color: '#fff', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#1a1a3e', fontSize: 15 },
   modalActions: { flexDirection: 'row', gap: 12, marginTop: 28, marginBottom: 8 },
   cancelBtn: { flex: 1, padding: 16, alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#333' },
-  cancelBtnText: { color: '#888', fontWeight: '600' },
   confirmBtn: { flex: 2, backgroundColor: '#6366f1', padding: 16, borderRadius: 12, alignItems: 'center' },
+  cancelBtnText: { color: '#888', fontWeight: '600' },
   confirmBtnText: { color: '#fff', fontWeight: '700' },
 });

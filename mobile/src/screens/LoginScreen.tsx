@@ -32,8 +32,16 @@ export default function LoginScreen({ navigation }: Props) {
 
   return (
     <LinearGradient colors={['#060611', '#0d0d1a', '#060611']} style={styles.gradient}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        style={styles.flex}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : -20}
+      >
+        <ScrollView 
+          contentContainerStyle={styles.scroll} 
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           {/* Logo / Brand */}
           <View style={styles.brand}>
             <View style={styles.logoCircle}>

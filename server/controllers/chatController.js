@@ -11,7 +11,6 @@ exports.getConversations = async (req, res) => {
     console.log(`[Chat] Fetching conversations for user: ${userId}`);
 
     // 1. Fetch memberships with basic conversation data
-    // We try to fetch with status/role, but fallback if they don't exist
     let memberships = [];
     let memError = null;
 
@@ -20,24 +19,34 @@ exports.getConversations = async (req, res) => {
         .from("conversation_members")
         .select("conversation_id, role, status")
         .eq("user_id", userId);
-      memberships = data;
-      memError = error;
+      
+      if (error) {
+        console.error(`[Chat] Membership fetch error for ${userId}:`, error.message);
+        return res.status(500).json({ 
+          error: "Failed to load chat memberships", 
+          details: error.message,
+          code: error.code
+        });
+      }
+      
+      memberships = data || [];
     } catch (e) {
       console.warn("[Chat] Detailed membership fetch failed, falling back to basic", e.message);
-      const { data, error } = await supabase
+      const { data, error: basicError } = await supabase
         .from("conversation_members")
         .select("conversation_id")
         .eq("user_id", userId);
-      memberships = data;
-      memError = error;
+      
+      if (basicError) {
+          console.error("[Chat] Basic membership fetch also failed:", basicError.message);
+          return res.status(500).json({ error: "Critical DB error fetching memberships" });
+      }
+      memberships = data || [];
     }
 
-    if (memError) {
-      console.error("[Chat] Membership fetch error:", memError.message);
-      return res.status(500).json({ error: "Failed to load chat memberships", details: memError.message });
-    }
+    console.log(`[Chat] User ${userId} has ${memberships.length} memberships`);
 
-    if (!memberships || memberships.length === 0) {
+    if (memberships.length === 0) {
       return res.json([]);
     }
 

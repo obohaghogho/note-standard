@@ -188,12 +188,18 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
   const loadInitialData = useCallback(async () => {
     if (loadingRef.current || !teamId || !user || !profile || !authReady) return;
     
-    // Identity change check
+    // Identity change check (Hardened to prevent initial load wipes)
     if (lastUserIdRef.current !== user.id) {
-      console.log(`[TeamChat] Identity change detected: ${user.id}`);
-      setMessages([]);
-      setMembers([]);
-      setTeamStats(null);
+      const isFirstLoad = lastUserIdRef.current === null;
+      console.log(`[TeamChat] Identity logic triggered: ${user.id} (was ${lastUserIdRef.current}). First load: ${isFirstLoad}`);
+      
+      if (!isFirstLoad) {
+        // Only wipe if it's a real switch between users
+        setMessages([]);
+        setMembers([]);
+        setTeamStats(null);
+      }
+      
       lastUserIdRef.current = user.id;
       messagesCountRef.current = 0;
     }

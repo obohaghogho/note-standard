@@ -6,6 +6,7 @@ export interface Profile {
     avatar_url?: string;
     is_verified?: boolean;
     plan_tier?: string;
+    is_online?: boolean;
 }
 
 export interface Member {

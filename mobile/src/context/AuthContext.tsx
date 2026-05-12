@@ -1,39 +1,64 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import apiClient from '../api/apiClient';
 import { AuthService, User } from '../services/AuthService';
+import { StoredAccount } from '../utils/AccountManager';
 import EventEmitter from '../services/EventEmitter';
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  accounts: StoredAccount[];
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (fullName: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
+  switchAccount: (userId: string) => Promise<boolean>;
+  removeAccount: (userId: string) => Promise<void>;
+  addAccount: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [accounts, setAccounts] = useState<StoredAccount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const loadUser = useCallback(async () => {
-    const u = await AuthService.getUser();
-    const token = await AuthService.getToken();
-    if (u && token) setUser(u);
-    setIsLoading(false);
+    try {
+      const u = await AuthService.getUser();
+      const token = await AuthService.getToken();
+      if (u && token) setUser(u);
+      
+      const accs = await AuthService.getStoredAccounts();
+      setAccounts(accs);
+    } catch (err) {
+      console.error('[AuthContext] Load error:', err);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   useEffect(() => { 
     loadUser(); 
     
     // Listen for global logout events (e.g. from 401 interceptor)
-    const handleLogout = () => setUser(null);
+    const handleLogout = () => {
+      setUser(null);
+      setAccounts([]);
+    };
+
+    const handleSwitch = (newUser: User) => {
+      setUser(newUser);
+      AuthService.getStoredAccounts().then(setAccounts);
+    };
+
     EventEmitter.on('auth:logout', handleLogout);
+    EventEmitter.on('auth:switch', handleSwitch);
     
     return () => {
       EventEmitter.off('auth:logout', handleLogout);
+      EventEmitter.off('auth:switch', handleSwitch);
     };
   }, [loadUser]);
 
@@ -45,6 +70,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (refresh_token) await AuthService.setRefreshToken(refresh_token);
       await AuthService.setUser(userData);
       setUser(userData);
+      
+      // Update accounts list
+      const accs = await AuthService.getStoredAccounts();
+      setAccounts(accs);
+      
       return { success: true };
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.response?.data?.error || 'Login failed. Please try again.';
@@ -59,6 +89,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await AuthService.setToken(token);
       await AuthService.setUser(userData);
       setUser(userData);
+      
+      // Update accounts list
+      const accs = await AuthService.getStoredAccounts();
+      setAccounts(accs);
+      
       return { success: true };
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.response?.data?.error || 'Registration failed. Please try again.';
@@ -69,10 +104,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     await AuthService.logout();
     setUser(null);
+    setAccounts([]);
+  };
+
+  const switchAccount = async (userId: string) => {
+    const success = await AuthService.switchAccount(userId);
+    return success;
+  };
+
+  const removeAccount = async (userId: string) => {
+    const { AccountManager } = require('../utils/AccountManager');
+    await AccountManager.removeAccount(userId);
+    const accs = await AuthService.getStoredAccounts();
+    setAccounts(accs);
+    if (user?.id === userId) {
+      setUser(null);
+    }
+  };
+
+  const addAccount = () => {
+    setUser(null); 
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, register, logout }}>
+    <AuthContext.Provider value={{ 
+      user, isLoading, isAuthenticated: !!user, accounts,
+      login, register, logout, switchAccount, removeAccount, addAccount 
+    }}>
       {children}
     </AuthContext.Provider>
   );

@@ -28,105 +28,37 @@ interface TeamMessage {
 }
 
 function TeamChatModal({
-  team, onClose, currentUserId
+  team, onClose, currentUserId, messages, onSendMessage, loading, playVoiceNote, handlePickMedia, handleVoiceNote, isRecording
 }: {
-  team: Team; onClose: () => void; currentUserId: string;
+  team: Team; 
+  onClose: () => void; 
+  currentUserId: string;
+  messages: TeamMessage[];
+  onSendMessage: (content?: string, attachmentId?: string) => Promise<void>;
+  loading: boolean;
+  playVoiceNote: (path: string) => Promise<void>;
+  handlePickMedia: () => Promise<void>;
+  handleVoiceNote: () => Promise<void>;
+  isRecording: boolean;
 }) {
-  const [messages, setMessages] = useState<TeamMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [audioPlayer, setAudioPlayer] = useState<Audio.Sound | null>(null);
-  const navigation = useNavigation<NativeStackNavigationProp<ChatStackParamList>>();
+  const flatListRef = useRef<FlatList>(null);
 
-  const loadMessages = useCallback(async () => {
-    try {
-      const res = await apiClient.get(`/teams/${team.id}/messages`);
-      setMessages(res.data || []);
-    } catch (e) {
-      console.error('[TeamChat] Failed to load:', e);
-    } finally {
-      setLoading(false);
-    }
-  }, [team.id]);
-
-  useEffect(() => { loadMessages(); }, [loadMessages]);
-
-  const sendMessage = async (overrideContent?: string, attachmentId?: string) => {
-    const contentToSend = overrideContent || newMessage.trim();
-    if (!contentToSend && !attachmentId) return;
+  const handleSend = async () => {
+    if (!newMessage.trim() || sending) return;
     setSending(true);
-    try {
-      await apiClient.post(`/teams/${team.id}/messages`, { 
-        content: contentToSend,
-        attachmentId 
-      });
-      if (!overrideContent) setNewMessage('');
-      loadMessages();
-    } catch (e) {
-      Alert.alert('Error', 'Failed to send message');
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handlePickMedia = async () => {
-    try {
-      const asset = await MediaService.pickImage();
-      if (!asset) return;
-      setLoading(true);
-      const attachment = await MediaService.uploadMedia(
-        asset.uri, asset.fileName || 'team.jpg', asset.mimeType || 'image/jpeg', team.id
-      );
-      await sendMessage(`Team media: ${attachment.file_name}`, attachment.id);
-    } catch (err: any) {
-      Alert.alert('Upload Error', err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVoiceNote = async () => {
-    if (isRecording) {
-      setIsRecording(false);
-      try {
-        setLoading(true);
-        const attachment = await VoiceService.stopRecording(team.id);
-        if (attachment) await sendMessage('Team Voice Note', attachment.id);
-      } catch (err: any) {
-        Alert.alert('Voice Note Error', err.message);
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      try {
-        await VoiceService.startRecording();
-        setIsRecording(true);
-      } catch (err: any) {
-        Alert.alert('Recording Error', err.message);
-      }
-    }
-  };
-
-  const playVoiceNote = async (path: string) => {
-    try {
-      if (audioPlayer) await audioPlayer.unloadAsync();
-      const res = await apiClient.get(`/media/signed-url?path=${path}`);
-      const { sound } = await Audio.Sound.createAsync({ uri: res.data.url });
-      setAudioPlayer(sound);
-      await sound.playAsync();
-    } catch (err) {
-      console.error('Failed to play audio', err);
-    }
+    await onSendMessage(newMessage.trim());
+    setNewMessage('');
+    setSending(false);
   };
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={styles.chatContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : -20}
       >
         <View style={styles.chatHeader}>
           <TouchableOpacity onPress={onClose} style={styles.chatBackBtn}>
@@ -136,87 +68,66 @@ function TeamChatModal({
             <Text style={styles.chatHeaderTitle} numberOfLines={1}>{team.name}</Text>
             <Text style={styles.chatHeaderSub}>{team.my_role?.toUpperCase()}</Text>
           </View>
-          
-          <View style={styles.headerActions}>
-            <TouchableOpacity 
-              onPress={() => {
-                onClose();
-                navigation.navigate('Call', { 
-                  type: 'audio', conversationId: team.id, targetUserId: team.id, targetName: team.name, isIncoming: false 
-                });
-              }} 
-              style={styles.headerActionBtn}
-            >
-              <Text style={styles.headerActionIcon}>📞</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              onPress={() => {
-                onClose();
-                navigation.navigate('Call', { 
-                  type: 'video', conversationId: team.id, targetUserId: team.id, targetName: team.name, isIncoming: false 
-                });
-              }} 
-              style={styles.headerActionBtn}
-            >
-              <Text style={styles.headerActionIcon}>📹</Text>
-            </TouchableOpacity>
-          </View>
         </View>
 
-        {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator color="#f59e0b" />
-          </View>
-        ) : (
-          <FlatList
-            data={messages}
-            keyExtractor={m => m.id}
-            contentContainerStyle={styles.messagesList}
-            inverted={false}
-            renderItem={({ item }) => {
-              const isMe = item.sender_id === currentUserId;
-              const senderName = item.profiles?.full_name || item.profiles?.username || 'Unknown';
-              // Check for attachment in item (note: team messages might have a slightly different structure)
-              const attachment = (item as any).attachment;
+        <View style={styles.messagesContainer}>
+          {loading && messages.length === 0 ? (
+            <View style={styles.center}>
+              <ActivityIndicator color="#f59e0b" />
+            </View>
+          ) : (
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              keyExtractor={m => m.id}
+              contentContainerStyle={styles.messagesList}
+              onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+              renderItem={({ item }) => {
+                const isMe = item.sender_id === currentUserId;
+                const senderName = item.profiles?.full_name || item.profiles?.username || 'Unknown';
+                const attachment = (item as any).attachment;
 
-              return (
-                <View style={[styles.messageBubble, isMe ? styles.myBubble : styles.theirBubble]}>
-                  {!isMe && <Text style={styles.senderName}>{senderName}</Text>}
-                  
-                  {attachment && (
-                    <View style={styles.attachmentContainer}>
-                      {attachment.file_type.startsWith('image') ? (
-                        <Image 
-                          source={{ uri: `https://tngcvgisfctggvivcnva.supabase.co/storage/v1/object/public/chat-media/${attachment.storage_path}` }} 
-                          style={styles.attachmentImage as any} 
-                        />
-                      ) : attachment.file_type.startsWith('audio') ? (
-                        <TouchableOpacity 
-                          style={styles.voiceNoteBtn} 
-                          onPress={() => playVoiceNote(attachment.storage_path)}
-                        >
-                          <Text style={styles.voiceNoteText}>▶ Voice Note</Text>
-                        </TouchableOpacity>
-                      ) : (
-                        <Text style={styles.attachmentFile}>📎 {attachment.file_name}</Text>
-                      )}
-                    </View>
-                  )}
+                return (
+                  <View style={[styles.messageBubble, isMe ? styles.myBubble : styles.theirBubble]}>
+                    {!isMe && <Text style={styles.senderName}>{senderName}</Text>}
+                    
+                    {attachment && (
+                      <View style={styles.attachmentContainer}>
+                        {attachment.file_type.startsWith('image') ? (
+                          <Image 
+                            source={{ uri: `https://tngcvgisfctggvivcnva.supabase.co/storage/v1/object/public/chat-media/${attachment.storage_path}` }} 
+                            style={styles.attachmentImage as any} 
+                          />
+                        ) : attachment.file_type.startsWith('audio') ? (
+                          <TouchableOpacity 
+                            style={styles.voiceNoteBtn} 
+                            onPress={() => playVoiceNote(attachment.storage_path)}
+                          >
+                            <Text style={styles.voiceNoteText}>▶ Voice Note</Text>
+                          </TouchableOpacity>
+                        ) : (
+                          <Text style={styles.attachmentFile}>📎 {attachment.file_name}</Text>
+                        )}
+                      </View>
+                    )}
 
-                  <Text style={styles.messageText}>{item.content}</Text>
-                  <Text style={styles.messageTime}>
-                    {new Date(item.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                  </Text>
-                </View>
-              );
-            }}
-            ListEmptyComponent={
-              <View style={styles.emptyMsg}>
-                <Text style={styles.emptyMsgText}>No messages yet. Start the conversation!</Text>
-              </View>
-            }
-          />
-        )}
+                    <Text style={styles.messageText}>{item.content}</Text>
+                    <Text style={styles.messageTime}>
+                      {new Date(item.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </View>
+                );
+              }}
+              ListEmptyComponent={
+                !loading ? (
+                  <View style={styles.emptyMsg}>
+                    <Text style={styles.emptyMsgText}>No messages yet. Start the conversation!</Text>
+                  </View>
+                ) : null
+              }
+            />
+          )}
+        </View>
 
         <View style={styles.inputContainer}>
           <View style={styles.inputRow}>
@@ -237,7 +148,7 @@ function TeamChatModal({
             {newMessage.trim() ? (
               <TouchableOpacity
                 style={[styles.sendBtn, !newMessage.trim() && styles.sendBtnDisabled]}
-                onPress={() => sendMessage()}
+                onPress={handleSend}
                 disabled={sending || !newMessage.trim()}
               >
                 {sending ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.sendBtnText}>↑</Text>}
@@ -265,6 +176,12 @@ export default function TeamsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTeam, setActiveTeam] = useState<Team | null>(null);
   const [currentUserId, setCurrentUserId] = useState('');
+  
+  // Per-team message cache to prevent "wipe-off"
+  const [teamMessages, setTeamMessages] = useState<Record<string, TeamMessage[]>>({});
+  const [chatLoading, setChatLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioPlayer, setAudioPlayer] = useState<Audio.Sound | null>(null);
 
   const load = useCallback(async () => {
     const user = await AuthService.getUser();
@@ -275,6 +192,87 @@ export default function TeamsScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const loadTeamMessages = async (teamId: string) => {
+    if (!teamId) return;
+    setChatLoading(true);
+    try {
+      const res = await apiClient.get(`/teams/${teamId}/messages`);
+      setTeamMessages(prev => ({ ...prev, [teamId]: res.data || [] }));
+    } catch (e) {
+      console.error('[TeamsScreen] Load messages error:', e);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTeam) {
+      loadTeamMessages(activeTeam.id);
+    }
+  }, [activeTeam]);
+
+  const handleSendMessage = async (content?: string, attachmentId?: string) => {
+    if (!activeTeam) return;
+    try {
+      await apiClient.post(`/teams/${activeTeam.id}/messages`, { content, attachmentId });
+      loadTeamMessages(activeTeam.id);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to send message');
+    }
+  };
+
+  const handlePickMedia = async () => {
+    if (!activeTeam) return;
+    try {
+      const asset = await MediaService.pickImage();
+      if (!asset) return;
+      setChatLoading(true);
+      const attachment = await MediaService.uploadMedia(
+        asset.uri, asset.fileName || 'team.jpg', asset.mimeType || 'image/jpeg', activeTeam.id
+      );
+      await handleSendMessage(`Team media: ${attachment.file_name}`, attachment.id);
+    } catch (err: any) {
+      Alert.alert('Upload Error', err.message);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const handleVoiceNote = async () => {
+    if (!activeTeam) return;
+    if (isRecording) {
+      setIsRecording(false);
+      try {
+        setChatLoading(true);
+        const attachment = await VoiceService.stopRecording(activeTeam.id);
+        if (attachment) await handleSendMessage('Team Voice Note', attachment.id);
+      } catch (err: any) {
+        Alert.alert('Voice Note Error', err.message);
+      } finally {
+        setChatLoading(false);
+      }
+    } else {
+      try {
+        await VoiceService.startRecording();
+        setIsRecording(true);
+      } catch (err: any) {
+        Alert.alert('Recording Error', err.message);
+      }
+    }
+  };
+
+  const playVoiceNote = async (path: string) => {
+    try {
+      if (audioPlayer) await audioPlayer.unloadAsync();
+      const res = await apiClient.get(`/media/signed-url?path=${path}`);
+      const { sound } = await Audio.Sound.createAsync({ uri: res.data.url });
+      setAudioPlayer(sound);
+      await sound.playAsync();
+    } catch (err) {
+      console.error('Failed to play audio', err);
+    }
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -343,6 +341,13 @@ export default function TeamsScreen() {
           team={activeTeam}
           onClose={() => setActiveTeam(null)}
           currentUserId={currentUserId}
+          messages={teamMessages[activeTeam.id] || []}
+          onSendMessage={handleSendMessage}
+          loading={chatLoading}
+          playVoiceNote={playVoiceNote}
+          handlePickMedia={handlePickMedia}
+          handleVoiceNote={handleVoiceNote}
+          isRecording={isRecording}
         />
       )}
     </View>
@@ -382,6 +387,7 @@ const styles = StyleSheet.create({
   emptySub: { color: '#666', fontSize: 14, marginTop: 6, textAlign: 'center', lineHeight: 22 },
   // Chat Modal
   chatContainer: { flex: 1, backgroundColor: '#060611' },
+  messagesContainer: { flex: 1 },
   chatHeader: {
     flexDirection: 'row', alignItems: 'center', paddingTop: 56, paddingBottom: 16,
     paddingHorizontal: 16, borderBottomWidth: 1, borderColor: '#111133',
