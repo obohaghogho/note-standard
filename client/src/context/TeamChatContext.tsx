@@ -6,9 +6,7 @@ import toast from 'react-hot-toast';
 import {
   getTeamMessages,
   sendMessage as apiSendMessage,
-  markMessagesRead,
   getTeamMembers,
-  shareNote as apiShareNote,
   getTeamStats,
   deleteTeamMessage,
   editTeamMessage,
@@ -120,7 +118,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
 
     const channel = supabase.channel(`team:${teamId}`);
     
-    channel.on('postgres_changes' as never, { event: 'INSERT', schema: 'public', table: 'team_messages', filter: `team_id=eq.${teamId}` }, (payload: any) => {
+    channel.on('postgres_changes' as never, { event: 'INSERT', schema: 'public', table: 'team_messages', filter: `team_id=eq.${teamId}` }, (payload: { new: TeamMessage }) => {
         if (!isMounted.current) return;
         setMessages(prev => {
             if (prev.some(m => m.id === payload.new.id)) return prev;
@@ -130,7 +128,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
         });
     });
 
-    channel.on('postgres_changes' as never, { event: 'UPDATE', schema: 'public', table: 'team_messages', filter: `team_id=eq.${teamId}` }, (payload: any) => {
+    channel.on('postgres_changes' as never, { event: 'UPDATE', schema: 'public', table: 'team_messages', filter: `team_id=eq.${teamId}` }, (payload: { new: TeamMessage }) => {
         if (!isMounted.current) return;
         const updated = payload.new;
         if (updated.is_deleted) {
@@ -140,7 +138,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
         }
     });
 
-    channel.on('postgres_changes' as never, { event: 'DELETE', schema: 'public', table: 'team_messages', filter: `team_id=eq.${teamId}` }, (payload: any) => {
+    channel.on('postgres_changes' as never, { event: 'DELETE', schema: 'public', table: 'team_messages', filter: `team_id=eq.${teamId}` }, (payload: { old: { id: string } }) => {
         if (!isMounted.current) return;
         setMessages(prev => prev.filter(m => m.id !== payload.old.id));
     });
@@ -157,10 +155,10 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
     return () => { if (channelRef.current) supabase.removeChannel(channelRef.current); };
   }, [setupRealtime]);
 
-  const sendMessage = async (content: string, metadata?: Record<string, unknown>, type: any = 'text', replyToId?: string) => {
+  const sendMessage = async (content: string, metadata?: Record<string, unknown>, type: import('../types/teams').MessageType = 'text', replyToId?: string) => {
     if (!user || (!content.trim() && !metadata)) return;
     try {
-        await apiSendMessage(teamId, { content, message_type: type, metadata, replyToId } as any);
+        await apiSendMessage(teamId, { content, message_type: type, metadata, replyToId } as SendMessageRequest);
         // Sync latest or let socket handle
     } catch (err) {
         toast.error('Failed to send message');

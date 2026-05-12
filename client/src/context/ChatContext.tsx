@@ -2,8 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
-import { NotificationService } from '../services/NotificationService';
-import { API_URL } from '../lib/api';
+
 import api from '../api/axiosInstance';
 import toast from 'react-hot-toast';
 
@@ -110,14 +109,14 @@ export const useChat = () => {
 };
 
 export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
-    const { user, profile, session, authReady, isSwitching } = useAuth();
+    const { user, session, authReady, isSwitching } = useAuth();
     const { socket, connected } = useSocket();
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [messages, setMessages] = useState<Record<string, Message[]>>({});
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-    const [hasMore, setHasMore] = useState<Record<string, boolean>>({});
-    const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
+    const [hasMore] = useState<Record<string, boolean>>({});
+    const [typingUsers] = useState<Record<string, string[]>>({});
     const [drafts, setDrafts] = useState<Record<string, string>>({});
 
     const isMounted = useRef(true);
@@ -185,14 +184,14 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             const response = await api.get('/chat/conversations');
             const data = response.data;
             if (isMounted.current && Array.isArray(data)) {
-                const mappedData = data.map((conv: any) => ({
+                const mappedData = data.map((conv: Conversation & { last_message?: Conversation['lastMessage'] }) => ({
                     ...conv,
                     lastMessage: conv.last_message 
                 }));
                 setConversations(mappedData);
                 setLoading(false);
                 joinAllRooms(mappedData);
-                mappedData.forEach((conv: any) => {
+                mappedData.forEach((conv: Conversation) => {
                     if (conv.unreadCount && conv.unreadCount > 0) markConversationDelivered(conv.id);
                 });
             }
@@ -266,7 +265,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }));
         };
 
-        const onMessageDeleted = ({ messageId, conversationId }: any) => {
+        const onMessageDeleted = ({ messageId, conversationId }: { messageId: string, conversationId: string }) => {
             setMessages(prev => {
                 const current = prev[conversationId] || [];
                 return { ...prev, [conversationId]: current.filter(m => m.id !== messageId) };
@@ -309,7 +308,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             setActiveConversationId(id);
             loadConversations();
             return id;
-        } catch (err) {
+        } catch {
             toast.error('Failed to start conversation');
             return null;
         }
@@ -319,7 +318,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         try {
             await api.delete(`/chat/messages/${messageId}`);
             toast.success('Message deleted');
-        } catch (err) {
+        } catch {
             toast.error('Failed to delete message');
         }
     };
@@ -328,7 +327,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         try {
             await api.patch(`/chat/messages/${messageId}`, { content });
             toast.success('Message updated');
-        } catch (err) {
+        } catch {
             toast.error('Failed to edit message');
         }
     };
