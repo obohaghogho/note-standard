@@ -738,18 +738,8 @@ export async function uploadTeamAudio(teamId: string, audioBlob: Blob): Promise<
  */
 export async function deleteTeamMessage(teamId: string, messageId: string): Promise<boolean> {
   const result = await safeCall<boolean>(`delete-team-message-${messageId}`, async () => {
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) throw new Error('Not authenticated');
-
-    const { data, error } = await supabase
-      .from('team_messages')
-      .update({ is_deleted: true })
-      .eq('id', messageId)
-      .eq('team_id', teamId)
-      .select('id');
-
-    if (error) throw error;
-    return !!(data && data.length > 0);
+    const response = await api.delete(`/api/teams/${teamId}/messages/${messageId}`);
+    return response.status === 200;
   });
 
   return result ?? false;
@@ -760,32 +750,8 @@ export async function deleteTeamMessage(teamId: string, messageId: string): Prom
  */
 export async function editTeamMessage(teamId: string, messageId: string, newContent: string): Promise<boolean> {
   const result = await safeCall<boolean>(`edit-team-message-${messageId}`, async () => {
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) throw new Error('Not authenticated');
-
-    const { error } = await supabase
-      .from('team_messages')
-      .update({ content: newContent, is_edited: true })
-      .eq('id', messageId)
-      // RLS handles the permission check (must be sender)
-      .eq('team_id', teamId)
-      .eq('is_deleted', false);
-
-    if (error) {
-       if (error.code === "42703" || error.code === "PGRST204") {
-         console.warn("[Teams API] is_edited column missing, retrying without it");
-         const { error: retryErr } = await supabase
-           .from('team_messages')
-           .update({ content: newContent })
-           .eq('id', messageId)
-           .eq('team_id', teamId)
-           .eq('is_deleted', false);
-         if (retryErr) throw retryErr;
-         return true;
-       }
-       throw error;
-    }
-    return true;
+    const response = await api.patch(`/api/teams/${teamId}/messages/${messageId}`, { content: newContent });
+    return response.status === 200;
   });
 
   return result ?? false;

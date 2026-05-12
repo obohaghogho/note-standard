@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet,
-  ActivityIndicator, RefreshControl, Image, Alert, Modal,
-  TextInput, ScrollView, KeyboardAvoidingView, Platform
+  View, Text, TextInput, TouchableOpacity, FlatList, FlatListProps,
+  StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Image,
+  Alert, Modal, ScrollView,
 } from 'react-native';
 import { TeamsService, Team } from '../services/TeamsService';
 import { AuthService } from '../services/AuthService';
@@ -14,6 +14,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ChatStackParamList } from '../navigation/ChatStack';
+import { io, Socket } from 'socket.io-client';
+import { GATEWAY_URL } from '../Config';
+import { useLongPressGesture } from '../hooks/useLongPressGesture';
 
 interface TeamMessage {
   id: string;
@@ -25,7 +28,85 @@ interface TeamMessage {
     full_name?: string;
     avatar_url?: string;
   };
+  is_edited?: boolean;
+  reply_to?: {
+    id: string;
+    content: string;
+    sender_id: string;
+  };
 }
+
+
+// ── TeamMessageBubble ─────────────────────────────────────────────────────
+// Defined OUTSIDE TeamChatModal so hooks run at component top-level (React rules).
+// useLongPressGesture gives scroll priority over long-press on every bubble.
+const TeamMessageBubble = React.memo(({
+  item,
+  currentUserId,
+  onLongPress,
+  playVoiceNote,
+}: {
+  item: TeamMessage;
+  currentUserId: string;
+  onLongPress: (msg: TeamMessage) => void;
+  playVoiceNote: (path: string) => Promise<void>;
+}) => {
+  const isMe = item.sender_id === currentUserId;
+  const senderName = item.profiles?.full_name || item.profiles?.username || 'Unknown';
+  const attachment = (item as any).attachment;
+
+  const longPressProps = useLongPressGesture({
+    onLongPress: () => onLongPress(item),
+    delay: 500,
+    moveThreshold: 10,
+  });
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      {...longPressProps}
+      style={[styles.messageBubble, isMe ? styles.myBubble : styles.theirBubble]}
+    >
+      {!isMe && <Text style={styles.senderName}>{senderName}</Text>}
+
+      {item.reply_to && (
+        <View style={styles.replyContext}>
+          <Text style={styles.replyContextName}>
+            {item.reply_to.sender_id === currentUserId ? 'You' : 'Member'}
+          </Text>
+          <Text style={styles.replyContextText} numberOfLines={1}>
+            {item.reply_to.content}
+          </Text>
+        </View>
+      )}
+
+      {attachment && (
+        <View style={styles.attachmentContainer}>
+          {attachment.file_type?.startsWith('image') ? (
+            <Image
+              source={{ uri: `https://tngcvgisfctggvivcnva.supabase.co/storage/v1/object/public/chat-media/${attachment.storage_path}` }}
+              style={styles.attachmentImage as any}
+            />
+          ) : attachment.file_type?.startsWith('audio') ? (
+            <TouchableOpacity style={styles.voiceNoteBtn} onPress={() => playVoiceNote(attachment.storage_path)}>
+              <Text style={styles.voiceNoteText}>▶ Voice Note</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.attachmentFile}>📎 {attachment.file_name}</Text>
+          )}
+        </View>
+      )}
+
+      <Text style={styles.messageText}>{item.content}</Text>
+      <View style={styles.bubbleFooter}>
+        {item.is_edited && <Text style={styles.editedTag}>edited</Text>}
+        <Text style={styles.messageTime}>
+          {new Date(item.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+});
 
 function TeamChatModal({
   team, onClose, currentUserId, messages, onSendMessage, loading, playVoiceNote, handlePickMedia, handleVoiceNote, isRecording
@@ -40,17 +121,56 @@ function TeamChatModal({
   handlePickMedia: () => Promise<void>;
   handleVoiceNote: () => Promise<void>;
   isRecording: boolean;
+  onDeleteMessage: (id: string) => Promise<void>;
+  onEditMessage: (id: string, content: string) => Promise<void>;
 }) {
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [replyTo, setReplyTo] = useState<TeamMessage | null>(null);
+  const [editingMessage, setEditingMessage] = useState<TeamMessage | null>(null);
   const flatListRef = useRef<FlatList>(null);
 
   const handleSend = async () => {
     if (!newMessage.trim() || sending) return;
     setSending(true);
-    await onSendMessage(newMessage.trim());
+    if (editingMessage) {
+      await onEditMessage(editingMessage.id, newMessage.trim());
+      setEditingMessage(null);
+    } else {
+      await onSendMessage(newMessage.trim(), undefined, replyTo?.id);
+      setReplyTo(null);
+    }
     setNewMessage('');
     setSending(false);
+  };
+
+  const handleLongPress = (msg: TeamMessage) => {
+    const isMe = msg.sender_id === currentUserId;
+    const options = ['Reply', 'Copy'];
+    if (isMe) options.push('Edit', 'Delete');
+    options.push('Cancel');
+
+    Alert.alert(
+      'Message Options',
+      undefined,
+      [
+        { text: 'Reply', onPress: () => setReplyTo(msg) },
+        { text: 'Copy', onPress: () => Alert.alert('Copied', 'Message copied to clipboard') },
+        ...(isMe ? [
+          { text: 'Edit', onPress: () => {
+            setEditingMessage(msg);
+            setNewMessage(msg.content);
+          }},
+          { text: 'Delete', onPress: () => {
+            Alert.alert('Delete', 'Delete this message?', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Delete', style: 'destructive', onPress: () => onDeleteMessage(msg.id) }
+            ]);
+          }, style: 'destructive' }
+        ] : []),
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
   };
 
   return (
@@ -82,42 +202,12 @@ function TeamChatModal({
               keyExtractor={m => m.id}
               contentContainerStyle={styles.messagesList}
               onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-              renderItem={({ item }) => {
-                const isMe = item.sender_id === currentUserId;
-                const senderName = item.profiles?.full_name || item.profiles?.username || 'Unknown';
-                const attachment = (item as any).attachment;
-
-                return (
-                  <View style={[styles.messageBubble, isMe ? styles.myBubble : styles.theirBubble]}>
-                    {!isMe && <Text style={styles.senderName}>{senderName}</Text>}
-                    
-                    {attachment && (
-                      <View style={styles.attachmentContainer}>
-                        {attachment.file_type.startsWith('image') ? (
-                          <Image 
-                            source={{ uri: `https://tngcvgisfctggvivcnva.supabase.co/storage/v1/object/public/chat-media/${attachment.storage_path}` }} 
-                            style={styles.attachmentImage as any} 
-                          />
-                        ) : attachment.file_type.startsWith('audio') ? (
-                          <TouchableOpacity 
-                            style={styles.voiceNoteBtn} 
-                            onPress={() => playVoiceNote(attachment.storage_path)}
-                          >
-                            <Text style={styles.voiceNoteText}>▶ Voice Note</Text>
-                          </TouchableOpacity>
-                        ) : (
-                          <Text style={styles.attachmentFile}>📎 {attachment.file_name}</Text>
-                        )}
-                      </View>
-                    )}
-
-                    <Text style={styles.messageText}>{item.content}</Text>
-                    <Text style={styles.messageTime}>
-                      {new Date(item.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
-                  </View>
-                );
-              }}
+              renderItem={({ item }) => <TeamMessageBubble
+                item={item}
+                currentUserId={currentUserId}
+                onLongPress={handleLongPress}
+                playVoiceNote={playVoiceNote}
+              />}
               ListEmptyComponent={
                 !loading ? (
                   <View style={styles.emptyMsg}>
@@ -128,6 +218,30 @@ function TeamChatModal({
             />
           )}
         </View>
+
+        {editingMessage && (
+          <View style={styles.actionPreview}>
+            <View style={styles.actionInfo}>
+              <Text style={styles.actionTitle}>Editing Message</Text>
+              <Text style={styles.actionText} numberOfLines={1}>{editingMessage.content}</Text>
+            </View>
+            <TouchableOpacity onPress={() => { setEditingMessage(null); setNewMessage(''); }} style={styles.actionClose}>
+              <Text style={styles.actionCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {replyTo && (
+          <View style={styles.actionPreview}>
+            <View style={styles.actionInfo}>
+              <Text style={styles.actionTitle}>Replying to {replyTo.sender_id === currentUserId ? 'yourself' : 'Member'}</Text>
+              <Text style={styles.actionText} numberOfLines={1}>{replyTo.content}</Text>
+            </View>
+            <TouchableOpacity onPress={() => setReplyTo(null)} style={styles.actionClose}>
+              <Text style={styles.actionCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={styles.inputContainer}>
           <View style={styles.inputRow}>
@@ -182,6 +296,7 @@ export default function TeamsScreen() {
   const [chatLoading, setChatLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [audioPlayer, setAudioPlayer] = useState<Audio.Sound | null>(null);
+  const socketRef = useRef<Socket | null>(null);
 
   const load = useCallback(async () => {
     const user = await AuthService.getUser();
@@ -209,16 +324,74 @@ export default function TeamsScreen() {
   useEffect(() => {
     if (activeTeam) {
       loadTeamMessages(activeTeam.id);
+
+      const initSocket = async () => {
+        const token = await AuthService.getToken();
+        const socket = io(GATEWAY_URL, {
+          auth: { token },
+          transports: ['websocket'],
+        });
+        socketRef.current = socket;
+
+        socket.on('connect', () => {
+          socket.emit('team:join', activeTeam.id);
+        });
+
+        socket.on('team:message', (msg: TeamMessage) => {
+          setTeamMessages(prev => {
+            const current = prev[activeTeam.id] || [];
+            if (current.some(m => m.id === msg.id)) return prev;
+            return { ...prev, [activeTeam.id]: [...current, msg] };
+          });
+        });
+
+        socket.on('team:message_edited', (editedMsg: TeamMessage) => {
+          setTeamMessages(prev => {
+            const current = prev[activeTeam.id] || [];
+            return { ...prev, [activeTeam.id]: current.map(m => m.id === editedMsg.id ? { ...m, ...editedMsg } : m) };
+          });
+        });
+
+        socket.on('team:message_deleted', ({ messageId }: { messageId: string }) => {
+          setTeamMessages(prev => {
+            const current = prev[activeTeam.id] || [];
+            return { ...prev, [activeTeam.id]: current.filter(m => m.id !== messageId) };
+          });
+        });
+      };
+
+      initSocket();
+
+      return () => {
+        socketRef.current?.disconnect();
+        socketRef.current = null;
+      };
     }
   }, [activeTeam]);
 
-  const handleSendMessage = async (content?: string, attachmentId?: string) => {
+  const handleSendMessage = async (content?: string, attachmentId?: string, replyToId?: string) => {
     if (!activeTeam) return;
     try {
-      await apiClient.post(`/teams/${activeTeam.id}/messages`, { content, attachmentId });
-      loadTeamMessages(activeTeam.id);
+      await apiClient.post(`/teams/${activeTeam.id}/messages`, { content, attachmentId, replyToId });
+      // socket listener will update UI
     } catch (e) {
       Alert.alert('Error', 'Failed to send message');
+    }
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    try {
+      await apiClient.delete(`/chat/messages/${messageId}`); // Shared endpoint for all messages
+    } catch (e) {
+      Alert.alert('Error', 'Failed to delete message');
+    }
+  };
+
+  const handleEditMessage = async (messageId: string, content: string) => {
+    try {
+      await apiClient.patch(`/chat/messages/${messageId}`, { content }); // Shared endpoint
+    } catch (e) {
+      Alert.alert('Error', 'Failed to edit message');
     }
   };
 
@@ -348,6 +521,8 @@ export default function TeamsScreen() {
           handlePickMedia={handlePickMedia}
           handleVoiceNote={handleVoiceNote}
           isRecording={isRecording}
+          onDeleteMessage={handleDeleteMessage}
+          onEditMessage={handleEditMessage}
         />
       )}
     </View>
@@ -407,13 +582,32 @@ const styles = StyleSheet.create({
   myBubble: { backgroundColor: '#6366f1', alignSelf: 'flex-end', borderBottomRightRadius: 4 },
   theirBubble: { backgroundColor: '#1a1a2e', alignSelf: 'flex-start', borderBottomLeftRadius: 4, borderWidth: 1, borderColor: '#2a2a4e' },
   senderName: { color: '#f59e0b', fontSize: 11, fontWeight: '700', marginBottom: 4 },
-  messageText: { color: '#fff', fontSize: 14, lineHeight: 20 },
-  messageTime: { color: 'rgba(255,255,255,0.4)', fontSize: 10, marginTop: 4, alignSelf: 'flex-end' },
-  attachmentContainer: { marginBottom: 8, borderRadius: 8, overflow: 'hidden' },
-  attachmentImage: { width: 180, height: 120, borderRadius: 8, backgroundColor: '#222' },
-  voiceNoteBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', padding: 6, borderRadius: 8 },
-  voiceNoteText: { color: '#fff', fontSize: 13 },
-  attachmentFile: { color: '#f59e0b', fontSize: 13, textDecorationLine: 'underline' },
+  bubbleFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 4 },
+  editedTag: { color: 'rgba(255,255,255,0.3)', fontSize: 9, fontStyle: 'italic', marginRight: 4 },
+  messageTime: { color: 'rgba(255,255,255,0.4)', fontSize: 10 },
+  replyContext: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#f59e0b',
+    padding: 6,
+    borderRadius: 4,
+    marginBottom: 6,
+  },
+  replyContextName: { color: '#f59e0b', fontSize: 11, fontWeight: '700', marginBottom: 2 },
+  replyContextText: { color: '#aaa', fontSize: 11 },
+  actionPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0d0d1e',
+    padding: 10,
+    borderTopWidth: 1,
+    borderColor: '#111133',
+  },
+  actionInfo: { flex: 1 },
+  actionTitle: { color: '#f59e0b', fontSize: 11, fontWeight: '700', marginBottom: 2 },
+  actionText: { color: '#aaa', fontSize: 11 },
+  actionClose: { width: 30, height: 30, justifyContent: 'center', alignItems: 'center' },
+  actionCloseText: { color: '#666', fontSize: 16 },
   emptyMsg: { alignItems: 'center', paddingTop: 80 },
   emptyMsgText: { color: '#555', fontSize: 14 },
   inputContainer: {

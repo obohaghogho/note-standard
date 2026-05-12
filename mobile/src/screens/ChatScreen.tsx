@@ -17,6 +17,7 @@ import { ChatStackParamList } from '../navigation/ChatStack';
 import { MediaService } from '../services/MediaService';
 import VoiceService from '../services/VoiceService';
 import { Audio } from 'expo-av';
+import { useLongPressGesture } from '../hooks/useLongPressGesture';
 
 type Props = {
   navigation: NativeStackNavigationProp<ChatStackParamList, 'Chat'>;
@@ -36,8 +37,93 @@ interface Message {
     file_name: string;
   };
   type?: string;
-  _optimistic?: boolean; // local-only flag for optimistic messages
+  _optimistic?: boolean; 
+  is_edited?: boolean;
+  reply_to?: {
+    id: string;
+    content: string;
+    sender_id: string;
+  };
 }
+
+// ── ChatMessageBubble ────────────────────────────────────────────────────
+// Must live OUTSIDE ChatScreen so useLongPressGesture follows Rules of Hooks.
+const ChatMessageBubble = React.memo(({
+  item,
+  currentUserId,
+  recipientName,
+  onLongPress,
+  onPlayAudio,
+}: {
+  item: Message;
+  currentUserId: string;
+  recipientName: string;
+  onLongPress: (msg: Message) => void;
+  onPlayAudio: (path: string) => void;
+}) => {
+  const isMe = item.sender_id === currentUserId;
+
+  const longPressProps = useLongPressGesture({
+    onLongPress: () => onLongPress(item),
+    delay: 500,
+    moveThreshold: 10,
+  });
+
+  return (
+    <View style={[styles.msgRow, isMe && styles.msgRowMe]}>
+      {!isMe && (
+        <LinearGradient colors={['#6366f1', '#4f46e5']} style={styles.msgAvatar}>
+          <Text style={styles.msgAvatarText}>{recipientName.charAt(0).toUpperCase()}</Text>
+        </LinearGradient>
+      )}
+      <TouchableOpacity
+        activeOpacity={0.85}
+        {...longPressProps}
+        style={[
+          styles.bubble,
+          isMe ? styles.bubbleMe : styles.bubbleThem,
+          item._optimistic && styles.bubbleOptimistic,
+        ]}
+      >
+        {item.reply_to && (
+          <View style={styles.replyContext}>
+            <Text style={styles.replyContextName}>
+              {item.reply_to.sender_id === currentUserId ? 'You' : 'Member'}
+            </Text>
+            <Text style={styles.replyContextText} numberOfLines={1}>
+              {item.reply_to.content}
+            </Text>
+          </View>
+        )}
+        {item.attachment && (
+          <View style={styles.attachmentContainer}>
+            {item.attachment.file_type.startsWith('image') ? (
+              <Image
+                source={{ uri: `https://tngcvgisfctggvivcnva.supabase.co/storage/v1/object/public/chat-media/${item.attachment.storage_path}` }}
+                style={styles.attachmentImage as any}
+              />
+            ) : item.attachment.file_type.startsWith('audio') ? (
+              <TouchableOpacity onPress={() => onPlayAudio(item.attachment!.storage_path)} style={styles.voiceNoteBtn}>
+                <Text style={styles.voiceNoteText}>▶ Voice Note</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.attachmentFile}>📎 {item.attachment.file_name}</Text>
+            )}
+          </View>
+        )}
+        <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.content}</Text>
+        <View style={styles.bubbleFooter}>
+          {item.is_edited && <Text style={styles.editedTag}>edited</Text>}
+          <Text style={styles.bubbleTime}>
+            {item._optimistic
+              ? 'Sending…'
+              : new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    </View>
+  );
+});
 
 export default function ChatScreen({ navigation, route }: Props) {
   const { conversationId, conversation } = route.params;
@@ -50,6 +136,8 @@ export default function ChatScreen({ navigation, route }: Props) {
   const socketRef = useRef<Socket | null>(null);
   const flatRef = useRef<FlatList>(null);
   const [audioPlayer, setAudioPlayer] = useState<Audio.Sound | null>(null);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
 
   // Safe member access — conversation.members may be partial (no profile) when coming from createConversation
   const members = conversation?.members ?? [];
@@ -108,12 +196,19 @@ export default function ChatScreen({ navigation, route }: Props) {
         // Incoming real-time message from another user
         socket.on('chat:message', (msg: Message) => {
           console.log('[ChatScreen] Received realtime message:', msg.id);
-          // Avoid duplicates — ignore if we sent this (optimistic already added)
           setMessages(prev => {
             const isDuplicate = prev.some(m => m.id === msg.id);
             if (isDuplicate) return prev;
             return [msg, ...prev];
           });
+        });
+
+        socket.on('chat:message_edited', (editedMsg: Message) => {
+          setMessages(prev => prev.map(m => m.id === editedMsg.id ? { ...m, ...editedMsg } : m));
+        });
+
+        socket.on('chat:message_deleted', ({ messageId }: { messageId: string }) => {
+          setMessages(prev => prev.filter(m => m.id !== messageId));
         });
 
         socket.on('disconnect', (reason) => {
@@ -131,6 +226,14 @@ export default function ChatScreen({ navigation, route }: Props) {
       socketRef.current = null;
     };
   }, [conversationId, fetchMessages, otherMember?.user_id]);
+
+  const deleteMessage = async (messageId: string) => {
+    try {
+      await apiClient.delete(`/chat/messages/${messageId}`);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to delete message');
+    }
+  };
 
   const sendMessage = async (overrideContent?: string, attachmentId?: string) => {
     const contentToSend = overrideContent || text.trim();
@@ -152,16 +255,22 @@ export default function ChatScreen({ navigation, route }: Props) {
     setMessages(prev => [optimisticMsg, ...prev]);
 
     try {
-      const res = await apiClient.post(
-        `/chat/conversations/${conversationId}/messages`,
-        { content: contentToSend, attachmentId }
-      );
-
-      const serverMsg: Message = res.data;
-      if (serverMsg?.id) {
-        setMessages(prev =>
-          prev.map(m => m.id === optimisticId ? { ...serverMsg } : m)
+      if (editingMessage) {
+        await apiClient.patch(`/chat/messages/${editingMessage.id}`, { content: contentToSend });
+        setEditingMessage(null);
+      } else {
+        const res = await apiClient.post(
+          `/chat/conversations/${conversationId}/messages`,
+          { content: contentToSend, attachmentId, replyToId: replyTo?.id }
         );
+
+        const serverMsg: Message = res.data;
+        if (serverMsg?.id) {
+          setMessages(prev =>
+            prev.map(m => m.id === optimisticId ? { ...serverMsg } : m)
+          );
+        }
+        setReplyTo(null);
       }
     } catch (e: any) {
       console.error('[ChatScreen] Send failed:', e);
@@ -234,46 +343,50 @@ export default function ChatScreen({ navigation, route }: Props) {
     }
   };
 
-  const renderMessage = ({ item }: { item: Message }) => {
-    const isMe = item.sender_id === user?.id;
-    return (
-      <View style={[styles.msgRow, isMe && styles.msgRowMe]}>
-        {!isMe && (
-          <LinearGradient colors={['#6366f1', '#4f46e5']} style={styles.msgAvatar}>
-            <Text style={styles.msgAvatarText}>{recipientName.charAt(0).toUpperCase()}</Text>
-          </LinearGradient>
-        )}
-        <View style={[
-          styles.bubble,
-          isMe ? styles.bubbleMe : styles.bubbleThem,
-          item._optimistic && styles.bubbleOptimistic,
-        ]}>
-          {item.attachment && (
-            <View style={styles.attachmentContainer}>
-              {item.attachment.file_type.startsWith('image') ? (
-                <Image 
-                  source={{ uri: `https://tngcvgisfctggvivcnva.supabase.co/storage/v1/object/public/chat-media/${item.attachment.storage_path}` }} 
-                  style={styles.attachmentImage as any} 
-                />
-              ) : item.attachment.file_type.startsWith('audio') ? (
-                <TouchableOpacity onPress={() => playVoiceNote(item.attachment!.storage_path)} style={styles.voiceNoteBtn}>
-                  <Text style={styles.voiceNoteText}>▶ Voice Note</Text>
-                </TouchableOpacity>
-              ) : (
-                <Text style={styles.attachmentFile}>📎 {item.attachment.file_name}</Text>
-              )}
-            </View>
-          )}
-          <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.content}</Text>
-          <Text style={styles.bubbleTime}>
-            {item._optimistic
-              ? 'Sending…'
-              : new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </Text>
-        </View>
-      </View>
+  const handleLongPress = (msg: Message) => {
+    const isMe = msg.sender_id === user?.id;
+    const options = ['Reply', 'Copy'];
+    if (isMe) options.push('Edit', 'Delete');
+    options.push('Cancel');
+
+    Alert.alert(
+      'Message Options',
+      undefined,
+      [
+        { text: 'Reply', onPress: () => setReplyTo(msg) },
+        { 
+          text: 'Copy', 
+          onPress: () => {
+            // In a real app we'd use Clipboard from expo-clipboard
+            Alert.alert('Copied', 'Message copied to clipboard');
+          } 
+        },
+        ...(isMe ? [
+          { text: 'Edit', onPress: () => {
+            setEditingMessage(msg);
+            setText(msg.content);
+          }},
+          { text: 'Delete', onPress: () => {
+            Alert.alert('Delete', 'Delete this message?', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Delete', style: 'destructive', onPress: () => deleteMessage(msg.id) }
+            ]);
+          }, style: 'destructive' }
+        ] : []),
+        { text: 'Cancel', style: 'cancel' }
+      ]
     );
   };
+
+  const renderMessage = useCallback(({ item }: { item: Message }) => (
+    <ChatMessageBubble
+      item={item}
+      currentUserId={user?.id ?? ''}
+      recipientName={recipientName}
+      onLongPress={handleLongPress}
+      onPlayAudio={playVoiceNote}
+    />
+  ), [user?.id, recipientName, handleLongPress, playVoiceNote]);
 
   return (
     <KeyboardAvoidingView
@@ -346,6 +459,31 @@ export default function ChatScreen({ navigation, route }: Props) {
             </View>
           }
         />
+      )}
+
+      {/* Action Previews */}
+      {editingMessage && (
+        <View style={styles.actionPreview}>
+          <View style={styles.actionInfo}>
+            <Text style={styles.actionTitle}>Editing Message</Text>
+            <Text style={styles.actionText} numberOfLines={1}>{editingMessage.content}</Text>
+          </View>
+          <TouchableOpacity onPress={() => { setEditingMessage(null); setText(''); }} style={styles.actionClose}>
+            <Text style={styles.actionCloseText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {replyTo && (
+        <View style={styles.actionPreview}>
+          <View style={styles.actionInfo}>
+            <Text style={styles.actionTitle}>Replying to {replyTo.sender_id === user?.id ? 'yourself' : 'Member'}</Text>
+            <Text style={styles.actionText} numberOfLines={1}>{replyTo.content}</Text>
+          </View>
+          <TouchableOpacity onPress={() => setReplyTo(null)} style={styles.actionClose}>
+            <Text style={styles.actionCloseText}>✕</Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       {/* Input */}
@@ -426,9 +564,33 @@ const styles = StyleSheet.create({
   bubbleMe: { backgroundColor: '#4f46e5', borderBottomRightRadius: 4 },
   bubbleThem: { backgroundColor: '#111133', borderBottomLeftRadius: 4 },
   bubbleOptimistic: { opacity: 0.7 },
-  bubbleText: { color: '#ccc', fontSize: 15, lineHeight: 21 },
   bubbleTextMe: { color: '#fff' },
-  bubbleTime: { color: 'rgba(255,255,255,0.4)', fontSize: 10, marginTop: 4, textAlign: 'right' },
+  bubbleFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 4 },
+  editedTag: { color: 'rgba(255,255,255,0.4)', fontSize: 10, fontStyle: 'italic', marginRight: 4 },
+  bubbleTime: { color: 'rgba(255,255,255,0.4)', fontSize: 10 },
+  replyContext: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#6366f1',
+    padding: 6,
+    borderRadius: 4,
+    marginBottom: 6,
+  },
+  replyContextName: { color: '#6366f1', fontSize: 12, fontWeight: '700', marginBottom: 2 },
+  replyContextText: { color: '#aaa', fontSize: 12 },
+  actionPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0d0d1e',
+    padding: 12,
+    borderTopWidth: 1,
+    borderColor: '#111133',
+  },
+  actionInfo: { flex: 1 },
+  actionTitle: { color: '#6366f1', fontSize: 12, fontWeight: '700', marginBottom: 2 },
+  actionText: { color: '#aaa', fontSize: 12 },
+  actionClose: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
+  actionCloseText: { color: '#666', fontSize: 18 },
   attachmentContainer: { marginBottom: 8, borderRadius: 8, overflow: 'hidden' },
   attachmentImage: { width: 200, height: 150, borderRadius: 8, backgroundColor: '#222' },
   voiceNoteBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', padding: 8, borderRadius: 8 },

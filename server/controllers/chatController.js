@@ -12,8 +12,6 @@ exports.getConversations = async (req, res) => {
 
     // 1. Fetch memberships with basic conversation data
     let memberships = [];
-    let memError = null;
-
     try {
       const { data, error } = await supabase
         .from("conversation_members")
@@ -21,27 +19,28 @@ exports.getConversations = async (req, res) => {
         .eq("user_id", userId);
       
       if (error) {
-        console.error(`[Chat] Membership fetch error for ${userId}:`, error.message);
-        return res.status(500).json({ 
-          error: "Failed to load chat memberships", 
-          details: error.message,
-          code: error.code
-        });
+        // Fallback for missing 'role' or 'status' columns
+        if (error.code === '42703') {
+           console.warn(`[Chat] role/status missing in conversation_members, falling back`);
+           const { data: fallbackData, error: fallbackError } = await supabase
+             .from("conversation_members")
+             .select("conversation_id")
+             .eq("user_id", userId);
+           
+           if (fallbackError) throw fallbackError;
+           memberships = fallbackData || [];
+        } else {
+           throw error;
+        }
+      } else {
+        memberships = data || [];
       }
-      
-      memberships = data || [];
     } catch (e) {
-      console.warn("[Chat] Detailed membership fetch failed, falling back to basic", e.message);
-      const { data, error: basicError } = await supabase
-        .from("conversation_members")
-        .select("conversation_id")
-        .eq("user_id", userId);
-      
-      if (basicError) {
-          console.error("[Chat] Basic membership fetch also failed:", basicError.message);
-          return res.status(500).json({ error: "Critical DB error fetching memberships" });
-      }
-      memberships = data || [];
+      console.error(`[Chat] Membership fetch error for ${userId}:`, e.message);
+      return res.status(500).json({ 
+        error: "Failed to load chat memberships", 
+        details: e.message
+      });
     }
 
     console.log(`[Chat] User ${userId} has ${memberships.length} memberships`);
@@ -538,15 +537,6 @@ exports.getMessages = async (req, res) => {
       console.warn("[Chat] Could not fetch cleared_at (column might be missing):", e.message);
     }
 
-    // Try full query with attachments first
-    try {
-      let query = supabase
-        .from("messages")
-        .select(`
-                    *,
-                    attachment:media_attachments(*)
-                `)
-        .eq("conversation_id", conversationId)
         .order("created_at", { ascending: false })
         .limit(parseInt(limit));
 
@@ -811,30 +801,6 @@ exports.sendMessage = async (req, res) => {
       detectedLang = await detectLanguage(content);
     }
 
-    // Prepare insert payload
-    const insertPayload = {
-      conversation_id: conversationId,
-      sender_id: userId,
-      content: content,
-      type: type || "text",
-      original_language: detectedLang,
-    };
-
-    // Add optional columns only if they likely exist (based on logic or we can try/catch)
-    // For production safety, we'll try a fail-safe insert pattern
-    const selectQuery = "*, attachment:media_attachments(*)";
-    let createdMessageId = null;
-
-    try {
-      const { data, error } = await supabase
-        .from("messages")
-        .insert([{
-          ...insertPayload,
-          sentiment: sentiment,
-          attachment_id: req.body.attachmentId || null,
-        }])
-        .select(selectQuery)
-        .single();
 
       if (error) {
         // If it's a "column does not exist" error (42703 for Postgres)

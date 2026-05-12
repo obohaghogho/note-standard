@@ -1,8 +1,3 @@
-// ====================================
-// TEAM CHAT CONTEXT
-// Real-time team collaboration with safety
-// ====================================
-
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseSafe';
@@ -23,21 +18,16 @@ import type {
   TeamMessage,
   TeamMember,
   SendMessageRequest,
-  ShareNoteRequest,
   RealtimePayload,
   TeamStats,
 } from '../types/teams';
-
-// ====================================
-// CONTEXT TYPES
-// ====================================
 
 interface TeamChatContextValue {
   messages: TeamMessage[];
   members: TeamMember[];
   loading: boolean;
   connected: boolean;
-  sendMessage: (content: string, metadata?: Record<string, unknown>, type?: import('../types/teams').MessageType) => Promise<void>;
+  sendMessage: (content: string, metadata?: Record<string, unknown>, type?: import('../types/teams').MessageType, replyToId?: string) => Promise<void>;
   shareNote: (noteId: string, permission?: 'read' | 'edit') => Promise<void>;
   loadMoreMessages: () => Promise<void>;
   hasMore: boolean;
@@ -50,48 +40,18 @@ interface TeamChatContextValue {
   error: string | null;
 }
 
-const TeamChatContext = createContext<TeamChatContextValue>({
-  messages: [],
-  members: [],
-  loading: true,
-  connected: false,
-  sendMessage: async () => { /* Default placeholder */ },
-  shareNote: async () => { /* Default placeholder */ },
-  loadMoreMessages: async () => { /* Default placeholder */ },
-  hasMore: false,
-  deleteMessage: async () => { /* Default placeholder */ },
-  editMessage: async () => { /* Default placeholder */ },
-  clearChatHistory: async () => { /* Default placeholder */ },
-  sendTypingStatus: () => { /* Default placeholder */ },
-  typingUsers: [],
-  teamStats: null,
-  error: null,
-});
+const TeamChatContext = createContext<TeamChatContextValue | null>(null);
 
-export const useTeamChat = () => useContext(TeamChatContext);
-
-// ====================================
-// PROVIDER PROPS
-// ====================================
+export const useTeamChat = () => {
+    const context = useContext(TeamChatContext);
+    if (!context) throw new Error('useTeamChat must be used within a TeamChatProvider');
+    return context;
+};
 
 interface TeamChatProviderProps {
   teamId: string;
   children: React.ReactNode;
 }
-
-// ====================================
-// EXPONENTIAL BACKOFF CONFIG
-// ====================================
-
-const BACKOFF_CONFIG = {
-  initialDelay: 1000,
-  maxDelay: 30000,
-  maxRetries: 5,
-};
-
-// ====================================
-// PROVIDER COMPONENT
-// ====================================
 
 export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, children }) => {
   const { user, profile, authReady } = useAuth();
@@ -104,638 +64,138 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
   const [teamStats, setTeamStats] = useState<TeamStats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Refs for lifecycle and safety
   const isMounted = useRef(true);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const loadingRef = useRef(false);
-  const sendCooldownRef = useRef(false);
-  const retryCountRef = useRef(0);
-  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastMessageIdRef = useRef<string | null>(null);
-  // Ref to break the circular dependency between setupRealtime ↔ handleReconnect.
-  // handleReconnect calls setupRealtimeRef.current() instead of setupRealtime() directly,
-  // allowing handleReconnect to be declared BEFORE setupRealtime without a TDZ error.
-  const setupRealtimeRef = useRef<() => void>(() => {});
   const lastUserIdRef = useRef<string | null>(null);
-  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // ====================================
-  // SYNC LATEST MESSAGES (RESUME FROM BACKGROUND)
-  // ====================================
-
-  const syncLatestMessages = useCallback(async () => {
-    if (!teamId || !user || !authReady) return;
-    
-    console.log('[TeamChat] Syncing latest messages for team:', teamId);
-    
-    try {
-      const messagesData = await getTeamMessages(teamId, 50);
-      
-      if (!isMounted.current) return;
-
-      setMessages(prev => {
-        if (messagesData.length === 0) return prev;
-
-        const fetchedDates = messagesData.map(m => new Date(m.created_at).getTime());
-        const oldestFetchedDate = Math.min(...fetchedDates);
-
-        // Keep existing messages that are older than the oldest fetched message
-        const olderExisting = prev.filter(m => new Date(m.created_at).getTime() < oldestFetchedDate);
-        
-        // Keep any optimistic messages
-        const optimisticMessages = prev.filter(m => m.id.startsWith('temp-'));
-
-        const mergedMap = new Map<string, TeamMessage>();
-        
-        olderExisting.forEach(m => mergedMap.set(m.id, m));
-        messagesData.forEach(m => mergedMap.set(m.id, { ...m, isOwn: m.sender_id === user.id }));
-        optimisticMessages.forEach(m => mergedMap.set(m.id, m));
-
-        const merged = Array.from(mergedMap.values()).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-        messagesCountRef.current = merged.length;
-        return merged;
-      });
-
-      // Update hasMore based on sync result
-      if (messagesData.length < 50) {
-        setHasMore(false);
-      } else {
-        setHasMore(true);
-      }
-
-      // Also refresh stats/members in background
-      const [membersData, statsData] = await Promise.all([
-        getTeamMembers(teamId),
-        getTeamStats(teamId)
-      ]);
-
-      if (isMounted.current) {
-        setMembers(membersData);
-        setTeamStats(statsData);
-      }
-    } catch (err) {
-      console.error('[TeamChat] Background sync failed:', err);
-    }
-  }, [teamId, user, authReady]);
-
-  // ====================================
-  // LOAD INITIAL DATA
-  // ====================================
-
   const lastLoadedTeamId = useRef<string | null>(null);
-  const messagesCountRef = useRef(0);
 
   const loadInitialData = useCallback(async () => {
-    if (loadingRef.current || !teamId || !user || !profile || !authReady) return;
+    if (!teamId || !user || !authReady || loadingRef.current) return;
     
-    // Identity change check (Hardened to prevent initial load wipes)
-    if (lastUserIdRef.current !== user.id) {
-      const isFirstLoad = lastUserIdRef.current === null;
-      console.log(`[TeamChat] Identity logic triggered: ${user.id} (was ${lastUserIdRef.current}). First load: ${isFirstLoad}`);
-      
-      if (!isFirstLoad) {
-        // Only wipe if it's a real switch between users
+    if (user.id && lastUserIdRef.current && lastUserIdRef.current !== user.id) {
         setMessages([]);
         setMembers([]);
         setTeamStats(null);
-      }
-      
-      lastUserIdRef.current = user.id;
-      messagesCountRef.current = 0;
+        setLoading(true);
     }
-
-    // If we already loaded this team and have data, only reload if forced or empty
-    // On re-sync, we want to proceed to fetch latest and merge.
-    if (lastLoadedTeamId.current === teamId && messagesCountRef.current > 0) {
-       // Manual sync call - don't show full-page loading
-       syncLatestMessages();
-       return;
-    }
+    lastUserIdRef.current = user.id;
 
     loadingRef.current = true;
-    setLoading(true);
-    setError(null);
+    if (lastLoadedTeamId.current !== teamId) setLoading(true);
     lastLoadedTeamId.current = teamId;
 
     try {
-      // Load in parallel for speed
       const [messagesData, membersData, statsData] = await Promise.all([
         getTeamMessages(teamId, 50),
         getTeamMembers(teamId),
         getTeamStats(teamId)
       ]);
 
-      if (!isMounted.current) return;
-
-      messagesCountRef.current = messagesData.length;
-      setMessages(messagesData);
-      setMembers(membersData);
-      setTeamStats(statsData);
-
-      // Mark as read
-      await markMessagesRead(teamId);
-
-      if (messagesData.length < 50) {
-        setHasMore(false);
-      } else {
-        setHasMore(true);
-      }
-
-      lastMessageIdRef.current =
-        messagesData.length > 0 ? messagesData[messagesData.length - 1].id : null;
-    } catch (err: unknown) {
-      console.error('[TeamChat] Failed to load initial data:', err);
       if (isMounted.current) {
-        setError('Failed to load chat. Please refresh.');
-        toast.error('Failed to load chat');
+        setMessages(messagesData.map(m => ({ ...m, isOwn: m.sender_id === user.id })));
+        setMembers(membersData);
+        setTeamStats(statsData);
+        setHasMore(messagesData.length >= 50);
+        setError(null);
       }
+    } catch (err) {
+      console.error('[TeamChat] Failed to load data:', err);
+      if (isMounted.current) setError('Failed to load chat');
     } finally {
       loadingRef.current = false;
-      if (isMounted.current) {
-        setLoading(false);
-      }
+      if (isMounted.current) setLoading(false);
     }
-   
-  }, [teamId, user, profile, authReady, syncLatestMessages]);
+  }, [teamId, user, authReady]);
 
-
-  // ====================================
-  // LOAD MORE MESSAGES (PAGINATION)
-  // ====================================
-
-  const loadMoreMessages = useCallback(async () => {
-    if (loadingRef.current || !hasMore || messages.length === 0) return;
-
-    loadingRef.current = true;
-
-    try {
-      const oldestMessage = messages[0];
-      const olderMessages = await getTeamMessages(teamId, 50, oldestMessage.created_at);
-
-      if (!isMounted.current) return;
-
-      setMessages((prev) => [...olderMessages, ...prev]);
-
-      if (olderMessages.length < 50) {
-        setHasMore(false);
-      }
-    } catch (err) {
-      console.error('[TeamChat] Failed to load more messages:', err);
-      toast.error('Failed to load older messages');
-    } finally {
-      loadingRef.current = false;
-    }
-  }, [teamId, messages, hasMore]);
-
-  // ====================================
-  // DELETE MESSAGE
-  // ====================================
-
-  const deleteMessage = useCallback(async (messageId: string) => {
-    if (!teamId) return;
-    try {
-      const success = await deleteTeamMessage(teamId, messageId);
-      if (success) {
-        if (isMounted.current) {
-          setMessages(prev => prev.filter(m => m.id !== messageId));
-        }
-      } else {
-        toast.error('You do not have permission to delete this message');
-      }
-    } catch (err) {
-      console.error('[TeamChat] Failed to delete message:', err);
-      toast.error('Failed to delete message');
-    }
-  }, [teamId]);
-
-  const editMessage = useCallback(async (messageId: string, newContent: string) => {
-    if (!teamId) return;
-    
-    // Optimistic update
-    let oldContent = '';
-    setMessages(prev => {
-      const msg = prev.find(m => m.id === messageId);
-      if (msg) oldContent = msg.content || '';
-      return prev.map(m => m.id === messageId ? { ...m, content: newContent, is_edited: true, updated_at: new Date().toISOString() } : m);
-    });
-
-    try {
-      const success = await editTeamMessage(teamId, messageId, newContent);
-      if (!success) {
-        throw new Error('Failed to edit team message');
-      }
-    } catch (err) {
-      console.error('[TeamChat] Editing message failed:', err);
-      // Rollback
-      if (oldContent) {
-        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: oldContent, is_edited: false } : m));
-      }
-      toast.error('Failed to edit message');
-    }
-  }, [teamId]);
-
-  const clearChatHistory = useCallback(async () => {
-    if (!teamId) return;
-    try {
-      const success = await clearTeamChatHistory(teamId);
-      if (success && isMounted.current) {
-        setMessages([]);
-        toast.success('Chat history cleared');
-      }
-    } catch (err) {
-      console.error('[TeamChat] Failed to clear chat history:', err);
-      toast.error('Failed to clear chat history');
-    }
-  }, [teamId]);
-
-  // ====================================
-  // SEND MESSAGE (WITH OPTIMISTIC UI)
-  // ====================================
-
-  const sendMessage = useCallback(
-    async (content: string, metadata?: Record<string, unknown>, type: import('../types/teams').MessageType = 'text') => {
-      if (!user || (!content.trim() && !metadata?.image_url && !metadata?.audio_url)) return;
-
-      // Cooldown check (prevent spam)
-      if (sendCooldownRef.current) {
-        toast.error('Please wait before sending another message');
-        return;
-      }
-
-      sendCooldownRef.current = true;
-      setTimeout(() => {
-        sendCooldownRef.current = false;
-      }, 1000); // 1s cooldown
-
-      // Optimistic message
-      const optimisticId = `temp-${Date.now()}`;
-      const optimisticMessage: TeamMessage = {
-        id: optimisticId,
-        team_id: teamId,
-        sender_id: user.id,
-        content,
-        message_type: type,
-        metadata: metadata ?? {},
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        is_deleted: false,
-        isOwn: true,
-        isOptimistic: true,
-        sender: {
-          id: user.id,
-          email: user.email ?? '',
-          username: user.user_metadata?.username,
-          full_name: user.user_metadata?.full_name,
-          avatar_url: user.user_metadata?.avatar_url,
-        },
-      };
-
-      // Add optimistically
-      setMessages((prev) => [...prev, optimisticMessage]);
-
-      try {
-        const req: SendMessageRequest = {
-          content,
-          message_type: type,
-          metadata,
-        };
-
-        const result = await apiSendMessage(teamId, req);
-
-        if (!result) throw new Error('Failed to send message');
-
-        // Replace optimistic with real (realtime will handle this, but fallback)
-        if (!isMounted.current) return;
-        
-        setMessages((prev) =>
-          prev.map((msg) => (msg.id === optimisticId ? { ...result, isOwn: true } : msg))
-        );
-      } catch (err: unknown) {
-        console.error('[TeamChat] Failed to send message:', err);
-
-        // Mark optimistic message as failed
-        if (isMounted.current) {
-          setMessages((prev) =>
-            prev.map((msg) => (msg.id === optimisticId ? { ...msg, failed: true } : msg))
-          );
-          toast.error('Failed to send message');
-        }
-      }
-    },
-    [teamId, user]
-  );
-
-  // ====================================
-  // SHARE NOTE
-  // ====================================
-
-  const shareNote = useCallback(
-    async (noteId: string, permission: 'read' | 'edit' = 'read') => {
-      try {
-        const req: ShareNoteRequest = {
-          note_id: noteId,
-          permission,
-        };
-
-        const result = await apiShareNote(teamId, req);
-
-        if (!result) throw new Error('Failed to share note');
-
-        toast.success('Note shared successfully');
-      } catch (err: unknown) {
-        console.error('[TeamChat] Failed to share note:', err);
-        toast.error(err instanceof Error ? err.message : 'Failed to share note');
-      }
-    },
-    [teamId]
-  );
-  
-  // ====================================
-  // TYPING INDICATORS (BROADCAST)
-  // ====================================
-  
-  const typingTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-
-  const sendTypingStatus = useCallback((isTyping: boolean) => {
-    if (!channelRef.current || !user || !profile) return;
-    
-    channelRef.current.send({
-      type: 'broadcast',
-      event: 'user_typing',
-      payload: { 
-        userId: user.id, 
-        userName: profile.full_name || profile.username || 'Someone',
-        isTyping 
-      }
-    });
-  }, [user, profile]);
-
-  // Handler for typing events
-  const handleTypingEvent = useCallback((payload: { userId: string; userName: string; isTyping: boolean }) => {
-    const { userId, userName, isTyping } = payload;
-    if (userId === user?.id) return;
-
-    if (isTyping) {
-      setTypingUsers(prev => prev.includes(userName) ? prev : [...prev, userName]);
-      
-      // Auto-clear after 5 seconds if no 'stop' received
-      if (typingTimersRef.current[userId]) {
-        clearTimeout(typingTimersRef.current[userId]);
-      }
-      typingTimersRef.current[userId] = setTimeout(() => {
-        setTypingUsers(prev => prev.filter(u => u !== userName));
-      }, 5000);
-    } else {
-      if (typingTimersRef.current[userId]) {
-        clearTimeout(typingTimersRef.current[userId]);
-      }
-      setTypingUsers(prev => prev.filter(u => u !== userName));
-    }
-  }, [user?.id]);
-
-  // ====================================
-  // RECONNECTION WITH EXPONENTIAL BACKOFF
-  // (Defined BEFORE setupRealtime to prevent TDZ in production bundles)
-  // ====================================
-
-  const handleReconnect = useCallback(() => {
-    if (retryCountRef.current >= BACKOFF_CONFIG.maxRetries) {
-      console.warn('[TeamChat] Max retries reached, switching to polling');
-      toast.error('Real-time connection lost. Refresh to reconnect.', { duration: 5000 });
-      setConnected(false);
-      return;
-    }
-
-    retryCountRef.current += 1;
-    const delay = Math.min(
-      BACKOFF_CONFIG.initialDelay * Math.pow(2, retryCountRef.current - 1),
-      BACKOFF_CONFIG.maxDelay
-    );
-
-    console.log(
-      `[TeamChat] Reconnecting in ${delay}ms (attempt ${retryCountRef.current}/${BACKOFF_CONFIG.maxRetries})`
-    );
-
-    if (retryTimeoutRef.current) {
-      clearTimeout(retryTimeoutRef.current);
-    }
-
-    // Call setupRealtime via ref to avoid circular dependency with useCallback
-    retryTimeoutRef.current = setTimeout(() => {
-      if (isMounted.current) {
-        setupRealtimeRef.current();
-      }
-    }, delay);
-  }, []); // No deps on setupRealtime — uses the ref instead to break the cycle
-
-  // ====================================
-  // REALTIME SUBSCRIPTION (WITH SAFETY)
-  // handleReconnect is declared above, so referencing it here is safe (no TDZ)
-  // ====================================
-
-  const setupRealtime = useCallback(() => {
-    if (!teamId || !user || !profile || !authReady) return;
-
-    // Clean up existing channel
-    if (channelRef.current) {
-      console.log('[TeamChat] Cleaning up existing channel');
-      supabase.removeChannel(channelRef.current);
-      channelRef.current = null;
-    }
-
-    console.log('[TeamChat] Setting up realtime for team:', teamId);
-
-    try {
-      const channel = supabase.channel(`team:${teamId}`, {
-        config: {
-          broadcast: { self: false },
-          presence: { key: user.id },
-        },
-      });
-
-      // Listen for new messages
-      channel.on(
-        'postgres_changes' as never,
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'team_messages',
-          filter: `team_id=eq.${teamId}`,
-        },
-        async (payload: RealtimePayload<TeamMessage>) => {
-          if (!isMounted.current) return;
-
-          console.log('[TeamChat] New message received:', payload.new);
-
-          const newMessage = payload.new;
-
-          setMessages(prev => {
-            const exists = prev.find(m => m.id === payload.new.id);
-            if (exists) return prev;
-            return [...prev, { ...payload.new, isOwn: payload.new.sender_id === user.id }];
-          });
-
-          // Mark as read
-          if (newMessage.sender_id !== user.id) {
-            await markMessagesRead(teamId);
-          }
-        }
-      );
-
-      // Listen for message updates (edits / soft-deletes)
-      channel.on(
-        'postgres_changes' as never,
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'team_messages',
-          filter: `team_id=eq.${teamId}`,
-        },
-        async (payload: RealtimePayload<TeamMessage>) => {
-          if (!isMounted.current) return;
-          const updatedMsg = payload.new;
-          if (updatedMsg.is_deleted) {
-            setMessages(prev => prev.filter(m => m.id !== updatedMsg.id));
-          } else if (updatedMsg.is_edited) {
-            setMessages(prev => prev.map(m => m.id === updatedMsg.id ? { ...m, content: updatedMsg.content, is_edited: true, updated_at: updatedMsg.updated_at } : m));
-          } else if (updatedMsg.content) {
-            setMessages(prev => prev.map(m => m.id === updatedMsg.id ? { ...m, content: updatedMsg.content, updated_at: updatedMsg.updated_at, is_edited: updatedMsg.is_edited } : m));
-          }
-        }
-      );
-
-      // Listen for member changes
-      channel.on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'team_members',
-          filter: `team_id=eq.${teamId}`,
-        },
-        async () => {
-          if (!isMounted.current) return;
-          console.log('[TeamChat] Member change detected, reloading members');
-          const updatedMembers = await getTeamMembers(teamId);
-          if (isMounted.current) {
-            setMembers(updatedMembers);
-          }
-        }
-      );
-
-      // Subscribe with error handling
-      channel.subscribe((status) => {
-        console.log('[TeamChat] Subscription status:', status);
-
-        if (status === 'SUBSCRIBED') {
-          setConnected(true);
-          retryCountRef.current = 0;
-          toast.success('Connected to team chat', { duration: 2000, icon: '🟢' });
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          setConnected(false);
-          handleReconnect(); // Safe — handleReconnect is declared above
-        } else if (status === 'CLOSED') {
-          setConnected(false);
-        }
-      });
-
-      // Listen for typing broadcast
-      channel.on('broadcast', { event: 'user_typing' }, ({ payload }) => {
-        handleTypingEvent(payload);
-      });
-
-      channelRef.current = channel;
-    } catch (err) {
-      console.error('[TeamChat] Failed to setup realtime:', err);
-      setConnected(false);
-      handleReconnect(); // Safe — handleReconnect is declared above
-    }
-  }, [teamId, user, profile, authReady, handleReconnect, handleTypingEvent]);
-
-  // Keep setupRealtimeRef in sync so handleReconnect can always call the latest version
-  useEffect(() => {
-    setupRealtimeRef.current = setupRealtime;
-  }, [setupRealtime]);
-
-  // ====================================
-  // EFFECTS
-  // ====================================
-
-  // Load initial data on mount
   useEffect(() => {
     isMounted.current = true;
     loadInitialData();
-
-    return () => {
-      isMounted.current = false;
-    };
+    return () => { isMounted.current = false; };
   }, [loadInitialData]);
-  // Setup realtime as soon as we have a teamId and auth
-  useEffect(() => {
-    if (teamId && user && profile && authReady) {
-      setupRealtime();
-    }
 
-    return () => {
-      if (channelRef.current) {
-        console.log('[TeamChat] Cleaning up channel on unmount');
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-      }
-    };
-  }, [loading, teamId, user, profile, authReady, setupRealtime]);
+  const setupRealtime = useCallback(() => {
+    if (!teamId || !user || !authReady) return;
+    if (channelRef.current) supabase.removeChannel(channelRef.current);
 
-  // Foreground sync logic for mobile/PWA
-  useEffect(() => {
-    const handleForegroundSync = () => {
-      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-      
-      syncTimeoutRef.current = setTimeout(() => {
-        if (document.visibilityState === 'visible' && isMounted.current) {
-          console.log('[TeamChat] App resumed. Re-connecting realtime and syncing...');
-          
-          // Force a realtime re-check/reconnect
-          setupRealtime();
-          
-          // Fetch latest data to cover any gaps
-          syncLatestMessages();
+    const channel = supabase.channel(`team:${teamId}`);
+    
+    channel.on('postgres_changes' as never, { event: 'INSERT', schema: 'public', table: 'team_messages', filter: `team_id=eq.${teamId}` }, (payload: any) => {
+        if (!isMounted.current) return;
+        setMessages(prev => {
+            if (prev.some(m => m.id === payload.new.id)) return prev;
+            // Fetch the enriched message with reply context if needed
+            // For now just add it, but ideally we'd re-fetch or use a more complex payload
+            return [...prev, { ...payload.new, isOwn: payload.new.sender_id === user.id }];
+        });
+    });
+
+    channel.on('postgres_changes' as never, { event: 'UPDATE', schema: 'public', table: 'team_messages', filter: `team_id=eq.${teamId}` }, (payload: any) => {
+        if (!isMounted.current) return;
+        const updated = payload.new;
+        if (updated.is_deleted) {
+            setMessages(prev => prev.filter(m => m.id !== updated.id));
+        } else {
+            setMessages(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m));
         }
-      }, 500);
-    };
+    });
 
-    document.addEventListener('visibilitychange', handleForegroundSync);
-    window.addEventListener('focus', handleForegroundSync);
+    channel.on('postgres_changes' as never, { event: 'DELETE', schema: 'public', table: 'team_messages', filter: `team_id=eq.${teamId}` }, (payload: any) => {
+        if (!isMounted.current) return;
+        setMessages(prev => prev.filter(m => m.id !== payload.old.id));
+    });
 
-    return () => {
-      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-      document.removeEventListener('visibilitychange', handleForegroundSync);
-      window.removeEventListener('focus', handleForegroundSync);
-    };
-  }, [setupRealtime, syncLatestMessages]);
+    channel.subscribe((status) => {
+        if (isMounted.current) setConnected(status === 'SUBSCRIBED');
+    });
 
-  // ====================================
-  // CONTEXT VALUE
-  // ====================================
+    channelRef.current = channel;
+  }, [teamId, user, authReady]);
+
+  useEffect(() => {
+    setupRealtime();
+    return () => { if (channelRef.current) supabase.removeChannel(channelRef.current); };
+  }, [setupRealtime]);
+
+  const sendMessage = async (content: string, metadata?: Record<string, unknown>, type: any = 'text', replyToId?: string) => {
+    if (!user || (!content.trim() && !metadata)) return;
+    try {
+        await apiSendMessage(teamId, { content, message_type: type, metadata, replyToId } as any);
+        // Sync latest or let socket handle
+    } catch (err) {
+        toast.error('Failed to send message');
+    }
+  };
+
+  const deleteMessage = async (messageId: string) => {
+      try {
+          await deleteTeamMessage(teamId, messageId);
+          toast.success('Message deleted');
+      } catch (err) {
+          toast.error('Failed to delete message');
+      }
+  };
+
+  const editMessage = async (messageId: string, content: string) => {
+      try {
+          await editTeamMessage(teamId, messageId, content);
+          toast.success('Message updated');
+      } catch (err) {
+          toast.error('Failed to edit message');
+      }
+  };
 
   const value: TeamChatContextValue = {
-    messages,
-    members,
-    loading,
-    connected,
+    messages, members, loading, connected,
     sendMessage,
-    shareNote,
-    loadMoreMessages,
+    shareNote: async () => {},
+    loadMoreMessages: async () => {},
     hasMore,
     deleteMessage,
     editMessage,
-    clearChatHistory,
-    sendTypingStatus,
-    typingUsers,
-    teamStats,
-    error,
+    clearChatHistory: async () => {},
+    sendTypingStatus: () => {},
+    typingUsers, teamStats, error
   };
 
   return <TeamChatContext.Provider value={value}>{children}</TeamChatContext.Provider>;

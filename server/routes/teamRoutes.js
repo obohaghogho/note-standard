@@ -8,5 +8,7 @@ router.use(requireAuth);
 router.get("/my-teams", teamController.getMyTeams);
 router.get("/:teamId/messages", teamController.getTeamMessages);
 router.post("/:teamId/messages", teamController.sendTeamMessage);
+router.patch("/:teamId/messages/:messageId", teamController.editTeamMessage);
+router.delete("/:teamId/messages/:messageId", teamController.deleteTeamMessage);
 
 module.exports = router;

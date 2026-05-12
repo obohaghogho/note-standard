@@ -4,6 +4,7 @@
 // ====================================
 
 import React, { useEffect, useRef, useState } from 'react';
+import { useChatGesture } from '../../hooks/useChatGesture';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { useTeamChat } from '../../context/TeamChatContext';
 import { useAuth } from '../../context/AuthContext';
@@ -62,64 +63,37 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [showRecorder, setShowRecorder] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<TeamMessage | null>(null);
 
   // ── WhatsApp-Style Selection System ──────────────────────
   const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
-  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressTriggeredRef = useRef(false);
   const isSelectionMode = selectedMessages.size > 0;
 
   const toggleMessageSelection = (msgId: string) => {
     setSelectedMessages(prev => {
       const next = new Set(prev);
-      if (next.has(msgId)) {
-        next.delete(msgId);
-      } else {
-        next.add(msgId);
-      }
+      if (next.has(msgId)) next.delete(msgId);
+      else next.add(msgId);
       return next;
     });
   };
 
-  const clearSelection = () => {
-    setSelectedMessages(new Set());
-  };
+  const clearSelection = () => setSelectedMessages(new Set());
 
-  const handleLongPressStart = (msgId: string) => {
-    longPressTriggeredRef.current = false;
-    longPressTimerRef.current = setTimeout(() => {
-      longPressTriggeredRef.current = true;
-      if (navigator.vibrate) navigator.vibrate(30);
-      toggleMessageSelection(msgId);
-    }, 500);
-  };
-
-  const handleLongPressEnd = () => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-  };
-
-  const handleMessageClick = (msgId: string) => {
-    if (longPressTriggeredRef.current) {
-      longPressTriggeredRef.current = false;
-      return;
-    }
-    if (isSelectionMode) {
-      toggleMessageSelection(msgId);
-    }
-  };
+  // Gesture hook — scroll always wins, long-press fires after 480ms of no movement
+  const gesture = useChatGesture({
+    onLongPress: (id) => toggleMessageSelection(id),
+    moveThreshold: 8,
+    delay: 480,
+  });
 
   // Layout Offset Management
   useEffect(() => {
     document.documentElement.style.setProperty('--floating-ui-offset', '110px');
     document.documentElement.style.setProperty('--chat-input-height', '130px');
-    
     return () => {
       document.documentElement.style.setProperty('--floating-ui-offset', '0px');
       document.documentElement.style.setProperty('--chat-input-height', '0px');
-      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
     };
   }, []);
   
@@ -199,7 +173,8 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
         await editMessage(editingMessageId, input.trim());
         setEditingMessageId(null);
       } else {
-        await sendMessage(input.trim());
+        await sendMessage(input.trim(), {}, 'text', replyTo?.id);
+        setReplyTo(null);
       }
       setInput('');
       sendTypingStatus(false);
@@ -419,14 +394,15 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
         } ${msg.failed ? 'team-chat__message--failed' : ''} ${
           isSelected ? 'team-chat__message--selected' : ''
         } group relative`}
-        onTouchStart={() => handleLongPressStart(msg.id)}
-        onTouchEnd={handleLongPressEnd}
-        onTouchCancel={handleLongPressEnd}
-        onMouseDown={() => handleLongPressStart(msg.id)}
-        onMouseUp={handleLongPressEnd}
-        onMouseLeave={handleLongPressEnd}
-        onClick={() => handleMessageClick(msg.id)}
-        style={{ userSelect: 'none', WebkitUserSelect: 'none' } as React.CSSProperties}
+        onTouchStart={(e) => gesture.onTouchStart(e, msg.id)}
+        onTouchMove={gesture.onTouchMove}
+        onTouchEnd={gesture.onTouchEnd}
+        onTouchCancel={gesture.onTouchCancel}
+        onMouseDown={(e) => gesture.onMouseDown(e, msg.id)}
+        onMouseUp={gesture.onMouseUp}
+        onMouseLeave={gesture.onMouseLeave}
+        onClick={(e) => gesture.onClick(e, msg.id, isSelectionMode, toggleMessageSelection)}
+        style={gesture.dragStartStyle}
       >
         {/* Selection checkbox */}
         {isSelectionMode && (
@@ -479,6 +455,16 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
                   path={msg.metadata.audio_url as string} 
                   fetchUrl={async (p) => p}
                 />
+              </div>
+            )}
+            {msg.reply_to && (
+              <div className="team-chat__message-reply-preview mb-2 p-2 rounded bg-white/5 border-l-2 border-blue-500 text-[10px] opacity-80">
+                <div className="font-bold text-blue-400 mb-0.5">
+                  {msg.reply_to.sender_id === user?.id ? 'You' : (members.find(m => m.user_id === msg.reply_to?.sender_id)?.profile?.full_name || 'Member')}
+                </div>
+                <div className="truncate text-gray-300">
+                  {msg.reply_to.content}
+                </div>
               </div>
             )}
             {msg.content && <div className="team-chat__message-text">{msg.content}</div>}
@@ -554,6 +540,21 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
             >
               <Share2 size={16} />
               <span className="hidden sm:inline">Copy</span>
+            </button>
+            <button 
+              onClick={() => {
+                const msgId = Array.from(selectedMessages)[0];
+                const msg = messages.find(m => m.id === msgId);
+                if (msg) {
+                  setReplyTo(msg);
+                  clearSelection();
+                  inputRef.current?.focus();
+                }
+              }}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-blue-300 hover:text-blue-200 hover:bg-blue-500/15 rounded-xl transition-all"
+            >
+              <Share2 size={16} className="rotate-180" />
+              <span className="hidden sm:inline">Reply</span>
             </button>
             {selectedMessages.size === 1 && (
               (() => {
@@ -704,6 +705,24 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
                     type="button" 
                     onClick={() => { setEditingMessageId(null); setInput(''); }}
                     className="hover:bg-blue-500/20 p-1.5 rounded-full transition-colors active:scale-95 text-blue-300 hover:text-white"
+                >
+                    <X size={14} />
+                </button>
+            </div>
+        )}
+        {replyTo && (
+            <div className="absolute bottom-[calc(100%+0.5rem)] left-0 right-0 flex items-center justify-between bg-gray-900/60 text-gray-200 text-xs px-3 py-2 rounded-lg border border-white/10 backdrop-blur-md animate-in slide-in-from-bottom-2 mx-4">
+                <div className="flex flex-col gap-0.5 flex-1 overflow-hidden">
+                    <span className="font-bold text-blue-400 flex items-center gap-1.5">
+                        <Share2 size={12} className="rotate-180" />
+                        Replying to {replyTo.sender_id === user?.id ? 'yourself' : (replyTo.sender?.full_name || 'Member')}
+                    </span>
+                    <span className="truncate opacity-70 italic text-[11px]">{replyTo.content}</span>
+                </div>
+                <button 
+                    type="button" 
+                    onClick={() => setReplyTo(null)}
+                    className="hover:bg-white/10 p-1.5 rounded-full transition-colors active:scale-95 ml-2"
                 >
                     <X size={14} />
                 </button>

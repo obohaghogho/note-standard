@@ -622,3 +622,50 @@
   background: rgba(59, 130, 246, 0.15) !important;
   border-color: rgba(59, 130, 246, 0.3) !important;
 }
+
+/* ====================================
+   GESTURE & SCROLL QUALITY
+   WhatsApp/Messenger-style interaction
+   ==================================== */
+
+/* Messages container: let browser handle scroll BEFORE JS fires */
+.team-chat__messages {
+  touch-action: pan-y;           /* native vertical scroll, no JS interception */
+  overscroll-behavior: contain;  /* prevent page bounce-through on mobile */
+  will-change: scroll-position;  /* GPU-accelerate scroll layer */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Every message item: prevent text highlight during press-and-drag */
+.team-chat__message {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: pan-y;           /* inherit scroll priority */
+  cursor: default;
+}
+
+/* Allow text select ONLY inside bubble text (not the outer wrapper) */
+.team-chat__message-text {
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
+}
+
+/* Selected state: smooth background transition, no jitter */
+.team-chat__message--selected {
+  transition: background 0.15s ease;
+}
+
+/* Input: restore normal text selection */
+.team-chat__input {
+  -webkit-user-select: text;
+  user-select: text;
+  touch-action: auto;
+}
+
+/* Scroll button: no highlight on tap */
+.team-chat__scroll-button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}

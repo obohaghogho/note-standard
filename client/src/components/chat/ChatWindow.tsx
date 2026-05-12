@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { useChatGesture } from '../../hooks/useChatGesture';
 import { AnimatePresence } from 'framer-motion';
 import { useChat } from '../../context/ChatContext';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
@@ -39,8 +40,6 @@ const ChatWindow: React.FC = () => {
 
     // ── WhatsApp-Style Selection System ──────────────────────
     const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
-    const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const longPressTriggeredRef = useRef(false);
     const isSelectionMode = selectedMessages.size > 0;
 
     // Forward modal state
@@ -55,49 +54,21 @@ const ChatWindow: React.FC = () => {
     const toggleMessageSelection = (msgId: string) => {
         setSelectedMessages(prev => {
             const next = new Set(prev);
-            if (next.has(msgId)) {
-                next.delete(msgId);
-            } else {
-                next.add(msgId);
-            }
+            if (next.has(msgId)) next.delete(msgId);
+            else next.add(msgId);
             return next;
         });
     };
 
-    const clearSelection = () => {
-        setSelectedMessages(new Set());
-    };
+    const clearSelection = () => setSelectedMessages(new Set());
 
-    const handleLongPressStart = (msgId: string) => {
-        // If already in selection mode, don't start another long press timer
-        // Just let the onClick handle the toggle
-        if (isSelectionMode) return;
-
-        longPressTriggeredRef.current = false;
-        longPressTimerRef.current = setTimeout(() => {
-            longPressTriggeredRef.current = true;
-            // Haptic feedback for mobile
-            if (navigator.vibrate) navigator.vibrate(30);
-            toggleMessageSelection(msgId);
-        }, 500); // Set to 500ms for a more responsive long-press
-    };
-
-    const handleLongPressEnd = () => {
-        if (longPressTimerRef.current) {
-            clearTimeout(longPressTimerRef.current);
-            longPressTimerRef.current = null;
-        }
-    };
-
-    const handleMessageClick = (msgId: string) => {
-        if (longPressTriggeredRef.current) {
-            longPressTriggeredRef.current = false;
-            return; // was a long press, don't toggle
-        }
-        if (isSelectionMode) {
-            toggleMessageSelection(msgId);
-        }
-    };
+    // Gesture hook — scroll wins, long-press only after 480ms of no movement
+    const gesture = useChatGesture({
+        onLongPress: (id) => toggleMessageSelection(id),
+        moveThreshold: 8,
+        delay: 480,
+        enabled: true,
+    });
 
     // Copy to clipboard
     const handleCopy = async () => {
@@ -117,12 +88,7 @@ const ChatWindow: React.FC = () => {
         }
     };
 
-    // Cleanup long press timer on unmount
-    useEffect(() => {
-        return () => {
-            if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
-        };
-    }, []);
+    // (No manual timer cleanup needed — useChatGesture manages its own cleanup)
     
     const [inputValue, setInputValue] = useState('');
     const [showMediaUpload, setShowMediaUpload] = useState(false);
@@ -412,7 +378,8 @@ const ChatWindow: React.FC = () => {
             if (currentEditingId) {
                 await editMessage(currentEditingId, textToSend);
             } else {
-                await sendMessage(textToSend);
+                await sendMessage(textToSend, 'text', undefined, replyTo?.id);
+                setReplyTo(null);
             }
         } catch {
             // Restore state if network request fails
@@ -872,7 +839,9 @@ const ChatWindow: React.FC = () => {
             <div 
                 className="flex-1 overflow-y-auto p-3 md:p-6 space-y-4 md:space-y-6 scroll-smooth overscroll-contain transition-all scrollbar-hide"
                 style={{ 
-                    WebkitOverflowScrolling: 'touch'
+                    WebkitOverflowScrolling: 'touch',
+                    touchAction: 'pan-y',        /* browser handles scroll before JS */
+                    overscrollBehavior: 'contain',
                 }}
                 ref={scrollContainerRef}
                 onScroll={handleScroll}
@@ -905,14 +874,15 @@ const ChatWindow: React.FC = () => {
                                 <div 
                                     key={msg.id || `msg-temp-${index}`} 
                                     className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'} ${isGrouped ? '-mt-2 md:-mt-3' : 'mt-4'} animate-in fade-in slide-in-from-bottom-2 duration-300`}
-                                    onTouchStart={() => handleLongPressStart(msg.id)}
-                                    onTouchEnd={handleLongPressEnd}
-                                    onTouchCancel={handleLongPressEnd}
-                                    onMouseDown={() => handleLongPressStart(msg.id)}
-                                    onMouseUp={handleLongPressEnd}
-                                    onMouseLeave={handleLongPressEnd}
-                                    onClick={() => handleMessageClick(msg.id)}
-                                    style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+                                    onTouchStart={(e) => gesture.onTouchStart(e, msg.id)}
+                                    onTouchMove={gesture.onTouchMove}
+                                    onTouchEnd={gesture.onTouchEnd}
+                                    onTouchCancel={gesture.onTouchCancel}
+                                    onMouseDown={(e) => gesture.onMouseDown(e, msg.id)}
+                                    onMouseUp={gesture.onMouseUp}
+                                    onMouseLeave={gesture.onMouseLeave}
+                                    onClick={(e) => gesture.onClick(e, msg.id, isSelectionMode, toggleMessageSelection)}
+                                    style={gesture.dragStartStyle}
                                 >
                                     {/* Selection checkbox indicator */}
                                     {isSelectionMode && (
