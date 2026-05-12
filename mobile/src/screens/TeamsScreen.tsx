@@ -7,6 +7,13 @@ import {
 import { TeamsService, Team } from '../services/TeamsService';
 import { AuthService } from '../services/AuthService';
 import apiClient from '../api/apiClient';
+import { MediaService } from '../services/MediaService';
+import VoiceService from '../services/VoiceService';
+import { Audio } from 'expo-av';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { ChatStackParamList } from '../navigation/ChatStack';
 
 interface TeamMessage {
   id: string;
@@ -29,6 +36,9 @@ function TeamChatModal({
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioPlayer, setAudioPlayer] = useState<Audio.Sound | null>(null);
+  const navigation = useNavigation<NativeStackNavigationProp<ChatStackParamList>>();
 
   const loadMessages = useCallback(async () => {
     try {
@@ -43,17 +53,71 @@ function TeamChatModal({
 
   useEffect(() => { loadMessages(); }, [loadMessages]);
 
-  const sendMessage = async () => {
-    if (!newMessage.trim()) return;
+  const sendMessage = async (overrideContent?: string, attachmentId?: string) => {
+    const contentToSend = overrideContent || newMessage.trim();
+    if (!contentToSend && !attachmentId) return;
     setSending(true);
     try {
-      await apiClient.post(`/teams/${team.id}/messages`, { content: newMessage.trim() });
-      setNewMessage('');
+      await apiClient.post(`/teams/${team.id}/messages`, { 
+        content: contentToSend,
+        attachmentId 
+      });
+      if (!overrideContent) setNewMessage('');
       loadMessages();
     } catch (e) {
       Alert.alert('Error', 'Failed to send message');
     } finally {
       setSending(false);
+    }
+  };
+
+  const handlePickMedia = async () => {
+    try {
+      const asset = await MediaService.pickImage();
+      if (!asset) return;
+      setLoading(true);
+      const attachment = await MediaService.uploadMedia(
+        asset.uri, asset.fileName || 'team.jpg', asset.mimeType || 'image/jpeg', team.id
+      );
+      await sendMessage(`Team media: ${attachment.file_name}`, attachment.id);
+    } catch (err: any) {
+      Alert.alert('Upload Error', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVoiceNote = async () => {
+    if (isRecording) {
+      setIsRecording(false);
+      try {
+        setLoading(true);
+        const attachment = await VoiceService.stopRecording(team.id);
+        if (attachment) await sendMessage('Team Voice Note', attachment.id);
+      } catch (err: any) {
+        Alert.alert('Voice Note Error', err.message);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      try {
+        await VoiceService.startRecording();
+        setIsRecording(true);
+      } catch (err: any) {
+        Alert.alert('Recording Error', err.message);
+      }
+    }
+  };
+
+  const playVoiceNote = async (path: string) => {
+    try {
+      if (audioPlayer) await audioPlayer.unloadAsync();
+      const res = await apiClient.get(`/media/signed-url?path=${path}`);
+      const { sound } = await Audio.Sound.createAsync({ uri: res.data.url });
+      setAudioPlayer(sound);
+      await sound.playAsync();
+    } catch (err) {
+      console.error('Failed to play audio', err);
     }
   };
 
@@ -72,6 +136,31 @@ function TeamChatModal({
             <Text style={styles.chatHeaderTitle} numberOfLines={1}>{team.name}</Text>
             <Text style={styles.chatHeaderSub}>{team.my_role?.toUpperCase()}</Text>
           </View>
+          
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              onPress={() => {
+                onClose();
+                navigation.navigate('Call', { 
+                  type: 'audio', conversationId: team.id, targetUserId: team.id, targetName: team.name, isIncoming: false 
+                });
+              }} 
+              style={styles.headerActionBtn}
+            >
+              <Text style={styles.headerActionIcon}>📞</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={() => {
+                onClose();
+                navigation.navigate('Call', { 
+                  type: 'video', conversationId: team.id, targetUserId: team.id, targetName: team.name, isIncoming: false 
+                });
+              }} 
+              style={styles.headerActionBtn}
+            >
+              <Text style={styles.headerActionIcon}>📹</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {loading ? (
@@ -87,9 +176,33 @@ function TeamChatModal({
             renderItem={({ item }) => {
               const isMe = item.sender_id === currentUserId;
               const senderName = item.profiles?.full_name || item.profiles?.username || 'Unknown';
+              // Check for attachment in item (note: team messages might have a slightly different structure)
+              const attachment = (item as any).attachment;
+
               return (
                 <View style={[styles.messageBubble, isMe ? styles.myBubble : styles.theirBubble]}>
                   {!isMe && <Text style={styles.senderName}>{senderName}</Text>}
+                  
+                  {attachment && (
+                    <View style={styles.attachmentContainer}>
+                      {attachment.file_type.startsWith('image') ? (
+                        <Image 
+                          source={{ uri: `https://tngcvgisfctggvivcnva.supabase.co/storage/v1/object/public/chat-media/${attachment.storage_path}` }} 
+                          style={styles.attachmentImage as any} 
+                        />
+                      ) : attachment.file_type.startsWith('audio') ? (
+                        <TouchableOpacity 
+                          style={styles.voiceNoteBtn} 
+                          onPress={() => playVoiceNote(attachment.storage_path)}
+                        >
+                          <Text style={styles.voiceNoteText}>▶ Voice Note</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <Text style={styles.attachmentFile}>📎 {attachment.file_name}</Text>
+                      )}
+                    </View>
+                  )}
+
                   <Text style={styles.messageText}>{item.content}</Text>
                   <Text style={styles.messageTime}>
                     {new Date(item.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
@@ -107,6 +220,10 @@ function TeamChatModal({
 
         <View style={styles.inputContainer}>
           <View style={styles.inputRow}>
+            <TouchableOpacity style={styles.attachBtn} onPress={handlePickMedia}>
+              <Text style={styles.attachIcon}>📎</Text>
+            </TouchableOpacity>
+
             <TextInput
               style={styles.messageInput}
               placeholder="Type a message..."
@@ -116,13 +233,25 @@ function TeamChatModal({
               multiline
               textAlignVertical="center"
             />
-            <TouchableOpacity
-              style={[styles.sendBtn, !newMessage.trim() && styles.sendBtnDisabled]}
-              onPress={sendMessage}
-              disabled={sending || !newMessage.trim()}
-            >
-              {sending ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.sendBtnText}>↑</Text>}
-            </TouchableOpacity>
+            
+            {newMessage.trim() ? (
+              <TouchableOpacity
+                style={[styles.sendBtn, !newMessage.trim() && styles.sendBtnDisabled]}
+                onPress={() => sendMessage()}
+                disabled={sending || !newMessage.trim()}
+              >
+                {sending ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.sendBtnText}>↑</Text>}
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.micBtn} onPress={handleVoiceNote}>
+                <LinearGradient 
+                  colors={isRecording ? ['#ef4444', '#dc2626'] : ['#6366f1', '#4f46e5']} 
+                  style={styles.micGrad}
+                >
+                  <Text style={styles.micIcon}>{isRecording ? '⏹' : '🎤'}</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -262,6 +391,9 @@ const styles = StyleSheet.create({
   chatHeaderInfo: { flex: 1 },
   chatHeaderTitle: { color: '#fff', fontSize: 17, fontWeight: '800' },
   chatHeaderSub: { color: '#f59e0b', fontSize: 10, fontWeight: '700', marginTop: 2 },
+  headerActions: { flexDirection: 'row', gap: 10 },
+  headerActionBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#111133', justifyContent: 'center', alignItems: 'center' },
+  headerActionIcon: { fontSize: 16 },
   messagesList: { padding: 16, paddingBottom: 8 },
   messageBubble: {
     maxWidth: '80%', padding: 12, borderRadius: 18, marginBottom: 10,
@@ -271,6 +403,11 @@ const styles = StyleSheet.create({
   senderName: { color: '#f59e0b', fontSize: 11, fontWeight: '700', marginBottom: 4 },
   messageText: { color: '#fff', fontSize: 14, lineHeight: 20 },
   messageTime: { color: 'rgba(255,255,255,0.4)', fontSize: 10, marginTop: 4, alignSelf: 'flex-end' },
+  attachmentContainer: { marginBottom: 8, borderRadius: 8, overflow: 'hidden' },
+  attachmentImage: { width: 180, height: 120, borderRadius: 8, backgroundColor: '#222' },
+  voiceNoteBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', padding: 6, borderRadius: 8 },
+  voiceNoteText: { color: '#fff', fontSize: 13 },
+  attachmentFile: { color: '#f59e0b', fontSize: 13, textDecorationLine: 'underline' },
   emptyMsg: { alignItems: 'center', paddingTop: 80 },
   emptyMsgText: { color: '#555', fontSize: 14 },
   inputContainer: {
@@ -286,6 +423,8 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     gap: 8,
   },
+  attachBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  attachIcon: { fontSize: 22, color: '#f59e0b' },
   messageInput: {
     flex: 1, 
     backgroundColor: '#16162a', 
@@ -298,6 +437,9 @@ const styles = StyleSheet.create({
     borderWidth: 1, 
     borderColor: '#1e1e3a',
   },
+  micBtn: { width: 46, height: 46, borderRadius: 23, overflow: 'hidden' },
+  micGrad: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
+  micIcon: { color: '#fff', fontSize: 18 },
   sendBtn: {
     width: 46, height: 46, borderRadius: 23, backgroundColor: '#f59e0b',
     justifyContent: 'center', alignItems: 'center',

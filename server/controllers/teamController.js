@@ -47,6 +47,7 @@ exports.getTeamMessages = async (req, res, next) => {
       .from('team_messages')
       .select(`
         *,
+        attachment:media_attachments(*),
         profiles:sender_id (
           id,
           username,
@@ -93,10 +94,12 @@ exports.sendTeamMessage = async (req, res, next) => {
         team_id: teamId,
         sender_id: senderId,
         content: content.trim(),
+        attachment_id: req.body.attachmentId || null,
         is_deleted: false,
       })
       .select(`
         *,
+        attachment:media_attachments(*),
         profiles:sender_id (
           id,
           username,
@@ -106,7 +109,24 @@ exports.sendTeamMessage = async (req, res, next) => {
       `)
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // Fallback for missing column
+      if (error.code === '42703') {
+        const { data: retryData, error: retryError } = await supabase
+          .from('team_messages')
+          .insert({
+            team_id: teamId,
+            sender_id: senderId,
+            content: content.trim(),
+            is_deleted: false,
+          })
+          .select('*, profiles:sender_id(*)')
+          .single();
+        if (retryError) throw retryError;
+        return res.status(201).json(retryData);
+      }
+      throw error;
+    }
     res.status(201).json(data);
   } catch (err) {
     next(err);
