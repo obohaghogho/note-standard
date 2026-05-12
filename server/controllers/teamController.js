@@ -176,7 +176,7 @@ exports.editTeamMessage = async (req, res, next) => {
       throw error;
     }
 
-    try { await realtime.emit('to_room', teamId, 'team_message_edited', data); } catch (_) {}
+    try { await realtime.emit('to_room', teamId, 'team_message_edited', data); } catch (e) { console.warn(e); }
     res.json(data);
   } catch (err) {
     next(err);
@@ -231,7 +231,7 @@ exports.deleteTeamMessage = async (req, res, next) => {
       }
     }
 
-    try { await realtime.emit('to_room', teamId, 'team_message_deleted', { messageId, teamId }); } catch (_) {}
+    try { await realtime.emit('to_room', teamId, 'team_message_deleted', { messageId, teamId }); } catch (e) { console.warn(e); }
     res.json({ success: true });
   } catch (err) {
     next(err);
