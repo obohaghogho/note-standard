@@ -540,12 +540,7 @@ exports.getMessages = async (req, res) => {
     // Build the main messages query with attachment join
     let query = supabase
       .from("messages")
-      .select(`
-        *,
-        attachment:media_attachments(*),
-        sender:profiles!messages_sender_id_fkey(id, username, full_name, avatar_url),
-        reply_to:messages!messages_reply_to_id_fkey(id, content, sender_id)
-      `)
+      .select("*, attachment:media_attachments(*), sender:profiles!messages_sender_id_fkey(id, username, full_name, avatar_url), reply_to:messages!messages_reply_to_id_fkey(id, content, sender_id)")
       .eq("conversation_id", conversationId)
       .order("created_at", { ascending: false })
       .limit(parseInt(limit));
