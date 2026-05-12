@@ -553,6 +553,7 @@ exports.getMessages = async (req, res) => {
         query = query.gt("created_at", clearedAt);
       }
 
+    try {
       const { data, error } = await query;
 
       if (error) {
