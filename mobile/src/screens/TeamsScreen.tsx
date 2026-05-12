@@ -109,13 +109,24 @@ const TeamMessageBubble = React.memo(({
 });
 
 function TeamChatModal({
-  team, onClose, currentUserId, messages, onSendMessage, loading, playVoiceNote, handlePickMedia, handleVoiceNote, isRecording
+  team,
+  onClose,
+  currentUserId,
+  messages,
+  onSendMessage,
+  loading,
+  playVoiceNote,
+  handlePickMedia,
+  handleVoiceNote,
+  isRecording,
+  onDeleteMessage,
+  onEditMessage,
 }: {
-  team: Team; 
-  onClose: () => void; 
+  team: Team;
+  onClose: () => void;
   currentUserId: string;
   messages: TeamMessage[];
-  onSendMessage: (content?: string, attachmentId?: string) => Promise<void>;
+  onSendMessage: (content?: string, attachmentId?: string, replyToId?: string) => Promise<void>;
   loading: boolean;
   playVoiceNote: (path: string) => Promise<void>;
   handlePickMedia: () => Promise<void>;
