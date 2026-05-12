@@ -122,13 +122,13 @@ exports.sendTeamMessage = async (req, res, next) => {
           .select('*, profiles:sender_id(*)')
           .single();
         if (retryError) throw retryError;
-        try { await realtime.emit('to_room', teamId, 'team_message', retryData); } catch (_) {}
+        try { await realtime.emit('to_room', teamId, 'team_message', retryData); } catch (e) { console.warn(e); }
         return res.status(201).json(retryData);
       }
       throw error;
     }
 
-    try { await realtime.emit('to_room', teamId, 'team_message', data); } catch (_) {}
+    try { await realtime.emit('to_room', teamId, 'team_message', data); } catch (e) { console.warn(e); }
     res.status(201).json(data);
   } catch (err) {
     next(err);
@@ -170,7 +170,7 @@ exports.editTeamMessage = async (req, res, next) => {
           .select('*, profiles:sender_id(*)')
           .single();
         if (retryError) throw retryError;
-        try { await realtime.emit('to_room', teamId, 'team_message_edited', retryData); } catch (_) {}
+        try { await realtime.emit('to_room', teamId, 'team_message_edited', retryData); } catch (e) { console.warn(e); }
         return res.json(retryData);
       }
       throw error;

@@ -10,13 +10,11 @@ import {
   getTeamStats,
   deleteTeamMessage,
   editTeamMessage,
-  clearTeamChatHistory,
 } from '../lib/teamsApi';
 import type {
   TeamMessage,
   TeamMember,
   SendMessageRequest,
-  RealtimePayload,
   TeamStats,
 } from '../types/teams';
 
@@ -52,13 +50,13 @@ interface TeamChatProviderProps {
 }
 
 export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, children }) => {
-  const { user, profile, authReady } = useAuth();
+  const { user, authReady } = useAuth();
   const [messages, setMessages] = useState<TeamMessage[]>([]);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [typingUsers] = useState<string[]>([]);
   const [teamStats, setTeamStats] = useState<TeamStats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -160,7 +158,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
     try {
         await apiSendMessage(teamId, { content, message_type: type, metadata, replyToId } as SendMessageRequest);
         // Sync latest or let socket handle
-    } catch (err) {
+    } catch {
         toast.error('Failed to send message');
     }
   };
@@ -169,7 +167,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
       try {
           await deleteTeamMessage(teamId, messageId);
           toast.success('Message deleted');
-      } catch (err) {
+      } catch {
           toast.error('Failed to delete message');
       }
   };
@@ -178,7 +176,7 @@ export const TeamChatProvider: React.FC<TeamChatProviderProps> = ({ teamId, chil
       try {
           await editTeamMessage(teamId, messageId, content);
           toast.success('Message updated');
-      } catch (err) {
+      } catch {
           toast.error('Failed to edit message');
       }
   };
