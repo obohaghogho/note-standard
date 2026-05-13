@@ -162,7 +162,7 @@ exports.getConversations = async (req, res) => {
       const timeA = new Date(a.last_message?.created_at || a.updated_at || a.created_at).getTime();
       const timeB = new Date(b.last_message?.created_at || b.updated_at || b.created_at).getTime();
       return timeB - timeA;
-    });
+    }).filter(c => c.chat_type !== "support" && c.name !== "Support Chat" && !(c.name && c.name.toLowerCase().includes("support team")));
 
     res.json(sorted);
   } catch (err) {

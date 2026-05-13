@@ -6,6 +6,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import apiClient from '../api/apiClient';
+import { useNavigation } from '@react-navigation/native';
 
 const MenuItem = ({
   icon, label, value, onPress, danger
@@ -30,6 +31,7 @@ export default function ProfileScreen() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [updatingPassword, setUpdatingPassword] = useState(false);
+  const navigation = useNavigation<any>();
 
   const name = user?.full_name || user?.username || 'User';
   const email = user?.email || '';
@@ -63,6 +65,15 @@ export default function ProfileScreen() {
       Alert.alert('Error', e.response?.data?.error || 'Failed to change password');
     } finally {
       setUpdatingPassword(false);
+    }
+  };
+
+  const handleSupport = async () => {
+    try {
+      const res = await apiClient.post('/chat/support');
+      navigation.navigate('Chat', { conversationId: res.data.id });
+    } catch (e) {
+      Alert.alert('Error', 'Failed to start support chat');
     }
   };
 
@@ -133,6 +144,11 @@ export default function ProfileScreen() {
           onPress={() => Alert.alert('Appearance', 'Optimized for comfort')}
         />
         <MenuItem icon="📱" label="App Version" value="1.4.2" />
+      </View>
+
+      <Text style={styles.sectionLabel}>Support</Text>
+      <View style={styles.section}>
+        <MenuItem icon="💬" label="Need Support" onPress={handleSupport} />
       </View>
 
       {/* Session */}

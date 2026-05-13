@@ -29,7 +29,7 @@ exports.getMyTeams = async (req, res, next) => {
     const teams = (memberships || []).map(m => {
       const teamObj = Array.isArray(m.teams) ? m.teams[0] : m.teams;
       return teamObj ? { ...teamObj, my_role: m.role } : null;
-    }).filter(Boolean);
+    }).filter(Boolean).filter(t => t.name !== "Support Chat" && !(t.name && t.name.toLowerCase().includes("support team")));
 
     res.json(teams);
   } catch (err) {
@@ -58,7 +58,19 @@ exports.getTeamMessages = async (req, res, next) => {
       .order('created_at', { ascending: false })
       .limit(50);
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === '42703') {
+        const { data: retryData, error: retryError } = await supabase
+          .from('team_messages')
+          .select('*, profiles:sender_id(id, username, full_name, avatar_url)')
+          .eq('team_id', teamId)
+          .order('created_at', { ascending: false })
+          .limit(50);
+        if (retryError) throw retryError;
+        return res.json((retryData || []).reverse());
+      }
+      throw error;
+    }
     res.json((data || []).reverse());
   } catch (err) {
     next(err);
