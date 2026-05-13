@@ -18,4 +18,14 @@ export class TeamsService {
       return [];
     }
   }
+
+  static async inviteMember(teamId: string, payload: any): Promise<any> {
+    try {
+      const response = await apiClient.post(`/teams/${teamId}/members`, payload);
+      return response.data;
+    } catch (err) {
+      console.error('[TeamsService] Failed to invite member:', err);
+      throw err;
+    }
+  }
 }

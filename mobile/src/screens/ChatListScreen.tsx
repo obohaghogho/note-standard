@@ -14,6 +14,8 @@ import { io, Socket } from 'socket.io-client';
 import { GATEWAY_URL } from '../Config';
 import { useIsFocused } from '@react-navigation/native';
 import { FriendsList } from '../components/FriendsList';
+import apiClient from '../api/apiClient';
+import { Alert } from 'react-native';
 
 type Props = { navigation: NativeStackNavigationProp<ChatStackParamList, 'ChatList'> };
 
@@ -175,6 +177,19 @@ export default function ChatListScreen({ navigation }: Props) {
     return my?.status === 'pending';
   }).length;
 
+  const handleSupport = async () => {
+    try {
+      const res = await apiClient.post('/chat/support', { subject: 'Support Request' });
+      if (res.data?.conversation) {
+        navigation.navigate('Chat', { conversationId: res.data.conversation.id, conversation: res.data.conversation });
+      } else if (res.data?.existingChatId) {
+        navigation.navigate('Chat', { conversationId: res.data.existingChatId });
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to connect to Support');
+    }
+  };
+
   if (loading && !refreshing) {
     return (
       <View style={styles.center}>
@@ -246,6 +261,11 @@ export default function ChatListScreen({ navigation }: Props) {
           </View>
         }
       />
+
+      <TouchableOpacity style={styles.fabSupport} onPress={handleSupport}>
+        <Text style={styles.fabSupportIcon}>💬</Text>
+        <Text style={styles.fabSupportText}>Need Help?</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -299,4 +319,11 @@ const styles = StyleSheet.create({
   emptySub: { color: '#666', fontSize: 14, marginTop: 6, textAlign: 'center' },
   startChatBtn: { marginTop: 20, backgroundColor: '#6366f1', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 14 },
   startChatBtnText: { color: '#fff', fontWeight: '700' },
+  fabSupport: {
+    position: 'absolute', bottom: 20, right: 20, backgroundColor: '#3b82f6',
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16,
+    borderRadius: 30, shadowColor: '#3b82f6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8
+  },
+  fabSupportIcon: { fontSize: 18, marginRight: 6 },
+  fabSupportText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
 });
