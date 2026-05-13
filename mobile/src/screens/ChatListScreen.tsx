@@ -94,8 +94,9 @@ export default function ChatListScreen({ navigation }: Props) {
     try {
       // 1. Load from Cache first for instant UI
       const cached = await AsyncStorage.getItem('cache_conversations');
-      if (cached && conversations.length === 0) {
-        setConversations(JSON.parse(cached));
+      if (cached) {
+        // Prevent setting cache if we already have data to stop flashing
+        setConversations(prev => prev.length === 0 ? JSON.parse(cached) : prev);
         setLoading(false);
       }
 
@@ -117,7 +118,7 @@ export default function ChatListScreen({ navigation }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, conversations.length]);
+  }, [user?.id]);
 
   useEffect(() => {
     if (isFocused) load();
