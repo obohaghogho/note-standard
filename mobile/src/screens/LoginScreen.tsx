@@ -122,6 +122,8 @@ export default function LoginScreen({ navigation }: Props) {
                 Don't have an account? <Text style={styles.registerLinkAccent}>Sign Up</Text>
               </Text>
             </TouchableOpacity>
+
+            <Text style={styles.versionText}>v1.5.9.1</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -174,6 +176,12 @@ const styles = StyleSheet.create({
   eyeIcon: {
     fontSize: 20,
     color: '#6366f1',
+  },
+  versionText: {
+    textAlign: 'center',
+    color: '#444',
+    fontSize: 12,
+    marginTop: 20,
   },
   loginBtn: { borderRadius: 14, overflow: 'hidden', marginTop: 8 },
   loginGrad: { padding: 16, alignItems: 'center' },
