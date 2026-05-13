@@ -16,6 +16,7 @@ export default function RegisterScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleRegister = async () => {
@@ -60,27 +61,66 @@ export default function RegisterScreen({ navigation }: Props) {
           </View>
 
           <View style={styles.card}>
-            {[
-              { label: 'Full Name', value: fullName, setter: setFullName, placeholder: 'John Doe', type: 'default' },
-              { label: 'Email', value: email, setter: setEmail, placeholder: 'you@example.com', type: 'email-address' },
-              { label: 'Password', value: password, setter: setPassword, placeholder: '••••••••', secure: true },
-              { label: 'Confirm Password', value: confirm, setter: setConfirm, placeholder: '••••••••', secure: true },
-            ].map((field) => (
-              <View style={styles.inputGroup} key={field.label}>
-                <Text style={styles.label}>{field.label}</Text>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Full Name</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="John Doe"
+                placeholderTextColor="#444"
+                value={fullName}
+                onChangeText={setFullName}
+                autoCapitalize="words"
+                autoCorrect={false}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Email</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="you@example.com"
+                placeholderTextColor="#444"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Password</Text>
+              <View style={styles.passwordContainer}>
                 <TextInput
-                  style={styles.input}
-                  placeholder={field.placeholder}
+                  style={styles.passwordInput}
+                  placeholder="••••••••"
                   placeholderTextColor="#444"
-                  value={field.value}
-                  onChangeText={field.setter}
-                  secureTextEntry={field.secure}
-                  keyboardType={(field.type as any) || 'default'}
-                  autoCapitalize={field.type === 'email-address' ? 'none' : 'words'}
-                  autoCorrect={false}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
                 />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+                  <Text style={styles.eyeIcon}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
+                </TouchableOpacity>
               </View>
-            ))}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Confirm Password</Text>
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="••••••••"
+                  placeholderTextColor="#444"
+                  value={confirm}
+                  onChangeText={setConfirm}
+                  secureTextEntry={!showPassword}
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+                  <Text style={styles.eyeIcon}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
 
             <TouchableOpacity style={styles.btn} onPress={handleRegister} disabled={loading}>
               <LinearGradient colors={['#6366f1', '#4f46e5']} style={styles.btnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
@@ -111,6 +151,27 @@ const styles = StyleSheet.create({
   inputGroup: { marginBottom: 16 },
   label: { color: '#aaa', fontSize: 13, fontWeight: '600', marginBottom: 8 },
   input: { backgroundColor: '#0a0a16', borderWidth: 1, borderColor: '#1e1e3a', borderRadius: 14, padding: 16, color: '#fff', fontSize: 15 },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0a0a16',
+    borderWidth: 1,
+    borderColor: '#1e1e3a',
+    borderRadius: 14,
+  },
+  passwordInput: {
+    flex: 1,
+    padding: 16,
+    color: '#fff',
+    fontSize: 15,
+  },
+  eyeBtn: {
+    padding: 12,
+  },
+  eyeIcon: {
+    fontSize: 20,
+    color: '#6366f1',
+  },
   btn: { borderRadius: 14, overflow: 'hidden', marginTop: 8 },
   btnGrad: { padding: 16, alignItems: 'center' },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },

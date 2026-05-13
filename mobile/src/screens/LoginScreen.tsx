@@ -14,6 +14,7 @@ export default function LoginScreen({ navigation }: Props) {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
@@ -72,14 +73,22 @@ export default function LoginScreen({ navigation }: Props) {
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="••••••••"
-                placeholderTextColor="#444"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-              />
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="••••••••"
+                  placeholderTextColor="#444"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                />
+                <TouchableOpacity 
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={styles.eyeBtn}
+                >
+                  <Text style={styles.eyeIcon}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={styles.authOptions}>
@@ -144,6 +153,27 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: '#0a0a16', borderWidth: 1, borderColor: '#1e1e3a',
     borderRadius: 14, padding: 16, color: '#fff', fontSize: 15,
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0a0a16',
+    borderWidth: 1,
+    borderColor: '#1e1e3a',
+    borderRadius: 14,
+  },
+  passwordInput: {
+    flex: 1,
+    padding: 16,
+    color: '#fff',
+    fontSize: 15,
+  },
+  eyeBtn: {
+    padding: 12,
+  },
+  eyeIcon: {
+    fontSize: 20,
+    color: '#6366f1',
   },
   loginBtn: { borderRadius: 14, overflow: 'hidden', marginTop: 8 },
   loginGrad: { padding: 16, alignItems: 'center' },

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList, FlatListProps,
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Image,
-  Alert, Modal, ScrollView,
+  Alert, Modal, ScrollView, RefreshControl,
 } from 'react-native';
 import { TeamsService, Team } from '../services/TeamsService';
 import { AuthService } from '../services/AuthService';
@@ -51,6 +51,7 @@ const TeamMessageBubble = React.memo(({
   onLongPress: (msg: TeamMessage) => void;
   playVoiceNote: (path: string) => Promise<void>;
 }) => {
+  if (!item) return null;
   const isMe = item.sender_id === currentUserId;
   const senderName = item.profiles?.full_name || item.profiles?.username || 'Unknown';
   const attachment = (item as any).attachment;
@@ -212,7 +213,7 @@ function TeamChatModal({
             <FlatList
               ref={flatListRef}
               data={Array.isArray(messages) ? messages : []}
-              keyExtractor={m => m.id}
+              keyExtractor={m => m?.id || Math.random().toString()}
               contentContainerStyle={styles.messagesList}
               onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
               renderItem={({ item }) => <TeamMessageBubble
