@@ -148,7 +148,7 @@ export default function ProfileScreen() {
 
       <Text style={styles.sectionLabel}>Support</Text>
       <View style={styles.section}>
-        <MenuItem icon="💬" label="Need Support" onPress={handleSupport} />
+        <MenuItem icon="💬" label="Need Help" onPress={handleSupport} />
       </View>
 
       {/* Session */}

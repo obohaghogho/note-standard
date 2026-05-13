@@ -59,7 +59,7 @@ exports.getTeamMessages = async (req, res, next) => {
       .limit(50);
 
     if (error) {
-      if (error.code === '42703') {
+      if (error.code === '42703' || error.code === 'PGRST200') {
         const { data: retryData, error: retryError } = await supabase
           .from('team_messages')
           .select('*, profiles:sender_id(id, username, full_name, avatar_url)')

@@ -328,7 +328,8 @@ export const ChatWidget = () => {
 
     // Hide the widget in the chat rooms (both user and admin) to avoid UI clutter
     const isChatRoom = location.pathname.startsWith('/dashboard/chat') || 
-                       location.pathname.startsWith('/admin/chats');
+                       location.pathname.startsWith('/admin/chats') ||
+                       location.pathname.startsWith('/dashboard/teams');
 
     if (!user || isKeyboardVisible || isChatRoom) return null;
 
