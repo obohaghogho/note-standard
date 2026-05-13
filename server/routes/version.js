@@ -7,10 +7,10 @@ const router = express.Router();
  * No auth required — must be accessible to all clients including outdated ones.
  */
 const APP_CONFIG = {
-  latest_version: '1.2.1',
-  minimum_version: '1.2.1',
+  latest_version: '1.6.0',
+  minimum_version: '1.6.0',
   force_update: true,
-  update_message: 'Critical update: Fixed team dashboard crash and iOS WebRTC video rendering issue.',
+  update_message: 'Critical Stability Update: Resolved persistent data loss in chats and improved wallet synchronization.',
   changelog: [
     'Fixed: iOS WebRTC remote video rendering as a black screen during video calls',
     'Fixed: Team dashboard crashing with "View blocked" error when team name is undefined'

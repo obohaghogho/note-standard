@@ -4,16 +4,12 @@
 -- ====================================
 
 -- Drop existing tables if any
-DROP TABLE IF EXISTS team_message_reads CASCADE;
-DROP TABLE IF EXISTS shared_notes CASCADE;
-DROP TABLE IF EXISTS team_messages CASCADE;
-DROP TABLE IF EXISTS team_members CASCADE;
-DROP TABLE IF EXISTS teams CASCADE;
+-- Tables are created using IF NOT EXISTS to prevent data loss on re-migration
 
 -- ====================================
 -- 1. TEAMS TABLE
 -- ====================================
-CREATE TABLE teams (
+CREATE TABLE IF NOT EXISTS teams (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   description TEXT,
@@ -48,7 +44,7 @@ CREATE TRIGGER teams_updated_at_trigger
 -- ====================================
 -- 2. TEAM_MEMBERS TABLE
 -- ====================================
-CREATE TABLE team_members (
+CREATE TABLE IF NOT EXISTS team_members (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -72,7 +68,7 @@ CREATE INDEX idx_team_members_role ON team_members(team_id, role);
 -- ====================================
 -- 3. TEAM_MESSAGES TABLE
 -- ====================================
-CREATE TABLE team_messages (
+CREATE TABLE IF NOT EXISTS team_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
   sender_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -118,7 +114,7 @@ CREATE TRIGGER team_messages_updated_at_trigger
 -- ====================================
 -- 4. SHARED_NOTES TABLE
 -- ====================================
-CREATE TABLE shared_notes (
+CREATE TABLE IF NOT EXISTS shared_notes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
   note_id UUID NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
@@ -143,7 +139,7 @@ CREATE INDEX idx_shared_notes_message_id ON shared_notes(message_id);
 -- ====================================
 -- 5. MESSAGE READ TRACKING
 -- ====================================
-CREATE TABLE team_message_reads (
+CREATE TABLE IF NOT EXISTS team_message_reads (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   message_id UUID NOT NULL REFERENCES team_messages(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,

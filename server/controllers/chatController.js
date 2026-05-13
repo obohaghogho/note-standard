@@ -8,7 +8,10 @@ const realtime = require("../services/realtimeService");
 exports.getConversations = async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log(`[Chat] Fetching conversations for user: ${userId}`);
+    console.log(`[Chat PERSISTENCE] Fetching for user: ${userId}`);
+    
+    // Safety: Log headers to ensure no auth mismatch during build deployments
+    console.log(`[Chat AUTH] Client Type: ${req.headers['x-client-type'] || 'web'}`);
 
     // 1. Fetch memberships with basic conversation data
     let memberships = [];

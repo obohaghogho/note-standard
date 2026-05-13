@@ -4,6 +4,8 @@ import {
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Image,
   Alert, Modal, ScrollView, RefreshControl,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TeamsService, Team } from '../services/TeamsService';
 import { AuthService } from '../services/AuthService';
 import apiClient from '../api/apiClient';
@@ -138,6 +140,7 @@ function TeamChatModal({
   onDeleteMessage: (id: string) => Promise<void>;
   onEditMessage: (id: string, content: string) => Promise<void>;
 }) {
+  const insets = useSafeAreaInsets();
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [replyTo, setReplyTo] = useState<TeamMessage | null>(null);
@@ -192,7 +195,7 @@ function TeamChatModal({
       <KeyboardAvoidingView
         style={styles.chatContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : -20}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 25}
       >
         <View style={styles.chatHeader}>
           <TouchableOpacity onPress={onClose} style={styles.chatBackBtn}>
@@ -257,7 +260,10 @@ function TeamChatModal({
           </View>
         )}
 
-        <View style={styles.inputContainer}>
+        <View style={[
+          styles.inputContainer,
+          { paddingBottom: Math.max(insets.bottom, 12) }
+        ]}>
           <View style={styles.inputRow}>
             <TouchableOpacity style={styles.attachBtn} onPress={handlePickMedia}>
               <Text style={styles.attachIcon}>📎</Text>
@@ -326,8 +332,19 @@ export default function TeamsScreen() {
     if (!teamId) return;
     setChatLoading(true);
     try {
+      // 1. Load from Cache
+      const cacheKey = `cache_team_messages_${teamId}`;
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached && !teamMessages[teamId]) {
+        setTeamMessages(prev => ({ ...prev, [teamId]: JSON.parse(cached) }));
+      }
+
       const res = await apiClient.get(`/teams/${teamId}/messages`);
-      setTeamMessages(prev => ({ ...prev, [teamId]: Array.isArray(res.data) ? res.data : [] }));
+      const data = Array.isArray(res.data) ? res.data : [];
+      
+      setTeamMessages(prev => ({ ...prev, [teamId]: data }));
+      // 2. Save to Cache
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(data));
     } catch (e) {
       console.error('[TeamsScreen] Load messages error:', e);
     } finally {
@@ -628,7 +645,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#0d0d1e',
     borderTopWidth: 1, 
     borderColor: '#111133', 
-    paddingBottom: Platform.OS === 'ios' ? 34 : 12,
   },
   inputRow: {
     flexDirection: 'row', 

@@ -18,6 +18,7 @@ export default function RegisterScreen({ navigation }: Props) {
   const [confirm, setConfirm] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [agreed, setAgreed] = useState(false);
 
   const handleRegister = async () => {
     if (!fullName.trim() || !email.trim() || !password.trim()) {
@@ -28,8 +29,20 @@ export default function RegisterScreen({ navigation }: Props) {
       Alert.alert('Password Mismatch', 'Passwords do not match.');
       return;
     }
-    if (password.length < 6) {
-      Alert.alert('Weak Password', 'Password must be at least 6 characters.');
+    if (password.length < 8) {
+      Alert.alert('Weak Password', 'Password must be at least 8 characters.');
+      return;
+    }
+    if (!/\d/.test(password)) {
+      Alert.alert('Weak Password', 'Password must contain at least one number.');
+      return;
+    }
+    if (!/[A-Z]/.test(password)) {
+      Alert.alert('Weak Password', 'Password must contain at least one uppercase letter.');
+      return;
+    }
+    if (!agreed) {
+      Alert.alert('Consent Required', 'Please agree to the Terms of Service and Privacy Policy to continue.');
       return;
     }
     setLoading(true);
@@ -122,8 +135,27 @@ export default function RegisterScreen({ navigation }: Props) {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.btn} onPress={handleRegister} disabled={loading}>
-              <LinearGradient colors={['#6366f1', '#4f46e5']} style={styles.btnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+            <View style={styles.termsContainer}>
+              <TouchableOpacity 
+                style={[styles.checkbox, agreed && styles.checkboxChecked]} 
+                onPress={() => setAgreed(!agreed)}
+              >
+                {agreed && <Text style={styles.checkMark}>✓</Text>}
+              </TouchableOpacity>
+              <View style={styles.termsTextWrap}>
+                <Text style={styles.termsText}>
+                  By creating an account, you agree to our <Text style={styles.termsLink}>Terms of Service</Text> and <Text style={styles.termsLink}>Privacy Policy</Text>. 
+                  You acknowledge that certain user activity, engagement analytics, platform interactions, advertising interactions, and anonymized platform data may be processed and utilized to improve services, platform performance, monetization systems, security, recommendations, and business operations in accordance with applicable laws and our Privacy Policy.
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.btn, (!agreed || loading) && styles.btnDisabled]} 
+              onPress={handleRegister} 
+              disabled={loading || !agreed}
+            >
+              <LinearGradient colors={agreed ? ['#6366f1', '#4f46e5'] : ['#333', '#222']} style={styles.btnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Create Account</Text>}
               </LinearGradient>
             </TouchableOpacity>
@@ -172,9 +204,17 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: '#6366f1',
   },
-  btn: { borderRadius: 14, overflow: 'hidden', marginTop: 8 },
+  btn: { borderRadius: 14, overflow: 'hidden', marginTop: 16 },
+  btnDisabled: { opacity: 0.6 },
   btnGrad: { padding: 16, alignItems: 'center' },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  termsContainer: { flexDirection: 'row', marginTop: 12, marginBottom: 8, gap: 12 },
+  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: '#1e1e3a', backgroundColor: '#0a0a16', justifyContent: 'center', alignItems: 'center', marginTop: 2 },
+  checkboxChecked: { backgroundColor: '#6366f1', borderColor: '#6366f1' },
+  checkMark: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+  termsTextWrap: { flex: 1 },
+  termsText: { color: '#666', fontSize: 11, lineHeight: 16 },
+  termsLink: { color: '#6366f1', fontWeight: '600' },
   loginLink: { marginTop: 24, alignItems: 'center' },
   loginLinkText: { color: '#666', fontSize: 14 },
   accent: { color: '#6366f1', fontWeight: '700' },

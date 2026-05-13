@@ -303,7 +303,8 @@ export const Signup = () => {
                                                 </div>
                                             </div>
                                             <span className="text-xs text-gray-400 leading-relaxed group-hover:text-gray-300 transition-colors">
-                                                I accept the <button type="button" onClick={() => setShowTermsModal(true)} className="text-primary hover:underline">Terms of Service</button> and <button type="button" className="text-primary hover:underline">Privacy Policy</button>. I understand that my data will be stored securely.
+                                                By creating an account, you agree to our <button type="button" onClick={() => setShowTermsModal(true)} className="text-primary hover:underline font-semibold">Terms of Service</button> and <button type="button" className="text-primary hover:underline font-semibold">Privacy Policy</button>. 
+                                                You acknowledge that certain user activity, engagement analytics, platform interactions, advertising interactions, and anonymized platform data may be processed and utilized to improve services, platform performance, monetization systems, security, recommendations, and business operations in accordance with applicable laws and our Privacy Policy.
                                             </span>
                                         </label>
                                     </div>

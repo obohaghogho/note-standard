@@ -10,7 +10,7 @@ DROP COLUMN IF EXISTS encrypted_session_key;
 -- 3. Update Messages
 -- We need to add 'content' and remove encryption fields.
 -- Data loss warning: Old encrypted messages will be lost (or unreadable).
-DELETE FROM messages; -- Clear old messages as they are encrypted
+-- DELETE FROM messages; -- REMOVED: This was causing data loss on deployment
 
 ALTER TABLE messages 
 ADD COLUMN IF NOT EXISTS content text NOT NULL DEFAULT '';

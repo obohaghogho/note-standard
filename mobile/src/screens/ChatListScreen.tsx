@@ -3,6 +3,7 @@ import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   ActivityIndicator, RefreshControl, Image,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import { ChatService, Conversation } from '../services/ChatService';
@@ -91,8 +92,15 @@ export default function ChatListScreen({ navigation }: Props) {
 
   const load = useCallback(async () => {
     try {
+      // 1. Load from Cache first for instant UI
+      const cached = await AsyncStorage.getItem('cache_conversations');
+      if (cached && conversations.length === 0) {
+        setConversations(JSON.parse(cached));
+        setLoading(false);
+      }
+
       const data = await ChatService.getConversations();
-      // data is guaranteed to be an array (ChatService now validates this)
+      // data is guaranteed to be an array
       const sorted = [...data].sort((a, b) => {
         const myA = a.members?.find(m => m.user_id === user?.id);
         const myB = b.members?.find(m => m.user_id === user?.id);
@@ -100,13 +108,16 @@ export default function ChatListScreen({ navigation }: Props) {
         const bAccepted = myB?.status === 'accepted' ? 0 : 1;
         return aAccepted - bAccepted;
       });
+      
       setConversations(sorted);
+      // 2. Persist to Cache
+      await AsyncStorage.setItem('cache_conversations', JSON.stringify(sorted));
     } catch (e) {
       console.error('[ChatList] Load failed:', e);
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, conversations.length]);
 
   useEffect(() => {
     if (isFocused) load();

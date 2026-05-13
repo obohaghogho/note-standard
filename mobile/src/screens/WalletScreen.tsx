@@ -138,11 +138,15 @@ export default function WalletScreen() {
         {/* Balance Card */}
         <LinearGradient colors={['#6366f1', '#4f46e5']} style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>{primaryCurrency} Wallet Balance</Text>
-          <Text style={styles.balanceValue}>
-            {currentBalance.toFixed(4)} {primaryCurrency}
+          <Text 
+            style={styles.balanceValue} 
+            numberOfLines={1} 
+            adjustsFontSizeToFit
+          >
+            {currentBalance.toFixed(2)} {primaryCurrency}
           </Text>
-          <Text style={styles.subBalance}>
-            Available: {(selectedWallet?.available_balance || selectedWallet?.balance || 0).toFixed(4)} {primaryCurrency}
+          <Text style={styles.subBalance} numberOfLines={1} adjustsFontSizeToFit>
+            Available: {(selectedWallet?.available_balance || selectedWallet?.balance || 0).toFixed(2)} {primaryCurrency}
           </Text>
           <View style={styles.actionRow}>
             <TouchableOpacity
@@ -194,7 +198,7 @@ export default function WalletScreen() {
                   <Text style={styles.assetNetwork}>{w.network || 'Mainnet'}</Text>
                 </View>
                 <View style={styles.assetBalanceWrap}>
-                  <Text style={styles.assetBalance}>{(w.balance || 0).toFixed(4)}</Text>
+                  <Text style={styles.assetBalance} numberOfLines={1} adjustsFontSizeToFit>{(w.balance || 0).toFixed(2)}</Text>
                   <Text style={styles.assetCurr}>{curr}</Text>
                 </View>
               </TouchableOpacity>

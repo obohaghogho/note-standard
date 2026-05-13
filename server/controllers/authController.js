@@ -79,7 +79,16 @@ const register = async (req, res) => {
     }
 
     // Note: The database trigger 'handle_new_user' will automatically create
-    // the profile and wallets when the record hits the auth.users table.
+    // the profile record. We will now proactively create wallets for the user.
+    const walletService = require("../services/walletService");
+    const currencies = ["NGN", "USD", "GBP", "ETH"];
+    
+    // Fire and forget wallet creation so it doesn't block the response
+    Promise.all(currencies.map(curr => 
+      walletService.createWallet(authData.user.id, curr).catch(e => 
+        console.error(`[AUTH-WALLET] Failed to auto-create ${curr} wallet:`, e.message)
+      )
+    ));
 
     // 4. Send Welcome Email (Confirmation)
     // We send this as a background task to not block the response

@@ -261,8 +261,8 @@ export default function DashboardHome() {
                 </motion.div>
 
                 {/* Live Activity Feed (Big) */}
-                <motion.div variants={itemVariants} className="md:col-span-5 h-full auto-rows-fr">
-                    <Card variant="glass-premium" className="p-0 flex flex-col h-[504px] sticky top-0 overflow-hidden group">
+                <motion.div variants={itemVariants} className="md:col-span-5 h-full">
+                    <Card variant="glass-premium" className="p-0 flex flex-col min-h-[400px] md:h-[504px] sticky top-0 overflow-hidden group">
                         <div className="p-8 pb-4 border-b border-white/5 flex items-center justify-between">
                             <h3 className="text-xl font-bold flex items-center gap-2 italic">
                                 <Activity size={20} className="text-primary" />
@@ -300,9 +300,9 @@ export default function DashboardHome() {
                 </motion.div>
 
                 {/* Social Hub & Quick Actions */}
-                <motion.div variants={itemVariants} className="md:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-6 h-[504px]">
+                <motion.div variants={itemVariants} className="md:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-6 min-h-[504px]">
                     {/* Social Hub */}
-                    <Card variant="glass-premium" className="sm:col-span-2 p-0 flex flex-col overflow-hidden border-blue-500/10 h-[350px]">
+                    <Card variant="glass-premium" className="sm:col-span-2 p-0 flex flex-col overflow-hidden border-blue-500/10 min-h-[300px] md:h-[350px]">
                         <div className="p-6 border-b border-white/5 flex items-center justify-between bg-blue-500/5">
                             <h3 className="text-lg font-bold flex items-center gap-2">
                                 <Users size={18} className="text-blue-400" />
@@ -316,7 +316,7 @@ export default function DashboardHome() {
                     </Card>
 
                     {/* Quick Access Cards */}
-                    <Card variant="glass-premium" className="p-6 flex flex-col justify-between group h-[130px] hover:border-emerald-500/30" hoverEffect onClick={() => navigate('/dashboard/notes')}>
+                    <Card variant="glass-premium" className="p-6 flex flex-col justify-between group min-h-[130px] hover:border-emerald-500/30" hoverEffect onClick={() => navigate('/dashboard/notes')}>
                         <div className="flex justify-between items-start">
                             <div className="p-2.5 bg-emerald-500/10 rounded-xl text-emerald-400 group-hover:bg-emerald-500 group-hover:text-black transition-all">
                                 <FileText size={18} />
@@ -329,7 +329,7 @@ export default function DashboardHome() {
                         </div>
                     </Card>
 
-                    <Card variant="glass-premium" className="p-6 flex flex-col justify-between group h-[130px] hover:border-blue-500/30" hoverEffect onClick={() => navigate('/dashboard/chat')}>
+                    <Card variant="glass-premium" className="p-6 flex flex-col justify-between group min-h-[130px] hover:border-blue-500/30" hoverEffect onClick={() => navigate('/dashboard/chat')}>
                         <div className="flex justify-between items-start">
                             <div className="p-2.5 bg-blue-500/10 rounded-xl text-blue-400 group-hover:bg-blue-500 group-hover:text-black transition-all">
                                 <Activity size={18} />

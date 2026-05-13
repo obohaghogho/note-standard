@@ -4,6 +4,8 @@ import {
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Image,
   Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { io, Socket } from 'socket.io-client';
 import apiClient from '../api/apiClient';
@@ -128,6 +130,7 @@ const ChatMessageBubble = React.memo(({
 export default function ChatScreen({ navigation, route }: Props) {
   const { conversationId, conversation } = route.params;
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -148,16 +151,27 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const fetchMessages = useCallback(async () => {
     try {
+      // Load from cache first
+      const cacheKey = `cache_messages_${conversationId}`;
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached && messages.length === 0) {
+        setMessages(JSON.parse(cached));
+        setLoading(false);
+      }
+
       const res = await apiClient.get(`/chat/conversations/${conversationId}/messages`);
       const data = Array.isArray(res.data) ? res.data : [];
-      // Server returns oldest→newest; we want newest first for inverted FlatList
-      setMessages([...data].reverse());
+      const newestFirst = [...data].reverse();
+      
+      setMessages(newestFirst);
+      // Save to cache
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(newestFirst));
     } catch (e) {
       console.error('[ChatScreen] Failed to load messages:', e);
     } finally {
       setLoading(false);
     }
-  }, [conversationId]);
+  }, [conversationId, messages.length]);
 
   useEffect(() => {
     fetchMessages();
@@ -392,7 +406,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : -20}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 25}
     >
       {/* Header */}
       <View style={styles.header}>
@@ -487,7 +501,10 @@ export default function ChatScreen({ navigation, route }: Props) {
       )}
 
       {/* Input */}
-      <View style={styles.inputRow}>
+    <View style={[
+      styles.inputRow, 
+      { paddingBottom: Math.max(insets.bottom, 12) }
+    ]}>
         <TouchableOpacity style={styles.attachBtn} onPress={handlePickMedia}>
           <Text style={styles.attachIcon}>📎</Text>
         </TouchableOpacity>
@@ -603,7 +620,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingHorizontal: 12,
     paddingTop: 10,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
     borderTopWidth: 1,
     borderColor: '#111133',
     backgroundColor: '#060611',

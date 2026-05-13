@@ -1,12 +1,12 @@
 -- Public Keys for E2EE
-create table public_keys (
+create table IF NOT EXISTS public_keys (
   user_id uuid references auth.users on delete cascade not null primary key,
   public_key text not null, -- Base64 encoded X25519 public key
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
 -- Conversations (Chats)
-create table conversations (
+create table IF NOT EXISTS conversations (
   id uuid default uuid_generate_v4() primary key,
   type text check (type in ('direct', 'group')) not null default 'direct',
   name text, -- Optional for direct chats, required for groups usually but we'll leave it nullable
@@ -15,7 +15,7 @@ create table conversations (
 );
 
 -- Conversation Members
-create table conversation_members (
+create table IF NOT EXISTS conversation_members (
   conversation_id uuid references conversations on delete cascade not null,
   user_id uuid references auth.users on delete cascade not null,
   role text check (role in ('admin', 'member')) default 'member',
@@ -34,7 +34,7 @@ create table conversation_members (
 );
 
 -- Messages
-create table messages (
+create table IF NOT EXISTS messages (
   id uuid default uuid_generate_v4() primary key,
   conversation_id uuid references conversations on delete cascade not null,
   sender_id uuid references auth.users on delete cascade not null,
