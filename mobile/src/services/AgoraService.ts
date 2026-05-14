@@ -22,11 +22,17 @@ class AgoraService {
 
   // ── Initialization ────────────────────────────────────────────────────────
 
-  async init() {
-    if (this.isInitialized) return;
+  async init(callType: 'audio' | 'video' = 'audio') {
+    if (this.isInitialized) {
+      // If already initialized but now need video, enable it
+      if (callType === 'video') {
+        this.engine?.enableVideo();
+      }
+      return;
+    }
 
     if (Platform.OS === 'android') {
-      await this.requestAndroidPermissions();
+      await this.requestAndroidPermissions(callType);
     }
 
     this.engine = createAgoraRtcEngine();
@@ -41,15 +47,21 @@ class AgoraService {
     );
     this.engine.enableAudio();
 
+    // Enable video pipeline only when needed (saves battery for audio-only calls)
+    if (callType === 'video') {
+      this.engine.enableVideo();
+    }
+
     this.isInitialized = true;
-    console.log('[AgoraService] Native engine initialized');
+    console.log(`[AgoraService] Native engine initialized (${callType})`);
   }
 
-  private async requestAndroidPermissions() {
-    await PermissionsAndroid.requestMultiple([
-      PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-      PermissionsAndroid.PERMISSIONS.CAMERA,
-    ]);
+  private async requestAndroidPermissions(callType: 'audio' | 'video' = 'audio') {
+    const permissions: string[] = [PermissionsAndroid.PERMISSIONS.RECORD_AUDIO];
+    if (callType === 'video') {
+      permissions.push(PermissionsAndroid.PERMISSIONS.CAMERA);
+    }
+    await PermissionsAndroid.requestMultiple(permissions as any);
   }
 
   // ── Token ─────────────────────────────────────────────────────────────────
@@ -66,13 +78,19 @@ class AgoraService {
 
   // ── Channel lifecycle ─────────────────────────────────────────────────────
 
-  async joinChannel(channelId: string, uid: number = 0) {
-    if (!this.engine) await this.init();
+  async joinChannel(channelId: string, uid: number = 0, callType: 'audio' | 'video' = 'audio') {
+    if (!this.engine) await this.init(callType);
+
+    // Ensure video is enabled for video calls even if init was called for audio
+    if (callType === 'video') {
+      this.engine?.enableVideo();
+    }
+
     const token = await this.fetchToken(channelId);
     this.engine?.joinChannel(token, channelId, uid, {
       clientRoleType: ClientRoleType.ClientRoleBroadcaster,
     });
-    console.log(`[AgoraService] Joining channel: ${channelId}`);
+    console.log(`[AgoraService] Joining channel: ${channelId} (${callType})`);
   }
 
   async leaveChannel() {

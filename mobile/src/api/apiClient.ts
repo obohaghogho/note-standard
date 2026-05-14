@@ -30,14 +30,20 @@ apiClient.interceptors.request.use(
 
 // Response Interceptor: Handle Global Errors (401, 500, etc.)
 let isRefreshing = false;
-let refreshSubscribers: ((token: string) => void)[] = [];
+let refreshSubscribers: ((token: string | null) => void)[] = [];
 
 function onRefreshed(token: string) {
-  refreshSubscribers.map(cb => cb(token));
+  refreshSubscribers.forEach(cb => cb(token));
   refreshSubscribers = [];
 }
 
-function subscribeTokenRefresh(cb: (token: string) => void) {
+function onRefreshFailed() {
+  // Reject all queued requests
+  refreshSubscribers.forEach(cb => cb(null));
+  refreshSubscribers = [];
+}
+
+function subscribeTokenRefresh(cb: (token: string | null) => void) {
   refreshSubscribers.push(cb);
 }
 
@@ -52,10 +58,14 @@ apiClient.interceptors.response.use(
       // If 401 Unauthorized, attempt to refresh the token
       if (status === 401 && !originalRequest._retry) {
         if (isRefreshing) {
-          // If already refreshing, wait for it to complete
-          return new Promise(resolve => {
-            subscribeTokenRefresh(token => {
-              originalRequest.headers.Authorization = `Bearer ${token}`;
+          // Queue the request until token refresh completes
+          return new Promise((resolve, reject) => {
+            subscribeTokenRefresh(newToken => {
+              if (!newToken) {
+                reject(error);
+                return;
+              }
+              originalRequest.headers.Authorization = `Bearer ${newToken}`;
               resolve(apiClient(originalRequest));
             });
           });
@@ -94,20 +104,27 @@ apiClient.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
           return apiClient(originalRequest);
         } catch (refreshError: any) {
+          // CRITICAL: Always reset isRefreshing so future requests aren't permanently blocked
           isRefreshing = false;
-          refreshSubscribers = [];
+          onRefreshFailed();
           
           console.error('[apiClient] ✗ Token refresh failed:', refreshError.message);
           
-          // Only force logout if it's a real auth error, not a network failure
-          const isAuthError = refreshError.response?.status === 401 || 
-                             refreshError.message === 'No refresh token' ||
-                             refreshError.response?.data?.error?.includes('invalid');
+          // Only force logout on confirmed auth failure — NOT on network timeouts
+          const isNetworkError = !refreshError.response;
+          const isAuthError = !isNetworkError && (
+            refreshError.response?.status === 401 ||
+            refreshError.message === 'No refresh token' ||
+            refreshError.response?.data?.error?.includes('invalid') ||
+            refreshError.response?.data?.error?.includes('expired')
+          );
 
           if (isAuthError) {
             console.warn('[apiClient] Refresh token invalid. Logging out...');
             await AuthService.logout();
             Alert.alert('Session Expired', 'Your session has expired. Please log in again.');
+          } else if (isNetworkError) {
+            console.warn('[apiClient] Network error during refresh — NOT logging out. Will retry on next request.');
           }
           
           return Promise.reject(error);

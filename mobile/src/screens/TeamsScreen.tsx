@@ -587,7 +587,11 @@ export default function TeamsScreen() {
   };
 
   const handleDeleteMessage = async (messageId: string) => {
-    try { await apiClient.delete(`/chat/messages/${messageId}`); }
+    if (!activeTeam) return;
+    try { 
+      // Use the correct team message delete endpoint
+      await apiClient.delete(`/teams/${activeTeam.id}/messages/${messageId}`); 
+    }
     catch (e) { Alert.alert('Error', 'Failed to delete message'); }
   };
 
@@ -602,9 +606,18 @@ export default function TeamsScreen() {
       const asset = await MediaService.pickImage();
       if (!asset) return;
       setChatLoading(true);
-      const attachment = await MediaService.uploadMedia(asset.uri, asset.fileName || 'team.jpg', asset.mimeType || 'image/jpeg', activeTeam.id);
-      await handleSendMessage(`Team media: ${attachment.file_name}`, attachment.id);
-    } catch (err: any) { Alert.alert('Upload Error', err.message); }
+      const attachment = await MediaService.uploadMedia(
+        asset.uri,
+        asset.fileName || `team_upload_${Date.now()}.jpg`,
+        asset.mimeType || 'image/jpeg',
+        activeTeam.id
+      );
+      const contentLabel = (asset.mimeType || '').startsWith('video') ? '📹 Video' : '🖼️ Image';
+      await handleSendMessage(contentLabel, attachment.id);
+    } catch (err: any) { 
+      console.error('[TeamsScreen] Media upload error:', err);
+      Alert.alert('Upload Error', err.message || 'Failed to upload media.');
+    }
     finally { setChatLoading(false); }
   };
 
@@ -615,12 +628,26 @@ export default function TeamsScreen() {
       try {
         setChatLoading(true);
         const attachment = await VoiceService.stopRecording(activeTeam.id);
-        if (attachment) await handleSendMessage('Team Voice Note', attachment.id);
-      } catch (err: any) { Alert.alert('Voice Note Error', err.message); }
+        if (attachment) {
+          await handleSendMessage('🎤 Voice Note', attachment.id);
+        } else {
+          Alert.alert('Voice Note Error', 'Recording was empty. Please try again.');
+        }
+      } catch (err: any) { 
+        console.error('[TeamsScreen] Voice note error:', err);
+        Alert.alert('Voice Note Error', err.message || 'Failed to process voice note.'); 
+      }
       finally { setChatLoading(false); }
     } else {
-      try { await VoiceService.startRecording(); setIsRecording(true); }
-      catch (err: any) { Alert.alert('Recording Error', err.message); }
+      try { 
+        await VoiceService.startRecording(); 
+        setIsRecording(true); 
+      }
+      catch (err: any) { 
+        console.error('[TeamsScreen] Recording error:', err);
+        setIsRecording(false);
+        Alert.alert('Recording Error', err.message || 'Could not start recording.'); 
+      }
     }
   };
 

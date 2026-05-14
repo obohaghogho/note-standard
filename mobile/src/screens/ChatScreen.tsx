@@ -308,14 +308,17 @@ export default function ChatScreen({ navigation, route }: Props) {
       setLoading(true);
       const attachment = await MediaService.uploadMedia(
         asset.uri,
-        asset.fileName || 'upload.jpg',
+        asset.fileName || `upload_${Date.now()}.jpg`,
         asset.mimeType || 'image/jpeg',
         conversationId
       );
-      
-      await sendMessage(`Sent ${attachment.file_type}`, attachment.id);
+
+      // Determine the human-readable content label
+      const contentLabel = (asset.mimeType || '').startsWith('video') ? '📹 Video' : '🖼️ Image';
+      await sendMessage(contentLabel, attachment.id);
     } catch (err: any) {
-      Alert.alert('Upload Error', err.message);
+      console.error('[ChatScreen] Media upload error:', err);
+      Alert.alert('Upload Error', err.message || 'Failed to upload media. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -323,24 +326,31 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const handleVoiceNote = async () => {
     if (isRecording) {
+      // Stop recording
       setIsRecording(false);
       try {
         setLoading(true);
         const attachment = await VoiceService.stopRecording(conversationId);
         if (attachment) {
-          await sendMessage('Voice Note', attachment.id);
+          await sendMessage('🎤 Voice Note', attachment.id);
+        } else {
+          Alert.alert('Voice Note Error', 'Recording was empty. Please try again.');
         }
       } catch (err: any) {
-        Alert.alert('Voice Note Error', err.message);
+        console.error('[ChatScreen] Voice note stop error:', err);
+        Alert.alert('Voice Note Error', err.message || 'Failed to process voice note.');
       } finally {
         setLoading(false);
       }
     } else {
+      // Start recording
       try {
         await VoiceService.startRecording();
         setIsRecording(true);
       } catch (err: any) {
-        Alert.alert('Recording Error', err.message);
+        console.error('[ChatScreen] Voice note start error:', err);
+        setIsRecording(false);
+        Alert.alert('Recording Error', err.message || 'Could not start recording. Check microphone permission.');
       }
     }
   };

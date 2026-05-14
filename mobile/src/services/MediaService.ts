@@ -12,45 +12,65 @@ export class MediaService {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.All,
-      allowsEditing: true,
+      allowsEditing: false,
       quality: 0.8,
     });
 
-    if (!result.canceled) {
+    if (!result.canceled && result.assets.length > 0) {
       return result.assets[0];
     }
     return null;
   }
 
-  static async uploadMedia(uri: string, fileName: string, fileType: string, conversationId: string) {
+  /**
+   * Upload media to Supabase Storage and create an attachment record.
+   * 
+   * @param uri - Local file URI
+   * @param fileName - File name (e.g. "photo.jpg")
+   * @param fileType - MIME type (e.g. "image/jpeg")
+   * @param contextId - Conversation ID or Team ID (used as the storage folder)
+   */
+  static async uploadMedia(uri: string, fileName: string, fileType: string, contextId: string) {
     try {
-      const fileExt = fileName.split('.').pop();
-      const path = `${conversationId}/${Date.now()}.${fileExt}`;
+      const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const fileExt = safeFileName.split('.').pop() || 'bin';
+      const storagePath = `${contextId}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
 
       // Convert URI to Blob
-      const response = await fetch(uri);
-      const blob = await response.blob();
+      const fetchResponse = await fetch(uri);
+      if (!fetchResponse.ok) {
+        throw new Error(`Failed to read file at URI: ${uri}`);
+      }
+      const blob = await fetchResponse.blob();
 
-      // Upload to Supabase Storage
+      console.log(`[MediaService] Uploading ${storagePath} (${blob.size} bytes, type: ${fileType})`);
+
+      // Upload to Supabase Storage (bucket: chat-media)
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('chat-media')
-        .upload(path, blob, {
+        .upload(storagePath, blob, {
           contentType: fileType,
           upsert: false,
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('[MediaService] Supabase upload error:', uploadError);
+        throw uploadError;
+      }
 
-      // Create attachment record in our backend
+      console.log('[MediaService] Upload successful, creating attachment record...');
+
+      // Create attachment record via our backend
       const res = await apiClient.post('/media/attachments', {
-        conversationId,
-        fileName,
+        conversationId: contextId,
+        fileName: safeFileName,
         fileType,
         fileSize: blob.size,
         storagePath: uploadData.path,
         metadata: {},
       });
 
+      console.log('[MediaService] Attachment record created:', res.data?.id);
       return res.data;
     } catch (err) {
       console.error('[MediaService] Upload failed:', err);

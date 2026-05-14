@@ -778,11 +778,13 @@ exports.webhookDeliver = async (req, res) => {
 exports.sendMessage = async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const { content, type } = req.body;
+    // FIX: Also read attachmentId and replyToId from body
+    const { content, type, attachmentId, replyToId } = req.body;
     const userId = req.user.id;
 
-    if (!content) {
-      return res.status(400).json({ error: "Content is required" });
+    // Allow empty content when an attachment is present
+    if (!content && !attachmentId) {
+      return res.status(400).json({ error: "Content or attachment is required" });
     }
 
     // Analysis: Sentiment (if text)
@@ -808,17 +810,22 @@ exports.sendMessage = async (req, res) => {
     }
     let createdMessageId = null;
     try {
+      const insertPayload = {
+        conversation_id: conversationId,
+        sender_id: userId,
+        content: content || '',
+        type: type || "text",
+        sentiment,
+        detected_language: detectedLang,
+        // FIX: Persist attachment reference and reply context
+        attachment_id: attachmentId || null,
+        reply_to_id: replyToId || null,
+      };
+
       const { data, error } = await supabase
         .from("messages")
-        .insert([{
-          conversation_id: conversationId,
-          sender_id: userId,
-          content: content,
-          type: type || "text",
-          sentiment,
-          detected_language: detectedLang
-        }])
-        .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url), reply_to:messages(id, content, sender_id)")
+        .insert([insertPayload])
+        .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url), reply_to:messages!reply_to_id(id, content, sender_id)")
         .single();
 
       if (error) {
@@ -830,7 +837,7 @@ exports.sendMessage = async (req, res) => {
           const fallbackPayload = {
             conversation_id: conversationId,
             sender_id: userId,
-            content: content,
+            content: content || '',
             type: type || "text",
           };
           const { data: retryData, error: retryErr } = await supabase

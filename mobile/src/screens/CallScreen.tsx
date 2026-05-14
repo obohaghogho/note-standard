@@ -116,12 +116,12 @@ export default function CallScreen({ navigation, route }: Props) {
 
     const setup = async () => {
       try {
-        await AgoraService.init();
+        await AgoraService.init(type);
         setupAgoraEvents();
 
         if (isIncoming) {
           // Already answered via IncomingCallModal — just join channel
-          await AgoraService.joinChannel(conversationId);
+          await AgoraService.joinChannel(conversationId, 0, type);
         } else {
           // Outgoing — SignalingService already joined but let's ensure
           setCallState('calling');

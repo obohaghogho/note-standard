@@ -26,6 +26,7 @@ class SignalingService {
   private userId: string | null = null;
   public activeTargetId: string | null = null;
   public activeConversationId: string | null = null;
+  public activeCallType: 'audio' | 'video' = 'audio';
 
   // ── Init ──────────────────────────────────────────────────────────────────
 
@@ -63,6 +64,7 @@ class SignalingService {
       console.log('[Signaling] 📲 Incoming call:', data);
       this.activeTargetId = data.from;
       this.activeConversationId = data.conversationId;
+      this.activeCallType = data.type === 'video' ? 'video' : 'audio';
 
       await CallService.displayIncomingCall({
         callerId: data.from,
@@ -135,6 +137,7 @@ class SignalingService {
     console.log(`[Signaling] 📞 Initiating ${type} call to ${targetUserId}`);
     this.activeTargetId = targetUserId;
     this.activeConversationId = conversationId;
+    this.activeCallType = type;
 
     await CallService.startOutgoingCall({
       callerId: targetUserId,
@@ -145,7 +148,7 @@ class SignalingService {
 
     // Join Agora pre-emptively so we're ready when remote answers
     try {
-      await AgoraService.joinChannel(conversationId);
+      await AgoraService.joinChannel(conversationId, 0, type);
     } catch (err) {
       console.error('[Signaling] Agora join failed (outgoing):', err);
     }
@@ -169,7 +172,7 @@ class SignalingService {
     });
 
     try {
-      await AgoraService.joinChannel(this.activeConversationId!);
+      await AgoraService.joinChannel(this.activeConversationId!, 0, this.activeCallType || 'audio');
       CallService.onCallConnected();
     } catch (err) {
       console.error('[Signaling] Agora join failed on answer:', err);
