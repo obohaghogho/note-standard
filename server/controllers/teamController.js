@@ -249,3 +249,109 @@ exports.deleteTeamMessage = async (req, res, next) => {
     next(err);
   }
 };
+
+exports.getTeamMembers = async (req, res, next) => {
+  try {
+    const { teamId } = req.params;
+    const { data, error } = await supabase
+      .from('team_members')
+      .select(`
+        id,
+        role,
+        joined_at,
+        profiles:user_id (
+          id,
+          username,
+          full_name,
+          avatar_url,
+          email
+        )
+      `)
+      .eq('team_id', teamId)
+      .order('joined_at', { ascending: true });
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.inviteMember = async (req, res, next) => {
+  try {
+    const { teamId } = req.params;
+    const { username, email, role } = req.body;
+    const inviterId = req.user.id;
+
+    // 1. Check if inviter is owner/admin
+    const { data: inviter, error: inviterError } = await supabase
+      .from('team_members')
+      .select('role')
+      .eq('team_id', teamId)
+      .eq('user_id', inviterId)
+      .single();
+
+    if (inviterError || !inviter || (inviter.role !== 'owner' && inviter.role !== 'admin')) {
+      return res.status(403).json({ error: 'Only team admins can invite members' });
+    }
+
+    // 2. Find target user
+    let targetUser;
+    if (email) {
+      const { data } = await supabase.from('profiles').select('id, username').ilike('email', email.trim()).single();
+      targetUser = data;
+    } else if (username) {
+      const { data } = await supabase.from('profiles').select('id, username').ilike('username', username.trim()).single();
+      targetUser = data;
+    }
+
+    if (!targetUser) return res.status(404).json({ error: 'User not found' });
+
+    // 3. Check if already a member
+    const { data: existing } = await supabase
+      .from('team_members')
+      .select('id')
+      .eq('team_id', teamId)
+      .eq('user_id', targetUser.id)
+      .maybeSingle();
+
+    if (existing) return res.status(400).json({ error: 'User is already a member' });
+
+    // 4. Add member
+    const { data: member, error: addError } = await supabase
+      .from('team_members')
+      .insert({
+        team_id: teamId,
+        user_id: targetUser.id,
+        role: role || 'member',
+        invited_by: inviterId
+      })
+      .select('*, profiles:user_id(*)')
+      .single();
+
+    if (addError) throw addError;
+
+    // 5. Send system message
+    const { data: sysMsg } = await supabase
+      .from('team_messages')
+      .insert({
+        team_id: teamId,
+        sender_id: inviterId,
+        message_type: 'system',
+        content: `invited ${targetUser.username} to the team`,
+        metadata: { event: 'member_joined', user_id: targetUser.id, user_name: targetUser.username }
+      })
+      .select('*, profiles:sender_id(*)')
+      .single();
+
+    // 6. Emit realtime
+    try { 
+      await realtime.emit('to_room', teamId, 'team:member_added', member); 
+      if (sysMsg) await realtime.emit('to_room', teamId, 'team:message', sysMsg);
+    } catch (e) { console.warn(e); }
+
+    res.status(201).json(member);
+  } catch (err) {
+    next(err);
+  }
+};

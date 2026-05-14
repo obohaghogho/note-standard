@@ -11,4 +11,7 @@ router.post("/:teamId/messages", teamController.sendTeamMessage);
 router.patch("/:teamId/messages/:messageId", teamController.editTeamMessage);
 router.delete("/:teamId/messages/:messageId", teamController.deleteTeamMessage);
 
+router.get("/:teamId/members", teamController.getTeamMembers);
+router.post("/:teamId/members", teamController.inviteMember);
+
 module.exports = router;

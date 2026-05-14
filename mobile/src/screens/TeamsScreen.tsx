@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Image,
-  Alert, Modal, RefreshControl,
+  Alert, Modal, RefreshControl, Keyboard,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -144,22 +144,83 @@ function TeamChatModal({
   const [replyTo, setReplyTo] = useState<TeamMessage | null>(null);
   const [editingMessage, setEditingMessage] = useState<TeamMessage | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
+  const [showMembersList, setShowMembersList] = useState(false);
+  const [members, setMembers] = useState<any[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  
+  // Search states for invitation
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [inviteRole, setInviteRole] = useState<'member'|'admin'>('member');
+  
   const flatListRef = useRef<FlatList>(null);
 
-  const handleInvite = async () => {
-    if (!inviteEmail.trim()) return;
+  const loadMembers = async () => {
+    setMembersLoading(true);
     try {
-      const isEmail = inviteEmail.includes('@');
-      const payload: any = { role: inviteRole };
-      if (isEmail) payload.email = inviteEmail.trim();
-      else payload.username = inviteEmail.trim();
+      const res = await apiClient.get(`/teams/${team.id}/members`);
+      setMembers(Array.isArray(res.data) ? res.data : []);
+    } catch (e) {
+      console.error('[Members] Load Error:', e);
+    } finally {
+      setMembersLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadMembers();
+  }, [team.id]);
+
+  // Auto-scroll when keyboard opens
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => {
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    );
+    return () => showSub.remove();
+  }, []);
+
+  const handleUserSearch = async (q: string) => {
+    setSearchQuery(q);
+    if (!q.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    setSearchLoading(true);
+    try {
+      const res = await apiClient.get(`/users/search?q=${encodeURIComponent(q)}`);
+      setSearchResults(Array.isArray(res.data) ? res.data : []);
+    } catch (e) {
+      console.error('[InviteSearch] Error:', e);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleInvite = async () => {
+    if (!selectedUser) {
+      Alert.alert('Error', 'Please select a user to invite');
+      return;
+    }
+    try {
+      const payload = { 
+        username: selectedUser.username,
+        role: inviteRole 
+      };
       
-      await TeamsService.inviteMember(team.id, payload);
-      Alert.alert('Success', 'Invitation sent successfully');
+      const res = await TeamsService.inviteMember(team.id, payload);
+      Alert.alert('Success', `${selectedUser.username} has been invited to the team`);
+      setMembers(prev => [...prev, res]);
       setShowInviteModal(false);
-      setInviteEmail('');
+      setSearchQuery('');
+      setSearchResults([]);
+      setSelectedUser(null);
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to send invitation');
     }
@@ -208,17 +269,17 @@ function TeamChatModal({
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={styles.chatContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 25}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <View style={styles.chatHeader}>
           <TouchableOpacity onPress={onClose} style={styles.chatBackBtn}>
             <Text style={styles.chatBackText}>← Back</Text>
           </TouchableOpacity>
-          <View style={styles.chatHeaderInfo}>
+          <TouchableOpacity onPress={() => setShowMembersList(!showMembersList)} style={styles.chatHeaderInfo}>
             <Text style={styles.chatHeaderTitle} numberOfLines={1}>{team.name || 'Team Chat'}</Text>
-            <Text style={styles.chatHeaderSub}>{team.my_role?.toUpperCase() || 'MEMBER'}</Text>
-          </View>
+            <Text style={styles.chatHeaderSub}>{members.length} MEMBERS • {team.my_role?.toUpperCase() || 'MEMBER'}</Text>
+          </TouchableOpacity>
           {(team.my_role === 'owner' || team.my_role === 'admin') && (
             <TouchableOpacity onPress={() => setShowInviteModal(true)} style={styles.headerActionBtn}>
               <Text style={styles.headerActionIcon}>➕</Text>
@@ -226,39 +287,117 @@ function TeamChatModal({
           )}
         </View>
 
-        <Modal visible={showInviteModal} animationType="fade" transparent onRequestClose={() => setShowInviteModal(false)}>
+        {showMembersList && (
+          <View style={styles.membersDropdown}>
+            <View style={styles.dropdownHeader}>
+              <Text style={styles.dropdownTitle}>Team Members</Text>
+              <TouchableOpacity onPress={() => setShowMembersList(false)}>
+                <Text style={styles.dropdownClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={members}
+              keyExtractor={m => m.id}
+              style={styles.membersFlatList}
+              renderItem={({ item }) => (
+                <View style={styles.memberItem}>
+                  <View style={styles.memberAvatar}>
+                    <Text style={styles.memberAvatarText}>{(item.profiles?.username || 'U').charAt(0).toUpperCase()}</Text>
+                  </View>
+                  <View style={styles.memberInfo}>
+                    <Text style={styles.memberName}>@{item.profiles?.username}</Text>
+                    <Text style={styles.memberRole}>{item.role.toUpperCase()}</Text>
+                  </View>
+                  {item.profiles?.id === currentUserId && <Text style={styles.youBadge}>You</Text>}
+                </View>
+              )}
+            />
+          </View>
+        )}
+
+        <Modal visible={showInviteModal} animationType="slide" transparent onRequestClose={() => setShowInviteModal(false)}>
           <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Invite Member</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Email or Username"
-                placeholderTextColor="#666"
-                value={inviteEmail}
-                onChangeText={setInviteEmail}
-                autoCapitalize="none"
-              />
-              <View style={styles.roleContainer}>
-                <TouchableOpacity 
-                  style={[styles.roleBtn, inviteRole === 'member' && styles.roleBtnActive]}
-                  onPress={() => setInviteRole('member')}
-                >
-                  <Text style={styles.roleBtnText}>Member</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.roleBtn, inviteRole === 'admin' && styles.roleBtnActive]}
-                  onPress={() => setInviteRole('admin')}
-                >
-                  <Text style={styles.roleBtnText}>Admin</Text>
+            <View style={styles.inviteModalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Add Team Member</Text>
+                <TouchableOpacity onPress={() => { setShowInviteModal(false); setSelectedUser(null); }}>
+                  <Text style={styles.modalCloseIcon}>✕</Text>
                 </TouchableOpacity>
               </View>
-              <View style={styles.modalActions}>
-                <TouchableOpacity style={styles.modalCancel} onPress={() => setShowInviteModal(false)}>
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.modalSubmit} onPress={handleInvite}>
-                  <Text style={styles.modalSubmitText}>Invite</Text>
-                </TouchableOpacity>
+
+              <View style={styles.searchContainer}>
+                <TextInput
+                  style={styles.modalSearchInput}
+                  placeholder="Search by username..."
+                  placeholderTextColor="#666"
+                  value={searchQuery}
+                  onChangeText={handleUserSearch}
+                  autoCapitalize="none"
+                  autoFocus
+                />
+                {searchLoading && <ActivityIndicator size="small" color="#f59e0b" style={styles.searchLoader} />}
+              </View>
+
+              <View style={styles.resultsContainer}>
+                {selectedUser ? (
+                  <View style={styles.selectedUserCard}>
+                    <View style={styles.selectedUserRow}>
+                      <View style={styles.avatarSmall}>
+                        <Text style={styles.avatarTextSmall}>{selectedUser.username.charAt(0).toUpperCase()}</Text>
+                      </View>
+                      <View style={styles.selectedUserInfo}>
+                        <Text style={styles.selectedUserName}>@{selectedUser.username}</Text>
+                        <Text style={styles.selectedUserEmail}>{selectedUser.email || 'NoteStandard User'}</Text>
+                      </View>
+                      <TouchableOpacity onPress={() => setSelectedUser(null)}>
+                        <Text style={styles.removeUser}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                    
+                    <View style={styles.rolePicker}>
+                      <Text style={styles.roleLabel}>Assign Role:</Text>
+                      <View style={styles.roleOptions}>
+                        <TouchableOpacity 
+                          style={[styles.roleOption, inviteRole === 'member' && styles.roleOptionActive]}
+                          onPress={() => setInviteRole('member')}
+                        >
+                          <Text style={[styles.roleOptionText, inviteRole === 'member' && styles.roleOptionTextActive]}>Member</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                          style={[styles.roleOption, inviteRole === 'admin' && styles.roleOptionActive]}
+                          onPress={() => setInviteRole('admin')}
+                        >
+                          <Text style={[styles.roleOptionText, inviteRole === 'admin' && styles.roleOptionTextActive]}>Admin</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    <TouchableOpacity style={styles.inviteConfirmBtn} onPress={handleInvite}>
+                      <Text style={styles.inviteConfirmText}>Add to Team</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <FlatList
+                    data={searchResults}
+                    keyExtractor={item => item.id}
+                    style={styles.resultsList}
+                    keyboardShouldPersistTaps="handled"
+                    renderItem={({ item }) => (
+                      <TouchableOpacity style={styles.resultItem} onPress={() => setSelectedUser(item)}>
+                        <View style={styles.avatarTiny}>
+                          <Text style={styles.avatarTextTiny}>{item.username.charAt(0).toUpperCase()}</Text>
+                        </View>
+                        <Text style={styles.resultText}>@{item.username}</Text>
+                        <Text style={styles.plusIcon}>＋</Text>
+                      </TouchableOpacity>
+                    )}
+                    ListEmptyComponent={
+                      searchQuery.length > 0 && !searchLoading ? (
+                        <Text style={styles.noResultsText}>No users found</Text>
+                      ) : null
+                    }
+                  />
+                )}
               </View>
             </View>
           </View>
@@ -275,6 +414,7 @@ function TeamChatModal({
               data={messages}
               keyExtractor={m => m?.id || Math.random().toString()}
               contentContainerStyle={styles.messagesList}
+              keyboardDismissMode="on-drag"
               onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
               renderItem={({ item }) => (
                 <TeamMessageBubble
@@ -428,6 +568,11 @@ export default function TeamsScreen() {
             const current = prev[activeTeam.id] || [];
             return { ...prev, [activeTeam.id]: current.filter(m => m.id !== messageId) };
           });
+        });
+        socket.on('team:member_added', (newMember: any) => {
+          // This will be picked up by the TeamChatModal's local state via parent if we passed it,
+          // but TeamChatModal has its own fetch. Let's make it simpler and just fetch or emit.
+          // For now, modal handles its own. But socket can trigger a refresh if we wanted.
         });
       };
       initSocket();
@@ -638,17 +783,49 @@ const styles = StyleSheet.create({
   micIcon: { color: '#fff', fontSize: 18 },
   sendBtn: { width: 46, height: 46, borderRadius: 23, backgroundColor: '#f59e0b', justifyContent: 'center', alignItems: 'center' },
   sendBtnText: { color: '#fff', fontSize: 18, fontWeight: '800' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { width: '80%', backgroundColor: '#0d0d1e', borderRadius: 20, padding: 24, borderWidth: 1, borderColor: '#1e1e3a' },
-  modalTitle: { color: '#fff', fontSize: 20, fontWeight: '800', marginBottom: 20, textAlign: 'center' },
-  modalInput: { backgroundColor: '#16162a', color: '#fff', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#1e1e3a', marginBottom: 16 },
-  roleContainer: { flexDirection: 'row', gap: 10, marginBottom: 24 },
-  roleBtn: { flex: 1, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: '#1e1e3a', alignItems: 'center' },
-  roleBtnActive: { backgroundColor: '#f59e0b', borderColor: '#f59e0b' },
-  roleBtnText: { color: '#fff', fontWeight: 'bold' },
-  modalActions: { flexDirection: 'row', gap: 12 },
-  modalCancel: { flex: 1, padding: 12, borderRadius: 12, backgroundColor: '#1e1e3a', alignItems: 'center' },
-  modalCancelText: { color: '#aaa', fontWeight: 'bold' },
-  modalSubmit: { flex: 1, padding: 12, borderRadius: 12, backgroundColor: '#3b82f6', alignItems: 'center' },
-  modalSubmitText: { color: '#fff', fontWeight: 'bold' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center' },
+  inviteModalContent: { width: '90%', backgroundColor: '#0d0d1e', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#1e1e3a', maxHeight: '80%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  modalCloseIcon: { color: '#666', fontSize: 20, padding: 4 },
+  searchContainer: { position: 'relative', marginBottom: 16 },
+  modalSearchInput: { backgroundColor: '#16162a', color: '#fff', padding: 14, paddingRight: 40, borderRadius: 14, borderWidth: 1, borderColor: '#1e1e3a', fontSize: 15 },
+  searchLoader: { position: 'absolute', right: 14, top: 16 },
+  resultsContainer: { minHeight: 100 },
+  resultsList: { maxHeight: 300 },
+  resultItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, marginBottom: 8, backgroundColor: '#16162a' },
+  avatarTiny: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#f59e0b22', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  avatarTextTiny: { color: '#f59e0b', fontSize: 14, fontWeight: '800' },
+  resultText: { color: '#fff', fontSize: 15, flex: 1, fontWeight: '600' },
+  plusIcon: { color: '#f59e0b', fontSize: 18, fontWeight: '800' },
+  noResultsText: { color: '#666', textAlign: 'center', marginTop: 20, fontSize: 14 },
+  selectedUserCard: { backgroundColor: '#16162a', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#f59e0b44' },
+  selectedUserRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  avatarSmall: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#f59e0b22', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  avatarTextSmall: { color: '#f59e0b', fontSize: 18, fontWeight: '800' },
+  selectedUserInfo: { flex: 1 },
+  selectedUserName: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  selectedUserEmail: { color: '#666', fontSize: 12, marginTop: 2 },
+  removeUser: { color: '#ef4444', fontSize: 20, padding: 4 },
+  rolePicker: { marginBottom: 20 },
+  roleLabel: { color: '#aaa', fontSize: 13, marginBottom: 10, fontWeight: '600' },
+  roleOptions: { flexDirection: 'row', gap: 10 },
+  roleOption: { flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#1e1e3a', alignItems: 'center', backgroundColor: '#0d0d1e' },
+  roleOptionActive: { backgroundColor: '#f59e0b22', borderColor: '#f59e0b' },
+  roleOptionText: { color: '#666', fontWeight: '700' },
+  roleOptionTextActive: { color: '#f59e0b' },
+  inviteConfirmBtn: { backgroundColor: '#f59e0b', padding: 16, borderRadius: 14, alignItems: 'center' },
+  inviteConfirmText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  membersDropdown: { backgroundColor: '#0d0d1e', borderBottomWidth: 1, borderColor: '#111133', maxHeight: 300, padding: 16 },
+  dropdownHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  dropdownTitle: { color: '#f59e0b', fontSize: 14, fontWeight: '800' },
+  dropdownClose: { color: '#666', fontSize: 16 },
+  membersFlatList: { width: '100%' },
+  memberItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  memberAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#111133', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  memberAvatarText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  memberInfo: { flex: 1 },
+  memberName: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  memberRole: { color: '#666', fontSize: 10, fontWeight: '800', marginTop: 2 },
+  youBadge: { color: '#f59e0b', fontSize: 10, fontWeight: '800', backgroundColor: '#f59e0b22', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
 });

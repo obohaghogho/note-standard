@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Image,
-  Alert,
+  Alert, Keyboard,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -141,6 +141,22 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [audioPlayer, setAudioPlayer] = useState<Audio.Sound | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+
+  // Auto-scroll when keyboard opens
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => {
+        // For inverted lists, we don't strictly need to scrollToEnd 
+        // as the input is at the bottom and list is at bottom,
+        // but it helps ensure consistency.
+        setTimeout(() => {
+          flatRef.current?.scrollToOffset({ offset: 0, animated: true });
+        }, 100);
+      }
+    );
+    return () => showSub.remove();
+  }, []);
 
   // Safe member access — conversation.members may be partial (no profile) when coming from createConversation
   const members = conversation?.members ?? [];
@@ -405,8 +421,8 @@ export default function ChatScreen({ navigation, route }: Props) {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 25}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       {/* Header */}
       <View style={styles.header}>
@@ -466,6 +482,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           keyExtractor={i => i.id}
           renderItem={renderMessage}
           inverted
+          keyboardDismissMode="on-drag"
           contentContainerStyle={styles.msgList}
           ListEmptyComponent={
             <View style={styles.emptyChat}>
