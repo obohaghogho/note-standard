@@ -810,6 +810,8 @@ exports.sendMessage = async (req, res) => {
     }
     let createdMessageId = null;
     try {
+      // Build payload conditionally — sending null for a non-existent column causes
+      // a 42703 error just like sending a value. Only add these fields when present.
       const insertPayload = {
         conversation_id: conversationId,
         sender_id: userId,
@@ -817,22 +819,25 @@ exports.sendMessage = async (req, res) => {
         type: type || "text",
         sentiment,
         detected_language: detectedLang,
-        // FIX: Persist attachment reference and reply context
-        attachment_id: attachmentId || null,
-        reply_to_id: replyToId || null,
       };
+      if (attachmentId) insertPayload.attachment_id = attachmentId;
+      if (replyToId)    insertPayload.reply_to_id   = replyToId;
 
       const { data, error } = await supabase
         .from("messages")
         .insert([insertPayload])
-        .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url), reply_to:messages!reply_to_id(id, content, sender_id)")
+        // Use safe select without explicit FK hint — same as getMessages which already works
+        .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url), reply_to:messages(id, content, sender_id)")
         .single();
 
       if (error) {
-        // If it's a "column does not exist" error (42703 for Postgres)
-        if (error.code === "42703") {
+        // Fallback for: missing column (42703) OR ambiguous/missing relationship (PGRST200)
+        const isSchemaMismatch = error.code === "42703" || error.code === "PGRST200" ||
+          (error.message && (error.message.includes("media_attachments") || error.message.includes("Could not find")));
+
+        if (isSchemaMismatch) {
           console.warn(
-            "[Chat Controller] Column missing, retrying basic insert",
+            "[Chat Controller] Schema mismatch, retrying basic insert:", error.code, error.message
           );
           const fallbackPayload = {
             conversation_id: conversationId,
