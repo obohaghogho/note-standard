@@ -99,19 +99,21 @@ exports.sendTeamMessage = async (req, res, next) => {
       return res.status(403).json({ error: 'You are not a member of this team' });
     }
 
+    const insertPayload = {
+      team_id: teamId,
+      sender_id: senderId,
+      content: content ? content.trim() : '',
+    };
+    if (req.body.attachmentId) insertPayload.attachment_id = req.body.attachmentId;
+    if (replyToId)             insertPayload.reply_to_id   = replyToId;
+
     const { data, error } = await supabase
       .from('team_messages')
-      .insert({
-        team_id: teamId,
-        sender_id: senderId,
-        content: content ? content.trim() : '',
-        attachment_id: req.body.attachmentId || null,
-        reply_to_id: replyToId || null,
-      })
+      .insert(insertPayload)
       .select(`
         *,
         attachment:media_attachments(*),
-        reply_to:team_messages!reply_to_id(id, content, sender_id, created_at),
+        reply_to:team_messages(id, content, sender_id, created_at),
         profiles:sender_id (
           id,
           username,
@@ -122,8 +124,11 @@ exports.sendTeamMessage = async (req, res, next) => {
       .single();
 
     if (error) {
-      // Fallback for missing column (e.g. attachment_id / reply_to_id)
-      if (error.code === '42703') {
+      // Fallback for missing column (42703) or missing relationship (PGRST200)
+      const isSchemaMismatch = error.code === '42703' || error.code === 'PGRST200' ||
+        (error.message && (error.message.includes('media_attachments') || error.message.includes('Could not find')));
+        
+      if (isSchemaMismatch) {
         const { data: retryData, error: retryError } = await supabase
           .from('team_messages')
           .insert({
@@ -166,14 +171,17 @@ exports.editTeamMessage = async (req, res, next) => {
       .select(`
         *,
         attachment:media_attachments(*),
-        reply_to:team_messages!reply_to_id(id, content, sender_id, created_at),
+        reply_to:team_messages(id, content, sender_id, created_at),
         profiles:sender_id (id, username, full_name, avatar_url)
       `)
       .single();
 
     if (error) {
-      // Fallback if is_edited column is missing
-      if (error.code === '42703') {
+      // Fallback if is_edited column or relationship is missing
+      const isSchemaMismatch = error.code === '42703' || error.code === 'PGRST200' ||
+        (error.message && (error.message.includes('media_attachments') || error.message.includes('Could not find')));
+        
+      if (isSchemaMismatch) {
         const { data: retryData, error: retryError } = await supabase
           .from('team_messages')
           .update({ content: content.trim() })
