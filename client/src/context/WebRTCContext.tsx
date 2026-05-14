@@ -4,7 +4,7 @@ import { useChat } from './ChatContext';
 import toast from 'react-hot-toast';
 import { CallOverlay } from '../components/chat/CallOverlay';
 import AgoraRTC, { IAgoraRTCClient, ILocalVideoTrack, ILocalAudioTrack } from "agora-rtc-sdk-ng";
-import axios from 'axios';
+import api from '../api/axiosInstance';
 
 interface CallState {
     type: 'voice' | 'video' | null;
@@ -337,7 +337,8 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const fetchAgoraToken = async (channel: string) => {
         try {
-            const response = await axios.get(`/api/agora?channel=${channel}`);
+            // Use the configured api instance which has the proper baseURL and Authorization headers
+            const response = await api.get(`/agora?channel=${channel}`);
             return response.data.token;
         } catch (err) {
             console.error('[Agora] Token fetch failed:', err);

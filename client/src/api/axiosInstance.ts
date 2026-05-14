@@ -1,5 +1,6 @@
 import axios from "axios"
 import { supabase } from "../lib/supabaseSafe"
+import { safeAuth } from "../lib/supabaseSafe"
 import { API_URL } from "../lib/api"
 
 const api = axios.create({
@@ -14,18 +15,13 @@ const api = axios.create({
 // Uses a retry loop to handle Supabase session hydration delay after Paystack redirect
 api.interceptors.request.use(
   async (config) => {
-    // Attempt to get session (optimized: check immediately, then one short retry if missing)
-    const { data: immediate } = await supabase.auth.getSession();
-    let session = immediate?.session;
+    // Attempt to get session using the resilient safeAuth helper
+    const session = await safeAuth();
 
-    if (!session) {
-      // Small wait only if session might be hydrating (one-shot retry)
-      await new Promise(r => setTimeout(r, 300));
-      const { data: retry } = await supabase.auth.getSession();
-      session = retry?.session;
-    }
     if (session?.access_token) {
       config.headers.Authorization = `Bearer ${session.access_token}`;
+    } else {
+      console.warn(`[Axios] Sending request to ${config.url} without Authorization header. (Session missing)`);
     }
     return config;
   },

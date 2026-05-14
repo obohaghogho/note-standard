@@ -179,8 +179,11 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
       setInput('');
       sendTypingStatus(false);
       inputRef.current?.focus();
-    } catch {
-      toast.error(editingMessageId ? 'Failed to edit message' : 'Failed to send message');
+    } catch (err: any) {
+        setInput(input); // or restore original text if you prefer
+        setEditingMessageId(editingMessageId);
+        const serverMsg = err.response?.data?.error || err.message;
+        toast.error(serverMsg ? `Error: ${serverMsg}` : (editingMessageId ? 'Failed to edit message' : 'Failed to send message'));
     } finally {
       setIsSending(false);
     }

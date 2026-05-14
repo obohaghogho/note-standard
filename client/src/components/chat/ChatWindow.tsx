@@ -50,6 +50,7 @@ const ChatWindow: React.FC = () => {
 
     // Editing state
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+    const [replyTo, setReplyTo] = useState<Message | null>(null);
 
     const toggleMessageSelection = (msgId: string) => {
         setSelectedMessages(prev => {
@@ -381,11 +382,12 @@ const ChatWindow: React.FC = () => {
                 await sendMessage(textToSend, 'text', undefined, replyTo?.id);
                 setReplyTo(null);
             }
-        } catch {
+        } catch (err: any) {
             // Restore state if network request fails
             setInputValue(textToSend);
             setEditingMessageId(currentEditingId);
-            toast.error(currentEditingId ? 'Failed to edit message' : 'Failed to send message');
+            const serverMsg = err.response?.data?.error || err.message;
+            toast.error(serverMsg ? `Error: ${serverMsg}` : (currentEditingId ? 'Failed to edit message' : 'Failed to send message'));
         }
     };
 
