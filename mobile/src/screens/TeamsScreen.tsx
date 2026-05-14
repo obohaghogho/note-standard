@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Image,
-  Alert, Modal, RefreshControl, Keyboard,
+  Alert, Modal, RefreshControl,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -173,18 +173,8 @@ function TeamChatModal({
     loadMembers();
   }, [team.id]);
 
-  // Auto-scroll when keyboard opens
-  useEffect(() => {
-    const showSub = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      () => {
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-      }
-    );
-    return () => showSub.remove();
-  }, []);
+  // Inverted FlatList auto-scrolls to newest messages natively.
+  // KeyboardAvoidingView + 'height' behavior handles the rest on Android.
 
   const handleUserSearch = async (q: string) => {
     setSearchQuery(q);
@@ -266,10 +256,11 @@ function TeamChatModal({
   };
 
   return (
-    <Modal visible animationType="slide" onRequestClose={onClose}>
+    <Modal visible animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <KeyboardAvoidingView
         style={styles.chatContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <View style={styles.chatHeader}>
           <TouchableOpacity onPress={onClose} style={styles.chatBackBtn}>
@@ -410,11 +401,14 @@ function TeamChatModal({
           ) : (
             <FlatList
               ref={flatListRef}
-              data={messages}
+              data={[...messages].reverse()}
               keyExtractor={m => m?.id || Math.random().toString()}
               contentContainerStyle={styles.messagesList}
-              keyboardDismissMode="on-drag"
-              onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+              keyboardDismissMode="interactive"
+              keyboardShouldPersistTaps="handled"
+              inverted
+              showsVerticalScrollIndicator={false}
+              removeClippedSubviews
               renderItem={({ item }) => (
                 <TeamMessageBubble
                   item={item}
@@ -458,7 +452,7 @@ function TeamChatModal({
           </View>
         )}
 
-        <View style={styles.inputContainer}>
+        <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <View style={styles.inputRow}>
             <TouchableOpacity style={styles.attachBtn} onPress={handlePickMedia}>
               <Text style={styles.attachIcon}>📎</Text>
@@ -470,6 +464,8 @@ function TeamChatModal({
               value={newMessage}
               onChangeText={setNewMessage}
               multiline
+              maxLength={4000}
+              textAlignVertical="center"
             />
             {newMessage.trim() ? (
               <TouchableOpacity style={styles.sendBtn} onPress={handleSend} disabled={sending}>
@@ -575,7 +571,11 @@ export default function TeamsScreen() {
         });
       };
       initSocket();
-      return () => { socketRef.current?.disconnect(); socketRef.current = null; };
+      return () => {
+        socketRef.current?.removeAllListeners();
+        socketRef.current?.disconnect();
+        socketRef.current = null;
+      };
     }
   }, [activeTeam]);
 
@@ -772,7 +772,7 @@ const styles = StyleSheet.create({
   actionCloseText: { color: '#666', fontSize: 16 },
   emptyMsg: { alignItems: 'center', paddingTop: 80 },
   emptyMsgText: { color: '#555', fontSize: 14 },
-  inputContainer: { backgroundColor: '#0d0d1e', borderTopWidth: 1, borderColor: '#111133', paddingBottom: Platform.OS === 'ios' ? 34 : 12 },
+  inputContainer: { backgroundColor: '#0d0d1e', borderTopWidth: 1, borderColor: '#111133' },
   inputRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 10, gap: 8 },
   attachBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
   attachIcon: { fontSize: 22, color: '#f59e0b' },

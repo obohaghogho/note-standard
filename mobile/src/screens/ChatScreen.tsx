@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Image,
-  Alert, Keyboard,
+  Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,7 +12,7 @@ import apiClient from '../api/apiClient';
 import { useAuth } from '../context/AuthContext';
 import { AuthService } from '../services/AuthService';
 import { Conversation } from '../services/ChatService';
-import { API_URL, GATEWAY_URL } from '../Config';
+import { GATEWAY_URL } from '../Config';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { ChatStackParamList } from '../navigation/ChatStack';
@@ -20,6 +20,7 @@ import { MediaService } from '../services/MediaService';
 import VoiceService from '../services/VoiceService';
 import { Audio } from 'expo-av';
 import { useLongPressGesture } from '../hooks/useLongPressGesture';
+import SignalingService from '../services/SignalingService';
 
 type Props = {
   navigation: NativeStackNavigationProp<ChatStackParamList, 'Chat'>;
@@ -142,21 +143,8 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
 
-  // Auto-scroll when keyboard opens
-  useEffect(() => {
-    const showSub = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      () => {
-        // For inverted lists, we don't strictly need to scrollToEnd 
-        // as the input is at the bottom and list is at bottom,
-        // but it helps ensure consistency.
-        setTimeout(() => {
-          flatRef.current?.scrollToOffset({ offset: 0, animated: true });
-        }, 100);
-      }
-    );
-    return () => showSub.remove();
-  }, []);
+  // Inverted FlatList auto-scrolls to latest message (offset 0) natively.
+  // No manual keyboard listener needed — KeyboardAvoidingView handles layout.
 
   // Safe member access — conversation.members may be partial (no profile) when coming from createConversation
   const members = conversation?.members ?? [];
@@ -418,10 +406,33 @@ export default function ChatScreen({ navigation, route }: Props) {
     />
   ), [user?.id, recipientName, handleLongPress, playVoiceNote]);
 
+  // ── Initiate VoIP call via SignalingService (no carrier/GSM) ──────────────
+  const startCall = useCallback(async (callType: 'audio' | 'video') => {
+    if (!otherMember?.user_id) return;
+    try {
+      await SignalingService.startCall(
+        otherMember.user_id,
+        recipientName,
+        callType,
+        conversationId
+      );
+      navigation.navigate('Call', {
+        type: callType,
+        conversationId,
+        targetUserId: otherMember.user_id,
+        targetName: recipientName,
+        isIncoming: false,
+      });
+    } catch (err) {
+      console.error('[ChatScreen] Call start error:', err);
+      Alert.alert('Call Failed', 'Could not start call. Please check your connection.');
+    }
+  }, [otherMember?.user_id, recipientName, conversationId, navigation]);
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       {/* Header */}
       <View style={styles.header}>
@@ -442,28 +453,16 @@ export default function ChatScreen({ navigation, route }: Props) {
           </Text>
         </View>
 
-        {/* Call Buttons */}
+        {/* VoIP Call Buttons — in-app only, no GSM */}
         <View style={styles.headerActions}>
-          <TouchableOpacity 
-            onPress={() => navigation.navigate('Call', { 
-              type: 'audio', 
-              conversationId, 
-              targetUserId: otherMember?.user_id || '', 
-              targetName: recipientName,
-              isIncoming: false 
-            })} 
+          <TouchableOpacity
+            onPress={() => startCall('audio')}
             style={styles.headerActionBtn}
           >
             <Text style={styles.headerActionIcon}>📞</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            onPress={() => navigation.navigate('Call', { 
-              type: 'video', 
-              conversationId, 
-              targetUserId: otherMember?.user_id || '', 
-              targetName: recipientName,
-              isIncoming: false 
-            })} 
+          <TouchableOpacity
+            onPress={() => startCall('video')}
             style={styles.headerActionBtn}
           >
             <Text style={styles.headerActionIcon}>📹</Text>
@@ -481,7 +480,10 @@ export default function ChatScreen({ navigation, route }: Props) {
           keyExtractor={i => i.id}
           renderItem={renderMessage}
           inverted
-          keyboardDismissMode="on-drag"
+          keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          removeClippedSubviews
           contentContainerStyle={styles.msgList}
           ListEmptyComponent={
             <View style={styles.emptyChat}>
@@ -517,10 +519,8 @@ export default function ChatScreen({ navigation, route }: Props) {
       )}
 
       {/* Input */}
-      <View style={styles.inputContainer}>
-        <View style={[
-          styles.inputRow
-        ]}>
+      <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        <View style={styles.inputRow}>
           <TouchableOpacity style={styles.attachBtn} onPress={handlePickMedia}>
             <Text style={styles.attachIcon}>📎</Text>
           </TouchableOpacity>
@@ -534,6 +534,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             multiline
             maxLength={2000}
             returnKeyType="default"
+            textAlignVertical="center"
           />
 
           {text.trim() ? (
@@ -620,7 +621,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: '#111133',
   },
-  inputContainer: { backgroundColor: '#0d0d1e', borderTopWidth: 1, borderColor: '#111133', paddingBottom: Platform.OS === 'ios' ? 34 : 12 },
+  inputContainer: { backgroundColor: '#0d0d1e', borderTopWidth: 1, borderColor: '#111133' },
   actionInfo: { flex: 1 },
   actionTitle: { color: '#6366f1', fontSize: 12, fontWeight: '700', marginBottom: 2 },
   actionText: { color: '#aaa', fontSize: 12 },

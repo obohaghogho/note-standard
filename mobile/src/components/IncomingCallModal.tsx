@@ -1,122 +1,167 @@
-import React, { useEffect, useState } from 'react';
+/**
+ * IncomingCallModal – Pure in-app incoming call UI.
+ *
+ * ❌ No RNCallKeep, no telecom, no Linking.openURL
+ * ✅ Subscribes to CallService events via EventEmitter
+ * ✅ Stops ringtone on answer, reject, timeout or remote hang-up
+ * ✅ Navigates to CallScreen on answer
+ */
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Modal,
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
-  Platform,
+  Animated,
+  Easing,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import CallService from '../services/CallService';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ChatStackParamList } from '../navigation/ChatStack';
-import { Audio } from 'expo-av';
-
-const { width, height } = Dimensions.get('window');
-
+import CallService, { CallData, CallState } from '../services/CallService';
+import SignalingService from '../services/SignalingService';
 import { navigate } from '../navigation/AppNavigator';
 
 export default function IncomingCallModal() {
   const [visible, setVisible] = useState(false);
-  const [callData, setCallData] = useState<any>(null);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [callData, setCallData] = useState<CallData | null>(null);
+
+  // Pulse animation for the avatar
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const pulseLoop = useRef<Animated.CompositeAnimation | null>(null);
+
+  // ── Pulse animation ─────────────────────────────────────────────────────
+
+  const startPulse = () => {
+    pulseLoop.current = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.15,
+          duration: 700,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 700,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulseLoop.current.start();
+  };
+
+  const stopPulse = () => {
+    pulseLoop.current?.stop();
+    pulseAnim.setValue(1);
+  };
+
+  // ── Subscribe to CallService events ─────────────────────────────────────
 
   useEffect(() => {
-    // 1. Listen for "Show UI" event (Android Self-Managed)
-    CallService.onShowIncomingCallUI((data) => {
-      console.log('[IncomingCallModal] Show UI requested:', data);
+    // Show UI when an incoming call arrives
+    const unsubIncoming = CallService.onShowIncomingCallUI((data: CallData) => {
       setCallData(data);
       setVisible(true);
-      playRingtone();
+      startPulse();
     });
 
-    // 2. Listen for external rejections (caller hung up)
-    CallService.onReject(() => {
-      console.log('[IncomingCallModal] Call rejected/ended externally');
+    // Hide UI if call ended remotely (caller hung up, timeout, etc.)
+    const unsubEnded = CallService.onCallEnded(() => {
       close();
     });
 
+    const unsubRejected = CallService.onCallRejected(() => {
+      close();
+    });
+
+    // Also react to state changes — hide when no longer ringing
+    const unsubState = CallService.onStateChange(({ state }: { state: CallState }) => {
+      if (state === 'idle' || state === 'ended' || state === 'failed') {
+        close();
+      }
+    });
+
     return () => {
-      stopRingtone();
+      unsubIncoming();
+      unsubEnded();
+      unsubRejected();
+      unsubState();
+      stopPulse();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const playRingtone = async () => {
-    try {
-      // Use a standard expo-av sound loading with try-catch
-      const { sound } = await Audio.Sound.createAsync(
-        require('../../assets/ringtone.mp3'),
-        { isLooping: true, volume: 1.0 }
-      );
-      setSound(sound);
-      await sound.playAsync();
-    } catch (err) {
-      console.warn('[IncomingCallModal] Ringtone failed (missing file), using silence.');
-    }
-  };
+  // ── Handlers ─────────────────────────────────────────────────────────────
 
-  const stopRingtone = async () => {
-    if (sound) {
-      try {
-        await sound.stopAsync();
-        await sound.unloadAsync();
-      } catch (e) {}
-      setSound(null);
-    }
-  };
-
-  const handleAnswer = () => {
-    stopRingtone();
+  const handleAnswer = async () => {
+    stopPulse();
     setVisible(false);
-    CallService.answerCall();
-    
-    // Navigate to CallScreen
-    if (callData) {
-      navigate('Call', {
-        type: callData.hasVideo ? 'video' : 'audio',
-        conversationId: callData.conversationId || '',
-        targetUserId: callData.handle || '',
-        targetName: callData.handle || 'User',
-        isIncoming: true
-      });
-    }
+
+    if (!callData) return;
+    await SignalingService.answerCall();
+
+    navigate('Call', {
+      type: callData.callType,
+      conversationId: callData.conversationId,
+      targetUserId: callData.callerId,
+      targetName: callData.callerName,
+      isIncoming: true,
+    });
+    setCallData(null);
   };
 
-  const handleReject = () => {
-    stopRingtone();
+  const handleReject = async () => {
+    stopPulse();
     setVisible(false);
-    CallService.rejectCall();
+    setCallData(null);
+    await SignalingService.rejectIncomingCall();
   };
 
   const close = () => {
-    stopRingtone();
+    stopPulse();
     setVisible(false);
     setCallData(null);
   };
 
   if (!visible || !callData) return null;
 
-  return (
-    <Modal visible={visible} transparent animationType="slide">
-      <LinearGradient colors={['#0f172a', '#1e1b4b']} style={styles.container}>
-        <View style={styles.content}>
-          <View style={styles.avatarLarge}>
-            <Text style={styles.avatarText}>{(callData.handle || 'U').charAt(0).toUpperCase()}</Text>
-          </View>
-          <Text style={styles.nameText}>{callData.handle || 'Incoming Call'}</Text>
-          <Text style={styles.statusText}>NoteStandard {callData.hasVideo ? 'Video' : 'Audio'} Call...</Text>
+  const initials = (callData.callerName || 'U').charAt(0).toUpperCase();
+  const callLabel = callData.callType === 'video' ? '📹 Video Call' : '🎧 Audio Call';
 
+  return (
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
+      <LinearGradient
+        colors={['rgba(10,10,30,0.97)', 'rgba(30,27,75,0.97)']}
+        style={styles.overlay}
+      >
+        <View style={styles.card}>
+          {/* Caller avatar */}
+          <Animated.View style={[styles.avatarWrap, { transform: [{ scale: pulseAnim }] }]}>
+            <LinearGradient colors={['#6366f1', '#4f46e5']} style={styles.avatar}>
+              <Text style={styles.avatarText}>{initials}</Text>
+            </LinearGradient>
+          </Animated.View>
+
+          <Text style={styles.incomingLabel}>{callLabel}</Text>
+          <Text style={styles.callerName}>{callData.callerName}</Text>
+          <Text style={styles.appLabel}>NoteStandard</Text>
+
+          {/* Answer / Reject buttons */}
           <View style={styles.controls}>
-            <TouchableOpacity onPress={handleReject} style={styles.rejectBtn}>
-              <Text style={styles.icon}>📞</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity onPress={handleAnswer} style={styles.answerBtn}>
-              <Text style={styles.icon}>📞</Text>
-            </TouchableOpacity>
+            <View style={styles.btnWrap}>
+              <TouchableOpacity onPress={handleReject} style={styles.rejectBtn} activeOpacity={0.8}>
+                <Text style={styles.rejectIcon}>📵</Text>
+              </TouchableOpacity>
+              <Text style={styles.btnLabel}>Decline</Text>
+            </View>
+
+            <View style={styles.btnWrap}>
+              <TouchableOpacity onPress={handleAnswer} style={styles.answerBtn} activeOpacity={0.8}>
+                <Text style={styles.answerIcon}>📞</Text>
+              </TouchableOpacity>
+              <Text style={styles.btnLabel}>Answer</Text>
+            </View>
           </View>
         </View>
       </LinearGradient>
@@ -125,49 +170,105 @@ export default function IncomingCallModal() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 100 },
-  avatarLarge: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: '#6366f1',
+  overlay: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
   },
-  avatarText: { color: '#fff', fontSize: 56, fontWeight: 'bold' },
-  nameText: { color: '#fff', fontSize: 28, fontWeight: 'bold', marginBottom: 8 },
-  statusText: { color: '#94a3b8', fontSize: 18, marginBottom: 80 },
+  card: {
+    width: '88%',
+    backgroundColor: '#0d0d1e',
+    borderRadius: 32,
+    alignItems: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: '#1e1e3a',
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+  avatarWrap: {
+    marginBottom: 28,
+  },
+  avatar: {
+    width: 128,
+    height: 128,
+    borderRadius: 64,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    color: '#fff',
+    fontSize: 52,
+    fontWeight: 'bold',
+  },
+  incomingLabel: {
+    color: '#6366f1',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+  callerName: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '800',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  appLabel: {
+    color: '#555',
+    fontSize: 13,
+    marginBottom: 48,
+  },
   controls: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    width: '100%',
-    paddingHorizontal: 40,
+    width: '80%',
+  },
+  btnWrap: {
+    alignItems: 'center',
+    gap: 10,
   },
   answerBtn: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: '#22c55e',
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 5,
+    shadowColor: '#22c55e',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  answerIcon: {
+    fontSize: 32,
   },
   rejectBtn: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: '#ef4444',
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 5,
-    transform: [{ rotate: '135deg' }],
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  icon: { fontSize: 32, color: '#fff' },
+  rejectIcon: {
+    fontSize: 32,
+  },
+  btnLabel: {
+    color: '#aaa',
+    fontSize: 13,
+    fontWeight: '600',
+  },
 });

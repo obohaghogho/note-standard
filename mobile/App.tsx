@@ -6,13 +6,15 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { NotificationProvider } from './src/context/NotificationContext';
-import CallService from './src/services/CallService';
 import { PushHandler } from './src/services/PushHandler';
 import BatteryService from './src/services/BatteryService';
-import SignalingService from './src/services/SignalingService';
 
-// Suppress noisy dev-only warnings
-LogBox.ignoreLogs(['Setting a timer', 'VirtualizedLists should never be nested']);
+// Suppress known dev-only warnings
+LogBox.ignoreLogs([
+  'Setting a timer',
+  'VirtualizedLists should never be nested',
+  'Non-serializable values were found in the navigation state',
+]);
 
 import IncomingCallModal from './src/components/IncomingCallModal';
 
@@ -21,31 +23,22 @@ export default function App() {
     const bootstrap = async () => {
       console.log('[App] Bootstrapping background services...');
 
-      // 1. Native call UI (CallKeep)
-      await CallService.setup();
-
-      // 2. Firebase push notification handler
+      // Firebase push notifications
       await PushHandler.init();
 
-      // 3. Battery optimization prompt (Android 14+ compliance)
+      // Battery optimization prompt (Android only)
       if (Platform.OS === 'android') {
-        const shouldRequest = await BatteryService.shouldRequestOptimization();
-        const hadMissedCall = await BatteryService.checkMissedCalls();
-        if (shouldRequest || hadMissedCall) {
-          await BatteryService.requestIgnoreBatteryOptimization();
+        try {
+          const shouldRequest = await BatteryService.shouldRequestOptimization();
+          const hadMissedCall = await BatteryService.checkMissedCalls();
+          if (shouldRequest || hadMissedCall) {
+            await BatteryService.requestIgnoreBatteryOptimization();
+          }
+        } catch (err) {
+          console.warn('[App] Battery optimization check failed:', err);
         }
       }
 
-      // 4. Call event listeners
-      CallService.onAnswer((callId: string) => {
-        console.log('[App] Call Answered:', callId);
-        // SignalingService handles navigation via its listeners
-      });
-      CallService.onReject((callId: string) => {
-        console.log('[App] Call Rejected:', callId);
-        SignalingService.cancelActiveCall();
-      });
-      
       console.log('[App] Bootstrap complete.');
     };
 
@@ -57,6 +50,7 @@ export default function App() {
       <AuthProvider>
         <NotificationProvider>
           <AppNavigator />
+          {/* In-app VoIP incoming call modal – rendered globally so it works from any screen */}
           <IncomingCallModal />
           <StatusBar style="light" />
         </NotificationProvider>
