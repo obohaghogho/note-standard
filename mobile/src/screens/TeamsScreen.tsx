@@ -270,7 +270,6 @@ function TeamChatModal({
       <KeyboardAvoidingView
         style={styles.chatContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <View style={styles.chatHeader}>
           <TouchableOpacity onPress={onClose} style={styles.chatBackBtn}>
@@ -459,7 +458,7 @@ function TeamChatModal({
           </View>
         )}
 
-        <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        <View style={styles.inputContainer}>
           <View style={styles.inputRow}>
             <TouchableOpacity style={styles.attachBtn} onPress={handlePickMedia}>
               <Text style={styles.attachIcon}>📎</Text>
@@ -773,7 +772,7 @@ const styles = StyleSheet.create({
   actionCloseText: { color: '#666', fontSize: 16 },
   emptyMsg: { alignItems: 'center', paddingTop: 80 },
   emptyMsgText: { color: '#555', fontSize: 14 },
-  inputContainer: { backgroundColor: '#0d0d1e', borderTopWidth: 1, borderColor: '#111133' },
+  inputContainer: { backgroundColor: '#0d0d1e', borderTopWidth: 1, borderColor: '#111133', paddingBottom: Platform.OS === 'ios' ? 34 : 12 },
   inputRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 10, gap: 8 },
   attachBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
   attachIcon: { fontSize: 22, color: '#f59e0b' },

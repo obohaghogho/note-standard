@@ -43,22 +43,6 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO",
-        "android.permission.CALL_PHONE",
-        "android.permission.READ_PHONE_STATE",
-        "android.permission.MANAGE_OWN_CALLS",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.USE_FULL_SCREEN_INTENT",
-        "android.permission.BIND_TELECOM_CONNECTION_SERVICE",
-        "android.permission.INTERNET",
-        "android.permission.ACCESS_NETWORK_STATE",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.READ_MEDIA_VIDEO",
-        "android.permission.CALL_PHONE",
-        "android.permission.READ_PHONE_STATE",
         "android.permission.MANAGE_OWN_CALLS",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.USE_FULL_SCREEN_INTENT",
@@ -67,7 +51,8 @@
         "android.permission.ACCESS_NETWORK_STATE"
       ],
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "softwareKeyboardLayoutMode": "adjustResize"
     },
     "plugins": [
       "expo-notifications",
@@ -82,7 +67,7 @@
             "appName": "NoteStandard"
           },
           "android": {
-            "selfManaged": false,
+            "selfManaged": true,
             "foregroundService": {
               "channelId": "com.notestandard.app.calls",
               "channelName": "Incoming Calls",

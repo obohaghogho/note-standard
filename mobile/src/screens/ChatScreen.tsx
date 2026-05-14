@@ -422,7 +422,6 @@ export default function ChatScreen({ navigation, route }: Props) {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       {/* Header */}
       <View style={styles.header}>
@@ -518,48 +517,49 @@ export default function ChatScreen({ navigation, route }: Props) {
       )}
 
       {/* Input */}
-    <View style={[
-      styles.inputRow, 
-      { paddingBottom: Math.max(insets.bottom, 12) }
-    ]}>
-        <TouchableOpacity style={styles.attachBtn} onPress={handlePickMedia}>
-          <Text style={styles.attachIcon}>📎</Text>
-        </TouchableOpacity>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Type a message..."
-          placeholderTextColor="#444"
-          value={text}
-          onChangeText={setText}
-          multiline
-          maxLength={2000}
-          returnKeyType="default"
-        />
-
-        {text.trim() ? (
-          <TouchableOpacity
-            style={[styles.sendBtn, (!text.trim() || sending) && styles.sendBtnDisabled]}
-            onPress={() => sendMessage()}
-            disabled={sending || !text.trim()}
-          >
-            <LinearGradient
-              colors={sending ? ['#333', '#222'] : ['#6366f1', '#4f46e5']}
-              style={styles.sendGrad}
-            >
-              <Text style={styles.sendIcon}>{sending ? '…' : '➤'}</Text>
-            </LinearGradient>
+      <View style={styles.inputContainer}>
+        <View style={[
+          styles.inputRow
+        ]}>
+          <TouchableOpacity style={styles.attachBtn} onPress={handlePickMedia}>
+            <Text style={styles.attachIcon}>📎</Text>
           </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.micBtn} onPress={handleVoiceNote}>
-            <LinearGradient 
-              colors={isRecording ? ['#ef4444', '#dc2626'] : ['#6366f1', '#4f46e5']} 
-              style={styles.sendGrad}
+
+          <TextInput
+            style={styles.input}
+            placeholder="Type a message..."
+            placeholderTextColor="#444"
+            value={text}
+            onChangeText={setText}
+            multiline
+            maxLength={2000}
+            returnKeyType="default"
+          />
+
+          {text.trim() ? (
+            <TouchableOpacity
+              style={[styles.sendBtn, (!text.trim() || sending) && styles.sendBtnDisabled]}
+              onPress={() => sendMessage()}
+              disabled={sending || !text.trim()}
             >
-              <Text style={styles.sendIcon}>{isRecording ? '⏹' : '🎤'}</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        )}
+              <LinearGradient
+                colors={sending ? ['#333', '#222'] : ['#6366f1', '#4f46e5']}
+                style={styles.sendGrad}
+              >
+                <Text style={styles.sendIcon}>{sending ? '…' : '➤'}</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.micBtn} onPress={handleVoiceNote}>
+              <LinearGradient 
+                colors={isRecording ? ['#ef4444', '#dc2626'] : ['#6366f1', '#4f46e5']} 
+                style={styles.sendGrad}
+              >
+                <Text style={styles.sendIcon}>{isRecording ? '⏹' : '🎤'}</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -620,6 +620,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: '#111133',
   },
+  inputContainer: { backgroundColor: '#0d0d1e', borderTopWidth: 1, borderColor: '#111133', paddingBottom: Platform.OS === 'ios' ? 34 : 12 },
   actionInfo: { flex: 1 },
   actionTitle: { color: '#6366f1', fontSize: 12, fontWeight: '700', marginBottom: 2 },
   actionText: { color: '#aaa', fontSize: 12 },

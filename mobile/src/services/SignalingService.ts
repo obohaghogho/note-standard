@@ -23,18 +23,17 @@ class SignalingService {
     });
 
     this.socket.on('call:incoming', (data) => {
-      console.log('[Signaling] Incoming call via socket:', data);
+      console.log('[Signaling] Incoming VoIP call via socket:', data);
       
-      // Critical: Store the caller's info so if we reject the call from CallKit, we know who to send the rejection to.
       this.activeTargetId = data.from;
       this.activeConversationId = data.conversationId;
 
       CallService.displayIncomingCall({
         callerId: data.from,
-        callerName: data.fromName,
-        callType: data.type,
+        callerName: data.fromName || 'Unknown User',
+        callType: data.type || 'audio',
         conversationId: data.conversationId,
-        peerId: data.peerId
+        peerId: data.peerId || data.from
       });
     });
 

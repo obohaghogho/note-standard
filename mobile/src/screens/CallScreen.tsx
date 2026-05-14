@@ -49,11 +49,16 @@ export default function CallScreen({ navigation, route }: Props) {
             setRemoteUid(null);
             endCall();
           },
+          onError: (err) => {
+            console.error('[CallScreen] Agora Error:', err);
+          }
         });
 
         if (isIncoming) {
+          // Join immediately since it was answered
           await SignalingService.answerCall(targetUserId, '', conversationId);
         } else {
+          // Initiating call
           await SignalingService.startCall(targetUserId, targetName, type, conversationId);
         }
       } catch (err) {
@@ -76,11 +81,12 @@ export default function CallScreen({ navigation, route }: Props) {
   };
 
   const toggleMute = () => {
-    // Agora logic for mute
+    AgoraService.muteLocalAudio(!isMuted);
     setIsMuted(!isMuted);
   };
 
   const toggleSpeaker = () => {
+    AgoraService.setEnableSpeakerphone(!isSpeaker);
     setIsSpeaker(!isSpeaker);
   };
 
@@ -95,7 +101,7 @@ export default function CallScreen({ navigation, route }: Props) {
             />
           ) : (
             <View style={styles.placeholder}>
-              <Text style={styles.statusText}>Connecting to {targetName}...</Text>
+              <Text style={styles.statusText}>{joined ? 'Ringing...' : 'Connecting...'}</Text>
             </View>
           )}
           
@@ -110,7 +116,9 @@ export default function CallScreen({ navigation, route }: Props) {
             <Text style={styles.avatarText}>{targetName.charAt(0).toUpperCase()}</Text>
           </View>
           <Text style={styles.nameText}>{targetName}</Text>
-          <Text style={styles.statusText}>{joined ? (remoteUid ? 'Connected' : 'Ringing...') : 'Initializing...'}</Text>
+          <Text style={styles.statusText}>
+            {!joined ? 'Initializing...' : (remoteUid ? '00:01' : 'Ringing...')}
+          </Text>
         </LinearGradient>
       )}
 

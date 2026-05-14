@@ -70,6 +70,14 @@ class AgoraService {
     this.engine?.leaveChannel();
   }
 
+  async muteLocalAudio(mute: boolean) {
+    this.engine?.muteLocalAudioStream(mute);
+  }
+
+  async setEnableSpeakerphone(enabled: boolean) {
+    this.engine?.setEnableSpeakerphone(enabled);
+  }
+
   registerEventHandler(handler: IRtcEngineEventHandler) {
     this.engine?.registerEventHandler(handler);
   }

@@ -14,6 +14,8 @@ import SignalingService from './src/services/SignalingService';
 // Suppress noisy dev-only warnings
 LogBox.ignoreLogs(['Setting a timer', 'VirtualizedLists should never be nested']);
 
+import IncomingCallModal from './src/components/IncomingCallModal';
+
 export default function App() {
   useEffect(() => {
     const bootstrap = async () => {
@@ -37,16 +39,13 @@ export default function App() {
       // 4. Call event listeners
       CallService.onAnswer((callId: string) => {
         console.log('[App] Call Answered:', callId);
+        // SignalingService handles navigation via its listeners
       });
       CallService.onReject((callId: string) => {
         console.log('[App] Call Rejected:', callId);
         SignalingService.cancelActiveCall();
       });
-      CallService.onEndCall((callId: string) => {
-        console.log('[App] Call Ended from System:', callId);
-        SignalingService.cancelActiveCall();
-      });
-
+      
       console.log('[App] Bootstrap complete.');
     };
 
@@ -58,6 +57,7 @@ export default function App() {
       <AuthProvider>
         <NotificationProvider>
           <AppNavigator />
+          <IncomingCallModal />
           <StatusBar style="light" />
         </NotificationProvider>
       </AuthProvider>
