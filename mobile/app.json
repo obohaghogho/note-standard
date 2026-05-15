@@ -48,7 +48,9 @@
         "android.permission.USE_FULL_SCREEN_INTENT",
         "android.permission.BIND_TELECOM_CONNECTION_SERVICE",
         "android.permission.INTERNET",
-        "android.permission.ACCESS_NETWORK_STATE"
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.READ_PHONE_STATE",
+        "android.permission.CALL_PHONE"
       ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -80,10 +82,10 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "a469327a-6f7b-4162-bf2c-278ea97226ee"
+        "projectId": "00352001-c4c1-42ad-9cf1-48e8e50aced7"
       }
     },
-    "owner": "obohoboh107",
+    "owner": "aghogho107",
     "runtimeVersion": {
       "policy": "appVersion"
     },

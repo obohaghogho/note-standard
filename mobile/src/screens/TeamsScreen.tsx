@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Image,
-  Alert, Modal, RefreshControl,
+  Alert, Modal, RefreshControl, Share,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -238,6 +238,16 @@ function TeamChatModal({
       [
         { text: 'Reply', onPress: () => setReplyTo(msg) },
         { text: 'Copy', onPress: () => Alert.alert('Copied', 'Message copied to clipboard') },
+        {
+          text: 'Share',
+          onPress: async () => {
+            try {
+              await Share.share({ message: msg.content });
+            } catch (error: any) {
+              Alert.alert('Error', error.message);
+            }
+          }
+        },
         ...(isMe ? [
           { text: 'Edit', onPress: () => {
             setEditingMessage(msg);
@@ -259,7 +269,7 @@ function TeamChatModal({
     <Modal visible animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <KeyboardAvoidingView
         style={styles.chatContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <View style={styles.chatHeader}>
@@ -596,7 +606,10 @@ export default function TeamsScreen() {
   };
 
   const handleEditMessage = async (messageId: string, content: string) => {
-    try { await apiClient.patch(`/chat/messages/${messageId}`, { content }); }
+    if (!activeTeam) return;
+    try { 
+      await apiClient.patch(`/teams/${activeTeam.id}/messages/${messageId}`, { content }); 
+    }
     catch (e) { Alert.alert('Error', 'Failed to edit message'); }
   };
 

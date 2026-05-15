@@ -1,7 +1,7 @@
 const { createClient } = require("@supabase/supabase-js");
 const fs = require("fs");
 const path = require("path");
-require("dotenv").config();
+require("dotenv").config({ path: path.join(__dirname, "../.env") });
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -22,7 +22,6 @@ if (!supabaseUrl || !supabaseKey) {
 async function runMigrations() {
   console.log("Migration runner starting...");
 
-  // Check for PG connection string
   const pgConnString = process.env.DATABASE_URL || process.env.DIRECT_URL;
 
   if (pgConnString) {
@@ -33,29 +32,56 @@ async function runMigrations() {
       await client.connect();
       console.log("Connected to PostgreSQL");
 
+      // 1. Create migration tracking table if not exists
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS _migrations (
+          id SERIAL PRIMARY KEY,
+          filename TEXT UNIQUE NOT NULL,
+          applied_at TIMESTAMPTZ DEFAULT NOW()
+        );
+      `);
+
       const migrationsDir = path.join(__dirname, "../database/migrations");
-      const files = fs.readdirSync(migrationsDir).sort();
+      const files = fs.readdirSync(migrationsDir)
+        .filter(f => f.endsWith(".sql"))
+        .sort();
+
+      // 2. Fetch already applied migrations
+      const { rows } = await client.query("SELECT filename FROM _migrations");
+      const appliedFiles = new Set(rows.map(r => r.filename));
 
       for (const file of files) {
-        if (file.endsWith(".sql")) {
-          console.log(`Applying migration: ${file}`);
-          const sql = fs.readFileSync(path.join(migrationsDir, file), "utf8");
+        if (appliedFiles.has(file)) {
+          console.log(`Skipping already applied migration: ${file}`);
+          continue;
+        }
+
+        console.log(`Applying migration: ${file}`);
+        const sql = fs.readFileSync(path.join(migrationsDir, file), "utf8");
+        
+        try {
+          await client.query("BEGIN");
           await client.query(sql);
-          console.log(`Success: ${file}`);
+          await client.query("INSERT INTO _migrations (filename) VALUES ($1)", [file]);
+          await client.query("COMMIT");
+          console.log(`✅ Success: ${file}`);
+        } catch (err) {
+          await client.query("ROLLBACK");
+          console.error(`❌ Error in ${file}:`, err.message);
+          // If a migration fails, we stop to prevent partial state
+          process.exit(1);
         }
       }
+      console.log("All migrations processed.");
     } catch (err) {
-      console.error("Migration error:", err);
+      console.error("Migration fatal error:", err);
     } finally {
       await client.end();
     }
   } else {
     console.log(
-      "No direct DATABASE_URL found. Please apply migrations manually via Supabase SQL Editor if this is a remote DB.",
+      "No direct DATABASE_URL found. Please apply migrations manually via Supabase SQL Editor.",
     );
-    console.log("Found migrations to apply:");
-    const migrationsDir = path.join(__dirname, "../database/migrations");
-    fs.readdirSync(migrationsDir).sort().forEach((f) => console.log(`- ${f}`));
   }
 }
 

@@ -3,6 +3,7 @@ import apiClient from '../api/apiClient';
 import { AuthService, User } from '../services/AuthService';
 import { StoredAccount } from '../utils/AccountManager';
 import EventEmitter from '../services/EventEmitter';
+import SignalingService from '../services/SignalingService';
 
 interface AuthContextType {
   user: User | null;
@@ -32,6 +33,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       const accs = await AuthService.getStoredAccounts();
       setAccounts(accs);
+
+      if (token && u) {
+        SignalingService.init(token, u.id);
+      }
     } catch (err) {
       console.error('[AuthContext] Load error:', err);
     } finally {
@@ -46,6 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const handleLogout = () => {
       setUser(null);
       setAccounts([]);
+      SignalingService.disconnect();
     };
 
     const handleSwitch = (newUser: User) => {
@@ -71,6 +77,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await AuthService.setUser(userData);
       setUser(userData);
       
+      // Initialize signaling immediately after login
+      SignalingService.init(token, userData.id);
+      
       // Update accounts list
       const accs = await AuthService.getStoredAccounts();
       setAccounts(accs);
@@ -90,6 +99,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await AuthService.setToken(token);
       await AuthService.setUser(userData);
       setUser(userData);
+      
+      // Initialize signaling immediately after registration
+      SignalingService.init(token, userData.id);
       
       // Update accounts list
       const accs = await AuthService.getStoredAccounts();

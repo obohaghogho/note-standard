@@ -85,9 +85,17 @@ apiClient.interceptors.response.use(
           }
 
           // Use axios directly to avoid interceptor recursion
+          // Added x-client-type to ensure bypass of web-only checks on server
           const res = await axios.post(`${API_URL}/api/auth/refresh-token`, { 
             refresh_token: refreshToken 
-          }, { timeout: 20000 });
+          }, { 
+            timeout: 30000,
+            headers: {
+              'Content-Type': 'application/json',
+              'x-client-type': 'mobile',
+              'X-Client-Info': 'mobile'
+            }
+          });
 
           const { token: newToken, refresh_token: newRefreshToken } = res.data;
           
@@ -105,13 +113,11 @@ apiClient.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
           return apiClient(originalRequest);
         } catch (refreshError: any) {
-          // CRITICAL: Always reset isRefreshing so future requests aren't permanently blocked
           isRefreshing = false;
           onRefreshFailed();
           
           console.error('[apiClient] ✗ Token refresh failed:', refreshError.message);
           
-          // Only force logout on confirmed auth failure — NOT on network timeouts
           const isNetworkError = !refreshError.response;
           const isAuthError = !isNetworkError && (
             refreshError.response?.status === 401 ||
@@ -122,10 +128,13 @@ apiClient.interceptors.response.use(
 
           if (isAuthError) {
             console.warn('[apiClient] Refresh token invalid. Logging out...');
+            const currentUser = await AuthService.getUser();
             await AuthService.logout();
-            Alert.alert('Session Expired', 'Your session has expired. Please log in again.');
-          } else if (isNetworkError) {
-            console.warn('[apiClient] Network error during refresh — NOT logging out. Will retry on next request.');
+            
+            // Only alert if we actually had a user session that we are now losing
+            if (currentUser) {
+                Alert.alert('Session Expired', 'Your session has expired. Please log in again.');
+            }
           }
           
           return Promise.reject(error);

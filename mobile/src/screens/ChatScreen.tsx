@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Image,
-  Alert,
+  Alert, Share,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -373,7 +373,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const handleLongPress = (msg: Message) => {
     const isMe = msg.sender_id === user?.id;
-    const options = ['Reply', 'Copy'];
+    const options = ['Reply', 'Copy', 'Share'];
     if (isMe) options.push('Edit', 'Delete');
     options.push('Cancel');
 
@@ -388,6 +388,18 @@ export default function ChatScreen({ navigation, route }: Props) {
             // In a real app we'd use Clipboard from expo-clipboard
             Alert.alert('Copied', 'Message copied to clipboard');
           } 
+        },
+        {
+          text: 'Share',
+          onPress: async () => {
+            try {
+              await Share.share({
+                message: msg.content,
+              });
+            } catch (error: any) {
+              Alert.alert('Error', error.message);
+            }
+          }
         },
         ...(isMe ? [
           { text: 'Edit', onPress: () => {
@@ -442,7 +454,8 @@ export default function ChatScreen({ navigation, route }: Props) {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
       {/* Header */}
       <View style={styles.header}>

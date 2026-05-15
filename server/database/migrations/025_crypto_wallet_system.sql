@@ -7,11 +7,12 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Drop existing tables to ensure clean slate (idempotent migration)
-DROP TABLE IF EXISTS payment_methods CASCADE;
-DROP TABLE IF EXISTS exchange_rates CASCADE;
-DROP TABLE IF EXISTS transactions CASCADE;
-DROP TABLE IF EXISTS wallet_keys CASCADE;
-DROP TABLE IF EXISTS wallets CASCADE;
+-- Tables are now created using IF NOT EXISTS to prevent data loss on re-migration
+-- DROP TABLE IF EXISTS payment_methods CASCADE;
+-- DROP TABLE IF EXISTS exchange_rates CASCADE;
+-- DROP TABLE IF EXISTS transactions CASCADE;
+-- DROP TABLE IF EXISTS wallet_keys CASCADE;
+-- DROP TABLE IF EXISTS wallets CASCADE;
 
 -- ====================================
 -- HELPER FUNCTIONS (Must be defined first)
@@ -30,7 +31,7 @@ $$ language 'plpgsql';
 -- 1. WALLETS TABLE
 -- Stores user balances for each currency
 -- ====================================
-CREATE TABLE wallets (
+CREATE TABLE IF NOT EXISTS wallets (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     currency VARCHAR(10) NOT NULL, -- 'BTC', 'ETH', 'USDT', 'USD', 'NGN'
@@ -60,7 +61,7 @@ CREATE TRIGGER update_wallets_updated_at
 -- 2. WALLET KEYS TABLE (SECURE)
 -- Stores encrypted keys. strict RLS.
 -- ====================================
-CREATE TABLE wallet_keys (
+CREATE TABLE IF NOT EXISTS wallet_keys (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     wallet_id UUID NOT NULL REFERENCES wallets(id) ON DELETE CASCADE,
     encrypted_key TEXT NOT NULL, -- AES encrypted private key
@@ -76,7 +77,7 @@ CREATE TABLE wallet_keys (
 -- 3. TRANSACTIONS TABLE
 -- Immutable ledger of all movements
 -- ====================================
-CREATE TABLE transactions ( 
+CREATE TABLE IF NOT EXISTS transactions ( 
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     wallet_id UUID NOT NULL REFERENCES wallets(id) ON DELETE CASCADE,
     type VARCHAR(20) NOT NULL, -- 'DEPOSIT', 'WITHDRAWAL', 'TRANSFER_IN', 'TRANSFER_OUT', 'BUY', 'SELL', 'SWAP'
@@ -104,7 +105,7 @@ CREATE TRIGGER update_transactions_updated_at
 -- ====================================
 -- 4. EXCHANGE RATES TABLE
 -- ====================================
-CREATE TABLE exchange_rates (
+CREATE TABLE IF NOT EXISTS exchange_rates (
     pair VARCHAR(20) PRIMARY KEY, -- 'BTC-USD', 'ETH-USD'
     rate NUMERIC(30, 18) NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -113,7 +114,7 @@ CREATE TABLE exchange_rates (
 -- ====================================
 -- 5. PAYMENT METHODS (Saved Cards/Banks)
 -- ====================================
-CREATE TABLE payment_methods (
+CREATE TABLE IF NOT EXISTS payment_methods (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     type VARCHAR(20) NOT NULL, -- 'CARD', 'BANK'
