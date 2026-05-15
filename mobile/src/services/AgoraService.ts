@@ -24,7 +24,6 @@ class AgoraService {
 
   async init(callType: 'audio' | 'video' = 'audio') {
     if (this.isInitialized) {
-      // If already initialized but now need video, enable it
       if (callType === 'video') {
         this.engine?.enableVideo();
       }
@@ -32,7 +31,10 @@ class AgoraService {
     }
 
     if (Platform.OS === 'android') {
-      await this.requestAndroidPermissions(callType);
+      const granted = await this.requestAndroidPermissions(callType);
+      if (!granted) {
+        throw new Error('Required permissions (Camera/Microphone) not granted');
+      }
     }
 
     this.engine = createAgoraRtcEngine();
@@ -47,7 +49,6 @@ class AgoraService {
     );
     this.engine.enableAudio();
 
-    // Enable video pipeline only when needed (saves battery for audio-only calls)
     if (callType === 'video') {
       this.engine.enableVideo();
     }
@@ -56,12 +57,19 @@ class AgoraService {
     console.log(`[AgoraService] Native engine initialized (${callType})`);
   }
 
-  private async requestAndroidPermissions(callType: 'audio' | 'video' = 'audio') {
-    const permissions: string[] = [PermissionsAndroid.PERMISSIONS.RECORD_AUDIO];
+  private async requestAndroidPermissions(callType: 'audio' | 'video' = 'audio'): Promise<boolean> {
+    const permissions: any[] = [PermissionsAndroid.PERMISSIONS.RECORD_AUDIO];
     if (callType === 'video') {
       permissions.push(PermissionsAndroid.PERMISSIONS.CAMERA);
     }
-    await PermissionsAndroid.requestMultiple(permissions as any);
+    
+    const results = await PermissionsAndroid.requestMultiple(permissions);
+    const audioGranted = results[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === PermissionsAndroid.RESULTS.GRANTED;
+    const cameraGranted = callType === 'video' 
+      ? results[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.RESULTS.GRANTED 
+      : true;
+
+    return audioGranted && cameraGranted;
   }
 
   // ── Token ─────────────────────────────────────────────────────────────────

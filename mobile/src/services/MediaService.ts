@@ -36,50 +36,58 @@ export class MediaService {
       const fileExt = safeFileName.split('.').pop() || 'bin';
       const storagePath = `${contextId}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
 
-      // Convert URI to Blob using XMLHttpRequest for better RN compatibility
-      const blob: Blob = await new Promise((resolve, reject) => {
+      // Convert URI to ArrayBuffer using XMLHttpRequest for maximum RN/Android compatibility
+      const arrayBuffer: ArrayBuffer = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.onload = () => resolve(xhr.response);
         xhr.onerror = (e) => {
           console.error('[MediaService] XHR error:', e);
-          reject(new TypeError('Network request failed'));
+          reject(new Error('Failed to read local file (Network request failed)'));
         };
-        xhr.responseType = 'blob';
+        xhr.responseType = 'arraybuffer';
         xhr.open('GET', uri, true);
         xhr.send(null);
       });
 
-      console.log(`[MediaService] Uploading ${storagePath} (${blob.size} bytes, type: ${fileType})`);
+      console.log(`[MediaService] Uploading ${storagePath} (${arrayBuffer.byteLength} bytes, type: ${fileType})`);
 
       // Upload to Supabase Storage (bucket: chat-media)
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('chat-media')
-        .upload(storagePath, blob, {
+        .upload(storagePath, arrayBuffer, {
           contentType: fileType,
+          cacheControl: '3600',
           upsert: false,
         });
-
+ 
       if (uploadError) {
         console.error('[MediaService] Supabase upload error:', uploadError);
-        throw uploadError;
+        throw new Error(`Storage upload failed: ${uploadError.message}`);
       }
-
+ 
       console.log('[MediaService] Upload successful, creating attachment record...');
-
+ 
       // Create attachment record via our backend
-      const res = await apiClient.post('/media/attachments', {
-        conversationId: contextId,
-        fileName: safeFileName,
-        fileType,
-        fileSize: blob.size,
-        storagePath: uploadData.path,
-        metadata: {},
-      });
-
-      console.log('[MediaService] Attachment record created:', res.data?.id);
-      return res.data;
-    } catch (err) {
-      console.error('[MediaService] Upload failed:', err);
+      try {
+        const res = await apiClient.post('/media/attachments', {
+          conversationId: contextId,
+          fileName: safeFileName,
+          fileType,
+          fileSize: arrayBuffer.byteLength,
+          storagePath: uploadData.path,
+          metadata: {},
+        });
+        
+        console.log('[MediaService] Attachment record created:', res.data?.id);
+        return res.data;
+      } catch (backendErr: any) {
+        console.error('[MediaService] Backend attachment creation failed:', backendErr);
+        // If backend fails, we should technically delete the orphan storage file, 
+        // but for now we throw a clear error.
+        throw new Error(`Failed to register attachment: ${backendErr.response?.data?.error || backendErr.message}`);
+      }
+    } catch (err: any) {
+      console.error('[MediaService] Upload root error:', err);
       throw err;
     }
   }
