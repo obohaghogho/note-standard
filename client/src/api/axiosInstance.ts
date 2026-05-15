@@ -1,5 +1,4 @@
 import axios from "axios"
-import { supabase } from "../lib/supabaseSafe"
 import { safeAuth } from "../lib/supabaseSafe"
 import { API_URL } from "../lib/api"
 

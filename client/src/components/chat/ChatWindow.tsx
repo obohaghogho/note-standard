@@ -382,11 +382,12 @@ const ChatWindow: React.FC = () => {
                 await sendMessage(textToSend, 'text', undefined, replyTo?.id);
                 setReplyTo(null);
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
+            const error = err as any;
             // Restore state if network request fails
             setInputValue(textToSend);
             setEditingMessageId(currentEditingId);
-            const serverMsg = err.response?.data?.error || err.message;
+            const serverMsg = error.response?.data?.error || error.message;
             toast.error(serverMsg ? `Error: ${serverMsg}` : (currentEditingId ? 'Failed to edit message' : 'Failed to send message'));
         }
     };
