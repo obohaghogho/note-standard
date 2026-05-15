@@ -15,7 +15,13 @@ export default tseslint.config(
       "**/coverage/**",
       "**/.github/**",
       "package-lock.json",
-      "eslint.config.mjs"
+      "eslint.config.mjs",
+      "mobile/**",
+      "scratch/**",
+      "chat_*.js",
+      "*.log",
+      "*.txt",
+      "*.sql"
     ],
   },
 
