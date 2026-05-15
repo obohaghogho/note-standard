@@ -180,7 +180,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
       sendTypingStatus(false);
       inputRef.current?.focus();
     } catch (err: unknown) {
-        const error = err as any;
+        const error = err as { response?: { data?: { error?: string } }; message?: string };
         setInput(input); // or restore original text if you prefer
         setEditingMessageId(editingMessageId);
         const serverMsg = error.response?.data?.error || error.message;

@@ -383,7 +383,7 @@ const ChatWindow: React.FC = () => {
                 setReplyTo(null);
             }
         } catch (err: unknown) {
-            const error = err as any;
+            const error = err as { response?: { data?: { error?: string } }; message?: string };
             // Restore state if network request fails
             setInputValue(textToSend);
             setEditingMessageId(currentEditingId);
