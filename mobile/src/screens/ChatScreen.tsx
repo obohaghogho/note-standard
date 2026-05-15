@@ -408,12 +408,12 @@ export default function ChatScreen({ navigation, route }: Props) {
           }},
           { text: 'Delete', onPress: () => {
             Alert.alert('Delete', 'Delete this message?', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Delete', style: 'destructive', onPress: () => deleteMessage(msg.id) }
+              { text: 'Cancel', style: 'cancel' as const },
+              { text: 'Delete', style: 'destructive' as const, onPress: () => deleteMessage(msg.id) }
             ]);
-          }, style: 'destructive' }
+          }, style: 'destructive' as const }
         ] : []),
-        { text: 'Cancel', style: 'cancel' }
+        { text: 'Cancel', style: 'cancel' as const }
       ]
     );
   };
@@ -623,6 +623,7 @@ const styles = StyleSheet.create({
   bubbleThem: { backgroundColor: '#111133', borderBottomLeftRadius: 4 },
   bubbleOptimistic: { opacity: 0.7 },
   bubbleTextMe: { color: '#fff' },
+  bubbleText: { color: '#fff', fontSize: 16, lineHeight: 22 },
   bubbleFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 4 },
   editedTag: { color: 'rgba(255,255,255,0.4)', fontSize: 10, fontStyle: 'italic', marginRight: 4 },
   bubbleTime: { color: 'rgba(255,255,255,0.4)', fontSize: 10 },

@@ -183,7 +183,10 @@ export default function ChatListScreen({ navigation }: Props) {
       if (res.data?.conversation) {
         navigation.navigate('Chat', { conversationId: res.data.conversation.id, conversation: res.data.conversation });
       } else if (res.data?.existingChatId) {
-        navigation.navigate('Chat', { conversationId: res.data.existingChatId });
+        navigation.navigate('Chat', { 
+          conversationId: res.data.existingChatId,
+          conversation: { id: res.data.existingChatId, name: 'Support', type: 'direct', members: [] } as any
+        });
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to connect to Support');

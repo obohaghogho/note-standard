@@ -255,12 +255,12 @@ function TeamChatModal({
           }},
           { text: 'Delete', onPress: () => {
             Alert.alert('Delete', 'Delete this message?', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Delete', style: 'destructive', onPress: () => onDeleteMessage(msg.id) }
+              { text: 'Cancel', style: 'cancel' as const },
+              { text: 'Delete', style: 'destructive' as const, onPress: () => onDeleteMessage(msg.id) }
             ]);
-          }, style: 'destructive' }
+          }, style: 'destructive' as const }
         ] : []),
-        { text: 'Cancel', style: 'cancel' }
+        { text: 'Cancel', style: 'cancel' as const }
       ]
     );
   };
@@ -678,9 +678,16 @@ export default function TeamsScreen() {
     try {
       const res = await apiClient.post('/chat/support', { subject: 'Support Request' });
       if (res.data?.conversation) {
-        navigation.navigate('Chat', { chat: res.data.conversation });
+        navigation.navigate('Chat', { 
+            conversationId: res.data.conversation.id,
+            conversation: res.data.conversation 
+        });
       } else if (res.data?.existingChatId) {
-        navigation.navigate('Chat', { chat: { id: res.data.existingChatId, name: 'Support', type: 'direct', support_status: 'open', members: [] } as any });
+        // Fallback for existing chat without full object (will fetch in ChatScreen)
+        navigation.navigate('Chat', { 
+            conversationId: res.data.existingChatId,
+            conversation: { id: res.data.existingChatId, name: 'Support', type: 'direct', support_status: 'open', members: [] } as any 
+        });
       }
     } catch (error) { Alert.alert('Error', 'Failed to connect to Support'); }
   };
