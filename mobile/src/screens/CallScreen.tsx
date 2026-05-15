@@ -76,14 +76,15 @@ export default function CallScreen({ navigation, route }: Props) {
   const setupAgoraEvents = useCallback(() => {
     const handler = {
       onJoinChannelSuccess: () => {
-        console.log('[CallScreen] Joined Agora channel');
-        setCallState('connected');
-        CallService.onCallConnected();
-        startDurationTimer();
+        console.log('[CallScreen] Joined Agora channel (local)');
+        // Wait for remote user to join before starting timer
       },
       onUserJoined: (_: any, uid: number) => {
         console.log('[CallScreen] Remote user joined:', uid);
         setRemoteUid(uid);
+        setCallState('connected');
+        CallService.onCallConnected();
+        startDurationTimer();
       },
       onUserOffline: (_: any, uid: number) => {
         console.log('[CallScreen] Remote user went offline:', uid);
@@ -98,10 +99,8 @@ export default function CallScreen({ navigation, route }: Props) {
         // 4 = Reconnecting, 5 = Failed
         if (state === 4) setCallState('reconnecting');
         if (state === 5) setCallState('failed');
-        if (state === 3) { // Connected
-          setCallState('connected');
-          startDurationTimer();
-        }
+        // We don't auto-start timer on reconnect here to avoid double timers, 
+        // rely on onUserJoined or existing state
       },
     };
     agoraHandlerRef.current = handler;

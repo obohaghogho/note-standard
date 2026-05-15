@@ -269,8 +269,8 @@ function TeamChatModal({
     <Modal visible animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <KeyboardAvoidingView
         style={styles.chatContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 70}
       >
         <View style={styles.chatHeader}>
           <TouchableOpacity onPress={onClose} style={styles.chatBackBtn}>

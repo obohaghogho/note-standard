@@ -36,12 +36,18 @@ export class MediaService {
       const fileExt = safeFileName.split('.').pop() || 'bin';
       const storagePath = `${contextId}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
 
-      // Convert URI to Blob
-      const fetchResponse = await fetch(uri);
-      if (!fetchResponse.ok) {
-        throw new Error(`Failed to read file at URI: ${uri}`);
-      }
-      const blob = await fetchResponse.blob();
+      // Convert URI to Blob using XMLHttpRequest for better RN compatibility
+      const blob: Blob = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.onload = () => resolve(xhr.response);
+        xhr.onerror = (e) => {
+          console.error('[MediaService] XHR error:', e);
+          reject(new TypeError('Network request failed'));
+        };
+        xhr.responseType = 'blob';
+        xhr.open('GET', uri, true);
+        xhr.send(null);
+      });
 
       console.log(`[MediaService] Uploading ${storagePath} (${blob.size} bytes, type: ${fileType})`);
 

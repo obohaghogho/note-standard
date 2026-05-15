@@ -77,12 +77,13 @@ class SignalingService {
     // ── Remote peer accepted our call ───────────────────────────────────────
     this.socket.on('call:ready', async (data) => {
       console.log('[Signaling] ✅ Remote peer ready');
+      // For the caller, we already joined pre-emptively in startCall.
+      // But we can call it again to be safe, ensuring the type is correct.
       try {
-        await AgoraService.joinChannel(this.activeConversationId!);
-        CallService.onCallConnected();
+        await AgoraService.joinChannel(this.activeConversationId!, 0, this.activeCallType || 'audio');
+        // connected state is handled by CallScreen via Agora events or CallService.onCallConnected
       } catch (err) {
         console.error('[Signaling] Agora join failed on ready:', err);
-        CallService.handleCallEnded('error');
       }
     });
 
