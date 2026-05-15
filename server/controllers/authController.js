@@ -28,7 +28,9 @@ const register = async (req, res) => {
     }
 
     // 1. reCAPTCHA check (Bypass for mobile apps which don't send origin or send specific app headers)
-    const isMobile = !req.headers.origin || req.headers['x-client-info']?.includes('mobile');
+    const isMobile = !req.headers.origin || 
+      req.headers['x-client-info']?.includes('mobile') || 
+      req.headers['x-client-type']?.includes('mobile');
     
     if (
       env.RECAPTCHA_SECRET_KEY && env.NODE_ENV === "production" && !isMobile

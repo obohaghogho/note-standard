@@ -76,6 +76,7 @@ const corsOptions = {
     "Accept",
     "Cache-Control",
     "X-Client-Info",
+    "x-client-type",
     "apikey",
     "Pragma",
     "x-device-id",

@@ -9,6 +9,7 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
     'x-client-type': 'mobile', // Used to bypass reCAPTCHA
+    'X-Client-Info': 'mobile', // Legacy header for some controllers
   },
 });
 

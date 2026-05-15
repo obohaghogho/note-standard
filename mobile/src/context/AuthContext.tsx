@@ -77,7 +77,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       return { success: true };
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.response?.data?.error || 'Login failed. Please try again.';
+      console.error('[AuthContext] Login error:', err.response?.data || err.message);
+      const msg = err?.response?.data?.message || err?.response?.data?.error || err.message || 'Login failed. Please try again.';
       return { success: false, error: msg };
     }
   };
@@ -96,7 +97,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       return { success: true };
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.response?.data?.error || 'Registration failed. Please try again.';
+      console.error('[AuthContext] Register error:', err.response?.data || err.message);
+      const msg = err?.response?.data?.message || err?.response?.data?.error || err.message || 'Registration failed. Please try again.';
       return { success: false, error: msg };
     }
   };
