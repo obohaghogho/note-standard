@@ -19,6 +19,7 @@ export interface Message {
     delivered_at?: string;
     is_edited?: boolean;
     updated_at?: string;
+    status?: 'sending' | 'sent' | 'failed';
     reply_to?: {
         id: string;
         content: string;
@@ -290,13 +291,85 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         };
     }, [socket, connected, user?.id]);
 
+    // Process Outbox when connection is restored
+    useEffect(() => {
+        if (!connected || !session || !user) return;
+        const processOutbox = async () => {
+            const currentOutbox = JSON.parse(localStorage.getItem('chat_outbox') || '[]');
+            if (currentOutbox.length === 0) return;
+            
+            const remainingOutbox = [];
+            for (const msg of currentOutbox) {
+                try {
+                    const res = await api.post(`/chat/conversations/${msg.conversation_id}/messages`, {
+                        content: msg.content,
+                        type: msg.type
+                    });
+                    setMessages(prev => {
+                        const current = prev[msg.conversation_id] || [];
+                        return {
+                            ...prev,
+                            [msg.conversation_id]: current.map(m => m.id === msg.id ? { ...res.data, isOwn: true, status: 'sent' } : m)
+                        };
+                    });
+                } catch {
+                    remainingOutbox.push(msg);
+                }
+            }
+            if (remainingOutbox.length < currentOutbox.length) {
+                toast.success('Offline messages sent');
+            }
+            localStorage.setItem('chat_outbox', JSON.stringify(remainingOutbox));
+        };
+        processOutbox();
+    }, [connected, session, user]);
+
     const sendMessageToConversation = async (conversationId: string, content: string, type: string = 'text', attachmentId?: string, replyToId?: string) => {
         if (!session || !user) throw new Error('Cannot send message');
+        
+        // Optimistic UI Update
+        const tempId = `temp-${Date.now()}`;
+        const optimisticMessage: Message = {
+            id: tempId,
+            conversation_id: conversationId,
+            sender_id: user.id,
+            content,
+            created_at: new Date().toISOString(),
+            type,
+            isOwn: true,
+            status: 'sending'
+        };
+        
+        setMessages(prev => {
+            const current = prev[conversationId] || [];
+            return { ...prev, [conversationId]: [...current, optimisticMessage] };
+        });
+
         try {
-            await api.post(`/chat/conversations/${conversationId}/messages`, { content, type, attachmentId, replyToId });
-            // Optimization: Let socket handle update or loadMessages(conversationId);
+            const res = await api.post(`/chat/conversations/${conversationId}/messages`, { content, type, attachmentId, replyToId });
+            
+            // Server response replaces optimistic message
+            setMessages(prev => {
+                const current = prev[conversationId] || [];
+                return {
+                    ...prev,
+                    [conversationId]: current.map(m => m.id === tempId ? { ...res.data, isOwn: true, status: 'sent' } : m)
+                };
+            });
+            return res.data;
         } catch (err) {
-            toast.error('Failed to send message');
+            // Update optimistic message status to failed and store in Outbox
+            setMessages(prev => {
+                const current = prev[conversationId] || [];
+                return {
+                    ...prev,
+                    [conversationId]: current.map(m => m.id === tempId ? { ...m, status: 'failed' } : m)
+                };
+            });
+            const outboxMsg = { ...optimisticMessage, status: 'failed' };
+            const currentOutbox = JSON.parse(localStorage.getItem('chat_outbox') || '[]');
+            localStorage.setItem('chat_outbox', JSON.stringify([...currentOutbox, outboxMsg]));
+            toast.error('Failed to send message, saved to outbox');
             throw err;
         }
     };
@@ -332,6 +405,53 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     };
 
+    const acceptConversation = async (conversationId: string) => {
+        try {
+            await api.put(`/chat/conversations/${conversationId}/accept`);
+            toast.success('Conversation accepted');
+            loadConversations();
+        } catch {
+            toast.error('Failed to accept conversation');
+        }
+    };
+
+    const deleteConversation = async (conversationId: string) => {
+        try {
+            await api.delete(`/chat/conversations/${conversationId}`);
+            toast.success('Chat deleted');
+            if (activeConversationId === conversationId) {
+                setActiveConversationId(null);
+            }
+            setConversations(prev => prev.filter(c => c.id !== conversationId));
+        } catch {
+            toast.error('Failed to delete chat');
+        }
+    };
+
+    const muteConversation = async (conversationId: string, isMuted: boolean) => {
+        try {
+            await api.put(`/chat/conversations/${conversationId}/mute`, { isMuted });
+            setConversations(prev => prev.map(c => {
+                if (c.id === conversationId) {
+                    return { ...c, is_muted: isMuted };
+                }
+                return c;
+            }));
+        } catch {
+            throw new Error('Failed to mute conversation');
+        }
+    };
+
+    const clearChatHistory = async (conversationId: string) => {
+        try {
+            await api.delete(`/chat/conversations/${conversationId}/messages`);
+            toast.success('Chat history cleared');
+            setMessages(prev => ({ ...prev, [conversationId]: [] }));
+        } catch {
+            toast.error('Failed to clear chat history');
+        }
+    };
+
     const value: ChatContextValue = {
         conversations, messages, activeConversationId, loading, connected,
         setActiveConversationId,
@@ -339,11 +459,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         loadMoreMessages: async () => {},
         markMessageRead, markMessageDelivered,
         startConversation,
-        acceptConversation: async () => {},
-        deleteConversation: async () => {},
+        acceptConversation,
+        deleteConversation,
         deleteMessage, editMessage,
-        muteConversation: async () => {},
-        clearChatHistory: async () => {},
+        muteConversation,
+        clearChatHistory,
         sendTypingStatus: () => {},
         typingUsers, drafts, setDraft: (cid, content) => setDrafts(prev => ({ ...prev, [cid]: content })), 
         hasMore, sendMessageToConversation,

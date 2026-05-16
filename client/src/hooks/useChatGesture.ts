@@ -12,6 +12,8 @@ import { useRef, useCallback } from 'react';
 
 interface ChatGestureOptions {
   onLongPress: (id: string) => void;
+  onSwipeRight?: (id: string) => void;
+  onSwipeLeft?: (id: string) => void;
   /** Pixels of movement that cancels the long-press. Default: 8 */
   moveThreshold?: number;
   /** Ms to hold before triggering. Default: 480 */
@@ -33,14 +35,16 @@ interface GestureHandlers {
   dragStartStyle: React.CSSProperties;
 }
 
-export function useChatGesture({
-  onLongPress,
-  moveThreshold = 8,
-  delay = 480,
-  enabled = true,
-}: ChatGestureOptions): GestureHandlers {
+export function useChatGesture(options: ChatGestureOptions): GestureHandlers {
+  const {
+    onLongPress,
+    moveThreshold = 8,
+    delay = 480,
+    enabled = true,
+  } = options;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startPosRef = useRef<{ x: number; y: number } | null>(null);
+  const currentPosRef = useRef<{ x: number; y: number } | null>(null);
   const didFireRef = useRef(false);
   const targetIdRef = useRef<string>('');
   const isScrollingRef = useRef(false);
@@ -70,6 +74,7 @@ export function useChatGesture({
     targetIdRef.current = id;
     const touch = e.touches[0];
     startPosRef.current = { x: touch.clientX, y: touch.clientY };
+    currentPosRef.current = { x: touch.clientX, y: touch.clientY };
 
     timerRef.current = setTimeout(() => {
       // Only fire if we haven't been scrolling
@@ -82,6 +87,7 @@ export function useChatGesture({
   const onTouchMove = useCallback((e: React.TouchEvent) => {
     if (!startPosRef.current || !timerRef.current) return;
     const touch = e.touches[0];
+    currentPosRef.current = { x: touch.clientX, y: touch.clientY };
     const dx = touch.clientX - startPosRef.current.x;
     const dy = touch.clientY - startPosRef.current.y;
 
@@ -94,12 +100,29 @@ export function useChatGesture({
 
   const onTouchEnd = useCallback(() => {
     cancel();
+    
+    if (startPosRef.current && currentPosRef.current && !didFireRef.current) {
+        const dx = currentPosRef.current.x - startPosRef.current.x;
+        const dy = currentPosRef.current.y - startPosRef.current.y;
+        
+        // Horizontal swipe detection (allow some vertical drift)
+        if (Math.abs(dx) > 50 && Math.abs(dy) < 50) {
+            if (dx > 0 && options.onSwipeRight) {
+                options.onSwipeRight(targetIdRef.current);
+            } else if (dx < 0 && options.onSwipeLeft) {
+                options.onSwipeLeft(targetIdRef.current);
+            }
+        }
+    }
+
     startPosRef.current = null;
-  }, [cancel]);
+    currentPosRef.current = null;
+  }, [cancel, options]);
 
   const onTouchCancel = useCallback(() => {
     cancel();
     startPosRef.current = null;
+    currentPosRef.current = null;
   }, [cancel]);
 
   /* ── Mouse handlers (desktop) ────────────────────── */

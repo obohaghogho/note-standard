@@ -36,33 +36,56 @@ export class MediaService {
       const fileExt = safeFileName.split('.').pop() || 'bin';
       const storagePath = `${contextId}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
 
-      // Convert URI to ArrayBuffer using XMLHttpRequest for maximum RN/Android compatibility
-      const arrayBuffer: ArrayBuffer = await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.onload = () => resolve(xhr.response);
-        xhr.onerror = (e) => {
-          console.error('[MediaService] XHR error:', e);
-          reject(new Error('Failed to read local file (Network request failed)'));
-        };
-        xhr.responseType = 'arraybuffer';
-        xhr.open('GET', uri, true);
-        xhr.send(null);
-      });
+      let arrayBuffer: ArrayBuffer | null = null;
+      let retries = 3;
+      while (retries > 0) {
+        try {
+          // Convert URI to ArrayBuffer using XMLHttpRequest for maximum RN/Android compatibility
+          arrayBuffer = await new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.onload = () => resolve(xhr.response);
+            xhr.onerror = (e) => {
+              reject(new Error('Failed to read local file (Network request failed)'));
+            };
+            xhr.responseType = 'arraybuffer';
+            xhr.open('GET', uri, true);
+            xhr.send(null);
+          });
+          break; // success
+        } catch (e) {
+          retries--;
+          if (retries === 0) throw e;
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      }
+
+      if (!arrayBuffer) throw new Error('Failed to load file into memory');
 
       console.log(`[MediaService] Uploading ${storagePath} (${arrayBuffer.byteLength} bytes, type: ${fileType})`);
 
-      // Upload to Supabase Storage (bucket: chat-media)
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('chat-media')
-        .upload(storagePath, arrayBuffer, {
-          contentType: fileType,
-          cacheControl: '3600',
-          upsert: false,
-        });
- 
-      if (uploadError) {
-        console.error('[MediaService] Supabase upload error:', uploadError);
-        throw new Error(`Storage upload failed: ${uploadError.message}`);
+      // Upload to Supabase Storage with retry logic
+      let uploadData = null;
+      let uploadRetries = 3;
+      while (uploadRetries > 0) {
+        const { data, error } = await supabase.storage
+          .from('chat-media')
+          .upload(storagePath, arrayBuffer, {
+            contentType: fileType,
+            cacheControl: '3600',
+            upsert: false,
+          });
+          
+        if (error) {
+          uploadRetries--;
+          if (uploadRetries === 0) {
+            console.error('[MediaService] Supabase upload error:', error);
+            throw new Error(`Storage upload failed: ${error.message}`);
+          }
+          await new Promise(r => setTimeout(r, 3000)); // wait before retry
+        } else {
+          uploadData = data;
+          break;
+        }
       }
  
       console.log('[MediaService] Upload successful, creating attachment record...');

@@ -20,6 +20,8 @@ interface LongPressGestureOptions {
   moveThreshold?: number;
   /** Ms to hold before firing. Must be ≥ FlatList scroll threshold. Default: 500 */
   delay?: number;
+  onSwipeRight?: () => void;
+  onSwipeLeft?: () => void;
 }
 
 interface LongPressGestureProps {
@@ -36,12 +38,16 @@ export function useLongPressGesture({
   onLongPress,
   moveThreshold = 10,
   delay = 500,
+  onSwipeRight,
+  onSwipeLeft,
 }: LongPressGestureOptions): LongPressGestureProps {
   const startPosRef = useRef<{ x: number; y: number } | null>(null);
   const cancelledRef = useRef(false);
+  const swipeFiredRef = useRef(false);
 
   const handlePressIn = useCallback((e: GestureResponderEvent) => {
     cancelledRef.current = false;
+    swipeFiredRef.current = false;
     const { pageX, pageY } = e.nativeEvent;
     startPosRef.current = { x: pageX, y: pageY };
   }, []);
@@ -57,15 +63,27 @@ export function useLongPressGesture({
   const onMoveShouldSetResponder = useCallback((e: GestureResponderEvent): boolean => {
     if (!startPosRef.current) return false;
     const { pageX, pageY } = e.nativeEvent;
-    const dx = Math.abs(pageX - startPosRef.current.x);
-    const dy = Math.abs(pageY - startPosRef.current.y);
-    if (dy > moveThreshold || dx > moveThreshold) {
+    const dx = pageX - startPosRef.current.x;
+    const dy = pageY - startPosRef.current.y;
+    
+    // Check for swipe gesture
+    if (!swipeFiredRef.current && Math.abs(dx) > 50 && Math.abs(dy) < 30) {
+      if (dx > 0 && onSwipeRight) {
+        onSwipeRight();
+        swipeFiredRef.current = true;
+      } else if (dx < 0 && onSwipeLeft) {
+        onSwipeLeft();
+        swipeFiredRef.current = true;
+      }
+    }
+
+    if (Math.abs(dy) > moveThreshold || Math.abs(dx) > moveThreshold) {
       // Movement detected — cancel long press silently
       cancelledRef.current = true;
       return false; // Don't steal the responder; let FlatList scroll
     }
     return false;
-  }, [moveThreshold]);
+  }, [moveThreshold, onSwipeRight, onSwipeLeft]);
 
   const handleLongPress = useCallback(() => {
     if (cancelledRef.current) return;

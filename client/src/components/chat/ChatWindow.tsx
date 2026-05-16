@@ -66,6 +66,10 @@ const ChatWindow: React.FC = () => {
     // Gesture hook — scroll wins, long-press only after 480ms of no movement
     const gesture = useChatGesture({
         onLongPress: (id) => toggleMessageSelection(id),
+        onSwipeRight: (id) => {
+            const msg = currentMessages.find(m => m.id === id);
+            if (msg) setReplyTo(msg);
+        },
         moveThreshold: 8,
         delay: 480,
         enabled: true,
@@ -1123,6 +1127,25 @@ const ChatWindow: React.FC = () => {
                                                     >
                                                         <X size={14} />
                                                     </button>
+                                                </div>
+                                            )}
+                                            {replyTo && (
+                                                <div className="absolute bottom-full left-0 mb-2 w-full flex flex-col justify-center bg-gray-800/80 text-gray-200 text-xs px-3 py-2 rounded-t-xl border-l-4 border-l-blue-500 border-t border-r border-gray-700 backdrop-blur-md animate-in slide-in-from-bottom-2 z-10">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="font-bold text-blue-400">
+                                                            {replyTo.sender_id === user?.id ? 'You' : (otherMember?.profile?.full_name || otherMember?.profile?.username || 'User')}
+                                                        </span>
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => setReplyTo(null)}
+                                                            className="hover:bg-gray-700 p-1 rounded-full transition-colors"
+                                                        >
+                                                            <X size={14} />
+                                                        </button>
+                                                    </div>
+                                                    <span className="truncate opacity-80 mt-1 max-w-[90%]">
+                                                        {replyTo.content || (replyTo.attachment ? 'Media message' : 'Message')}
+                                                    </span>
                                                 </div>
                                             )}
                                             {showMentions && mentionParticipants.length > 0 && (

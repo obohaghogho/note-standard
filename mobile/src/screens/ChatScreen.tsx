@@ -62,12 +62,14 @@ const ChatMessageBubble = React.memo(({
   currentUserId: string;
   recipientName: string;
   onLongPress: (msg: Message) => void;
+  onSwipeRight?: (msg: Message) => void;
   onPlayAudio: (path: string) => void;
 }) => {
   const isMe = item.sender_id === currentUserId;
 
   const longPressProps = useLongPressGesture({
     onLongPress: () => onLongPress(item),
+    onSwipeRight: onSwipeRight ? () => onSwipeRight(item) : undefined,
     delay: 500,
     moveThreshold: 10,
   });
@@ -220,6 +222,31 @@ export default function ChatScreen({ navigation, route }: Props) {
         socket.on('connect', () => {
           console.log('[ChatScreen] Socket connected to gateway successfully');
           socket.emit('chat:join', conversationId);
+          
+          // Process outbox when connected
+          AsyncStorage.getItem(`chat_outbox_${conversationId}`).then(async (outboxJson) => {
+            if (!outboxJson) return;
+            const currentOutbox = JSON.parse(outboxJson);
+            if (currentOutbox.length === 0) return;
+            
+            const remainingOutbox = [];
+            for (const msg of currentOutbox) {
+                try {
+                    const res = await apiClient.post(`/chat/conversations/${conversationId}/messages`, {
+                        content: msg.content,
+                        attachmentId: msg.attachmentId,
+                        replyToId: msg.replyToId
+                    });
+                    setMessages(prev => prev.map(m => m.id === msg.id ? { ...res.data } : m));
+                } catch (e) {
+                    remainingOutbox.push(msg);
+                }
+            }
+            if (remainingOutbox.length < currentOutbox.length) {
+                console.log('[ChatScreen] Outbox processed successfully');
+            }
+            await AsyncStorage.setItem(`chat_outbox_${conversationId}`, JSON.stringify(remainingOutbox));
+          });
         });
 
         socket.on('connect_error', (err) => {
@@ -345,9 +372,18 @@ export default function ChatScreen({ navigation, route }: Props) {
       }
     } catch (e: any) {
       console.error('[ChatScreen] Send failed:', e);
-      setMessages(prev => prev.filter(m => m.id !== optimisticId));
+      // Change to failed state instead of deleting
+      setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, _optimistic: false, type: 'failed' } : m));
+      
+      if (!editingMessage) {
+        // Save to Outbox
+        const outboxMsg = { id: optimisticId, content: contentToSend, attachmentId, replyToId: replyTo?.id };
+        const currentOutbox = JSON.parse(await AsyncStorage.getItem(`chat_outbox_${conversationId}`) || '[]');
+        await AsyncStorage.setItem(`chat_outbox_${conversationId}`, JSON.stringify([...currentOutbox, outboxMsg]));
+      }
+
       if (!overrideContent) setText(contentToSend);
-      Alert.alert('Send Failed', 'Could not send your message.');
+      Alert.alert('Send Failed', 'Could not send your message. It will retry when reconnected.');
     } finally {
       setSending(false);
     }
@@ -477,6 +513,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       currentUserId={user?.id ?? ''}
       recipientName={recipientName}
       onLongPress={handleLongPress}
+      onSwipeRight={(msg) => setReplyTo(msg)}
       onPlayAudio={playVoiceNote}
     />
   ), [user?.id, recipientName, handleLongPress, playVoiceNote]);
