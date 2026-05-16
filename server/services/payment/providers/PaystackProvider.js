@@ -109,7 +109,7 @@ class PaystackProvider extends BaseProvider {
           email,
           first_name: firstName,
           last_name: lastName,
-          phone,
+          phone: phone || undefined,
         });
         customerCode = customerResponse.data.data.customer_code;
       } catch (custError) {
@@ -119,6 +119,7 @@ class PaystackProvider extends BaseProvider {
           const fetchResponse = await this.client.get(`/customer/${email}`);
           customerCode = fetchResponse.data.data.customer_code;
         } else {
+          console.error("[Paystack] Customer Creation Failed:", custError.response?.data || custError.message);
           throw custError;
         }
       }
@@ -126,11 +127,27 @@ class PaystackProvider extends BaseProvider {
       if (!customerCode) throw new Error("Could not resolve Paystack customer code");
 
       // 2. Request dedicated virtual account
-      // Note: "preferred_bank" is optional but titan-paystack is reliable
-      const response = await this.client.post("/dedicated_account", {
-        customer: customerCode,
-        preferred_bank: "titan-paystack", 
-      });
+      // Note: "preferred_bank" is optional. We try titan-paystack first, 
+      // but we'll retry without it if it fails with a bank-specific error.
+      let response;
+      try {
+        response = await this.client.post("/dedicated_account", {
+          customer: customerCode,
+          preferred_bank: "titan-paystack", 
+        });
+      } catch (daError) {
+        const msg = daError.response?.data?.message || "";
+        const isBankError = msg.includes("bank") || msg.includes("provider") || msg.includes("not available");
+        
+        if (isBankError) {
+            console.warn(`[Paystack] titan-paystack failed (${msg}), retrying without preferred_bank...`);
+            response = await this.client.post("/dedicated_account", {
+                customer: customerCode
+            });
+        } else {
+            throw daError;
+        }
+      }
 
       const entry = response.data.data;
       
@@ -169,18 +186,24 @@ class PaystackProvider extends BaseProvider {
         assignmentReference: entry.assignment?.reference
       };
     } catch (error) {
+      const paystackError = error.response?.data || {};
       console.error(
         "Paystack Dedicated Account Error:",
-        error.response?.data || error.message,
+        paystackError,
       );
       
       // Specific error for bank downtime
-      if (error.response?.data?.message?.includes("bank") && error.response?.data?.message?.includes("downtime")) {
+      if (paystackError.message?.includes("bank") && paystackError.message?.includes("downtime")) {
           throw new Error("Paystack's partner banks are currently experiencing downtime. Please try again later or use Card payment.");
       }
 
+      // If it still says not available, it might be the business configuration
+      if (paystackError.message?.includes("not available for your business")) {
+          throw new Error("Dedicated NUBAN is not available for your Paystack business. Please ensure your account is 'Live' and you have enabled DVAs in your Paystack Dashboard Settings.");
+      }
+
       throw new Error(
-        error.response?.data?.message || "Failed to generate virtual account"
+        paystackError.message || error.message || "Failed to generate virtual account"
       );
     }
   }

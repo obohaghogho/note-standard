@@ -189,7 +189,7 @@ async function createBankDeposit(
   try {
     const { data, error } = await supabase
       .from("profiles")
-      .select("email, full_name, preferences")
+      .select("email, full_name, preferences, phone, phone_number")
       .eq("id", userId)
       .single();
     profile = data;
@@ -215,7 +215,7 @@ async function createBankDeposit(
   const nameParts = (profile.full_name || "User Standard").split(" ");
   const firstName = nameParts[0] || "User";
   const lastName = nameParts.slice(1).join(" ") || "Standard";
-  const userPhone = ""; 
+  const userPhone = profile.phone || profile.phone_number || ""; 
 
   let rawDetails = allBankDetails[upCurrency] || (upCurrency === "NGN" ? allBankDetails.NGN : (allBankDetails.USD || allBankDetails.NGN));
   const selectedDetails = {
@@ -252,32 +252,43 @@ async function createBankDeposit(
           if (upCurrency === "NGN") {
               const PaystackProvider = require("./payment/providers/PaystackProvider");
               const paystack = new PaystackProvider();
-              const virtualAccount = await paystack.getDedicatedAccount(profile.email, firstName, lastName, userPhone);
-              
-              liveDetails = {
-                bankName: virtualAccount.bankName,
-                accountNumber: virtualAccount.accountNumber,
-                accountName: virtualAccount.accountName,
-                note: "Funds are credited instantly after transfer",
-              };
-
-              // Store in dedicated_accounts table
-              await supabase.from("dedicated_accounts").insert({
-                  user_id: userId,
-                  provider: "paystack",
-                  provider_customer_code: virtualAccount.customerCode,
-                  provider_account_id: String(virtualAccount.id),
-                  bank_name: virtualAccount.bankName,
-                  account_number: virtualAccount.accountNumber,
-                  account_name: virtualAccount.accountName,
-                  currency: "NGN",
-                  metadata: { assignmentReference: virtualAccount.assignmentReference }
-              });
-
-              // Also sync to profiles for global resolution
-              await supabase.from("profiles").update({ 
-                  paystack_customer_code: virtualAccount.customerCode 
-              }).eq("id", userId);
+              try {
+                  const virtualAccount = await paystack.getDedicatedAccount(profile.email, firstName, lastName, userPhone);
+                  
+                  liveDetails = {
+                    bankName: virtualAccount.bankName,
+                    accountNumber: virtualAccount.accountNumber,
+                    accountName: virtualAccount.accountName,
+                    note: "Funds are credited instantly after transfer",
+                  };
+    
+                  // Store in dedicated_accounts table
+                  await supabase.from("dedicated_accounts").insert({
+                      user_id: userId,
+                      provider: "paystack",
+                      provider_customer_code: virtualAccount.customerCode,
+                      provider_account_id: String(virtualAccount.id),
+                      bank_name: virtualAccount.bankName,
+                      account_number: virtualAccount.accountNumber,
+                      account_name: virtualAccount.accountName,
+                      currency: "NGN",
+                      metadata: { assignmentReference: virtualAccount.assignmentReference }
+                  });
+    
+                  // Also sync to profiles for global resolution
+                  await supabase.from("profiles").update({ 
+                      paystack_customer_code: virtualAccount.customerCode 
+                  }).eq("id", userId);
+              } catch (vaErr) {
+                  logger.warn(`[DepositService] Paystack DVA generation failed: ${vaErr.message}`);
+                  // If we have manual bank details (not the default GENERATING... one), use them
+                  if (liveDetails.accountNumber && liveDetails.accountNumber !== "GENERATING...") {
+                      liveDetails.note = "Dedicated account unavailable. Using manual settlement. Please upload proof of payment.";
+                  } else {
+                      // No fallback available, throw the specific error to the user
+                      throw vaErr;
+                  }
+              }
           } else if (["USD", "EUR", "GBP"].includes(upCurrency)) {
               const hasFincra = process.env.FINCRA_SECRET_KEY && process.env.FINCRA_PUBLIC_KEY;
               const isFincraDisabled = process.env.FINCRA_VIRTUAL_ACCOUNTS_DISABLED === "true";

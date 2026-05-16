@@ -69,6 +69,8 @@ exports.depositCard = async (req, res, next) => {
       error.message.includes("Maximum") ||
       error.message.includes("must not exceed") ||
       error.message.includes("unavailable") ||
+      error.message.includes("available") ||
+      error.message.includes("business") ||
       error.message.includes("not supported");
 
     if (isValidationError) {
@@ -118,6 +120,8 @@ exports.depositTransfer = async (req, res, next) => {
       error.message.includes("Maximum") ||
       error.message.includes("must not exceed") ||
       error.message.includes("unavailable") ||
+      error.message.includes("available") ||
+      error.message.includes("business") ||
       error.message.includes("not supported");
 
     if (isValidationError) {
