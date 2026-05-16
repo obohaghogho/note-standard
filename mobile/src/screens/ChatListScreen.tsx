@@ -78,7 +78,14 @@ function ConversationItem({
               {new Date(lastMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </Text>
           )}
-          <Text style={styles.chevron}>›</Text>
+          {(item as any).unreadCount > 0 && !isPending && (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadBadgeText}>
+                {(item as any).unreadCount > 99 ? '99+' : (item as any).unreadCount}
+              </Text>
+            </View>
+          )}
+          {!(item as any).unreadCount && <Text style={styles.chevron}>›</Text>}
         </View>
       )}
     </TouchableOpacity>
@@ -311,8 +318,10 @@ const styles = StyleSheet.create({
   itemInfo: { flex: 1 },
   itemName: { color: '#fff', fontSize: 15, fontWeight: '700' },
   itemSub: { color: '#666', fontSize: 12, marginTop: 3 },
-  rightMeta: { alignItems: 'flex-end', gap: 2 },
+  rightMeta: { alignItems: 'flex-end', gap: 4 },
   timeLabel: { color: '#444', fontSize: 10 },
+  unreadBadge: { backgroundColor: '#10b981', borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5 },
+  unreadBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
   acceptBtn: { backgroundColor: '#3b82f6', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
   acceptBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   chevron: { color: '#333', fontSize: 24 },

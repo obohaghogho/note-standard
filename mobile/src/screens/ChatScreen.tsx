@@ -72,6 +72,15 @@ const ChatMessageBubble = React.memo(({
     moveThreshold: 10,
   });
 
+  // WhatsApp-style tick: ✓ sent, ✓✓ delivered, blue ✓✓ read
+  const renderTicks = (msg: Message & { delivered_at?: string; read_at?: string }) => {
+    if (!isMe) return null;
+    if (msg._optimistic) return <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>{'  ✓'}</Text>;
+    if ((msg as any).read_at) return <Text style={{ color: '#60a5fa', fontSize: 10 }}>{'  ✓✓'}</Text>;
+    if ((msg as any).delivered_at) return <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10 }}>{'  ✓✓'}</Text>;
+    return <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>{'  ✓'}</Text>;
+  };
+
   return (
     <View style={[styles.msgRow, isMe && styles.msgRowMe]}>
       {!isMe && (
@@ -122,6 +131,7 @@ const ChatMessageBubble = React.memo(({
               ? 'Sending…'
               : new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>
+          {renderTicks(item as any)}
         </View>
       </TouchableOpacity>
     </View>
@@ -137,8 +147,11 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [typingUser, setTypingUser] = useState<string | null>(null);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const flatRef = useRef<FlatList>(null);
+  const initialLoadDoneRef = useRef(false);
   const [audioPlayer, setAudioPlayer] = useState<Audio.Sound | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
@@ -155,27 +168,37 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const fetchMessages = useCallback(async () => {
     try {
-      // Load from cache first
-      const cacheKey = `cache_messages_${conversationId}`;
-      const cached = await AsyncStorage.getItem(cacheKey);
-      if (cached && messages.length === 0) {
-        setMessages(JSON.parse(cached));
-        setLoading(false);
+      // Load from cache first (only on first load)
+      if (!initialLoadDoneRef.current) {
+        const cacheKey = `cache_messages_${conversationId}`;
+        const cached = await AsyncStorage.getItem(cacheKey);
+        if (cached) {
+          setMessages(JSON.parse(cached));
+          setLoading(false);
+        }
       }
 
       const res = await apiClient.get(`/chat/conversations/${conversationId}/messages`);
       const data = Array.isArray(res.data) ? res.data : [];
       const newestFirst = [...data].reverse();
-      
+
       setMessages(newestFirst);
+      initialLoadDoneRef.current = true;
       // Save to cache
-      await AsyncStorage.setItem(cacheKey, JSON.stringify(newestFirst));
+      await AsyncStorage.setItem(`cache_messages_${conversationId}`, JSON.stringify(newestFirst));
+
+      // Mark unread messages as read
+      const unread = data.filter((m: Message) => m.sender_id !== user?.id && !(m as any).read_at);
+      for (const m of unread) {
+        apiClient.post(`/chat/messages/${m.id}/read`).catch(() => {});
+      }
     } catch (e) {
       console.error('[ChatScreen] Failed to load messages:', e);
     } finally {
       setLoading(false);
     }
-  }, [conversationId, messages.length]);
+  // IMPORTANT: Do NOT include messages.length — it causes socket reconnect loop
+  }, [conversationId, user?.id]);
 
   useEffect(() => {
     fetchMessages();
@@ -217,6 +240,10 @@ export default function ChatScreen({ navigation, route }: Props) {
           setMessages(prev => {
             const isDuplicate = prev.some(m => m.id === msg.id);
             if (isDuplicate) return prev;
+            // Mark as read immediately since user is in the chat
+            if (msg.sender_id !== user?.id) {
+              apiClient.post(`/chat/messages/${msg.id}/read`).catch(() => {});
+            }
             return [msg, ...prev];
           });
         });
@@ -227,6 +254,31 @@ export default function ChatScreen({ navigation, route }: Props) {
 
         socket.on('chat:message_deleted', ({ messageId }: { messageId: string }) => {
           setMessages(prev => prev.filter(m => m.id !== messageId));
+        });
+
+        // Message status updates
+        socket.on('chat:message_read', ({ messageId }: { messageId: string }) => {
+          setMessages(prev => prev.map(m =>
+            m.id === messageId ? { ...m, read_at: new Date().toISOString() } as any : m
+          ));
+        });
+
+        socket.on('chat:message_delivered', ({ messageId }: { messageId: string }) => {
+          setMessages(prev => prev.map(m =>
+            m.id === messageId ? { ...m, delivered_at: new Date().toISOString() } as any : m
+          ));
+        });
+
+        // Typing indicator
+        socket.on('chat:typing', ({ userId: typingId, username, isTyping }: { userId: string; username?: string; isTyping: boolean }) => {
+          if (typingId === user?.id) return;
+          if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+          if (isTyping) {
+            setTypingUser(username || recipientName);
+            typingTimerRef.current = setTimeout(() => setTypingUser(null), 4000);
+          } else {
+            setTypingUser(null);
+          }
         });
 
         socket.on('disconnect', (reason) => {
@@ -240,10 +292,11 @@ export default function ChatScreen({ navigation, route }: Props) {
     initSocket();
 
     return () => {
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
       socketRef.current?.disconnect();
       socketRef.current = null;
     };
-  }, [conversationId, fetchMessages, otherMember?.user_id]);
+  }, [conversationId, otherMember?.user_id]);
 
   const deleteMessage = async (messageId: string) => {
     try {
@@ -497,6 +550,13 @@ export default function ChatScreen({ navigation, route }: Props) {
       {loading ? (
         <View style={styles.center}><ActivityIndicator size="large" color="#6366f1" /></View>
       ) : (
+        <>
+        {typingUser && (
+          <View style={styles.typingRow}>
+            <Text style={styles.typingText}>{typingUser} is typing</Text>
+            <Text style={styles.typingDots}>•••</Text>
+          </View>
+        )}
         <FlatList
           ref={flatRef}
           data={messages}
@@ -514,6 +574,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             </View>
           }
         />
+        </>
       )}
 
       {/* Action Previews */}
@@ -553,7 +614,12 @@ export default function ChatScreen({ navigation, route }: Props) {
             placeholder="Type a message..."
             placeholderTextColor="#444"
             value={text}
-            onChangeText={setText}
+            onChangeText={(t) => {
+              setText(t);
+              if (socketRef.current?.connected) {
+                socketRef.current.emit('typing', { conversationId });
+              }
+            }}
             multiline
             maxLength={2000}
             returnKeyType="default"
@@ -658,6 +724,9 @@ const styles = StyleSheet.create({
   attachmentFile: { color: '#6366f1', fontSize: 14, textDecorationLine: 'underline' },
   emptyChat: { alignItems: 'center', paddingTop: 60 },
   emptyChatText: { color: '#444', fontSize: 14 },
+  typingRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 6, backgroundColor: '#060611' },
+  typingText: { color: '#6366f1', fontSize: 12, fontStyle: 'italic' },
+  typingDots: { color: '#6366f1', fontSize: 14, marginLeft: 4, letterSpacing: 2 },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',

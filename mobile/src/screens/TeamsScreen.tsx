@@ -269,8 +269,8 @@ function TeamChatModal({
     <Modal visible animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <KeyboardAvoidingView
         style={styles.chatContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 70}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <View style={styles.chatHeader}>
           <TouchableOpacity onPress={onClose} style={styles.chatBackBtn}>
@@ -411,7 +411,7 @@ function TeamChatModal({
           ) : (
             <FlatList
               ref={flatListRef}
-              data={[...messages].reverse()}
+              data={messages}
               keyExtractor={m => m?.id || Math.random().toString()}
               contentContainerStyle={styles.messagesList}
               keyboardDismissMode="interactive"
@@ -591,9 +591,33 @@ export default function TeamsScreen() {
 
   const handleSendMessage = async (content?: string, attachmentId?: string, replyToId?: string) => {
     if (!activeTeam) return;
+
+    // Optimistic update — add message instantly before API responds
+    const optimisticId = `opt-team-${Date.now()}`;
+    if (content) {
+      const optimisticMsg: TeamMessage = {
+        id: optimisticId,
+        content,
+        created_at: new Date().toISOString(),
+        sender_id: currentUserId,
+      };
+      setTeamMessages(prev => ({
+        ...prev,
+        [activeTeam.id]: [...(prev[activeTeam.id] || []), optimisticMsg],
+      }));
+    }
+
     try {
       await apiClient.post(`/teams/${activeTeam.id}/messages`, { content, attachmentId, replyToId });
-    } catch (e) { Alert.alert('Error', 'Failed to send message'); }
+      // Socket will deliver confirmed message; optimistic will be deduplicated
+    } catch (e) {
+      // Rollback optimistic on failure
+      setTeamMessages(prev => ({
+        ...prev,
+        [activeTeam.id]: (prev[activeTeam.id] || []).filter(m => m.id !== optimisticId),
+      }));
+      Alert.alert('Error', 'Failed to send message');
+    }
   };
 
   const handleDeleteMessage = async (messageId: string) => {
