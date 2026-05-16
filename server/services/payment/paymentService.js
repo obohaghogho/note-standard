@@ -657,6 +657,11 @@ class PaymentService {
         body.data?.status === "successful" ||
         body.data?.status === "success"         // Paystack uses lowercase "success"
       ) {
+        // --- DVA RECONCILIATION ---
+        if (providerName === "paystack" && (event.accountNumber || event.customerCode)) {
+             await this._reconcileDedicatedAccountPayment(event);
+        }
+
         result = await this.finalizeTransaction(event.reference, event);
       } else if (event.status === "failed") {
         result = await this.failTransaction(event.reference, "Payment failed");
@@ -668,6 +673,99 @@ class PaymentService {
 
 
   /**
+   * Reconcile Dedicated Account Payment (DFOS v6.6)
+   * Ensures a transaction record exists for incoming DVA payments.
+   */
+  async _reconcileDedicatedAccountPayment(event) {
+    const { reference, accountNumber, customerCode, amount, currency, userId: metadataUserId } = event;
+    
+    // 1. Check if transaction already exists
+    const { data: existing } = await supabase
+      .from("transactions")
+      .select("id")
+      .or(`reference_id.eq.${reference},provider_reference.eq.${reference}`)
+      .maybeSingle();
+      
+    if (existing) return;
+
+    logger.info(`[Reconciliation] DVA Payment ${reference} has no transaction record. Attempting auto-provisioning.`);
+
+    // 2. Resolve User ID
+    let userId = metadataUserId;
+    if (!userId) {
+        let query = supabase.from("dedicated_accounts").select("user_id");
+        if (accountNumber) {
+            query = query.eq("account_number", accountNumber);
+        } else if (customerCode) {
+            query = query.eq("provider_customer_code", customerCode);
+        }
+        
+        const { data: dva } = await query.maybeSingle();
+        if (dva) {
+            userId = dva.user_id;
+        }
+    }
+
+    if (!userId) {
+        logger.warn(`[Reconciliation] Could not resolve user for DVA payment ${reference}. Account: ${accountNumber}, Code: ${customerCode}`);
+        return;
+    }
+
+    // 3. Find NGN Wallet
+    let { data: wallet } = await supabase
+      .from("wallets")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("currency", currency || "NGN")
+      .single();
+
+    if (!wallet) {
+      // Create wallet if missing
+      const { data: newWallet, error: walletErr } = await supabase
+        .from("wallets")
+        .insert({
+          user_id: userId,
+          currency: currency || "NGN",
+          balance: 0,
+        })
+        .select("id")
+        .single();
+      
+      if (walletErr) {
+          logger.error(`[Reconciliation] Failed to create wallet for user ${userId}: ${walletErr.message}`);
+          return;
+      }
+      wallet = newWallet;
+    }
+
+    // 4. Create Transaction Record
+    const { error: insertErr } = await supabase
+      .from("transactions")
+      .insert({
+        user_id: userId,
+        wallet_id: wallet.id,
+        amount: amount,
+        currency: currency || "NGN",
+        type: "DEPOSIT",
+        status: "PENDING",
+        reference_id: reference,
+        provider_reference: reference,
+        display_label: "Bank Transfer Deposit (DVA)",
+        metadata: {
+            ...event.raw?.data?.metadata,
+            is_dva_automated: true,
+            paystack_customer_code: customerCode,
+            paystack_account_number: accountNumber
+        }
+      });
+
+    if (insertErr) {
+        logger.error(`[Reconciliation] Failed to create transaction for DVA payment ${reference}: ${insertErr.message}`);
+    } else {
+        logger.info(`[Reconciliation] Successfully provisioned transaction for DVA payment ${reference} (User: ${userId})`);
+    }
+  }
+
   /**
    * Finalize transaction (Strict v6.0 Consolidated Core Lane)
    * This is the authoritative settlement engine.
