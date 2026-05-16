@@ -150,37 +150,38 @@ async function createBankDeposit(
     throw new Error("BTC and ETH deposits are not supported via bank transfer");
   }
 
-  // Fetch bank details from settings or grey_instructions table
-  let allBankDetails = await commissionService.getSetting("bank_deposit_details");
-  
-  if (!allBankDetails) {
-      try {
-          const { data: greyData } = await supabase.from("grey_instructions").select("*");
-          if (greyData && greyData.length > 0) {
-              allBankDetails = greyData.reduce((acc, curr) => {
-                  acc[curr.currency] = {
-                      bankName: curr.bank_name,
-                      accountNumber: curr.account_number,
-                      accountName: curr.account_name,
-                      swiftCode: curr.swift_code,
-                      iban: curr.iban,
-                      instructions: curr.instructions
-                  };
-                  return acc;
-              }, {});
-          }
-      } catch (err) {
-          logger.warn("[DepositService] Failed to fetch from grey_instructions table:", err.message);
-      }
-  }
-
-  // Final hardcoded fallback (Grey details)
-  allBankDetails = allBankDetails || {
-      NGN: { bankName: "Moniepoint", accountNumber: "Contact Support", accountName: "NoteStandard Admin" },
+  // Define default bank details (fallbacks)
+  const defaultBankDetails = {
+      NGN: { bankName: "Paystack (Titan Trust)", accountNumber: "Dynamic Account", accountName: "NoteStandard Wallet", note: "Please wait a moment for your secure account to be generated." },
       USD: { bankName: "Lead Bank (USD) - Grey", accountNumber: "210930905386", accountName: "tejiri jude oboh", swiftCode: "101019644", note: "Include reference in narration" },
       GBP: { bankName: "Clear Junction (GBP) - Grey", accountNumber: "42075582", accountName: "tejiri jude oboh", swiftCode: "CLJUGB21XXX", note: "Include reference in narration" },
       EUR: { bankName: "Clear Junction (EUR) - Grey", accountNumber: "GB87CLJU04130742075582", accountName: "tejiri jude oboh", swiftCode: "CLJUGB21XXX", note: "Include reference in narration" }
   };
+
+  // Fetch bank details from settings and merge with hardcoded defaults
+  const settingsBankDetails = await commissionService.getSetting("bank_deposit_details") || {};
+  let allBankDetails = { ...defaultBankDetails, ...settingsBankDetails };
+  
+  try {
+      const { data: greyData } = await supabase.from("grey_instructions").select("*");
+      if (greyData && greyData.length > 0) {
+          greyData.forEach(curr => {
+              // Ensure we don't let Grey instructions override NGN if they happen to be there by mistake
+              if (curr.currency === "NGN" && curr.bank_name.toLowerCase().includes("grey")) return;
+
+              allBankDetails[curr.currency] = {
+                  bankName: curr.bank_name,
+                  accountNumber: curr.account_number,
+                  accountName: curr.account_name,
+                  swiftCode: curr.swift_code,
+                  iban: curr.iban,
+                  instructions: curr.instructions
+              };
+          });
+      }
+  } catch (err) {
+      logger.warn("[DepositService] Failed to fetch from grey_instructions table:", err.message);
+  }
 
   let profile = null;
   let profileError = null;
@@ -216,7 +217,7 @@ async function createBankDeposit(
   const lastName = nameParts.slice(1).join(" ") || "Standard";
   const userPhone = ""; 
 
-  let rawDetails = allBankDetails[upCurrency] || allBankDetails.USD || allBankDetails.NGN;
+  let rawDetails = allBankDetails[upCurrency] || (upCurrency === "NGN" ? allBankDetails.NGN : (allBankDetails.USD || allBankDetails.NGN));
   const selectedDetails = {
     ...rawDetails,
     accountName: rawDetails.accountName || "NoteStandard Admin",
