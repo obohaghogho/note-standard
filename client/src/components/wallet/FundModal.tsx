@@ -529,7 +529,9 @@ export const FundModal: React.FC<FundModalProps> = ({
                     >
                         <CreditCard size={18} />
                         <div className="flex flex-col items-center">
-                            <span className="text-sm font-medium">Card</span>
+                            <span className="text-sm font-medium">
+                                {effectivePayCurrency === 'NGN' ? 'Paystack (Card/Transfer)' : 'Card'}
+                            </span>
                             {['BTC', 'ETH'].includes(effectivePayCurrency.toUpperCase()) && (
                                 <span className="text-[8px] opacity-70">Unavailable</span>
                             )}
@@ -544,7 +546,9 @@ export const FundModal: React.FC<FundModalProps> = ({
                         }`}
                     >
                         <Landmark size={18} />
-                        <span className="text-sm font-medium">Transfer</span>
+                        <span className="text-sm font-medium">
+                            {effectivePayCurrency === 'NGN' ? 'Direct Bank Transfer' : 'Transfer'}
+                        </span>
                     </button>
                     {isCrypto && (
                         <button
@@ -636,6 +640,14 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         </button>
                                     </div>
                                 </div>
+                                {effectivePayCurrency === 'NGN' && (
+                                    <div className="p-3 bg-purple-950/20 border border-purple-500/30 rounded-xl text-[11px] text-purple-300 flex items-start gap-2.5 mb-4 leading-relaxed">
+                                        <span className="text-sm select-none">ℹ️</span>
+                                        <span>
+                                            <strong>Paystack Secure Checkout:</strong> You will be redirected to a payment screen supporting <strong>Card, Bank Transfer, USSD, QR Code, and Bank App</strong> deposits.
+                                        </span>
+                                    </div>
+                                )}
                                 <Button onClick={handleCardDeposit} disabled={loading} className="w-full h-12 text-base font-bold">
                                     {loading ? <Loader2 className="animate-spin mr-2" size={20} /> : <Zap className="mr-2" size={20} />}
                                     Proceed to Checkout
@@ -673,6 +685,14 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         </button>
                                     </div>
                                 </div>
+                                {effectivePayCurrency === 'NGN' && (
+                                    <div className="p-3 bg-purple-950/20 border border-purple-500/30 rounded-xl text-[11px] text-purple-300 flex items-start gap-2.5 mb-4 leading-relaxed">
+                                        <span className="text-sm select-none">ℹ️</span>
+                                        <span>
+                                            <strong>Dedicated Account Transfer:</strong> Generate a unique NGN bank account assigned specifically to your wallet. Any bank app transfer made to this account will credit your balance instantly.
+                                        </span>
+                                    </div>
+                                )}
                                 <Button onClick={handleBankDeposit} disabled={loading} className="w-full h-12 text-base font-bold">
                                     {loading ? <Loader2 className="animate-spin mr-2" size={20} /> : <Landmark className="mr-2" size={20} />}
                                     Generate Transfer Details
