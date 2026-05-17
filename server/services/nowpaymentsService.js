@@ -134,8 +134,14 @@ exports.getOrCreateDepositAddress = async (
       .maybeSingle();
 
     if (existing) {
-    const MOCK_KEYWORDS = ["-", "dummy", "test", "mock", "address", "123456", "example"];
-    const isMock = existing.address && MOCK_KEYWORDS.some(kw => existing.address.toLowerCase().includes(kw));
+    const isMock = !existing.address || 
+                   existing.address.length < 26 || 
+                   existing.address.toLowerCase().includes("mock") || 
+                   existing.address.toLowerCase().includes("dummy") || 
+                   existing.address.toLowerCase().includes("example") || 
+                   existing.address.toLowerCase().includes("generating") || 
+                   existing.address.toLowerCase() === "tbd" || 
+                   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(existing.address);
 
     if (!isMock) {
       logger.info(
