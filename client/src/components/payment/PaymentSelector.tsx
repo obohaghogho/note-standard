@@ -216,8 +216,8 @@ export default function PaymentSelector({
         >
           <div className="ps-method-icon">💳</div>
           <div className="ps-method-info">
-            <h3>Pay with Card</h3>
-            <p>Instant • Card, Bank, USSD</p>
+            <h3>{currency === "NGN" ? "Instant Card & Bank Payment" : "Pay with Card"}</h3>
+            <p>{currency === "NGN" ? "Pay securely via Bank Transfer, Card, or USSD" : "Instant • Card, Bank, USSD"}</p>
           </div>
           <div className="ps-method-badge ps-recommended">Recommended</div>
           <div className="ps-method-arrow">→</div>
