@@ -25,83 +25,94 @@ const FINCRA_BASE_URL = (_fincraEnv === 'live' || _fincraEnv === 'production')
 
 class PayoutService {
   /**
-   * Initiate a fiat payout via Fincra Disbursement API
-   * https://docs.fincra.com/docs/payouts
+   * Initiate a fiat payout via Paystack Transfers API
+   * https://paystack.com/docs/transfers/single-transfers
    */
-  async createFincraTransfer(
+  async createPaystackTransfer(
     bankCode,
     accountNumber,
+    accountName,
     amount,
     currency,
     reference,
-    narration = "Withdrawal",
-    options = {},
+    narration = "Withdrawal"
   ) {
-    if (!FINCRA_SECRET_KEY || !FINCRA_BUSINESS_ID) {
-      throw new Error("Fincra configuration missing (secret key or business ID)");
+    const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
+    if (!PAYSTACK_SECRET_KEY) {
+      throw new Error("Paystack configuration missing (secret key)");
+    }
+
+    if (currency !== "NGN") {
+      throw new Error("Paystack transfers currently only support NGN.");
     }
 
     const startTime = Date.now();
     try {
-      const accountName = options.accountName;
       if (!accountName) {
-        throw new Error("accountName is required for bank transfers — it must match the exact name on the destination bank account.");
+        throw new Error("accountName is required for bank transfers.");
       }
-      const country = options.country || (currency === "NGN" ? "NG" : "US");
 
-      const beneficiary = {
-        firstName: accountName.split(" ")[0],
-        lastName: accountName.split(" ").slice(1).join(" ") || accountName.split(" ")[0],
-        type: "individual",
-        accountHolderName: accountName,
-        accountNumber: accountNumber,
-        bankCode: bankCode,
-        country: country,
-        sortCode: options.branchCode || options.swiftCode || undefined,
-      };
-      // Only include email if explicitly provided — do not use a fake fallback
-      if (options.email) beneficiary.email = options.email;
-
-      const requestPayload = {
-          sourceCurrency: currency,
-          destinationCurrency: currency,
-          amount: parseFloat(amount),
-          business: FINCRA_BUSINESS_ID,
-          description: narration,
-          customerReference: reference,
-          beneficiary,
-          paymentDestination: "bank_account",
-      };
-
-      const response = await api.post(
-        `${FINCRA_BASE_URL}/disbursements/payouts`,
-        requestPayload,
+      // Step 1: Create Transfer Recipient
+      const recipientResponse = await api.post(
+        "https://api.paystack.co/transferrecipient",
+        {
+          type: "nuban",
+          name: accountName,
+          account_number: accountNumber,
+          bank_code: bankCode,
+          currency: currency
+        },
         {
           headers: {
-            "api-key": FINCRA_SECRET_KEY,
-            "x-business-id": FINCRA_BUSINESS_ID,
-            "Content-Type": "application/json",
-          },
+            "Authorization": `Bearer ${PAYSTACK_SECRET_KEY}`,
+            "Content-Type": "application/json"
+          }
+        }
+      );
+
+      const recipientCode = recipientResponse.data?.data?.recipient_code;
+      if (!recipientCode) {
+        throw new Error("Failed to generate Paystack recipient code");
+      }
+
+      // Step 2: Initiate Transfer
+      // Paystack expects amount in Kobo
+      const amountInMinor = Math.round(parseFloat(amount) * 100);
+
+      const transferResponse = await api.post(
+        "https://api.paystack.co/transfer",
+        {
+          source: "balance",
+          amount: amountInMinor,
+          recipient: recipientCode,
+          reason: narration,
+          reference: reference
         },
+        {
+          headers: {
+            "Authorization": `Bearer ${PAYSTACK_SECRET_KEY}`,
+            "Content-Type": "application/json"
+          }
+        }
       );
 
       const latency = Date.now() - startTime;
-      const respData = response.data?.data || response.data || {};
+      const respData = transferResponse.data?.data || {};
 
       return {
         success: true,
-        payoutId: respData.id || respData.reference || reference,
+        payoutId: respData.reference || reference,
         status: respData.status || "PROCESSING",
-        provider: "FINCRA",
+        provider: "PAYSTACK",
         latency,
-        rawResponse: response.data,
-        requestPayload
+        rawResponse: transferResponse.data,
+        requestPayload: { amountInMinor, recipientCode, reference }
       };
     } catch (error) {
       const latency = Date.now() - startTime;
       logger.error(
-        "[PayoutService] Fincra Transfer Error:",
-        error.response?.data || error.message,
+        "[PayoutService] Paystack Transfer Error:",
+        error.response?.data || error.message
       );
       return {
         success: false,

@@ -213,6 +213,8 @@ exports.withdraw = async (req, res) => {
       account_name,
       swift_code,
       branch_code,
+      sort_code,
+      iban,
       country,
       network,
       idempotencyKey,
@@ -221,7 +223,7 @@ exports.withdraw = async (req, res) => {
     const isCrypto = ["BTC", "ETH", "USDT", "USDC", "TRX", "POLYGON"].includes(String(currency).toUpperCase());
 
     // Build a structured destination object so payoutWorker can extract
-    // bankCode, accountNumber, accountName etc. correctly when dispatching to Fincra.
+    // bankCode, accountNumber, accountName etc. correctly when dispatching.
     const destination = isCrypto
       ? { address: address, network: network || "native" }
       : {
@@ -232,6 +234,8 @@ exports.withdraw = async (req, res) => {
           country:       country || (currency === "NGN" ? "NG" : "US"),
           swiftCode:     swift_code,
           branchCode:    branch_code,
+          sortCode:      sort_code,
+          iban:          iban,
         };
 
     const mappedData = {

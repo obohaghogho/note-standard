@@ -81,15 +81,31 @@ class PayoutWorker {
             let result;
             if (payout.payout_method === 'bank_transfer') {
                 const dest = payout.destination || {};
-                result = await payoutService.createFincraTransfer(
-                    dest.bankCode,
-                    dest.accountNumber,
-                    payout.amount,
-                    payout.currency,
-                    payout.id, // Reference = payout_id (Institutional Determinism)
-                    `Withdrawal-${payout.id.substring(0,8)}`,
-                    { accountName: dest.accountName, email: dest.email }
-                );
+                
+                if (payout.currency === 'NGN') {
+                    // Automated Paystack NGN Payout
+                    result = await payoutService.createPaystackTransfer(
+                        dest.bankCode,
+                        dest.accountNumber,
+                        dest.accountName,
+                        payout.amount,
+                        payout.currency,
+                        payout.id,
+                        `Withdrawal-${payout.id.substring(0,8)}`
+                    );
+                } else {
+                    // Manual queue for Grey (USD, EUR, GBP, JPY)
+                    logger.info(`[PayoutWorker] Routing ${payout.currency} withdrawal ${payout.id} to manual queue for Grey processing.`);
+                    
+                    result = {
+                        success: true,
+                        payoutId: payout.id,
+                        status: 'MANUAL_PENDING',
+                        provider: 'GREY_MANUAL',
+                        latency: 0,
+                        rawResponse: { message: "Routed to manual Grey processing queue." }
+                    };
+                }
             } else if (payout.payout_method === 'crypto') {
                 const dest = payout.destination || {};
                 result = await payoutService.createNowPaymentsPayout(
@@ -112,6 +128,8 @@ class PayoutWorker {
                 } else if (result.status === 'WAITING_FOR_VERIFICATION') {
                     logger.warn(`[PayoutWorker] Payout ${payout.id} requires 2FA Verification at NOWPayments Dashboard.`);
                     await payoutService.updatePayoutState(payout.id, 'CONFIRMING', { ...result, message: '2FA Verification Required at NOWPayments' });
+                } else if (result.status === 'MANUAL_PENDING') {
+                    await payoutService.updatePayoutState(payout.id, 'MANUAL_PENDING', result);
                 } else {
                     await payoutService.updatePayoutState(payout.id, 'SENT', result);
                 }
