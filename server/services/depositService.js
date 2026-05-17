@@ -1,5 +1,5 @@
 const supabase = require("../config/database");
-console.log("[DepositService] LOADED V3 - Checking for userId in profile lookup");
+console.log("[DepositService] LOADED V4 - currencyConfig integrated");
 const { v4: uuidv4 } = require("uuid");
 const fxService = require("./fxService");
 const commissionService = require("./commissionService");
@@ -7,6 +7,7 @@ const logger = require("../utils/logger");
 const paystackService = require("./paystackService");
 const math = require("../utils/mathUtils");
 const { checkDailyLimit } = require("../utils/limitCheck");
+const currencyConfig = require("../config/currencyConfig");
 const CLIENT_URL = process.env.CLIENT_URL || "https://notestandard.com";
 
 const PaymentService = require("./payment/paymentService");
@@ -24,25 +25,30 @@ async function createCardDeposit(
 ) {
   const { toCurrency, toNetwork } = options;
   const upCurrency = currency.toUpperCase();
-  // --- UNIVERSAL USD FALLBACK FOR INTERNATIONAL (DFOS v6.3) ---
-  // Since Paystack primarily supports NGN and USD, we convert EUR/GBP/JPY
-  // to USD for the gateway. This provides a better experience than NGN
-  // while ensuring the transaction can be processed.
+  // ── GATEWAY CURRENCY NORMALIZATION (DFOS v6.4) ───────────────────────────
+  // For currencies that Paystack cannot process natively (EUR, GBP, JPY),
+  // we pre-convert to USD here — the ONLY place this conversion should happen.
+  // The FX_VOLATILITY_BUFFER absorbs exchange rate fluctuations and processor
+  // spread. It is embedded in the displayed rate, not shown as a separate fee.
   let gatewayOptions = { isCrypto: false };
 
-  if (["EUR", "GBP", "JPY"].includes(upCurrency)) {
+  if (currencyConfig.requiresGatewayConversion(upCurrency)) {
+    const target = currencyConfig.getGatewayConversionTarget(upCurrency);
     try {
-      const rate = await fxService.getRate(upCurrency, "USD");
-      // Add a small 1% buffer for FX volatility
-      const bufferedRate = math.multiply(rate, 1.01); 
-      const amountInUsd = math.multiply(amount, bufferedRate);
-      
-      gatewayOptions.gatewayCurrency = "USD";
-      gatewayOptions.gatewayAmount = parseFloat(math.formatSafe(amountInUsd));
-      
-      logger.info(`[DepositService] Routing ${amount} ${upCurrency} via USD ($${gatewayOptions.gatewayAmount}) for Paystack compatibility.`);
+      const rate = await fxService.getRate(upCurrency, target.targetCurrency);
+      // Apply the volatility buffer — absorbed into the effective rate shown to user
+      const bufferedRate = math.multiply(rate, 1 + currencyConfig.FX_VOLATILITY_BUFFER);
+      const amountInTarget = math.multiply(amount, bufferedRate);
+
+      gatewayOptions.gatewayCurrency = target.targetCurrency;
+      gatewayOptions.gatewayAmount = parseFloat(math.formatSafe(amountInTarget));
+
+      logger.info(
+        `[DepositService] Gateway normalization: ${amount} ${upCurrency} → ${gatewayOptions.gatewayAmount} ${target.targetCurrency} ` +
+        `(rate: ${rate}, buffered: ${bufferedRate})`
+      );
     } catch (fxErr) {
-      logger.warn(`[DepositService] USD fallback conversion failed: ${fxErr.message}. Proceeding natively.`);
+      logger.warn(`[DepositService] Gateway normalization failed for ${upCurrency}: ${fxErr.message}. Proceeding natively — payment may be rejected.`);
     }
   } else if (upCurrency === "BTC" || upCurrency === "ETH") {
     throw new Error(`${upCurrency} deposits are not supported via payment`);
@@ -148,6 +154,14 @@ async function createBankDeposit(
   const upCurrency = currency.toUpperCase();
   if (upCurrency === "BTC" || upCurrency === "ETH") {
     throw new Error("BTC and ETH deposits are not supported via bank transfer");
+  }
+
+  // ── Bank Transfer Support Check (DFOS v6.4) ──────────────────────────────
+  // Check if this currency supports bank transfer deposits.
+  // JPY does not — we return a friendly error with the fallback suggestion.
+  const bankTransferSupport = currencyConfig.getBankTransferSupport(upCurrency);
+  if (!bankTransferSupport.supported) {
+    throw new Error(bankTransferSupport.message || `Bank transfers in ${currency} are not supported.`);
   }
 
   // Define default bank details (fallbacks)

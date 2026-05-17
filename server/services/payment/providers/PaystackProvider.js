@@ -2,12 +2,14 @@ const axios = require("axios");
 const crypto = require("crypto");
 const math = require("../../../utils/mathUtils");
 const BaseProvider = require("./BaseProvider");
+const { isPaystackNative } = require("../../../config/currencyConfig");
 
 class PaystackProvider extends BaseProvider {
   constructor() {
     super();
     this.secretKey = process.env.PAYSTACK_SECRET_KEY;
     this.baseUrl = "https://api.paystack.co";
+    this.isTestKey = this.secretKey && this.secretKey.includes("_test_");
     this.client = axios.create({
       baseURL: this.baseUrl,
       headers: {
@@ -20,38 +22,50 @@ class PaystackProvider extends BaseProvider {
   async initialize(data) {
     let { email, amount, currency, reference, callbackUrl, metadata } = data;
 
-    // --- PAYSTACK MULTI-CURRENCY ROUTING (DFOS v6.3) ---
-    // Paystack (especially Nigerian accounts) primarily supports NGN and USD.
-    // If the currency is not NGN or USD, we convert it to USD to ensure a
-    // professional international experience for the user.
-    if (!["NGN", "USD"].includes(currency)) {
-      const fxService = require("../../fxService");
-      try {
-        const rate = await fxService.getRate(currency, "USD");
-        amount = amount * rate;
-        currency = "USD";
-        metadata = { ...metadata, paystack_converted: true, original_currency: data.currency };
-      } catch (fxErr) {
-        console.warn(`[Paystack] USD fallback failed: ${fxErr.message}. Attempting native initialization.`);
-      }
+    // ── Currency Normalization (DFOS v6.4) ───────────────────────────────────
+    // IMPORTANT: Currency pre-conversion is the EXCLUSIVE responsibility of
+    // depositService.createCardDeposit(), which populates gatewayOptions.gatewayCurrency
+    // and gatewayOptions.gatewayAmount using currencyConfig.
+    // PaymentService.initializePayment() then passes those through to here via
+    // the `amount` and `currency` parameters (options.gatewayAmount || amount).
+    //
+    // This provider must NEVER perform its own FX conversion — doing so would
+    // cause a double FX hit and an unauditable rate discrepancy.
+    //
+    // If this provider receives a non-native currency (not NGN or USD), it means
+    // the caller failed to pre-convert. We log a critical warning and attempt
+    // a best-effort passthrough, but this should NEVER happen in production.
+    if (!isPaystackNative(currency)) {
+      console.error(
+        `[PaystackProvider] CRITICAL: Received non-native currency ${currency} without pre-conversion. ` +
+        `This is a caller contract violation. depositService should have pre-converted via gatewayOptions. ` +
+        `Proceeding with raw currency — payment may be rejected by Paystack.`
+      );
     }
 
-    // Sandbox Safety: Paystack Sandbox often only supports NGN.
-    // If we are in test mode and the currency is USD, we convert to NGN for testing stability.
-    const isTestKey = this.secretKey && this.secretKey.includes("test");
-    if (isTestKey && currency === "USD") {
+    // ── Sandbox Guard (TEST KEYS ONLY) ───────────────────────────────────────
+    // Paystack sandbox frequently only processes NGN. When running with a test
+    // key, auto-convert USD→NGN so development environments stay stable.
+    // This block is strictly gated on the isTestKey flag set in constructor.
+    // It MUST NEVER fire in production (sk_live keys).
+    if (this.isTestKey && currency === "USD") {
       const fxService = require("../../fxService");
       try {
         const rate = await fxService.getRate("USD", "NGN");
         amount = amount * rate;
         currency = "NGN";
-        metadata = { ...metadata, sandbox_converted: true };
+        metadata = { ...metadata, sandbox_ngn_converted: true, sandbox_original_currency: "USD" };
+        console.warn(`[PaystackProvider] SANDBOX MODE: Converted USD→NGN for test key compatibility. Rate: ${rate}`);
       } catch (fxErr) {
-        console.warn(`[Paystack] Sandbox NGN fallback failed: ${fxErr.message}`);
+        console.warn(`[PaystackProvider] Sandbox NGN fallback conversion failed: ${fxErr.message}. Proceeding as USD.`);
       }
+    } else if (!this.isTestKey && currency !== "NGN" && currency !== "USD") {
+      // Production safety: If this fires, a pre-conversion bug slipped through.
+      // We should never reach here in a correctly configured system.
+      console.error(`[PaystackProvider] PRODUCTION WARNING: Non-native currency ${currency} passed to Paystack on live key. Expected pre-conversion from depositService.`);
     }
 
-    // Paystack uses smallest unit (kobo for NGN)
+    // Paystack uses smallest unit (kobo for NGN, cent for USD)
     const amountInSmallestUnit = Math.round(amount * 100);
 
     try {

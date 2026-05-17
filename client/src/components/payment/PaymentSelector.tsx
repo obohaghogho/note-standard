@@ -4,6 +4,27 @@ import type { PaymentStatus } from "../../api/depositApi";
 import GreyTransferDetails from "./GreyTransferDetails";
 import "./PaymentSelector.css";
 
+// ── Gateway Routing Info ───────────────────────────────────────────────
+// Per-currency notices shown to users before checkout.
+// These set expectations for payment processing without alarming users.
+const GATEWAY_ROUTING_INFO: Record<string, { icon: string; message: string }> = {
+  JPY: {
+    icon: "💡",
+    message:
+      "JPY transfers are currently routed through USD conversion. Your payment will be processed in USD for best compatibility.",
+  },
+  EUR: {
+    icon: "💡",
+    message:
+      "EUR payments are processed via our USD settlement channel. The converted amount is calculated at the current exchange rate.",
+  },
+  GBP: {
+    icon: "💡",
+    message:
+      "GBP payments are processed via our USD settlement channel. The converted amount is calculated at the current exchange rate.",
+  },
+};
+
 interface PaymentSelectorProps {
   amount: number;
   currency: string;
@@ -194,6 +215,10 @@ export default function PaymentSelector({
 
   // ─── Method Selection Screen ────────────────────────────────
 
+  const routingInfo = GATEWAY_ROUTING_INFO[currency?.toUpperCase() ?? ""];
+  // JPY bank transfer is blocked on the backend — hide the option to avoid a dead-end UX
+  const bankTransferAvailable = currency !== "NGN" && currency?.toUpperCase() !== "JPY";
+
   return (
     <div className="ps-container">
       <div className="ps-header">
@@ -205,6 +230,14 @@ export default function PaymentSelector({
           </span>
         </p>
       </div>
+
+      {/* Currency routing notice — only shown for non-native Paystack currencies (JPY, EUR, GBP) */}
+      {routingInfo && (
+        <div className="ps-routing-notice" role="note" aria-label="Payment routing information">
+          <span className="ps-routing-notice-icon">{routingInfo.icon}</span>
+          <p className="ps-routing-notice-text">{routingInfo.message}</p>
+        </div>
+      )}
 
       <div className="ps-methods">
         {/* Paystack Card */}
@@ -223,8 +256,8 @@ export default function PaymentSelector({
           <div className="ps-method-arrow">→</div>
         </button>
 
-        {/* Grey Transfer Card */}
-        {currency !== "NGN" && (
+        {/* Grey Transfer Card — hidden for JPY (bank transfer not supported) */}
+        {bankTransferAvailable && (
           <button
             className={`ps-method-card ps-grey ${isLoading ? "ps-disabled" : ""}`}
             onClick={handleGrey}

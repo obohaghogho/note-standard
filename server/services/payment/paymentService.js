@@ -283,6 +283,12 @@ class PaymentService {
         idempotencyKey,
         targetCurrency,
         targetNetwork,
+        // Gateway conversion tracking (used by finalizeTransaction for correct settlement)
+        // Populated when depositService pre-converts a non-native currency (EUR/GBP/JPY→USD)
+        original_amount: amount,
+        original_currency: currency,
+        gateway_currency: options.gatewayCurrency || null,
+        gateway_amount: options.gatewayAmount || null,
       },
       type: isCrypto || targetCurrency !== currency
         ? "Digital Assets Purchase"
@@ -718,28 +724,28 @@ class PaymentService {
         return;
     }
 
-    // 3. Find NGN Wallet
+    // 3. Find or create NGN Wallet (DFOS v6.4: Insert into wallets_store, not wallets VIEW)
     let { data: wallet } = await supabase
-      .from("wallets")
+      .from("wallets_store")  // ←← CRITICAL FIX: wallets is a VIEW, wallets_store is the real table
       .select("id")
       .eq("user_id", userId)
       .eq("currency", currency || "NGN")
-      .single();
+      .maybeSingle();
 
     if (!wallet) {
       // Create wallet if missing
       const { data: newWallet, error: walletErr } = await supabase
-        .from("wallets")
+        .from("wallets_store")  // ←← CRITICAL FIX: must insert into wallets_store
         .insert({
           user_id: userId,
           currency: currency || "NGN",
-          balance: 0,
+          address: `${currency || "NGN"}_${userId.substring(0, 8)}`,
         })
         .select("id")
         .single();
       
       if (walletErr) {
-          logger.error(`[Reconciliation] Failed to create wallet for user ${userId}: ${walletErr.message}`);
+          logger.error(`[Reconciliation] Failed to create wallet in wallets_store for user ${userId}: ${walletErr.message}`);
           return;
       }
       wallet = newWallet;
@@ -805,17 +811,50 @@ class PaymentService {
         }
 
         // 3. CORE LANE SETTLEMENT (Strictly Fiat / Ledger Purity)
-        // Rule: Internal deposits/purchases use VERIFIED amount directly. No FX service.
-        // Safety Guard: In sandbox, Paystack auto-converts USD -> NGN. 
-        // We must ensure we don't credit NGN amounts to a USD wallet.
-        let settlementAmount = tx.amount;
-        if (eventData?.amount && (!eventData.currency || eventData.currency === tx.currency)) {
+        // Settlement Amount Resolution (DFOS v6.4 — Multi-Currency Fix)
+        //
+        // The rule: credit the wallet with the ORIGINAL amount in the WALLET currency,
+        // not the gateway-settled amount. This is because:
+        //  - Paystack may process USD→NGN internally (sandbox or some live configs)
+        //  - We pre-convert EUR/GBP/JPY→USD before sending to gateway
+        //  - The DB transaction record always holds the ORIGINAL currency/amount
+        //
+        // Resolution priority:
+        //  1. If eventData currency matches the DB tx currency: use eventData amount (normal case)
+        //  2. If an intentional gateway conversion was recorded in metadata: use original_amount
+        //  3. Fallback: always use tx.amount from the DB (safe, never over-credits)
+        let settlementAmount = tx.amount; // Safe baseline: always the DB-recorded original amount
+
+        if (eventData?.amount) {
+          const eventCurrency = (eventData.currency || "").toUpperCase();
+          const txCurrency = (tx.currency || "").toUpperCase();
+
+          if (!eventCurrency || eventCurrency === txCurrency) {
+            // Case 1: Currencies match — direct settlement
             settlementAmount = eventData.amount;
-        } else if (eventData?.amount && eventData.currency !== tx.currency) {
-            logger.warn(`[Finalize] Currency mismatch for ${reference}: Provider returned ${eventData.currency}, DB has ${tx.currency}. Fallback to DB amount: ${tx.amount}`);
+          } else if (tx.metadata?.gateway_currency && tx.metadata?.original_amount) {
+            // Case 2: Intentional pre-conversion (e.g. EUR→USD sent to Paystack)
+            // The gateway settled in gateway_currency (USD), but the wallet is in tx.currency (EUR).
+            // We credit the wallet with original_amount (EUR) — the pre-conversion amount.
+            settlementAmount = tx.metadata.original_amount;
+            logger.info(
+              `[Finalize] Gateway conversion detected for ${reference}: ` +
+              `Crediting ${settlementAmount} ${txCurrency} (gateway settled ${eventData.amount} ${eventCurrency})`
+            );
+          } else {
+            // Case 3: Unexpected currency mismatch — use safe DB fallback, alert loudly
+            logger.error(
+              `[Finalize] CURRENCY_MISMATCH for ${reference}: ` +
+              `Provider returned ${eventCurrency}, DB has ${txCurrency}. ` +
+              `No gateway_currency metadata found. Falling back to DB amount: ${tx.amount}. ` +
+              `MANUAL AUDIT REQUIRED.`
+            );
+            // settlementAmount already set to tx.amount — no change needed
+          }
         }
-        
+
         logger.info(`[Finalize] Executing Journaled Settlement [confirm_deposit] for ${reference}`);
+        logger.info(`[Finalize] Settlement: ${settlementAmount} ${tx.currency} (wallet: ${tx.wallet_id})`);
         
         const { data: rpcApplied, error: rpcError } = await supabase.rpc("confirm_deposit", {
             p_transaction_id: tx.id,
