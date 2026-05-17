@@ -63,15 +63,15 @@ class PaymentFactory {
         return new GreyProvider();
       }
       // Card / Checkout flow: Paystack
-      // EUR and GBP will have been pre-converted to USD by depositService via gatewayOptions.
-      // The transaction record still carries the original currency (EUR/GBP) for ledger accuracy.
-      logger.info(`PaymentFactory: Selecting Paystack for ${upCurrency} card payment (pre-converted to USD if needed)`);
+      // USD, EUR and GBP will have been pre-converted to NGN by depositService via gatewayOptions.
+      // The transaction record still carries the original currency for ledger accuracy.
+      logger.info(`PaymentFactory: Selecting Paystack for ${upCurrency} card payment (pre-converted to NGN if needed)`);
       return new PaystackProvider();
     }
 
-    // 4. JPY — card deposits are pre-converted to USD by depositService before reaching here.
+    // 4. JPY — card deposits are pre-converted to NGN by depositService before reaching here.
     //    Bank transfers are blocked upstream in depositService with a friendly message.
-    //    The factory routes JPY card payments to Paystack, which will receive the USD
+    //    The factory routes JPY card payments to Paystack, which will receive the NGN
     //    amount/currency via gatewayOptions (not the raw JPY).
     if (upCurrency === "JPY") {
       if (method === "bank_transfer") {
@@ -83,12 +83,12 @@ class PaymentFactory {
           "JPY bank transfers are not supported. Please use USD."
         );
       }
-      logger.info(`PaymentFactory: Routing JPY card payment via Paystack (pre-converted to USD by depositService)`);
+      logger.info(`PaymentFactory: Routing JPY card payment via Paystack (pre-converted to NGN by depositService)`);
       return new PaystackProvider();
     }
 
     // 5. Other cross-border fiat (KES, GHS, etc.) — route via Paystack.
-    //    depositService is responsible for pre-converting these to USD.
+    //    depositService is responsible for pre-converting these to NGN.
     logger.info(`PaymentFactory: Fallback — routing ${upCurrency} to Paystack (caller must pre-convert via gatewayOptions)`);
     return new PaystackProvider();
   }

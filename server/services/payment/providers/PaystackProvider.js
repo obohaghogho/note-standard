@@ -59,8 +59,10 @@ class PaystackProvider extends BaseProvider {
       } catch (fxErr) {
         console.warn(`[PaystackProvider] Sandbox NGN fallback conversion failed: ${fxErr.message}. Proceeding as USD.`);
       }
-    } else if (!this.isTestKey && currency !== "NGN" && currency !== "USD") {
+    } else if (!this.isTestKey && !isPaystackNative(currency)) {
       // Production safety: If this fires, a pre-conversion bug slipped through.
+      // After DFOS v6.4, all non-NGN currencies (including USD) are pre-converted
+      // to NGN by depositService before reaching this provider.
       // We should never reach here in a correctly configured system.
       console.error(`[PaystackProvider] PRODUCTION WARNING: Non-native currency ${currency} passed to Paystack on live key. Expected pre-conversion from depositService.`);
     }

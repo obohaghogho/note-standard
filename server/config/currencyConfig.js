@@ -8,26 +8,28 @@
  * must import from here instead of maintaining their own hardcoded arrays.
  *
  * Routing Philosophy:
- *  - NGN  → Paystack natively (NGN)
- *  - USD  → Paystack natively (USD), live key only
- *  - EUR  → Convert to USD → Paystack (card) | Grey manual (bank transfer)
- *  - GBP  → Convert to USD → Paystack (card) | Grey manual (bank transfer)
- *  - JPY  → Convert to USD → Paystack (card) | Block bank transfer with message
+ *  - NGN  → Paystack natively (NGN) — no conversion needed
+ *  - USD  → Convert to NGN → Paystack (card)
+ *  - EUR  → Convert to NGN → Paystack (card) | Grey manual (bank transfer)
+ *  - GBP  → Convert to NGN → Paystack (card) | Grey manual (bank transfer)
+ *  - JPY  → Convert to NGN → Paystack (card) | Block bank transfer with message
  */
 
-// ── Paystack Gateway-Supported Currencies ────────────────────────────────────
-// These are the ONLY currencies Paystack processes without internal conversion.
-// NGN: always supported (domestic).
-// USD: supported on LIVE keys only (Paystack sandbox auto-converts to NGN).
-const PAYSTACK_NATIVE_CURRENCIES = new Set(["NGN", "USD"]);
+// ── Paystack Gateway-Supported Currencies ──────────────────────────────────────
+// NGN is the ONLY currency Nigerian Paystack live accounts (sk_live_*) support
+// natively. USD requires a separate Paystack Global merchant account.
+// All non-NGN wallet currencies must be pre-converted to NGN before gateway call.
+const PAYSTACK_NATIVE_CURRENCIES = new Set(["NGN"]);
 
-// ── Wallet Currencies Requiring Gateway Conversion ────────────────────────────
-// For these currencies, the backend MUST pre-convert to a gateway-native
-// currency BEFORE calling the payment provider. This prevents double FX hits.
+// ── Wallet Currencies Requiring Gateway Conversion ────────────────────────
+// All non-NGN fiat wallet currencies must be pre-converted to NGN before
+// the Paystack API call. The original currency and amount are stored in
+// transaction metadata so the wallet is correctly credited post-settlement.
 const GATEWAY_CONVERSION_MAP = {
-  EUR: { targetCurrency: "USD", method: "card" },
-  GBP: { targetCurrency: "USD", method: "card" },
-  JPY: { targetCurrency: "USD", method: "card" },
+  USD: { targetCurrency: "NGN", method: "card" },
+  EUR: { targetCurrency: "NGN", method: "card" },
+  GBP: { targetCurrency: "NGN", method: "card" },
+  JPY: { targetCurrency: "NGN", method: "card" },
 };
 
 // ── FX Volatility Buffer ──────────────────────────────────────────────────────
