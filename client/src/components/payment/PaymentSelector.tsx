@@ -8,20 +8,25 @@ import "./PaymentSelector.css";
 // Per-currency notices shown to users before checkout.
 // These set expectations for payment processing without alarming users.
 const GATEWAY_ROUTING_INFO: Record<string, { icon: string; message: string }> = {
-  JPY: {
+  USD: {
     icon: "💡",
     message:
-      "JPY transfers are currently routed through USD conversion. Your payment will be processed in USD for best compatibility.",
+      "Note: Your payment will be processed securely in Nigerian Naira (NGN) at the live exchange rate. Your wallet will still be credited with the exact USD amount.",
   },
   EUR: {
     icon: "💡",
     message:
-      "EUR payments are processed via our USD settlement channel. The converted amount is calculated at the current exchange rate.",
+      "Note: Your payment will be processed securely in Nigerian Naira (NGN) at the live exchange rate. Your wallet will still be credited with the exact EUR amount.",
   },
   GBP: {
     icon: "💡",
     message:
-      "GBP payments are processed via our USD settlement channel. The converted amount is calculated at the current exchange rate.",
+      "Note: Your payment will be processed securely in Nigerian Naira (NGN) at the live exchange rate. Your wallet will still be credited with the exact GBP amount.",
+  },
+  JPY: {
+    icon: "💡",
+    message:
+      "Note: Your payment will be processed securely in Nigerian Naira (NGN) at the live exchange rate. Your wallet will still be credited with the exact JPY amount.",
   },
 };
 
