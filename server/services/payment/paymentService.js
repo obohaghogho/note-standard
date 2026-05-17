@@ -49,9 +49,16 @@ class PaymentService {
     const method = metadata.method || options.method || "card";
 
     logger.info(`[DEBUG] Step 1: Provider selection for ${currency} (${isCrypto ? 'Crypto' : 'Fiat'}) method: ${method}`);
+    
+    // Force Paystack for all NGN transactions to prevent manual Grey transfers
+    let resolvedProvider = options.provider;
+    if (currency && String(currency).toUpperCase() === "NGN") {
+      resolvedProvider = "paystack";
+    }
+
     // 1. Determine provider via Factory or explicit request
-    const provider = options.provider
-      ? PaymentFactory.getProviderByName(options.provider)
+    const provider = resolvedProvider
+      ? PaymentFactory.getProviderByName(resolvedProvider)
       : PaymentFactory.getProvider(
         currency,
         metadata.region || "NG",

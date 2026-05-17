@@ -224,20 +224,22 @@ export default function PaymentSelector({
         </button>
 
         {/* Grey Transfer Card */}
-        <button
-          className={`ps-method-card ps-grey ${isLoading ? "ps-disabled" : ""}`}
-          onClick={handleGrey}
-          disabled={isLoading}
-          id="pay-with-grey"
-        >
-          <div className="ps-method-icon">🏦</div>
-          <div className="ps-method-info">
-            <h3>Bank Transfer</h3>
-            <p>Manual • 1-60 min processing</p>
-          </div>
-          <div className="ps-method-badge ps-fallback">Fallback</div>
-          <div className="ps-method-arrow">→</div>
-        </button>
+        {currency !== "NGN" && (
+          <button
+            className={`ps-method-card ps-grey ${isLoading ? "ps-disabled" : ""}`}
+            onClick={handleGrey}
+            disabled={isLoading}
+            id="pay-with-grey"
+          >
+            <div className="ps-method-icon">🏦</div>
+            <div className="ps-method-info">
+              <h3>Bank Transfer</h3>
+              <p>Manual • 1-60 min processing</p>
+            </div>
+            <div className="ps-method-badge ps-fallback">Fallback</div>
+            <div className="ps-method-arrow">→</div>
+          </button>
+        )}
       </div>
 
       {onCancel && (
