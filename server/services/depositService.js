@@ -229,26 +229,28 @@ async function createBankDeposit(
   
   // ── Optimization: Cache Virtual Accounts in Dedicated Accounts Table ──
   try {
-      const { data: dbAccount } = await supabase
-          .from("dedicated_accounts")
-          .select("*")
-          .eq("user_id", userId)
-          .eq("currency", upCurrency)
-          .eq("provider", upCurrency === "NGN" ? "paystack" : "fincra")
-          .maybeSingle();
+      let dbAccount = null;
+      if (upCurrency === "NGN") {
+          const { data } = await supabase
+              .from("dedicated_accounts")
+              .select("*")
+              .eq("user_id", userId)
+              .eq("currency", "NGN")
+              .eq("provider", "paystack")
+              .maybeSingle();
+          dbAccount = data;
+      }
 
       if (dbAccount) {
-          logger.info(`[DepositService] Using stored dedicated account for ${upCurrency} (User: ${userId})`);
+          logger.info(`[DepositService] Using stored dedicated account for NGN (User: ${userId})`);
           liveDetails = {
               bankName: dbAccount.bank_name,
               accountNumber: dbAccount.account_number,
               accountName: dbAccount.account_name,
-              note: upCurrency === "NGN" 
-                ? "Funds are credited instantly after transfer" 
-                : `Funds are credited after ${upCurrency} settlement (1-3 days)`,
+              note: "Funds are credited instantly after transfer",
           };
       } else {
-          // Generate new account if missing
+          // Generate new NGN account if missing
           if (upCurrency === "NGN") {
               const PaystackProvider = require("./payment/providers/PaystackProvider");
               const paystack = new PaystackProvider();
@@ -290,42 +292,9 @@ async function createBankDeposit(
                   }
               }
           } else if (["USD", "EUR", "GBP"].includes(upCurrency)) {
-              const hasFincra = process.env.FINCRA_SECRET_KEY && process.env.FINCRA_PUBLIC_KEY;
-              const isFincraDisabled = process.env.FINCRA_VIRTUAL_ACCOUNTS_DISABLED === "true";
-
-              if (hasFincra && !isFincraDisabled) {
-                  const FincraProvider = require("./payment/providers/FincraProvider");
-                  const fincra = new FincraProvider();
-                  const va = await fincra.createVirtualAccount({
-                    currency: upCurrency, 
-                    email: profile.email, 
-                    firstName, 
-                    lastName, 
-                    phone: userPhone 
-                  });
-
-                  if (va) {
-                    liveDetails = {
-                      bankName: va.bankName,
-                      accountNumber: va.accountNumber,
-                      accountName: va.accountName,
-                      routingNumber: va.routingNumber || va.swiftCode,
-                      note: `Funds are credited after ${upCurrency} settlement (1-3 days)`,
-                    };
-
-                    // Store in dedicated_accounts table
-                    await supabase.from("dedicated_accounts").insert({
-                        user_id: userId,
-                        provider: "fincra",
-                        provider_account_id: String(va.id || ""),
-                        bank_name: va.bankName,
-                        account_number: va.accountNumber,
-                        account_name: va.accountName,
-                        currency: upCurrency,
-                        metadata: { routingNumber: va.routingNumber, swiftCode: va.swiftCode }
-                    });
-                  }
-              }
+              // Fincra virtual accounts are completely cut off as requested by User.
+              // We fall back entirely to manual bank transfer details from the Grey instructions table.
+              logger.info(`[DepositService] FCY Virtual Accounts are disabled. Using Grey manual transfer accounts.`);
           }
       }
   } catch (err) {

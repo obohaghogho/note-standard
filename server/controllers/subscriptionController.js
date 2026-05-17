@@ -27,17 +27,8 @@ exports.createCheckoutSession = async (req, res) => {
     const customerName = profile?.full_name || email.split("@")[0] || "Standard User";
     const reference = uuidv4();
 
-    // Use Paystack as the primary provider (Fincra is deprecated for these currencies)
+    // Fincra is completely cut off as requested by User. Paystack is the exclusive card payment provider.
     let usedMethod = "paystack";
-    
-    // Allow manual override but default to Paystack
-    if (paymentMethod === "paystack") {
-      usedMethod = "paystack";
-    } else if (paymentMethod === "fincra") {
-      // Only use Fincra if explicitly requested and keys exist, but warn it's deprecated
-      const hasFincra = !!(process.env.FINCRA_SECRET_KEY && process.env.FINCRA_PUBLIC_KEY);
-      if (hasFincra) usedMethod = "fincra";
-    }
 
     // 2. Handle Currency Conversion
     // For Paystack, we generally prefer NGN for settlement stability, 
