@@ -3,7 +3,7 @@ import payoutApi from "../../api/payoutApi";
 import type { ManualWithdrawal } from "../../api/payoutApi";
 import { toast } from "react-hot-toast";
 import { format } from "date-fns";
-import { Loader2, Check, X, MessageSquare, AlertTriangle, Building, CreditCard, User, Globe } from "lucide-react";
+import { Loader2, Check, X, MessageSquare, Building, CreditCard, User, Globe } from "lucide-react";
 import { Button } from "../common/Button";
 
 const AdminWithdrawalPanel: React.FC = () => {
