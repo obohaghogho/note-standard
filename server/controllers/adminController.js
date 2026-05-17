@@ -1576,12 +1576,25 @@ exports.getPendingWithdrawals = async (req, res) => {
     
     const { data, error } = await serviceSupabase
       .from("payout_requests")
-      .select(`
-        *,
-        profile:profiles(email, full_name, username)
-      `)
+      .select("*")
       .eq("status", "MANUAL_PENDING")
       .order("created_at", { ascending: false });
+
+    // Fetch profiles manually
+    if (data && data.length > 0) {
+      const userIds = [...new Set(data.map(d => d.user_id))];
+      const { data: profiles } = await serviceSupabase
+        .from("profiles")
+        .select("id, email, full_name, username")
+        .in("id", userIds);
+        
+      const profilesMap = {};
+      (profiles || []).forEach(p => profilesMap[p.id] = p);
+      
+      data.forEach(d => {
+        d.profile = profilesMap[d.user_id] || null;
+      });
+    }
 
     if (error) throw error;
     res.json(data);
@@ -1642,9 +1655,14 @@ exports.rejectWithdrawal = async (req, res) => {
     // 1. Fetch withdrawal details
     const { data: request, error: reqErr } = await serviceSupabase
       .from("payout_requests")
-      .select("*, profile:profiles(email)")
+      .select("*")
       .eq("id", id)
       .single();
+
+    if (request) {
+      const { data: pData } = await serviceSupabase.from("profiles").select("email").eq("id", request.user_id).single();
+      request.profile = pData || { email: "" };
+    }
 
     if (reqErr || !request) {
       return res.status(404).json({ error: "Withdrawal not found" });

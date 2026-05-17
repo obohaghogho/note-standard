@@ -139,7 +139,7 @@ class ManualDepositController {
       // 1. Fetch from legacy manual_deposits table
       const { data: legacy, error: legacyError } = await supabase
         .from("manual_deposits")
-        .select("*, profile:profiles(email, full_name, username)")
+        .select("*")
         .eq("status", "pending")
         .order("created_at", { ascending: true });
 
@@ -148,12 +148,36 @@ class ManualDepositController {
       // 2. Fetch from unified transactions table (New Flow)
       const { data: unified, error: unifiedError } = await supabase
         .from("transactions")
-        .select("*, profile:profiles(email, full_name, username)")
+        .select("*")
         .eq("status", "PROCESSING")
         .eq("type", "DEPOSIT")
         .order("created_at", { ascending: true });
 
       if (unifiedError) throw unifiedError;
+
+      // Extract unique user IDs
+      const userIds = new Set();
+      (legacy || []).forEach(d => userIds.add(d.user_id));
+      (unified || []).forEach(d => userIds.add(d.user_id));
+
+      // Fetch profiles
+      let profilesMap = {};
+      if (userIds.size > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, email, full_name, username")
+          .in("id", Array.from(userIds));
+          
+        if (profiles) {
+          profiles.forEach(p => profilesMap[p.id] = p);
+        }
+      }
+
+      // Add profiles to legacy
+      const legacyWithProfiles = (legacy || []).map(d => ({
+        ...d,
+        profile: profilesMap[d.user_id]
+      }));
 
       // 3. Normalize unified transactions to match ManualDeposit interface for UI
       const normalizedUnified = (unified || []).map(tx => ({
@@ -168,11 +192,11 @@ class ManualDepositController {
         admin_notes: tx.metadata?.status_note,
         created_at: tx.created_at,
         updated_at: tx.updated_at,
-        profile: tx.profile
+        profile: profilesMap[tx.user_id]
       }));
 
       // Combine both sources
-      const allPending = [...(legacy || []), ...normalizedUnified];
+      const allPending = [...legacyWithProfiles, ...normalizedUnified];
       
       res.json(allPending);
     } catch (err) {
@@ -195,7 +219,7 @@ class ManualDepositController {
       if (!isUnified) {
         const { data, error } = await serviceSupabase
           .from("manual_deposits")
-          .select("*, profile:profiles(email)")
+          .select("*")
           .eq("id", id)
           .single();
         if (error) throw error;
@@ -203,11 +227,16 @@ class ManualDepositController {
       } else {
         const { data, error } = await serviceSupabase
           .from("transactions")
-          .select("*, profile:profiles(email)")
+          .select("*")
           .eq("id", id)
           .single();
         if (error) throw error;
         deposit = data;
+      }
+
+      if (deposit) {
+        const { data: pData } = await serviceSupabase.from("profiles").select("email").eq("id", deposit.user_id).single();
+        deposit.profile = pData || { email: "" };
       }
 
       if (!deposit) {
@@ -322,7 +351,7 @@ class ManualDepositController {
       if (!isUnified) {
         const { data, error } = await serviceSupabase
           .from("manual_deposits")
-          .select("*, profile:profiles(email)")
+          .select("*")
           .eq("id", id)
           .single();
         if (error) throw error;
@@ -330,11 +359,16 @@ class ManualDepositController {
       } else {
         const { data, error } = await serviceSupabase
           .from("transactions")
-          .select("*, profile:profiles(email)")
+          .select("*")
           .eq("id", id)
           .single();
         if (error) throw error;
         deposit = data;
+      }
+
+      if (deposit) {
+        const { data: pData } = await serviceSupabase.from("profiles").select("email").eq("id", deposit.user_id).single();
+        deposit.profile = pData || { email: "" };
       }
 
       if (!deposit) {
