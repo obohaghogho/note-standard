@@ -1567,5 +1567,154 @@ exports.getSystemStatus = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/admin/withdrawals/pending - Get MANUAL_PENDING withdrawals
+ */
+exports.getPendingWithdrawals = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    
+    const { data, error } = await serviceSupabase
+      .from("payout_requests")
+      .select(`
+        *,
+        profile:profiles(email, full_name, username)
+      `)
+      .eq("status", "MANUAL_PENDING")
+      .order("created_at", { ascending: false });
 
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    logger.error("[Admin] Error fetching pending withdrawals:", err.message);
+    res.status(500).json({ error: "Failed to fetch pending withdrawals" });
+  }
+};
 
+/**
+ * PUT /api/admin/withdrawals/:id/approve - Approve a manual withdrawal
+ */
+exports.approveWithdrawal = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adminNotes } = req.body;
+    const payoutService = require("../services/payment/payoutService");
+    
+    const serviceSupabase = getServiceSupabase();
+    const { data: request, error: reqErr } = await serviceSupabase
+      .from("payout_requests")
+      .select("status")
+      .eq("id", id)
+      .single();
+
+    if (reqErr || !request) {
+      return res.status(404).json({ error: "Withdrawal not found" });
+    }
+
+    if (request.status !== "MANUAL_PENDING") {
+      return res.status(400).json({ error: `Withdrawal is not pending manual fulfillment (Current Status: ${request.status})` });
+    }
+
+    const updated = await payoutService.updatePayoutState(id, "COMPLETED", {
+      metadata: { admin_approved: true, approved_at: new Date().toISOString(), approved_by: req.user.id, admin_notes: adminNotes }
+    });
+
+    await logAdminAction(req, "APPROVE_MANUAL_WITHDRAWAL", "payout_requests", id);
+    res.json({ success: true, message: "Withdrawal marked as completed", request: updated });
+  } catch (err) {
+    logger.error("[Admin] Error approving withdrawal:", err.message);
+    res.status(500).json({ error: "Failed to approve withdrawal" });
+  }
+};
+
+/**
+ * PUT /api/admin/withdrawals/:id/reject - Reject manual withdrawal and refund wallet
+ */
+exports.rejectWithdrawal = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adminNotes } = req.body;
+    
+    if (!adminNotes) return res.status(400).json({ error: "Rejection reason is required" });
+
+    const serviceSupabase = getServiceSupabase();
+    
+    // 1. Fetch withdrawal details
+    const { data: request, error: reqErr } = await serviceSupabase
+      .from("payout_requests")
+      .select("*, profile:profiles(email)")
+      .eq("id", id)
+      .single();
+
+    if (reqErr || !request) {
+      return res.status(404).json({ error: "Withdrawal not found" });
+    }
+
+    if (request.status !== "MANUAL_PENDING") {
+      return res.status(400).json({ error: `Cannot reject. Withdrawal status is ${request.status}` });
+    }
+
+    // 2. Fetch or create Wallet for Refund
+    const walletService = require("../services/walletService");
+    const wallet = await walletService.createWallet(request.user_id, request.currency, "native");
+    if (!wallet) throw new Error("Could not find user wallet for refund");
+
+    // 3. Create Refund Transaction Record
+    const { data: tx, error: txError } = await serviceSupabase
+      .from("transactions")
+      .insert([{
+        wallet_id: wallet.id,
+        user_id: request.user_id,
+        type: "DEPOSIT", // A refund acts as a deposit back to the wallet
+        display_label: "Withdrawal Refund",
+        category: "refund",
+        description: `Refund for rejected withdrawal. Reason: ${adminNotes}`,
+        amount: request.amount, // Total amount initially requested
+        currency: request.currency,
+        status: "COMPLETED",
+        reference_id: `refnd-${id.substring(0,8)}`,
+        metadata: {
+            original_payout_id: id,
+            reason: adminNotes,
+            rejected_by: req.user.id
+        },
+        completed_at: new Date().toISOString()
+      }])
+      .select()
+      .single();
+
+    if (txError) throw txError;
+
+    // 4. Update Wallet Balance (Refund)
+    const { error: balError } = await serviceSupabase.rpc("confirm_deposit", {
+      p_transaction_id: tx.id,
+      p_wallet_id: wallet.id,
+      p_amount: request.amount
+    });
+
+    if (balError) throw balError;
+
+    // 5. Mark payout as FAILED_FINAL
+    const payoutService = require("../services/payment/payoutService");
+    const updated = await payoutService.updatePayoutState(id, "FAILED_FINAL", {
+      error: adminNotes,
+      metadata: { admin_rejected: true, rejected_at: new Date().toISOString(), rejected_by: req.user.id, reason: adminNotes }
+    });
+
+    // 6. Notify user
+    await createNotification({
+        receiverId: request.user_id,
+        type: "withdrawal_rejected",
+        title: "Withdrawal Rejected",
+        message: `Your withdrawal of ${request.currency} ${request.amount} was rejected. Funds have been returned to your wallet. Reason: ${adminNotes}`,
+        link: "/dashboard/activity",
+    });
+
+    await logAdminAction(req, "REJECT_MANUAL_WITHDRAWAL", "payout_requests", id, { reason: adminNotes });
+    
+    res.json({ success: true, message: "Withdrawal rejected and funds refunded", request: updated });
+  } catch (err) {
+    logger.error("[Admin] Error rejecting withdrawal:", err.message);
+    res.status(500).json({ error: err.message || "Failed to reject withdrawal" });
+  }
+};

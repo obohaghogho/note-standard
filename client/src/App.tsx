@@ -64,6 +64,7 @@ const AdminSettings = lazyWithRetry(() => import('./pages/admin/AdminSettings'),
 const ManageAds = lazyWithRetry(() => import('./pages/admin/ManageAds'), 'ManageAds');
 const LimitRequestsPage = lazyWithRetry(() => import('./pages/admin/LimitRequestsPage'), 'LimitRequestsPage');
 const ManualDeposits = lazyWithRetry(() => import('./pages/admin/ManualDeposits'), 'ManualDeposits');
+const ManualWithdrawals = lazyWithRetry(() => import('./pages/admin/ManualWithdrawals'), 'ManualWithdrawals');
 const ReconciliationDashboard = lazyWithRetry(() => import('./pages/admin/ReconciliationDashboard').then(m => ({ default: m.ReconciliationDashboard })), 'ReconciliationDashboard');
 
 
@@ -218,6 +219,7 @@ function App() {
                                 <Route path="reconciliation" element={<ReconciliationDashboard />} />
                                 <Route path="ads" element={<ManageAds />} />
                                 <Route path="deposits" element={<ManualDeposits />} />
+                                <Route path="withdrawals" element={<ManualWithdrawals />} />
                                 <Route path="limit-requests" element={<LimitRequestsPage />} />
                                 <Route path="settings" element={<AdminSettings />} />
                               </Route>

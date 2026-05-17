@@ -84,4 +84,9 @@ router.post("/debug/force-confirm", adminController.debugForceConfirm);
 router.post("/debug/simulate-swap", adminController.debugSimulateSwap);
 router.post("/debug/simulate-webhook", adminController.debugSimulateWebhook);
 
+// Manual Withdrawals
+router.get("/withdrawals/pending", adminController.getPendingWithdrawals);
+router.put("/withdrawals/:id/approve", adminController.approveWithdrawal);
+router.put("/withdrawals/:id/reject", adminController.rejectWithdrawal);
+
 module.exports = router;

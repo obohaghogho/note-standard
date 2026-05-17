@@ -19,7 +19,9 @@ import {
     Target,
     Home,
     Zap,
-    ShieldAlert
+    ShieldAlert,
+    ArrowDownToLine,
+    ArrowUpFromLine
 } from 'lucide-react';
 import { LanguageSelector } from '../common/LanguageSelector';
 import SecureImage from '../common/SecureImage';
@@ -86,6 +88,8 @@ export const AdminLayout = () => {
         { to: '/admin/reconciliation', icon: ShieldAlert, label: 'Observatory' },
         { to: '/admin/broadcasts', icon: Megaphone, label: 'Broadcasts' },
         { to: '/admin/limit-requests', icon: Zap, label: 'Limit Requests' },
+        { to: '/admin/deposits', icon: ArrowDownToLine, label: 'Manual Deposits' },
+        { to: '/admin/withdrawals', icon: ArrowUpFromLine, label: 'Manual Withdrawals' },
         { to: '/admin/auto-reply', icon: Bot, label: 'Auto-Reply' },
         { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
         { to: '/admin/settings', icon: Settings, label: 'Settings' },
