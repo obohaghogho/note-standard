@@ -1,4 +1,4 @@
-import { api } from '../lib/api';
+import axiosInstance from './axiosInstance';
 
 export interface ManualWithdrawal {
     id: string;
@@ -28,7 +28,7 @@ export const payoutApi = {
      * Fetch pending manual withdrawals (Admin Only)
      */
     getAdminPending: async (): Promise<ManualWithdrawal[]> => {
-        const response = await api.get('/api/admin/withdrawals/pending');
+        const response = await axiosInstance.get('/api/admin/withdrawals/pending');
         return response.data;
     },
 
@@ -36,14 +36,14 @@ export const payoutApi = {
      * Approve manual withdrawal (Admin Only)
      */
     approve: async (id: string, adminNotes?: string): Promise<void> => {
-        await api.put(`/api/admin/withdrawals/${id}/approve`, { adminNotes });
+        await axiosInstance.put(`/api/admin/withdrawals/${id}/approve`, { adminNotes });
     },
 
     /**
      * Reject manual withdrawal (Admin Only)
      */
     reject: async (id: string, adminNotes: string): Promise<void> => {
-        await api.put(`/api/admin/withdrawals/${id}/reject`, { adminNotes });
+        await axiosInstance.put(`/api/admin/withdrawals/${id}/reject`, { adminNotes });
     }
 };
 
