@@ -28,7 +28,7 @@ export const payoutApi = {
      * Fetch pending manual withdrawals (Admin Only)
      */
     getAdminPending: async (): Promise<ManualWithdrawal[]> => {
-        const response = await axiosInstance.get('/api/admin/withdrawals/pending');
+        const response = await axiosInstance.get('/admin/withdrawals/pending');
         return response.data;
     },
 
@@ -36,14 +36,14 @@ export const payoutApi = {
      * Approve manual withdrawal (Admin Only)
      */
     approve: async (id: string, adminNotes?: string): Promise<void> => {
-        await axiosInstance.put(`/api/admin/withdrawals/${id}/approve`, { adminNotes });
+        await axiosInstance.put(`/admin/withdrawals/${id}/approve`, { adminNotes });
     },
 
     /**
      * Reject manual withdrawal (Admin Only)
      */
     reject: async (id: string, adminNotes: string): Promise<void> => {
-        await axiosInstance.put(`/api/admin/withdrawals/${id}/reject`, { adminNotes });
+        await axiosInstance.put(`/admin/withdrawals/${id}/reject`, { adminNotes });
     }
 };
 
