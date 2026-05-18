@@ -276,8 +276,18 @@ export default function ChatScreen({ navigation, route }: Props) {
         socket.on('chat:message', (msg: Message) => {
           console.log('[ChatScreen] Received realtime message:', msg.id);
           setMessages(prev => {
-            const isDuplicate = prev.some(m => m.id === msg.id);
-            if (isDuplicate) return prev;
+            if (prev.some(m => m.id === msg.id)) return prev;
+
+            // If we are the sender, and we have an optimistic message, replace it
+            if (msg.sender_id === user?.id) {
+              const optIndex = prev.findIndex(m => m._optimistic);
+              if (optIndex !== -1) {
+                const next = [...prev];
+                next[optIndex] = { ...msg };
+                return next;
+              }
+            }
+
             // Mark as read immediately since user is in the chat
             if (msg.sender_id !== user?.id) {
               apiClient.post(`/chat/messages/${msg.id}/read`).catch(() => {});
@@ -405,7 +415,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       const asset = await MediaService.pickImage();
       if (!asset) return;
 
-      setLoading(true);
+      setSending(true);
       const attachment = await MediaService.uploadMedia(
         asset.uri,
         asset.fileName || `upload_${Date.now()}.jpg`,
@@ -420,7 +430,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       console.error('[ChatScreen] Media upload error:', err);
       Alert.alert('Upload Error', err.message || 'Failed to upload media. Please try again.');
     } finally {
-      setLoading(false);
+      setSending(false);
     }
   };
 
@@ -429,7 +439,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       // Stop recording
       setIsRecording(false);
       try {
-        setLoading(true);
+        setSending(true);
         const attachment = await VoiceService.stopRecording(conversationId);
         if (attachment) {
           await sendMessage('🎤 Voice Note', attachment.id);
@@ -440,7 +450,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         console.error('[ChatScreen] Voice note stop error:', err);
         Alert.alert('Voice Note Error', err.message || 'Failed to process voice note.');
       } finally {
-        setLoading(false);
+        setSending(false);
       }
     } else {
       // Start recording
