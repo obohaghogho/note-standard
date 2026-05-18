@@ -38,9 +38,26 @@ function ConversationItem({
   // Format last message preview
   const lastMsg = item.last_message;
   let subText = 'Tap to open chat';
-  if (isPending) subText = '📩 Wants to connect with you';
-  else if (otherPending) subText = '⏳ Waiting for their acceptance';
-  else if (lastMsg?.content) subText = lastMsg.content.length > 40 ? lastMsg.content.slice(0, 40) + '…' : lastMsg.content;
+  let isMe = false;
+  let tickStr = '';
+  let tickColor = 'rgba(255,255,255,0.3)';
+
+  if (isPending) {
+    subText = '📩 Wants to connect with you';
+  } else if (otherPending) {
+    subText = '⏳ Waiting for their acceptance';
+  } else if (lastMsg) {
+    isMe = lastMsg.sender_id === userId;
+    let content = lastMsg.content || 'Attachment';
+    content = content.length > 40 ? content.slice(0, 40) + '…' : content;
+    subText = (isMe ? 'You: ' : '') + content;
+    
+    if (isMe) {
+      if ((lastMsg as any).read_at) { tickStr = '  ✓✓'; tickColor = '#60a5fa'; }
+      else if ((lastMsg as any).delivered_at) { tickStr = '  ✓✓'; tickColor = 'rgba(255,255,255,0.5)'; }
+      else { tickStr = '  ✓'; tickColor = 'rgba(255,255,255,0.3)'; }
+    }
+  }
 
   return (
     <TouchableOpacity
@@ -64,7 +81,10 @@ function ConversationItem({
 
       <View style={styles.itemInfo}>
         <Text style={styles.itemName} numberOfLines={1}>{name}</Text>
-        <Text style={styles.itemSub} numberOfLines={1}>{subText}</Text>
+        <Text style={styles.itemSub} numberOfLines={1}>
+          {subText}
+          {isMe && <Text style={{ color: tickColor, fontSize: 10 }}>{tickStr}</Text>}
+        </Text>
       </View>
 
       {isPending && onAccept ? (
@@ -148,6 +168,58 @@ export default function ChatListScreen({ navigation }: Props) {
         socket.on('chat:new_conversation', () => load());
         socket.on('chat:conversation_updated', () => load());
         
+        socket.on('chat:message', (msg) => {
+          setConversations(prev => prev.map(conv => {
+            if (conv.id === msg.conversation_id) {
+               return { ...conv, last_message: msg, unreadCount: msg.sender_id !== user?.id ? (conv as any).unreadCount + 1 : (conv as any).unreadCount };
+            }
+            return conv;
+          }).sort((a, b) => new Date(b.last_message?.created_at || b.updated_at).getTime() - new Date(a.last_message?.created_at || a.updated_at).getTime()));
+        });
+
+        socket.on('chat:message_read', ({ messageId, conversationId }) => {
+          setConversations(prev => prev.map(conv => {
+             if (conv.id === conversationId && conv.last_message?.id === messageId) {
+               return { ...conv, last_message: { ...conv.last_message, read_at: new Date().toISOString() } };
+             }
+             return conv;
+          }));
+        });
+
+        socket.on('chat:message_delivered', ({ messageId, conversationId, delivered_at }) => {
+          setConversations(prev => prev.map(conv => {
+             if (conv.id === conversationId && conv.last_message?.id === messageId) {
+               return { ...conv, last_message: { ...conv.last_message, delivered_at: delivered_at || new Date().toISOString() } };
+             }
+             return conv;
+          }));
+        });
+
+        socket.on('chat:conversation_read', ({ conversationId, readerId, readAt }) => {
+          if (readerId !== user?.id) {
+            setConversations(prev => prev.map(conv => {
+              if (conv.id === conversationId && conv.last_message && conv.last_message.sender_id === user?.id) {
+                return { ...conv, last_message: { ...conv.last_message, read_at: readAt, delivered_at: readAt } };
+              }
+              return conv;
+            }));
+          } else {
+             // We read it, so clear our unread count
+             setConversations(prev => prev.map(conv => conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv));
+          }
+        });
+
+        socket.on('chat:conversation_delivered', ({ conversationId, userId: delUserId, delivered_at }) => {
+          if (delUserId !== user?.id) {
+            setConversations(prev => prev.map(conv => {
+              if (conv.id === conversationId && conv.last_message && conv.last_message.sender_id === user?.id && !(conv.last_message as any).read_at) {
+                return { ...conv, last_message: { ...conv.last_message, delivered_at } };
+              }
+              return conv;
+            }));
+          }
+        });
+
         // Real-time presence updates for the list
         socket.on('user_online', ({ userId, online }) => {
           setConversations(prev => prev.map(conv => {
