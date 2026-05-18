@@ -14,7 +14,6 @@ import { MediaUpload } from './MediaUpload';
 import { VoiceRecorder } from './VoiceRecorder';
 import { AudioPlayer } from './AudioPlayer';
 import { API_URL } from '../../lib/api';
-import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
 import { MediaPreviewModal } from './MediaPreviewModal';
 import { MentionSuggestions } from './MentionSuggestions';
@@ -162,7 +161,7 @@ const ChatWindow: React.FC = () => {
 
     const isWaitingForOthers = myMember?.status === 'accepted' && otherMember?.status === 'pending';
 
-    const scrollToBottom = (behavior: any = 'smooth') => {
+    const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
         if (scrollContainerRef.current) {
             const { scrollHeight } = scrollContainerRef.current;
             const validBehavior: ScrollBehavior = (behavior === 'smooth' || behavior === 'auto') ? behavior : 'smooth';

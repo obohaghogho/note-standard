@@ -1,7 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
-import { API_URL } from '../../lib/api';
-import { useAuth } from '../../context/AuthContext';
 import { X, Image as ImageIcon, Send, Loader2, Upload } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -9,17 +6,15 @@ import SecureImage from '../common/SecureImage';
 import './MediaUpload.css';
 
 interface MediaUploadProps {
-    conversationId: string;
     onUploadComplete: (file: File, type: 'image' | 'video') => void;
     onCancel: () => void;
 }
 
-export const MediaUpload: React.FC<MediaUploadProps> = ({ conversationId, onUploadComplete, onCancel }) => {
-    const { session } = useAuth();
+export const MediaUpload: React.FC<MediaUploadProps> = ({ onUploadComplete, onCancel }) => {
     const [file, setFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-    const [uploading, setUploading] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState(0);
+    const uploading = false;
+    const uploadProgress = 0;
     const fileInputRef = useRef<HTMLInputElement>(null);
     const touchStartRef = useRef<{ x: number, y: number } | null>(null);
 

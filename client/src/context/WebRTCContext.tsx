@@ -111,7 +111,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const currentCallStatus = useRef<CallState['status']>('idle');
     const otherUserRef = useRef<CallState['otherUser']>(null);
     const incomingSignalQueue = useRef<{ candidate?: RTCIceCandidateInit }[]>([]);
-    const fetchedIceServers = useRef<any[] | null>(null);
+    const fetchedIceServers = useRef<RTCIceServer[] | null>(null);
 
     const dialToneRef = useRef<HTMLAudioElement | null>(null);
     const incomingRingtoneRef = useRef<HTMLAudioElement | null>(null);

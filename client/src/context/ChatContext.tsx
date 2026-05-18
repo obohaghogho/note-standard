@@ -412,6 +412,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             socket.off('chat:conversation_read', onConversationRead);
             socket.off('chat:conversation_delivered', onConversationDelivered);
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [socket, connected, user?.id]);
 
     // Process Outbox when connection is restored
@@ -583,7 +584,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     }
                 }, 300);
 
-                const { data: uploadData, error: uploadError } = await supabase.storage
+                const { error: uploadError } = await supabase.storage
                     .from('chat-media')
                     .upload(filePath, file, {
                         cacheControl: '3600',
