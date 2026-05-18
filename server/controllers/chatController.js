@@ -845,6 +845,8 @@ exports.sendMessage = async (req, res) => {
             content: content || '',
             type: type || "text",
           };
+          if (attachmentId) fallbackPayload.attachment_id = attachmentId;
+          if (replyToId)    fallbackPayload.reply_to_id   = replyToId;
           const { data: retryData, error: retryErr } = await supabase
             .from("messages")
             .insert([fallbackPayload])
