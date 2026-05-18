@@ -24,21 +24,64 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
   }
 }
 
-// Initialize APNs (iOS VoIP)
-let apnProvider = null;
+// Initialize APNs (iOS VoIP & Chat)
+let apnProviderProd = null;
+let apnProviderSandbox = null;
+
 if (process.env.APNS_KEY_PATH) {
   try {
-    apnProvider = new apn.Provider({
-      token: {
-        key: process.env.APNS_KEY_PATH,
-        keyId: process.env.APNS_KEY_ID,
-        teamId: process.env.APNS_TEAM_ID,
-      },
-      production: process.env.NODE_ENV === 'production'
+    const tokenConfig = {
+      key: process.env.APNS_KEY_PATH,
+      keyId: process.env.APNS_KEY_ID,
+      teamId: process.env.APNS_TEAM_ID,
+    };
+    
+    apnProviderProd = new apn.Provider({
+      token: tokenConfig,
+      production: true
     });
-    console.log('[PushService] APNs Provider initialized.');
+    
+    apnProviderSandbox = new apn.Provider({
+      token: tokenConfig,
+      production: false
+    });
+    
+    console.log('[PushService] APNs Providers (Prod & Sandbox) initialized.');
   } catch (err) {
     console.error('[PushService] APNs initialization failed:', err.message);
+  }
+}
+
+/**
+ * Helper to send APNs notification with automatic Sandbox fallback
+ */
+async function sendApnsWithFallback(notification, token, label) {
+  if (!apnProviderProd || !apnProviderSandbox) return;
+  
+  try {
+    const resultProd = await apnProviderProd.send(notification, token);
+    
+    if (resultProd.failed && resultProd.failed.length > 0) {
+      const failure = resultProd.failed[0];
+      const isBadToken = failure.response && failure.response.reason === 'BadDeviceToken';
+      
+      if (isBadToken) {
+        console.log(`[PushService] 🔄 APNs Prod rejected token for ${label} (BadDeviceToken). Falling back to Sandbox...`);
+        const resultSandbox = await apnProviderSandbox.send(notification, token);
+        
+        if (resultSandbox.failed && resultSandbox.failed.length > 0) {
+          console.error(`[PushService] ❌ APNs Sandbox also failed for ${label}:`, JSON.stringify(resultSandbox.failed));
+        } else {
+          console.log(`[PushService] ✅ APNs Sandbox delivery successful for ${label}.`);
+        }
+      } else {
+        console.error(`[PushService] ❌ APNs Prod failed for ${label}:`, JSON.stringify(resultProd.failed));
+      }
+    } else {
+      console.log(`[PushService] ✅ APNs Prod delivery successful for ${label}.`);
+    }
+  } catch (err) {
+    console.error(`[PushService] ❌ APNs delivery error for ${label}:`, err.message);
   }
 }
 
@@ -91,7 +134,7 @@ async function sendCallPush(params) {
       }
 
       // iOS VoIP - PushKit specific for immediate CallKit trigger
-      if (t.platform === 'ios' && t.type === 'voip' && apnProvider) {
+      if (t.platform === 'ios' && t.type === 'voip' && (apnProviderProd || apnProviderSandbox)) {
         const notification = new apn.Notification();
         notification.topic = (process.env.APNS_BUNDLE_ID || 'com.notestandard.app') + '.voip';
         notification.priority = 10;
@@ -109,9 +152,8 @@ async function sendCallPush(params) {
           callerName: payload.callerName, // Duplicate for root access
         };
         
-        console.log(`[PushService] 📤 Sending VoIP Push (iOS) to topic: ${notification.topic}`);
-        return apnProvider.send(notification, t.token)
-          .catch(err => console.error(`[PushService] ❌ VoIP fail for ${t.token}:`, err.message));
+        console.log(`[PushService] 📤 Initiating VoIP Push (iOS) to topic: ${notification.topic}`);
+        return sendApnsWithFallback(notification, t.token, 'VoIP');
       }
     });
 
@@ -173,7 +215,7 @@ async function sendChatPush(params) {
 
       // iOS APNs — alert push (NOT voip) for regular chat notifications
       // voip push is reserved for calls only (PushKit)
-      if (t.platform === 'ios' && t.type === 'apns' && apnProvider) {
+      if (t.platform === 'ios' && t.type === 'apns' && (apnProviderProd || apnProviderSandbox)) {
         const notification = new apn.Notification();
         notification.topic = process.env.APNS_BUNDLE_ID || 'com.notestandard.app'; // Standard bundle, NOT .voip
         notification.priority = 10;
@@ -189,14 +231,8 @@ async function sendChatPush(params) {
           url: payload.url || '/dashboard/chat',
         };
 
-        console.log(`[PushService] 📤 Sending APNs alert (iOS chat) to topic: ${notification.topic}`);
-        return apnProvider.send(notification, t.token)
-          .then(result => {
-            if (result.failed && result.failed.length > 0) {
-              console.error('[PushService] ❌ APNs chat fail:', JSON.stringify(result.failed));
-            }
-          })
-          .catch(err => console.error(`[PushService] ❌ APNs chat fail:`, err.message));
+        console.log(`[PushService] 📤 Initiating APNs alert (iOS chat) to topic: ${notification.topic}`);
+        return sendApnsWithFallback(notification, t.token, 'Chat');
       }
     });
 
