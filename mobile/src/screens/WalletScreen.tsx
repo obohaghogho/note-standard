@@ -65,11 +65,24 @@ export default function WalletScreen() {
         apiClient.get(`/wallet/ledger`),
       ]);
 
-      const walletsData = wRes.data || [];
+      const rawWallets = wRes.data || [];
+      const walletsData = rawWallets.map((w: any) => ({
+        ...w,
+        balance: typeof w.balance === 'string' ? parseFloat(w.balance) : (Number(w.balance) || 0),
+        available_balance: typeof w.available_balance === 'string' ? parseFloat(w.available_balance) : (Number(w.available_balance) || 0),
+        reserved_balance: typeof w.reserved_balance === 'string' ? parseFloat(w.reserved_balance) : (Number(w.reserved_balance) || 0),
+      }));
+
       setWallets(walletsData);
-      if (walletsData.length > 0 && !selectedWallet) {
-        setSelectedWallet(walletsData[0]);
+
+      if (walletsData.length > 0) {
+        setSelectedWallet((prev: Wallet | null) => {
+          if (!prev) return walletsData[0];
+          const updated = walletsData.find((w: any) => w.id === prev.id);
+          return updated || walletsData[0];
+        });
       }
+
       setLedger(lRes.data?.entries || lRes.data || []);
     } catch (e: any) {
       console.error('[WalletScreen] Failed to load wallet data:', e?.message || e);

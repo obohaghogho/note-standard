@@ -3,7 +3,6 @@ import { useSocket } from './SocketContext';
 import { useChat } from './ChatContext';
 import toast from 'react-hot-toast';
 import { CallOverlay } from '../components/chat/CallOverlay';
-import AgoraRTC, { IAgoraRTCClient, ILocalVideoTrack, ILocalAudioTrack } from "agora-rtc-sdk-ng";
 import api from '../api/axiosInstance';
 
 interface CallState {
@@ -40,31 +39,12 @@ export const useWebRTC = () => {
     return context;
 };
 
-// STUN + TURN fallback for NAT traversal
-const iceServers = [
+// Fallback STUN + TURN configurations
+const fallbackIceServers = [
     { urls: "stun:stun.l.google.com:19302" },
-    {
-      urls: "turn:openrelay.metered.ca:80",
-      username: "openrelayproject",
-      credential: "openrelayproject"
-    },
-    {
-      urls: "turn:openrelay.metered.ca:443",
-      username: "openrelayproject",
-      credential: "openrelayproject"
-    }
+    { urls: "stun:stun1.l.google.com:19302" }
 ];
 
-const AGORA_APP_ID = "652459c783604367857bc602fc8faae5";
-
-/**
- * BUG FIX — iOS Audio Noise:
- * iOS Safari ignores the `{ ideal: ... }` constraint format for basic boolean audio
- * properties (echoCancellation, noiseSuppression, autoGainControl). When these are
- * passed as objects, iOS falls back to its default stereo video-audio session which
- * causes the noisy background audio. Using plain boolean values forces iOS to apply
- * the constraints correctly and use the voice-call audio processing pipeline.
- */
 const isIOSDevice = (): boolean => {
     if (typeof navigator === 'undefined') return false;
     return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -73,38 +53,33 @@ const isIOSDevice = (): boolean => {
 
 const getAudioConstraints = (): MediaTrackConstraints => {
     if (isIOSDevice()) {
-        // iOS: use plain booleans for noise/echo properties.
-        // Using { exact: true } or { ideal: ... } can sometimes bypass hardware AEC on Safari.
         return {
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
-            // @ts-expect-error: latency is a non-standard constraint for WebRTC
+            // @ts-expect-error: latency is non-standard
             latency: 0,
             sampleRate: 48000,
             channelCount: 1,
-            // @ts-expect-error: voiceActivityDetection is a non-standard constraint
+            // @ts-expect-error: voiceActivityDetection is non-standard
             voiceActivityDetection: true
         };
     }
-    
-    // Desktop/Android: robust constraints for noise and echo reduction
     return {
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true,
         // @ts-expect-error: latency is non-standard
         latency: 0,
-        // Chromium-specific aggressive processing
-        // @ts-expect-error: googEchoCancellation is a Chromium-only legacy constraint
+        // @ts-expect-error: googEchoCancellation is non-standard
         googEchoCancellation: true,
-        // @ts-expect-error: googAutoGainControl is a Chromium-only legacy constraint
+        // @ts-expect-error: googAutoGainControl is non-standard
         googAutoGainControl: true,
-        // @ts-expect-error: googNoiseSuppression is a Chromium-only legacy constraint
+        // @ts-expect-error: googNoiseSuppression is non-standard
         googNoiseSuppression: true,
-        // @ts-expect-error: googHighpassFilter is a Chromium-only legacy constraint
+        // @ts-expect-error: googHighpassFilter is non-standard
         googHighpassFilter: true,
-        // @ts-expect-error: googTypingNoiseDetection is a Chromium-only legacy constraint
+        // @ts-expect-error: googTypingNoiseDetection is non-standard
         googTypingNoiseDetection: true,
         channelCount: { ideal: 1 },
         sampleRate: { ideal: 48000 }
@@ -134,15 +109,9 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const remoteStreamRef = useRef<MediaStream | null>(null);
     const callTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const currentCallStatus = useRef<CallState['status']>('idle');
-    // Stable ref for otherUser so socket handlers can read it without stale closure
     const otherUserRef = useRef<CallState['otherUser']>(null);
     const incomingSignalQueue = useRef<{ candidate?: RTCIceCandidateInit }[]>([]);
-
-    // Agora Refs
-    const agoraClientRef = useRef<IAgoraRTCClient | null>(null);
-    const localAudioTrackRef = useRef<ILocalAudioTrack | null>(null);
-    const localVideoTrackRef = useRef<ILocalVideoTrack | null>(null);
-    const isUsingAgora = useRef<boolean>(false);
+    const fetchedIceServers = useRef<any[] | null>(null);
 
     const dialToneRef = useRef<HTMLAudioElement | null>(null);
     const incomingRingtoneRef = useRef<HTMLAudioElement | null>(null);
@@ -156,8 +125,6 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         incomingRingtoneRef.current.loop = true;
         incomingRingtoneRef.current.volume = 0.8;
 
-        // BUG FIX — iOS Ringtones:
-        // Unlock audio elements on first user interaction to satisfy iOS autoplay policy.
         const unlock = () => {
             if (dialToneRef.current) {
                 dialToneRef.current.play().then(() => dialToneRef.current?.pause()).catch(() => {});
@@ -179,7 +146,6 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         };
     }, []);
 
-    // Keep refs in sync with state
     useEffect(() => { currentCallStatus.current = callState.status; }, [callState.status]);
     useEffect(() => { otherUserRef.current = callState.otherUser; }, [callState.otherUser]);
 
@@ -214,7 +180,6 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return sdp.split('\r\n').map(line => {
             if (line.includes('a=fmtp:111')) {
                 let newLine = line;
-                // Force mono and high-quality voice parameters for Opus
                 if (!line.includes('usedtx=1')) newLine += ';usedtx=1';
                 if (!line.includes('stereo=0')) newLine += ';stereo=0';
                 if (!line.includes('sprop-stereo=0')) newLine += ';sprop-stereo=0';
@@ -231,35 +196,16 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const cleanup = useCallback(async () => {
         if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
         
-        // Cleanup standard WebRTC
         if (pcRef.current) {
             pcRef.current.close();
             pcRef.current = null;
         }
-
-        // Cleanup Agora
-        if (agoraClientRef.current) {
-            try {
-                localAudioTrackRef.current?.stop();
-                localAudioTrackRef.current?.close();
-                localVideoTrackRef.current?.stop();
-                localVideoTrackRef.current?.close();
-                await agoraClientRef.current.leave();
-            } catch (err) {
-                console.error('[Agora] Cleanup error:', err);
-            }
-            agoraClientRef.current = null;
-            localAudioTrackRef.current = null;
-            localVideoTrackRef.current = null;
-        }
-        isUsingAgora.current = false;
 
         if (localStreamRef.current) {
             localStreamRef.current.getTracks().forEach(t => t.stop());
             localStreamRef.current = null;
         }
 
-        // FIX: also clear remote stream ref to prevent stale stream reference
         remoteStreamRef.current = null;
         incomingSignalQueue.current = [];
         
@@ -273,9 +219,25 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setIsVideoEnabled(true);
     }, []);
 
+    const ensureIceServers = async () => {
+        if (fetchedIceServers.current) return fetchedIceServers.current;
+        try {
+            console.log('[WebRTC] Fetching dynamic ICE servers from gateway...');
+            const response = await api.get('/webrtc/ice-servers');
+            if (response.data && response.data.iceServers) {
+                fetchedIceServers.current = response.data.iceServers;
+                return response.data.iceServers;
+            }
+        } catch (err) {
+            console.warn('[WebRTC] Dynamic ICE server fetch failed, using STUN fallback:', err);
+        }
+        fetchedIceServers.current = fallbackIceServers;
+        return fallbackIceServers;
+    };
+
     const createPeerConnection = useCallback((targetUserId: string) => {
         const pc = new RTCPeerConnection({ 
-            iceServers,
+            iceServers: fetchedIceServers.current || fallbackIceServers,
             iceCandidatePoolSize: 10
         });
 
@@ -294,24 +256,19 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 remoteStreamRef.current = event.streams[0];
                 setRemoteStream(event.streams[0]);
             } else {
-                // Fallback: If no stream is provided, create one or use existing
                 const stream = remoteStreamRef.current || new MediaStream();
                 stream.addTrack(event.track);
                 remoteStreamRef.current = stream;
                 setRemoteStream(stream);
             }
-            
-            // Force a state update to ensure UI re-renders if a new track arrives 
-            // but the MediaStream reference is the same (e.g., audio then video)
             setCallState(prev => ({ ...prev }));
         };
 
         pc.onconnectionstatechange = () => {
-            console.log('[WebRTC] Connection State:', pc.connectionState);
+            console.log('[WebRTC] Connection State Change:', pc.connectionState);
             if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
                 cleanup();
             }
-            // FIX: 'connected' state is ONLY set here — after ICE negotiation completes
             if (pc.connectionState === 'connected') {
                 setCallState(p => ({ ...p, status: 'connected', connectedAt: p.connectedAt || Date.now() }));
             }
@@ -325,7 +282,6 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return pc;
     }, [socket, cleanup]);
 
-    // FIX: typed signal queue items
     const flushSignalQueue = async (pc: RTCPeerConnection) => {
         while (incomingSignalQueue.current.length > 0) {
             const signal = incomingSignalQueue.current.shift();
@@ -335,110 +291,12 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
     };
 
-    const fetchAgoraToken = async (channel: string) => {
-        try {
-            // Use the configured api instance which has the proper baseURL and Authorization headers
-            const response = await api.get(`/agora?channel=${channel}`);
-            return response.data.token;
-        } catch (err) {
-            console.error('[Agora] Token fetch failed:', err);
-            throw err;
-        }
-    };
-
-    const initAgoraCall = async (conversationId: string, type: 'voice' | 'video') => {
-        console.log('[Agora] Initializing Agora Call...');
-        const client = AgoraRTC.createClient({ mode: "rtc", codec: "h264" });
-        agoraClientRef.current = client;
-        isUsingAgora.current = true;
-
-        const token = await fetchAgoraToken(conversationId);
-        await client.join(AGORA_APP_ID, conversationId, token, null);
-
-        // Create local tracks. 
-        // iOS Safari hardware AEC works best when software AEC is disabled.
-        const audioTrack = await AgoraRTC.createMicrophoneAudioTrack(
-            isIOSDevice() 
-                ? { AEC: false, ANS: false, AGC: false } 
-                : { AEC: true, ANS: true, AGC: true }
-        );
-        localAudioTrackRef.current = audioTrack;
-
-        let videoTrack: ILocalVideoTrack | null = null;
-        if (type === 'video') {
-            videoTrack = await AgoraRTC.createCameraVideoTrack();
-            localVideoTrackRef.current = videoTrack;
-        }
-
-        // Sync with existing MediaStream state for UI compatibility
-        const localStream = new MediaStream();
-        localStream.addTrack(audioTrack.getMediaStreamTrack());
-        if (videoTrack) localStream.addTrack(videoTrack.getMediaStreamTrack());
-        localStreamRef.current = localStream;
-        setLocalStream(localStream);
-
-        // Publish tracks
-        await client.publish(videoTrack ? [audioTrack, videoTrack] : [audioTrack]);
-
-        // Handle remote tracks
-        client.on("user-published", async (user, mediaType) => {
-            await client.subscribe(user, mediaType);
-            console.log("[Agora] Subscribed to remote user:", user.uid, mediaType);
-
-            if (mediaType === "video") {
-                const remoteVideoTrack = user.videoTrack;
-                
-                const remoteStream = remoteStreamRef.current || new MediaStream();
-                if (remoteVideoTrack) remoteStream.addTrack(remoteVideoTrack.getMediaStreamTrack());
-                
-                remoteStreamRef.current = remoteStream;
-                setRemoteStream(remoteStream);
-            }
-
-            if (mediaType === "audio") {
-                const remoteAudioTrack = user.audioTrack;
-                // CRITICAL: Call play() directly so Agora uses its own optimized hidden <audio> tag with AEC enabled.
-                // Do NOT attach this to our custom CallOverlay MediaStream.
-                if (remoteAudioTrack) {
-                    remoteAudioTrack.play();
-                }
-            }
-            
-            setCallState(p => ({ ...p, status: 'connected', connectedAt: p.connectedAt || Date.now() }));
-        });
-
-        client.on("user-unpublished", (user) => {
-            console.log("[Agora] User unpublished:", user.uid);
-            // In a 1-to-1 call, this usually means the call ended
-            cleanup();
-        });
-    };
-
     const startCall = async (targetUserId: string, conversationId: string, type: 'voice' | 'video', otherUser: CallState['otherUser']) => {
         setCallState({ type, status: 'calling', otherUser, conversationId, connectedAt: null });
 
-        // TRY AGORA FIRST (Highly recommended for iOS)
         try {
-            await initAgoraCall(conversationId, type);
-            socket?.emit('call:initiate', { to: targetUserId, type, conversationId, useAgora: true });
-            sendMessageToConversation(conversationId, `Started a ${type} call`, 'call');
+            await ensureIceServers();
 
-            callTimeoutRef.current = setTimeout(() => {
-                if (currentCallStatus.current === 'calling') {
-                    toast.error('No answer');
-                    socket?.emit('call:timeout', { to: targetUserId });
-                    cleanup();
-                }
-            }, 60000);
-            return;
-        } catch (agoraErr) {
-            console.warn('[WebRTC] Agora failed or free tier over, falling back to standard WebRTC:', agoraErr);
-            // Fallback to standard WebRTC implementation
-            isUsingAgora.current = false;
-        }
-
-        try {
-            // Standard WebRTC Implementation
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: getAudioConstraints(),
                 video: type === 'video' ? getVideoConstraints() : false,
@@ -470,20 +328,9 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const conversationId = callState.conversationId;
         if (!targetUserId || !conversationId) return cleanup();
 
-        // Check if the caller is using Agora (this would be sent in the incoming signal, but here we prioritize it anyway)
-        // If it's iOS, we DEFINITELY want Agora if possible.
         try {
-            await initAgoraCall(conversationId, callState.type || 'voice');
-            socket?.emit('call:ready', { to: targetUserId, useAgora: true });
-            setCallState(p => ({ ...p, status: 'connecting' }));
-            return;
-        } catch (agoraErr) {
-            console.warn('[WebRTC] Agora Accept failed, falling back to standard WebRTC:', agoraErr);
-            isUsingAgora.current = false;
-        }
+            await ensureIceServers();
 
-        try {
-            // Standard WebRTC Fallback
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: getAudioConstraints(),
                 video: callState.type === 'video' ? getVideoConstraints() : false,
@@ -493,9 +340,6 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             setLocalStream(stream);
 
             socket?.emit('call:ready', { to: targetUserId, useAgora: false });
-
-            // FIX: Set 'connecting' (not 'connected') — actual 'connected' fires via
-            // pc.onconnectionstatechange once ICE negotiation completes
             setCallState(p => ({ ...p, status: 'connecting' }));
 
         } catch (err) {
@@ -518,41 +362,29 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     const toggleMute = () => {
-        if (isUsingAgora.current && localAudioTrackRef.current) {
-            const nextMute = !isMuted;
-            localAudioTrackRef.current.setEnabled(!nextMute);
-            setIsMuted(nextMute);
-            return;
-        }
         if (localStreamRef.current) {
-            localStreamRef.current.getAudioTracks().forEach(t => t.enabled = isMuted);
-            setIsMuted(!isMuted);
+            const nextMute = !isMuted;
+            localStreamRef.current.getAudioTracks().forEach(t => t.enabled = !nextMute);
+            setIsMuted(nextMute);
         }
     };
 
     const toggleVideo = () => {
-        if (isUsingAgora.current && localVideoTrackRef.current) {
-            const nextVideo = !isVideoEnabled;
-            localVideoTrackRef.current.setEnabled(nextVideo);
-            setIsVideoEnabled(nextVideo);
-            return;
-        }
         if (localStreamRef.current) {
-            localStreamRef.current.getVideoTracks().forEach(t => t.enabled = !isVideoEnabled);
-            setIsVideoEnabled(!isVideoEnabled);
+            const nextVideo = !isVideoEnabled;
+            localStreamRef.current.getVideoTracks().forEach(t => t.enabled = nextVideo);
+            setIsVideoEnabled(nextVideo);
         }
     };
 
     useEffect(() => {
         if (!socket || !socketConnected) return;
 
-        const handleCallIncoming = (data: { from: string; fromName?: string; fromAvatar?: string; type?: 'voice' | 'video'; conversationId: string; useAgora?: boolean }) => {
+        const handleCallIncoming = (data: { from: string; fromName?: string; fromAvatar?: string; type?: 'voice' | 'video'; conversationId: string }) => {
             if (currentCallStatus.current !== 'idle') {
                 socket.emit('call:reject', { to: data.from });
                 return;
             }
-            // If caller says they are using Agora, we should prepare for it.
-            // But our acceptCall logic already prioritizes it.
             setCallState({
                 type: data.type || 'voice',
                 status: 'incoming',
@@ -562,16 +394,9 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             });
         };
 
-        const handleCallReady = async (data: { from: string; useAgora?: boolean }) => {
-            // Caller side: receiver said ready → create and send the offer (if not using Agora)
+        const handleCallReady = async (data: { from: string }) => {
             if (currentCallStatus.current !== 'calling') return;
             const targetUserId = data.from;
-
-            if (isUsingAgora.current || data.useAgora) {
-                console.log('[Agora] Receiver is ready, Agora session active.');
-                // No need for WebRTC signaling here, Agora handles it.
-                return;
-            }
             
             try {
                 const stream = localStreamRef.current;
@@ -585,8 +410,6 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 await pc.setLocalDescription(optimizedOffer);
 
                 socket.emit('call:signal', { to: targetUserId, signal: { offer: optimizedOffer } });
-
-                // FIX: Set 'connecting' here — 'connected' fires via onconnectionstatechange
                 setCallState(p => ({ ...p, status: 'connecting' }));
                 
             } catch (err) {
@@ -643,7 +466,6 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
         };
 
-        // FIX: Show missed-call toast when caller hangs up/times out while we're ringing
         const handleCallEndedOrTimeout = () => {
             if (currentCallStatus.current === 'incoming') {
                 const name = otherUserRef.current?.full_name || 'Unknown';
@@ -667,7 +489,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             socket.off('call:ended', handleCallEndedOrTimeout);
             socket.off('call:timeout', handleCallEndedOrTimeout);
         };
-    }, [socket, socketConnected, cleanup, callState.type, createPeerConnection]);
+    }, [socket, socketConnected, cleanup, createPeerConnection]);
 
     return (
         <WebRTCContext.Provider value={{

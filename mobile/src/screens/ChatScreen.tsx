@@ -56,6 +56,7 @@ const ChatMessageBubble = React.memo(({
   currentUserId,
   recipientName,
   onLongPress,
+  onSwipeRight,
   onPlayAudio,
 }: {
   item: Message;
@@ -111,17 +112,20 @@ const ChatMessageBubble = React.memo(({
         )}
         {item.attachment && (
           <View style={styles.attachmentContainer}>
-            {item.attachment.file_type.startsWith('image') ? (
+            {item.attachment.file_type?.startsWith('image') ? (
               <Image
                 source={{ uri: `https://tngcvgisfctggvivcnva.supabase.co/storage/v1/object/public/chat-media/${item.attachment.storage_path}` }}
                 style={styles.attachmentImage as any}
               />
-            ) : item.attachment.file_type.startsWith('audio') ? (
-              <TouchableOpacity onPress={() => onPlayAudio(item.attachment!.storage_path)} style={styles.voiceNoteBtn}>
+            ) : item.attachment.file_type?.startsWith('audio') ? (
+              <TouchableOpacity 
+                onPress={() => item.attachment?.storage_path && onPlayAudio(item.attachment.storage_path)} 
+                style={styles.voiceNoteBtn}
+              >
                 <Text style={styles.voiceNoteText}>▶ Voice Note</Text>
               </TouchableOpacity>
             ) : (
-              <Text style={styles.attachmentFile}>📎 {item.attachment.file_name}</Text>
+              <Text style={styles.attachmentFile}>📎 {item.attachment.file_name || 'Attachment'}</Text>
             )}
           </View>
         )}
@@ -141,7 +145,14 @@ const ChatMessageBubble = React.memo(({
 });
 
 export default function ChatScreen({ navigation, route }: Props) {
-  const { conversationId, conversation } = route.params;
+  const { conversationId, conversation } = route.params || {};
+  if (!conversationId) {
+    return (
+      <View style={styles.center}>
+        <Text style={{ color: '#fff' }}>No conversation selected.</Text>
+      </View>
+    );
+  }
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -166,7 +177,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   const otherMember = members.find(m => m.user_id !== user?.id);
   const profile = otherMember?.profile;
   const [isOtherOnline, setIsOtherOnline] = useState(profile?.is_online || false);
-  const recipientName = profile?.full_name || profile?.username || 'Chat';
+  const recipientName = profile?.full_name?.trim() || profile?.username?.trim() || 'Chat';
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -597,7 +608,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         <FlatList
           ref={flatRef}
           data={messages}
-          keyExtractor={i => i.id}
+          keyExtractor={i => i?.id || Math.random().toString()}
           renderItem={renderMessage}
           inverted
           keyboardDismissMode="interactive"
