@@ -36,6 +36,8 @@ class WebRTCService {
   private remoteStream: MediaStream | null = null;
   private isInitialized = false;
   private iceServers: any[] = [];
+  private pendingCandidates: any[] = []; // queued until setRemoteDescription done
+  private remoteDescriptionSet = false;
   
   // Callbacks for UI updates
   private onConnectionStateChangeCallback: ((state: WebRTCConnectionState) => void) | null = null;
@@ -126,7 +128,6 @@ class WebRTCService {
     await this.setupLocalStream(callType);
     this.createPeerConnection();
 
-    // Add local tracks to peer connection
     if (this.localStream) {
       this.localStream.getTracks().forEach(track => {
         this.peerConnection?.addTrack(track, this.localStream!);
@@ -134,6 +135,8 @@ class WebRTCService {
     }
 
     await this.peerConnection!.setRemoteDescription(new RTCSessionDescription(offerSdp));
+    this.remoteDescriptionSet = true;
+    await this.drainPendingCandidates(); // flush any queued ICE candidates
     const answer = await this.peerConnection!.createAnswer();
     await this.peerConnection!.setLocalDescription(answer);
 
@@ -143,10 +146,17 @@ class WebRTCService {
   async handleAnswer(answerSdp: any) {
     if (!this.peerConnection) return;
     await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answerSdp));
+    this.remoteDescriptionSet = true;
+    await this.drainPendingCandidates(); // flush any queued ICE candidates
   }
 
   async addIceCandidate(candidate: any) {
-    if (!this.peerConnection) return;
+    if (!this.peerConnection || !this.remoteDescriptionSet) {
+      // Queue until setRemoteDescription is done — adding before it causes silent drops
+      console.log('[WebRTC] Queuing ICE candidate (remote description not set yet)');
+      this.pendingCandidates.push(candidate);
+      return;
+    }
     try {
       await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
     } catch (e) {
@@ -154,10 +164,27 @@ class WebRTCService {
     }
   }
 
+  private async drainPendingCandidates() {
+    if (!this.peerConnection || this.pendingCandidates.length === 0) return;
+    console.log(`[WebRTC] Draining ${this.pendingCandidates.length} queued ICE candidates`);
+    const candidates = [...this.pendingCandidates];
+    this.pendingCandidates = [];
+    for (const candidate of candidates) {
+      try {
+        await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (e) {
+        console.warn('[WebRTC] Error draining ICE candidate:', e);
+      }
+    }
+  }
+
   private createPeerConnection() {
     if (this.peerConnection) {
       this.peerConnection.close();
     }
+    // Reset ICE candidate state for fresh connection
+    this.pendingCandidates = [];
+    this.remoteDescriptionSet = false;
 
     const config = {
       iceServers: this.iceServers,
@@ -309,6 +336,8 @@ class WebRTCService {
     }
 
     this.isInitialized = false;
+    this.pendingCandidates = [];
+    this.remoteDescriptionSet = false;
 
     // Discard callback references to prevent garbage collector memory leaks
     if (this.onRemoteStreamCallback) {

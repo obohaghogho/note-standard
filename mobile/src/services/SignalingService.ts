@@ -103,7 +103,11 @@ class SignalingService {
             signal: answer,
             sessionId: this.activeSessionId,
           });
-
+          // Callee requests any ICE candidates that were buffered from the caller
+          this.emit('call:request-buffered-ice', {
+            sessionId: this.activeSessionId,
+            fromUserId: this.activeTargetId, // fetch candidates FROM the caller
+          });
           // Connected on answering side (connecting phase transition)
           CallService.onCallConnected();
         } else if (signal.type === 'answer') {
@@ -186,7 +190,7 @@ class SignalingService {
     this.activeCallType = type;
 
     await CallService.startOutgoingCall({
-      callerId: targetUserId,
+      callerId: this.userId ?? '', // local user is the caller
       callerName: targetName,
       callType: type,
       conversationId,

@@ -67,36 +67,6 @@ export default function CallScreen({ navigation, route }: Props) {
     return `${m}:${s}`;
   };
 
-  // ── WebRTC event registration ──────────────────────────────────────────
-
-  const setupWebRTCCallbacks = useCallback(() => {
-    WebRTCService.registerCallbacks({
-      onConnectionStateChange: (state: WebRTCConnectionState) => {
-        console.log('[CallScreen] Connection state update:', state);
-        if (state === 'connected') {
-          setCallState('connected');
-          CallService.onCallConnected();
-          startDurationTimer();
-          
-          // Fetch and store streams
-          setLocalStream(WebRTCService.getLocalStream());
-          setRemoteStream(WebRTCService.getRemoteStream());
-        } else if (state === 'failed') {
-          setCallState('failed');
-          handleEndCall(false);
-        } else if (state === 'disconnected') {
-          setCallState('reconnecting');
-        } else if (state === 'closed') {
-          setCallState('ended');
-          handleEndCall(false);
-        }
-      },
-      onRemoteStream: (stream: MediaStream | null) => {
-        setRemoteStream(stream);
-      }
-    });
-  }, [startDurationTimer, handleEndCall]);
-
   // ── Setup on mount ─────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -106,15 +76,50 @@ export default function CallScreen({ navigation, route }: Props) {
     const setup = async () => {
       try {
         await WebRTCService.init(type);
-        setupWebRTCCallbacks();
+
+        // Register callbacks inline — avoids stale closure from useCallback
+        WebRTCService.registerCallbacks({
+          onConnectionStateChange: (state: WebRTCConnectionState) => {
+            if (!isMounted) return;
+            console.log('[CallScreen] Connection state:', state);
+            if (state === 'connected') {
+              setCallState('connected');
+              CallService.onCallConnected();
+              startDurationTimer();
+              setLocalStream(WebRTCService.getLocalStream());
+              setRemoteStream(WebRTCService.getRemoteStream());
+            } else if (state === 'failed') {
+              setCallState('failed');
+              // Clean up without re-signaling (peer already dropped)
+              WebRTCService.leaveChannel();
+              CallService.handleCallEnded('error');
+              setTimeout(() => { if (isMounted) navigation.goBack(); }, 1500);
+            } else if (state === 'disconnected') {
+              setCallState('reconnecting');
+            } else if (state === 'closed') {
+              setCallState('ended');
+            }
+          },
+          onRemoteStream: (stream: MediaStream | null) => {
+            if (isMounted) setRemoteStream(stream);
+          },
+        });
 
         if (isIncoming) {
-          // If incoming call screen is mounted, callee answered via incoming modal.
-          // Trigger the signaling response.
+          // Ensure CallService is in ringing state (may have been set by push notification path)
+          if (CallService.getState() === 'idle') {
+            console.warn('[CallScreen] CallService was idle for incoming call — forcing ringing state');
+            await CallService.displayIncomingCall({
+              callerId: SignalingService.activeTargetId || '',
+              callerName: route.params.targetName,
+              callType: type,
+              conversationId: route.params.conversationId,
+            });
+          }
           await SignalingService.answerCall();
-          setLocalStream(WebRTCService.getLocalStream());
+          // Local stream isn't ready yet — it will be set when WebRTC connects
+          setCallState('connecting');
         } else {
-          // Outgoing
           setCallState('calling');
         }
       } catch (err) {
@@ -128,9 +133,11 @@ export default function CallScreen({ navigation, route }: Props) {
 
     setup();
 
-    // Listen for call state transitions externally
     const unsubEnded = CallService.onCallEnded(() => {
-      if (isMounted) handleEndCall(false);
+      if (isMounted) {
+        stopDurationTimer();
+        setTimeout(() => navigation.goBack(), 800);
+      }
     });
 
     const unsubState = CallService.onStateChange(({ state }: { state: CallState }) => {
