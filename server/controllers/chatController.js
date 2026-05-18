@@ -667,11 +667,12 @@ exports.markMessageRead = async (req, res) => {
   try {
     const { messageId } = req.params;
     const userId = req.user.id;
+    const now = new Date().toISOString();
 
     try {
       const { data, error } = await supabase
         .from("messages")
-        .update({ read_at: new Date().toISOString() })
+        .update({ read_at: now })
         .eq("id", messageId)
         .neq("sender_id", userId) // Only mark as read if not the sender
         .select()
@@ -679,20 +680,18 @@ exports.markMessageRead = async (req, res) => {
 
       if (error) {
         if (error.code === "42703" || error.code === "PGRST204") {
-          console.warn(
-            "[Chat Controller] read_at column missing, skipping update",
-          );
+          console.warn("[Chat Controller] read_at column missing, skipping update");
           return res.json({ success: true, note: "read_at column missing" });
         }
         throw error;
       }
 
-      // Emit read receipt via gateway
-      await realtime.emitToConversation(data.conversation_id, "chat:message_read", {
-        messageId,
-        conversationId: data.conversation_id,
-        userId,
-      });
+      const receiptPayload = { messageId, conversationId: data.conversation_id, userId, readAt: now };
+
+      // Emit to conversation room (for ChatScreen listeners)
+      await realtime.emitToConversation(data.conversation_id, "chat:message_read", receiptPayload);
+      // ALSO emit directly to the original sender so their ChatList updates too
+      await realtime.emitToUser(data.sender_id, "chat:message_read", receiptPayload);
 
       res.json({ success: true });
     } catch (updateErr) {
@@ -709,11 +708,12 @@ exports.markMessageDelivered = async (req, res) => {
   try {
     const { messageId } = req.params;
     const userId = req.user.id;
+    const now = new Date().toISOString();
 
     try {
       const { data, error } = await supabase
         .from("messages")
-        .update({ delivered_at: new Date().toISOString() })
+        .update({ delivered_at: now })
         .eq("id", messageId)
         .neq("sender_id", userId) // Only mark as delivered if not the sender
         .select()
@@ -721,21 +721,18 @@ exports.markMessageDelivered = async (req, res) => {
 
       if (error) {
         if (error.code === "42703" || error.code === "PGRST204") {
-          console.warn(
-            "[Chat Controller] delivered_at column missing, skipping update",
-          );
+          console.warn("[Chat Controller] delivered_at column missing, skipping update");
           return res.json({ success: true, note: "delivered_at column missing" });
         }
         throw error;
       }
 
-      // Emit delivered receipt via gateway
-      await realtime.emitToConversation(data.conversation_id, "chat:message_delivered", {
-        messageId,
-        conversationId: data.conversation_id,
-        userId,
-        delivered_at: data.delivered_at
-      });
+      const receiptPayload = { messageId, conversationId: data.conversation_id, userId, delivered_at: now };
+
+      // Emit to conversation room (for ChatScreen listeners)
+      await realtime.emitToConversation(data.conversation_id, "chat:message_delivered", receiptPayload);
+      // ALSO emit directly to the original sender so their ChatList updates too
+      await realtime.emitToUser(data.sender_id, "chat:message_delivered", receiptPayload);
 
       res.json({ success: true });
     } catch (updateErr) {
@@ -1533,12 +1530,26 @@ exports.markConversationRead = async (req, res) => {
       throw error;
     }
 
-    // Emit event to room
-    await realtime.emitToConversation(conversationId, "chat:conversation_read", {
-        conversationId,
-        readerId: userId,
-        readAt: now
-    });
+    const readPayload = { conversationId, readerId: userId, readAt: now };
+
+    // Emit to conversation room (for anyone in the ChatScreen)
+    await realtime.emitToConversation(conversationId, "chat:conversation_read", readPayload);
+
+    // CRITICAL FIX: Also emit directly to each other member via their personal user room
+    // so their ChatList screen (which is NOT in the conversation room) receives the update.
+    try {
+      const { data: otherMembers } = await supabase
+        .from("conversation_members")
+        .select("user_id")
+        .eq("conversation_id", conversationId)
+        .neq("user_id", userId);
+
+      for (const member of otherMembers || []) {
+        await realtime.emitToUser(member.user_id, "chat:conversation_read", readPayload);
+      }
+    } catch (memberErr) {
+      console.warn("[Chat Controller] Failed to emit read receipt to individual users:", memberErr.message);
+    }
 
     res.json({ success: true });
   } catch (err) {
@@ -1568,12 +1579,26 @@ exports.markConversationDelivered = async (req, res) => {
       throw error;
     }
 
-    // Emit event to room
-    await realtime.emitToConversation(conversationId, "chat:conversation_delivered", {
-        conversationId,
-        userId: userId,
-        delivered_at: now
-    });
+    const deliveredPayload = { conversationId, userId, delivered_at: now };
+
+    // Emit to conversation room (for anyone in the ChatScreen)
+    await realtime.emitToConversation(conversationId, "chat:conversation_delivered", deliveredPayload);
+
+    // CRITICAL FIX: Also emit directly to each other member via their personal user room
+    // so their ChatList screen (which is NOT in the conversation room) receives the update.
+    try {
+      const { data: otherMembers } = await supabase
+        .from("conversation_members")
+        .select("user_id")
+        .eq("conversation_id", conversationId)
+        .neq("user_id", userId);
+
+      for (const member of otherMembers || []) {
+        await realtime.emitToUser(member.user_id, "chat:conversation_delivered", deliveredPayload);
+      }
+    } catch (memberErr) {
+      console.warn("[Chat Controller] Failed to emit delivered receipt to individual users:", memberErr.message);
+    }
 
     res.json({ success: true });
   } catch (err) {

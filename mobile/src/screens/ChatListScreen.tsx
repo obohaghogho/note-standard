@@ -53,8 +53,8 @@ function ConversationItem({
     subText = (isMe ? 'You: ' : '') + content;
     
     if (isMe) {
-      if ((lastMsg as any).read_at) { tickStr = '  ✓✓'; tickColor = '#60a5fa'; }
-      else if ((lastMsg as any).delivered_at) { tickStr = '  ✓✓'; tickColor = 'rgba(255,255,255,0.5)'; }
+      if (lastMsg.read_at) { tickStr = '  ✓✓'; tickColor = '#60a5fa'; }
+      else if (lastMsg.delivered_at) { tickStr = '  ✓✓'; tickColor = 'rgba(255,255,255,0.5)'; }
       else { tickStr = '  ✓'; tickColor = 'rgba(255,255,255,0.3)'; }
     }
   }
@@ -164,7 +164,15 @@ export default function ChatListScreen({ navigation }: Props) {
         reconnection: true,
         reconnectionAttempts: 5,
       });
-        socket.on('connect', () => console.log('[ChatList] Socket connected'));
+        socket.on('connect', () => {
+          console.log('[ChatList] Socket connected');
+          // Join all loaded conversation rooms so we receive room-based status events
+          // even when ChatListScreen is the active screen (not ChatScreen).
+          setConversations(current => {
+            current.forEach(conv => socket.emit('chat:join', conv.id));
+            return current;
+          });
+        });
         socket.on('chat:new_conversation', () => load());
         socket.on('chat:conversation_updated', () => load());
         
@@ -212,7 +220,7 @@ export default function ChatListScreen({ navigation }: Props) {
         socket.on('chat:conversation_delivered', ({ conversationId, userId: delUserId, delivered_at }) => {
           if (delUserId !== user?.id) {
             setConversations(prev => prev.map(conv => {
-              if (conv.id === conversationId && conv.last_message && conv.last_message.sender_id === user?.id && !(conv.last_message as any).read_at) {
+              if (conv.id === conversationId && conv.last_message && conv.last_message.sender_id === user?.id && !conv.last_message.read_at) {
                 return { ...conv, last_message: { ...conv.last_message, delivered_at } };
               }
               return conv;

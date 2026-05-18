@@ -286,10 +286,14 @@ export default function ChatScreen({ navigation, route }: Props) {
               }
             }
 
-            // Mark as read and delivered immediately since user is in the chat
+            // Mark as delivered+read immediately since user is actively in the chat.
+            // Optimistically set timestamp locally so sender's tick updates fast.
             if (msg.sender_id !== user?.id) {
+              const now = new Date().toISOString();
+              // Background HTTP calls to persist in DB + broadcast receipt to sender
               apiClient.put(`/chat/messages/${msg.id}/deliver`).catch(() => {});
               apiClient.put(`/chat/messages/${msg.id}/read`).catch(() => {});
+              return [{ ...msg, delivered_at: now, read_at: now } as any, ...prev];
             }
             return [msg, ...prev];
           });
@@ -303,16 +307,16 @@ export default function ChatScreen({ navigation, route }: Props) {
           setMessages(prev => prev.filter(m => m.id !== messageId));
         });
 
-        // Message status updates
-        socket.on('chat:message_read', ({ messageId }: { messageId: string }) => {
+        // Message status updates — use server-provided timestamps for accuracy
+        socket.on('chat:message_read', ({ messageId, readAt }: { messageId: string; readAt?: string }) => {
           setMessages(prev => prev.map(m =>
-            m.id === messageId ? { ...m, read_at: new Date().toISOString() } as any : m
+            m.id === messageId ? { ...m, read_at: readAt || new Date().toISOString() } as any : m
           ));
         });
 
-        socket.on('chat:message_delivered', ({ messageId }: { messageId: string }) => {
+        socket.on('chat:message_delivered', ({ messageId, delivered_at }: { messageId: string; delivered_at?: string }) => {
           setMessages(prev => prev.map(m =>
-            m.id === messageId ? { ...m, delivered_at: new Date().toISOString() } as any : m
+            m.id === messageId ? { ...m, delivered_at: delivered_at || new Date().toISOString() } as any : m
           ));
         });
 

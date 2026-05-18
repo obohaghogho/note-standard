@@ -27,6 +27,8 @@ export interface Conversation {
         content: string;
         sender_id: string;
         created_at: string;
+        read_at?: string | null;
+        delivered_at?: string | null;
     } | null;
 }
 
