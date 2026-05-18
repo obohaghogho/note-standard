@@ -72,6 +72,47 @@ class PayoutWorker {
         logger.info(`[PayoutWorker] Dispatching payout ${payout.id} (Amount: ${payout.amount} ${payout.currency})`);
 
         try {
+            // ── KERNEL SAFEGUARD: LIQUID RESERVE VALIDATION ──────────────────
+            const currency = payout.currency;
+            const requiredAmount = Number(payout.amount);
+
+            const { data: treasuryWallet } = await supabase
+                .from("wallets_store")
+                .select("id, balance, user_id")
+                .eq("address", `TREASURY_${currency}`)
+                .maybeSingle();
+
+            const treasuryBalance = treasuryWallet ? Math.abs(Number(treasuryWallet.balance) || 0) : 0;
+
+            if (treasuryBalance < requiredAmount) {
+                const errMsg = `LIQUID_RESERVE_BREACH: Available treasury settled reserves for ${currency} (${treasuryBalance}) are insufficient to cover this withdrawal of ${requiredAmount}. Dispatch aborted.`;
+                logger.error(`[Payout_Guard] [CRITICAL_RESERVE_BREACH] ${errMsg}`);
+                
+                await payoutService.updatePayoutState(payout.id, 'FAILED_FINAL', {
+                    error: "Insufficient settled reserves in treasury.",
+                    message: errMsg,
+                    failure_code: "TREASURY_RESERVE_BREACH"
+                });
+
+                const adminId = treasuryWallet ? treasuryWallet.user_id : payout.user_id;
+
+                await supabase.from("security_audit_logs").insert({
+                    user_id: adminId,
+                    event_type: "TREASURY_RESERVE_BREACH",
+                    severity: "CRITICAL",
+                    description: `Payout dispatcher blocked withdrawal ${payout.id} due to treasury reserve breach on ${currency}. Required: ${requiredAmount}, Settled Treasury: ${treasuryBalance}.`,
+                    payload: {
+                        payout_id: payout.id,
+                        currency: currency,
+                        required_amount: requiredAmount,
+                        treasury_balance: treasuryBalance,
+                        alert_level: "HIGH"
+                    }
+                });
+
+                return;
+            }
+
             // 2. STEP A: INTENT LOGGING (Transition to PROCESSING)
             await payoutService.updatePayoutState(payout.id, 'PROCESSING', {
                 retry_count: (payout.retry_count || 0) + 1

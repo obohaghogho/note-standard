@@ -155,7 +155,146 @@ class ReconciliationWorker {
         await this.runGovernanceCycle(); // Step 4: Institutional Guard Cycle
         await this.syncSentPayouts();
         await this.cleanupStaleReservations();
+        await this.checkAndSweepSettlements();
         await this.assertLedgerIntegrity();
+    }
+
+    static lastSweepTime = 0;
+
+    static async checkAndSweepSettlements() {
+        const now = Date.now();
+        // 30 minutes throttle
+        if (now - this.lastSweepTime < 30 * 60 * 1000) return;
+        this.lastSweepTime = now;
+
+        try {
+            logger.info("[ReconciliationWorker] Running Paystack Settlement Sweep check...");
+            await this.sweepAllCurrencies(false);
+        } catch (err) {
+            logger.error("[ReconciliationWorker] Paystack Settlement Sweep check failed:", err.message);
+        }
+    }
+
+    static async sweepAllCurrencies(override = false) {
+        const currencies = ['NGN', 'USD', 'EUR', 'GBP', 'JPY'];
+        const results = [];
+
+        for (const curr of currencies) {
+            const res = await this.sweepCurrency(curr, override);
+            if (res) results.push(res);
+        }
+
+        return results;
+    }
+
+    static async sweepCurrency(curr, override = false) {
+        let query = supabase
+            .from('transactions')
+            .select('id, amount, currency, metadata')
+            .eq('currency', curr)
+            .eq('provider', 'paystack')
+            .in('status', ['COMPLETED', 'SUCCESS']);
+
+        if (!override) {
+            // T+1 settlement logic (older than 24 hours)
+            const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+            query = query.lte('completed_at', cutoff);
+        }
+
+        const { data: txs, error } = await query;
+        if (error) {
+            logger.error(`[Sweep_${curr}] Failed to fetch transactions:`, error.message);
+            return null;
+        }
+
+        const eligibleTxs = (txs || []).filter(tx => !tx.metadata?.swept);
+        if (eligibleTxs.length === 0) {
+            return null;
+        }
+
+        const txIds = eligibleTxs.map(t => t.id);
+        const totalAmount = eligibleTxs.reduce((sum, t) => sum + Number(t.amount), 0);
+
+        if (totalAmount <= 0) {
+            return null;
+        }
+
+        logger.info(`[Sweep_${curr}] Initiating sweep for ${eligibleTxs.length} transactions. Total: ${totalAmount} ${curr}`);
+
+        const { data: settlementWallet } = await supabase
+            .from('wallets_store')
+            .select('id, user_id')
+            .eq('address', `SETTLEMENT_PAYSTACK_${curr}`)
+            .maybeSingle();
+
+        const { data: treasuryWallet } = await supabase
+            .from('wallets_store')
+            .select('id, user_id')
+            .eq('address', `TREASURY_${curr}`)
+            .maybeSingle();
+
+        if (!settlementWallet || !treasuryWallet) {
+            logger.error(`[Sweep_${curr}] Missing system wallets. Settlement: ${!!settlementWallet}, Treasury: ${!!treasuryWallet}`);
+            return null;
+        }
+
+        const adminId = settlementWallet.user_id;
+        const todayStr = new Date().toISOString().split('T')[0];
+        const idempotencyKey = `sweep_${curr}_${todayStr}_${override ? Date.now() : 'auto'}`;
+
+        const entries = [
+            {
+                wallet_id: settlementWallet.id,
+                user_id: adminId,
+                currency: curr,
+                amount: totalAmount,
+                side: 'CREDIT'
+            },
+            {
+                wallet_id: treasuryWallet.id,
+                user_id: adminId,
+                currency: curr,
+                amount: -totalAmount,
+                side: 'DEBIT'
+            }
+        ];
+
+        try {
+            const { data: txId, error: rpcError } = await supabase.rpc('execute_ledger_transaction_v6', {
+                p_idempotency_key: idempotencyKey,
+                p_type: 'SWEEP',
+                p_status: 'SETTLED',
+                p_metadata: {
+                    currency: curr,
+                    swept_transactions_count: eligibleTxs.length,
+                    swept_at: new Date().toISOString(),
+                    is_manual_override: override
+                },
+                p_entries: entries
+            });
+
+            if (rpcError) {
+                if (rpcError.message?.includes('duplicate key value')) {
+                    logger.warn(`[Sweep_${curr}] Sweep already completed for today (Idempotency matched).`);
+                    return null;
+                }
+                throw rpcError;
+            }
+
+            for (const tx of eligibleTxs) {
+                const updatedMeta = { ...(tx.metadata || {}), swept: true, swept_at: new Date().toISOString(), sweep_tx_id: txId };
+                await supabase
+                    .from('transactions')
+                    .update({ metadata: updatedMeta })
+                    .eq('id', tx.id);
+            }
+
+            logger.info(`[Sweep_${curr}] Sweep transaction successfully recorded. ID: ${txId}`);
+            return { currency: curr, amount: totalAmount, count: eligibleTxs.length, transaction_id: txId };
+        } catch (err) {
+            logger.error(`[Sweep_${curr}] Sweep execution crashed:`, err.message);
+            return null;
+        }
     }
 
     /**

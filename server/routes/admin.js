@@ -43,6 +43,8 @@ router.get("/payment-audit-logs", adminController.getPaymentAuditLogs);
 router.get("/reconciliation/proposals", reconciliationController.getProposals);
 router.post("/reconciliation/proposals/:id/invalidate", reconciliationController.invalidateProposal);
 router.post("/reconciliation/proposals/:id/approve", reconciliationController.approveHighDriftProposal);
+router.get("/financial-stats", adminController.getFinancialStats);
+router.post("/settlements/sweep", adminController.sweepSettlements);
 
 
 // Bank Payment Management

@@ -151,7 +151,43 @@ class SwapService {
       throw new Error("Price feed unavailable: Cannot execute at this time. Please try again.");
     }
 
-    // Delegate to atomic 4-leg DB RPC (handles BEGIN/COMMIT/ROLLBACK internally)
+    // ── FX LIQUIDITY SAFEGUARD & TREASURY BACKSTOP ──────────────────────────
+    const targetCurrency = quote.to_currency;
+    const requiredAmount = Number(quote.to_amount);
+
+    const { data: fxPool, error: fxPoolError } = await supabase
+      .from("wallets_store")
+      .select("id, balance")
+      .eq("address", `FX_POOL_${targetCurrency}`)
+      .maybeSingle();
+
+    if (fxPoolError) {
+      logger.error(`[SwapService] Failed to check FX pool balance for ${targetCurrency}:`, fxPoolError.message);
+    }
+
+    const currentBalance = fxPool ? Number(fxPool.balance) : 0;
+
+    const BLOCK_ON_LOW_FX_LIQUIDITY = process.env.BLOCK_ON_LOW_FX_LIQUIDITY !== 'false';
+    const ALLOW_TREASURY_FX_BACKSTOP = process.env.ALLOW_TREASURY_FX_BACKSTOP !== 'false';
+
+    if (currentBalance < requiredAmount) {
+      if (BLOCK_ON_LOW_FX_LIQUIDITY) {
+        if (ALLOW_TREASURY_FX_BACKSTOP) {
+          logger.warn(`[FX_Liquidity_Safeguard] Low liquidity in FX_POOL_${targetCurrency} (${currentBalance} < ${requiredAmount}). Triggering Treasury Backstop...`);
+          const backstopSuccess = await this.triggerTreasuryBackstop(targetCurrency, requiredAmount - currentBalance);
+          if (!backstopSuccess) {
+            throw new Error(`Insufficient liquidity in exchange pool for ${targetCurrency}. Treasury backstop failed or reserves depleted.`);
+          }
+        } else {
+          logger.error(`[FX_Liquidity_Safeguard] Blocked swap: FX_POOL_${targetCurrency} has insufficient balance (${currentBalance} < ${requiredAmount}) and backstop is disabled.`);
+          throw new Error(`Insufficient liquidity in exchange pool for ${targetCurrency}. Swap rejected.`);
+        }
+      } else {
+        logger.warn(`[FX_Liquidity_Safeguard] Low liquidity in FX_POOL_${targetCurrency} (${currentBalance} < ${requiredAmount}), but block is disabled. Proceeding.`);
+      }
+    }
+
+    // Delegate to atomic DB RPC (handles BEGIN/COMMIT/ROLLBACK internally)
     const { data: txId, error: txError } = await supabase.rpc(
       "execute_swap_v6",
       {
@@ -196,6 +232,95 @@ class SwapService {
       fee: quote.fee,
       rate: quote.rate,
     };
+  }
+
+  async triggerTreasuryBackstop(currency, neededAmount) {
+    try {
+      const { data: treasuryWallet } = await supabase
+        .from("wallets_store")
+        .select("id, user_id, balance")
+        .eq("address", `TREASURY_${currency}`)
+        .maybeSingle();
+
+      const { data: fxPoolWallet } = await supabase
+        .from("wallets_store")
+        .select("id, user_id")
+        .eq("address", `FX_POOL_${currency}`)
+        .maybeSingle();
+
+      if (!treasuryWallet || !fxPoolWallet) {
+        logger.error(`[Backstop_${currency}] Missing system wallets. Treasury: ${!!treasuryWallet}, FX_POOL: ${!!fxPoolWallet}`);
+        return false;
+      }
+
+      const treasuryBalance = Math.abs(Number(treasuryWallet.balance) || 0);
+      if (treasuryBalance < neededAmount) {
+        logger.error(`[Backstop_${currency}] Treasury has insufficient settled reserves (${treasuryBalance} < ${neededAmount}). Rejecting backstop.`);
+        return false;
+      }
+
+      const maxAllowedFraction = 0.5;
+      if (neededAmount > treasuryBalance * maxAllowedFraction) {
+        logger.error(`[Backstop_${currency}] Backstop request ${neededAmount} exceeds the safety fraction of 50% of Treasury balance (${treasuryBalance}). Rejecting.`);
+        return false;
+      }
+
+      const adminId = treasuryWallet.user_id;
+      const idempotencyKey = `backstop_${currency}_${Date.now()}`;
+
+      const entries = [
+        {
+          wallet_id: treasuryWallet.id,
+          user_id: adminId,
+          currency: currency,
+          amount: neededAmount,
+          side: 'CREDIT'
+        },
+        {
+          wallet_id: fxPoolWallet.id,
+          user_id: adminId,
+          currency: currency,
+          amount: -neededAmount,
+          side: 'DEBIT'
+        }
+      ];
+
+      const { data: txId, error: rpcError } = await supabase.rpc('execute_ledger_transaction_v6', {
+        p_idempotency_key: idempotencyKey,
+        p_type: 'BACKSTOP',
+        p_status: 'SETTLED',
+        p_metadata: {
+          currency: currency,
+          needed_amount: neededAmount,
+          reason: 'Emergency FX Pool Liquidity Backstop',
+          triggered_at: new Date().toISOString()
+        },
+        p_entries: entries
+      });
+
+      if (rpcError) throw rpcError;
+
+      logger.error(`[COMPLIANCE_WARNING] [HIGH_PRIORITY_ALERT] Treasury FX Backstop triggered! Tapped Treasury_${currency} for ${neededAmount} to fund FX_POOL_${currency}. Swap transaction allowed under ALLOW_TREASURY_FX_BACKSTOP override. Ledger Tx ID: ${txId}`);
+
+      await supabase.from("security_audit_logs").insert({
+        user_id: adminId,
+        event_type: "TREASURY_BACKSTOP_TAPPED",
+        severity: "CRITICAL",
+        description: `Treasury FX Backstop triggered! Tapped Treasury_${currency} for ${neededAmount} to fund FX_POOL_${currency}.`,
+        payload: {
+          currency: currency,
+          amount: neededAmount,
+          treasury_remaining: treasuryBalance - neededAmount,
+          transaction_id: txId,
+          alert_level: "HIGH"
+        }
+      });
+
+      return true;
+    } catch (err) {
+      logger.error(`[Backstop_${currency}] Execution crashed:`, err.message);
+      return false;
+    }
   }
 }
 

@@ -1736,3 +1736,115 @@ exports.rejectWithdrawal = async (req, res) => {
     res.status(500).json({ error: err.message || "Failed to reject withdrawal" });
   }
 };
+
+/**
+ * GET /api/admin/financial-stats
+ * Premium institutional dashboard analytics showing backing ratios and liabilities vs reserves.
+ */
+exports.getFinancialStats = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+
+    const { data: wallets, error } = await serviceSupabase
+      .from("wallets_store")
+      .select("address, currency, balance");
+
+    if (error) throw error;
+
+    const stats = {};
+    const currencies = ["NGN", "USD", "EUR", "GBP", "JPY"];
+    
+    currencies.forEach(curr => {
+      stats[curr] = {
+        currency: curr,
+        liabilities: 0,
+        treasury_reserves: 0,
+        unsettled_balances: 0,
+        fx_pool: 0,
+        revenue: 0,
+        net_exposure: 0,
+        collateral_ratio_percent: 100
+      };
+    });
+
+    (wallets || []).forEach(w => {
+      const curr = w.currency;
+      if (!stats[curr]) return;
+
+      const addr = w.address || "";
+      const val = Number(w.balance) || 0;
+
+      if (addr.startsWith("TREASURY_")) {
+        stats[curr].treasury_reserves = Math.abs(val);
+      } else if (addr.startsWith("SETTLEMENT_PAYSTACK_")) {
+        stats[curr].unsettled_balances = Math.abs(val);
+      } else if (addr.startsWith("FX_POOL_")) {
+        stats[curr].fx_pool = Math.abs(val);
+      } else if (addr.startsWith("REVENUE_")) {
+        stats[curr].revenue = val;
+      } else if (
+        !addr.startsWith("SETTLEMENT_") &&
+        !addr.startsWith("TREASURY_") &&
+        !addr.startsWith("FX_POOL_") &&
+        !addr.startsWith("RECONCILIATION_") &&
+        !addr.startsWith("PENDING_")
+      ) {
+        stats[curr].liabilities += val;
+      }
+    });
+
+    currencies.forEach(curr => {
+      const s = stats[curr];
+      const backingAssets = s.treasury_reserves + s.unsettled_balances;
+      
+      s.net_exposure = Math.max(0, s.liabilities - backingAssets);
+      s.collateral_ratio_percent = s.liabilities > 0 
+        ? Math.round((backingAssets / s.liabilities) * 100) 
+        : 100;
+    });
+
+    const { count: anomalyAlertsCount } = await serviceSupabase
+      .from("security_audit_logs")
+      .select("*", { count: "exact", head: true })
+      .in("event_type", ["TREASURY_RESERVE_BREACH", "TREASURY_BACKSTOP_TAPPED", "LEDGER_DRIFT_DETECTED"]);
+
+    res.json({
+      success: true,
+      stats: Object.values(stats),
+      anomaly_alerts_count: anomalyAlertsCount || 0,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    logger.error("[AdminStats] Error fetching financial stats:", err.message);
+    res.status(500).json({ error: "Failed to load financial statistics" });
+  }
+};
+
+/**
+ * POST /api/admin/settlements/sweep
+ * Triggers manual Paystack settlement sweeps with optional age constraint override.
+ */
+exports.sweepSettlements = async (req, res) => {
+  try {
+    const { override = false } = req.body;
+    const ReconciliationWorker = require("../workers/reconciliationWorker");
+
+    logger.info(`[AdminSweep] Admin ${req.user.id} triggered manual settlement sweep. Override: ${override}`);
+    
+    const results = await ReconciliationWorker.sweepAllCurrencies(override);
+
+    await logAdminAction(req, "TRIGGER_SETTLEMENT_SWEEP", "settlements", "all", {
+      manual_override: override,
+      sweep_results: results
+    });
+
+    res.json({
+      success: true,
+      message: "Settlement sweep executed successfully",
+      swept_currencies: results
+    });
+  } catch (err) {
+    logger.error("[AdminSweep] Manual settlement sweep failed:", err.message);
+    res.status(500).json({ error: err.message || "Failed to execute manual settlement sweep" });
+  }
+};
