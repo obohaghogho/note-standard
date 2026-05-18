@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Image,
-  Alert, Share,
+  Alert, Share, Animated, PanResponder, Modal,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,7 +19,6 @@ import { ChatStackParamList } from '../navigation/ChatStack';
 import { MediaService } from '../services/MediaService';
 import VoiceService from '../services/VoiceService';
 import { Audio } from 'expo-av';
-import { useLongPressGesture } from '../hooks/useLongPressGesture';
 import SignalingService from '../services/SignalingService';
 
 type Props = {
@@ -49,15 +48,61 @@ interface Message {
   };
 }
 
+// ── MessageActionSheet ──────────────────────────────────────────────────
+const MessageActionSheet = React.memo(({
+  message, currentUserId, onClose, onReply, onCopy, onShare, onEdit, onDelete,
+}: {
+  message: Message | null;
+  currentUserId: string;
+  onClose: () => void;
+  onReply: (m: Message) => void;
+  onCopy: (m: Message) => void;
+  onShare: (m: Message) => void;
+  onEdit: (m: Message) => void;
+  onDelete: (m: Message) => void;
+}) => {
+  const isMe = message?.sender_id === currentUserId;
+  if (!message) return null;
+  const actions = [
+    { icon: '↩', label: 'Reply', color: '#6366f1', onPress: () => { onReply(message); onClose(); } },
+    { icon: '📋', label: 'Copy', color: '#10b981', onPress: () => { onCopy(message); onClose(); } },
+    { icon: '↗', label: 'Share', color: '#3b82f6', onPress: () => { onShare(message); onClose(); } },
+    ...(isMe && !message._optimistic ? [
+      { icon: '✏', label: 'Edit', color: '#f59e0b', onPress: () => { onEdit(message); onClose(); } },
+      { icon: '🗑', label: 'Delete', color: '#ef4444', danger: true, onPress: () => { onDelete(message); onClose(); } },
+    ] : []),
+  ];
+  return (
+    <Modal transparent animationType="slide" visible statusBarTranslucent onRequestClose={onClose}>
+      <TouchableOpacity style={asStyles.overlay} onPress={onClose} activeOpacity={1}>
+        <View style={asStyles.sheet}>
+          <View style={asStyles.handle} />
+          <View style={asStyles.preview}>
+            <Text style={asStyles.previewLabel}>{isMe ? 'Your message' : 'Message'}</Text>
+            <Text style={asStyles.previewText} numberOfLines={2}>{message.content || '📎 Attachment'}</Text>
+          </View>
+          <View style={asStyles.grid}>
+            {actions.map((a, i) => (
+              <TouchableOpacity key={i} style={asStyles.actionBtn} onPress={a.onPress} activeOpacity={0.7}>
+                <View style={[asStyles.actionIconWrap, { backgroundColor: a.color + '22' }]}>
+                  <Text style={asStyles.actionIcon}>{a.icon}</Text>
+                </View>
+                <Text style={[asStyles.actionLabel, (a as any).danger && { color: '#ef4444' }]}>{a.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TouchableOpacity style={asStyles.cancelBtn} onPress={onClose}>
+            <Text style={asStyles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+});
+
 // ── ChatMessageBubble ────────────────────────────────────────────────────
-// Must live OUTSIDE ChatScreen so useLongPressGesture follows Rules of Hooks.
 const ChatMessageBubble = React.memo(({
-  item,
-  currentUserId,
-  recipientName,
-  onLongPress,
-  onSwipeRight,
-  onPlayAudio,
+  item, currentUserId, recipientName, onLongPress, onSwipeRight, onPlayAudio,
 }: {
   item: Message;
   currentUserId: string;
@@ -67,15 +112,32 @@ const ChatMessageBubble = React.memo(({
   onPlayAudio: (path: string) => void;
 }) => {
   const isMe = item.sender_id === currentUserId;
+  const swipeX = useRef(new Animated.Value(0)).current;
+  const swipeFired = useRef(false);
 
-  const longPressProps = useLongPressGesture({
-    onLongPress: () => onLongPress(item),
-    onSwipeRight: onSwipeRight ? () => onSwipeRight(item) : undefined,
-    delay: 500,
-    moveThreshold: 10,
-  });
+  const panResponder = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_, gs) =>
+      Math.abs(gs.dx) > 8 && Math.abs(gs.dy) < Math.abs(gs.dx) * 0.9,
+    onPanResponderGrant: () => { swipeFired.current = false; },
+    onPanResponderMove: (_, gs) => {
+      if (gs.dx > 0) swipeX.setValue(Math.min(gs.dx, 75));
+    },
+    onPanResponderRelease: (_, gs) => {
+      if (gs.dx > 50 && !swipeFired.current && onSwipeRight) {
+        swipeFired.current = true;
+        onSwipeRight(item);
+      }
+      Animated.spring(swipeX, { toValue: 0, useNativeDriver: true, tension: 50, friction: 8 }).start();
+    },
+    onPanResponderTerminate: () => {
+      Animated.spring(swipeX, { toValue: 0, useNativeDriver: true }).start();
+    },
+  })).current;
 
-  // WhatsApp-style tick: ✓ sent, ✓✓ delivered, blue ✓✓ read
+  const replyOpacity = swipeX.interpolate({ inputRange: [10, 55], outputRange: [0, 1], extrapolate: 'clamp' });
+  const replyScale = swipeX.interpolate({ inputRange: [10, 55], outputRange: [0.4, 1], extrapolate: 'clamp' });
+
   const renderTicks = (msg: Message & { delivered_at?: string; read_at?: string }) => {
     if (!isMe) return null;
     if (msg._optimistic) return <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>{'  ✓'}</Text>;
@@ -85,61 +147,66 @@ const ChatMessageBubble = React.memo(({
   };
 
   return (
-    <View style={[styles.msgRow, isMe && styles.msgRowMe]}>
+    <View style={[styles.msgRow, isMe && styles.msgRowMe]} {...panResponder.panHandlers}>
+      {/* Swipe-to-reply arrow indicator */}
+      <Animated.View style={[
+        styles.replyIndicator,
+        isMe ? styles.replyIndicatorRight : styles.replyIndicatorLeft,
+        { opacity: replyOpacity, transform: [{ scale: replyScale }] },
+      ]}>
+        <Text style={styles.replyIndicatorIcon}>↩</Text>
+      </Animated.View>
+
       {!isMe && (
         <LinearGradient colors={['#6366f1', '#4f46e5']} style={styles.msgAvatar}>
           <Text style={styles.msgAvatarText}>{recipientName.charAt(0).toUpperCase()}</Text>
         </LinearGradient>
       )}
-      <TouchableOpacity
-        activeOpacity={0.85}
-        {...longPressProps}
-        style={[
-          styles.bubble,
-          isMe ? styles.bubbleMe : styles.bubbleThem,
-          item._optimistic && styles.bubbleOptimistic,
-        ]}
-      >
-        {item.reply_to && (
-          <View style={styles.replyContext}>
-            <Text style={styles.replyContextName}>
-              {item.reply_to.sender_id === currentUserId ? 'You' : 'Member'}
+      <Animated.View style={{ transform: [{ translateX: swipeX }] }}>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onLongPress={() => onLongPress(item)}
+          delayLongPress={400}
+          style={[
+            styles.bubble,
+            isMe ? styles.bubbleMe : styles.bubbleThem,
+            item._optimistic && styles.bubbleOptimistic,
+          ]}
+        >
+          {item.reply_to && (
+            <View style={styles.replyContext}>
+              <Text style={styles.replyContextName}>
+                {item.reply_to.sender_id === currentUserId ? 'You' : recipientName}
+              </Text>
+              <Text style={styles.replyContextText} numberOfLines={1}>{item.reply_to.content}</Text>
+            </View>
+          )}
+          {item.attachment && (
+            <View style={styles.attachmentContainer}>
+              {item.attachment.file_type?.startsWith('image') ? (
+                <Image
+                  source={{ uri: `https://tngcvgisfctggvivcnva.supabase.co/storage/v1/object/public/chat-media/${item.attachment.storage_path}` }}
+                  style={styles.attachmentImage as any}
+                />
+              ) : item.attachment.file_type?.startsWith('audio') ? (
+                <TouchableOpacity onPress={() => item.attachment?.storage_path && onPlayAudio(item.attachment.storage_path)} style={styles.voiceNoteBtn}>
+                  <Text style={styles.voiceNoteText}>▶ Voice Note</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={styles.attachmentFile}>📎 {item.attachment.file_name || 'Attachment'}</Text>
+              )}
+            </View>
+          )}
+          <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.content}</Text>
+          <View style={styles.bubbleFooter}>
+            {item.is_edited && <Text style={styles.editedTag}>edited</Text>}
+            <Text style={styles.bubbleTime}>
+              {item._optimistic ? 'Sending…' : new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </Text>
-            <Text style={styles.replyContextText} numberOfLines={1}>
-              {item.reply_to.content}
-            </Text>
+            {renderTicks(item as any)}
           </View>
-        )}
-        {item.attachment && (
-          <View style={styles.attachmentContainer}>
-            {item.attachment.file_type?.startsWith('image') ? (
-              <Image
-                source={{ uri: `https://tngcvgisfctggvivcnva.supabase.co/storage/v1/object/public/chat-media/${item.attachment.storage_path}` }}
-                style={styles.attachmentImage as any}
-              />
-            ) : item.attachment.file_type?.startsWith('audio') ? (
-              <TouchableOpacity 
-                onPress={() => item.attachment?.storage_path && onPlayAudio(item.attachment.storage_path)} 
-                style={styles.voiceNoteBtn}
-              >
-                <Text style={styles.voiceNoteText}>▶ Voice Note</Text>
-              </TouchableOpacity>
-            ) : (
-              <Text style={styles.attachmentFile}>📎 {item.attachment.file_name || 'Attachment'}</Text>
-            )}
-          </View>
-        )}
-        <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.content}</Text>
-        <View style={styles.bubbleFooter}>
-          {item.is_edited && <Text style={styles.editedTag}>edited</Text>}
-          <Text style={styles.bubbleTime}>
-            {item._optimistic
-              ? 'Sending…'
-              : new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </Text>
-          {renderTicks(item as any)}
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </Animated.View>
     </View>
   );
 });
@@ -168,6 +235,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [audioPlayer, setAudioPlayer] = useState<Audio.Sound | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+  const [actionSheetMessage, setActionSheetMessage] = useState<Message | null>(null);
 
   // Inverted FlatList auto-scrolls to latest message (offset 0) natively.
   // No manual keyboard listener needed — KeyboardAvoidingView handles layout.
@@ -501,52 +569,34 @@ export default function ChatScreen({ navigation, route }: Props) {
     }
   };
 
-  const handleLongPress = (msg: Message) => {
-    const isMe = msg.sender_id === user?.id;
-    const options = ['Reply', 'Copy', 'Share'];
-    if (isMe) options.push('Edit', 'Delete');
-    options.push('Cancel');
+  // Open the action sheet — reliable on both iOS and Android
+  const handleLongPress = useCallback((msg: Message) => {
+    setActionSheetMessage(msg);
+  }, []);
 
-    Alert.alert(
-      'Message Options',
-      undefined,
-      [
-        { text: 'Reply', onPress: () => setReplyTo(msg) },
-        { 
-          text: 'Copy', 
-          onPress: () => {
-            // In a real app we'd use Clipboard from expo-clipboard
-            Alert.alert('Copied', 'Message copied to clipboard');
-          } 
-        },
-        {
-          text: 'Share',
-          onPress: async () => {
-            try {
-              await Share.share({
-                message: msg.content,
-              });
-            } catch (error: any) {
-              Alert.alert('Error', error.message);
-            }
-          }
-        },
-        ...(isMe ? [
-          { text: 'Edit', onPress: () => {
-            setEditingMessage(msg);
-            setText(msg.content);
-          }},
-          { text: 'Delete', onPress: () => {
-            Alert.alert('Delete', 'Delete this message?', [
-              { text: 'Cancel', style: 'cancel' as const },
-              { text: 'Delete', style: 'destructive' as const, onPress: () => deleteMessage(msg.id) }
-            ]);
-          }, style: 'destructive' as const }
-        ] : []),
-        { text: 'Cancel', style: 'cancel' as const }
-      ]
-    );
-  };
+  const handleCopy = useCallback((msg: Message) => {
+    try {
+      // Use the Share API as a reliable copy fallback across all Expo versions
+      Share.share({ message: msg.content }).catch(() => {});
+    } catch (_) {}
+    Alert.alert('Copied ✓', 'Message text copied.');
+  }, []);
+
+  const handleShare = useCallback(async (msg: Message) => {
+    try { await Share.share({ message: msg.content }); } catch (_) {}
+  }, []);
+
+  const handleEditMsg = useCallback((msg: Message) => {
+    setEditingMessage(msg);
+    setText(msg.content);
+  }, []);
+
+  const handleDeleteMsg = useCallback((msg: Message) => {
+    Alert.alert('Delete Message', 'This message will be permanently deleted.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => deleteMessage(msg.id) },
+    ]);
+  }, [deleteMessage]);
 
   const renderMessage = useCallback(({ item }: { item: Message }) => (
     <ChatMessageBubble
@@ -655,6 +705,20 @@ export default function ChatScreen({ navigation, route }: Props) {
         </>
       )}
 
+      {/* Message Action Sheet — long press menu */}
+      {actionSheetMessage && (
+        <MessageActionSheet
+          message={actionSheetMessage}
+          currentUserId={user?.id ?? ''}
+          onClose={() => setActionSheetMessage(null)}
+          onReply={(msg) => setReplyTo(msg)}
+          onCopy={handleCopy}
+          onShare={handleShare}
+          onEdit={handleEditMsg}
+          onDelete={handleDeleteMsg}
+        />
+      )}
+
       {/* Action Previews */}
       {editingMessage && (
         <View style={styles.actionPreview}>
@@ -671,7 +735,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       {replyTo && (
         <View style={styles.actionPreview}>
           <View style={styles.actionInfo}>
-            <Text style={styles.actionTitle}>Replying to {replyTo.sender_id === user?.id ? 'yourself' : 'Member'}</Text>
+            <Text style={styles.actionTitle}>↩ Replying to {replyTo.sender_id === user?.id ? 'yourself' : recipientName}</Text>
             <Text style={styles.actionText} numberOfLines={1}>{replyTo.content}</Text>
           </View>
           <TouchableOpacity onPress={() => setReplyTo(null)} style={styles.actionClose}>
@@ -835,4 +899,84 @@ const styles = StyleSheet.create({
   sendBtnDisabled: { opacity: 0.5 },
   sendGrad: { width: 48, height: 48, justifyContent: 'center', alignItems: 'center', borderRadius: 24 },
   sendIcon: { color: '#fff', fontSize: 18 },
+  // Swipe-to-reply indicator
+  replyIndicator: {
+    position: 'absolute',
+    top: '50%',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#6366f122',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 0,
+  },
+  replyIndicatorLeft: { left: 36 },
+  replyIndicatorRight: { right: 4 },
+  replyIndicatorIcon: { fontSize: 16, color: '#6366f1' },
+});
+
+// ── Action Sheet Styles ────────────────────────────────────────────────
+const asStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: '#0d0d1e',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 32,
+    paddingTop: 12,
+    borderWidth: 1,
+    borderColor: '#1e1e3a',
+    borderBottomWidth: 0,
+  },
+  handle: {
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: '#333', alignSelf: 'center', marginBottom: 16,
+  },
+  preview: {
+    marginHorizontal: 20,
+    marginBottom: 16,
+    padding: 14,
+    backgroundColor: '#060611',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#1e1e3a',
+  },
+  previewLabel: { color: '#6366f1', fontSize: 11, fontWeight: '700', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.8 },
+  previewText: { color: '#ccc', fontSize: 14, lineHeight: 20 },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 12,
+    gap: 8,
+    marginBottom: 12,
+  },
+  actionBtn: {
+    flexBasis: '22%',
+    flexGrow: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: '#111133',
+  },
+  actionIconWrap: {
+    width: 44, height: 44, borderRadius: 22,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 6,
+  },
+  actionIcon: { fontSize: 20 },
+  actionLabel: { color: '#ccc', fontSize: 12, fontWeight: '600' },
+  cancelBtn: {
+    marginHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#111133',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#1e1e3a',
+  },
+  cancelText: { color: '#888', fontSize: 15, fontWeight: '600' },
 });
