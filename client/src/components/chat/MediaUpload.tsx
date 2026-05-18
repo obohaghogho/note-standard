@@ -10,7 +10,7 @@ import './MediaUpload.css';
 
 interface MediaUploadProps {
     conversationId: string;
-    onUploadComplete: (attachmentId: string, type: string, content: string) => void;
+    onUploadComplete: (file: File, type: 'image' | 'video') => void;
     onCancel: () => void;
 }
 
@@ -70,59 +70,10 @@ export const MediaUpload: React.FC<MediaUploadProps> = ({ conversationId, onUplo
         setPreviewUrl(URL.createObjectURL(selectedFile));
     };
 
-    const handleUpload = async () => {
-        if (!file || !session) return;
-
-        setUploading(true);
-        setUploadProgress(10);
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
-        const filePath = `${conversationId}/${fileName}`;
-
-        try {
-            setUploadProgress(30);
-            const { error: uploadError, data } = await supabase.storage
-                .from('chat-media')
-                .upload(filePath, file, {
-                    cacheControl: '3600',
-                    upsert: false
-                });
-
-            if (uploadError) throw uploadError;
-            setUploadProgress(70);
-
-            const type = file.type.startsWith('image/') ? 'image' : 'video';
-            
-            const res = await fetch(`${API_URL}/api/media/attachments`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.access_token}`
-                },
-                body: JSON.stringify({
-                    conversationId,
-                    fileName: file.name,
-                    fileType: file.type,
-                    fileSize: file.size,
-                    storagePath: data.path,
-                    metadata: {}
-                })
-            });
-
-            if (!res.ok) throw new Error('Failed to create attachment record');
-
-            const attachment = await res.json();
-            setUploadProgress(100);
-            
-            onUploadComplete(attachment.id, type, attachment.file_name);
-            toast.success('Media sent');
-        } catch (err: unknown) {
-            console.error('Upload failed:', err);
-            toast.error(err instanceof Error ? err.message : 'Upload failed');
-        } finally {
-            setUploading(false);
-            setUploadProgress(0);
-        }
+    const handleUpload = () => {
+        if (!file) return;
+        const type = file.type.startsWith('image/') ? 'image' : 'video';
+        onUploadComplete(file, type);
     };
 
     const handleTouchStart = (e: React.TouchEvent) => {

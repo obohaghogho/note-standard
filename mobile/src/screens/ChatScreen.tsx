@@ -200,11 +200,9 @@ export default function ChatScreen({ navigation, route }: Props) {
       // Save to cache
       await AsyncStorage.setItem(`cache_messages_${conversationId}`, JSON.stringify(newestFirst));
 
-      // Mark unread messages as read
-      const unread = data.filter((m: Message) => m.sender_id !== user?.id && !(m as any).read_at);
-      for (const m of unread) {
-        apiClient.post(`/chat/messages/${m.id}/read`).catch(() => {});
-      }
+      // Mark conversation as delivered and read in one go
+      apiClient.put(`/chat/conversations/${conversationId}/deliver`).catch(() => {});
+      apiClient.put(`/chat/conversations/${conversationId}/read`).catch(() => {});
     } catch (e) {
       console.error('[ChatScreen] Failed to load messages:', e);
     } finally {
@@ -288,9 +286,10 @@ export default function ChatScreen({ navigation, route }: Props) {
               }
             }
 
-            // Mark as read immediately since user is in the chat
+            // Mark as read and delivered immediately since user is in the chat
             if (msg.sender_id !== user?.id) {
-              apiClient.post(`/chat/messages/${msg.id}/read`).catch(() => {});
+              apiClient.put(`/chat/messages/${msg.id}/deliver`).catch(() => {});
+              apiClient.put(`/chat/messages/${msg.id}/read`).catch(() => {});
             }
             return [msg, ...prev];
           });
@@ -315,6 +314,23 @@ export default function ChatScreen({ navigation, route }: Props) {
           setMessages(prev => prev.map(m =>
             m.id === messageId ? { ...m, delivered_at: new Date().toISOString() } as any : m
           ));
+        });
+
+        // Conversation-wide status updates
+        socket.on('chat:conversation_read', ({ conversationId: readConvId, readerId, readAt }: { conversationId: string, readerId: string, readAt: string }) => {
+          if (readConvId === conversationId && readerId !== user?.id) {
+            setMessages(prev => prev.map(m =>
+              m.sender_id === user?.id ? { ...m, read_at: readAt, delivered_at: readAt } as any : m
+            ));
+          }
+        });
+
+        socket.on('chat:conversation_delivered', ({ conversationId: delConvId, userId: delUserId, delivered_at }: { conversationId: string, userId: string, delivered_at: string }) => {
+          if (delConvId === conversationId && delUserId !== user?.id) {
+            setMessages(prev => prev.map(m =>
+              m.sender_id === user?.id && !(m as any).read_at ? { ...m, delivered_at: delivered_at } as any : m
+            ));
+          }
         });
 
         // Typing indicator

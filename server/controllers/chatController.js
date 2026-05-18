@@ -497,7 +497,7 @@ exports.acceptConversation = async (req, res) => {
             message: `${accepter?.username || "Someone"} accepted your chat request!`,
             link: `/dashboard/chat?id=${conversationId}`,
           });
-          await realtime.emitToUser(m.user_id, "chat:conversation_updated", { conversationId, status: "accepted" });
+          await realtime.emitToUser(m.user_id, "chat:conversation_updated", { conversationId, userId, status: "accepted" });
         }
       }
     } catch (notifErr) {
@@ -507,6 +507,7 @@ exports.acceptConversation = async (req, res) => {
     // Also notify self across other tabs/devices
     await realtime.emitToUser(userId, "chat:conversation_updated", {
       conversationId,
+      userId,
       status: "accepted",
     });
 
@@ -823,22 +824,25 @@ exports.sendMessage = async (req, res) => {
       if (attachmentId) insertPayload.attachment_id = attachmentId;
       if (replyToId)    insertPayload.reply_to_id   = replyToId;
 
-      const { data, error } = await supabase
+      // Stage 1: Insert the raw message to database
+      let insertedMessage = null;
+      const { data: insertData, error: insertError } = await supabase
         .from("messages")
         .insert([insertPayload])
-        // Use safe select without explicit FK hint — same as getMessages which already works
-        .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url), reply_to:messages(id, content, sender_id)")
+        .select("id")
         .single();
 
-      if (error) {
-        // Fallback for: missing column (42703) OR ambiguous/missing relationship (PGRST200)
-        const isSchemaMismatch = error.code === "42703" || error.code === "PGRST200" ||
-          (error.message && (error.message.includes("media_attachments") || error.message.includes("Could not find")));
+      if (insertError) {
+        // Fallback for missing columns (e.g. sentiment or language metadata)
+        const isSchemaError = insertError.code === "42703" || insertError.code === "PGRST200" ||
+          (insertError.message && (
+            insertError.message.includes("sentiment") || 
+            insertError.message.includes("detected_language") || 
+            insertError.message.includes("attachment_id")
+          ));
 
-        if (isSchemaMismatch) {
-          console.warn(
-            "[Chat Controller] Schema mismatch, retrying basic insert:", error.code, error.message
-          );
+        if (isSchemaError) {
+          console.warn("[Chat Controller] Schema mismatch on insert, retrying basic fallback insert:", insertError.code, insertError.message);
           const fallbackPayload = {
             conversation_id: conversationId,
             sender_id: userId,
@@ -847,21 +851,59 @@ exports.sendMessage = async (req, res) => {
           };
           if (attachmentId) fallbackPayload.attachment_id = attachmentId;
           if (replyToId)    fallbackPayload.reply_to_id   = replyToId;
+
           const { data: retryData, error: retryErr } = await supabase
             .from("messages")
             .insert([fallbackPayload])
-            .select('*')
+            .select("id")
             .single();
 
           if (retryErr) throw retryErr;
-          createdMessageId = retryData.id;
-          processAfterMsg(retryData);
+          insertedMessage = retryData;
         } else {
-          throw error;
+          throw insertError;
         }
       } else {
-        createdMessageId = data.id;
-        processAfterMsg(data);
+        insertedMessage = insertData;
+      }
+
+      createdMessageId = insertedMessage.id;
+
+      // Stage 2: Hydrate the inserted message with all necessary joins (sender, attachment, etc.)
+      const { data: hydratedMessage, error: hydrateError } = await supabase
+        .from("messages")
+        .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url), reply_to:messages(id, content, sender_id)")
+        .eq("id", createdMessageId)
+        .single();
+
+      if (hydrateError) {
+        console.warn("[Chat Controller] Failed to fully hydrate message on select, retrying simple select:", hydrateError.code, hydrateError.message);
+        
+        const { data: simpleMessage, error: simpleErr } = await supabase
+          .from("messages")
+          .select("*")
+          .eq("id", createdMessageId)
+          .single();
+
+        if (simpleErr) throw simpleErr;
+        
+        // Hydrate sender details manually if the join itself failed
+        try {
+          const { data: senderData } = await supabase
+            .from("profiles")
+            .select("id, username, full_name, avatar_url")
+            .eq("id", userId)
+            .single();
+          if (senderData) {
+            simpleMessage.sender = senderData;
+          }
+        } catch (e) {
+          console.warn("[Chat Controller] Manual profile hydration failed:", e);
+        }
+
+        processAfterMsg(simpleMessage);
+      } else {
+        processAfterMsg(hydratedMessage);
       }
     } catch (msgErr) {
       console.error("====================== CHAT ERROR TRACE ======================");

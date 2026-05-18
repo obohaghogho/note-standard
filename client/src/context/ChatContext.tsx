@@ -5,6 +5,7 @@ import { useSocket } from './SocketContext';
 
 import api from '../api/axiosInstance';
 import toast from 'react-hot-toast';
+import { supabase } from '../lib/supabase';
 
 export interface Message {
     id: string;
@@ -81,6 +82,7 @@ export interface ChatContextValue {
     connected: boolean;
     setActiveConversationId: (id: string | null) => void;
     sendMessage: (content: string, type?: string, attachmentId?: string, replyToId?: string) => Promise<void>;
+    sendMediaMessage: (file: File | Blob, type: 'image' | 'video' | 'audio' | 'file', conversationId?: string) => Promise<void>;
     loadMoreMessages: (conversationId: string) => Promise<void>;
     markMessageRead: (messageId: string) => Promise<void>;
     markMessageDelivered: (messageId: string) => Promise<void>;
@@ -125,6 +127,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const conversationsRef = useRef<Conversation[]>([]);
     const socketRef = useRef<Socket | null>(null);
     const lastUserIdRef = useRef<string | null>(null);
+    const activeConversationIdRef = useRef<string | null>(null);
 
     useEffect(() => {
         conversationsRef.current = conversations;
@@ -237,10 +240,19 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, [authReady, session, user, loadConversations]);
 
     useEffect(() => {
+        activeConversationIdRef.current = activeConversationId;
         if (activeConversationId) {
             loadMessages(activeConversationId);
+            markConversationRead(activeConversationId);
         }
-    }, [activeConversationId, loadMessages]);
+    }, [activeConversationId, loadMessages, markConversationRead]);
+
+    // Re-subscribe all conversations on socket reconnect
+    useEffect(() => {
+        if (connected && conversations.length > 0) {
+            joinAllRooms(conversations);
+        }
+    }, [connected, conversations, joinAllRooms]);
 
     useEffect(() => {
         if (!socket || !connected) return;
@@ -248,18 +260,32 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         const processIncomingMessage = (msg: Message & { sender_id: string; conversation_id: string }) => {
             if (!isMounted.current) return;
             const newMessage: Message = { ...msg, isOwn: msg.sender_id === user?.id };
+            
+            // Mark as read immediately if this conversation is active and message is from another user
+            if (activeConversationIdRef.current === msg.conversation_id && msg.sender_id !== user?.id) {
+                markMessageRead(msg.id);
+            }
+
+            // Mark as delivered immediately if received from another user
+            if (msg.sender_id !== user?.id) {
+                markMessageDelivered(msg.id);
+            }
+
             setMessages(prev => {
                 const current = prev[msg.conversation_id] || [];
                 if (current.some(m => m.id === msg.id)) return prev;
                 return { ...prev, [msg.conversation_id]: [...current, newMessage] };
             });
+
+            // Increment unread count only if chat is NOT currently open
+            const isCurrentlyOpen = activeConversationIdRef.current === msg.conversation_id;
             setConversations(prev => prev.map(conv => {
                 if (conv.id === msg.conversation_id) {
                     return {
                         ...conv,
                         updated_at: msg.created_at,
                         lastMessage: { content: msg.content, sender_id: msg.sender_id, created_at: msg.created_at },
-                        unreadCount: (conv.unreadCount || 0) + (msg.sender_id !== user?.id ? 1 : 0)
+                        unreadCount: isCurrentlyOpen ? 0 : (conv.unreadCount || 0) + (msg.sender_id !== user?.id ? 1 : 0)
                     };
                 }
                 return conv;
@@ -280,14 +306,111 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             });
         };
 
+        const onMessageRead = ({ messageId, conversationId }: { messageId: string, conversationId: string }) => {
+            if (!isMounted.current) return;
+            setMessages(prev => {
+                const current = prev[conversationId] || [];
+                return {
+                    ...prev,
+                    [conversationId]: current.map(m => m.id === messageId ? { ...m, read_at: new Date().toISOString() } : m)
+                };
+            });
+        };
+
+        const onMessageDelivered = ({ messageId, conversationId }: { messageId: string, conversationId: string }) => {
+            if (!isMounted.current) return;
+            setMessages(prev => {
+                const current = prev[conversationId] || [];
+                return {
+                    ...prev,
+                    [conversationId]: current.map(m => m.id === messageId ? { ...m, delivered_at: new Date().toISOString() } : m)
+                };
+            });
+        };
+
+        const onReadReceipt = ({ conversationId, messageIds }: { conversationId: string, messageIds: string[] }) => {
+            if (!isMounted.current) return;
+            setMessages(prev => {
+                const current = prev[conversationId] || [];
+                return {
+                    ...prev,
+                    [conversationId]: current.map(m => messageIds.includes(m.id) ? { ...m, read_at: new Date().toISOString() } : m)
+                };
+            });
+        };
+
+        const onDeliveryReceipt = ({ conversationId, messageId }: { conversationId: string, messageId: string }) => {
+            if (!isMounted.current) return;
+            setMessages(prev => {
+                const current = prev[conversationId] || [];
+                return {
+                    ...prev,
+                    [conversationId]: current.map(m => m.id === messageId ? { ...m, delivered_at: new Date().toISOString() } : m)
+                };
+            });
+        };
+
+        const onConversationUpdated = ({ conversationId, userId, status }: { conversationId: string, userId: string, status: string }) => {
+            if (!isMounted.current) return;
+            setConversations(prev => prev.map(c => {
+                if (c.id === conversationId) {
+                    return {
+                        ...c,
+                        members: c.members.map(m => m.user_id === userId ? { ...m, status } : m)
+                    };
+                }
+                return c;
+            }));
+        };
+
+        const onConversationRead = ({ conversationId, readerId, readAt }: { conversationId: string, readerId: string, readAt: string }) => {
+            if (!isMounted.current) return;
+            if (readerId !== user?.id) {
+                setMessages(prev => {
+                    const current = prev[conversationId] || [];
+                    return {
+                        ...prev,
+                        [conversationId]: current.map(m => m.sender_id === user?.id ? { ...m, read_at: readAt, delivered_at: readAt } : m)
+                    };
+                });
+            }
+        };
+
+        const onConversationDelivered = ({ conversationId, userId, delivered_at }: { conversationId: string, userId: string, delivered_at: string }) => {
+            if (!isMounted.current) return;
+            if (userId !== user?.id) {
+                setMessages(prev => {
+                    const current = prev[conversationId] || [];
+                    return {
+                        ...prev,
+                        [conversationId]: current.map(m => m.sender_id === user?.id && !m.read_at ? { ...m, delivered_at: delivered_at } : m)
+                    };
+                });
+            }
+        };
+
         socket.on('chat:message', processIncomingMessage);
         socket.on('chat:message_deleted', onMessageDeleted);
         socket.on('chat:message_edited', onMessageEdited);
+        socket.on('chat:message_read', onMessageRead);
+        socket.on('chat:message_delivered', onMessageDelivered);
+        socket.on('chat:read_receipt', onReadReceipt);
+        socket.on('chat:delivery_receipt', onDeliveryReceipt);
+        socket.on('chat:conversation_updated', onConversationUpdated);
+        socket.on('chat:conversation_read', onConversationRead);
+        socket.on('chat:conversation_delivered', onConversationDelivered);
         
         return () => { 
             socket.off('chat:message', processIncomingMessage); 
             socket.off('chat:message_deleted', onMessageDeleted);
             socket.off('chat:message_edited', onMessageEdited);
+            socket.off('chat:message_read', onMessageRead);
+            socket.off('chat:message_delivered', onMessageDelivered);
+            socket.off('chat:read_receipt', onReadReceipt);
+            socket.off('chat:delivery_receipt', onDeliveryReceipt);
+            socket.off('chat:conversation_updated', onConversationUpdated);
+            socket.off('chat:conversation_read', onConversationRead);
+            socket.off('chat:conversation_delivered', onConversationDelivered);
         };
     }, [socket, connected, user?.id]);
 
@@ -374,6 +497,178 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     };
 
+    const sendMediaMessage = useCallback(async (
+        file: File | Blob, 
+        type: 'image' | 'video' | 'audio' | 'file', 
+        customConversationId?: string
+    ) => {
+        const conversationId = customConversationId || activeConversationId;
+        if (!conversationId || !session || !user) {
+            toast.error('Cannot send media message');
+            return;
+        }
+
+        const tempId = `temp-${Date.now()}`;
+        const fileName = (file as File).name || `audio_${Date.now()}.webm`;
+        const fileSize = file.size;
+        const fileType = file.type;
+
+        // 1. Generate local blob/object URL for instant rendering
+        const localUrl = URL.createObjectURL(file);
+
+        // 2. Build and insert optimistic message
+        const optimisticMessage: Message = {
+            id: tempId,
+            conversation_id: conversationId,
+            sender_id: user.id,
+            content: `Shared a ${type}: ${fileName}`,
+            created_at: new Date().toISOString(),
+            type,
+            isOwn: true,
+            status: 'sending',
+            attachment: {
+                id: tempId,
+                file_name: fileName,
+                file_type: fileType,
+                file_size: fileSize,
+                storage_path: localUrl,
+                metadata: {
+                    localPreview: localUrl,
+                    progress: 0
+                }
+            }
+        };
+
+        setMessages(prev => {
+            const current = prev[conversationId] || [];
+            return { ...prev, [conversationId]: [...current, optimisticMessage] };
+        });
+
+        // 3. Trigger asynchronous background upload
+        const runBackgroundUpload = async () => {
+            let progressInterval: NodeJS.Timeout | undefined;
+            try {
+                // Perform upload to Supabase Storage
+                const timestamp = Date.now();
+                const randomStr = Math.random().toString(36).substring(7);
+                const safeName = fileName.replace(/[^a-zA-Z0-9.]/g, '_');
+                
+                let filePath = '';
+                if (type === 'audio') {
+                    // Upload raw recording to temporary folder first
+                    filePath = `temp/raw_${timestamp}_${randomStr}_${safeName}`;
+                } else {
+                    filePath = `${conversationId}/${timestamp}_${randomStr}_${safeName}`;
+                }
+
+                // Smooth simulated progress bar increments by 10-15% up to 90%
+                let currentProgress = 0;
+                progressInterval = setInterval(() => {
+                    if (currentProgress < 90) {
+                        currentProgress += Math.floor(Math.random() * 15) + 5;
+                        if (currentProgress > 90) currentProgress = 90;
+                        setMessages(prev => {
+                            const current = prev[conversationId] || [];
+                            return {
+                                ...prev,
+                                [conversationId]: current.map(m => m.id === tempId ? {
+                                    ...m,
+                                    attachment: m.attachment ? {
+                                        ...m.attachment,
+                                        metadata: { ...m.attachment.metadata, progress: currentProgress }
+                                    } : undefined
+                                } : m)
+                            };
+                        });
+                    }
+                }, 300);
+
+                const { data: uploadData, error: uploadError } = await supabase.storage
+                    .from('chat-media')
+                    .upload(filePath, file, {
+                        cacheControl: '3600',
+                        upsert: false,
+                        contentType: fileType || (type === 'audio' ? 'audio/webm' : undefined)
+                    });
+
+                if (uploadError) throw uploadError;
+
+                let attachment = null;
+                if (type === 'audio') {
+                    // Trigger backend transcode processing
+                    const transcodeRes = await api.post('/media/process-audio', {
+                        storagePath: filePath,
+                        conversationId
+                    });
+                    attachment = transcodeRes.data;
+                } else {
+                    // Create the attachment record in DB directly for other media types
+                    const attachmentRes = await api.post('/media/attachments', {
+                        conversationId,
+                        fileName,
+                        fileType,
+                        fileSize,
+                        storagePath: filePath,
+                        metadata: {
+                            original_name: fileName,
+                            uploaded_at: new Date().toISOString()
+                        }
+                    });
+                    attachment = attachmentRes.data;
+                }
+
+                // Stop progress interval and set to 100%
+                if (progressInterval) clearInterval(progressInterval);
+                setMessages(prev => {
+                    const current = prev[conversationId] || [];
+                    return {
+                        ...prev,
+                        [conversationId]: current.map(m => m.id === tempId ? {
+                            ...m,
+                            attachment: m.attachment ? {
+                                ...m.attachment,
+                                metadata: { ...m.attachment.metadata, progress: 100 }
+                            } : undefined
+                        } : m)
+                    };
+                });
+
+                // Send the actual message
+                const msgRes = await api.post(`/chat/conversations/${conversationId}/messages`, {
+                    content: type === 'audio' ? 'Sent a voice message' : `Shared a ${type}: ${fileName}`,
+                    type,
+                    attachmentId: attachment.id
+                });
+
+                // Replace the optimistic message in state with the final server message
+                setMessages(prev => {
+                    const current = prev[conversationId] || [];
+                    return {
+                        ...prev,
+                        [conversationId]: current.map(m => m.id === tempId ? { ...msgRes.data, isOwn: true, status: 'sent' } : m)
+                    };
+                });
+
+                // Clean up local preview URL
+                URL.revokeObjectURL(localUrl);
+
+            } catch (err) {
+                console.error('[ChatContext] Background media upload failed:', err);
+                if (progressInterval) clearInterval(progressInterval);
+                setMessages(prev => {
+                    const current = prev[conversationId] || [];
+                    return {
+                        ...prev,
+                        [conversationId]: current.map(m => m.id === tempId ? { ...m, status: 'failed' } : m)
+                    };
+                });
+                toast.error(`Failed to send ${type}`);
+            }
+        };
+
+        runBackgroundUpload();
+    }, [activeConversationId, session, user]);
+
     const startConversation = async (username: string): Promise<string | null> => {
         try {
             const res = await api.post('/chat/conversations', { participants: [username], type: 'direct' });
@@ -456,6 +751,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         conversations, messages, activeConversationId, loading, connected,
         setActiveConversationId,
         sendMessage: (content, type, attachmentId, replyToId) => sendMessageToConversation(activeConversationId!, content, type, attachmentId, replyToId),
+        sendMediaMessage,
         loadMoreMessages: async () => {},
         markMessageRead, markMessageDelivered,
         startConversation,

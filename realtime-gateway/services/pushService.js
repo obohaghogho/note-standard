@@ -97,20 +97,16 @@ async function sendCallPush(params) {
         notification.priority = 10;
         notification.pushType = 'voip';
         notification.expiry = 0; // Immediate delivery, do not store
+        notification.alert = {
+          title: `Incoming ${payload.callType} call`,
+          body: `${payload.callerName} is calling you...`
+        };
+        notification.sound = 'default';
+        notification.contentAvailable = true;
         notification.payload = {
           ...payload,
           uuid: payload.peerId || payload.callId,
           callerName: payload.callerName, // Duplicate for root access
-        };
-        // VoIP pushes should ideally only have content-available, but adding 
-        // a fallback alert can help if CallKit takes too long to wake up.
-        notification.aps = {
-          'content-available': 1,
-          alert: {
-            title: `Incoming ${payload.callType} call`,
-            body: `${payload.callerName} is calling you...`
-          },
-          sound: 'default'
         };
         
         console.log(`[PushService] 📤 Sending VoIP Push (iOS) to topic: ${notification.topic}`);
@@ -185,17 +181,12 @@ async function sendChatPush(params) {
         notification.alert = { title, body };
         notification.sound = 'default';
         notification.badge = 1;
+        notification.contentAvailable = true;
+        notification.mutableContent = true;
         notification.payload = {
           conversationId: payload.conversationId,
           messageId: payload.messageId,
           url: payload.url || '/dashboard/chat',
-          aps: {
-            alert: { title, body },
-            sound: 'default',
-            badge: 1,
-            'mutable-content': 1,
-            'content-available': 1,
-          },
         };
 
         console.log(`[PushService] 📤 Sending APNs alert (iOS chat) to topic: ${notification.topic}`);

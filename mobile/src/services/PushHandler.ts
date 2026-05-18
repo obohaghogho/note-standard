@@ -45,7 +45,7 @@ export class PushHandler {
       const tokenData = await Notifications.getDevicePushTokenAsync();
       const token = tokenData.data;
       console.log('[PushHandler] 🔑 Standard Device Token:', token);
-      await this.registerTokenWithBackend(token, 'fcm'); // FCM for Android, standard APNs for iOS
+      await this.registerTokenWithBackend(token, Platform.OS === 'ios' ? 'apns' : 'fcm'); // FCM for Android, standard APNs for iOS
     } catch (err) {
       console.error('[PushHandler] ❌ Failed to fetch standard device token:', err);
     }

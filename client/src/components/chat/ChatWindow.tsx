@@ -30,7 +30,7 @@ const ChatWindow: React.FC = () => {
         conversations, acceptConversation, deleteConversation, deleteMessage, editMessage,
         muteConversation, clearChatHistory, loadMoreMessages, hasMore,
         sendTypingStatus, typingUsers, sendMessageToConversation,
-        drafts, setDraft
+        drafts, setDraft, sendMediaMessage
     } = useChat();
     const [, setSearchParams] = useSearchParams();
     const { isUserOnline, getUserLastSeen } = usePresence();
@@ -98,6 +98,10 @@ const ChatWindow: React.FC = () => {
     const [inputValue, setInputValue] = useState('');
     const [showMediaUpload, setShowMediaUpload] = useState(false);
     const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+    const signedUrlsRef = useRef<Record<string, string>>({});
+    useEffect(() => {
+        signedUrlsRef.current = signedUrls;
+    }, [signedUrls]);
     
     // Confirmation state
     const [confirmModal, setConfirmModal] = useState<{
@@ -351,7 +355,7 @@ const ChatWindow: React.FC = () => {
     }, [searchQuery, isSearchOpen, activeConversationId, session?.access_token]);
 
     const fetchSignedUrl = useCallback(async (path: string) => {
-        if (signedUrls[path]) return signedUrls[path];
+        if (signedUrlsRef.current[path]) return signedUrlsRef.current[path];
         try {
             const res = await fetch(`${API_URL}/api/media/signed-url?path=${encodeURIComponent(path)}`, {
                 headers: { 'Authorization': `Bearer ${session?.access_token}` }
@@ -359,13 +363,14 @@ const ChatWindow: React.FC = () => {
             if (res.ok) {
                 const { url } = await res.json();
                 setSignedUrls(prev => ({ ...prev, [path]: url }));
+                signedUrlsRef.current[path] = url; // optimistic cache write to prevent concurrency races
                 return url;
             }
         } catch (err) {
             console.error('Failed to get signed URL:', err);
         }
         return null;
-    }, [signedUrls, session?.access_token]);
+    }, [session?.access_token]);
 
     const handleSend = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
@@ -397,10 +402,10 @@ const ChatWindow: React.FC = () => {
         }
     };
 
-    const handleMediaUploadComplete = async (attachmentId: string, type: string, fileName: string) => {
+    const handleMediaUploadComplete = async (file: File, type: 'image' | 'video') => {
+        setShowMediaUpload(false);
         try {
-            await sendMessage(`Shared a ${type}: ${fileName}`, type, attachmentId);
-            setShowMediaUpload(false);
+            await sendMediaMessage(file, type);
         } catch {
             toast.error('Failed to send media message');
         }
@@ -446,54 +451,13 @@ const ChatWindow: React.FC = () => {
     };
 
     const handleVoiceMessage = async (blob: Blob) => {
-        if (!session || !activeConversationId) return;
-        
-        const loadingToast = toast.loading('Processing voice message...');
+        if (!activeConversationId) return;
+        setIsVoiceRecording(false);
         try {
-            const mimeType = blob.type || 'audio/webm';
-            // Use a temporary path for processing
-            const tempFileName = `raw_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-            const tempPath = `temp/${tempFileName}`;
-
-            // 1. Upload raw blob to Supabase Storage (Temp folder)
-            const { error: uploadError, data } = await supabase.storage
-                .from('chat-media')
-                .upload(tempPath, blob, {
-                    cacheControl: '3600',
-                    upsert: false,
-                    contentType: mimeType
-                });
-
-            if (uploadError) throw uploadError;
-
-            // 2. Call Backend to convert and create record
-            const res = await fetch(`${API_URL}/api/media/process-audio`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.access_token}`
-                },
-                body: JSON.stringify({
-                    storagePath: data.path,
-                    conversationId: activeConversationId
-                })
-            });
-
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.error || 'Failed to process audio');
-            }
-
-            const attachment = await res.json();
-
-            // 3. Send Message referencing the new attachment
-            await sendMessage('Sent a voice message', 'audio', attachment.id);
-            
-            setIsVoiceRecording(false);
-            toast.success('Voice message sent', { id: loadingToast });
+            await sendMediaMessage(blob, 'audio');
         } catch (err) {
             console.error('[ChatWindow] Voice message error:', err);
-            toast.error(err instanceof Error ? err.message : 'Failed to send voice message', { id: loadingToast });
+            toast.error('Failed to send voice message');
         }
     };
 
@@ -845,7 +809,7 @@ const ChatWindow: React.FC = () => {
             )}
 
             <div 
-                className="flex-1 overflow-y-auto p-3 md:p-6 space-y-4 md:space-y-6 scroll-smooth overscroll-contain transition-all scrollbar-hide"
+                className="flex-1 overflow-y-auto p-3 md:p-6 space-y-4 md:space-y-6 scroll-smooth overscroll-contain transition-all custom-scrollbar"
                 style={{ 
                     WebkitOverflowScrolling: 'touch',
                     touchAction: 'pan-y',        /* browser handles scroll before JS */
@@ -1328,14 +1292,27 @@ const ChatWindow: React.FC = () => {
 
 const ImageWithSignedUrl = ({ path, fetchUrl, onPreview }: { path: string, fetchUrl: (p: string) => Promise<string | null>, onPreview?: (url: string) => void }) => {
     const [url, setUrl] = useState<string | null>(null);
-    useEffect(() => { fetchUrl(path).then(setUrl); }, [path, fetchUrl]);
+    useEffect(() => {
+        if (path.startsWith('blob:') || path.startsWith('data:')) {
+            setUrl(path);
+            return;
+        }
+        fetchUrl(path).then(setUrl);
+    }, [path, fetchUrl]);
     return <SecureImage src={url || undefined} alt="Attached" className="max-w-full h-auto cursor-pointer hover:opacity-95 transition-opacity" onClick={() => { if (url) { if (onPreview) onPreview(url); else window.open(url, '_blank'); } }} />;
 };
 
 const VideoWithSignedUrl = ({ path, fetchUrl, onPreview }: { path: string, fetchUrl: (p: string) => Promise<string | null>, onPreview?: (url: string) => void }) => {
     const [url, setUrl] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    useEffect(() => { fetchUrl(path).then(u => { setUrl(u); if (u) setIsLoading(false); }); }, [path, fetchUrl]);
+    useEffect(() => {
+        if (path.startsWith('blob:') || path.startsWith('data:')) {
+            setUrl(path);
+            setIsLoading(false);
+            return;
+        }
+        fetchUrl(path).then(u => { setUrl(u); if (u) setIsLoading(false); });
+    }, [path, fetchUrl]);
     if (isLoading) return <div className="aspect-video bg-gray-700 animate-pulse flex items-center justify-center"><Loader2 className="animate-spin text-gray-500" /></div>;
     if (!url) return <div className="p-4 text-center text-xs text-gray-500">Video failed to load</div>;
     return (
