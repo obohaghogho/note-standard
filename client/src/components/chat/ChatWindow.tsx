@@ -158,12 +158,13 @@ const ChatWindow: React.FC = () => {
 
     const isWaitingForOthers = myMember?.status === 'accepted' && otherMember?.status === 'pending';
 
-    const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    const scrollToBottom = (behavior: any = 'smooth') => {
         if (scrollContainerRef.current) {
             const { scrollHeight } = scrollContainerRef.current;
+            const validBehavior: ScrollBehavior = (behavior === 'smooth' || behavior === 'auto') ? behavior : 'smooth';
             scrollContainerRef.current.scrollTo({
                 top: scrollHeight,
-                behavior
+                behavior: validBehavior
             });
             // Force set state to avoid lag in UI update
             setIsAtBottom(true);
