@@ -38,6 +38,7 @@ router.post("/support-chats/:id/join", adminController.joinSupportChat);
 // Audit Logs
 router.get("/audit-logs", adminController.getAuditLogs);
 router.get("/payment-audit-logs", adminController.getPaymentAuditLogs);
+router.get("/calls", adminController.getCallSessions);
 
 // Institutional Reconciliation & Observability (Phase 7)
 router.get("/reconciliation/proposals", reconciliationController.getProposals);

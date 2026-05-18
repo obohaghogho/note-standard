@@ -1,10 +1,9 @@
 /**
- * CallScreen – In-app VoIP call screen.
+ * CallScreen – In-app WebRTC Video/Audio VoIP call screen.
  *
- * ❌ Does NOT trigger GSM/carrier/telecom dialer
- * ✅ Uses Agora RTC for audio/video streams
- * ✅ Full state machine integration via CallService
- * ✅ Proper cleanup on unmount
+ * ❌ Zero Agora code, Zero carrier GSM redirects, Zero SIM calls.
+ * ✅ Pure WebRTC rendering utilizing react-native-webrtc.
+ * ✅ Seamless peer connections and layout scaling.
  */
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
@@ -16,12 +15,12 @@ import {
   Dimensions,
   StatusBar,
 } from 'react-native';
-import { RtcSurfaceView } from 'react-native-agora';
+import { RTCView, MediaStream } from 'react-native-webrtc';
 import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { ChatStackParamList } from '../navigation/ChatStack';
-import AgoraService from '../services/AgoraService';
+import WebRTCService, { WebRTCConnectionState } from '../services/WebRTCService';
 import SignalingService from '../services/SignalingService';
 import CallService, { CallState } from '../services/CallService';
 
@@ -36,18 +35,15 @@ export default function CallScreen({ navigation, route }: Props) {
   const { type, conversationId, targetUserId, targetName, isIncoming } = route.params;
 
   const [callState, setCallState] = useState<CallState>(isIncoming ? 'connecting' : 'calling');
-  const [remoteUid, setRemoteUid] = useState<number | null>(null);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaker, setIsSpeaker] = useState(type === 'video');
-  const [isFrontCamera, setIsFrontCamera] = useState(true);
   const [isMinimized, setIsMinimized] = useState(false);
 
   // Call duration timer
   const [durationSecs, setDurationSecs] = useState(0);
   const durationTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Agora event handler ref for cleanup
-  const agoraHandlerRef = useRef<any>(null);
 
   // ── Duration timer ─────────────────────────────────────────────────────
 
@@ -71,41 +67,35 @@ export default function CallScreen({ navigation, route }: Props) {
     return `${m}:${s}`;
   };
 
-  // ── Agora event handler ────────────────────────────────────────────────
+  // ── WebRTC event registration ──────────────────────────────────────────
 
-  const setupAgoraEvents = useCallback(() => {
-    const handler = {
-      onJoinChannelSuccess: () => {
-        console.log('[CallScreen] Joined Agora channel (local)');
-        // Wait for remote user to join before starting timer
+  const setupWebRTCCallbacks = useCallback(() => {
+    WebRTCService.registerCallbacks({
+      onConnectionStateChange: (state: WebRTCConnectionState) => {
+        console.log('[CallScreen] Connection state update:', state);
+        if (state === 'connected') {
+          setCallState('connected');
+          CallService.onCallConnected();
+          startDurationTimer();
+          
+          // Fetch and store streams
+          setLocalStream(WebRTCService.getLocalStream());
+          setRemoteStream(WebRTCService.getRemoteStream());
+        } else if (state === 'failed') {
+          setCallState('failed');
+          handleEndCall(false);
+        } else if (state === 'disconnected') {
+          setCallState('reconnecting');
+        } else if (state === 'closed') {
+          setCallState('ended');
+          handleEndCall(false);
+        }
       },
-      onUserJoined: (_: any, uid: number) => {
-        console.log('[CallScreen] Remote user joined:', uid);
-        setRemoteUid(uid);
-        setCallState('connected');
-        CallService.onCallConnected();
-        startDurationTimer();
-      },
-      onUserOffline: (_: any, uid: number) => {
-        console.log('[CallScreen] Remote user went offline:', uid);
-        setRemoteUid(null);
-        handleEndCall();
-      },
-      onError: (err: any) => {
-        console.error('[CallScreen] Agora error:', err);
-        setCallState('failed');
-      },
-      onConnectionStateChanged: (_: any, state: number) => {
-        // 4 = Reconnecting, 5 = Failed
-        if (state === 4) setCallState('reconnecting');
-        if (state === 5) setCallState('failed');
-        // We don't auto-start timer on reconnect here to avoid double timers, 
-        // rely on onUserJoined or existing state
-      },
-    };
-    agoraHandlerRef.current = handler;
-    AgoraService.registerEventHandler(handler);
-  }, [startDurationTimer]);
+      onRemoteStream: (stream: MediaStream | null) => {
+        setRemoteStream(stream);
+      }
+    });
+  }, [startDurationTimer, handleEndCall]);
 
   // ── Setup on mount ─────────────────────────────────────────────────────
 
@@ -115,18 +105,20 @@ export default function CallScreen({ navigation, route }: Props) {
 
     const setup = async () => {
       try {
-        await AgoraService.init(type);
-        setupAgoraEvents();
+        await WebRTCService.init(type);
+        setupWebRTCCallbacks();
 
         if (isIncoming) {
-          // Already answered via IncomingCallModal — just join channel
-          await AgoraService.joinChannel(conversationId, 0, type);
+          // If incoming call screen is mounted, callee answered via incoming modal.
+          // Trigger the signaling response.
+          await SignalingService.answerCall();
+          setLocalStream(WebRTCService.getLocalStream());
         } else {
-          // Outgoing — SignalingService already joined but let's ensure
+          // Outgoing
           setCallState('calling');
         }
       } catch (err) {
-        console.error('[CallScreen] Setup error:', err);
+        console.error('[CallScreen] WebRTC setup failure:', err);
         if (isMounted) {
           setCallState('failed');
           setTimeout(() => navigation.goBack(), 2000);
@@ -136,7 +128,7 @@ export default function CallScreen({ navigation, route }: Props) {
 
     setup();
 
-    // Listen for call ended externally (remote hang up, timeout)
+    // Listen for call state transitions externally
     const unsubEnded = CallService.onCallEnded(() => {
       if (isMounted) handleEndCall(false);
     });
@@ -144,7 +136,11 @@ export default function CallScreen({ navigation, route }: Props) {
     const unsubState = CallService.onStateChange(({ state }: { state: CallState }) => {
       if (!isMounted) return;
       setCallState(state);
-      if (state === 'connected') startDurationTimer();
+      if (state === 'connected') {
+        startDurationTimer();
+        setLocalStream(WebRTCService.getLocalStream());
+        setRemoteStream(WebRTCService.getRemoteStream());
+      }
       if (state === 'ended' || state === 'failed') {
         stopDurationTimer();
         setTimeout(() => navigation.goBack(), 1000);
@@ -156,11 +152,8 @@ export default function CallScreen({ navigation, route }: Props) {
       unsubEnded();
       unsubState();
       stopDurationTimer();
-      if (agoraHandlerRef.current) {
-        AgoraService.unregisterEventHandler(agoraHandlerRef.current);
-      }
+      WebRTCService.leaveChannel();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Controls ───────────────────────────────────────────────────────────
@@ -170,32 +163,31 @@ export default function CallScreen({ navigation, route }: Props) {
     if (emit) {
       await SignalingService.endActiveCall();
     } else {
-      await AgoraService.leaveChannel();
+      await WebRTCService.leaveChannel();
       await CallService.handleCallEnded('normal');
     }
     navigation.goBack();
   }, [navigation, stopDurationTimer]);
 
   const toggleMute = useCallback(() => {
-    AgoraService.muteLocalAudio(!isMuted);
+    WebRTCService.muteLocalAudio(!isMuted);
     setIsMuted(m => !m);
   }, [isMuted]);
 
   const toggleSpeaker = useCallback(() => {
-    AgoraService.setEnableSpeakerphone(!isSpeaker);
+    WebRTCService.setEnableSpeakerphone(!isSpeaker);
     setIsSpeaker(s => !s);
   }, [isSpeaker]);
 
   const toggleCamera = useCallback(() => {
-    AgoraService.switchCamera();
-    setIsFrontCamera(f => !f);
+    WebRTCService.switchCamera();
   }, []);
 
   // ── Status label ───────────────────────────────────────────────────────
 
   const statusLabel = () => {
     switch (callState) {
-      case 'calling':      return 'Ringing...';
+      case 'calling':      return 'Calling...';
       case 'ringing':      return 'Ringing...';
       case 'connecting':   return 'Connecting...';
       case 'connected':    return formatDuration(durationSecs);
@@ -215,11 +207,12 @@ export default function CallScreen({ navigation, route }: Props) {
       {type === 'video' ? (
         // ── Video call layout ─────────────────────────────────────────────
         <View style={styles.videoContainer}>
-          {/* Remote video full screen */}
-          {remoteUid ? (
-            <RtcSurfaceView
-              canvas={{ uid: remoteUid }}
+          {/* Remote video fullscreen */}
+          {remoteStream ? (
+            <RTCView
+              streamURL={remoteStream.toURL()}
               style={styles.remoteVideo}
+              objectFit="cover"
             />
           ) : (
             <LinearGradient colors={['#0f172a', '#1e1b4b']} style={styles.remoteVideo}>
@@ -232,14 +225,15 @@ export default function CallScreen({ navigation, route }: Props) {
           )}
 
           {/* Local video PiP */}
-          {!isMinimized && (
-            <RtcSurfaceView
-              canvas={{ uid: 0 }}
+          {!isMinimized && localStream && (
+            <RTCView
+              streamURL={localStream.toURL()}
               style={styles.localVideo}
+              objectFit="cover"
             />
           )}
 
-          {/* Camera switch */}
+          {/* Camera Flip */}
           {type === 'video' && (
             <TouchableOpacity style={styles.switchCameraBtn} onPress={toggleCamera}>
               <Text style={styles.switchCameraIcon}>🔄</Text>

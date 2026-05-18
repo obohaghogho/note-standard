@@ -1848,3 +1848,50 @@ exports.sweepSettlements = async (req, res) => {
     res.status(500).json({ error: err.message || "Failed to execute manual settlement sweep" });
   }
 };
+
+/**
+ * GET /api/admin/calls
+ * Get all system call sessions with pagination and filters
+ */
+exports.getCallSessions = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const status = req.query.status;
+    const callType = req.query.callType;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    let query = serviceSupabase
+      .from("call_sessions")
+      .select(`
+        *,
+        caller:profiles!caller_id (username, full_name, avatar_url),
+        callee:profiles!callee_id (username, full_name, avatar_url)
+      `, { count: "exact" });
+
+    if (status) query = query.eq("status", status);
+    if (callType) query = query.eq("call_type", callType);
+
+    const { data: calls, error, count } = await query
+      .order("started_at", { ascending: false })
+      .range(from, to);
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      calls: calls || [],
+      pagination: {
+        page,
+        limit,
+        total: count || 0,
+        totalPages: Math.ceil((count || 0) / limit),
+      },
+    });
+  } catch (err) {
+    logger.error("[AdminCalls] Failed to load call sessions:", err.message);
+    res.status(500).json({ error: "Failed to fetch call sessions" });
+  }
+};

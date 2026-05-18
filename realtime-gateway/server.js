@@ -12,7 +12,7 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const { ExpressPeerServer } = require('peer');
+// PeerJS removed — pure WebRTC signaling via Socket.IO
 const { authMiddleware } = require('./auth');
 const cors = require('cors');
 const { Client } = require('pg');
@@ -121,19 +121,10 @@ function dispatchSocketEvent(envelope) {
 }
 
 // ✅ 6. PEERJS SETUP — 100% Isolated Dummy Server Pattern
-const peerDummyServer = http.createServer();
-peerDummyServer.listen(0, '127.0.0.1', () => {
-  const port = peerDummyServer.address().port;
-  console.log(`[PeerJS] Dummy server listening internally on 127.0.0.1:${port}`);
-});
-
-const peerServer = ExpressPeerServer(peerDummyServer, {
-  path: '/peerjs',
-  allow_discovery: false,
-  proxied: true,
-});
-
-app.use(peerServer);
+// ✅ 6. WebRTC ICE Server Config Route
+// Provides STUN/TURN configuration to clients. Replaces the removed PeerJS server.
+const webrtcRoutes = require('./routes/webrtc');
+app.use('/webrtc', webrtcRoutes);
 
 // ✅ 7. SOCKET.IO SETUP
 const io = new Server(httpServer, {
@@ -149,29 +140,34 @@ const io = new Server(httpServer, {
   allowEIO3: true,
 });
 
-const socketIoListeners = httpServer.listeners('upgrade').slice(0);
-httpServer.removeAllListeners('upgrade');
-
-httpServer.on('upgrade', (req, socket, head) => {
-  if (req.url && req.url.startsWith('/peerjs')) {
-    peerDummyServer.emit('upgrade', req, socket, head);
-  } else {
-    if (socketIoListeners.length > 0) {
-      socketIoListeners.forEach(l => l(req, socket, head));
-    } else {
-      const current = httpServer.listeners('upgrade').filter(l => l !== thisListener);
-      current.forEach(l => l(req, socket, head));
+// Production Hardening: Configure Redis adapter if REDIS_URL is provided for multi-instance horizontal scaling
+const REDIS_URL = process.env.REDIS_URL;
+if (REDIS_URL) {
+  try {
+    const { createAdapter } = require('@socket.io/redis-adapter');
+    const { createClient } = require('redis');
+    
+    const pubClient = createClient({ url: REDIS_URL });
+    const subClient = pubClient.duplicate();
+    
+    Promise.all([pubClient.connect(), subClient.connect()]).then(() => {
+      io.adapter(createAdapter(pubClient, subClient));
+      console.log('[Socket.IO] 🔴 Redis Adapter integrated successfully for multi-instance scaling.');
+    }).catch(err => {
+      console.error('[Socket.IO] 🔴 Redis Connection failed:', err.message);
+    });
+  } catch (err) {
+    try {
+      const redisAdapter = require('socket.io-redis');
+      io.adapter(redisAdapter(REDIS_URL));
+      console.log('[Socket.IO] 🔴 socket.io-redis Adapter integrated successfully.');
+    } catch (e) {
+      console.error('[Socket.IO] 🔴 Failed to initialize Redis Adapter:', err.message);
     }
   }
-});
-const thisListener = httpServer.listeners('upgrade')[0];
+}
 
-peerServer.on('connection', (client) => {
-  console.log(`[PeerJS] ✓ Peer connected: ${client.getId()}`);
-});
-peerServer.on('disconnect', (client) => {
-  console.log(`[PeerJS] ✗ Peer disconnected: ${client.getId()}`);
-});
+// Socket.IO handles WebSocket upgrades natively — no custom upgrade listener needed.
 
 io.use(authMiddleware);
 
@@ -231,17 +227,27 @@ async function initPgListener() {
     }
   });
 
-  async function connect() {
-    try {
-      await pgClient.connect();
-      console.log('[Gateway] 🐘 PostgreSQL connected for LISTEN');
-      await pgClient.query('LISTEN realtime_events');
-      console.log('[Gateway] 🐘 ✓ Listening for PostgreSQL events on channel: realtime_events');
-    } catch (err) {
-      console.error('[Gateway] 🐘 PostgreSQL connection failed:', err.message);
-      if (!isReconnecting) reconnectPg();
+    async function connect() {
+      try {
+        await pgClient.connect();
+        console.log('[Gateway] 🐘 PostgreSQL connected for LISTEN');
+        await pgClient.query('LISTEN realtime_events');
+        console.log('[Gateway] 🐘 ✓ Listening for PostgreSQL events on channel: realtime_events');
+        
+        // Production Hardening: Reconcile orphaned active call sessions automatically on gateway startup
+        console.log('[Gateway] 🐘 Reconciling orphaned active call sessions...');
+        const reconcileRes = await pgClient.query('SELECT cleanup_stale_call_sessions()');
+        const resolvedCount = reconcileRes.rows[0]?.cleanup_stale_call_sessions || 0;
+        if (resolvedCount > 0) {
+          console.log(`[Gateway] 🐘 ✓ Resolved ${resolvedCount} orphaned call sessions during gateway startup recovery.`);
+        } else {
+          console.log('[Gateway] 🐘 ✓ No orphaned call sessions found.');
+        }
+      } catch (err) {
+        console.error('[Gateway] 🐘 PostgreSQL connection failed:', err.message);
+        if (!isReconnecting) reconnectPg();
+      }
     }
-  }
 
   async function reconnectPg() {
     isReconnecting = true;

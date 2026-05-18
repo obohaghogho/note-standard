@@ -20,12 +20,10 @@
           "voip",
           "remote-notification",
           "audio",
-          "processing",
-          "voip",
-          "remote-notification",
-          "audio",
           "processing"
-        ]
+        ],
+        "NSCameraUsageDescription": "NoteStandard requires camera access for in-app video calling.",
+        "NSMicrophoneUsageDescription": "NoteStandard requires microphone access for in-app audio and video calling."
       }
     },
     "android": {

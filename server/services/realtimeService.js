@@ -3,6 +3,9 @@ require('dotenv').config();
 const eventSigner = require('../utils/eventSigner');
 const logger = require('../utils/logger');
 
+// Single pg pool shared with the rest of the server for pg_notify dispatch.
+// HTTP fallback removed — it leaked the internal gateway URL and was unreliable
+// under load. pg_notify is the authoritative, secure dispatch path.
 let pgPool;
 
 if (process.env.DATABASE_URL) {
@@ -16,9 +19,9 @@ if (process.env.DATABASE_URL) {
     pgPool.on('error', (err) => {
         logger.error('[RealtimeService] PostgreSQL Pool Error', { error: err.message });
     });
+} else {
+    logger.warn('[RealtimeService] DATABASE_URL not set — realtime events will be silently dropped');
 }
-
-const fetch = require('node-fetch');
 
 /**
  * REALTIME EVENT FIREWALL
@@ -117,16 +120,11 @@ const emit = async (type, room, event, payload, options = {}) => {
             return;
         }
 
-        // 4. Dispatch
+        // 4. Dispatch via pg_notify (the single authoritative path)
         if (pgPool) {
             await pgPool.query('SELECT pg_notify($1, $2)', ['realtime_events', payloadString]);
         } else {
-            const gatewayUrl = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
-            await fetch(`${gatewayUrl}/internal/emit`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: payloadString
-            });
+            logger.warn('[RealtimeService] pgPool unavailable — realtime event dropped', { event });
         }
     } catch (err) {
         // Fail-closed — never propagate emit errors to caller

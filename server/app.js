@@ -151,7 +151,7 @@ app.use("/api/broadcasts", broadcastsRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/bank-account", bankAccountRoutes);
 app.use("/api/limit-requests", requireAuth, require("./routes/limitRequests"));
-app.use("/api/agora", require("./routes/agora"));
+app.use("/api/webrtc", require("./routes/webrtc"));
 app.use("/api/teams", teamRoutes);
 
 // ─── Payment, Transaction & Webhook Routes ────────────────────
