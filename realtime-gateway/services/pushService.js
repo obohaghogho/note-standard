@@ -59,10 +59,29 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT) {
 let apnProviderProd = null;
 let apnProviderSandbox = null;
 
-if (process.env.APNS_KEY_PATH) {
+let apnsKey = null;
+if (process.env.APNS_KEY) {
+  apnsKey = process.env.APNS_KEY.replace(/\\n/g, '\n');
+} else if (process.env.APNS_KEY_PATH) {
+  try {
+    const fs = require('fs');
+    const accountPath = path.resolve(process.cwd(), process.env.APNS_KEY_PATH);
+    if (fs.existsSync(accountPath)) {
+      apnsKey = fs.readFileSync(accountPath, 'utf8');
+      console.log('[PushService] Loaded APNs key from APNS_KEY_PATH file.');
+    } else {
+      apnsKey = process.env.APNS_KEY_PATH;
+    }
+  } catch (err) {
+    console.warn('[PushService] APNs key file read fallback failed, passing path directly:', err.message);
+    apnsKey = process.env.APNS_KEY_PATH;
+  }
+}
+
+if (apnsKey && process.env.APNS_KEY_ID && process.env.APNS_TEAM_ID) {
   try {
     const tokenConfig = {
-      key: process.env.APNS_KEY_PATH,
+      key: apnsKey,
       keyId: process.env.APNS_KEY_ID,
       teamId: process.env.APNS_TEAM_ID,
     };
@@ -81,6 +100,8 @@ if (process.env.APNS_KEY_PATH) {
   } catch (err) {
     console.error('[PushService] APNs initialization failed:', err.message);
   }
+} else {
+  console.warn('[PushService] APNs initialization skipped: APNS_KEY or APNS_KEY_PATH/ID/TEAM_ID missing.');
 }
 
 /**

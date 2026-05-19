@@ -42,15 +42,31 @@ export class PushHandler {
       this.setupAndroidCallKeep();
     }
 
-    // 3. Get standard device token (FCM for Android, APNs for iOS Chat)
+    // 3. Register device token asynchronously (if logged in, it succeeds)
+    this.registerDeviceToken().catch(err => {
+      console.warn('[PushHandler] Graceful initial register Device Token fail:', err);
+    });
+  }
+
+  static async registerDeviceToken() {
+    console.log('[PushHandler] 📡 Fetching and registering device tokens...');
     try {
       const tokenData = await Notifications.getDevicePushTokenAsync();
       const token = tokenData.data;
       console.log('[PushHandler] 🔑 Standard Device Token:', token);
-      await this.registerTokenWithBackend(token, Platform.OS === 'ios' ? 'apns' : 'fcm'); // FCM for Android, standard APNs for iOS
+      await this.registerTokenWithBackend(token, Platform.OS === 'ios' ? 'apns' : 'fcm');
     } catch (err) {
       console.error('[PushHandler] ❌ Failed to fetch standard device token:', err);
     }
+
+    if (Platform.OS === 'ios') {
+      try {
+        VoipPushNotification.registerVoipToken();
+      } catch (err) {
+        console.error('[PushHandler] ❌ Failed to request iOS VoIP token:', err);
+      }
+    }
+  }
 
     // 4. Listeners
     Notifications.addNotificationReceivedListener(notification => {

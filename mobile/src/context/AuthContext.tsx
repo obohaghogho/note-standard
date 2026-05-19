@@ -4,6 +4,7 @@ import { AuthService, User } from '../services/AuthService';
 import { StoredAccount } from '../utils/AccountManager';
 import EventEmitter from '../services/EventEmitter';
 import SignalingService from '../services/SignalingService';
+import { PushHandler } from '../services/PushHandler';
 
 interface AuthContextType {
   user: User | null;
@@ -67,6 +68,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       EventEmitter.off('auth:switch', handleSwitch);
     };
   }, [loadUser]);
+
+  useEffect(() => {
+    if (user) {
+      console.log(`[AuthContext] Ensuring device push tokens are registered for user: ${user.id}`);
+      PushHandler.registerDeviceToken().catch(err => {
+        console.warn('[AuthContext] Device token registration failed:', err);
+      });
+    }
+  }, [user]);
 
   const login = async (email: string, password: string) => {
     try {
