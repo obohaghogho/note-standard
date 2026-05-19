@@ -4,6 +4,7 @@
   "installCommand": "npm install",
   "routes": [
     { "src": "/(fincra-verification\\.txt)", "dest": "/$1" },
+    { "src": "/.well-known/(.*)", "dest": "/.well-known/$1" },
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]

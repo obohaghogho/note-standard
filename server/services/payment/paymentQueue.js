@@ -54,6 +54,27 @@ if (redis && env.REDIS_URL) {
         jobId: "reconciliation-tier-2-repeat"
     }).catch(err => logger.error("[Queue] Failed to schedule Tier 2 reconciliation", { error: err.message }));
 
+    // 4. Production-Safe Apple Pay Domain Verification Monitor (DFOS v6.6)
+    // Runs every 60 minutes to ensure that Vercel routes are not intercepting/redirecting the association file.
+    setInterval(() => {
+        const https = require("https");
+        const TARGET_URL = "https://notestandard.com/.well-known/apple-developer-merchantid-domain-association";
+        
+        https.get(TARGET_URL, (res) => {
+            if (res.statusCode !== 200) {
+                logger.error(
+                    `[HEALTH_ALERT] Apple Pay domain verification file is offline or unreachable! ` +
+                    `Path: ${TARGET_URL}. Status Code: ${res.statusCode}. ` +
+                    `Payment infrastructure health: DANGER.`
+                );
+            } else {
+                logger.info(`[HEALTH_CHECK] Apple Pay domain association is healthy.`);
+            }
+        }).on("error", (err) => {
+            logger.error(`[HEALTH_ALERT] Apple Pay domain verification health check crashed!`, { error: err.message });
+        });
+    }, 3600000); // 1 Hour
+
     logger.info(`[PaymentQueue] Initialized with Redis: ${env.REDIS_URL.split("@").pop()}`);
 } else {
     logger.warn('⚠️ Redis disabled (no REDIS_URL) - paymentQueue is inactive');
