@@ -14,7 +14,8 @@ const paystack = axios.create({
 /**
  * Initialize a transaction
  * @param {string} email - Customer email
- * @param {number} amount - Amount in kobo/cents
+ * @param {number} amount - Amount in kobo/cents (smallest unit)
+ * @param {string} currency - Processing currency (USD, NGN, etc)
  * @param {string} callbackUrl - URL to redirect to after payment
  * @param {object} metadata - Custom metadata
  * @param {string} [plan] - Optional plan code for subscriptions
@@ -22,15 +23,21 @@ const paystack = axios.create({
 exports.initializeTransaction = async (
   email,
   amount,
+  currency,
   callbackUrl,
   metadata = {},
   reference = null,
   plan = null,
 ) => {
+  if (!currency) {
+    throw new Error("[paystackService] currency parameter is strictly required");
+  }
+
   try {
     const payload = {
       email,
-      amount: Math.round(amount), // Ensure integer
+      amount: Math.round(amount), // Ensure integer (cents/kobo)
+      currency: String(currency).toUpperCase(),
       callback_url: callbackUrl,
       metadata: JSON.stringify(metadata),
     };

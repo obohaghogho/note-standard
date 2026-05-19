@@ -25,32 +25,8 @@ async function createCardDeposit(
 ) {
   const { toCurrency, toNetwork } = options;
   const upCurrency = currency.toUpperCase();
-  // ── GATEWAY CURRENCY NORMALIZATION (DFOS v6.4) ───────────────────────────
-  // For currencies that Paystack cannot process natively (EUR, GBP, JPY),
-  // we pre-convert to USD here — the ONLY place this conversion should happen.
-  // The FX_VOLATILITY_BUFFER absorbs exchange rate fluctuations and processor
-  // spread. It is embedded in the displayed rate, not shown as a separate fee.
-  let gatewayOptions = { isCrypto: false };
 
-  if (currencyConfig.requiresGatewayConversion(upCurrency)) {
-    const target = currencyConfig.getGatewayConversionTarget(upCurrency);
-    try {
-      const rate = await fxService.getRate(upCurrency, target.targetCurrency);
-      // Apply the volatility buffer — absorbed into the effective rate shown to user
-      const bufferedRate = math.multiply(rate, 1 + currencyConfig.FX_VOLATILITY_BUFFER);
-      const amountInTarget = math.multiply(amount, bufferedRate);
-
-      gatewayOptions.gatewayCurrency = target.targetCurrency;
-      gatewayOptions.gatewayAmount = parseFloat(math.formatSafe(amountInTarget));
-
-      logger.info(
-        `[DepositService] Gateway normalization: ${amount} ${upCurrency} → ${gatewayOptions.gatewayAmount} ${target.targetCurrency} ` +
-        `(rate: ${rate}, buffered: ${bufferedRate})`
-      );
-    } catch (fxErr) {
-      logger.warn(`[DepositService] Gateway normalization failed for ${upCurrency}: ${fxErr.message}. Proceeding natively — payment may be rejected.`);
-    }
-  } else if (upCurrency === "BTC" || upCurrency === "ETH") {
+  if (upCurrency === "BTC" || upCurrency === "ETH") {
     throw new Error(`${upCurrency} deposits are not supported via payment`);
   }
 
@@ -120,23 +96,24 @@ async function createCardDeposit(
     }
   }
 
-  // Initialize payment through unified service
-  return await PaymentService.initializePayment(
+  // Initialize payment through enterprise PaymentIntentService
+  const PaymentIntentService = require("./payment/PaymentIntentService");
+  return await PaymentIntentService.createPaymentIntent({
     userId,
-    profile.email,
+    email: profile.email,
     amount,
     currency,
-    {
+    method: "card",
+    isCrypto: false,
+    metadata: {
       type: toCurrency && toCurrency !== currency ? "Digital Assets Purchase" : "DEPOSIT",
-      method: "card",
       userPlan,
       idempotencyKey,
       targetCurrency: toCurrency,
       targetNetwork: toNetwork,
       customerName: profile.full_name || profile.username || profile.email.split("@")[0],
     },
-    gatewayOptions,
-  );
+  });
 }
 
 /**

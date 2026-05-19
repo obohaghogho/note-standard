@@ -21,60 +21,25 @@ class PaystackProvider extends BaseProvider {
 
   async initialize(data) {
     let { email, amount, currency, reference, callbackUrl, metadata } = data;
+    const { normalizeToSmallestUnit } = require("../../../config/currencyMetadata");
 
-    // ── Currency Normalization (DFOS v6.4) ───────────────────────────────────
-    // IMPORTANT: Currency pre-conversion is the EXCLUSIVE responsibility of
-    // depositService.createCardDeposit(), which populates gatewayOptions.gatewayCurrency
-    // and gatewayOptions.gatewayAmount using currencyConfig.
-    // PaymentService.initializePayment() then passes those through to here via
-    // the `amount` and `currency` parameters (options.gatewayAmount || amount).
-    //
-    // This provider must NEVER perform its own FX conversion — doing so would
-    // cause a double FX hit and an unauditable rate discrepancy.
-    //
-    // If this provider receives a non-native currency (not NGN or USD), it means
-    // the caller failed to pre-convert. We log a critical warning and attempt
-    // a best-effort passthrough, but this should NEVER happen in production.
-    if (!isPaystackNative(currency)) {
-      console.error(
-        `[PaystackProvider] CRITICAL: Received non-native currency ${currency} without pre-conversion. ` +
-        `This is a caller contract violation. depositService should have pre-converted via gatewayOptions. ` +
-        `Proceeding with raw currency — payment may be rejected by Paystack.`
-      );
+    // Enforce currency presence
+    if (!currency) {
+      throw new Error("[PaystackProvider] Currency is strictly required for initialization");
     }
 
-    // ── Sandbox Guard (TEST KEYS ONLY) ───────────────────────────────────────
-    // Paystack sandbox frequently only processes NGN. When running with a test
-    // key, auto-convert USD→NGN so development environments stay stable.
-    // This block is strictly gated on the isTestKey flag set in constructor.
-    // It MUST NEVER fire in production (sk_live keys).
-    if (this.isTestKey && currency === "USD") {
-      const fxService = require("../../fxService");
-      try {
-        const rate = await fxService.getRate("USD", "NGN");
-        amount = amount * rate;
-        currency = "NGN";
-        metadata = { ...metadata, sandbox_ngn_converted: true, sandbox_original_currency: "USD" };
-        console.warn(`[PaystackProvider] SANDBOX MODE: Converted USD→NGN for test key compatibility. Rate: ${rate}`);
-      } catch (fxErr) {
-        console.warn(`[PaystackProvider] Sandbox NGN fallback conversion failed: ${fxErr.message}. Proceeding as USD.`);
-      }
-    } else if (!this.isTestKey && !isPaystackNative(currency)) {
-      // Production safety: If this fires, a pre-conversion bug slipped through.
-      // After DFOS v6.4, all non-NGN currencies (including USD) are pre-converted
-      // to NGN by depositService before reaching this provider.
-      // We should never reach here in a correctly configured system.
-      console.error(`[PaystackProvider] PRODUCTION WARNING: Non-native currency ${currency} passed to Paystack on live key. Expected pre-conversion from depositService.`);
-    }
+    const upCurrency = String(currency).toUpperCase();
 
-    // Paystack uses smallest unit (kobo for NGN, cent for USD)
-    const amountInSmallestUnit = Math.round(amount * 100);
+    // Enforce precision-safe normalization to smallest unit (cents/kobo/etc)
+    const amountInSmallestUnit = normalizeToSmallestUnit(amount, upCurrency);
+
+    console.log(`[PaystackProvider] Initializing transaction: ${amount} ${upCurrency} (${amountInSmallestUnit} units) for ${email}`);
 
     try {
       const response = await this.client.post("/transaction/initialize", {
         email,
         amount: amountInSmallestUnit,
-        currency,
+        currency: upCurrency,
         reference,
         callback_url: callbackUrl,
         plan: data.plan,
@@ -289,13 +254,14 @@ class PaystackProvider extends BaseProvider {
     // If it's a dedicated account payment, the metadata might be empty.
     // We can identify it by data.dedicated_account or data.customer.customer_code
     let userId = data.metadata?.userId || data.metadata?.user_id;
-    
+    const { formatFromSmallestUnit } = require("../../../config/currencyMetadata");
+
     return {
       type: type,
       display_label: data.metadata?.display_label || "Digital Assets Purchase",
       reference: data.reference,
       status: status,
-      amount: math.divide(data.amount, 100),
+      amount: formatFromSmallestUnit(data.amount, data.currency),
       currency: data.currency,
       userId: userId,
       customerCode: data.customer?.customer_code,

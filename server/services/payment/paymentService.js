@@ -810,6 +810,49 @@ class PaymentService {
           };
         }
 
+        // 2.b Webhook Verification & Quarantine Queue (Enterprise-Grade Security)
+        if (eventData) {
+          const Decimal = require("decimal.js");
+          const expectedAmount = new Decimal(tx.processing_amount || tx.amount);
+          const expectedCurrency = String(tx.processing_currency || tx.currency).toUpperCase();
+          const actualAmount = new Decimal(eventData.amount);
+          const actualCurrency = String(eventData.currency).toUpperCase();
+
+          if (expectedCurrency !== actualCurrency || !expectedAmount.equals(actualAmount)) {
+            logger.error(
+              `[QUARANTINE] Mismatched Webhook Data detected for reference: ${reference}. ` +
+              `Expected: ${expectedAmount} ${expectedCurrency}, Webhook: ${actualAmount} ${actualCurrency}`
+            );
+
+            // Freeze/Block transaction by moving status to QUARANTINED
+            const { error: updateError } = await supabase
+              .from("transactions")
+              .update({
+                status: "QUARANTINED",
+                metadata: {
+                  ...tx.metadata,
+                  quarantine_reason: "Currency or Amount Mismatch",
+                  actual_amount: actualAmount.toNumber(),
+                  actual_currency: actualCurrency,
+                  expected_amount: expectedAmount.toNumber(),
+                  expected_currency: expectedCurrency,
+                  quarantined_at: new Date().toISOString()
+                }
+              })
+              .eq("id", tx.id);
+
+            if (updateError) {
+              logger.error(`[Finalize] Failed to quarantine transaction: ${updateError.message}`);
+            }
+
+            return {
+              status: "QUARANTINED",
+              error: "CURRENCY_INTEGRITY_MISMATCH",
+              transactionId: tx.id
+            };
+          }
+        }
+
         // 3. CORE LANE SETTLEMENT (Strictly Fiat / Ledger Purity)
         // Settlement Amount Resolution (DFOS v6.4 — Multi-Currency Fix)
         //
