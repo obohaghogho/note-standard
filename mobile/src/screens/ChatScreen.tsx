@@ -221,6 +221,10 @@ export default function ChatScreen({ navigation, route }: Props) {
     );
   }
   const { user } = useAuth();
+  const userRef = useRef(user);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState('');
@@ -341,12 +345,15 @@ export default function ChatScreen({ navigation, route }: Props) {
         // Incoming real-time message from another user
         socket.on('chat:message', (msg: Message) => {
           console.log('[ChatScreen] Received realtime message:', msg.id);
+          const currentUser = userRef.current;
           setMessages(prev => {
             if (prev.some(m => m.id === msg.id)) return prev;
 
             // If we are the sender, and we have an optimistic message, replace it
-            if (msg.sender_id === user?.id) {
-              const optIndex = prev.findIndex(m => m._optimistic);
+            if (msg.sender_id === currentUser?.id) {
+              const optIndex = prev.findIndex(m => 
+                m._optimistic && (m.content === msg.content || m.type === msg.type)
+              );
               if (optIndex !== -1) {
                 const next = [...prev];
                 next[optIndex] = { ...msg };
@@ -356,7 +363,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
             // Mark as delivered+read immediately since user is actively in the chat.
             // Optimistically set timestamp locally so sender's tick updates fast.
-            if (msg.sender_id !== user?.id) {
+            if (msg.sender_id !== currentUser?.id) {
               const now = new Date().toISOString();
               // Background HTTP calls to persist in DB + broadcast receipt to sender
               apiClient.put(`/chat/messages/${msg.id}/deliver`).catch(() => {});
@@ -390,24 +397,27 @@ export default function ChatScreen({ navigation, route }: Props) {
 
         // Conversation-wide status updates
         socket.on('chat:conversation_read', ({ conversationId: readConvId, readerId, readAt }: { conversationId: string, readerId: string, readAt: string }) => {
-          if (readConvId === conversationId && readerId !== user?.id) {
+          const currentUser = userRef.current;
+          if (readConvId === conversationId && readerId !== currentUser?.id) {
             setMessages(prev => prev.map(m =>
-              m.sender_id === user?.id ? { ...m, read_at: readAt, delivered_at: readAt } as any : m
+              m.sender_id === currentUser?.id ? { ...m, read_at: readAt, delivered_at: readAt } as any : m
             ));
           }
         });
 
         socket.on('chat:conversation_delivered', ({ conversationId: delConvId, userId: delUserId, delivered_at }: { conversationId: string, userId: string, delivered_at: string }) => {
-          if (delConvId === conversationId && delUserId !== user?.id) {
+          const currentUser = userRef.current;
+          if (delConvId === conversationId && delUserId !== currentUser?.id) {
             setMessages(prev => prev.map(m =>
-              m.sender_id === user?.id && !(m as any).read_at ? { ...m, delivered_at: delivered_at } as any : m
+              m.sender_id === currentUser?.id && !(m as any).read_at ? { ...m, delivered_at: delivered_at } as any : m
             ));
           }
         });
 
         // Typing indicator
         socket.on('chat:typing', ({ userId: typingId, username, isTyping }: { userId: string; username?: string; isTyping: boolean }) => {
-          if (typingId === user?.id) return;
+          const currentUser = userRef.current;
+          if (typingId === currentUser?.id) return;
           if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
           if (isTyping) {
             setTypingUser(username || recipientName);

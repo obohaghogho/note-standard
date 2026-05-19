@@ -11,16 +11,47 @@ const supabase = createClient(
 
 // Initialize Firebase Admin (Android FCM)
 let firebaseApp = null;
-if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
+if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+  try {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    firebaseApp = admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+    console.log('[PushService] Firebase Admin initialized via FIREBASE_SERVICE_ACCOUNT env var string.');
+  } catch (err) {
+    console.error('[PushService] Firebase initialization via FIREBASE_SERVICE_ACCOUNT JSON failed:', err.message);
+  }
+} else if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
   try {
     const accountPath = path.resolve(process.cwd(), process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
     const serviceAccount = require(accountPath);
     firebaseApp = admin.initializeApp({
       credential: admin.credential.cert(serviceAccount)
     });
-    console.log('[PushService] Firebase Admin initialized.');
+    console.log('[PushService] Firebase Admin initialized via file path.');
   } catch (err) {
-    console.error('[PushService] Firebase initialization failed:', err.message);
+    console.error('[PushService] Firebase initialization via file failed:', err.message);
+  }
+} else if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+  try {
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n');
+    firebaseApp = admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: privateKey,
+      })
+    });
+    console.log('[PushService] Firebase Admin initialized via individual env vars.');
+  } catch (err) {
+    console.error('[PushService] Firebase initialization via individual env vars failed:', err.message);
+  }
+} else {
+  try {
+    firebaseApp = admin.initializeApp();
+    console.log('[PushService] Firebase Admin initialized using Application Default Credentials.');
+  } catch (err) {
+    console.warn('[PushService] Firebase Admin default/ADC initialization skipped/failed:', err.message);
   }
 }
 
@@ -109,7 +140,7 @@ async function sendCallPush(params) {
     console.log(`[PushService] 📦 Native Payload:`, JSON.stringify(payload, null, 2));
 
     const pushPromises = tokens.map(async (t) => {
-      // Android FCM - Data-Only high-priority for native wake-up
+      // Android FCM - Dual-payload high-priority for native wake-up and system tray display fallback
       if (t.platform === 'android' && t.type === 'fcm' && firebaseApp) {
         // Sanitize all values to strings to prevent FCM crashing
         const safeData = {};
@@ -121,6 +152,10 @@ async function sendCallPush(params) {
 
         const message = {
           token: t.token,
+          notification: {
+            title: title || `Incoming ${payload.callType || 'call'}`,
+            body: body || `${payload.callerName || 'Someone'} is calling you...`,
+          },
           data: {
             ...safeData,
             // Native layer expects string values for remoteMessage.getData()
@@ -134,11 +169,15 @@ async function sendCallPush(params) {
           android: {
             priority: 'high',
             ttl: 0, // No delay, no queueing if expired
+            notification: {
+              sound: 'default',
+              clickAction: 'FLUTTER_NOTIFICATION_CLICK',
+            }
           }
         };
-        console.log(`[PushService] 📤 Sending FCM Data-Only (Android) to: ${t.token.substring(0, 10)}...`);
+        console.log(`[PushService] 📤 Sending FCM Call push (Android) to: ${t.token.substring(0, 10)}...`);
         return admin.messaging().send(message)
-          .catch(err => console.error(`[PushService] ❌ FCM fail for ${t.token.substring(0, 10)}:`, err.message));
+          .catch(err => console.error(`[PushService] ❌ FCM call push fail for ${t.token.substring(0, 10)}:`, err.message));
       }
 
       // iOS VoIP - PushKit specific for immediate CallKit trigger

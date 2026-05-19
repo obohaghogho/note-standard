@@ -274,6 +274,20 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             setMessages(prev => {
                 const current = prev[msg.conversation_id] || [];
                 if (current.some(m => m.id === msg.id)) return prev;
+
+                // Handle optimistic UI matching for our own messages
+                if (msg.sender_id === user?.id) {
+                    const optimisticIndex = current.findIndex(m => 
+                        (m.status === 'sending' || m.id.startsWith('temp-')) &&
+                        (m.content === msg.content || m.type === msg.type)
+                    );
+                    if (optimisticIndex !== -1) {
+                        const updated = [...current];
+                        updated[optimisticIndex] = newMessage;
+                        return { ...prev, [msg.conversation_id]: updated };
+                    }
+                }
+
                 return { ...prev, [msg.conversation_id]: [...current, newMessage] };
             });
 
