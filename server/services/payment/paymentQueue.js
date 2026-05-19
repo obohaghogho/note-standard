@@ -54,26 +54,62 @@ if (redis && env.REDIS_URL) {
         jobId: "reconciliation-tier-2-repeat"
     }).catch(err => logger.error("[Queue] Failed to schedule Tier 2 reconciliation", { error: err.message }));
 
-    // 4. Production-Safe Apple Pay Domain Verification Monitor (DFOS v6.6)
+    // 4. Production-Safe Apple Pay Domain Verification Monitor (DFOS v7.0)
     // Runs every 60 minutes to ensure that Vercel routes are not intercepting/redirecting the association file.
     setInterval(() => {
         const https = require("https");
+        const crypto = require("crypto");
         const TARGET_URL = "https://notestandard.com/.well-known/apple-developer-merchantid-domain-association";
+        const EXPECTED_HASH = "4e2fdd224e8c281c107b247c5c0ee0292f7c4ce11f9bd9c7c5b1a594dd3199bb";
         
         https.get(TARGET_URL, (res) => {
-            if (res.statusCode !== 200) {
+            const { statusCode } = res;
+            
+            // 1. Redirect Check
+            if (statusCode >= 300 && statusCode < 400) {
+                logger.error(
+                    `[HEALTH_ALERT] Apple Pay domain association check failed! Redirect introduced (status ${statusCode}). ` +
+                    `Location: ${res.headers.location}. Payment infrastructure health: DANGER.`
+                );
+                return;
+            }
+
+            // 2. Status Check
+            if (statusCode !== 200) {
                 logger.error(
                     `[HEALTH_ALERT] Apple Pay domain verification file is offline or unreachable! ` +
-                    `Path: ${TARGET_URL}. Status Code: ${res.statusCode}. ` +
+                    `Path: ${TARGET_URL}. Status Code: ${statusCode}. ` +
                     `Payment infrastructure health: DANGER.`
                 );
-            } else {
-                logger.info(`[HEALTH_CHECK] Apple Pay domain association is healthy.`);
+                return;
             }
+
+            const chunks = [];
+            res.on("data", (chunk) => chunks.push(chunk));
+            res.on("end", () => {
+                try {
+                    const body = Buffer.concat(chunks);
+                    const sha256 = crypto.createHash("sha256").update(body).digest("hex");
+                    
+                    // 3. Content Modification Check / Middleware Interception Check
+                    if (sha256 !== EXPECTED_HASH) {
+                        logger.error(
+                            `[HEALTH_ALERT] Apple Pay verification file signature mismatch! Content was modified or intercepted! ` +
+                            `Expected: ${EXPECTED_HASH}, Got: ${sha256}. ` +
+                            `Payment infrastructure health: DANGER.`
+                        );
+                    } else {
+                        logger.info(`[HEALTH_CHECK] Apple Pay domain association integrity verified (SHA256 match).`);
+                    }
+                } catch (e) {
+                    logger.error(`[HEALTH_ALERT] Failed to verify Apple Pay domain verification file signature`, { error: e.message });
+                }
+            });
         }).on("error", (err) => {
             logger.error(`[HEALTH_ALERT] Apple Pay domain verification health check crashed!`, { error: err.message });
         });
     }, 3600000); // 1 Hour
+
 
     logger.info(`[PaymentQueue] Initialized with Redis: ${env.REDIS_URL.split("@").pop()}`);
 } else {

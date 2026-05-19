@@ -400,3 +400,37 @@
     color: #c4b5fd;
   }
 }
+
+/* ─── Apple Pay Premium Styling ──────────────────────────────── */
+
+.ps-apple-pay {
+  background: #000000;
+  border-color: #1f2937;
+  color: #ffffff;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ps-apple-pay .ps-method-icon {
+  background: #111111;
+  color: #ffffff;
+}
+
+.ps-apple-pay .ps-method-info h3 {
+  color: #ffffff;
+}
+
+.ps-apple-pay .ps-method-info p {
+  color: #9ca3af;
+}
+
+.ps-apple-pay:hover {
+  border-color: #ffffff;
+  background: #050505;
+  box-shadow: 0 8px 24px rgba(255, 255, 255, 0.1);
+}
+
+.ps-apple-pay .ps-recommended {
+  background: #ffffff;
+  color: #000000;
+}
+
