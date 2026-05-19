@@ -8,6 +8,7 @@ if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
     process.env.VAPID_PRIVATE_KEY,
   );
 } else {
+  // Loaded successfully from server/.env when present
   console.warn("[NotificationService] VAPID keys missing. Push notifications will be disabled.");
 }
 

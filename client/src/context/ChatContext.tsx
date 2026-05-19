@@ -322,46 +322,94 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         const onMessageRead = ({ messageId, conversationId }: { messageId: string, conversationId: string }) => {
             if (!isMounted.current) return;
+            const nowStr = new Date().toISOString();
             setMessages(prev => {
                 const current = prev[conversationId] || [];
                 return {
                     ...prev,
-                    [conversationId]: current.map(m => m.id === messageId ? { ...m, read_at: new Date().toISOString() } : m)
+                    [conversationId]: current.map(m => m.id === messageId ? { ...m, read_at: nowStr } : m)
                 };
             });
+
+            // ALSO update the last message in conversation list!
+            setConversations(prev => prev.map(c => {
+                if (c.id === conversationId && c.lastMessage && c.lastMessage.id === messageId) {
+                    return {
+                        ...c,
+                        lastMessage: { ...c.lastMessage, read_at: nowStr, delivered_at: c.lastMessage.delivered_at || nowStr }
+                    };
+                }
+                return c;
+            }));
         };
 
         const onMessageDelivered = ({ messageId, conversationId }: { messageId: string, conversationId: string }) => {
             if (!isMounted.current) return;
+            const nowStr = new Date().toISOString();
             setMessages(prev => {
                 const current = prev[conversationId] || [];
                 return {
                     ...prev,
-                    [conversationId]: current.map(m => m.id === messageId ? { ...m, delivered_at: new Date().toISOString() } : m)
+                    [conversationId]: current.map(m => m.id === messageId ? { ...m, delivered_at: nowStr } : m)
                 };
             });
+
+            // ALSO update the last message in conversation list!
+            setConversations(prev => prev.map(c => {
+                if (c.id === conversationId && c.lastMessage && c.lastMessage.id === messageId) {
+                    return {
+                        ...c,
+                        lastMessage: { ...c.lastMessage, delivered_at: nowStr }
+                    };
+                }
+                return c;
+            }));
         };
 
         const onReadReceipt = ({ conversationId, messageIds }: { conversationId: string, messageIds: string[] }) => {
             if (!isMounted.current) return;
+            const nowStr = new Date().toISOString();
             setMessages(prev => {
                 const current = prev[conversationId] || [];
                 return {
                     ...prev,
-                    [conversationId]: current.map(m => messageIds.includes(m.id) ? { ...m, read_at: new Date().toISOString() } : m)
+                    [conversationId]: current.map(m => messageIds.includes(m.id) ? { ...m, read_at: nowStr } : m)
                 };
             });
+
+            // ALSO update the last message in conversation list!
+            setConversations(prev => prev.map(c => {
+                if (c.id === conversationId && c.lastMessage && messageIds.includes(c.lastMessage.id)) {
+                    return {
+                        ...c,
+                        lastMessage: { ...c.lastMessage, read_at: nowStr, delivered_at: c.lastMessage.delivered_at || nowStr }
+                    };
+                }
+                return c;
+            }));
         };
 
         const onDeliveryReceipt = ({ conversationId, messageId }: { conversationId: string, messageId: string }) => {
             if (!isMounted.current) return;
+            const nowStr = new Date().toISOString();
             setMessages(prev => {
                 const current = prev[conversationId] || [];
                 return {
                     ...prev,
-                    [conversationId]: current.map(m => m.id === messageId ? { ...m, delivered_at: new Date().toISOString() } : m)
+                    [conversationId]: current.map(m => m.id === messageId ? { ...m, delivered_at: nowStr } : m)
                 };
             });
+
+            // ALSO update the last message in conversation list!
+            setConversations(prev => prev.map(c => {
+                if (c.id === conversationId && c.lastMessage && c.lastMessage.id === messageId) {
+                    return {
+                        ...c,
+                        lastMessage: { ...c.lastMessage, delivered_at: nowStr }
+                    };
+                }
+                return c;
+            }));
         };
 
         const onConversationUpdated = ({ conversationId, userId, status }: { conversationId: string, userId: string, status: string }) => {
@@ -387,6 +435,29 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         [conversationId]: current.map(m => m.sender_id === user?.id ? { ...m, read_at: readAt, delivered_at: readAt } : m)
                     };
                 });
+
+                // ALSO update the last message in conversation list!
+                setConversations(prev => prev.map(c => {
+                    if (c.id === conversationId && c.lastMessage && c.lastMessage.sender_id === user?.id) {
+                        return {
+                            ...c,
+                            lastMessage: { ...c.lastMessage, read_at: readAt, delivered_at: readAt }
+                        };
+                    }
+                    return c;
+                }));
+            } else {
+                // If it is the current user who read it (e.g. from another device), clear unread count!
+                setConversations(prev => prev.map(c => {
+                    if (c.id === conversationId) {
+                        return {
+                            ...c,
+                            unreadCount: 0,
+                            lastMessage: c.lastMessage && c.lastMessage.sender_id !== user?.id ? { ...c.lastMessage, read_at: readAt } : c.lastMessage
+                        };
+                    }
+                    return c;
+                }));
             }
         };
 
@@ -400,6 +471,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         [conversationId]: current.map(m => m.sender_id === user?.id && !m.read_at ? { ...m, delivered_at: delivered_at } : m)
                     };
                 });
+
+                // ALSO update the last message in conversation list!
+                setConversations(prev => prev.map(c => {
+                    if (c.id === conversationId && c.lastMessage && c.lastMessage.sender_id === user?.id && !c.lastMessage.read_at) {
+                        return {
+                            ...c,
+                            lastMessage: { ...c.lastMessage, delivered_at: delivered_at }
+                        };
+                    }
+                    return c;
+                }));
             }
         };
 
