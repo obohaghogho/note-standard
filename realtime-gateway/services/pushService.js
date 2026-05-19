@@ -111,17 +111,25 @@ async function sendCallPush(params) {
     const pushPromises = tokens.map(async (t) => {
       // Android FCM - Data-Only high-priority for native wake-up
       if (t.platform === 'android' && t.type === 'fcm' && firebaseApp) {
+        // Sanitize all values to strings to prevent FCM crashing
+        const safeData = {};
+        for (const key in payload) {
+          if (payload[key] !== undefined && payload[key] !== null) {
+            safeData[key] = String(payload[key]);
+          }
+        }
+
         const message = {
           token: t.token,
           data: {
-            ...payload,
+            ...safeData,
             // Native layer expects string values for remoteMessage.getData()
-            type: String(payload.type),
-            caller_id: String(payload.callerId),
-            caller_name: String(payload.callerName),
-            call_type: String(payload.callType),
-            call_id: String(payload.callId || payload.peerId),
-            conversation_id: String(payload.conversationId),
+            type: String(payload.type || 'incoming_call'),
+            caller_id: String(payload.callerId || ''),
+            caller_name: String(payload.callerName || ''),
+            call_type: String(payload.callType || ''),
+            call_id: String(payload.sessionId || payload.callId || payload.peerId || ''),
+            conversation_id: String(payload.conversationId || ''),
           },
           android: {
             priority: 'high',
@@ -204,7 +212,6 @@ async function sendChatPush(params) {
             priority: 'high',
             notification: {
               sound: 'default',
-              channelId: 'chat_messages',
             },
           },
         };

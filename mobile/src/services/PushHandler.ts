@@ -3,6 +3,7 @@ import CallService, { CallData } from './CallService';
 import { Platform } from 'react-native';
 import EventEmitter from './EventEmitter';
 import VoipPushNotification from 'react-native-voip-push-notification';
+import RNCallKeep from 'react-native-callkeep';
 import { AuthService } from './AuthService';
 import apiClient from '../api/apiClient';
 
@@ -35,9 +36,10 @@ export class PushHandler {
       finalStatus = status;
     }
 
-    // 2. iOS VoIP Push Registration (CRITICAL for Ringing Parity)
     if (Platform.OS === 'ios') {
       this.setupVoIP();
+    } else if (Platform.OS === 'android') {
+      this.setupAndroidCallKeep();
     }
 
     // 3. Get standard device token (FCM for Android, APNs for iOS Chat)
@@ -113,6 +115,22 @@ export class PushHandler {
 
     // Request VoIP token
     VoipPushNotification.registerVoipToken();
+  }
+
+  static setupAndroidCallKeep() {
+    console.log('[PushHandler] 🤖 Setting up Android CallKeep listeners...');
+    
+    RNCallKeep.addEventListener('answerCall', ({ callUUID }) => {
+      console.log('[PushHandler] Android CallKeep answered:', callUUID);
+      RNCallKeep.answerIncomingCall(callUUID);
+      CallService.answerCall();
+      RNCallKeep.backToForeground();
+    });
+
+    RNCallKeep.addEventListener('endCall', ({ callUUID }) => {
+      console.log('[PushHandler] Android CallKeep rejected/ended:', callUUID);
+      CallService.rejectCall();
+    });
   }
 
   static async registerTokenWithBackend(token: string, type: 'fcm' | 'voip' | 'apns', retryCount = 0) {
