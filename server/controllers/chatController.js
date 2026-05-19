@@ -670,6 +670,9 @@ exports.markMessageRead = async (req, res) => {
     const now = new Date().toISOString();
 
     try {
+      let msgRow = null;
+      let readAt = now;
+
       const { data, error } = await supabase
         .from("messages")
         .update({ read_at: now })
@@ -679,19 +682,41 @@ exports.markMessageRead = async (req, res) => {
         .single();
 
       if (error) {
-        if (error.code === "42703" || error.code === "PGRST204") {
+        if (error.code === "42703") {
+          // Column doesn't exist — nothing we can do, skip gracefully
           console.warn("[Chat Controller] read_at column missing, skipping update");
           return res.json({ success: true, note: "read_at column missing" });
         }
-        throw error;
+        if (error.code === "PGRST204") {
+          // 0 rows updated — message may already be read, or sender_id === userId.
+          // Fall back to a plain SELECT so we can still emit with the stored timestamp.
+          console.warn("[Chat Controller] markMessageRead: 0 rows updated, falling back to SELECT");
+          const { data: existing } = await supabase
+            .from("messages")
+            .select("id, conversation_id, sender_id, read_at")
+            .eq("id", messageId)
+            .single();
+          if (existing && existing.sender_id !== userId) {
+            msgRow = existing;
+            readAt = existing.read_at || now;
+          } else {
+            return res.json({ success: true, note: "no-op" });
+          }
+        } else {
+          throw error;
+        }
+      } else {
+        msgRow = data;
       }
 
-      const receiptPayload = { messageId, conversationId: data.conversation_id, userId, readAt: now };
+      if (!msgRow) return res.json({ success: true, note: "no-op" });
+
+      const receiptPayload = { messageId, conversationId: msgRow.conversation_id, userId, readAt };
 
       // Emit to conversation room (for ChatScreen listeners)
-      await realtime.emitToConversation(data.conversation_id, "chat:message_read", receiptPayload);
+      await realtime.emitToConversation(msgRow.conversation_id, "chat:message_read", receiptPayload);
       // ALSO emit directly to the original sender so their ChatList updates too
-      await realtime.emitToUser(data.sender_id, "chat:message_read", receiptPayload);
+      await realtime.emitToUser(msgRow.sender_id, "chat:message_read", receiptPayload);
 
       res.json({ success: true });
     } catch (updateErr) {
@@ -711,6 +736,9 @@ exports.markMessageDelivered = async (req, res) => {
     const now = new Date().toISOString();
 
     try {
+      let msgRow = null;
+      let deliveredAt = now;
+
       const { data, error } = await supabase
         .from("messages")
         .update({ delivered_at: now })
@@ -720,19 +748,41 @@ exports.markMessageDelivered = async (req, res) => {
         .single();
 
       if (error) {
-        if (error.code === "42703" || error.code === "PGRST204") {
+        if (error.code === "42703") {
+          // Column doesn't exist — skip gracefully
           console.warn("[Chat Controller] delivered_at column missing, skipping update");
           return res.json({ success: true, note: "delivered_at column missing" });
         }
-        throw error;
+        if (error.code === "PGRST204") {
+          // 0 rows updated — message already delivered, or sender_id === userId.
+          // Fall back to SELECT so we can still emit with the actual stored timestamp.
+          console.warn("[Chat Controller] markMessageDelivered: 0 rows updated, falling back to SELECT");
+          const { data: existing } = await supabase
+            .from("messages")
+            .select("id, conversation_id, sender_id, delivered_at")
+            .eq("id", messageId)
+            .single();
+          if (existing && existing.sender_id !== userId) {
+            msgRow = existing;
+            deliveredAt = existing.delivered_at || now;
+          } else {
+            return res.json({ success: true, note: "no-op" });
+          }
+        } else {
+          throw error;
+        }
+      } else {
+        msgRow = data;
       }
 
-      const receiptPayload = { messageId, conversationId: data.conversation_id, userId, delivered_at: now };
+      if (!msgRow) return res.json({ success: true, note: "no-op" });
+
+      const receiptPayload = { messageId, conversationId: msgRow.conversation_id, userId, delivered_at: deliveredAt };
 
       // Emit to conversation room (for ChatScreen listeners)
-      await realtime.emitToConversation(data.conversation_id, "chat:message_delivered", receiptPayload);
+      await realtime.emitToConversation(msgRow.conversation_id, "chat:message_delivered", receiptPayload);
       // ALSO emit directly to the original sender so their ChatList updates too
-      await realtime.emitToUser(data.sender_id, "chat:message_delivered", receiptPayload);
+      await realtime.emitToUser(msgRow.sender_id, "chat:message_delivered", receiptPayload);
 
       res.json({ success: true });
     } catch (updateErr) {
@@ -927,6 +977,44 @@ exports.sendMessage = async (req, res) => {
       ).then();
     }
 
+    /**
+     * Fire-and-forget native push via gateway /internal/push.
+     * Called for each recipient so iOS/Android get APNs/FCM when offline.
+     */
+    function sendNativePush({ memberId, senderName, msgContent, msgId }) {
+      try {
+        const http = require('http');
+        const https = require('https');
+        const rawUrl = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
+        const targetUrl = new URL('/internal/push', rawUrl);
+        const body = JSON.stringify({
+          userId: memberId,
+          title: senderName || 'New Message',
+          body: (msgContent || '').substring(0, 100),
+          payload: {
+            type: 'chat_message',
+            conversationId,
+            messageId: msgId,
+            url: `/dashboard/chat?id=${conversationId}`,
+          },
+        });
+        const options = {
+          hostname: targetUrl.hostname,
+          port: targetUrl.port || (targetUrl.protocol === 'https:' ? 443 : 80),
+          path: targetUrl.pathname,
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+        };
+        const lib = targetUrl.protocol === 'https:' ? https : http;
+        const req2 = lib.request(options, (r) => r.resume());
+        req2.on('error', (err) => console.warn('[Chat] sendNativePush error:', err.message));
+        req2.write(body);
+        req2.end();
+      } catch (e) {
+        console.warn('[Chat] sendNativePush setup error:', e.message);
+      }
+    }
+
     // --- Notification Logic ---
     const io = req.app.get("io");
     try {
@@ -962,6 +1050,16 @@ exports.sendMessage = async (req, res) => {
             link: `/dashboard/chat?id=${conversationId}`,
             messageId: createdMessageId,
             conversationId: conversationId,
+          });
+
+          // ── Native Push (iOS APNs / Android FCM) ──────────────────────────
+          // Fire-and-forget: sends to offline devices via the gateway push service.
+          // This is the ONLY path that triggers sendChatPush for new messages.
+          sendNativePush({
+            memberId: member.user_id,
+            senderName: sender?.username || 'New Message',
+            msgContent: content,
+            msgId: createdMessageId,
           });
         }
       }

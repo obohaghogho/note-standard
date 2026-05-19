@@ -138,9 +138,48 @@ export default function ChatListScreen({ navigation }: Props) {
         const bAccepted = myB?.status === 'accepted' ? 0 : 1;
         return aAccepted - bAccepted;
       });
-      
-      setConversations(sorted);
-      // 2. Persist to Cache
+
+      // ── Tick Preservation: merge socket-applied ticks into fresh server data ──
+      // The isFocused re-fetch can race against a socket delivery event.
+      // If the socket already set delivered_at / read_at in local state, we must
+      // NOT regress that back to null just because the API call happened to
+      // complete slightly before or slightly after the DB commit.
+      setConversations(prev => {
+        // Build a lookup of current in-memory tick state keyed by conversation id
+        const tickMap: Record<string, { delivered_at?: string | null; read_at?: string | null }> = {};
+        prev.forEach(c => {
+          if (c.last_message) {
+            tickMap[c.id] = {
+              delivered_at: (c.last_message as any).delivered_at,
+              read_at: (c.last_message as any).read_at,
+            };
+          }
+        });
+
+        return sorted.map(conv => {
+          const inMem = tickMap[conv.id];
+          if (!inMem || !conv.last_message) return conv;
+          // Take the "better" (more advanced) tick status — never regress
+          const serverDelivered = (conv.last_message as any).delivered_at;
+          const serverRead     = (conv.last_message as any).read_at;
+          const mergedDelivered = serverDelivered || inMem.delivered_at || null;
+          const mergedRead      = serverRead      || inMem.read_at      || null;
+          if (mergedDelivered === serverDelivered && mergedRead === serverRead) {
+            return conv; // nothing changed, avoid re-render
+          }
+          return {
+            ...conv,
+            last_message: {
+              ...conv.last_message,
+              delivered_at: mergedDelivered,
+              read_at: mergedRead,
+            } as any,
+          };
+        });
+      });
+
+      // 2. Persist to Cache (with merged data from current state)
+      // We persist sorted (server data) — the merged state is only in-memory
       await AsyncStorage.setItem('cache_conversations', JSON.stringify(sorted));
     } catch (e) {
       console.error('[ChatList] Load failed:', e);
