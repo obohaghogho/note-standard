@@ -420,44 +420,48 @@ export const ChatWidget = () => {
                                                 <p>Send a message to start the conversation</p>
                                             </div>
                                         ) : (
-                                            messages.map(msg => (
-                                                <div
-                                                    key={msg.id}
-                                                    className={`chat-message ${msg.sender_id === user?.id ? 'own' : 'other'}`}
-                                                >
-                                                    <div className="message-bubble relative">
-                                                        {msg.sender_id !== user?.id && (
-                                                            <span className="text-[9px] uppercase tracking-tighter opacity-50 absolute -top-4 left-1 font-bold">
-                                                                Support Specialist
-                                                            </span>
-                                                        )}
-                                                        {msg.type === 'audio' ? (
-                                                            <div className="flex flex-col gap-2 min-w-[200px]">
-                                                                <AudioPlayer 
-                                                                    path={msg.attachment?.storage_path || ''} 
-                                                                    fetchUrl={fetchSignedUrl} 
-                                                                />
-                                                            </div>
-                                                        ) : (
-                                                            <p>{msg.content}</p>
-                                                        )}
-                                                        <span className="msg-time">
-                                                            {formatTime(msg.created_at)}
-                                                            {msg.sender_id === user?.id && (
-                                                                <span className="ml-1 inline-block scale-75">
-                                                                    {msg.read_at ? (
-                                                                        <CheckCheck size={12} className="text-blue-300" />
-                                                                    ) : msg.delivered_at ? (
-                                                                        <CheckCheck size={12} className="text-gray-400 opacity-60" />
-                                                                    ) : (
-                                                                        <Check size={12} className="opacity-40" />
-                                                                    )}
+                                                                       messages.map((msg, idx) => {
+                                                const isConsecutive = idx > 0 && messages[idx - 1].sender_id === msg.sender_id;
+                                                const showLabel = msg.sender_id !== user?.id && !isConsecutive;
+                                                return (
+                                                    <div
+                                                        key={msg.id}
+                                                        className={`chat-message ${msg.sender_id === user?.id ? 'own' : 'other'} ${showLabel ? 'has-label' : ''}`}
+                                                    >
+                                                        <div className="message-bubble relative">
+                                                            {showLabel && (
+                                                                <span className="text-[9px] uppercase tracking-tighter opacity-50 absolute -top-4 left-1 font-bold">
+                                                                    Support Specialist
                                                                 </span>
                                                             )}
-                                                        </span>
+                                                            {msg.type === 'audio' ? (
+                                                                <div className="flex flex-col gap-2 min-w-[200px]">
+                                                                    <AudioPlayer 
+                                                                        path={msg.attachment?.storage_path || ''} 
+                                                                        fetchUrl={fetchSignedUrl} 
+                                                                    />
+                                                                </div>
+                                                            ) : (
+                                                                <p>{msg.content}</p>
+                                                            )}
+                                                            <span className="msg-time">
+                                                                {formatTime(msg.created_at)}
+                                                                {msg.sender_id === user?.id && (
+                                                                    <span className="ml-1 inline-block scale-75">
+                                                                        {msg.read_at ? (
+                                                                            <CheckCheck size={12} className="text-blue-300" />
+                                                                        ) : msg.delivered_at ? (
+                                                                            <CheckCheck size={12} className="text-gray-400 opacity-60" />
+                                                                        ) : (
+                                                                            <Check size={12} className="opacity-40" />
+                                                                        )}
+                                                                    </span>
+                                                                )}
+                                                            </span>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ))
+                                                );
+                                            })
                                         )}
                                         {adminTyping && (
                                             <div className="typing-indicator">

@@ -350,11 +350,13 @@ export const AdminChat = () => {
     if (!isAdmin) return <div className="p-8">Access Denied</div>;
 
     return (
-        <div className="admin-chat-container">
-            <div className="admin-chat-sidebar">
-                <div className="sidebar-header">
+        <div className="p-4 md:p-8 bg-crystal min-h-screen relative w-full flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/35 backdrop-blur-sm pointer-events-none z-0" />
+            <div className="admin-chat relative z-10 w-full max-w-[1400px]">
+            <div className="chat-list">
+                <div className="chat-list-header">
                     <h3>Support Chats</h3>
-                    <div className="filters">
+                    <div className="chat-filters">
                         <select
                             id="support-status-filter"
                             name="statusFilter"
@@ -370,7 +372,7 @@ export const AdminChat = () => {
                     </div>
                 </div>
 
-                <div className="search-bar">
+                <div className="chat-search">
                     <Search size={16} />
                     <input
                         id="chat-search-input"
@@ -383,7 +385,7 @@ export const AdminChat = () => {
                     />
                 </div>
 
-                <div className="chat-list">
+                <div className="chat-items">
                     {loading ? (
                         <div className="p-4 text-center">Loading...</div>
                     ) : filteredChats.length === 0 ? (
@@ -414,7 +416,7 @@ export const AdminChat = () => {
                                     <div className="info">
                                         <div className="header">
                                             <span className="name">{userProfile?.username || chat.name}</span>
-                                            <span className={`status-tag ${chat.support_status}`} />
+                                            <span className={`status-dot ${chat.support_status}`} />
                                         </div>
                                         <p className="preview">
                                             {chat.lastMessage?.content || 'No messages'}
@@ -430,11 +432,11 @@ export const AdminChat = () => {
                 </div>
             </div>
 
-            <div className="admin-chat-main">
+            <div className="chat-window">
                 {activeChat ? (
                     <>
-                        <div className="main-header">
-                            <div className="user-info">
+                        <div className="chat-window-header">
+                            <div className="chat-user-info">
                                 {(() => {
                                     const chatMember = getUserFromChat(activeChat);
                                     const userProfile = chatMember?.profile;
@@ -560,15 +562,18 @@ export const AdminChat = () => {
                         </div>
                     </>
                 ) : (
-                    <div className="empty-state">
-                        <MessageSquare size={48} />
-                        <h3>Select a conversation</h3>
-                        <p>Pick a chat from the sidebar to start responding to users.</p>
+                    <div className="no-chat-selected p-8 text-center flex flex-col items-center justify-center gap-3 h-full">
+                        <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-2 shadow-xl">
+                            <MessageSquare size={32} className="text-indigo-400" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-white/95">Select a conversation</h3>
+                        <p className="text-xs text-gray-500 max-w-xs leading-relaxed">Pick a support chat from the sidebar to start securely responding to users and assisting them in real-time.</p>
                     </div>
                 )}
             </div>
 
 
+            </div>
         </div>
     );
 };

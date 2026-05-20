@@ -566,22 +566,33 @@ const ChatWindow: React.FC = () => {
 
     if (!activeConversationId) {
         return (
-            <div className="flex items-center justify-center h-full text-gray-500 bg-gray-900">
-                <p>Select a conversation to start chatting</p>
+            <div className="flex-grow flex flex-col items-center justify-center h-full text-gray-400 bg-crystal relative p-6">
+                <div className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-none z-0" />
+                <div className="relative z-10 text-center flex flex-col items-center gap-3 bg-black/45 backdrop-blur-xl border border-white/10 p-8 rounded-2xl max-w-sm shadow-2xl">
+                    <MessageCircle size={40} className="text-blue-400/80 animate-pulse" />
+                    <p className="font-semibold text-white/80">Select a conversation to start chatting</p>
+                    <p className="text-xs text-gray-500 leading-relaxed">Pick any member or channel from the sidebar list to begin your secure conversation.</p>
+                </div>
             </div>
         );
     }
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-full bg-gray-900 text-gray-400">
-                <Loader2 className="w-8 h-8 animate-spin" />
+            <div className="flex-grow flex items-center justify-center h-full bg-crystal text-gray-400 relative">
+                <div className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-none z-0" />
+                <div className="relative z-10 flex flex-col items-center gap-3">
+                    <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+                    <p className="text-xs text-gray-500 uppercase tracking-widest font-bold">Decrypting messages...</p>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="flex-1 flex flex-col h-full min-h-0 bg-gray-950 text-white overflow-hidden relative w-full shadow-none rounded-none md:max-w-[1200px] md:mx-auto md:shadow-2xl md:border-x md:border-white/5">
+        <div className="flex-1 flex flex-col h-full min-h-0 bg-crystal text-white overflow-hidden relative w-full shadow-none rounded-none md:max-w-[1200px] md:mx-auto md:shadow-2xl md:border-x md:border-white/5">
+            {/* Immersive glass layer overlay */}
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-none z-0" />
             {/* ── Selection Action Bar (WhatsApp-style) ── */}
             {isSelectionMode ? (
                 <div className="pt-safe flex-shrink-0 border-b border-blue-500/30 bg-blue-600/10 backdrop-blur-md z-20" onClick={(e) => e.stopPropagation()}>
@@ -802,8 +813,8 @@ const ChatWindow: React.FC = () => {
             )}
 
             {activeConversationId && hasMore[activeConversationId] && (
-                <div className="flex justify-center py-2 bg-gray-950">
-                    <button onClick={handleLoadMore} className="text-xs font-medium text-blue-400 hover:text-blue-300">Load older messages</button>
+                <div className="flex justify-center py-2 bg-transparent relative z-10">
+                    <button onClick={handleLoadMore} className="text-xs font-medium text-blue-400 hover:text-blue-300 hover:underline">Load older messages</button>
                 </div>
             )}
 
@@ -1059,7 +1070,7 @@ const ChatWindow: React.FC = () => {
 
 
             {!isPending ? (
-                <div className="flex-shrink-0 bg-gray-950/95 backdrop-blur-2xl border-t border-white/10 z-20">
+                <div className="flex-shrink-0 bg-gray-950/40 backdrop-blur-2xl border-t border-white/10 z-20 relative">
                     <div className="max-w-[900px] mx-auto p-3 md:p-4 pb-[max(env(safe-area-inset-bottom,20px),20px)]">
                         <form onSubmit={handleSend} className="flex flex-col gap-2 md:gap-3 max-w-full">
                             {isVoiceRecording ? (
