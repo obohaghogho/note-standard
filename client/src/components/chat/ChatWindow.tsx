@@ -8,7 +8,7 @@ import { usePresence } from '../../context/PresenceContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../common/SecureImage';
-import { Send, Languages, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Maximize, Trash2, Share2, X, Copy, Menu, Pencil } from 'lucide-react';
+import { Send, Languages, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Maximize, Trash2, Share2, X, Copy, Menu, Pencil, MessageCircle } from 'lucide-react';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { MediaUpload } from './MediaUpload';
 import { VoiceRecorder } from './VoiceRecorder';
