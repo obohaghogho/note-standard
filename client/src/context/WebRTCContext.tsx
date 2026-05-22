@@ -305,7 +305,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             localStreamRef.current = stream;
             setLocalStream(stream);
 
-            socket?.emit('call:initiate', { to: targetUserId, type, conversationId, useAgora: false });
+            socket?.emit('call:initiate', { to: targetUserId, type, callType: type, conversationId, useAgora: false });
             sendMessageToConversation(conversationId, `Started a ${type} call`, 'call');
 
             callTimeoutRef.current = setTimeout(() => {
@@ -380,13 +380,14 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     useEffect(() => {
         if (!socket || !socketConnected) return;
 
-        const handleCallIncoming = (data: { from: string; fromName?: string; fromAvatar?: string; type?: 'voice' | 'video'; conversationId: string }) => {
+        const handleCallIncoming = (data: { from: string; fromName?: string; fromAvatar?: string; type?: 'voice' | 'video'; callType?: 'voice' | 'video'; conversationId: string }) => {
             if (currentCallStatus.current !== 'idle') {
                 socket.emit('call:reject', { to: data.from });
                 return;
             }
+            const resolvedType = data.type || data.callType || 'voice';
             setCallState({
-                type: data.type || 'voice',
+                type: resolvedType,
                 status: 'incoming',
                 otherUser: { id: data.from, full_name: data.fromName || 'Unknown User', avatar_url: data.fromAvatar },
                 conversationId: data.conversationId,

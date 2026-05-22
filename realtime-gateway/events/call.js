@@ -153,6 +153,7 @@ module.exports = (io, socket) => {
             from:           session.caller_id,
             fromName:       null, // caller name not stored here; callee should fetch from profile
             callType:       session.call_type,
+            type:           session.call_type, // support both type and callType
             conversationId: session.conversation_id,
             isSync:         true,
           });
@@ -163,6 +164,7 @@ module.exports = (io, socket) => {
             sessionId:      session.id,
             calleeId:       session.callee_id,
             callType:       session.call_type,
+            type:           session.call_type, // support both type and callType
             conversationId: session.conversation_id,
           });
         }
@@ -174,9 +176,10 @@ module.exports = (io, socket) => {
 
   // ── 1. call:initiate ───────────────────────────────────────────────────────
   socket.on('call:initiate', async (data) => {
-    const { to, callType, conversationId } = data;
+    const { to, conversationId } = data;
+    const callType = data.callType || data.type; // support both type and callType
     if (!to || !callType || !conversationId) {
-      socket.emit('call:error', { code: 'MISSING_FIELDS', message: 'to, callType, and conversationId are required' });
+      socket.emit('call:error', { code: 'MISSING_FIELDS', message: 'to, callType/type, and conversationId are required' });
       return;
     }
 
@@ -207,6 +210,7 @@ module.exports = (io, socket) => {
       fromName:       userName,
       fromAvatar:     userAvatar,
       callType,
+      type:           callType, // support both type and callType
       conversationId,
     });
 
@@ -219,6 +223,7 @@ module.exports = (io, socket) => {
         callerId:       userId,
         callerName:     userName,
         callType,
+        type:           callType, // support both type and callType
         conversationId,
         sessionId,
       },
