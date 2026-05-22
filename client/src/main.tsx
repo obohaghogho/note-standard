@@ -135,37 +135,35 @@ if ('serviceWorker' in navigator) {
 
 console.log('🚀 NoteStandard Booting...');
 
-// ── VisualViewport keyboard tracker ────────────────────────────────────────
-// Sets --kb-height and --vh so .chat-root always matches the true visible area.
 // ── Production-grade cross-platform keyboard tracker ────────────────────────
-// Handles both iOS Safari (innerHeight stays fixed, vp.height shrinks)
-// and Android Chrome (both shrink together at the same time).
-//
-// The fix for Android is to defer with requestAnimationFrame so both
-// window.innerHeight and vp.height have settled before we diff them.
-// The fix for iOS is window.scrollTo(0,0) on input focus so Safari doesn't
-// shift the layout viewport up and cut off the chat header.
+// Handles both iOS Safari and Android Chrome keyboard viewports.
+// Sets --vv-height to the visual viewport height, and locks the outer page
+// scroll position to 0,0 to prevent mobile browsers from shifting the page on focus.
 (() => {
   let rafId: number | null = null;
 
-  const applyKbHeight = () => {
+  const applyViewportVars = () => {
     const vp = window.visualViewport;
-    const kbHeight = vp ? Math.max(0, window.innerHeight - vp.height) : 0;
-    document.documentElement.style.setProperty('--kb-height', `${kbHeight}px`);
+    if (vp) {
+      document.documentElement.style.setProperty('--vv-height', `${vp.height}px`);
+      const kbHeight = Math.max(0, window.innerHeight - vp.height);
+      document.documentElement.style.setProperty('--kb-height', `${kbHeight}px`);
+    } else {
+      document.documentElement.style.setProperty('--vv-height', '100%');
+      document.documentElement.style.setProperty('--kb-height', '0px');
+    }
   };
 
-  // Defer to next animation frame so both window.innerHeight and vp.height
-  // are stable (critical for Android where they update asynchronously).
   const setViewportVars = () => {
     if (rafId !== null) cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(() => {
-      applyKbHeight();
+      applyViewportVars();
       rafId = null;
     });
   };
 
   // Run immediately on load.
-  applyKbHeight();
+  applyViewportVars();
 
   // VisualViewport API — fires on keyboard open/close and Safari scroll.
   if (window.visualViewport) {
@@ -176,18 +174,30 @@ console.log('🚀 NoteStandard Booting...');
   // Also catch orientation changes and desktop resize.
   window.addEventListener('resize', setViewportVars, { passive: true });
 
-  // iOS Safari "scroll on focus" fix:
-  // When a user taps an input, iOS aggressively scrolls the layout viewport
-  // upward to reveal the input, cutting off the header and messages.
-  // Calling window.scrollTo(0,0) immediately cancels that forced scroll.
-  const resetScroll = () => {
-    // Use requestAnimationFrame so the focus event fully completes first.
-    requestAnimationFrame(() => window.scrollTo(0, 0));
+  // Prevent ANY document-level scrolling on focus and generally lock document scroll to 0,0.
+  // This is because all page scrolling in NoteStandard is handled by internal overflow divs.
+  // The layout viewport itself should always remain firmly anchored at 0,0.
+  const forceScrollReset = () => {
+    if (window.scrollY !== 0 || window.scrollX !== 0) {
+      window.scrollTo(0, 0);
+    }
   };
+
+  // Listen to focus changes
   document.addEventListener('focusin', (e) => {
     const tag = (e.target as HTMLElement)?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA') resetScroll();
+    if (tag === 'INPUT' || tag === 'TEXTAREA') {
+      forceScrollReset();
+      // Run multiple checks as the keyboard animation triggers
+      setTimeout(forceScrollReset, 20);
+      setTimeout(forceScrollReset, 50);
+      setTimeout(forceScrollReset, 100);
+      setTimeout(forceScrollReset, 200);
+    }
   }, { passive: true });
+
+  // Listen to any scroll events on the window and lock back to 0,0
+  window.addEventListener('scroll', forceScrollReset, { passive: true });
 })();
 
 

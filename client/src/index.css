@@ -332,11 +332,7 @@ input[type=number] {
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 100%;
-  /* Keyboard avoidance: pad the bottom by keyboard height */
-  padding-bottom: var(--kb-height, 0px);
-  /* Smooth keyboard open/close animation (matches iOS keyboard animation) */
-  transition: padding-bottom 0.25s ease-out;
+  height: var(--vv-height, 100%);
   overflow: hidden;
   position: relative;
   overscroll-behavior: none;
