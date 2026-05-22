@@ -323,8 +323,7 @@ input[type=number] {
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 100dvh;
-  height: calc(var(--vh, 1vh) * 100 - var(--kb-height, 0px));
+  height: 100%;
   overflow: hidden;
   position: relative;
   /* Prevent elastic bounce from revealing whitespace below */

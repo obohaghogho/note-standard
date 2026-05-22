@@ -128,7 +128,9 @@ const ChatWindow: React.FC = () => {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [translations, setTranslations] = useState<{ [key: string]: string }>({});
     const [showOriginal, setShowOriginal] = useState<{ [key: string]: boolean }>({});
-    const [isAtBottom, setIsAtBottom] = useState(true);
+    const [showScrollDown, setShowScrollDown] = useState(false);
+    const isAtBottomRef = useRef(true);
+    const prevConvIdRef = useRef<string | null>(null);
     
     // Search states
     const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -168,10 +170,12 @@ const ChatWindow: React.FC = () => {
     // scrolls to the *element* regardless of container position in the DOM.
 
     const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
-        if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ block: 'end', behavior });
+        if (scrollContainerRef.current) {
+            const container = scrollContainerRef.current;
+            container.scrollTo({ top: container.scrollHeight, behavior });
+            isAtBottomRef.current = true;
+            setShowScrollDown(false);
         }
-        setIsAtBottom(true);
     }, []);
 
     const handleLoadMore = async () => {
@@ -194,28 +198,44 @@ const ChatWindow: React.FC = () => {
     const handleScroll = useCallback(() => {
         if (!scrollContainerRef.current) return;
         const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-        // 100px threshold — matches WhatsApp/Telegram tolerance
-        const reachedBottom = scrollHeight - scrollTop - clientHeight < 100;
-        setIsAtBottom(reachedBottom);
+        // 150px threshold to be more forgiving
+        const reachedBottom = scrollHeight - scrollTop - clientHeight <= 150;
+        isAtBottomRef.current = reachedBottom;
+        setShowScrollDown(!reachedBottom);
     }, []);
 
-    // When a new message arrives, only auto-scroll if already at bottom
-    useEffect(() => {
-        if (isAtBottom && currentMessages.length > 0) {
-            // Use requestAnimationFrame so we scroll after DOM paint
-            requestAnimationFrame(() => scrollToBottom('smooth'));
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentMessages.length]);
-
-    // When switching conversations: INSTANT jump to bottom BEFORE paint (useLayoutEffect)
-    // This guarantees users NEVER see the top of the list when opening a chat.
+    // 1. Maintain scroll position on resize (e.g. mobile keyboard opens/closes)
     useLayoutEffect(() => {
-        if (activeConversationId && messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ block: 'end', behavior: 'instant' });
-            setIsAtBottom(true);
+        const container = scrollContainerRef.current;
+        if (!container) return;
+        const resizeObserver = new ResizeObserver(() => {
+            if (isAtBottomRef.current) {
+                container.scrollTop = container.scrollHeight;
+            }
+        });
+        resizeObserver.observe(container);
+        return () => resizeObserver.disconnect();
+    }, []);
+
+    // 2. Scroll to bottom instantly on load, chat switch, or when new message arrives IF at bottom
+    useLayoutEffect(() => {
+        const container = scrollContainerRef.current;
+        if (!activeConversationId || !container) return;
+
+        // Reset scroll position intent when switching chats
+        if (prevConvIdRef.current !== activeConversationId) {
+            isAtBottomRef.current = true;
+            setShowScrollDown(false);
+            prevConvIdRef.current = activeConversationId;
         }
-    }, [activeConversationId]);
+
+        // If user is at bottom, auto-scroll to reveal new content
+        if (isAtBottomRef.current) {
+            container.scrollTop = container.scrollHeight;
+            isAtBottomRef.current = true;
+            setShowScrollDown(false);
+        }
+    }, [activeConversationId, currentMessages.length]);
 
     // Initialize input from draft
     useEffect(() => {
@@ -381,6 +401,10 @@ const ChatWindow: React.FC = () => {
         if (e) e.preventDefault();
         const textToSend = inputValue.trim();
         if (!textToSend || !activeConversationId) return;
+
+        // Force scroll to bottom on every send so user always sees what they sent
+        isAtBottomRef.current = true;
+        setShowScrollDown(false);
 
         // Clear UI state synchronously for instant feedback
         setInputValue('');
@@ -1090,7 +1114,7 @@ const ChatWindow: React.FC = () => {
                 <div ref={messagesEndRef} className="chat-scroll-anchor" />
             </div>
 
-            {!isAtBottom && (
+            {showScrollDown && (
                 <button 
                     onClick={() => scrollToBottom()} 
                     className="absolute bottom-[5.5rem] right-5 md:bottom-24 md:right-6 bg-blue-600 text-white p-3 rounded-full shadow-2xl hover:bg-blue-700 transition-all animate-in zoom-in-0 duration-200 z-30 hover:scale-110 active:scale-95 border border-white/10"
