@@ -407,3 +407,65 @@ input[type=number] {
 .msg-bubble {
   animation: msg-in 0.18s ease-out both;
 }
+
+/* ======================================================
+   KEYBOARD OPEN COMPACT MODE (WHATSAPP-STYLE)
+   ====================================================== */
+@media (max-width: 767px) {
+  .keyboard-open .chat-header > div {
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+  }
+
+  .keyboard-open .chat-header h2 {
+    font-size: 15px !important;
+  }
+
+  .keyboard-open .chat-header p {
+    display: none !important; /* Hide online/typing/status text to save vertical space on mobile header */
+  }
+
+  .keyboard-open .chat-messages {
+    padding: 6px 10px !important;
+  }
+
+  .keyboard-open .msg-bubble {
+    margin-top: 4px !important;
+  }
+
+  .keyboard-open .msg-bubble > div {
+    padding: 8px 12px !important;
+    font-size: 13.5px !important;
+    line-height: 1.4 !important;
+    border-radius: 14px !important;
+  }
+
+  .keyboard-open .chat-input-bar > div {
+    padding: 6px 8px !important;
+  }
+
+  .keyboard-open .chat-input-bar form {
+    gap: 6px !important;
+  }
+
+  .keyboard-open .chat-input-bar button[type="submit"],
+  .keyboard-open .chat-input-bar button[aria-label="Record voice note"] {
+    width: 38px !important;
+    height: 38px !important;
+  }
+
+  .keyboard-open .chat-input-bar button[type="button"] {
+    padding: 4px !important;
+  }
+
+  .keyboard-open .chat-input-bar button[type="button"] svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  .keyboard-open #chat-window-input {
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+    font-size: 14px !important;
+  }
+}

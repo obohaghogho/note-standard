@@ -148,9 +148,16 @@ console.log('🚀 NoteStandard Booting...');
       document.documentElement.style.setProperty('--vv-height', `${vp.height}px`);
       const kbHeight = Math.max(0, window.innerHeight - vp.height);
       document.documentElement.style.setProperty('--kb-height', `${kbHeight}px`);
+      
+      if (kbHeight > 60) {
+        document.documentElement.classList.add('keyboard-open');
+      } else {
+        document.documentElement.classList.remove('keyboard-open');
+      }
     } else {
       document.documentElement.style.setProperty('--vv-height', '100%');
       document.documentElement.style.setProperty('--kb-height', '0px');
+      document.documentElement.classList.remove('keyboard-open');
     }
   };
 
