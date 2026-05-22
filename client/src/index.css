@@ -323,19 +323,19 @@ input[type=number] {
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 100%;
+  height: 100dvh; /* Native dynamic viewport height for mobile browsers */
+  height: calc(var(--vh, 1vh) * 100); /* Fallback */
   overflow: hidden;
   position: relative;
   /* Prevent elastic bounce from revealing whitespace below */
   overscroll-behavior: none;
 }
 
-/* Sticky header — never disappears, never gets pushed off top */
+/* Header — flex child, remains at top */
 .chat-header {
   flex-shrink: 0;
   flex-grow: 0;
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 30;
   /* Safe area: notch phones */
   padding-top: env(safe-area-inset-top, 0px);
@@ -357,6 +357,7 @@ input[type=number] {
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: auto; /* native jump behaves instantly */
+  /* Remove safe area bottom here, we add it to input bar */
 }
 
 /* Input bar — always at bottom, no keyboard overlap */
@@ -366,6 +367,7 @@ input[type=number] {
   position: relative;
   z-index: 20;
   width: 100%;
+  background: inherit;
   /* Safe area: home indicator on iPhone */
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }

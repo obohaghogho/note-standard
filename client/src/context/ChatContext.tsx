@@ -49,6 +49,7 @@ export interface Conversation {
     name: string;
     updated_at: string;
     lastMessage?: {
+        id: string;
         content: string;
         sender_id: string;
         created_at: string;
@@ -298,17 +299,27 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
             // Increment unread count only if chat is NOT currently open
             const isCurrentlyOpen = activeConversationIdRef.current === msg.conversation_id;
-            setConversations(prev => prev.map(conv => {
-                if (conv.id === msg.conversation_id) {
-                    return {
-                        ...conv,
-                        updated_at: msg.created_at,
-                        lastMessage: { content: msg.content, sender_id: msg.sender_id, created_at: msg.created_at },
-                        unreadCount: isCurrentlyOpen ? 0 : (conv.unreadCount || 0) + (msg.sender_id !== user?.id ? 1 : 0)
-                    };
+            setConversations(prev => {
+                const convExists = prev.some(c => c.id === msg.conversation_id);
+                if (!convExists) {
+                    // Conversation was likely cleared/deleted from UI, but a new message arrived!
+                    // Re-fetch conversations to restore it.
+                    setTimeout(() => loadConversations(), 100);
+                    return prev;
                 }
-                return conv;
-            }));
+
+                return prev.map(conv => {
+                    if (conv.id === msg.conversation_id) {
+                        return {
+                            ...conv,
+                            updated_at: msg.created_at,
+                            lastMessage: { content: msg.content, sender_id: msg.sender_id, created_at: msg.created_at },
+                            unreadCount: isCurrentlyOpen ? 0 : (conv.unreadCount || 0) + (msg.sender_id !== user?.id ? 1 : 0)
+                        };
+                    }
+                    return conv;
+                });
+            });
         };
 
         const onMessageDeleted = ({ messageId, conversationId }: { messageId: string, conversationId: string }) => {
@@ -664,7 +675,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         // 3. Trigger asynchronous background upload
         const runBackgroundUpload = async () => {
-            let progressInterval: NodeJS.Timeout | undefined;
+            let progressInterval: ReturnType<typeof setInterval> | undefined;
             try {
                 // Perform upload to Supabase Storage
                 const timestamp = Date.now();

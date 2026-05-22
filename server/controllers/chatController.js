@@ -162,7 +162,20 @@ exports.getConversations = async (req, res) => {
       const timeA = new Date(a.last_message?.created_at || a.updated_at || a.created_at).getTime();
       const timeB = new Date(b.last_message?.created_at || b.updated_at || b.created_at).getTime();
       return timeB - timeA;
-    }).filter(c => c.chat_type !== "support" && c.name !== "Support Chat" && !(c.name && c.name.toLowerCase().includes("support team")));
+    }).filter(c => {
+      // Hide support chats
+      if (c.chat_type === "support" || c.name === "Support Chat" || (c.name && c.name.toLowerCase().includes("support team"))) return false;
+      
+      // Hide if it was "deleted" (cleared_at is after the last message, or cleared_at exists and there are no messages)
+      if (c.membership?.cleared_at) {
+        if (c.last_message && new Date(c.membership.cleared_at) >= new Date(c.last_message.created_at)) {
+          return false;
+        } else if (!c.last_message) {
+          return false;
+        }
+      }
+      return true;
+    });
 
     res.json(sorted);
   } catch (err) {
@@ -1377,27 +1390,46 @@ exports.deleteConversation = async (req, res) => {
       });
     }
 
-    // NEW LOGIC: Only remove the requesting user from the conversation.
-    // DO NOT delete messages or the conversation itself, as that wipes it for others.
-    const { error: membersDeleteError } = await supabase
-      .from("conversation_members")
-      .delete()
-      .eq("conversation_id", conversationId)
-      .eq("user_id", userId);
+    // NEW LOGIC: Only remove the requesting user from the conversation if it's a group chat.
+    // For direct chats, DO NOT delete messages or the conversation itself, as that wipes it for others.
+    // Instead, we just update cleared_at to hide it.
+    const { data: convData } = await supabase
+      .from("conversations")
+      .select("type")
+      .eq("id", conversationId)
+      .single();
 
-    if (membersDeleteError) throw membersDeleteError;
+    if (convData && convData.type === "direct") {
+      // Just clear history (hide chat) for direct chats to preserve relationships
+      const { error: updateError } = await supabase
+        .from("conversation_members")
+        .update({ cleared_at: new Date().toISOString() })
+        .eq("conversation_id", conversationId)
+        .eq("user_id", userId);
 
-    // Optional: Only delete the actual conversation and messages if NO members are left
-    const { count: memberCount } = await supabase
-      .from("conversation_members")
-      .select("*", { count: 'exact', head: true })
-      .eq("conversation_id", conversationId);
-    
-    if (memberCount === 0) {
-      console.log(`[Chat Delete] Last member left, cleaning up conversation ${conversationId}`);
-      await supabase.from("messages").delete().eq("conversation_id", conversationId);
-      await supabase.from("attachments").delete().eq("conversation_id", conversationId);
-      await supabase.from("conversations").delete().eq("id", conversationId);
+      if (updateError) throw updateError;
+    } else {
+      // It's a group chat, safe to remove member
+      const { error: membersDeleteError } = await supabase
+        .from("conversation_members")
+        .delete()
+        .eq("conversation_id", conversationId)
+        .eq("user_id", userId);
+
+      if (membersDeleteError) throw membersDeleteError;
+
+      // Optional: Only delete the actual conversation and messages if NO members are left
+      const { count: memberCount } = await supabase
+        .from("conversation_members")
+        .select("*", { count: 'exact', head: true })
+        .eq("conversation_id", conversationId);
+      
+      if (memberCount === 0) {
+        console.log(`[Chat Delete] Last member left, cleaning up conversation ${conversationId}`);
+        await supabase.from("messages").delete().eq("conversation_id", conversationId);
+        await supabase.from("attachments").delete().eq("conversation_id", conversationId);
+        await supabase.from("conversations").delete().eq("id", conversationId);
+      }
     }
 
     // Notify participants via Gateway

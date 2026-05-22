@@ -117,8 +117,6 @@ function App() {
     return () => {
       window.removeEventListener('error', handleError);
       window.removeEventListener('unhandledrejection', handler);
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
       window.removeEventListener('resize', updateVh);
       window.visualViewport?.removeEventListener('resize', updateVh);
       window.visualViewport?.removeEventListener('scroll', updateVh);
