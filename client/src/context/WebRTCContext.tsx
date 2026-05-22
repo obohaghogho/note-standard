@@ -57,6 +57,7 @@ const getAudioConstraints = (): MediaTrackConstraints => {
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
+            // @ts-expect-error: latency is non-standard
             latency: 0,
             sampleRate: 48000,
             channelCount: 1,
@@ -67,6 +68,7 @@ const getAudioConstraints = (): MediaTrackConstraints => {
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true,
+        // @ts-expect-error: latency is non-standard
         latency: 0,
         googEchoCancellation: true,
         googAutoGainControl: true,
