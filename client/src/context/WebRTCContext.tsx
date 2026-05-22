@@ -7,7 +7,7 @@ import api from '../api/axiosInstance';
 
 interface CallState {
     type: 'voice' | 'video' | null;
-    status: 'idle' | 'calling' | 'incoming' | 'connecting' | 'connected' | 'ended';
+    status: 'idle' | 'calling' | 'ringing' | 'incoming' | 'connecting' | 'connected' | 'ended';
     otherUser: {
         id: string;
         full_name: string;
@@ -393,6 +393,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 conversationId: data.conversationId,
                 connectedAt: null,
             });
+            socket.emit('call:ringing', { to: data.from });
         };
 
         const handleCallReady = async (data: { from: string }) => {
@@ -475,7 +476,14 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             cleanup();
         };
 
+        const handleCallRinging = () => {
+            if (currentCallStatus.current === 'calling') {
+                setCallState(p => ({ ...p, status: 'ringing' }));
+            }
+        };
+
         socket.on('call:incoming', handleCallIncoming);
+        socket.on('call:ringing', handleCallRinging);
         socket.on('call:ready', handleCallReady);
         socket.on('call:signal', handleCallSignal);
         socket.on('call:rejected', cleanup);
@@ -484,6 +492,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         return () => {
             socket.off('call:incoming', handleCallIncoming);
+            socket.off('call:ringing', handleCallRinging);
             socket.off('call:ready', handleCallReady);
             socket.off('call:signal', handleCallSignal);
             socket.off('call:rejected', cleanup);

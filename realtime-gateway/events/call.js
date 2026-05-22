@@ -229,6 +229,13 @@ module.exports = (io, socket) => {
     });
   });
 
+  // ── 1.5. call:ringing ──────────────────────────────────────────────────────
+  socket.on('call:ringing', (data) => {
+    const { to } = data;
+    if (!to) return;
+    io.to(`user:${to}`).emit('call:ringing', { from: userId });
+  });
+
   // ── 2. call:answer ─────────────────────────────────────────────────────────
   socket.on('call:answer', async (data) => {
     const { to, sessionId } = data;
