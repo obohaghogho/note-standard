@@ -591,7 +591,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             sender_id: user.id,
             content,
             created_at: new Date().toISOString(),
-            type: type as any,
+            type: (type || 'text') as Message['type'],
             isOwn: true,
             status: 'sending',
             reply_to: replyToData

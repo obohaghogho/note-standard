@@ -223,7 +223,6 @@ module.exports = (io, socket) => {
         callerId:       userId,
         callerName:     userName,
         callType,
-        type:           callType, // support both type and callType
         conversationId,
         sessionId,
       },

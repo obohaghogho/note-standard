@@ -78,7 +78,7 @@ export default function PaymentSelector({
   const [isApplePaySupported, setIsApplePaySupported] = useState(false);
 
   // ─── Telemetry Engine ─────────────────────────────────────────
-  const trackTelemetry = useCallback((event: string, payload?: any) => {
+  const trackTelemetry = useCallback((event: string, payload?: Record<string, unknown>) => {
     console.log(`[Telemetry] ${event}`, payload || {});
   }, []);
 
@@ -105,7 +105,7 @@ export default function PaymentSelector({
           return false;
         }
 
-        const ApplePaySession = (window as any).ApplePaySession;
+        const ApplePaySession = (window as unknown as { ApplePaySession?: { canMakePayments: () => boolean } }).ApplePaySession;
         if (ApplePaySession && typeof ApplePaySession.canMakePayments === "function") {
           const supported = ApplePaySession.canMakePayments();
           if (supported) {
