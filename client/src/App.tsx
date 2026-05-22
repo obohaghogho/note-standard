@@ -96,30 +96,10 @@ function App() {
     window.addEventListener('error', handleError);
     window.addEventListener('unhandledrejection', handler);
 
-    // Mobile Viewport Height — use visualViewport API (works on iOS/Android keyboard open)
-    // This is the same approach WhatsApp & Facebook Messenger use.
-    const updateVh = () => {
-      const height = window.visualViewport
-        ? window.visualViewport.height
-        : window.innerHeight;
-      document.documentElement.style.setProperty('--vh', `${height * 0.01}px`);
-      // Also set a --vvh for absolute pinned chat containers
-      document.documentElement.style.setProperty('--vvh', `${height}px`);
-    };
-    updateVh();
-    window.visualViewport?.addEventListener('resize', updateVh);
-    window.visualViewport?.addEventListener('scroll', updateVh);
-    window.addEventListener('resize', updateVh); // fallback for browsers without visualViewport
-
-
-
     // Cleanup on unmount
     return () => {
       window.removeEventListener('error', handleError);
       window.removeEventListener('unhandledrejection', handler);
-      window.removeEventListener('resize', updateVh);
-      window.visualViewport?.removeEventListener('resize', updateVh);
-      window.visualViewport?.removeEventListener('scroll', updateVh);
     };
   }, []);
 

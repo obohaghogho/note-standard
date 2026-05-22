@@ -52,7 +52,7 @@ router.post('/image', upload.single('file'), async (req, res) => {
                 {
                     folder: 'note_standard_profiles',
                     transformation: [
-                        { width: 400, height: 400, crop: 'fill', gravity: 'face' }
+                        { width: 400, height: 400, crop: 'fill', gravity: 'face', fetch_format: 'auto' }
                     ]
                 },
                 (error, result) => {

@@ -157,7 +157,9 @@ console.log('🚀 NoteStandard Booting...');
     const kbHeight = Math.max(0, layoutH - vh - vp.offsetTop);
 
     document.documentElement.style.setProperty('--vh', `${vh * 0.01}px`);
+    document.documentElement.style.setProperty('--vvh', `${vh}px`);
     document.documentElement.style.setProperty('--kb-height', `${kbHeight}px`);
+    document.documentElement.style.setProperty('--vp-offset', `${vp.offsetTop}px`);
   };
 
   // Run immediately
