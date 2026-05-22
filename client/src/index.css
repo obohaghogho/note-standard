@@ -30,7 +30,7 @@
 
   body {
     width: 100%;
-    height: 100dvh;
+    height: calc(var(--vh, 1vh) * 100);
     margin: 0;
     padding: 0;
     overflow: hidden;
@@ -253,11 +253,11 @@
 
 /* MOBILE RESPONSIVENESS UTILITIES */
 .min-h-screen-safe {
-  min-height: 100dvh;
+  min-height: calc(var(--vh, 1vh) * 100);
 }
 
 .h-screen-safe {
-  height: 100dvh;
+  height: calc(var(--vh, 1vh) * 100);
 }
 
 .pb-safe {

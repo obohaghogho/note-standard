@@ -114,6 +114,14 @@ function App() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
+    // Mobile Viewport Height fix for keyboard issues
+    const setHeight = () => {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
+    setHeight();
+    window.addEventListener('resize', setHeight);
+
     // Initial check for offline state
     if (!navigator.onLine) {
       handleOffline();
@@ -125,6 +133,7 @@ function App() {
       window.removeEventListener('unhandledrejection', handler);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('resize', setHeight);
     };
   }, []);
 

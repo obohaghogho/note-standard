@@ -140,6 +140,8 @@ const ChatWindow: React.FC = () => {
     
     // Mentions state
     const [showMentions, setShowMentions] = useState(false);
+    const [mentionSearch, setMentionSearch] = useState('');
+    const [mentionParticipants, setMentionParticipants] = useState<any[]>([]);
     
     // Ref to prevent translation loops
     const translatingRef = useRef<Set<string>>(new Set());
@@ -564,6 +566,12 @@ const ChatWindow: React.FC = () => {
         return current.sender_id === previous.sender_id && timeDiff < 60000; // Group if within 1 minute
     };
 
+    const getSenderName = (senderId: string) => {
+        if (senderId === user?.id) return 'You';
+        const member = activeConversation?.members.find(m => m.user_id === senderId);
+        return member?.profile?.username || member?.profile?.full_name || 'Member';
+    };
+
     if (!activeConversationId) {
         return (
             <div className="flex-grow flex flex-col items-center justify-center h-full text-gray-400 bg-crystal relative p-6">
@@ -668,7 +676,7 @@ const ChatWindow: React.FC = () => {
                     </div>
                 </div>
             ) : (
-            <div className="flex-shrink-0 bg-gray-950/80 backdrop-blur-2xl border-b border-white/5 z-20 pt-safe shadow-sm">
+            <div className="sticky top-0 flex-shrink-0 bg-gray-950 border-b border-white/5 z-20 pt-safe shadow-sm">
                 <div className="px-3 py-3 md:px-5 md:py-4 flex items-center justify-between gap-4 w-full">
                     <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                         <button 
@@ -855,6 +863,7 @@ const ChatWindow: React.FC = () => {
                             return (
                                 <div 
                                     key={msg.id || `msg-temp-${index}`} 
+                                    id={`msg-${msg.id}`}
                                     className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'} ${isGrouped ? '-mt-2 md:-mt-3' : 'mt-4'} animate-in fade-in slide-in-from-bottom-2 duration-300`}
                                     onTouchStart={(e) => gesture.onTouchStart(e, msg.id)}
                                     onTouchMove={gesture.onTouchMove}
@@ -885,6 +894,32 @@ const ChatWindow: React.FC = () => {
                                             ? 'bg-blue-600/40 border-blue-400/50 ring-1 ring-blue-500/30'
                                             : (msg.sender_id === user?.id ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-blue-500/50' : 'bg-gray-800/90 text-gray-200 border-gray-700/50')
                                     } relative group transition-all duration-200 ${isSelectionMode ? 'cursor-pointer' : ''}`}>
+                                        {msg.reply_to && (
+                                            <div 
+                                                className={`mb-2 p-2.5 rounded-xl border-l-[3.5px] text-xs transition-all backdrop-blur-md cursor-pointer hover:bg-black/5 ${
+                                                    msg.sender_id === user?.id 
+                                                        ? 'bg-black/20 border-l-blue-400 text-blue-100' 
+                                                        : 'bg-white/5 border-l-blue-500 text-gray-300'
+                                                }`}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const element = document.getElementById(`msg-${msg.reply_to?.id}`);
+                                                    if (element) {
+                                                        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                        element.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2', 'ring-offset-transparent');
+                                                        setTimeout(() => element.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2', 'ring-offset-transparent'), 2000);
+                                                    }
+                                                }}
+                                            >
+                                                <p className={`font-bold mb-0.5 ${msg.sender_id === user?.id ? 'text-blue-300' : 'text-blue-400'}`}>
+                                                    {getSenderName(msg.reply_to.sender_id)}
+                                                </p>
+                                                <p className="truncate opacity-80 leading-relaxed italic">
+                                                    {msg.reply_to.content || (msg.reply_to.type !== 'text' ? `Shared a ${msg.reply_to.type}` : '')}
+                                                </p>
+                                            </div>
+                                        )}
+
                                         {msg.attachment && msg.type !== 'audio' && (
                                             <div className="mb-2 rounded-lg overflow-hidden border border-black/20 bg-black/10">
                                                 {msg.type === 'image' ? (
@@ -1054,7 +1089,7 @@ const ChatWindow: React.FC = () => {
 
             {!isAtBottom && (
                 <button 
-                    onClick={scrollToBottom} 
+                    onClick={() => scrollToBottom()} 
                     className="absolute bottom-24 right-6 bg-blue-600 text-white p-3 rounded-full shadow-2xl hover:bg-blue-700 transition-all animate-in zoom-in-0 duration-200 z-[30] hover:scale-110 active:scale-95 border border-white/10"
                 >
                     <ArrowDown size={20} />
@@ -1063,7 +1098,7 @@ const ChatWindow: React.FC = () => {
 
             <AnimatePresence>
                 {showMediaUpload && activeConversationId && (
-                    <MediaUpload conversationId={activeConversationId} onUploadComplete={handleMediaUploadComplete} onCancel={() => setShowMediaUpload(false)} />
+                    <MediaUpload onUploadComplete={handleMediaUploadComplete} onCancel={() => setShowMediaUpload(false)} />
                 )}
             </AnimatePresence>
 

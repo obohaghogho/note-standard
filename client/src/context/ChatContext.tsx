@@ -128,6 +128,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const socketRef = useRef<Socket | null>(null);
     const lastUserIdRef = useRef<string | null>(null);
     const activeConversationIdRef = useRef<string | null>(null);
+    const messagesRef = useRef<Record<string, Message[]>>({});
+
+    useEffect(() => {
+        messagesRef.current = messages;
+    }, [messages]);
 
     useEffect(() => {
         conversationsRef.current = conversations;
@@ -547,6 +552,21 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const sendMessageToConversation = async (conversationId: string, content: string, type: string = 'text', attachmentId?: string, replyToId?: string) => {
         if (!session || !user) throw new Error('Cannot send message');
         
+        // Find the message being replied to for optimistic UI
+        let replyToData = undefined;
+        if (replyToId) {
+            const allMsgs = messagesRef.current[conversationId] || [];
+            const originalMsg = allMsgs.find((m: Message) => m.id === replyToId);
+            if (originalMsg) {
+                replyToData = {
+                    id: originalMsg.id,
+                    content: originalMsg.content,
+                    sender_id: originalMsg.sender_id,
+                    type: originalMsg.type
+                };
+            }
+        }
+
         // Optimistic UI Update
         const tempId = `temp-${Date.now()}`;
         const optimisticMessage: Message = {
@@ -555,9 +575,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             sender_id: user.id,
             content,
             created_at: new Date().toISOString(),
-            type,
+            type: type as any,
             isOwn: true,
-            status: 'sending'
+            status: 'sending',
+            reply_to: replyToData
         };
         
         setMessages(prev => {

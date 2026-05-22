@@ -1377,42 +1377,28 @@ exports.deleteConversation = async (req, res) => {
       });
     }
 
-    // Delete messages first (if cascade delete isn't fully set up in Supabase)
-    const { error: msgDeleteError } = await supabase
-      .from("messages")
-      .delete()
-      .eq("conversation_id", conversationId);
-
-    if (msgDeleteError) throw msgDeleteError;
-
-    // Delete members
+    // NEW LOGIC: Only remove the requesting user from the conversation.
+    // DO NOT delete messages or the conversation itself, as that wipes it for others.
     const { error: membersDeleteError } = await supabase
       .from("conversation_members")
       .delete()
-      .eq("conversation_id", conversationId);
+      .eq("conversation_id", conversationId)
+      .eq("user_id", userId);
 
     if (membersDeleteError) throw membersDeleteError;
 
-    // Delete attachments metadata (if any)
-    const { error: attachmentsDeleteError } = await supabase
-      .from("attachments")
-      .delete()
+    // Optional: Only delete the actual conversation and messages if NO members are left
+    const { count: memberCount } = await supabase
+      .from("conversation_members")
+      .select("*", { count: 'exact', head: true })
       .eq("conversation_id", conversationId);
-
-    if (attachmentsDeleteError) {
-      console.warn(
-        "Could not delete attachments metadata:",
-        attachmentsDeleteError.message,
-      );
+    
+    if (memberCount === 0) {
+      console.log(`[Chat Delete] Last member left, cleaning up conversation ${conversationId}`);
+      await supabase.from("messages").delete().eq("conversation_id", conversationId);
+      await supabase.from("attachments").delete().eq("conversation_id", conversationId);
+      await supabase.from("conversations").delete().eq("id", conversationId);
     }
-
-    // Delete conversation
-    const { error: convDeleteError } = await supabase
-      .from("conversations")
-      .delete()
-      .eq("id", conversationId);
-
-    if (convDeleteError) throw convDeleteError;
 
     // Notify participants via Gateway
     await realtime.emitToConversation(conversationId, "chat:conversation_deleted", { conversationId });
