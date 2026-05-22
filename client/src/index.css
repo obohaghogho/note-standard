@@ -310,3 +310,90 @@ input[type=number] {
   scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
 
+/* ======================================================
+   WHATSAPP-STYLE CHAT LAYOUT
+   ====================================================== */
+
+/* 
+  The chat root takes exactly the visible viewport height.
+  100dvh = dynamic viewport height (shrinks when keyboard opens on modern browsers).
+  Fallback: calc(var(--vh,1vh)*100 - var(--kb-height,0px)) driven by VisualViewport JS.
+*/
+.chat-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100dvh;
+  height: calc(var(--vh, 1vh) * 100 - var(--kb-height, 0px));
+  overflow: hidden;
+  position: relative;
+  /* Prevent elastic bounce from revealing whitespace below */
+  overscroll-behavior: none;
+}
+
+/* Sticky header — never disappears, never gets pushed off top */
+.chat-header {
+  flex-shrink: 0;
+  flex-grow: 0;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  /* Safe area: notch phones */
+  padding-top: env(safe-area-inset-top, 0px);
+  width: 100%;
+}
+
+/* 
+  Message list — fills the space between header and input.
+  overflow-y: auto enables internal scrolling.
+  overscroll-behavior: contain prevents scroll chaining to the outer page.
+*/
+.chat-messages {
+  flex: 1 1 0%;
+  min-height: 0; /* ← critical: allows flex child to shrink below content size */
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: auto; /* we control smooth scrolling manually */
+}
+
+/* Input bar — always at bottom, no keyboard overlap */
+.chat-input-bar {
+  flex-shrink: 0;
+  flex-grow: 0;
+  position: relative;
+  z-index: 20;
+  width: 100%;
+  /* Safe area: home indicator on iPhone */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Scroll anchor — placed after last message, scrollIntoView targets this */
+.chat-scroll-anchor {
+  height: 1px;
+  width: 100%;
+  flex-shrink: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+/* Typing indicator fade-in */
+@keyframes typing-dot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+.typing-dot {
+  animation: typing-dot 1.4s infinite ease-in-out;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* Message bubble entrance */
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.msg-bubble {
+  animation: msg-in 0.18s ease-out both;
+}

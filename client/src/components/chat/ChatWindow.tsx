@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useChatGesture } from '../../hooks/useChatGesture';
 import { AnimatePresence } from 'framer-motion';
 import { useChat } from '../../context/ChatContext';
@@ -163,18 +163,16 @@ const ChatWindow: React.FC = () => {
 
     const isWaitingForOthers = myMember?.status === 'accepted' && otherMember?.status === 'pending';
 
-    const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
-        if (scrollContainerRef.current) {
-            const { scrollHeight } = scrollContainerRef.current;
-            const validBehavior: ScrollBehavior = (behavior === 'smooth' || behavior === 'auto') ? behavior : 'smooth';
-            scrollContainerRef.current.scrollTo({
-                top: scrollHeight,
-                behavior: validBehavior
-            });
-            // Force set state to avoid lag in UI update
-            setIsAtBottom(true);
+    // ── Scroll helpers ────────────────────────────────────────────────────
+    // scrollIntoView is more reliable than scrollTop = scrollHeight because it
+    // scrolls to the *element* regardless of container position in the DOM.
+
+    const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ block: 'end', behavior });
         }
-    };
+        setIsAtBottom(true);
+    }, []);
 
     const handleLoadMore = async () => {
         if (!activeConversationId || !scrollContainerRef.current) return;
@@ -184,32 +182,38 @@ const ChatWindow: React.FC = () => {
         
         await loadMoreMessages(activeConversationId);
         
-        setTimeout(() => {
+        // Restore scroll position after older messages are prepended
+        requestAnimationFrame(() => {
             if (scrollContainerRef.current) {
                 const newScrollHeight = scrollContainerRef.current.scrollHeight;
                 scrollContainerRef.current.scrollTop = newScrollHeight - previousScrollHeight;
             }
-        }, 0);
+        });
     };
 
-    const handleScroll = () => {
+    const handleScroll = useCallback(() => {
         if (!scrollContainerRef.current) return;
         const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-        const reachedBottom = scrollHeight - scrollTop - clientHeight < 50;
+        // 100px threshold — matches WhatsApp/Telegram tolerance
+        const reachedBottom = scrollHeight - scrollTop - clientHeight < 100;
         setIsAtBottom(reachedBottom);
-    };
+    }, []);
 
+    // When a new message arrives, only auto-scroll if already at bottom
     useEffect(() => {
-        if (isAtBottom) scrollToBottom('smooth');
-    }, [currentMessages, isAtBottom]);
+        if (isAtBottom && currentMessages.length > 0) {
+            // Use requestAnimationFrame so we scroll after DOM paint
+            requestAnimationFrame(() => scrollToBottom('smooth'));
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentMessages.length]);
 
-    useEffect(() => {
-        if (activeConversationId) {
-            // Use setTimeout to ensure DOM has updated before scrolling
-            setTimeout(() => {
-                scrollToBottom('auto');
-                setIsAtBottom(true);
-            }, 0);
+    // When switching conversations: INSTANT jump to bottom BEFORE paint (useLayoutEffect)
+    // This guarantees users NEVER see the top of the list when opening a chat.
+    useLayoutEffect(() => {
+        if (activeConversationId && messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ block: 'end', behavior: 'instant' });
+            setIsAtBottom(true);
         }
     }, [activeConversationId]);
 
@@ -598,12 +602,12 @@ const ChatWindow: React.FC = () => {
     }
 
     return (
-        <div className="flex-1 flex flex-col h-full min-h-0 bg-crystal text-white overflow-hidden relative w-full shadow-none rounded-none md:max-w-[1200px] md:mx-auto md:shadow-2xl md:border-x md:border-white/5">
+        <div className="chat-root bg-crystal text-white w-full md:max-w-[1200px] md:mx-auto md:shadow-2xl md:border-x md:border-white/5">
             {/* Immersive glass layer overlay */}
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-none z-0" />
             {/* ── Selection Action Bar (WhatsApp-style) ── */}
             {isSelectionMode ? (
-                <div className="pt-safe flex-shrink-0 border-b border-blue-500/30 bg-blue-600/10 backdrop-blur-md z-20" onClick={(e) => e.stopPropagation()}>
+                <div className="chat-header border-b border-blue-500/30 bg-blue-600/10 backdrop-blur-md" onClick={(e) => e.stopPropagation()}>
                     <div className="p-2 md:p-4 flex items-center justify-between gap-4 w-full">
                         <div className="flex items-center gap-3">
                             <button 
@@ -676,7 +680,7 @@ const ChatWindow: React.FC = () => {
                     </div>
                 </div>
             ) : (
-            <div className="flex-shrink-0 bg-gray-950/95 backdrop-blur-md border-b border-white/5 z-30 pt-safe shadow-md">
+            <div className="chat-header bg-gray-950/95 backdrop-blur-md border-b border-white/5 shadow-md">
                 <div className="px-3 py-2.5 md:px-5 md:py-4 flex items-center justify-between gap-4 w-full">
                     <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                         <button 
@@ -722,7 +726,7 @@ const ChatWindow: React.FC = () => {
                                         )}
                                     </div>
                                     <div className="min-w-0">
-                                        <h2 className="font-semibold truncate max-w-[60px] xs:max-w-[100px] sm:max-w-[150px] md:max-w-[300px] text-[10px] xs:text-xs md:text-base flex items-center gap-1">
+                                        <h2 className="font-semibold truncate max-w-[130px] xs:max-w-[160px] sm:max-w-[200px] md:max-w-[300px] text-sm md:text-base flex items-center gap-1">
                                             {displayName || 'Chat'}
                                             {activeConversation?.type === 'direct' && otherM && otherM.profile && (
                                                 <UserBadge 
@@ -827,11 +831,9 @@ const ChatWindow: React.FC = () => {
             )}
 
             <div 
-                className="flex-1 overflow-y-auto p-3 md:p-6 space-y-4 md:space-y-6 scroll-smooth overscroll-contain transition-all custom-scrollbar"
+                className="chat-messages custom-scrollbar p-3 md:p-6"
                 style={{ 
-                    WebkitOverflowScrolling: 'touch',
-                    touchAction: 'pan-y',        /* browser handles scroll before JS */
-                    overscrollBehavior: 'contain',
+                    touchAction: 'pan-y',
                 }}
                 ref={scrollContainerRef}
                 onScroll={handleScroll}
@@ -856,7 +858,7 @@ const ChatWindow: React.FC = () => {
                         ))}
                     </div>
                 ) : (
-                    <>
+                    <div className="space-y-1 md:space-y-2">
                         {currentMessages.map((msg, index) => {
                             const isGrouped = isSameSender(index);
                             const isSelected = selectedMessages.has(msg.id);
@@ -864,7 +866,7 @@ const ChatWindow: React.FC = () => {
                                 <div 
                                     key={msg.id || `msg-temp-${index}`} 
                                     id={`msg-${msg.id}`}
-                                    className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'} ${isGrouped ? '-mt-2 md:-mt-3' : 'mt-4'} animate-in fade-in slide-in-from-bottom-2 duration-300`}
+                                    className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'} ${isGrouped ? '' : 'mt-3'} msg-bubble`}
                                     onTouchStart={(e) => gesture.onTouchStart(e, msg.id)}
                                     onTouchMove={gesture.onTouchMove}
                                     onTouchEnd={gesture.onTouchEnd}
@@ -1065,7 +1067,7 @@ const ChatWindow: React.FC = () => {
                                 </span>
                             </div>
                         )}
-                    </>
+                    </div>
                 )}
 
                 {isPending && (
@@ -1084,13 +1086,14 @@ const ChatWindow: React.FC = () => {
                         <p className="text-sm text-gray-400 italic font-medium">Waiting for acceptance...</p>
                     </div>
                 )}
-                <div ref={messagesEndRef} />
+                {/* Scroll anchor — scrollIntoView(block:'end') lands here */}
+                <div ref={messagesEndRef} className="chat-scroll-anchor" />
             </div>
 
             {!isAtBottom && (
                 <button 
                     onClick={() => scrollToBottom()} 
-                    className="absolute bottom-24 right-6 bg-blue-600 text-white p-3 rounded-full shadow-2xl hover:bg-blue-700 transition-all animate-in zoom-in-0 duration-200 z-[30] hover:scale-110 active:scale-95 border border-white/10"
+                    className="absolute bottom-[5.5rem] right-5 md:bottom-24 md:right-6 bg-blue-600 text-white p-3 rounded-full shadow-2xl hover:bg-blue-700 transition-all animate-in zoom-in-0 duration-200 z-30 hover:scale-110 active:scale-95 border border-white/10"
                 >
                     <ArrowDown size={20} />
                 </button>
@@ -1105,8 +1108,8 @@ const ChatWindow: React.FC = () => {
 
 
             {!isPending ? (
-                <div className="flex-shrink-0 bg-gray-950/40 backdrop-blur-2xl border-t border-white/10 z-20 relative">
-                    <div className="max-w-[900px] mx-auto p-3 md:p-4 pb-[max(env(safe-area-inset-bottom,20px),20px)]">
+                <div className="chat-input-bar bg-gray-950/40 backdrop-blur-2xl border-t border-white/10">
+                    <div className="max-w-[900px] mx-auto p-3 md:p-4">
                         <form onSubmit={handleSend} className="flex flex-col gap-2 md:gap-3 max-w-full">
                             {isVoiceRecording ? (
                                 <div className="flex justify-center p-3 bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700/50 animate-in slide-in-from-bottom-4 duration-300">

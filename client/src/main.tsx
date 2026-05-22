@@ -135,6 +135,45 @@ if ('serviceWorker' in navigator) {
 
 console.log('🚀 NoteStandard Booting...');
 
+// ── VisualViewport keyboard tracker ────────────────────────────────────────
+// Sets --kb-height and --vh so .chat-root always matches the true visible area.
+// This is the professional way to handle keyboard avoidance on mobile web
+// (used by Twitter/X, Telegram Web, etc.).
+(() => {
+  const setViewportVars = () => {
+    const vp = window.visualViewport;
+    if (!vp) {
+      // Fallback: just use window dimensions
+      document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
+      document.documentElement.style.setProperty('--kb-height', '0px');
+      return;
+    }
+
+    // True visible height (shrinks when keyboard appears)
+    const vh = vp.height;
+    // Layout viewport height (stays constant — the full page height)
+    const layoutH = window.innerHeight;
+    // Keyboard height = difference between layout and visual viewport
+    const kbHeight = Math.max(0, layoutH - vh - vp.offsetTop);
+
+    document.documentElement.style.setProperty('--vh', `${vh * 0.01}px`);
+    document.documentElement.style.setProperty('--kb-height', `${kbHeight}px`);
+  };
+
+  // Run immediately
+  setViewportVars();
+
+  // Listen on VisualViewport for keyboard open/close
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', setViewportVars, { passive: true });
+    window.visualViewport.addEventListener('scroll', setViewportVars, { passive: true });
+  }
+
+  // Also handle plain window resize (desktop / orientation change)
+  window.addEventListener('resize', setViewportVars, { passive: true });
+})();
+
+
 const container = document.getElementById('root');
 if (container) {
   const root = createRoot(container);
