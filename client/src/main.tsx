@@ -137,36 +137,57 @@ console.log('🚀 NoteStandard Booting...');
 
 // ── VisualViewport keyboard tracker ────────────────────────────────────────
 // Sets --kb-height and --vh so .chat-root always matches the true visible area.
-// VisualViewport keyboard avoidance.
-// Sets --kb-height = keyboard height in px.
-// .chat-root uses padding-bottom: var(--kb-height) to push the input bar up.
-// No transforms, no fixed-body hacks — identical to Telegram Web's approach.
+// ── Production-grade cross-platform keyboard tracker ────────────────────────
+// Handles both iOS Safari (innerHeight stays fixed, vp.height shrinks)
+// and Android Chrome (both shrink together at the same time).
+//
+// The fix for Android is to defer with requestAnimationFrame so both
+// window.innerHeight and vp.height have settled before we diff them.
+// The fix for iOS is window.scrollTo(0,0) on input focus so Safari doesn't
+// shift the layout viewport up and cut off the chat header.
 (() => {
-  const setViewportVars = () => {
-    const vp = window.visualViewport;
-    if (!vp) {
-      document.documentElement.style.setProperty('--kb-height', '0px');
-      return;
-    }
+  let rafId: number | null = null;
 
-    // window.innerHeight is the full layout viewport (stable, never changes with keyboard).
-    // vp.height is the visible area (shrinks when keyboard appears).
-    // The difference is exactly the keyboard height.
-    const kbHeight = Math.max(0, window.innerHeight - vp.height);
+  const applyKbHeight = () => {
+    const vp = window.visualViewport;
+    const kbHeight = vp ? Math.max(0, window.innerHeight - vp.height) : 0;
     document.documentElement.style.setProperty('--kb-height', `${kbHeight}px`);
   };
 
-  // Run immediately on load
-  setViewportVars();
+  // Defer to next animation frame so both window.innerHeight and vp.height
+  // are stable (critical for Android where they update asynchronously).
+  const setViewportVars = () => {
+    if (rafId !== null) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(() => {
+      applyKbHeight();
+      rafId = null;
+    });
+  };
 
-  // VisualViewport fires both resize (keyboard) and scroll (Safari offset)
+  // Run immediately on load.
+  applyKbHeight();
+
+  // VisualViewport API — fires on keyboard open/close and Safari scroll.
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', setViewportVars, { passive: true });
     window.visualViewport.addEventListener('scroll', setViewportVars, { passive: true });
   }
 
-  // Also catch orientation changes and desktop resizes
+  // Also catch orientation changes and desktop resize.
   window.addEventListener('resize', setViewportVars, { passive: true });
+
+  // iOS Safari "scroll on focus" fix:
+  // When a user taps an input, iOS aggressively scrolls the layout viewport
+  // upward to reveal the input, cutting off the header and messages.
+  // Calling window.scrollTo(0,0) immediately cancels that forced scroll.
+  const resetScroll = () => {
+    // Use requestAnimationFrame so the focus event fully completes first.
+    requestAnimationFrame(() => window.scrollTo(0, 0));
+  };
+  document.addEventListener('focusin', (e) => {
+    const tag = (e.target as HTMLElement)?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') resetScroll();
+  }, { passive: true });
 })();
 
 

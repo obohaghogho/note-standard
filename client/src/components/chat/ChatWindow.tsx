@@ -1099,7 +1099,7 @@ const ChatWindow: React.FC = () => {
 
 
             {!isPending ? (
-                <div className="chat-input-bar pb-safe bg-gray-950/40 backdrop-blur-2xl border-t border-white/10">
+                <div className="chat-input-bar bg-gray-950/40 backdrop-blur-2xl border-t border-white/10">
                     <div className="max-w-[900px] mx-auto p-3 md:p-4">
                         <form onSubmit={handleSend} className="flex flex-col gap-2 md:gap-3 max-w-full">
                             {isVoiceRecording ? (
