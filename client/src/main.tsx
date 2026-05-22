@@ -151,22 +151,20 @@ console.log('🚀 NoteStandard Booting...');
 
     // True visible height (shrinks when keyboard appears)
     const vh = vp.height;
-    // Layout viewport height (stays constant — the full page height)
     const layoutH = window.innerHeight;
     
-    // Force Safari to revert its aggressive layout viewport push
-    if (vp.offsetTop > 0 && document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
-        window.scrollTo(0, 0);
-    }
-    
-    // Keyboard height = difference between layout and visual viewport
-    // If we successfully blocked the scroll, offsetTop is 0.
-    const kbHeight = Math.max(0, layoutH - vh - (vp.offsetTop || 0));
+    // True keyboard height is just the difference between layout and visual viewport
+    // (Since we removed interactive-widget=resizes-content, layoutH stays constant)
+    const kbHeight = Math.max(0, layoutH - vh);
+
+    // Calculate how much Safari forcefully pushed the layout up (via scroll or shift)
+    const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    const totalOffset = (vp.offsetTop || 0) + scrollY;
 
     document.documentElement.style.setProperty('--vh', `${vh * 0.01}px`);
     document.documentElement.style.setProperty('--vvh', `${vh}px`);
     document.documentElement.style.setProperty('--kb-height', `${kbHeight}px`);
-    document.documentElement.style.setProperty('--vp-offset', `${vp.offsetTop}px`);
+    document.documentElement.style.setProperty('--vp-offset', `${totalOffset}px`);
   };
 
   // Run immediately
