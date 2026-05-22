@@ -57,11 +57,9 @@ const getAudioConstraints = (): MediaTrackConstraints => {
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
-            // @ts-expect-error: latency is non-standard
             latency: 0,
             sampleRate: 48000,
             channelCount: 1,
-            // @ts-expect-error: voiceActivityDetection is non-standard
             voiceActivityDetection: true
         };
     }
@@ -69,17 +67,11 @@ const getAudioConstraints = (): MediaTrackConstraints => {
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true,
-        // @ts-expect-error: latency is non-standard
         latency: 0,
-        // @ts-expect-error: googEchoCancellation is non-standard
         googEchoCancellation: true,
-        // @ts-expect-error: googAutoGainControl is non-standard
         googAutoGainControl: true,
-        // @ts-expect-error: googNoiseSuppression is non-standard
         googNoiseSuppression: true,
-        // @ts-expect-error: googHighpassFilter is non-standard
         googHighpassFilter: true,
-        // @ts-expect-error: googTypingNoiseDetection is non-standard
         googTypingNoiseDetection: true,
         channelCount: { ideal: 1 },
         sampleRate: { ideal: 48000 }
