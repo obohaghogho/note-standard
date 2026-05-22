@@ -58,6 +58,9 @@ export interface Conversation {
     };
     unreadCount?: number;
     is_muted?: boolean;
+    isBlocked?: boolean;
+    blockedByMe?: boolean;
+    blockedByThem?: boolean;
     members: {
         user_id: string;
         role: string;
@@ -94,6 +97,8 @@ export interface ChatContextValue {
     editMessage: (messageId: string, content: string) => Promise<void>;
     muteConversation: (id: string, isMuted: boolean) => Promise<void>;
     clearChatHistory: (id: string) => Promise<void>;
+    blockUser: (blockedId: string) => Promise<void>;
+    unblockUser: (blockedId: string) => Promise<void>;
     sendTypingStatus: (isTyping: boolean) => void;
     typingUsers: Record<string, string[]>;
     drafts: Record<string, string>;
@@ -829,6 +834,26 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     };
 
+    const blockUser = async (blockedId: string) => {
+        try {
+            await api.post('/chat/block', { blockedId });
+            toast.success('User blocked');
+            loadConversations();
+        } catch {
+            toast.error('Failed to block user');
+        }
+    };
+
+    const unblockUser = async (blockedId: string) => {
+        try {
+            await api.post('/chat/unblock', { blockedId });
+            toast.success('User unblocked');
+            loadConversations();
+        } catch {
+            toast.error('Failed to unblock user');
+        }
+    };
+
     const acceptConversation = async (conversationId: string) => {
         try {
             await api.put(`/chat/conversations/${conversationId}/accept`);
@@ -889,6 +914,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         deleteMessage, editMessage,
         muteConversation,
         clearChatHistory,
+        blockUser,
+        unblockUser,
         sendTypingStatus: () => {},
         typingUsers, drafts, setDraft: (cid, content) => setDrafts(prev => ({ ...prev, [cid]: content })), 
         hasMore, sendMessageToConversation,

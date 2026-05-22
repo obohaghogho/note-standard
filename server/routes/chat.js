@@ -65,4 +65,9 @@ router.put("/messages/:messageId/deliver", chatController.markMessageDelivered);
 router.delete("/messages/:messageId", chatController.deleteMessage);
 router.patch("/messages/:messageId", chatController.editMessage);
 
+// User Blocking
+router.post("/block", chatController.blockUser);
+router.post("/unblock", chatController.unblockUser);
+router.get("/blocked", chatController.getBlockedUsers);
+
 module.exports = router;

@@ -65,6 +65,18 @@ exports.getConversations = async (req, res) => {
       return res.status(500).json({ error: "Failed to load conversation details" });
     }
 
+    // Fetch user blocks for the current user
+    let userBlocks = [];
+    try {
+      const { data: blocks } = await supabase
+        .from("user_blocks")
+        .select("blocker_id, blocked_id")
+        .or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`);
+      userBlocks = blocks || [];
+    } catch (e) {
+      console.warn("[Chat getConversations] Failed to load user blocks:", e.message);
+    }
+
     // 3. Enrich conversations with members and last message
     const enriched = await Promise.all(conversations.map(async (conv) => {
       try {
@@ -139,6 +151,27 @@ exports.getConversations = async (req, res) => {
           console.warn(`[Chat] Unread count query failed for ${conv.id}:`, e.message);
         }
 
+        // Check if blocked in direct chat
+        let isBlocked = false;
+        let blockedByMe = false;
+        let blockedByThem = false;
+        
+        if (conv.type === "direct") {
+          const otherMember = (members || []).find(m => m.user_id !== userId);
+          if (otherMember) {
+            const otherId = otherMember.user_id;
+            const blockRelation = userBlocks.find(b => 
+              (b.blocker_id === userId && b.blocked_id === otherId) || 
+              (b.blocker_id === otherId && b.blocked_id === userId)
+            );
+            if (blockRelation) {
+              isBlocked = true;
+              blockedByMe = blockRelation.blocker_id === userId;
+              blockedByThem = blockRelation.blocker_id === otherId;
+            }
+          }
+        }
+
         return {
           ...conv,
           unreadCount,
@@ -149,7 +182,10 @@ exports.getConversations = async (req, res) => {
             joined_at: null
           },
           members: members || [],
-          last_message: lastMsgs?.[0] || null
+          last_message: lastMsgs?.[0] || null,
+          isBlocked,
+          blockedByMe,
+          blockedByThem
         };
       } catch (e) {
         console.error(`[Chat] Enrichment failed for conv ${conv.id}:`, e.message);
@@ -846,6 +882,40 @@ exports.sendMessage = async (req, res) => {
     // Allow empty content when an attachment is present
     if (!content && !attachmentId) {
       return res.status(400).json({ error: "Content or attachment is required" });
+    }
+
+    // Verify blocking status
+    const { data: members, error: membersError } = await supabase
+      .from("conversation_members")
+      .select("user_id")
+      .eq("conversation_id", conversationId);
+      
+    if (membersError) throw membersError;
+    
+    // We only care about blocking in 1-on-1 direct conversations.
+    // If it's a direct conversation, there will be exactly 2 members.
+    if (members && members.length === 2) {
+      const otherMember = members.find(m => m.user_id !== userId);
+      if (otherMember) {
+        const recipientId = otherMember.user_id;
+        
+        // Check if there is any block between userId and recipientId
+        const { data: blocks, error: blocksError } = await supabase
+          .from("user_blocks")
+          .select("blocker_id, blocked_id")
+          .or(`and(blocker_id.eq.${userId},blocked_id.eq.${recipientId}),and(blocker_id.eq.${recipientId},blocked_id.eq.${userId})`);
+          
+        if (blocksError && blocksError.code !== 'PGRST116') {
+          console.warn("[Chat Block Check] Failed to check user_blocks table:", blocksError.message);
+        } else if (blocks && blocks.length > 0) {
+          const isBlockedByMe = blocks.some(b => b.blocker_id === userId);
+          if (isBlockedByMe) {
+            return res.status(403).json({ error: "BLOCKED_BY_YOU", message: "You have blocked this user" });
+          } else {
+            return res.status(403).json({ error: "BLOCKED_BY_THEM", message: "This user has blocked you" });
+          }
+        }
+      }
     }
 
     // Analysis: Sentiment (if text)
@@ -1722,3 +1792,101 @@ exports.markConversationDelivered = async (req, res) => {
     res.status(500).json({ error: "Server Error" });
   }
 };
+
+// ==========================================
+// BLOCKING SYSTEM
+// ==========================================
+
+exports.blockUser = async (req, res) => {
+  try {
+    const blockerId = req.user.id;
+    const { blockedId } = req.body;
+    if (!blockedId) return res.status(400).json({ error: "Blocked user ID required" });
+
+    if (blockerId === blockedId) {
+      return res.status(400).json({ error: "You cannot block yourself" });
+    }
+
+    const { data, error } = await supabase
+      .from("user_blocks")
+      .insert([{ blocker_id: blockerId, blocked_id: blockedId }])
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') { // Unique constraint violation (already blocked)
+        return res.json({ success: true, message: "User already blocked" });
+      }
+      throw error;
+    }
+
+    // Notify the gateway if needed to disconnect calls/chats
+    await realtime.emitToUser(blockedId, "chat:blocked", { blockerId });
+    await realtime.emitToUser(blockerId, "chat:blocked_success", { blockedId });
+
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error("Error blocking user:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+exports.unblockUser = async (req, res) => {
+  try {
+    const blockerId = req.user.id;
+    const { blockedId } = req.body;
+    if (!blockedId) return res.status(400).json({ error: "Blocked user ID required" });
+
+    const { error } = await supabase
+      .from("user_blocks")
+      .delete()
+      .eq("blocker_id", blockerId)
+      .eq("blocked_id", blockedId);
+
+    if (error) throw error;
+
+    await realtime.emitToUser(blockedId, "chat:unblocked", { blockerId });
+    await realtime.emitToUser(blockerId, "chat:unblocked_success", { blockedId });
+
+    res.json({ success: true, message: "User unblocked" });
+  } catch (err) {
+    console.error("Error unblocking user:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+exports.getBlockedUsers = async (req, res) => {
+  try {
+    const blockerId = req.user.id;
+    
+    // First fetch the blocked IDs
+    const { data: blocks, error: blocksError } = await supabase
+      .from("user_blocks")
+      .select("blocked_id")
+      .eq("blocker_id", blockerId);
+
+    if (blocksError) {
+      if (blocksError.code === 'PGRST116') return res.json([]); // Table missing
+      throw blocksError;
+    }
+
+    if (!blocks || blocks.length === 0) {
+      return res.json([]);
+    }
+
+    // Then fetch profiles avoiding relationship ambiguities
+    const blockedIds = blocks.map(b => b.blocked_id);
+    const { data: profiles, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id, username, full_name, avatar_url")
+      .in("id", blockedIds);
+
+    if (profilesError) throw profilesError;
+
+    res.json(profiles || []);
+  } catch (err) {
+    console.error("Error fetching blocked users:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+

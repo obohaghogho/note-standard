@@ -29,7 +29,8 @@ const ChatWindow: React.FC = () => {
         conversations, acceptConversation, deleteConversation, deleteMessage, editMessage,
         muteConversation, clearChatHistory, loadMoreMessages, hasMore,
         sendTypingStatus, typingUsers, sendMessageToConversation,
-        drafts, setDraft, sendMediaMessage
+        drafts, setDraft, sendMediaMessage,
+        blockUser, unblockUser
     } = useChat();
     const [, setSearchParams] = useSearchParams();
     const { isUserOnline, getUserLastSeen } = usePresence();
@@ -105,7 +106,7 @@ const ChatWindow: React.FC = () => {
     // Confirmation state
     const [confirmModal, setConfirmModal] = useState<{
         isOpen: boolean;
-        type: 'message' | 'clear' | 'delete_chat';
+        type: 'message' | 'clear' | 'delete_chat' | 'block_user';
         messageId?: string;
     }>({
         isOpen: false,
@@ -445,6 +446,16 @@ const ChatWindow: React.FC = () => {
         if (!activeConversationId) return;
         setShowMoreMenu(false);
         setConfirmModal({ isOpen: true, type: 'delete_chat' });
+    };
+
+    const handleBlockUser = async () => {
+        if (!activeConversationId || !otherMember?.user_id) return;
+        setShowMoreMenu(false);
+        if (activeConversation?.blockedByMe) {
+            await unblockUser(otherMember.user_id);
+        } else {
+            setConfirmModal({ isOpen: true, type: 'block_user' });
+        }
     };
 
     const handleVoiceMessage = async (blob: Blob) => {
@@ -808,6 +819,11 @@ const ChatWindow: React.FC = () => {
                                     <button onClick={handleMuteChat} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 rounded-lg">{activeConversation?.is_muted ? 'Unmute Notifications' : 'Mute Notifications'}</button>
                                     <button onClick={handleClearChat} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 rounded-lg">Clear History</button>
                                     <button onClick={handleDeleteChat} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-400/10 rounded-lg">Delete Chat</button>
+                                    {activeConversation?.type === 'direct' && (
+                                        <button onClick={handleBlockUser} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-400/10 rounded-lg">
+                                            {activeConversation.blockedByMe ? 'Unblock User' : 'Block User'}
+                                        </button>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -1101,7 +1117,24 @@ const ChatWindow: React.FC = () => {
             {!isPending ? (
                 <div className="chat-input-bar bg-gray-950/40 backdrop-blur-2xl border-t border-white/10">
                     <div className="max-w-[900px] mx-auto p-3 md:p-4">
-                        <form onSubmit={handleSend} className="flex flex-col gap-2 md:gap-3 max-w-full">
+                        {activeConversation?.isBlocked ? (
+                            <div className="flex flex-col items-center justify-center p-4 bg-gray-800/80 rounded-2xl border border-gray-700/50">
+                                <p className="text-sm font-medium text-gray-300 text-center">
+                                    {activeConversation.blockedByMe 
+                                        ? "You blocked this user. Unblock to send a message." 
+                                        : "You can no longer send messages to this user."}
+                                </p>
+                                {activeConversation.blockedByMe && (
+                                    <button 
+                                        onClick={handleBlockUser} 
+                                        className="mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs rounded-lg transition-colors"
+                                    >
+                                        Unblock User
+                                    </button>
+                                )}
+                            </div>
+                        ) : (
+                            <form onSubmit={handleSend} className="flex flex-col gap-2 md:gap-3 max-w-full">
                             {isVoiceRecording ? (
                                 <div className="flex justify-center p-3 bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700/50 animate-in slide-in-from-bottom-4 duration-300">
                                     <VoiceRecorder onSend={handleVoiceMessage} onCancel={() => setIsVoiceRecording(false)} />
@@ -1230,6 +1263,7 @@ const ChatWindow: React.FC = () => {
                                 )}
                             </div>
                         </form>
+                        )}
                     </div>
                 </div>
             ) : (
@@ -1280,12 +1314,22 @@ const ChatWindow: React.FC = () => {
                         } catch {
                             toast.error('Failed to delete chat', { id: loadingToast });
                         }
+                    } else if (type === 'block_user' && otherMember) {
+                        const loadingToast = toast.loading('Blocking user...');
+                        try {
+                            await blockUser(otherMember.user_id);
+                            toast.success('User blocked', { id: loadingToast });
+                        } catch {
+                            toast.error('Failed to block user', { id: loadingToast });
+                        }
                     }
                 }}
                 title={
                     confirmModal.type === 'message' 
                         ? (selectedMessages.size > 1 ? `Delete ${selectedMessages.size} Messages` : 'Delete Message')
-                        : confirmModal.type === 'clear' ? 'Clear History' : 'Delete Chat'
+                        : confirmModal.type === 'clear' ? 'Clear History' 
+                        : confirmModal.type === 'block_user' ? 'Block User'
+                        : 'Delete Chat'
                 }
                 message={
                     confirmModal.type === 'message' 
@@ -1293,11 +1337,13 @@ const ChatWindow: React.FC = () => {
                             ? `Are you sure you want to delete ${selectedMessages.size} selected messages? This action cannot be undone.`
                             : 'Are you sure you want to delete this message? This action cannot be undone.')
                         : confirmModal.type === 'clear' ? 'Are you sure you want to clear all messages in this chat? This only affects your view.'
+                        : confirmModal.type === 'block_user' ? 'Are you sure you want to block this user? They will not be able to send you messages.'
                         : 'Are you sure you want to delete this conversation forever? All history will be lost.'
                 }
                 confirmText={
                     confirmModal.type === 'message' ? 'Delete' : 
-                    confirmModal.type === 'clear' ? 'Clear' : 'Delete'
+                    confirmModal.type === 'clear' ? 'Clear' : 
+                    confirmModal.type === 'block_user' ? 'Block' : 'Delete'
                 }
                 variant="danger"
             />
