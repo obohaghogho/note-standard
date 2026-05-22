@@ -67,34 +67,42 @@ export function useChatGesture(options: ChatGestureOptions): GestureHandlers {
 
   /* ── Touch handlers ──────────────────────────────── */
 
+  const isSwipingRef = useRef(false);
+
   const onTouchStart = useCallback((e: React.TouchEvent, id: string) => {
     if (!enabled) return;
     didFireRef.current = false;
     isScrollingRef.current = false;
+    isSwipingRef.current = false;
     targetIdRef.current = id;
     const touch = e.touches[0];
     startPosRef.current = { x: touch.clientX, y: touch.clientY };
     currentPosRef.current = { x: touch.clientX, y: touch.clientY };
 
     timerRef.current = setTimeout(() => {
-      // Only fire if we haven't been scrolling
-      if (!isScrollingRef.current) {
+      // Only fire long-press if we haven't been scrolling or swiping
+      if (!isScrollingRef.current && !isSwipingRef.current) {
         fire(id);
       }
     }, delay);
   }, [delay, enabled, fire]);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!startPosRef.current || !timerRef.current) return;
+    if (!startPosRef.current) return;
     const touch = e.touches[0];
     currentPosRef.current = { x: touch.clientX, y: touch.clientY };
     const dx = touch.clientX - startPosRef.current.x;
     const dy = touch.clientY - startPosRef.current.y;
 
-    // Any vertical movement beyond threshold → it's a scroll, cancel long press
-    if (Math.abs(dy) > moveThreshold || Math.abs(dx) > moveThreshold * 2) {
+    // Vertical movement = user is scrolling → cancel long-press timer
+    if (Math.abs(dy) > moveThreshold) {
       isScrollingRef.current = true;
       cancel();
+    }
+    // Horizontal movement dominant → user is swiping to reply
+    else if (Math.abs(dx) > moveThreshold * 2 && Math.abs(dy) < moveThreshold) {
+      isSwipingRef.current = true;
+      cancel(); // cancel long-press timer, swipe will be handled in onTouchEnd
     }
   }, [cancel, moveThreshold]);
 
@@ -106,7 +114,8 @@ export function useChatGesture(options: ChatGestureOptions): GestureHandlers {
         const dy = currentPosRef.current.y - startPosRef.current.y;
         
         // Horizontal swipe detection (allow some vertical drift)
-        if (Math.abs(dx) > 50 && Math.abs(dy) < 50) {
+        // More sensitive: 30px threshold instead of 50px
+        if (Math.abs(dx) > 30 && Math.abs(dy) < 60) {
             if (dx > 0 && options.onSwipeRight) {
                 options.onSwipeRight(targetIdRef.current);
             } else if (dx < 0 && options.onSwipeLeft) {

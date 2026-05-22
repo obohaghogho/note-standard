@@ -114,13 +114,20 @@ function App() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Mobile Viewport Height fix for keyboard issues
-    const setHeight = () => {
-      const vh = window.innerHeight * 0.01;
-      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    // Mobile Viewport Height — use visualViewport API (works on iOS/Android keyboard open)
+    // This is the same approach WhatsApp & Facebook Messenger use.
+    const updateVh = () => {
+      const height = window.visualViewport
+        ? window.visualViewport.height
+        : window.innerHeight;
+      document.documentElement.style.setProperty('--vh', `${height * 0.01}px`);
+      // Also set a --vvh for absolute pinned chat containers
+      document.documentElement.style.setProperty('--vvh', `${height}px`);
     };
-    setHeight();
-    window.addEventListener('resize', setHeight);
+    updateVh();
+    window.visualViewport?.addEventListener('resize', updateVh);
+    window.visualViewport?.addEventListener('scroll', updateVh);
+    window.addEventListener('resize', updateVh); // fallback for browsers without visualViewport
 
     // Initial check for offline state
     if (!navigator.onLine) {
@@ -133,7 +140,9 @@ function App() {
       window.removeEventListener('unhandledrejection', handler);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
-      window.removeEventListener('resize', setHeight);
+      window.removeEventListener('resize', updateVh);
+      window.visualViewport?.removeEventListener('resize', updateVh);
+      window.visualViewport?.removeEventListener('scroll', updateVh);
     };
   }, []);
 

@@ -676,8 +676,8 @@ const ChatWindow: React.FC = () => {
                     </div>
                 </div>
             ) : (
-            <div className="sticky top-0 flex-shrink-0 bg-gray-950 border-b border-white/5 z-20 pt-safe shadow-sm">
-                <div className="px-3 py-3 md:px-5 md:py-4 flex items-center justify-between gap-4 w-full">
+            <div className="flex-shrink-0 bg-gray-950/95 backdrop-blur-md border-b border-white/5 z-30 pt-safe shadow-md">
+                <div className="px-3 py-2.5 md:px-5 md:py-4 flex items-center justify-between gap-4 w-full">
                     <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                         <button 
                             onClick={() => {
@@ -894,7 +894,7 @@ const ChatWindow: React.FC = () => {
                                             ? 'bg-blue-600/40 border-blue-400/50 ring-1 ring-blue-500/30'
                                             : (msg.sender_id === user?.id ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-blue-500/50' : 'bg-gray-800/90 text-gray-200 border-gray-700/50')
                                     } relative group transition-all duration-200 ${isSelectionMode ? 'cursor-pointer' : ''}`}>
-                                        {msg.reply_to && (
+                                        {msg.reply_to?.id && (
                                             <div 
                                                 className={`mb-2 p-2.5 rounded-xl border-l-[3.5px] text-xs transition-all backdrop-blur-md cursor-pointer hover:bg-black/5 ${
                                                     msg.sender_id === user?.id 
@@ -915,7 +915,7 @@ const ChatWindow: React.FC = () => {
                                                     {getSenderName(msg.reply_to.sender_id)}
                                                 </p>
                                                 <p className="truncate opacity-80 leading-relaxed italic">
-                                                    {msg.reply_to.content || (msg.reply_to.type !== 'text' ? `Shared a ${msg.reply_to.type}` : '')}
+                                                    {msg.reply_to.content || (msg.reply_to.type && msg.reply_to.type !== 'text' ? `Shared a ${msg.reply_to.type}` : 'Message')}
                                                 </p>
                                             </div>
                                         )}

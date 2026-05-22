@@ -102,11 +102,14 @@ export function DashboardLayout() {
                 onClose={() => setIsMobileMenuOpen(false)}
             />
             
-            <main className={cn(
-                "flex-1 transition-all duration-300 min-w-0 flex flex-col w-full h-full relative",
-                !isChatActiveOnMobile && "pb-safe md:ml-64",
-                isChatActiveOnMobile && "fixed inset-0 z-[60] bg-gray-950 h-screen-safe w-screen m-0 p-0 md:relative md:inset-auto md:z-0 md:bg-transparent md:ml-64 overscroll-none"
-            )}>
+            <main
+                className={cn(
+                    "flex-1 transition-all duration-300 min-w-0 flex flex-col w-full h-full relative",
+                    !isChatActiveOnMobile && "pb-safe md:ml-64",
+                    isChatActiveOnMobile && "fixed inset-x-0 top-0 z-[60] bg-gray-950 w-screen m-0 p-0 md:relative md:inset-auto md:z-0 md:bg-transparent md:ml-64 overscroll-none"
+                )}
+                style={isChatActiveOnMobile ? { height: 'var(--vvh, 100dvh)' } : undefined}
+            >
                 {renderHeader()}
 
                 <div className={cn(
