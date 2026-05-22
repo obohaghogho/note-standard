@@ -18,11 +18,10 @@
 
   html {
     width: 100%;
+    height: 100%;
     margin: 0;
     padding: 0;
-    overflow-x: hidden;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
+    overflow: hidden;
     overscroll-behavior-y: none;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
@@ -35,29 +34,21 @@
     padding: 0;
     overflow: hidden;
     overscroll-behavior-y: none;
-    position: relative;
     background-color: #0a0a0a;
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
-    /* touch-action is intentionally NOT set on body — setting pan-x pan-y here
-       suppresses legitimate touch events on mobile inputs, scroll areas, and
-       interactive elements like the chat input and notification dropdowns. */
   }
 
+  /* 
+   * #root must NEVER have transform — it breaks position:fixed for all modals/overlays.
+   * Simple 100% fill is all that is needed here.
+   */
   #root {
     width: 100%;
     height: 100%;
-    position: absolute;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    right: 0;
-    transform: translateY(var(--vp-offset, 0px));
     display: flex;
     flex-direction: column;
-    z-index: 1;
-    overflow-x: hidden;
-    overflow-y: hidden;
+    overflow: hidden;
     overscroll-behavior-y: none;
   }
 
@@ -325,16 +316,29 @@ input[type=number] {
   100dvh = dynamic viewport height (shrinks when keyboard opens on modern browsers).
   Fallback: calc(var(--vh,1vh)*100 - var(--kb-height,0px)) driven by VisualViewport JS.
 */
+/*
+ * .chat-root: The main keyboard-avoidance container.
+ * 
+ * How it works on iOS Safari:
+ *  1. visualViewport fires 'resize' when keyboard opens.
+ *  2. JS sets --kb-height = window.innerHeight - visualViewport.height.
+ *  3. padding-bottom pushes the input bar above the keyboard.
+ *  4. The messages flex area shrinks to fill the remaining space.
+ *
+ * NO transforms. NO fixed positioning tricks. NO body locking.
+ * This is the exact pattern used by Telegram Web & WhatsApp Web.
+ */
 .chat-root {
   display: flex;
   flex-direction: column;
   width: 100%;
   height: 100%;
+  /* Keyboard avoidance: pad the bottom by keyboard height */
   padding-bottom: var(--kb-height, 0px);
-  transition: padding-bottom 0.1s cubic-bezier(0.2, 0.9, 0.3, 1);
+  /* Smooth keyboard open/close animation (matches iOS keyboard animation) */
+  transition: padding-bottom 0.25s ease-out;
   overflow: hidden;
   position: relative;
-  /* Prevent elastic bounce from revealing whitespace below */
   overscroll-behavior: none;
 }
 

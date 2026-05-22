@@ -137,46 +137,35 @@ console.log('🚀 NoteStandard Booting...');
 
 // ── VisualViewport keyboard tracker ────────────────────────────────────────
 // Sets --kb-height and --vh so .chat-root always matches the true visible area.
-// This is the professional way to handle keyboard avoidance on mobile web
-// (used by Twitter/X, Telegram Web, etc.).
+// VisualViewport keyboard avoidance.
+// Sets --kb-height = keyboard height in px.
+// .chat-root uses padding-bottom: var(--kb-height) to push the input bar up.
+// No transforms, no fixed-body hacks — identical to Telegram Web's approach.
 (() => {
   const setViewportVars = () => {
     const vp = window.visualViewport;
     if (!vp) {
-      // Fallback: just use window dimensions
-      document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
       document.documentElement.style.setProperty('--kb-height', '0px');
       return;
     }
 
-    // True visible height (shrinks when keyboard appears)
-    const vh = vp.height;
-    const layoutH = window.innerHeight;
-    
-    // True keyboard height is just the difference between layout and visual viewport
-    // (Since we removed interactive-widget=resizes-content, layoutH stays constant)
-    const kbHeight = Math.max(0, layoutH - vh);
-
-    // Calculate how much Safari forcefully pushed the layout up (via scroll or shift)
-    const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-    const totalOffset = (vp.offsetTop || 0) + scrollY;
-
-    document.documentElement.style.setProperty('--vh', `${vh * 0.01}px`);
-    document.documentElement.style.setProperty('--vvh', `${vh}px`);
+    // window.innerHeight is the full layout viewport (stable, never changes with keyboard).
+    // vp.height is the visible area (shrinks when keyboard appears).
+    // The difference is exactly the keyboard height.
+    const kbHeight = Math.max(0, window.innerHeight - vp.height);
     document.documentElement.style.setProperty('--kb-height', `${kbHeight}px`);
-    document.documentElement.style.setProperty('--vp-offset', `${totalOffset}px`);
   };
 
-  // Run immediately
+  // Run immediately on load
   setViewportVars();
 
-  // Listen on VisualViewport for keyboard open/close
+  // VisualViewport fires both resize (keyboard) and scroll (Safari offset)
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', setViewportVars, { passive: true });
     window.visualViewport.addEventListener('scroll', setViewportVars, { passive: true });
   }
 
-  // Also handle plain window resize (desktop / orientation change)
+  // Also catch orientation changes and desktop resizes
   window.addEventListener('resize', setViewportVars, { passive: true });
 })();
 
