@@ -125,7 +125,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [hasMore] = useState<Record<string, boolean>>({});
-    const [typingUsers] = useState<Record<string, string[]>>({});
+    const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
     const [drafts, setDrafts] = useState<Record<string, string>>({});
 
     const isMounted = useRef(true);
@@ -135,6 +135,21 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const lastUserIdRef = useRef<string | null>(null);
     const activeConversationIdRef = useRef<string | null>(null);
     const messagesRef = useRef<Record<string, Message[]>>({});
+    const typingTimeoutsRef = useRef<Record<string, NodeJS.Timeout>>({});
+
+    const sendTypingStatus = useCallback((isTyping: boolean) => {
+        if (!socket || !connected || !activeConversationIdRef.current) return;
+        
+        if (isTyping) {
+            socket.emit('typing', {
+                conversationId: activeConversationIdRef.current
+            });
+        } else {
+            socket.emit('stop_typing', {
+                conversationId: activeConversationIdRef.current
+            });
+        }
+    }, [socket, connected]);
 
     useEffect(() => {
         messagesRef.current = messages;
@@ -506,6 +521,33 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }
         };
 
+        const onTyping = ({ conversationId, userId, isTyping }: { conversationId: string, userId: string, isTyping: boolean }) => {
+            if (!isMounted.current || userId === user?.id) return;
+            
+            setTypingUsers(prev => {
+                const current = prev[conversationId] || [];
+                if (isTyping) {
+                    if (!current.includes(userId)) return { ...prev, [conversationId]: [...current, userId] };
+                } else {
+                    return { ...prev, [conversationId]: current.filter(id => id !== userId) };
+                }
+                return prev;
+            });
+
+            if (isTyping) {
+                const key = `${conversationId}-${userId}`;
+                if (typingTimeoutsRef.current[key]) clearTimeout(typingTimeoutsRef.current[key]);
+                typingTimeoutsRef.current[key] = setTimeout(() => {
+                    if (isMounted.current) {
+                        setTypingUsers(prev => {
+                            const current = prev[conversationId] || [];
+                            return { ...prev, [conversationId]: current.filter(id => id !== userId) };
+                        });
+                    }
+                }, 3000);
+            }
+        };
+
         socket.on('chat:message', processIncomingMessage);
         socket.on('chat:message_deleted', onMessageDeleted);
         socket.on('chat:message_edited', onMessageEdited);
@@ -516,6 +558,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         socket.on('chat:conversation_updated', onConversationUpdated);
         socket.on('chat:conversation_read', onConversationRead);
         socket.on('chat:conversation_delivered', onConversationDelivered);
+        socket.on('chat:typing', onTyping);
         
         return () => { 
             socket.off('chat:message', processIncomingMessage); 
@@ -528,6 +571,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             socket.off('chat:conversation_updated', onConversationUpdated);
             socket.off('chat:conversation_read', onConversationRead);
             socket.off('chat:conversation_delivered', onConversationDelivered);
+            socket.off('chat:typing', onTyping);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [socket, connected, user?.id]);
@@ -916,7 +960,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         clearChatHistory,
         blockUser,
         unblockUser,
-        sendTypingStatus: () => {},
+        sendTypingStatus,
         typingUsers, drafts, setDraft: (cid, content) => setDrafts(prev => ({ ...prev, [cid]: content })), 
         hasMore, sendMessageToConversation,
         markConversationRead, markConversationDelivered
