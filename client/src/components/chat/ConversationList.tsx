@@ -142,6 +142,8 @@ const ConversationItem = React.memo(({
            prevProps.isOnline === nextProps.isOnline &&
            prevProps.conv.updated_at === nextProps.conv.updated_at &&
            prevProps.conv.lastMessage?.id === nextProps.conv.lastMessage?.id &&
+           prevProps.conv.lastMessage?.delivered_at === nextProps.conv.lastMessage?.delivered_at &&
+           prevProps.conv.lastMessage?.read_at === nextProps.conv.lastMessage?.read_at &&
            prevProps.conv.unreadCount === nextProps.conv.unreadCount &&
            JSON.stringify(prevProps.conv.typingUsers) === JSON.stringify(nextProps.conv.typingUsers);
 });

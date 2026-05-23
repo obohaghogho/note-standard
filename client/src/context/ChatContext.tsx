@@ -117,6 +117,19 @@ export const useChat = () => {
     return context;
 };
 
+// Helper: Enforce precedence so a message never downgrades its delivery status
+// Priority: read_at > delivered_at > sent
+const mergeMessageStatus = (oldMsg: Message, newMsg: Partial<Message>): Message => {
+    return {
+        ...oldMsg,
+        ...newMsg,
+        // If old message had read_at, preserve it unless new message also has it
+        read_at: newMsg.read_at || oldMsg.read_at,
+        // If old message had delivered_at, preserve it unless new message also has it
+        delivered_at: newMsg.delivered_at || oldMsg.delivered_at,
+    };
+};
+
 export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const { user, session, authReady, isSwitching } = useAuth();
     const { socket, connected } = useSocket();
@@ -167,8 +180,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, [socket]);
 
 
-    const markMessageRead = useCallback(async (messageId: string) => {
+    const markMessageRead = useCallback(async (messageId: string, conversationId: string) => {
         if (!session) return;
+        const now = new Date().toISOString();
+        if (socketRef.current?.connected) {
+            socketRef.current.emit('chat:read', { conversationId, messageIds: [messageId], readAt: now });
+        }
         try {
             await api.put(`/chat/messages/${messageId}/read`);
         } catch (err) {
@@ -176,8 +193,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }, [session]);
 
-    const markMessageDelivered = useCallback(async (messageId: string) => {
+    const markMessageDelivered = useCallback(async (messageId: string, conversationId: string) => {
         if (!session) return;
+        const now = new Date().toISOString();
+        if (socketRef.current?.connected) {
+            socketRef.current.emit('chat:delivered', { conversationId, messageId, deliveredAt: now });
+        }
         try {
             await api.put(`/chat/messages/${messageId}/deliver`);
         } catch (err) {
@@ -246,7 +267,16 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const filtered = (res.data as (Message & { is_deleted?: boolean })[]).filter(
                     m => !deletedMessageIdsRef.current.has(m.id) && !m.is_deleted
                 );
-                setMessages(prev => ({ ...prev, [conversationId]: filtered }));
+                // Use mergeMessageStatus to ensure we never downgrade a message's delivery status
+                // if the fast-path socket event beat the server response.
+                setMessages(prev => {
+                    const existingMap = new Map((prev[conversationId] || []).map(m => [m.id, m]));
+                    const merged = filtered.map(m => {
+                        const existing = existingMap.get(m.id);
+                        return existing ? mergeMessageStatus(existing, m) : m;
+                    });
+                    return { ...prev, [conversationId]: merged };
+                });
             }
         } catch (err) {
             console.error('[Chat] Failed to load messages:', err);
@@ -299,12 +329,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             
             // Mark as read immediately if this conversation is active and message is from another user
             if (activeConversationIdRef.current === msg.conversation_id && msg.sender_id !== user?.id) {
-                markMessageRead(msg.id);
+                markMessageRead(msg.id, msg.conversation_id);
             }
 
             // Mark as delivered immediately if received from another user
             if (msg.sender_id !== user?.id) {
-                markMessageDelivered(msg.id);
+                markMessageDelivered(msg.id, msg.conversation_id);
             }
 
             setMessages(prev => {
@@ -375,7 +405,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const current = prev[conversationId] || [];
                 return {
                     ...prev,
-                    [conversationId]: current.map(m => m.id === messageId ? { ...m, read_at: nowStr } : m)
+                    [conversationId]: current.map(m => m.id === messageId ? mergeMessageStatus(m, { read_at: nowStr }) : m)
                 };
             });
 
@@ -384,7 +414,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 if (c.id === conversationId && c.lastMessage && c.lastMessage.id === messageId) {
                     return {
                         ...c,
-                        lastMessage: { ...c.lastMessage, read_at: nowStr, delivered_at: c.lastMessage.delivered_at || nowStr }
+                        lastMessage: mergeMessageStatus(c.lastMessage as any, { read_at: nowStr, delivered_at: nowStr }) as any
                     };
                 }
                 return c;
@@ -398,7 +428,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const current = prev[conversationId] || [];
                 return {
                     ...prev,
-                    [conversationId]: current.map(m => m.id === messageId ? { ...m, delivered_at: nowStr } : m)
+                    [conversationId]: current.map(m => m.id === messageId ? mergeMessageStatus(m, { delivered_at: nowStr }) : m)
                 };
             });
 
@@ -407,7 +437,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 if (c.id === conversationId && c.lastMessage && c.lastMessage.id === messageId) {
                     return {
                         ...c,
-                        lastMessage: { ...c.lastMessage, delivered_at: nowStr }
+                        lastMessage: mergeMessageStatus(c.lastMessage as any, { delivered_at: nowStr }) as any
                     };
                 }
                 return c;
@@ -421,7 +451,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const current = prev[conversationId] || [];
                 return {
                     ...prev,
-                    [conversationId]: current.map(m => messageIds.includes(m.id) ? { ...m, read_at: nowStr } : m)
+                    [conversationId]: current.map(m => messageIds.includes(m.id) ? mergeMessageStatus(m, { read_at: nowStr }) : m)
                 };
             });
 
@@ -430,7 +460,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 if (c.id === conversationId && c.lastMessage && messageIds.includes(c.lastMessage.id)) {
                     return {
                         ...c,
-                        lastMessage: { ...c.lastMessage, read_at: nowStr, delivered_at: c.lastMessage.delivered_at || nowStr }
+                        lastMessage: mergeMessageStatus(c.lastMessage as any, { read_at: nowStr, delivered_at: nowStr }) as any
                     };
                 }
                 return c;
@@ -444,7 +474,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const current = prev[conversationId] || [];
                 return {
                     ...prev,
-                    [conversationId]: current.map(m => m.id === messageId ? { ...m, delivered_at: nowStr } : m)
+                    [conversationId]: current.map(m => m.id === messageId ? mergeMessageStatus(m, { delivered_at: nowStr }) : m)
                 };
             });
 
@@ -453,7 +483,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 if (c.id === conversationId && c.lastMessage && c.lastMessage.id === messageId) {
                     return {
                         ...c,
-                        lastMessage: { ...c.lastMessage, delivered_at: nowStr }
+                        lastMessage: mergeMessageStatus(c.lastMessage as any, { delivered_at: nowStr }) as any
                     };
                 }
                 return c;
@@ -480,7 +510,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     const current = prev[conversationId] || [];
                     return {
                         ...prev,
-                        [conversationId]: current.map(m => m.sender_id === user?.id ? { ...m, read_at: readAt, delivered_at: readAt } : m)
+                        [conversationId]: current.map(m => m.sender_id === user?.id ? mergeMessageStatus(m, { read_at: readAt, delivered_at: readAt }) : m)
                     };
                 });
 
@@ -489,7 +519,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     if (c.id === conversationId && c.lastMessage && c.lastMessage.sender_id === user?.id) {
                         return {
                             ...c,
-                            lastMessage: { ...c.lastMessage, read_at: readAt, delivered_at: readAt }
+                            lastMessage: mergeMessageStatus(c.lastMessage as any, { read_at: readAt, delivered_at: readAt }) as any
                         };
                     }
                     return c;
@@ -516,7 +546,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     const current = prev[conversationId] || [];
                     return {
                         ...prev,
-                        [conversationId]: current.map(m => m.sender_id === user?.id && !m.read_at ? { ...m, delivered_at: delivered_at } : m)
+                        [conversationId]: current.map(m => m.sender_id === user?.id && !m.read_at ? mergeMessageStatus(m, { delivered_at: delivered_at }) : m)
                     };
                 });
 
@@ -525,7 +555,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     if (c.id === conversationId && c.lastMessage && c.lastMessage.sender_id === user?.id && !c.lastMessage.read_at) {
                         return {
                             ...c,
-                            lastMessage: { ...c.lastMessage, delivered_at: delivered_at }
+                            lastMessage: mergeMessageStatus(c.lastMessage as any, { delivered_at: delivered_at }) as any
                         };
                     }
                     return c;
