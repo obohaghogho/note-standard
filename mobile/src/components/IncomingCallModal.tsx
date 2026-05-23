@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   Animated,
   Easing,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import CallService, { CallData, CallState } from '../services/CallService';
@@ -124,7 +125,7 @@ export default function IncomingCallModal() {
     setCallData(null);
   };
 
-  if (!visible || !callData) return null;
+  if (!visible || !callData || Platform.OS === 'ios') return null;
 
   const initials = (callData.callerName || 'U').charAt(0).toUpperCase();
   const callLabel = callData.callType === 'video' ? '📹 Video Call' : '🎧 Audio Call';

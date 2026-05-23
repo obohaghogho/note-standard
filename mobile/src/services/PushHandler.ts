@@ -1,20 +1,18 @@
 import * as Notifications from 'expo-notifications';
 import CallService, { CallData } from './CallService';
+import SignalingService from './SignalingService';
 import { Platform } from 'react-native';
 import EventEmitter from './EventEmitter';
 import VoipPushNotification from 'react-native-voip-push-notification';
 import RNCallKeep from 'react-native-callkeep';
-import { AuthService } from './AuthService';
+import { navigate } from '../navigation/AppNavigator';
 import apiClient from '../api/apiClient';
 
 // Configure how notifications are handled when the app is in the foreground
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const { data } = notification.request.content;
-    
-    // Suppress system alert for messages in foreground to use custom UI
     const isMessage = data?.type === 'message' || data?.type === 'chat_message';
-    
     return {
       shouldShowAlert: !isMessage,
       shouldPlaySound: true,
@@ -27,7 +25,6 @@ export class PushHandler {
   static async init() {
     console.log('[PushHandler] 🛠️ Initializing Push Integration...');
 
-    // 1. Request standard permissions (for chat messages)
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
     
@@ -36,51 +33,29 @@ export class PushHandler {
       finalStatus = status;
     }
 
+    this.setupCallKeepListeners();
+
     if (Platform.OS === 'ios') {
       this.setupVoIP();
-    } else if (Platform.OS === 'android') {
-      this.setupAndroidCallKeep();
     }
 
-    // 3. Register device token asynchronously (if logged in, it succeeds)
     this.registerDeviceToken().catch(err => {
       console.warn('[PushHandler] Graceful initial register Device Token fail:', err);
     });
-  }
 
-  static async registerDeviceToken() {
-    console.log('[PushHandler] 📡 Fetching and registering device tokens...');
-    try {
-      const tokenData = await Notifications.getDevicePushTokenAsync();
-      const token = tokenData.data;
-      console.log('[PushHandler] 🔑 Standard Device Token:', token);
-      await this.registerTokenWithBackend(token, Platform.OS === 'ios' ? 'apns' : 'fcm');
-    } catch (err) {
-      console.error('[PushHandler] ❌ Failed to fetch standard device token:', err);
-    }
-
-    if (Platform.OS === 'ios') {
-      try {
-        VoipPushNotification.registerVoipToken();
-      } catch (err) {
-        console.error('[PushHandler] ❌ Failed to request iOS VoIP token:', err);
-      }
-    }
-  }
-
-    // 4. Listeners
     Notifications.addNotificationReceivedListener(notification => {
       const { data, title, body } = notification.request.content;
       console.log('[PushHandler] 🔔 Standard Push Received:', JSON.stringify(data));
       
       if (data.type === 'incoming_call' && Platform.OS === 'android') {
         // Android handles call signaling via standard high-priority FCM
+        // RNCallKeep is triggered by the headless JS task in index.ts for background cases,
+        // but this covers the foreground case.
         this.handleIncomingCall(data as unknown as CallData);
       } else if (data.type === 'message' || data.type === 'chat_message') {
-        // Trigger delivery receipt if messageId is available
         if (data.messageId) {
           apiClient.post(`/chat/messages/${data.messageId}/webhook-deliver`).catch(e => {
-            console.error('[PushHandler] Foreground delivery receipt failed:', e);
+            console.error('[PushHandler] Delivery receipt failed:', e);
           });
         }
         
@@ -100,52 +75,85 @@ export class PushHandler {
     console.log('[PushHandler] ✅ Initialization finished.');
   }
 
+  static async registerDeviceToken() {
+    console.log('[PushHandler] 📡 Fetching and registering device tokens...');
+    try {
+      const tokenData = await Notifications.getDevicePushTokenAsync();
+      const token = tokenData.data;
+      await this.registerTokenWithBackend(token, Platform.OS === 'ios' ? 'apns' : 'fcm');
+    } catch (err) {
+      console.error('[PushHandler] ❌ Failed to fetch standard device token:', err);
+    }
+
+    if (Platform.OS === 'ios') {
+      try {
+        VoipPushNotification.registerVoipToken();
+      } catch (err) {
+        console.error('[PushHandler] ❌ Failed to request iOS VoIP token:', err);
+      }
+    }
+  }
+
+  static setupCallKeepListeners() {
+    console.log('[PushHandler] 🤖 Setting up global CallKeep listeners...');
+    
+    RNCallKeep.addEventListener('answerCall', async ({ callUUID }) => {
+      console.log('[PushHandler] 📞 Native CallKit/ConnectionService answered:', callUUID);
+      await CallService.answerCall(callUUID);
+      
+      // Navigate to the call screen automatically
+      const callData = CallService.getCurrentCall();
+      if (callData) {
+        await SignalingService.answerCall();
+        navigate('Call', {
+          type: callData.callType,
+          conversationId: callData.conversationId,
+          targetUserId: callData.callerId,
+          targetName: callData.callerName,
+          isIncoming: true,
+        });
+      }
+      
+      if (Platform.OS === 'android') {
+        RNCallKeep.backToForeground();
+      }
+    });
+
+    RNCallKeep.addEventListener('endCall', async ({ callUUID }) => {
+      console.log('[PushHandler] 📵 Native CallKit/ConnectionService rejected/ended:', callUUID);
+      await SignalingService.rejectIncomingCall();
+      CallService.rejectCall(callUUID);
+    });
+  }
+
   static setupVoIP() {
     console.log('[PushHandler] 🍎 Setting up iOS VoIP (PushKit)...');
     
     VoipPushNotification.addEventListener('register', (token) => {
       console.log('[PushHandler] 🔑 iOS VoIP Token Received:', token);
-      this.registerTokenWithBackend(token, 'voip', 0); // Start with 0 retries
+      this.registerTokenWithBackend(token, 'voip', 0);
     });
 
     VoipPushNotification.addEventListener('notification', (notification: any) => {
       console.log('[PushHandler] 📞 iOS VoIP Push Received:', JSON.stringify(notification));
       
-      // VoIP notifications on iOS MUST trigger CallKit immediately
       const callData = {
+        uuid: notification.uuid, // Pass exact CallKit UUID from Apple PushKit
         callerId: notification.callerId || notification.from,
         callerName: notification.callerName || notification.fromName,
         callType: notification.callType || notification.type,
         conversationId: notification.conversationId,
         peerId: notification.peerId || notification.from
-      };
+      } as CallData;
 
       if (notification.type === 'incoming_call' || notification.type === 'call_incoming') {
-        this.handleIncomingCall(callData as unknown as CallData);
+        // MUST report new incoming call to CallKit immediately
+        this.handleIncomingCall(callData);
       } else if (notification.type === 'call_cancelled') {
-        CallService.rejectCall();
+        CallService.rejectCall(notification.uuid);
       }
       
       (VoipPushNotification as any).onFinishNotification(notification.uuid);
-    });
-
-    // Request VoIP token
-    VoipPushNotification.registerVoipToken();
-  }
-
-  static setupAndroidCallKeep() {
-    console.log('[PushHandler] 🤖 Setting up Android CallKeep listeners...');
-    
-    RNCallKeep.addEventListener('answerCall', ({ callUUID }) => {
-      console.log('[PushHandler] Android CallKeep answered:', callUUID);
-      RNCallKeep.answerIncomingCall(callUUID);
-      CallService.answerCall();
-      RNCallKeep.backToForeground();
-    });
-
-    RNCallKeep.addEventListener('endCall', ({ callUUID }) => {
-      console.log('[PushHandler] Android CallKeep rejected/ended:', callUUID);
-      CallService.rejectCall();
     });
   }
 
@@ -153,22 +161,15 @@ export class PushHandler {
     console.log(`[PushHandler] 📡 Registering ${type} token with backend (Try: ${retryCount + 1})...`);
     try {
       const response = await apiClient.post(`/notifications/register-native-token`, {
-        token,
-        platform: Platform.OS,
-        type
+        token, platform: Platform.OS, type
       });
-      
-      const resData = response.data;
-      if (resData.success) {
+      if (response.data.success) {
         console.log(`[PushHandler] ✅ ${type} token registered successfully.`);
       } else {
-        throw new Error(resData.error || 'Unknown error');
+        throw new Error(response.data.error || 'Unknown error');
       }
     } catch (err: any) {
-      console.warn(`[PushHandler] ⚠️ ${type} token registration failed:`, err?.response?.data || err.message || err);
-      // Only retry on network errors or 500s, not 401s (since apiClient handles 401s globally)
       if (retryCount < 3 && (!err.response || err.response.status >= 500)) {
-          console.log(`[PushHandler] 🔄 Retrying ${type} registration in 5s...`);
           setTimeout(() => this.registerTokenWithBackend(token, type, retryCount + 1), 5000);
       }
     }

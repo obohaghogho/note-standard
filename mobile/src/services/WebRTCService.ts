@@ -17,6 +17,7 @@ import {
   registerGlobals,
 } from 'react-native-webrtc';
 import { Platform, PermissionsAndroid } from 'react-native';
+import InCallManager from 'react-native-incall-manager';
 import apiClient from '../api/apiClient';
 
 // Register global WebRTC classes for compatibility if needed
@@ -109,18 +110,26 @@ class WebRTCService {
     await this.setupLocalStream(callType);
     this.createPeerConnection();
 
-    // Add local tracks to peer connection
+    // Add local tracks to peer connection using Transceivers instead of addTrack
+    // This is critical for iOS to ensure proper bidirectional negotiation
     if (this.localStream) {
       this.localStream.getTracks().forEach(track => {
-        this.peerConnection?.addTrack(track, this.localStream!);
+        this.peerConnection?.addTransceiver(track, {
+          direction: 'sendrecv',
+          streams: [this.localStream!]
+        });
       });
     }
 
     // Create SDP Offer
     const offer = await this.peerConnection!.createOffer({});
-    await this.peerConnection!.setLocalDescription(offer);
+    const mungedSdp = { type: offer.type, sdp: this.enforceH264(offer.sdp || '') };
+    await this.peerConnection!.setLocalDescription(mungedSdp);
+    
+    // Start InCallManager for proper iOS audio routing
+    InCallManager.start({ media: callType === 'video' ? 'video' : 'audio' });
 
-    return offer;
+    return mungedSdp;
   }
 
   async handleIncomingOffer(offerSdp: any, callType: 'audio' | 'video' = 'audio'): Promise<RTCSessionDescription> {
@@ -130,7 +139,10 @@ class WebRTCService {
 
     if (this.localStream) {
       this.localStream.getTracks().forEach(track => {
-        this.peerConnection?.addTrack(track, this.localStream!);
+        this.peerConnection?.addTransceiver(track, {
+          direction: 'sendrecv',
+          streams: [this.localStream!]
+        });
       });
     }
 
@@ -138,9 +150,13 @@ class WebRTCService {
     this.remoteDescriptionSet = true;
     await this.drainPendingCandidates(); // flush any queued ICE candidates
     const answer = await this.peerConnection!.createAnswer();
-    await this.peerConnection!.setLocalDescription(answer);
+    const mungedSdp = { type: answer.type, sdp: this.enforceH264(answer.sdp || '') };
+    await this.peerConnection!.setLocalDescription(mungedSdp);
+    
+    // Start InCallManager for proper iOS audio routing
+    InCallManager.start({ media: callType === 'video' ? 'video' : 'audio' });
 
-    return answer;
+    return mungedSdp;
   }
 
   async handleAnswer(answerSdp: any) {
@@ -176,6 +192,36 @@ class WebRTCService {
         console.warn('[WebRTC] Error draining ICE candidate:', e);
       }
     }
+  }
+
+  // ── SDP Munging for iOS Video Stability ────────────────────────────────────
+  private enforceH264(sdp: string): string {
+    // Prioritize H264 for iOS hardware compatibility (prevents black screen on iOS)
+    const lines = sdp.split('\r\n');
+    const mLineIndex = lines.findIndex(line => line.startsWith('m=video'));
+    if (mLineIndex === -1) return sdp;
+
+    const payloadTypes: string[] = [];
+    const rtpMaps = lines.filter(line => line.startsWith('a=rtpmap:'));
+    
+    rtpMaps.forEach(line => {
+      if (line.toLowerCase().includes('h264')) {
+        const match = line.match(/a=rtpmap:(\d+)/);
+        if (match) payloadTypes.push(match[1]);
+      }
+    });
+
+    if (payloadTypes.length === 0) return sdp;
+
+    const mLineParts = lines[mLineIndex].split(' ');
+    const originalPayloads = mLineParts.slice(3);
+    const newPayloads = [
+      ...payloadTypes,
+      ...originalPayloads.filter(pt => !payloadTypes.includes(pt))
+    ];
+    lines[mLineIndex] = [...mLineParts.slice(0, 3), ...newPayloads].join(' ');
+    
+    return lines.join('\r\n');
   }
 
   private createPeerConnection() {
@@ -223,12 +269,16 @@ class WebRTCService {
     }
 
     const constraints = {
-      audio: true,
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
       video: callType === 'video' ? {
         facingMode: 'user',
-        width: 640,
-        height: 480,
-        frameRate: 30,
+        width: { ideal: 640 },
+        height: { ideal: 480 },
+        frameRate: { ideal: 30 },
       } : false,
     };
 
@@ -259,8 +309,8 @@ class WebRTCService {
   }
 
   setEnableSpeakerphone(enabled: boolean) {
-    // React Native WebRTC handles this via standard audio routing
     console.log('[WebRTC] Speakerphone toggled to:', enabled);
+    InCallManager.setForceSpeakerphoneOn(enabled);
   }
 
   switchCamera() {
@@ -292,6 +342,9 @@ class WebRTCService {
 
   async leaveChannel() {
     console.log('[WebRTC] Initiating comprehensive hardware and media resource cleanup');
+    
+    // Stop InCallManager to release iOS audio session correctly
+    InCallManager.stop();
     
     // Stop all local media tracks to ensure immediate release of camera/microphone hardware
     if (this.localStream) {
