@@ -88,8 +88,8 @@ export interface ChatContextValue {
     sendMessage: (content: string, type?: string, attachmentId?: string, replyToId?: string) => Promise<void>;
     sendMediaMessage: (file: File | Blob, type: 'image' | 'video' | 'audio' | 'file', conversationId?: string) => Promise<void>;
     loadMoreMessages: (conversationId: string) => Promise<void>;
-    markMessageRead: (messageId: string) => Promise<void>;
-    markMessageDelivered: (messageId: string) => Promise<void>;
+    markMessageRead: (messageId: string, conversationId: string) => Promise<void>;
+    markMessageDelivered: (messageId: string, conversationId: string) => Promise<void>;
     startConversation: (username: string) => Promise<string | null>; 
     acceptConversation: (id: string) => Promise<void>;
     deleteConversation: (id: string) => Promise<void>;
@@ -148,7 +148,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const lastUserIdRef = useRef<string | null>(null);
     const activeConversationIdRef = useRef<string | null>(null);
     const messagesRef = useRef<Record<string, Message[]>>({});
-    const typingTimeoutsRef = useRef<Record<string, NodeJS.Timeout>>({});
+    const typingTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
     // Tombstone: permanently tracks deleted message IDs across room switches, reconnects,
     // and page refreshes within the session. Any ingestion path filters against this.
     const deletedMessageIdsRef = useRef<Set<string>>(new Set());
@@ -373,7 +373,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         return {
                             ...conv,
                             updated_at: msg.created_at,
-                            lastMessage: { content: msg.content, sender_id: msg.sender_id, created_at: msg.created_at },
+                            lastMessage: { id: msg.id, content: msg.content, sender_id: msg.sender_id, created_at: msg.created_at },
                             unreadCount: isCurrentlyOpen ? 0 : (conv.unreadCount || 0) + (msg.sender_id !== user?.id ? 1 : 0)
                         };
                     }

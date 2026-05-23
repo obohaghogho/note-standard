@@ -3,6 +3,26 @@ const { createNotification } = require("../services/notificationService");
 const { detectLanguage } = require("../services/translationService");
 const realtime = require("../services/realtimeService");
 
+function getNotificationPreview(type, content) {
+  switch (type) {
+    case 'audio':
+    case 'voice':
+      return '🎤 Voice message';
+    case 'image':
+      return '📷 Photo';
+    case 'video':
+      return '🎥 Video';
+    case 'document':
+    case 'file':
+      return '📄 Document';
+    case 'call':
+    case 'call_incoming':
+      return '📞 Missed call';
+    default:
+      return content;
+  }
+}
+
 // --- Conversations ---
 
 exports.getConversations = async (req, res) => {
@@ -1126,14 +1146,15 @@ exports.sendMessage = async (req, res) => {
             continue;
           }
 
+          const senderName = sender?.username || "Someone";
+          const previewContent = getNotificationPreview(type || 'text', content);
+
           await createNotification({
             receiverId: member.user_id,
             senderId: userId,
             type: "chat_message",
-            title: "New Message",
-            message: `${sender?.username || "Someone"} sent you a message: ${
-              content.substring(0, 50)
-            }${content.length > 50 ? "..." : ""}`,
+            title: senderName,
+            message: previewContent,
             link: `/dashboard/chat?id=${conversationId}`,
             messageId: createdMessageId,
             conversationId: conversationId,
@@ -1144,8 +1165,8 @@ exports.sendMessage = async (req, res) => {
           // This is the ONLY path that triggers sendChatPush for new messages.
           sendNativePush({
             memberId: member.user_id,
-            senderName: sender?.username || 'New Message',
-            msgContent: content,
+            senderName: senderName,
+            msgContent: previewContent,
             msgId: createdMessageId,
           });
         }
@@ -1168,14 +1189,13 @@ exports.sendMessage = async (req, res) => {
 
           for (const mUser of mentionedUsers) {
             if (mUser.id !== userId) { // Don't notify self
+              const previewContent = getNotificationPreview(type || 'text', content);
               await createNotification({
                 receiverId: mUser.id,
                 senderId: userId,
                 type: "mention",
-                title: "You were mentioned",
-                message: `${senderName} mentioned you in a chat: "${
-                  content.substring(0, 50)
-                }..."`,
+                title: senderName,
+                message: `Mentioned you: ${previewContent}`,
                 link: `/dashboard/chat?id=${conversationId}`,
               });
             }

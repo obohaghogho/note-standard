@@ -272,6 +272,7 @@ async function sendChatPush(params) {
             priority: 'high',
             notification: {
               sound: 'default',
+              tag: `chat-${payload.conversationId || 'default'}`, // Forces grouping per conversation on Android
             },
           },
         };
@@ -292,6 +293,7 @@ async function sendChatPush(params) {
         notification.badge = 1;
         notification.contentAvailable = true;
         notification.mutableContent = true;
+        notification.threadId = payload.conversationId || 'default'; // Forces grouping in iOS Notification Center
         notification.payload = {
           conversationId: payload.conversationId,
           messageId: payload.messageId,
