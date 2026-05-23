@@ -334,7 +334,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // ── acceptCall (callee side) ──────────────────────────────────────────────
     const acceptCall = useCallback(async () => {
-        const { otherUser, conversationId, type, sessionId } = callState;
+        const { otherUser, type, sessionId } = callState;
         if (!otherUser?.id) { cleanup(); return; }
         targetUserIdRef.current = otherUser.id;
 
