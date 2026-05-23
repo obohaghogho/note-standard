@@ -410,6 +410,33 @@ input[type=number] {
 }
 
 /* ======================================================
+   ANDROID TOUCH & SELECTION HARDENING
+   ====================================================== */
+
+/*
+ * Inside the message list, we need touch-action: pan-y so the
+ * useChatGesture hook can detect long-press vs scroll correctly.
+ * The global `* { touch-action: manipulation }` above would override
+ * this without the explicit scoped rule below.
+ */
+.chat-messages,
+.chat-messages * {
+  touch-action: pan-y;
+}
+
+/*
+ * .conv-item — CSS-layer complement to the inline userSelect:none
+ * applied in ConversationList.tsx. Belt-and-suspenders to ensure
+ * ZERO text is selectable on conversation list rows on Android/iOS.
+ */
+.conv-item {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ======================================================
    KEYBOARD OPEN COMPACT MODE (WHATSAPP-STYLE)
    ====================================================== */
 @media (max-width: 767px) {

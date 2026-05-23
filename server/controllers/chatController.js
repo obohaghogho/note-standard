@@ -590,11 +590,13 @@ exports.getMessages = async (req, res) => {
       console.warn("[Chat] Could not fetch cleared_at (column might be missing):", e.message);
     }
 
-    // Build the main messages query with attachment join
+    // Build the main messages query with attachment join.
+    // IMPORTANT: .eq('is_deleted', false) ensures soft-deleted messages never reach clients.
     let query = supabase
       .from("messages")
       .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url), reply_to:messages(id, content, sender_id)")
       .eq("conversation_id", conversationId)
+      .eq("is_deleted", false)
       .order("created_at", { ascending: false })
       .limit(parseInt(limit));
 
@@ -623,6 +625,7 @@ exports.getMessages = async (req, res) => {
             .from("messages")
             .select("*")
             .eq("conversation_id", conversationId)
+            .eq("is_deleted", false)
             .order("created_at", { ascending: false })
             .limit(parseInt(limit));
           
@@ -639,11 +642,12 @@ exports.getMessages = async (req, res) => {
       res.json((data || []).reverse());
     } catch (innerErr) {
       console.warn("[Chat Controller] Inner query error:", innerErr.message);
-      // Final fallback
+      // Final fallback — also exclude deleted messages
       const { data, error } = await supabase
         .from("messages")
         .select("*")
         .eq("conversation_id", conversationId)
+        .eq("is_deleted", false)
         .order("created_at", { ascending: false })
         .limit(parseInt(limit));
       if (error) throw error;
@@ -1623,11 +1627,13 @@ exports.deleteMessage = async (req, res) => {
 
     console.log(`[Chat Delete] Successfully soft-deleted message ${messageId}`);
 
-    // Notify via Gateway
-    await realtime.emitToConversation(data.conversation_id, "chat:message_deleted", {
-      messageId,
-      conversationId: data.conversation_id,
-    });
+    const deletePayload = { messageId, conversationId: data.conversation_id };
+
+    // Broadcast to all OTHER sockets in the conversation room.
+    await realtime.emitToConversation(data.conversation_id, "chat:message_deleted", deletePayload);
+    // Also emit directly to the deleting user so their own client receives the socket event.
+    // (emitToConversation excludes the initiating socket in most gateway implementations.)
+    await realtime.emitToUser(userId, "chat:message_deleted", deletePayload);
 
     res.json({ success: true, message: "Message deleted" });
   } catch (err) {

@@ -136,6 +136,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const activeConversationIdRef = useRef<string | null>(null);
     const messagesRef = useRef<Record<string, Message[]>>({});
     const typingTimeoutsRef = useRef<Record<string, NodeJS.Timeout>>({});
+    // Tombstone: permanently tracks deleted message IDs across room switches, reconnects,
+    // and page refreshes within the session. Any ingestion path filters against this.
+    const deletedMessageIdsRef = useRef<Set<string>>(new Set());
 
     const sendTypingStatus = useCallback((isTyping: boolean) => {
         if (!socket || !connected || !activeConversationIdRef.current) return;
@@ -238,7 +241,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         try {
             const res = await api.get(`/chat/conversations/${conversationId}/messages`);
             if (isMounted.current) {
-                setMessages(prev => ({ ...prev, [conversationId]: res.data }));
+                // Hard-filter: remove any message that is in the tombstone (optimistically deleted
+                // this session) or that the server already marked as soft-deleted.
+                const filtered = (res.data as (Message & { is_deleted?: boolean })[]).filter(
+                    m => !deletedMessageIdsRef.current.has(m.id) && !m.is_deleted
+                );
+                setMessages(prev => ({ ...prev, [conversationId]: filtered }));
             }
         } catch (err) {
             console.error('[Chat] Failed to load messages:', err);
@@ -283,8 +291,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => {
         if (!socket || !connected) return;
 
-        const processIncomingMessage = (msg: Message & { sender_id: string; conversation_id: string }) => {
+        const processIncomingMessage = (msg: Message & { sender_id: string; conversation_id: string } & { is_deleted?: boolean }) => {
             if (!isMounted.current) return;
+            // Tombstone guard: reject any socket replay of a message we already deleted.
+            if (deletedMessageIdsRef.current.has(msg.id) || msg.is_deleted) return;
             const newMessage: Message = { ...msg, isOwn: msg.sender_id === user?.id };
             
             // Mark as read immediately if this conversation is active and message is from another user
@@ -343,6 +353,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         };
 
         const onMessageDeleted = ({ messageId, conversationId }: { messageId: string, conversationId: string }) => {
+            // Add to tombstone first so any in-flight loadMessages also filters it out.
+            deletedMessageIdsRef.current.add(messageId);
             setMessages(prev => {
                 const current = prev[conversationId] || [];
                 return { ...prev, [conversationId]: current.filter(m => m.id !== messageId) };
@@ -861,10 +873,40 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     const deleteMessage = async (messageId: string) => {
+        // 1. Find the message in the current state so we can restore it on failure.
+        let savedMsg: Message | undefined;
+        let savedConvId: string | undefined;
+        setMessages(prev => {
+            // Search all loaded conversations for this message id.
+            for (const [convId, msgs] of Object.entries(prev)) {
+                const found = msgs.find(m => m.id === messageId);
+                if (found) {
+                    savedMsg = found;
+                    savedConvId = convId;
+                    break;
+                }
+            }
+            if (!savedConvId) return prev; // already gone
+            // 2. Optimistic removal.
+            return { ...prev, [savedConvId]: prev[savedConvId].filter(m => m.id !== messageId) };
+        });
+
+        // 3. Add to tombstone so loadMessages won't re-hydrate this ID.
+        deletedMessageIdsRef.current.add(messageId);
+
         try {
             await api.delete(`/chat/messages/${messageId}`);
-            toast.success('Message deleted');
+            // Success — tombstone entry stays permanently for this session.
         } catch {
+            // 4. Rollback: restore the message and remove from tombstone.
+            deletedMessageIdsRef.current.delete(messageId);
+            if (savedMsg && savedConvId) {
+                setMessages(prev => ({
+                    ...prev,
+                    [savedConvId!]: [...(prev[savedConvId!] || []), savedMsg!]
+                        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                }));
+            }
             toast.error('Failed to delete message');
         }
     };

@@ -214,6 +214,22 @@ const ChatWindow: React.FC = () => {
         }
     }, [activeConversationId, drafts]);
 
+    // Reset all per-room ephemeral state when switching conversations.
+    // This prevents stale selections, translations, and reply context from
+    // leaking across different chat rooms (WhatsApp/Telegram-grade isolation).
+    useEffect(() => {
+        setSelectedMessages(new Set());
+        setTranslations({});
+        setShowOriginal({});
+        setReplyTo(null);
+        setEditingMessageId(null);
+        setShowMoreMenu(false);
+        setIsSearchOpen(false);
+        setSearchQuery('');
+        setSearchResults([]);
+        setShowEmojiPicker(false);
+    }, [activeConversationId]);
+
     const translationsRef = useRef(translations);
     useEffect(() => {
         translationsRef.current = translations;
@@ -899,7 +915,7 @@ const ChatWindow: React.FC = () => {
                             const isSelected = selectedMessages.has(msg.id);
                             return (
                                 <div 
-                                    key={msg.id || `msg-temp-${index}`} 
+                                    key={msg.id} 
                                     id={`msg-${msg.id}`}
                                     className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'} ${isGrouped ? '' : 'mt-3'} msg-bubble`}
                                     onTouchStart={(e) => gesture.onTouchStart(e, msg.id)}

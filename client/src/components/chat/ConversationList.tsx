@@ -1,4 +1,4 @@
-import React, { useMemo, startTransition } from 'react';
+import React, { useMemo, startTransition, useRef, useCallback } from 'react';
 import { useChat } from '../../context/ChatContext';
 import { useAuth } from '../../context/AuthContext';
 import { Check, CheckCheck } from 'lucide-react';
@@ -42,9 +42,17 @@ const ConversationItem = React.memo(({
     return (
         <div
             onClick={() => onClick(conv.id)}
+            onContextMenu={(e) => e.preventDefault()}
+            draggable={false}
             className={`p-4 md:p-5 cursor-pointer active:bg-white/[0.04] md:hover:bg-white/[0.02] transition-all flex items-center gap-4 relative group ${
                 isActive ? 'bg-white/[0.04]' : ''
             }`}
+            style={{
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                // Suppress iOS callout (share/copy popup on long press)
+                WebkitTouchCallout: 'none' as React.CSSProperties['WebkitUserSelect'],
+            }}
         >
             {/* Avatar Container */}
             <div className="relative flex-shrink-0">
@@ -143,6 +151,8 @@ const ConversationList: React.FC = () => {
     const { user } = useAuth();
     const { isUserOnline } = usePresence();
     const [, setSearchParams] = useSearchParams();
+    // Debounce guard: prevents double-navigation from rapid taps on Android.
+    const lastClickTimeRef = useRef(0);
 
     const sortedConversations = useMemo(() => {
         return [...conversations].sort((a, b) => {
@@ -152,13 +162,17 @@ const ConversationList: React.FC = () => {
         });
     }, [conversations]);
 
-    const handleConversationClick = (convId: string) => {
-        // startTransition keeps UI responsive during the heavy React Router transition
+    const handleConversationClick = useCallback((convId: string) => {
+        const now = Date.now();
+        // 400ms debounce — prevents double-tap and rapid repeated navigation.
+        if (now - lastClickTimeRef.current < 400) return;
+        lastClickTimeRef.current = now;
+        // startTransition keeps UI responsive during the React Router transition.
         startTransition(() => {
             setActiveConversationId(convId);
             setSearchParams({ id: convId });
         });
-    };
+    }, [setActiveConversationId, setSearchParams]);
 
     if (loading) return <div className="p-4 text-gray-400">Loading chats...</div>;
 
