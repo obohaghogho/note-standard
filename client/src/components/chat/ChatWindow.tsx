@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback, startTransition } from 'react';
 import { useChatGesture } from '../../hooks/useChatGesture';
 import { AnimatePresence } from 'framer-motion';
 import { useChat } from '../../context/ChatContext';
@@ -688,10 +688,12 @@ const ChatWindow: React.FC = () => {
                     <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                         <button 
                             onClick={() => {
-                                setActiveConversationId(null);
-                                setSearchParams({});
+                                startTransition(() => {
+                                    setActiveConversationId(null);
+                                    setSearchParams({});
+                                });
                             }}
-                            className="p-2 -ml-2 text-gray-400 hover:text-white md:hidden active:scale-90 transition-transform"
+                            className="p-2 -ml-2 text-gray-400 active:text-white md:hover:text-white md:hidden active:scale-90 transition-transform"
                             aria-label="Back to conversations"
                         >
                             <ArrowLeft size={24} />

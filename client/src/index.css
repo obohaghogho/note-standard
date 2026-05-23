@@ -52,9 +52,10 @@
     overscroll-behavior-y: none;
   }
 
-  /* Remove tap highlight globally */
+  /* Remove tap highlight globally and enforce fast tap response */
   * {
     -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
   }
 
   /* Prevent flex/grid children from overflowing their parents.
