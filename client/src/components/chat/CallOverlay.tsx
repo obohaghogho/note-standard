@@ -5,8 +5,8 @@ import SecureImage from '../common/SecureImage';
 interface CallOverlayProps {
     callState: {
         type: 'voice' | 'video' | null;
-        // FIX: 'connecting' and 'ringing' added to match WebRTCContext state
-        status: 'idle' | 'calling' | 'ringing' | 'incoming' | 'connecting' | 'connected';
+        // FIX: Added 'reconnecting' to match WebRTCContext state machine
+        status: 'idle' | 'calling' | 'ringing' | 'incoming' | 'connecting' | 'connected' | 'reconnecting';
         connectedAt?: number | null;
     };
     acceptCall: () => void;
@@ -116,12 +116,13 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
 
     const statusLabel = () => {
         switch (callState.status) {
-            case 'connected':   return callState.type === 'voice' ? 'In Voice Call' : 'Video Connected';
-            case 'connecting':  return 'Connecting...';
-            case 'calling':     return 'Calling...';
-            case 'ringing':     return 'Ringing...';
-            case 'incoming':    return `${callState.type === 'video' ? 'Video' : 'Voice'} Call Incoming`;
-            default:            return 'Connecting...';
+            case 'connected':     return callState.type === 'voice' ? 'In Voice Call' : 'Video Connected';
+            case 'reconnecting':  return 'Reconnecting...';
+            case 'connecting':    return 'Connecting...';
+            case 'calling':       return 'Calling...';
+            case 'ringing':       return 'Ringing...';
+            case 'incoming':      return `${callState.type === 'video' ? 'Video' : 'Voice'} Call Incoming`;
+            default:              return 'Connecting...';
         }
     };
 
@@ -178,7 +179,9 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
                                     {timer}
                                 </div>
                             )}
-                            <p className="text-blue-400 font-medium animate-pulse">
+                            <p className={`font-medium animate-pulse ${
+                                callState.status === 'reconnecting' ? 'text-yellow-400' : 'text-blue-400'
+                            }`}>
                                 {statusLabel()}
                             </p>
                         </div>

@@ -236,14 +236,16 @@ module.exports = (io, socket) => {
     io.to(`user:${to}`).emit('call:ringing', { from: userId });
   });
 
-  // ── 2. call:answer ─────────────────────────────────────────────────────────
-  socket.on('call:answer', async (data) => {
+  // ── 2. call:answer / call:ready (aliases) ────────────────────────────────
+  // BUG FIX: The client previously emitted `call:ready` which the server never
+  // handled, causing the caller to never receive confirmation and permanently
+  // hang at "Connecting...". Both event names are now accepted.
+  async function handleCallAnswer(data) {
     const { to, sessionId } = data;
     if (!to) return;
 
     console.log(`[Call] ✅ ${userId} answered call from ${to} (session: ${sessionId})`);
 
-    // Remove from ringing state, move to connecting
     activeCalls.delete(userId);
 
     await updateCallSession(sessionId, {
@@ -251,11 +253,16 @@ module.exports = (io, socket) => {
       answered_at: new Date().toISOString(),
     });
 
+    // Relay to caller — client listens for call:answered to create RTCPeerConnection
     io.to(`user:${to}`).emit('call:answered', {
       from:      userId,
-      sessionId,
+      sessionId, // FIX: pass sessionId so caller can track it
     });
-  });
+  }
+
+  socket.on('call:answer', handleCallAnswer);
+  // Alias: client may emit call:ready (kept for backward compatibility)
+  socket.on('call:ready',  handleCallAnswer);
 
   // ── 3. call:signal (SDP Offer / Answer) ───────────────────────────────────
   socket.on('call:signal', async (data) => {
