@@ -13,5 +13,6 @@ router.delete("/:teamId/messages/:messageId", teamController.deleteTeamMessage);
 
 router.get("/:teamId/members", teamController.getTeamMembers);
 router.post("/:teamId/members", teamController.inviteMember);
+router.delete("/:teamId/members/:userId", teamController.removeMember);
 
 module.exports = router;

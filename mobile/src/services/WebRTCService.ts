@@ -254,11 +254,25 @@ class WebRTCService {
       }
     };
 
-    this.peerConnection.onaddstream = (event: any) => {
-      console.log('[WebRTC] Remote stream added successfully');
-      this.remoteStream = event.stream;
+    // CRITICAL FIX: Replace deprecated onaddstream with modern ontrack.
+    // react-native-webrtc v124+ no longer fires onaddstream.
+    // We must collect incoming tracks and assemble a remote MediaStream manually.
+    this.peerConnection.ontrack = (event: any) => {
+      console.log('[WebRTC] ontrack fired — kind:', event.track?.kind);
+      const track = event.track;
+      if (!track) return;
+
+      if (!this.remoteStream) {
+        // @ts-ignore — react-native-webrtc provides MediaStream constructor
+        this.remoteStream = new MediaStream();
+      }
+      this.remoteStream.addTrack(track);
+
+      // Notify the UI on every track addition so it can render the stream
+      // as soon as the first track (audio) arrives, not waiting for video.
       if (this.onRemoteStreamCallback) {
-        this.onRemoteStreamCallback(event.stream);
+        this.onRemoteStreamCallback(this.remoteStream);
+        console.log('[WebRTC] Remote stream updated and dispatched to UI');
       }
     };
   }

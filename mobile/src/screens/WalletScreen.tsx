@@ -6,6 +6,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import apiClient from '../api/apiClient';
 import { useNavigation } from '@react-navigation/native';
+import { useIsFocused } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList } from '../navigation/MainStack';
 
@@ -91,7 +92,14 @@ export default function WalletScreen() {
     }
   }, []);
 
+  const isFocused = useIsFocused();
+
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Re-fetch every time user navigates back to wallet (e.g. after a transfer or deposit)
+  useEffect(() => {
+    if (isFocused) loadData();
+  }, [isFocused]);
 
   const onRefresh = async () => {
     setRefreshing(true);

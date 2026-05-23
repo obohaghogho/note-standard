@@ -1,5 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import { Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
 import apiClient from '../api/apiClient';
 
@@ -36,22 +38,36 @@ export class MediaService {
       const fileExt = safeFileName.split('.').pop() || 'bin';
       const storagePath = `${contextId}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
 
+      // CRITICAL FIX: Android 10+ blocks XHR reads of content:// URIs.
+      // We must first copy the file to an accessible cache directory (file:// path).
+      let readableUri = uri;
+      if (Platform.OS === 'android' && uri.startsWith('content://')) {
+        const destPath = `${FileSystem.cacheDirectory}upload_${Date.now()}.${fileExt}`;
+        try {
+          await FileSystem.copyAsync({ from: uri, to: destPath });
+          readableUri = destPath;
+          console.log('[MediaService] Copied content:// to file:// cache for Android:', destPath);
+        } catch (copyErr) {
+          console.error('[MediaService] Failed to copy content:// URI to cache:', copyErr);
+          throw new Error('Could not read the selected file. Please try selecting it again.');
+        }
+      }
+
       let arrayBuffer: ArrayBuffer | null = null;
       let retries = 3;
       while (retries > 0) {
         try {
-          // Convert URI to ArrayBuffer using XMLHttpRequest for maximum RN/Android compatibility
           arrayBuffer = await new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             xhr.onload = () => resolve(xhr.response);
-            xhr.onerror = (e) => {
+            xhr.onerror = () => {
               reject(new Error('Failed to read local file (Network request failed)'));
             };
             xhr.responseType = 'arraybuffer';
-            xhr.open('GET', uri, true);
+            xhr.open('GET', readableUri, true);
             xhr.send(null);
           });
-          break; // success
+          break;
         } catch (e) {
           retries--;
           if (retries === 0) throw e;

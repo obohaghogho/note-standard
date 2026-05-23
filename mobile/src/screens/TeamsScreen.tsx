@@ -137,6 +137,7 @@ function TeamChatModal({
   isRecording: boolean;
   onDeleteMessage: (id: string) => Promise<void>;
   onEditMessage: (id: string, content: string) => Promise<void>;
+  onRemoveMember: (userId: string) => Promise<void>;
 }) {
   const insets = useSafeAreaInsets();
   const [newMessage, setNewMessage] = useState('');
@@ -270,7 +271,7 @@ function TeamChatModal({
       <KeyboardAvoidingView
         style={styles.chatContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <View style={styles.chatHeader}>
           <TouchableOpacity onPress={onClose} style={styles.chatBackBtn}>
@@ -308,7 +309,22 @@ function TeamChatModal({
                     <Text style={styles.memberName}>@{item.profiles?.username}</Text>
                     <Text style={styles.memberRole}>{item.role.toUpperCase()}</Text>
                   </View>
-                  {item.profiles?.id === currentUserId && <Text style={styles.youBadge}>You</Text>}
+                  {item.profiles?.id === currentUserId ? (
+                    <Text style={styles.youBadge}>You</Text>
+                  ) : (team.my_role === 'owner' || team.my_role === 'admin') && item.role !== 'owner' ? (
+                    <TouchableOpacity style={styles.removeMemberBtn} onPress={() => {
+                      Alert.alert('Remove Member', `Are you sure you want to remove @${item.profiles?.username}?`, [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Remove', style: 'destructive', onPress: async () => {
+                            await onRemoveMember(item.profiles?.id);
+                            setMembers(prev => prev.filter(m => m.profiles?.id !== item.profiles?.id));
+                          } 
+                        }
+                      ]);
+                    }}>
+                      <Text style={styles.removeMemberIcon}>🗑️</Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               )}
             />
@@ -698,6 +714,17 @@ export default function TeamsScreen() {
     } catch (err) { console.error('Failed to play audio', err); }
   };
 
+  const handleRemoveMember = async (userId: string) => {
+    if (!activeTeam) return;
+    try {
+      await TeamsService.removeMember(activeTeam.id, userId);
+      // Optional: Show toast or rely on socket
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to remove member');
+      throw e;
+    }
+  };
+
   const handleSupport = async () => {
     try {
       const res = await apiClient.post('/chat/support', { subject: 'Support Request' });
@@ -707,13 +734,17 @@ export default function TeamsScreen() {
             conversation: res.data.conversation 
         });
       } else if (res.data?.existingChatId) {
-        // Fallback for existing chat without full object (will fetch in ChatScreen)
-        navigation.navigate('Chat', { 
-            conversationId: res.data.existingChatId,
-            conversation: { id: res.data.existingChatId, name: 'Support', type: 'direct', support_status: 'open', members: [] } as any 
-        });
+        try {
+          const convRes = await apiClient.get(`/chat/conversations/${res.data.existingChatId}`);
+          navigation.navigate('Chat', { conversationId: res.data.existingChatId, conversation: convRes.data });
+        } catch {
+          navigation.navigate('Chat', { 
+              conversationId: res.data.existingChatId,
+              conversation: { id: res.data.existingChatId, name: 'Support', type: 'direct', support_status: 'open', members: [] } as any 
+          });
+        }
       }
-    } catch (error) { Alert.alert('Error', 'Failed to connect to Support'); }
+    } catch (error) { Alert.alert('Error', 'Failed to connect to Support. Please check your connection.'); }
   };
 
   return (
@@ -772,6 +803,7 @@ export default function TeamsScreen() {
           isRecording={isRecording}
           onDeleteMessage={handleDeleteMessage}
           onEditMessage={handleEditMessage}
+          onRemoveMember={handleRemoveMember}
         />
       )}
 
@@ -898,4 +930,6 @@ const styles = StyleSheet.create({
   memberName: { color: '#fff', fontSize: 14, fontWeight: '700' },
   memberRole: { color: '#666', fontSize: 10, fontWeight: '800', marginTop: 2 },
   youBadge: { color: '#f59e0b', fontSize: 10, fontWeight: '800', backgroundColor: '#f59e0b22', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  removeMemberBtn: { padding: 4, marginLeft: 8 },
+  removeMemberIcon: { fontSize: 16 },
 });

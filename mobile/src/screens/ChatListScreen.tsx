@@ -178,9 +178,12 @@ export default function ChatListScreen({ navigation }: Props) {
         });
       });
 
-      // 2. Persist to Cache (with merged data from current state)
-      // We persist sorted (server data) — the merged state is only in-memory
-      await AsyncStorage.setItem('cache_conversations', JSON.stringify(sorted));
+      // 2. Persist to Cache — ONLY if we actually got data.
+      // CRITICAL FIX: Never overwrite cache with an empty array.
+      // An empty result may be a transient auth/network error, not a real empty state.
+      if (sorted.length > 0) {
+        await AsyncStorage.setItem('cache_conversations', JSON.stringify(sorted));
+      }
     } catch (e) {
       console.error('[ChatList] Load failed:', e);
     } finally {
@@ -309,13 +312,21 @@ export default function ChatListScreen({ navigation }: Props) {
       if (res.data?.conversation) {
         navigation.navigate('Chat', { conversationId: res.data.conversation.id, conversation: res.data.conversation });
       } else if (res.data?.existingChatId) {
-        navigation.navigate('Chat', { 
-          conversationId: res.data.existingChatId,
-          conversation: { id: res.data.existingChatId, name: 'Support', type: 'direct', members: [] } as any
-        });
+        // Fetch the full conversation object so ChatScreen has members/profiles
+        try {
+          const convRes = await apiClient.get(`/chat/conversations/${res.data.existingChatId}`);
+          const fullConv = convRes.data;
+          navigation.navigate('Chat', { conversationId: res.data.existingChatId, conversation: fullConv });
+        } catch {
+          // Fallback: navigate without full data — ChatScreen will still load messages
+          navigation.navigate('Chat', {
+            conversationId: res.data.existingChatId,
+            conversation: { id: res.data.existingChatId, name: 'Support', type: 'direct', members: [] } as any,
+          });
+        }
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to connect to Support');
+      Alert.alert('Error', 'Failed to connect to Support. Please check your connection.');
     }
   };
 
