@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { supabase } = require('../config/supabase');
+const supabase = require('../config/supabase');
 
 // Signup/Login handled by Supabase Client on Frontend mostly.
 // Backend might handle profile syncing or custom claims.

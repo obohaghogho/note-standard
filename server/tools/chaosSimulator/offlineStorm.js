@@ -1,7 +1,7 @@
 // For simulating a post, we will call the backend API using our local Express routing 
 // or internal RPC to avoid Auth/fetch complexities in the chaos runner.
 // We'll require the local controller or RPC.
-const { supabase } = require('../../config/database');
+const supabase = require('../../config/database');
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 

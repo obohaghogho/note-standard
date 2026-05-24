@@ -1,4 +1,4 @@
-const { supabase } = require('../config/supabase');
+const supabase = require('../config/supabase');
 
 /**
  * Emit an immutable message event to the Event Ledger (message_events)
