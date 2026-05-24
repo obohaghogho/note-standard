@@ -2,6 +2,8 @@ const { Pool } = require('pg');
 require('dotenv').config();
 const eventSigner = require('../utils/eventSigner');
 const logger = require('../utils/logger');
+const diagnosticLogger = require('../utils/diagnosticLogger');
+const replayGuard = require('../utils/replayGuard');
 
 // Single pg pool shared with the rest of the server for pg_notify dispatch.
 // HTTP fallback removed — it leaked the internal gateway URL and was unreliable
@@ -120,8 +122,29 @@ const emit = async (type, room, event, payload, options = {}) => {
             return;
         }
 
+        // 3a. Replay protection guard for sequenced chat events
+        if (payload && typeof payload.sequence_number === 'number') {
+            const convId = payload.conversation_id || payload.conversationId;
+            const replayCheck = replayGuard.check(convId, payload.sequence_number);
+            if (!replayCheck.allowed) {
+                logger.warn('[RealtimeService] Replay rejected — stale sequence', {
+                    event,
+                    conversation_id: convId,
+                    reason: replayCheck.reason
+                });
+                return; // Silently drop — do not broadcast stale replays
+            }
+        }
+
         // 4. Dispatch via pg_notify (the single authoritative path)
         if (pgPool) {
+            // DIAGNOSTICS LOGGING
+            diagnosticLogger.logEvent(event, payload, { 
+                room: targetRoom, 
+                isFinancial,
+                platform: 'server-gateway'
+            });
+
             await pgPool.query('SELECT pg_notify($1, $2)', ['realtime_events', payloadString]);
         } else {
             logger.warn('[RealtimeService] pgPool unavailable — realtime event dropped', { event });

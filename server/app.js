@@ -133,6 +133,7 @@ const analyticsRoutes = require("./routes/analytics");
 const manualDepositRoutes = require("./routes/manualDepositRoutes");
 const bankAccountRoutes = require("./routes/bankAccountRoutes");
 const teamRoutes = require("./routes/teamRoutes");
+const sessionRoutes = require("./routes/session");
 
 // API Mounts
 app.use("/api/auth", authRoutes);
@@ -153,6 +154,27 @@ app.use("/api/bank-account", bankAccountRoutes);
 app.use("/api/limit-requests", requireAuth, require("./routes/limitRequests"));
 app.use("/api/webrtc", require("./routes/webrtc"));
 app.use("/api/teams", teamRoutes);
+app.use("/api/system", require("./routes/system"));
+app.use("/api/session", sessionRoutes);
+
+// Phase 6.2: Replay Debugger
+const replayRoutes = require("./tools/replayDebugger/replayRoutes");
+app.use(replayRoutes);
+
+// Phase 6.2 Step 3: Chaos Simulator
+const { runChaosScenario } = require("./tools/chaosSimulator/index.js");
+app.post("/api/debug/chaos/run", async (req, res) => {
+  const { conversation_id, level } = req.body;
+  const result = await runChaosScenario({
+    conversationId: conversation_id,
+    level: level || 1
+  });
+  res.json(result);
+});
+
+// Phase 8.3: Replay Certification Layer
+const certificateRoutes = require("./tools/replayCertification/certificateAPI");
+app.use(certificateRoutes);
 
 // ─── Payment, Transaction & Webhook Routes ────────────────────
 // CRITICAL: These MUST be mounted BEFORE the SystemState mutation block.

@@ -2,6 +2,11 @@ const supabase = require("../config/database");
 const { createNotification } = require("../services/notificationService");
 const { detectLanguage } = require("../services/translationService");
 const realtime = require("../services/realtimeService");
+const features = require("../config/features");
+const { normalizeOutboundMessage } = require("../utils/payloadNormalizer");
+const replayGuard = require("../utils/replayGuard");
+const crypto = require("crypto");
+const { emitMessageEvent } = require("../rpc/eventLedger");
 
 function getNotificationPreview(type, content) {
   switch (type) {
@@ -38,13 +43,13 @@ exports.getConversations = async (req, res) => {
     try {
       const { data, error } = await supabase
         .from("conversation_members")
-        .select("conversation_id, role, status")
+        .select("conversation_id, role, status, cleared_at")
         .eq("user_id", userId);
       
       if (error) {
-        // Fallback for missing 'role' or 'status' columns
+        // Fallback for missing 'role' or 'status' or 'cleared_at' columns
         if (error.code === '42703') {
-           console.warn(`[Chat] role/status missing in conversation_members, falling back`);
+           console.warn(`[Chat] role/status/cleared_at missing in conversation_members, falling back`);
            const { data: fallbackData, error: fallbackError } = await supabase
              .from("conversation_members")
              .select("conversation_id")
@@ -198,7 +203,7 @@ exports.getConversations = async (req, res) => {
           membership: {
             role: membership?.role || "member",
             status: membership?.status || "accepted",
-            cleared_at: null,
+            cleared_at: membership?.cleared_at || null,
             joined_at: null
           },
           members: members || [],
@@ -222,14 +227,10 @@ exports.getConversations = async (req, res) => {
       // Hide support chats
       if (c.chat_type === "support" || c.name === "Support Chat" || (c.name && c.name.toLowerCase().includes("support team"))) return false;
       
-      // Hide if it was "deleted" (cleared_at is after the last message, or cleared_at exists and there are no messages)
-      if (c.membership?.cleared_at) {
-        if (c.last_message && new Date(c.membership.cleared_at) >= new Date(c.last_message.created_at)) {
-          return false;
-        } else if (!c.last_message) {
-          return false;
-        }
-      }
+      // PHASE 2.5: Message Recovery Protection.
+      // Conversations must NEVER disappear structurally because of cleared_at.
+      // We explicitly removed the logic that hid conversations here.
+      // Only messages within the conversation will become hidden on the frontend.
       return true;
     });
 
@@ -806,6 +807,7 @@ exports.markMessageDelivered = async (req, res) => {
   try {
     const { messageId } = req.params;
     const userId = req.user.id;
+    const { deviceId } = req.body; // Phase 6: per-device receipt
     const now = new Date().toISOString();
 
     try {
@@ -849,6 +851,27 @@ exports.markMessageDelivered = async (req, res) => {
       }
 
       if (!msgRow) return res.json({ success: true, note: "no-op" });
+
+      // Phase 6: fire per-device receipt (fire-and-forget, non-blocking)
+      if (deviceId) {
+        supabase.rpc('rpc_mark_delivered', {
+            p_message_id: messageId,
+            p_device_id: deviceId
+        }).catch(e => console.warn('[Phase6] rpc_mark_delivered failed:', e.message));
+
+        // ==========================================
+        // EVENT LEDGER: Emit DELIVERED
+        // ==========================================
+        emitMessageEvent({
+          messageId: messageId,
+          conversationId: msgRow.conversation_id,
+          userId,
+          deviceId,
+          sessionId: req.body.sessionId || null,
+          eventType: 'DELIVERED',
+          correlationId: messageId
+        });
+      }
 
       const receiptPayload = { messageId, conversationId: msgRow.conversation_id, userId, delivered_at: deliveredAt };
 
@@ -900,7 +923,7 @@ exports.sendMessage = async (req, res) => {
   try {
     const { conversationId } = req.params;
     // FIX: Also read attachmentId and replyToId from body
-    const { content, type, attachmentId, replyToId } = req.body;
+    const { content, type, attachmentId, replyToId, deviceId, sessionId } = req.body;
     const userId = req.user.id;
 
     // Allow empty content when an attachment is present
@@ -964,66 +987,108 @@ exports.sendMessage = async (req, res) => {
       detectedLang = await detectLanguage(content);
     }
     let createdMessageId = null;
+    let isDuplicate = false;
+    const eventId = req.body.eventId || crypto.randomUUID();
+
     try {
-      // Build payload conditionally — sending null for a non-existent column causes
-      // a 42703 error just like sending a value. Only add these fields when present.
-      const insertPayload = {
-        conversation_id: conversationId,
-        sender_id: userId,
-        content: content || '',
-        type: type || "text",
-        sentiment,
-        detected_language: detectedLang,
-      };
-      if (attachmentId) insertPayload.attachment_id = attachmentId;
-      if (replyToId)    insertPayload.reply_to_id   = replyToId;
-
-      // Stage 1: Insert the raw message to database
       let insertedMessage = null;
-      const { data: insertData, error: insertError } = await supabase
-        .from("messages")
-        .insert([insertPayload])
-        .select("id")
-        .single();
 
-      if (insertError) {
-        // Fallback for missing columns (e.g. sentiment or language metadata)
-        const isSchemaError = insertError.code === "42703" || insertError.code === "PGRST200" ||
-          (insertError.message && (
-            insertError.message.includes("sentiment") || 
-            insertError.message.includes("detected_language") || 
-            insertError.message.includes("attachment_id")
-          ));
+      const isTransactional = features.isFeatureEnabled('SEQUENCE_ENFORCEMENT', userId);
+      console.log(`[SEQUENCE_MODE]: ${isTransactional ? 'transactional' : 'legacy'} (User: ${userId})`);
 
-        if (isSchemaError) {
-          console.warn("[Chat Controller] Schema mismatch on insert, retrying basic fallback insert:", insertError.code, insertError.message);
-          const fallbackPayload = {
-            conversation_id: conversationId,
-            sender_id: userId,
-            content: content || '',
-            type: type || "text",
-          };
-          if (attachmentId) fallbackPayload.attachment_id = attachmentId;
-          if (replyToId)    fallbackPayload.reply_to_id   = replyToId;
+      if (isTransactional) {
+        console.log(`[Chat Controller] Using RPC Transaction for sendMessage (event_id: ${eventId})`);
+        const { data: rpcData, error: rpcError } = await supabase.rpc('rpc_send_message', {
+            p_conversation_id: conversationId,
+            p_sender_id: userId,
+            p_content: content || '',
+            p_type: type || "text",
+            p_event_id: eventId,
+            p_original_language: detectedLang,
+            p_attachment_id: attachmentId || null
+        });
 
-          const { data: retryData, error: retryErr } = await supabase
-            .from("messages")
-            .insert([fallbackPayload])
-            .select("id")
-            .single();
-
-          if (retryErr) throw retryErr;
-          insertedMessage = retryData;
-        } else {
-          throw insertError;
+        if (rpcError) throw rpcError;
+        
+        insertedMessage = rpcData.message;
+        isDuplicate = rpcData.is_duplicate;
+        
+        if (isDuplicate) {
+           console.log(`[Chat Controller] Idempotent send: duplicate event_id ${eventId} rejected safely.`);
+        } else if (insertedMessage?.sequence_number) {
+           // Advance replay guard high-water mark for this conversation
+           replayGuard.advance(conversationId, insertedMessage.sequence_number);
         }
       } else {
-        insertedMessage = insertData;
+        const insertPayload = {
+          conversation_id: conversationId,
+          sender_id: userId,
+          content: content || '',
+          type: type || "text",
+          sentiment,
+          detected_language: detectedLang,
+        };
+        if (attachmentId) insertPayload.attachment_id = attachmentId;
+        if (replyToId)    insertPayload.reply_to_id   = replyToId;
+
+        const { data: insertData, error: insertError } = await supabase
+          .from("messages")
+          .insert([insertPayload])
+          .select("id")
+          .single();
+
+        if (insertError) {
+          const isSchemaError = insertError.code === "42703" || insertError.code === "PGRST200" ||
+            (insertError.message && (
+              insertError.message.includes("sentiment") || 
+              insertError.message.includes("detected_language") || 
+              insertError.message.includes("attachment_id")
+            ));
+
+          if (isSchemaError) {
+            console.warn("[Chat Controller] Schema mismatch on insert, retrying basic fallback insert:", insertError.code, insertError.message);
+            const fallbackPayload = {
+              conversation_id: conversationId,
+              sender_id: userId,
+              content: content || '',
+              type: type || "text",
+            };
+            if (attachmentId) fallbackPayload.attachment_id = attachmentId;
+            if (replyToId)    fallbackPayload.reply_to_id   = replyToId;
+
+            const { data: retryData, error: retryErr } = await supabase
+              .from("messages")
+              .insert([fallbackPayload])
+              .select("id")
+              .single();
+
+            if (retryErr) throw retryErr;
+            insertedMessage = retryData;
+          } else {
+            throw insertError;
+          }
+        } else {
+          insertedMessage = insertData;
+        }
       }
 
       createdMessageId = insertedMessage.id;
 
-      // Stage 2: Hydrate the inserted message with all necessary joins (sender, attachment, etc.)
+      // ==========================================
+      // EVENT LEDGER: Emit SENT
+      // ==========================================
+      if (deviceId) {
+        emitMessageEvent({
+          messageId: createdMessageId,
+          conversationId,
+          userId,
+          deviceId,
+          sessionId,
+          eventType: 'SENT',
+          correlationId: eventId // The generated intent ID is the correlation root
+        });
+      }
+
       const { data: hydratedMessage, error: hydrateError } = await supabase
         .from("messages")
         .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url), reply_to:messages(id, content, sender_id)")
@@ -1041,7 +1106,6 @@ exports.sendMessage = async (req, res) => {
 
         if (simpleErr) throw simpleErr;
         
-        // Hydrate sender details manually if the join itself failed
         try {
           const { data: senderData } = await supabase
             .from("profiles")
@@ -1069,13 +1133,27 @@ exports.sendMessage = async (req, res) => {
     }
 
     async function processAfterMsg(msgToSend) {
-      // 1. Respond to sender immediately to minimize perceived latency
-      if (!res.headersSent) {
-          res.json(msgToSend);
+      // Normalize before broadcast
+      let safePayload = msgToSend;
+      const isTransactional = features.isFeatureEnabled('SEQUENCE_ENFORCEMENT', userId);
+      
+      if (isTransactional) {
+          safePayload = normalizeOutboundMessage(msgToSend);
+          if (!safePayload) {
+             console.error("[Chat Controller] Normalization failed. Dropping outbound broadcast.");
+             return;
+          }
       }
 
-      // 2. Broadcast to other members immediately
-      await realtime.emitToConversation(conversationId, "chat:message", msgToSend);
+      // 1. Respond to sender immediately
+      if (!res.headersSent) {
+          res.json(safePayload);
+      }
+
+      // 2. Broadcast to other members immediately if it's not a duplicate
+      if (!isDuplicate) {
+          await realtime.emitToConversation(conversationId, "chat:message", safePayload);
+      }
 
       // 3. Background tasks (non-blocking)
       supabase.from("conversations").update({ updated_at: new Date() }).eq(
@@ -1564,13 +1642,25 @@ exports.clearChatHistory = async (req, res) => {
     const { conversationId } = req.params;
     const userId = req.user.id;
 
-    const { error } = await supabase
-      .from("conversation_members")
-      .update({ cleared_at: new Date() })
-      .eq("conversation_id", conversationId)
-      .eq("user_id", userId);
+    const isTransactional = features.isFeatureEnabled('SEQUENCE_ENFORCEMENT', userId);
+    console.log(`[SEQUENCE_MODE]: ${isTransactional ? 'transactional' : 'legacy'} (User: ${userId}, Action: clearChatHistory)`);
 
-    if (error) throw error;
+    if (isTransactional) {
+        console.log(`[Chat Controller] Using RPC Transaction for clearChatHistory`);
+        const { data: rpcData, error: rpcError } = await supabase.rpc('rpc_clear_chat', {
+            p_conversation_id: conversationId,
+            p_user_id: userId
+        });
+        if (rpcError) throw rpcError;
+    } else {
+        const { error } = await supabase
+          .from("conversation_members")
+          .update({ cleared_at: new Date() })
+          .eq("conversation_id", conversationId)
+          .eq("user_id", userId);
+
+        if (error) throw error;
+    }
 
     res.json({ success: true, message: "Chat history cleared" });
   } catch (err) {
@@ -1623,36 +1713,61 @@ exports.deleteMessage = async (req, res) => {
       .from("messages")
       .update({
         is_deleted: true,
-        content: "Message deleted", // Optional: scrub content
+        content: "Message deleted",
       })
       .eq("id", messageId);
 
-    // If not admin, force ownership check
     if (!isAdmin) {
       query = query.eq("sender_id", userId);
     }
 
-    const { data, error } = await query.select().single();
+    let deletePayload;
+    const isTransactional = features.isFeatureEnabled('SEQUENCE_ENFORCEMENT', userId);
+    console.log(`[SEQUENCE_MODE]: ${isTransactional ? 'transactional' : 'legacy'} (User: ${userId}, Action: deleteMessage)`);
 
-    if (error) {
-      // Check for 'No rows found' equivalent in supabase or missing permissions
-      if (error.code === "PGRST116" || error.details?.includes('0 rows')) {
-        console.warn(`[Chat Delete] Deletion failed. Record not found or RLS blocked it for user ${userId}`);
-        return res.status(404).json({
-          error: "Message not found or you don't have permission to delete it",
-        });
+    if (isTransactional) {
+      console.log(`[Chat Delete] Using RPC Transaction for deleteMessage ${messageId}`);
+      const { data: rpcData, error: rpcError } = await supabase.rpc('rpc_delete_message', {
+          p_message_id: messageId,
+          p_sender_id: userId
+      });
+
+      if (rpcError) throw rpcError;
+      if (!rpcData.success) {
+          return res.status(404).json({ error: rpcData.error || "Message not found" });
       }
-      throw error;
+      
+      deletePayload = { 
+        messageId, 
+        conversationId: message.conversation_id,
+        conversation_version: rpcData.conversation_version,
+        is_duplicate: rpcData.is_duplicate 
+      };
+      
+      if (rpcData.is_duplicate) {
+        console.log(`[Chat Delete] Idempotent delete: message ${messageId} already deleted.`);
+      }
+    } else {
+      const { data, error } = await query.select().single();
+
+      if (error) {
+        if (error.code === "PGRST116" || error.details?.includes('0 rows')) {
+          console.warn(`[Chat Delete] Deletion failed. Record not found or RLS blocked it for user ${userId}`);
+          return res.status(404).json({
+            error: "Message not found or you don't have permission to delete it",
+          });
+        }
+        throw error;
+      }
+      
+      deletePayload = { messageId, conversationId: data.conversation_id };
     }
 
     console.log(`[Chat Delete] Successfully soft-deleted message ${messageId}`);
 
-    const deletePayload = { messageId, conversationId: data.conversation_id };
-
     // Broadcast to all OTHER sockets in the conversation room.
-    await realtime.emitToConversation(data.conversation_id, "chat:message_deleted", deletePayload);
-    // Also emit directly to the deleting user so their own client receives the socket event.
-    // (emitToConversation excludes the initiating socket in most gateway implementations.)
+    await realtime.emitToConversation(message.conversation_id, "chat:message_deleted", deletePayload);
+    // Also emit directly to the deleting user
     await realtime.emitToUser(userId, "chat:message_deleted", deletePayload);
 
     res.json({ success: true, message: "Message deleted" });
@@ -1725,30 +1840,58 @@ exports.markConversationRead = async (req, res) => {
   try {
     const { conversationId } = req.params;
     const userId = req.user.id;
+    const { deviceId, lastMessageId } = req.body; // Phase 6: per-device receipt
     const now = new Date().toISOString();
 
-    // Mark all messages in this conversation as read, except own
-    const { error } = await supabase
-      .from("messages")
-      .update({ read_at: now, delivered_at: now }) // If read, it must have been delivered
-      .eq("conversation_id", conversationId)
-      .neq("sender_id", userId)
-      .is("read_at", null);
+    let readPayload = { conversationId, readerId: userId, readAt: now };
 
-    if (error) {
-      if (error.code === "42703") {
-         return res.json({ success: true, note: "read_at column missing" });
-      }
-      throw error;
+    // Phase 6: Per-device read receipt via RPC (lease-gated on DB side)
+    if (deviceId && lastMessageId) {
+        const { data: receiptData, error: receiptError } = await supabase.rpc('rpc_mark_read', {
+            p_conversation_id: conversationId,
+            p_device_id: deviceId,
+            p_last_message_id: lastMessageId
+        });
+
+        if (receiptError) {
+            // Non-fatal: passive device attempting to publish — return specific code
+            console.warn('[Phase6] rpc_mark_read error:', receiptError.message);
+            if (receiptError.message?.includes('Passive device')) {
+                return res.status(403).json({ success: false, code: 'LEASE_PASSIVE', error: receiptError.message });
+            }
+        }
     }
 
-    const readPayload = { conversationId, readerId: userId, readAt: now };
+    const isTransactional = features.isFeatureEnabled('SEQUENCE_ENFORCEMENT', userId);
+    console.log(`[SEQUENCE_MODE]: ${isTransactional ? 'transactional' : 'legacy'} (User: ${userId}, Action: markConversationRead)`);
 
-    // Emit to conversation room (for anyone in the ChatScreen)
+    if (isTransactional) {
+        console.log(`[Chat Controller] Using RPC Transaction for markRead`);
+        const { data: rpcData, error: rpcError } = await supabase.rpc('rpc_mark_read', {
+            p_conversation_id: conversationId,
+            p_user_id: userId
+        });
+        if (rpcError) throw rpcError;
+        
+        readPayload.conversation_version = rpcData.conversation_version;
+    } else {
+        const { error } = await supabase
+          .from("messages")
+          .update({ read_at: now, delivered_at: now })
+          .eq("conversation_id", conversationId)
+          .neq("sender_id", userId)
+          .is("read_at", null);
+
+        if (error) {
+          if (error.code === "42703") {
+             return res.json({ success: true, note: "read_at column missing" });
+          }
+          throw error;
+        }
+    }
+
     await realtime.emitToConversation(conversationId, "chat:conversation_read", readPayload);
 
-    // CRITICAL FIX: Also emit directly to each other member via their personal user room
-    // so their ChatList screen (which is NOT in the conversation room) receives the update.
     try {
       const { data: otherMembers } = await supabase
         .from("conversation_members")
@@ -1913,6 +2056,38 @@ exports.getBlockedUsers = async (req, res) => {
   } catch (err) {
     console.error("Error fetching blocked users:", err.message);
     res.status(500).json({ error: "Server Error" });
+  }
+};
+
+// ==========================================
+// EVENT LEDGER (Phase 6.2)
+// ==========================================
+
+exports.emitLedgerEvent = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { messageId, conversationId, deviceId, sessionId, eventType, correlationId, metadata } = req.body;
+
+    if (!messageId || !conversationId || !deviceId || !eventType || !correlationId) {
+      return res.status(400).json({ error: "Missing required event fields" });
+    }
+
+    await emitMessageEvent({
+      messageId,
+      conversationId,
+      userId,
+      deviceId,
+      sessionId,
+      eventType,
+      correlationId,
+      metadata
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[EventLedger] Controller error:", err.message);
+    // Don't fail the client on ledger errors
+    res.json({ success: true, error: "Event recorded with warnings" });
   }
 };
 

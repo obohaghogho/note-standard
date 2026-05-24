@@ -3,6 +3,7 @@ const router = express.Router();
 const chatController = require("../controllers/chatController");
 const translationController = require("../controllers/translationController");
 const { requireAuth } = require("../middleware/auth");
+const { accMiddleware } = require("../tools/acc");
 
 // Public Webhooks
 router.post("/messages/:messageId/webhook-deliver", chatController.webhookDeliver);
@@ -32,10 +33,12 @@ router.delete(
 );
 router.put(
   "/conversations/:conversationId/read",
+  accMiddleware,
   chatController.markConversationRead,
 );
 router.put(
   "/conversations/:conversationId/deliver",
+  accMiddleware,
   chatController.markConversationDelivered,
 );
 
@@ -50,6 +53,7 @@ router.get(
 );
 router.post(
   "/conversations/:conversationId/messages",
+  accMiddleware,
   chatController.sendMessage,
 );
 router.put(
@@ -64,6 +68,9 @@ router.put("/messages/:messageId/read", chatController.markMessageRead);
 router.put("/messages/:messageId/deliver", chatController.markMessageDelivered);
 router.delete("/messages/:messageId", chatController.deleteMessage);
 router.patch("/messages/:messageId", chatController.editMessage);
+
+// Event Ledger (Phase 6.2)
+router.post("/events", chatController.emitLedgerEvent);
 
 // User Blocking
 router.post("/block", chatController.blockUser);

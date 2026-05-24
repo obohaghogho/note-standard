@@ -14,7 +14,8 @@
     "build:client": "npm run build -w client",
     "lint": "eslint .",
     "typecheck": "npm run typecheck -w client",
-    "prepare": "echo 'Skipping husky in production'"
+    "prepare": "echo 'Skipping husky in production'",
+    "chaos:ci": "node server/tools/ciChaosGate/ciRunner.js"
   },
   "dependencies": {
     "bip39": "^3.1.0",

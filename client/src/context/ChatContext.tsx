@@ -1,7 +1,13 @@
-import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
+import { validateMessagePayload, normalizeSequenceNumber } from 'shared/payloadValidator';
+import { mergeMessages } from 'shared/messageMergeEngine';
+import { useSessionArbitration } from 'shared/hooks/useSessionArbitration';
+import { OfflineQueueEngine } from 'shared/offlineQueueEngine';
+import { ensureLeaseOwnership } from 'shared/leaseBarrier';
+import { ReadReceiptEngine } from 'shared/readReceiptEngine';
 
 import api from '../api/axiosInstance';
 import toast from 'react-hot-toast';
@@ -21,6 +27,10 @@ export interface Message {
     is_edited?: boolean;
     updated_at?: string;
     status?: 'sending' | 'sent' | 'failed';
+    // Phase 3: sequence integrity fields (optional for legacy compat)
+    sequence_number?: number;
+    conversation_version?: number;
+    event_id?: string;
     reply_to?: {
         id: string;
         content: string;
@@ -107,6 +117,10 @@ export interface ChatContextValue {
     sendMessageToConversation: (conversationId: string, content: string, type?: string, attachmentId?: string, replyToId?: string) => Promise<void>;
     markConversationRead: (conversationId: string) => Promise<void>;
     markConversationDelivered: (conversationId: string) => Promise<void>;
+    isActiveWriter: (conversationId: string) => boolean;
+    isClaimingLease: (conversationId: string) => boolean;
+    // Phase 6: optimistic local read + lease-gated server ACK
+    onMessageVisible: (conversationId: string, messageId: string) => void;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -141,7 +155,76 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
     const [drafts, setDrafts] = useState<Record<string, string>>({});
 
+    const [deviceId, setDeviceId] = useState<string | null>(null);
+    const [sessionId, setSessionId] = useState<string | null>(null);
+
     const isMounted = useRef(true);
+
+    // Initialize Device and Session
+    useEffect(() => {
+        if (!user) return;
+        const initSession = async () => {
+            let localDeviceId = localStorage.getItem('chat_device_id');
+            if (!localDeviceId) {
+                localDeviceId = `web-${Math.random().toString(36).substring(2, 9)}`;
+                localStorage.setItem('chat_device_id', localDeviceId);
+            }
+            setDeviceId(localDeviceId);
+
+            try {
+                const res = await api.post('/session/register', {
+                    userId: user.id,
+                    deviceId: localDeviceId,
+                    userAgent: navigator.userAgent
+                });
+                if (res.data?.session_id) {
+                    setSessionId(res.data.session_id);
+                }
+            } catch (err) {
+                console.error('[ChatContext] Session registration failed', err);
+            }
+        };
+        initSession();
+    }, [user]);
+
+    const { isActiveWriter, isClaimingLease, markLeaseClaimStart, markLeaseClaimEnd, leases } = useSessionArbitration({
+        sessionId,
+        deviceId,
+        supabase,
+        initialConversations: conversations as any
+    });
+
+    // Phase 6: ReadReceiptEngine — optimistic local state + debounced server emission
+    const readReceiptEngine = useMemo(() => new ReadReceiptEngine(
+        api,
+        () => deviceId,
+        () => sessionId,
+        (cid: string) => isActiveWriter(cid),
+        // markLocalReadState: update UI immediately so blue ticks show on this device instantly
+        (conversationId: string, lastMessageId: string) => {
+            setMessages(prev => {
+                const current = prev[conversationId] || [];
+                const nowStr = new Date().toISOString();
+                return {
+                    ...prev,
+                    [conversationId]: current.map(m =>
+                        m.id === lastMessageId || (m.created_at <= new Date(nowStr).toISOString() && !m.isOwn)
+                            ? mergeMessageStatus(m, { read_at: nowStr })
+                            : m
+                    )
+                };
+            });
+            // Clear conversation unread count optimistically
+            setConversations(prev => prev.map(c =>
+                c.id === conversationId ? { ...c, unreadCount: 0 } : c
+            ));
+        }
+    ), [deviceId, isActiveWriter]);
+
+    // Flush any queued read intents when device becomes active writer
+    useEffect(() => {
+        if (connected) readReceiptEngine.flushQueue();
+    }, [connected, isActiveWriter, readReceiptEngine]);
     const conversationsFetchRef = useRef(false);
     const conversationsRef = useRef<Conversation[]>([]);
     const socketRef = useRef<Socket | null>(null);
@@ -149,9 +232,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const activeConversationIdRef = useRef<string | null>(null);
     const messagesRef = useRef<Record<string, Message[]>>({});
     const typingTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-    // Tombstone: permanently tracks deleted message IDs across room switches, reconnects,
-    // and page refreshes within the session. Any ingestion path filters against this.
+    // Tombstone: permanently tracks deleted message IDs across room switches and reconnects.
     const deletedMessageIdsRef = useRef<Set<string>>(new Set());
+    // Phase 3: per-conversation sequence high-water mark (mirrors server-side replayGuard)
+    // Sentinel -1 means "not yet seen any sequenced message for this conversation".
+    const lastSeenSequenceRef = useRef<Record<string, number>>({});
 
     const sendTypingStatus = useCallback((isTyping: boolean) => {
         if (!socket || !connected || !activeConversationIdRef.current) return;
@@ -181,49 +266,49 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
 
     const markMessageRead = useCallback(async (messageId: string, conversationId: string) => {
-        if (!session) return;
+        if (!session || !deviceId) return;
         const now = new Date().toISOString();
         if (socketRef.current?.connected) {
-            socketRef.current.emit('chat:read', { conversationId, messageIds: [messageId], readAt: now });
+            socketRef.current.emit('chat:read', { conversationId, messageIds: [messageId], readAt: now, deviceId });
         }
         try {
-            await api.put(`/chat/messages/${messageId}/read`);
+            await api.put(`/chat/conversations/${conversationId}/read`, { deviceId, lastMessageId: messageId });
         } catch (err) {
             console.error('[Chat] Failed to mark read:', err);
         }
-    }, [session]);
+    }, [session, deviceId]);
 
     const markMessageDelivered = useCallback(async (messageId: string, conversationId: string) => {
-        if (!session) return;
+        if (!session || !deviceId) return;
         const now = new Date().toISOString();
         if (socketRef.current?.connected) {
-            socketRef.current.emit('chat:delivered', { conversationId, messageId, deliveredAt: now });
+            socketRef.current.emit('chat:delivered', { conversationId, messageId, deliveredAt: now, deviceId });
         }
         try {
-            await api.put(`/chat/messages/${messageId}/deliver`);
+            await api.put(`/chat/messages/${messageId}/deliver`, { deviceId });
         } catch (err) {
             console.error('[Chat] Failed to mark delivered:', err);
         }
-    }, [session]);
+    }, [session, deviceId]);
 
     const markConversationDelivered = useCallback(async (conversationId: string) => {
-        if (!session) return;
+        if (!session || !deviceId) return;
         try {
-            await api.put(`/chat/conversations/${conversationId}/deliver`);
+            await api.put(`/chat/conversations/${conversationId}/deliver`, { deviceId });
         } catch (err) {
             console.error('[Chat] Failed to mark conversation delivered:', err);
         }
-    }, [session]);
+    }, [session, deviceId]);
 
     const markConversationRead = useCallback(async (conversationId: string) => {
-        if (!session) return;
+        if (!session || !deviceId) return;
         try {
-            await api.put(`/chat/conversations/${conversationId}/read`);
+            await api.put(`/chat/conversations/${conversationId}/read`, { deviceId });
             setConversations(prev => prev.map(conv => conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv));
         } catch (err) {
             console.error('[Chat] Failed to mark conversation read:', err);
         }
-    }, [session]);
+    }, [session, deviceId]);
 
     const joinAllRooms = useCallback((convList: Conversation[]) => {
         const s = socketRef.current;
@@ -267,14 +352,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const filtered = (res.data as (Message & { is_deleted?: boolean })[]).filter(
                     m => !deletedMessageIdsRef.current.has(m.id) && !m.is_deleted
                 );
-                // Use mergeMessageStatus to ensure we never downgrade a message's delivery status
-                // if the fast-path socket event beat the server response.
+                
+                // Phase 3.2: Deterministic Merge Engine
                 setMessages(prev => {
-                    const existingMap = new Map((prev[conversationId] || []).map(m => [m.id, m]));
-                    const merged = filtered.map(m => {
-                        const existing = existingMap.get(m.id);
-                        return existing ? mergeMessageStatus(existing, m) : m;
-                    });
+                    const current = prev[conversationId] || [];
+                    const { merged } = mergeMessages(current, filtered);
                     return { ...prev, [conversationId]: merged };
                 });
             }
@@ -321,64 +403,105 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => {
         if (!socket || !connected) return;
 
-        const processIncomingMessage = (msg: Message & { sender_id: string; conversation_id: string } & { is_deleted?: boolean }) => {
+        const processIncomingMessage = (raw: unknown) => {
             if (!isMounted.current) return;
-            // Tombstone guard: reject any socket replay of a message we already deleted.
+
+            // ── Phase 3: Schema validation gate ───────────────────────────────
+            const validation = validateMessagePayload(raw);
+            if (!validation.valid) {
+                if (import.meta.env.DEV) {
+                    console.warn('[Chat] Dropping invalid socket payload:', validation.reason, raw);
+                }
+                return;
+            }
+            const msg = validation.data as Message & { is_deleted?: boolean };
+
+            // ── Tombstone guard: reject replays of deleted messages ────────────
             if (deletedMessageIdsRef.current.has(msg.id) || msg.is_deleted) return;
-            const newMessage: Message = { ...msg, isOwn: msg.sender_id === user?.id };
+
+            // ── Phase 3: User guard — ensure user is hydrated before unread logic
+            if (!user?.id) return;
+
+            // ── Phase 3: Type-safe sequence deduplication ─────────────────────
+            const seq = normalizeSequenceNumber(msg.sequence_number);
+            const isOwnMessage = msg.sender_id === user.id;
+
+            if (seq !== undefined) {
+                // Sentinel -1 = not yet seen any sequenced message
+                const lastSeen = lastSeenSequenceRef.current[msg.conversation_id] ?? -1;
+
+                if (seq <= lastSeen && !isOwnMessage) {
+                    // Stale replay — drop silently
+                    if (import.meta.env.DEV) {
+                        console.warn(`[Chat] Dropped stale sequence replay: seq ${seq} <= lastSeen ${lastSeen} for conv ${msg.conversation_id}`);
+                    }
+                    return;
+                }
+                // Advance high-water mark only for sequenced messages
+                lastSeenSequenceRef.current[msg.conversation_id] = Math.max(lastSeen, seq);
+            }
+            // NOTE: If seq === undefined (legacy message), bypass sequence check
+            // and DO NOT update lastSeenSequenceRef (preserves watermark integrity).
+
+            const newMessage: Message = { ...msg, isOwn: isOwnMessage };
             
-            // Mark as read immediately if this conversation is active and message is from another user
-            if (activeConversationIdRef.current === msg.conversation_id && msg.sender_id !== user?.id) {
+            // Mark as read immediately if this conversation is active
+            if (activeConversationIdRef.current === msg.conversation_id && !isOwnMessage) {
                 markMessageRead(msg.id, msg.conversation_id);
             }
 
             // Mark as delivered immediately if received from another user
-            if (msg.sender_id !== user?.id) {
+            if (!isOwnMessage) {
                 markMessageDelivered(msg.id, msg.conversation_id);
             }
 
+            // Phase 3.2: Atomic State Mutation using Merge Engine
+            // By wrapping setConversations inside setMessages, we guarantee that newlyAddedCount
+            // is calculated against the absolutely latest 'prev' array, eliminating race conditions
+            // without needing mutable refs.
             setMessages(prev => {
                 const current = prev[msg.conversation_id] || [];
-                if (current.some(m => m.id === msg.id)) return prev;
+                const { merged, newlyAddedCount } = mergeMessages(current, [newMessage]);
 
-                // Handle optimistic UI matching for our own messages
-                if (msg.sender_id === user?.id) {
-                    const optimisticIndex = current.findIndex(m => 
-                        (m.status === 'sending' || m.id.startsWith('temp-')) &&
-                        (m.content === msg.content || m.type === msg.type)
-                    );
-                    if (optimisticIndex !== -1) {
-                        const updated = [...current];
-                        updated[optimisticIndex] = newMessage;
-                        return { ...prev, [msg.conversation_id]: updated };
-                    }
+                // Only update conversations if something materially changed (new message, or sequence update)
+                if (newlyAddedCount > 0 || msg.sequence_number !== undefined) {
+                    const isCurrentlyOpen = activeConversationIdRef.current === msg.conversation_id;
+
+                    setConversations(cPrev => {
+                        const convExists = cPrev.some(c => c.id === msg.conversation_id);
+                        if (!convExists) {
+                            setTimeout(() => loadConversations(), 100);
+                            return cPrev;
+                        }
+
+                        return cPrev.map(conv => {
+                            if (conv.id !== msg.conversation_id) return conv;
+
+                            // Timestamp-ordered lastMessage fallback
+                            const existingLastMsgTime = new Date(conv.lastMessage?.created_at ?? 0).getTime();
+                            const newMsgTime = new Date(msg.created_at).getTime();
+                            const shouldUpdateLastMessage = newMsgTime >= existingLastMsgTime;
+
+                            // Deterministic Unread Delta (only increments by the exact number of NEW unread messages)
+                            const shouldIncrementUnread = !isCurrentlyOpen && !isOwnMessage && newlyAddedCount > 0;
+
+                            if (!shouldUpdateLastMessage && !shouldIncrementUnread) return conv;
+
+                            return {
+                                ...conv,
+                                updated_at: shouldUpdateLastMessage ? msg.created_at : conv.updated_at,
+                                lastMessage: shouldUpdateLastMessage
+                                    ? { id: msg.id, content: msg.content, sender_id: msg.sender_id, created_at: msg.created_at }
+                                    : conv.lastMessage,
+                                unreadCount: shouldIncrementUnread
+                                    ? (conv.unreadCount || 0) + newlyAddedCount
+                                    : conv.unreadCount
+                            };
+                        });
+                    });
                 }
 
-                return { ...prev, [msg.conversation_id]: [...current, newMessage] };
-            });
-
-            // Increment unread count only if chat is NOT currently open
-            const isCurrentlyOpen = activeConversationIdRef.current === msg.conversation_id;
-            setConversations(prev => {
-                const convExists = prev.some(c => c.id === msg.conversation_id);
-                if (!convExists) {
-                    // Conversation was likely cleared/deleted from UI, but a new message arrived!
-                    // Re-fetch conversations to restore it.
-                    setTimeout(() => loadConversations(), 100);
-                    return prev;
-                }
-
-                return prev.map(conv => {
-                    if (conv.id === msg.conversation_id) {
-                        return {
-                            ...conv,
-                            updated_at: msg.created_at,
-                            lastMessage: { id: msg.id, content: msg.content, sender_id: msg.sender_id, created_at: msg.created_at },
-                            unreadCount: isCurrentlyOpen ? 0 : (conv.unreadCount || 0) + (msg.sender_id !== user?.id ? 1 : 0)
-                        };
-                    }
-                    return conv;
-                });
+                return { ...prev, [msg.conversation_id]: merged };
             });
         };
 
@@ -618,43 +741,84 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [socket, connected, user?.id]);
 
+    // Phase 5.5: Lease-Aware Offline Queue Engine
+    const offlineQueue = useMemo(() => {
+        return new OfflineQueueEngine({
+            getItem: (key: string) => localStorage.getItem(key),
+            setItem: (key: string, value: string) => localStorage.setItem(key, value)
+        });
+    }, []);
+
+    const flushQueue = useCallback(async () => {
+        if (!connected || !session || !user || !deviceId || !sessionId) return;
+        
+        const intents = await offlineQueue.getPendingIntents();
+        if (intents.length === 0) return;
+
+        for (const intent of intents) {
+            if (intent.status === 'sending' || intent.attempts >= 3) continue;
+
+            await offlineQueue.updateIntentStatus(intent.event_id, 'sending');
+
+            try {
+                // Phase 5.5: Lease Barrier
+                await ensureLeaseOwnership(
+                    intent.conversation_id, 
+                    sessionId, 
+                    deviceId, 
+                    api, 
+                    (cid: string) => leases[cid], 
+                    markLeaseClaimEnd // Optional UI sync
+                );
+
+                const res = await api.post(`/chat/conversations/${intent.conversation_id}/messages`, {
+                    content: intent.payload.content,
+                    type: intent.payload.type,
+                    attachmentId: intent.payload.attachmentId,
+                    replyToId: intent.payload.replyToId,
+                    eventId: intent.event_id,
+                    deviceId,
+                    sessionId
+                });
+
+                // Canonical backend collapse
+                const canonicalMessage = { ...res.data, isOwn: true, status: 'sent' };
+                setMessages(prev => {
+                    const current = prev[intent.conversation_id] || [];
+                    const { merged } = mergeMessages(current, [canonicalMessage]);
+                    return { ...prev, [intent.conversation_id]: merged };
+                });
+
+                await offlineQueue.removeIntent(intent.event_id);
+            } catch (err) {
+                console.error('[ChatContext] Failed to flush intent', intent.event_id, err);
+                await offlineQueue.updateIntentStatus(intent.event_id, 'failed');
+                // Revert optimistic UI status to failed
+                setMessages(prev => {
+                    const current = prev[intent.conversation_id] || [];
+                    return {
+                        ...prev,
+                        [intent.conversation_id]: current.map(m => m.id === intent.event_id || m.event_id === intent.event_id ? { ...m, status: 'failed' } : m)
+                    };
+                });
+            }
+        }
+    }, [connected, session, user, deviceId, sessionId, offlineQueue, leases, markLeaseClaimEnd]);
+
     // Process Outbox when connection is restored
     useEffect(() => {
-        if (!connected || !session || !user) return;
-        const processOutbox = async () => {
-            const currentOutbox = JSON.parse(localStorage.getItem('chat_outbox') || '[]');
-            if (currentOutbox.length === 0) return;
-            
-            const remainingOutbox = [];
-            for (const msg of currentOutbox) {
-                try {
-                    const res = await api.post(`/chat/conversations/${msg.conversation_id}/messages`, {
-                        content: msg.content,
-                        type: msg.type
-                    });
-                    setMessages(prev => {
-                        const current = prev[msg.conversation_id] || [];
-                        return {
-                            ...prev,
-                            [msg.conversation_id]: current.map(m => m.id === msg.id ? { ...res.data, isOwn: true, status: 'sent' } : m)
-                        };
-                    });
-                } catch {
-                    remainingOutbox.push(msg);
-                }
-            }
-            if (remainingOutbox.length < currentOutbox.length) {
-                toast.success('Offline messages sent');
-            }
-            localStorage.setItem('chat_outbox', JSON.stringify(remainingOutbox));
-        };
-        processOutbox();
-    }, [connected, session, user]);
+        if (connected) flushQueue();
+    }, [connected, flushQueue]);
 
     const sendMessageToConversation = async (conversationId: string, content: string, type: string = 'text', attachmentId?: string, replyToId?: string) => {
-        if (!session || !user) throw new Error('Cannot send message');
+        if (!session || !user || !deviceId || !sessionId) throw new Error('Cannot send message');
         
-        // Find the message being replied to for optimistic UI
+        // Phase 5: Soft Override Claim UI Hint
+        if (!isActiveWriter(conversationId)) {
+            markLeaseClaimStart(conversationId);
+            toast('Switching chat control to this device...', { icon: '🔄', id: 'lease_claim' });
+        }
+
         let replyToData = undefined;
         if (replyToId) {
             const allMsgs = messagesRef.current[conversationId] || [];
@@ -669,10 +833,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }
         }
 
-        // Optimistic UI Update
-        const tempId = `temp-${Date.now()}`;
+        // Generate Canonical Event ID
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+        const clientEventId = `evt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
         const optimisticMessage: Message = {
             id: tempId,
+            event_id: clientEventId,
             conversation_id: conversationId,
             sender_id: user.id,
             content,
@@ -685,36 +852,21 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         
         setMessages(prev => {
             const current = prev[conversationId] || [];
-            return { ...prev, [conversationId]: [...current, optimisticMessage] };
+            const { merged } = mergeMessages(current, [optimisticMessage]);
+            return { ...prev, [conversationId]: merged };
         });
 
-        try {
-            const res = await api.post(`/chat/conversations/${conversationId}/messages`, { content, type, attachmentId, replyToId });
-            
-            // Server response replaces optimistic message
-            setMessages(prev => {
-                const current = prev[conversationId] || [];
-                return {
-                    ...prev,
-                    [conversationId]: current.map(m => m.id === tempId ? { ...res.data, isOwn: true, status: 'sent' } : m)
-                };
-            });
-            return res.data;
-        } catch (err) {
-            // Update optimistic message status to failed and store in Outbox
-            setMessages(prev => {
-                const current = prev[conversationId] || [];
-                return {
-                    ...prev,
-                    [conversationId]: current.map(m => m.id === tempId ? { ...m, status: 'failed' } : m)
-                };
-            });
-            const outboxMsg = { ...optimisticMessage, status: 'failed' };
-            const currentOutbox = JSON.parse(localStorage.getItem('chat_outbox') || '[]');
-            localStorage.setItem('chat_outbox', JSON.stringify([...currentOutbox, outboxMsg]));
-            toast.error('Failed to send message, saved to outbox');
-            throw err;
-        }
+        // 1. Push Intent to Offline Queue
+        await offlineQueue.pushIntent({
+            event_id: clientEventId,
+            conversation_id: conversationId,
+            payload: { content, type, attachmentId, replyToId },
+            leaseSnapshot: { device_id: deviceId, session_id: sessionId },
+            created_at: Date.now()
+        });
+
+        // 2. Trigger Queue Flush
+        flushQueue();
     };
 
     const sendMediaMessage = useCallback(async (
@@ -728,7 +880,14 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             return;
         }
 
-        const tempId = `temp-${Date.now()}`;
+        // Phase 5: Soft Override Claim
+        if (!isActiveWriter(conversationId)) {
+            markLeaseClaimStart(conversationId);
+            toast('Switching chat control to this device...', { icon: '🔄', id: 'lease_claim' });
+        }
+
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+        const clientEventId = `evt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
         const fileName = (file as File).name || `audio_${Date.now()}.webm`;
         const fileSize = file.size;
         const fileType = file.type;
@@ -739,6 +898,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         // 2. Build and insert optimistic message
         const optimisticMessage: Message = {
             id: tempId,
+            event_id: clientEventId,
             conversation_id: conversationId,
             sender_id: user.id,
             content: `Shared a ${type}: ${fileName}`,
@@ -761,7 +921,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         setMessages(prev => {
             const current = prev[conversationId] || [];
-            return { ...prev, [conversationId]: [...current, optimisticMessage] };
+            const { merged } = mergeMessages(current, [optimisticMessage]);
+            return { ...prev, [conversationId]: merged };
         });
 
         // 3. Trigger asynchronous background upload
@@ -857,16 +1018,18 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const msgRes = await api.post(`/chat/conversations/${conversationId}/messages`, {
                     content: type === 'audio' ? 'Sent a voice message' : `Shared a ${type}: ${fileName}`,
                     type,
-                    attachmentId: attachment.id
+                    attachmentId: attachment.id,
+                    eventId: clientEventId,
+                    deviceId,
+                    sessionId
                 });
 
-                // Replace the optimistic message in state with the final server message
+                // Phase 3.2: Use merge engine to replace optimistic message
+                const canonicalMessage = { ...msgRes.data, isOwn: true, status: 'sent' };
                 setMessages(prev => {
                     const current = prev[conversationId] || [];
-                    return {
-                        ...prev,
-                        [conversationId]: current.map(m => m.id === tempId ? { ...msgRes.data, isOwn: true, status: 'sent' } : m)
-                    };
+                    const { merged } = mergeMessages(current, [canonicalMessage]);
+                    return { ...prev, [conversationId]: merged };
                 });
 
                 // Clean up local preview URL
@@ -1035,7 +1198,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         sendTypingStatus,
         typingUsers, drafts, setDraft: (cid, content) => setDrafts(prev => ({ ...prev, [cid]: content })), 
         hasMore, sendMessageToConversation,
-        markConversationRead, markConversationDelivered
+        markConversationRead, markConversationDelivered,
+        isActiveWriter, isClaimingLease,
+        onMessageVisible: (conversationId: string, messageId: string) => readReceiptEngine.onMessageVisible(conversationId, messageId)
     };
 
     return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

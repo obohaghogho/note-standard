@@ -1,0 +1,45 @@
+name: Chaos Gate
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  chaos:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Start Server (background)
+        run: npm run start &
+
+      - name: Wait for server boot
+        run: sleep 10
+
+      # ── Phase 6.3 + 8.2 + 8.3 Unified Gate ─────────────────────
+      # ciRunner.js now orchestrates all three phases:
+      #   1. Messaging Chaos Gate (Phase 6.3) — hits live server
+      #   2. ACC War-Game Level 2 (Phase 8.2) — standalone mock
+      #   3. Replay Certification (Phase 8.3) — deterministic, no DB
+      - name: Run Unified Chaos + Certification Gate
+        run: npm run chaos:ci
+        env:
+          API_URL: http://localhost:3000
+
+      # ── Publish acc_chaos_report.json as a CI artifact ───────────
+      - name: Upload Chaos Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acc-chaos-report
+          path: acc_chaos_report.json

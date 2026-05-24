@@ -73,6 +73,9 @@ const ChatRedirect = () => {
   return <Navigate to={`/dashboard/chat?id=${id}`} replace />;
 };
 
+// Phase 6.2: Replay Debugger UI
+const ReplayPage = lazyWithRetry(() => import('./debug/replay/ReplayPage'), 'ReplayPage');
+
 function App() {
   useEffect(() => {
     // Global error handler for uncaught errors
@@ -147,6 +150,9 @@ function App() {
                             <Route path="/download" element={<DownloadPage />} />
                             
                             <Route path="/chat/:id" element={<ChatRedirect />} />
+
+                            {/* Phase 6.2: Replay Debugger UI */}
+                            <Route path="/debug/replay" element={<ReplayPage />} />
 
                             <Route path="/activity/success" element={<ActivitySuccess />} />
                             <Route path="/activity/cancel" element={<ActivityCancel />} />
