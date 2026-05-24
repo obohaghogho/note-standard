@@ -1,4 +1,4 @@
-const { forceTakeoverLease } = require("../../rpc/sessionArbitration");
+const { forceTakeoverLease } = require("../../../rpc/sessionArbitration");
 
 module.exports = {
   name: "leaseViolationFix",

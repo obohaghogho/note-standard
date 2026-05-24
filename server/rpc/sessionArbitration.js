@@ -1,4 +1,4 @@
-const { supabase } = require('../lib/supabase');
+const { supabase } = require('../config/supabase');
 
 /**
  * Register a new device session
