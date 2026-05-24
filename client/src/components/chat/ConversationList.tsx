@@ -1,5 +1,6 @@
 import React, { useMemo, startTransition, useRef, useCallback } from 'react';
 import { useChat } from '../../context/ChatContext';
+import type { Conversation } from '../../context/ChatContext';
 import { useAuth } from '../../context/AuthContext';
 import { Check, CheckCheck } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -17,8 +18,8 @@ const ConversationItem = React.memo(({
     isActive, 
     onClick 
 }: { 
-    conv: any, 
-    user: any, 
+    conv: Conversation & { typingUsers?: string[] }, 
+    user: { id?: string } | null, 
     isOnline: boolean, 
     isActive: boolean, 
     onClick: (id: string) => void 
@@ -27,7 +28,7 @@ const ConversationItem = React.memo(({
     let displayAvatar = null;
     
     if (conv.type === 'direct') {
-        const otherMember = conv.members.find((m: any) => m.user_id !== user?.id);
+        const otherMember = conv.members.find((m: { user_id: string; profile?: Conversation['members'][0]['profile'] }) => m.user_id !== user?.id);
         if (otherMember && otherMember.profile) {
             const profile = otherMember.profile;
             displayName = profile.full_name || profile.username || 'Unknown User';
@@ -77,8 +78,8 @@ const ConversationItem = React.memo(({
                         {displayName || 'Untitled Chat'}
                         {conv.type === 'direct' && (
                             <UserBadge 
-                                planTier={conv.members.find((m: any) => m.user_id !== user?.id)?.profile?.plan_tier}
-                                isVerified={conv.members.find((m: any) => m.user_id !== user?.id)?.profile?.is_verified}
+                                planTier={conv.members.find((m: { user_id: string; profile?: Conversation['members'][0]['profile'] }) => m.user_id !== user?.id)?.profile?.plan_tier}
+                                isVerified={conv.members.find((m: { user_id: string; profile?: Conversation['members'][0]['profile'] }) => m.user_id !== user?.id)?.profile?.is_verified}
                             />
                         )}
                         {typingUsersList.length > 0 && (

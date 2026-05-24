@@ -24,7 +24,7 @@ function analyze(events) {
                 deliveredMessages.set(event.message_id, event.device_id);
                 break;
 
-            case "READ":
+            case "READ": {
                 const leaseOwner = leaseMap.get(event.conversation_id);
 
                 if (leaseOwner && leaseOwner !== event.device_id) {
@@ -35,6 +35,7 @@ function analyze(events) {
                     });
                 }
                 break;
+            }
 
             case "LEASE_TAKEN":
                 leaseMap.set(event.conversation_id, event.device_id);

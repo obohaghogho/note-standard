@@ -191,7 +191,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         sessionId,
         deviceId,
         supabase,
-        initialConversations: conversations as any
+        initialConversations: conversations as Conversation[]
     });
 
     // Phase 6: ReadReceiptEngine — optimistic local state + debounced server emission
@@ -219,7 +219,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 c.id === conversationId ? { ...c, unreadCount: 0 } : c
             ));
         }
-    ), [deviceId, isActiveWriter]);
+    ), [deviceId, sessionId, isActiveWriter]);
 
     // Flush any queued read intents when device becomes active writer
     useEffect(() => {
@@ -537,7 +537,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 if (c.id === conversationId && c.lastMessage && c.lastMessage.id === messageId) {
                     return {
                         ...c,
-                        lastMessage: mergeMessageStatus(c.lastMessage as any, { read_at: nowStr, delivered_at: nowStr }) as any
+                        lastMessage: mergeMessageStatus(c.lastMessage as Message, { read_at: nowStr, delivered_at: nowStr }) as Conversation['lastMessage']
                     };
                 }
                 return c;
@@ -560,7 +560,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 if (c.id === conversationId && c.lastMessage && c.lastMessage.id === messageId) {
                     return {
                         ...c,
-                        lastMessage: mergeMessageStatus(c.lastMessage as any, { delivered_at: nowStr }) as any
+                        lastMessage: mergeMessageStatus(c.lastMessage as Message, { delivered_at: nowStr }) as Conversation['lastMessage']
                     };
                 }
                 return c;
