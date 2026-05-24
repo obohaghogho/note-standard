@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ReplayResponse } from "./replayTypes";
-import api from "../../services/api";
+import api from "../../api/axiosInstance";
 
 export function useReplayDebugger(conversationId: string | null) {
   const [data, setData] = useState<ReplayResponse | null>(null);
