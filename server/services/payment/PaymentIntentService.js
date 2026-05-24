@@ -117,6 +117,8 @@ class PaymentIntentService {
         metadata: {
           ...metadata,
           transactionId: tx.id,
+          userId,       // Required: webhook uses this to resolve the payer
+          user_id: userId, // Fallback alias for legacy parseWebhookEvent readers
         }
       });
 

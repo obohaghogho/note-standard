@@ -364,6 +364,7 @@ class PaymentService {
           ...metadata,
           transactionId: transaction.id,
           userId,
+          user_id: userId, // Fallback alias for parseWebhookEvent readers
           original_currency: currency,
           original_amount: amount,
           gateway_currency: options.gatewayCurrency || currency
@@ -745,8 +746,9 @@ class PaymentService {
         .single();
       
       if (walletErr) {
-          logger.error(`[Reconciliation] Failed to create wallet in wallets_store for user ${userId}: ${walletErr.message}`);
-          return;
+          const errMsg = `[Reconciliation] Failed to create wallet in wallets_store for user ${userId}: ${walletErr.message}`;
+          logger.error(errMsg);
+          throw new Error(errMsg);
       }
       wallet = newWallet;
     }
@@ -773,7 +775,14 @@ class PaymentService {
       });
 
     if (insertErr) {
-        logger.error(`[Reconciliation] Failed to create transaction for DVA payment ${reference}: ${insertErr.message}`);
+        // Duplicate key (23505) means transaction was already created — safe to continue
+        if (insertErr.code === "23505") {
+            logger.info(`[Reconciliation] Transaction already exists for DVA payment ${reference} (race condition — safe to continue).`);
+        } else {
+            const errMsg = `[Reconciliation] Failed to create transaction for DVA payment ${reference}: ${insertErr.message}`;
+            logger.error(errMsg);
+            throw new Error(errMsg);
+        }
     } else {
         logger.info(`[Reconciliation] Successfully provisioned transaction for DVA payment ${reference} (User: ${userId})`);
     }
@@ -792,11 +801,18 @@ class PaymentService {
           .from("transactions")
           .select("*")
           .or(`reference_id.eq.${reference},provider_reference.eq.${reference}`)
-          .single();
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-        if (fetchError || !tx) {
-          logger.error(`[Finalize] Transaction not found: ${reference}`);
-          return { status: "FAILED", error: "TRANSACTION_NOT_FOUND" };
+        if (fetchError) {
+          logger.error(`[Finalize] DB error fetching transaction for ${reference}: ${fetchError.message}`);
+          throw new Error(`DB_FETCH_ERROR: ${fetchError.message}`);
+        }
+
+        if (!tx) {
+          logger.error(`[Finalize] Transaction not found for reference: ${reference}`);
+          throw new Error(`TRANSACTION_NOT_FOUND: No transaction matches reference ${reference}`);
         }
 
         // 2. IDEMPOTENCY GUARD
@@ -810,46 +826,59 @@ class PaymentService {
           };
         }
 
-        // 2.b Webhook Verification & Quarantine Queue (Enterprise-Grade Security)
+        // 2.b Webhook Verification & Quarantine Queue
+        // IMPORTANT: Paystack adds its own transaction fees to the amount in the webhook payload.
+        // e.g., customer deposits NGN 1500 -> Paystack webhook returns NGN 1522.85 (fees included).
+        // We MUST NOT quarantine on amount difference -- only on CURRENCY mismatch which
+        // is a genuine integrity violation (different currency = wrong payment entirely).
         if (eventData) {
-          const Decimal = require("decimal.js");
-          const expectedAmount = new Decimal(tx.processing_amount || tx.amount);
           const expectedCurrency = String(tx.processing_currency || tx.currency).toUpperCase();
-          const actualAmount = new Decimal(eventData.amount);
-          const actualCurrency = String(eventData.currency).toUpperCase();
+          const actualCurrency = String(eventData.currency || tx.currency).toUpperCase();
 
-          if (expectedCurrency !== actualCurrency || !expectedAmount.equals(actualAmount)) {
+          // Only quarantine on currency mismatch — different currency = wrong payment
+          // NOTE: Do NOT compare amounts. Paystack includes its own transaction fees in
+          // the webhook amount (e.g., NGN 1500 deposit → webhook reports NGN 1522.85).
+          // Comparing amounts would quarantine every legitimate deposit.
+          if (actualCurrency && expectedCurrency !== actualCurrency) {
             logger.error(
-              `[QUARANTINE] Mismatched Webhook Data detected for reference: ${reference}. ` +
-              `Expected: ${expectedAmount} ${expectedCurrency}, Webhook: ${actualAmount} ${actualCurrency}`
+              `[QUARANTINE] Currency Mismatch for reference: ${reference}. ` +
+              `Expected: ${expectedCurrency}, Webhook: ${actualCurrency}`
             );
 
-            // Freeze/Block transaction by moving status to QUARANTINED
-            const { error: updateError } = await supabase
+            await supabase
               .from("transactions")
               .update({
                 status: "QUARANTINED",
                 metadata: {
                   ...tx.metadata,
-                  quarantine_reason: "Currency or Amount Mismatch",
-                  actual_amount: actualAmount.toNumber(),
+                  quarantine_reason: "Currency Mismatch",
                   actual_currency: actualCurrency,
-                  expected_amount: expectedAmount.toNumber(),
                   expected_currency: expectedCurrency,
                   quarantined_at: new Date().toISOString()
                 }
               })
               .eq("id", tx.id);
 
-            if (updateError) {
-              logger.error(`[Finalize] Failed to quarantine transaction: ${updateError.message}`);
-            }
-
             return {
               status: "QUARANTINED",
               error: "CURRENCY_INTEGRITY_MISMATCH",
               transactionId: tx.id
             };
+          }
+
+          // Log fee delta for audit visibility (informational only)
+          if (eventData.amount) {
+            const Decimal = require("decimal.js");
+            const expectedAmount = new Decimal(tx.processing_amount || tx.amount);
+            const actualAmount = new Decimal(eventData.amount);
+            const delta = actualAmount.minus(expectedAmount);
+            if (!delta.isZero()) {
+              logger.info(
+                `[Finalize] Fee delta for ${reference}: customer requested ${expectedAmount} ${expectedCurrency}, ` +
+                `Paystack total (incl. fees): ${actualAmount} ${actualCurrency}. ` +
+                `Crediting customer original amount: ${expectedAmount}.`
+              );
+            }
           }
         }
 

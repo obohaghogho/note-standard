@@ -59,7 +59,7 @@ class NativeSocketLifecycleManager {
       auth: { token },
       transports: ['websocket'], // Native WebSocket only — no XHR polling on mobile
       reconnection: false,       // Managed manually with AppState awareness
-      timeout: 15000,
+      timeout: 60000,
     });
 
     socket.on('connect', () => {

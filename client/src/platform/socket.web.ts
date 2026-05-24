@@ -81,7 +81,7 @@ class SocketLifecycleManager {
       auth: { token },
       transports: ['polling', 'websocket'], // polling first — ensures auth token validated in HTTP handshake
       reconnection: false, // We manage reconnects ourselves for backoff control
-      timeout: 20000,
+      timeout: 60000,
     });
 
     socket.on('connect', () => {

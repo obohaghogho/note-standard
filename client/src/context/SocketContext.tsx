@@ -76,7 +76,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             reconnection: true,
             reconnectionAttempts: MAX_RETRIES,
             reconnectionDelay: 2000,
-            timeout: 20000,
+            timeout: 60000,
         });
 
         socket.on('connect', () => {

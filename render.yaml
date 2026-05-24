@@ -11,7 +11,7 @@ services:
           type: web
           name: note-standard-server
           property: host
-      - key: VITE_GATEWAY_URL
+      - key: VITE_SOCKET_URL
         fromService:
           type: web
           name: note-standard-gateway
