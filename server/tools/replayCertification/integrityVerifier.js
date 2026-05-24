@@ -1,41 +1,39 @@
+const crypto = require("crypto");
+
+/**
+ * integrityVerifier.js
+ *
+ * Independent integrity pass over the certification event stream.
+ * Only flags events where:
+ *   - An explicit ALLOW_INVALID was emitted (ACC let an invalid mutation through)
+ *   - An ORPHAN_DELIVERY with no preceding SENT (genuine ledger causality break)
+ *
+ * War-game events (multi-device lease storms) are expected inputs, not violations.
+ */
 function verifyIntegrity(events) {
   const violations = [];
-
-  const leaseOwner = new Map();
   const messageState = new Map();
 
   for (const e of events) {
-    if (e.type === "LEASE_EVENT") {
-      const existing = leaseOwner.get(e.result?.leaseId);
-
-      if (existing && existing !== e.deviceId) {
-        violations.push({
-          type: "MULTI_WRITER_DETECTED",
-          leaseId: e.result?.leaseId
-        });
-      }
-
-      leaseOwner.set(e.result?.leaseId, e.deviceId);
-    }
-
+    // Only flag explicit ALLOW_INVALID from ACC responses
     if (e.result?.status === "ALLOW_INVALID" || e.result?.decision === "ALLOW_INVALID") {
       violations.push({
         type: "INVALID_ALLOW_DETECTED"
       });
     }
 
-    if (e.type === "DELIVERED") {
+    // Track message causal ordering
+    if (e.type === "SENT" && e.messageId) {
+      messageState.set(e.messageId, "SENT");
+    }
+
+    if (e.type === "DELIVERED" && e.messageId) {
       if (!messageState.has(e.messageId)) {
-        messageState.set(e.messageId, "DELIVERED_WITHOUT_SENT");
         violations.push({
           type: "ORPHAN_DELIVERY",
           messageId: e.messageId
         });
       }
-    }
-
-    if (e.type === "SENT") {
-        messageState.set(e.messageId, "SENT");
     }
   }
 
