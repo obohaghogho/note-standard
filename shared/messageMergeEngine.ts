@@ -65,14 +65,14 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
     // Stage 4: Sort
     const mergedArray = Array.from(byId.values());
     mergedArray.sort((a, b) => {
-        const seqA = a.sequence_number ?? -1;
-        const seqB = b.sequence_number ?? -1;
+        const seqA = (a.sequence_number !== undefined && a.sequence_number > 0) ? a.sequence_number : -1;
+        const seqB = (b.sequence_number !== undefined && b.sequence_number > 0) ? b.sequence_number : -1;
         
         if (seqA !== -1 && seqB !== -1) {
             return seqA - seqB;
         }
         
-        // Fallback to timestamp if either is missing a sequence number
+        // Fallback to timestamp if either is missing a valid sequence number
         const timeA = new Date(a.created_at).getTime();
         const timeB = new Date(b.created_at).getTime();
         return timeA - timeB;

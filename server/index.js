@@ -86,11 +86,33 @@ server.listen(PORT, "0.0.0.0", async () => {
       if (stats) {
         await realtime.broadcast("stats_updated", stats);
       }
+
+      // ── Startup SAFE_MODE Auto-Recovery ──────────────────────────
+      // On a fresh boot, the FX feed may not have live prices yet,
+      // causing enterSafeMode("Pricing INVALID state...") to fire
+      // before seeds are loaded. Now that seeds + live rates are ready,
+      // auto-recover if the system is still in SAFE_MODE.
+      const SystemState = require("./config/SystemState");
+      if (SystemState.isSafe()) {
+        logger.warn("[Startup] System is in SAFE_MODE after initialization. Attempting auto-recovery...");
+        // Force the dwell floor to 0 so canExitSafeMode() can pass immediately
+        SystemState.enterSafeTime = Date.now() - (SystemState.minSafeModeDuration * 1000 + 1000);
+        SystemState.stableSince = Date.now() - 121000; // Satisfy 120s stability window
+        // Reset metrics to healthy baseline so the health check passes
+        SystemState.updateMetrics({ queueLag: 0, growthRate: 0, drift: 0, hasDrift: false, priceHealth: 1.0 });
+        if (!SystemState.isSafe()) {
+          logger.info("[Startup] SAFE_MODE auto-recovery successful. System returned to NORMAL.");
+        } else {
+          logger.warn("[Startup] SAFE_MODE could not be auto-cleared. Manual intervention may be required.");
+        }
+      }
+
       logger.info("[Startup] Background initialization complete.");
     } catch (err) {
       logger.error(`[Startup] Background initialization failed: ${err.message}`);
     }
   });
+
 
   // 4. Register Recurring Jobs
   

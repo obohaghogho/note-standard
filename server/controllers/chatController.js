@@ -1027,6 +1027,7 @@ exports.sendMessage = async (req, res) => {
           type: type || "text",
           sentiment,
           detected_language: detectedLang,
+          event_id: eventId,
         };
         if (attachmentId) insertPayload.attachment_id = attachmentId;
         if (replyToId)    insertPayload.reply_to_id   = replyToId;
@@ -1052,6 +1053,7 @@ exports.sendMessage = async (req, res) => {
               sender_id: userId,
               content: content || '',
               type: type || "text",
+              event_id: eventId,
             };
             if (attachmentId) fallbackPayload.attachment_id = attachmentId;
             if (replyToId)    fallbackPayload.reply_to_id   = replyToId;

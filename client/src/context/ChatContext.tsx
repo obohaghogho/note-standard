@@ -158,11 +158,50 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const [deviceId, setDeviceId] = useState<string | null>(null);
     const [sessionId, setSessionId] = useState<string | null>(null);
 
+    // Holds the in-flight initSession promise so sendMessageToConversation
+    // can await it instead of throwing immediately when sessionId is null.
+    const sessionInitPromiseRef = useRef<Promise<string | null> | null>(null);
+    const deviceIdRef = useRef<string | null>(null);
+    const sessionIdRef = useRef<string | null>(null);
+
+    // Keep refs in sync so the send function always reads the latest value
+    // without causing extra renders.
+    useEffect(() => { deviceIdRef.current = deviceId; }, [deviceId]);
+    useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
+
     const isMounted = useRef(true);
 
     // Initialize Device and Session
     useEffect(() => {
-        if (!user) return;
+        // Wait for auth to be fully ready and session token to be available.
+        // This prevents the Axios interceptor's safeAuth() from being throttled
+        // on page load, which caused 401s and "Could not obtain sessionId" warnings.
+        if (!user || !session?.access_token || !authReady) return;
+
+        const doRegister = async (localDeviceId: string, token: string): Promise<string | null> => {
+            // Pass the token directly in the per-request headers.
+            // The Axios interceptor now skips safeAuth() when Authorization is already set,
+            // so this bypasses the throttle while keeping all other Axios behaviour.
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    const res = await api.post('/session/register', {
+                        userId: user.id,
+                        deviceId: localDeviceId,
+                        userAgent: navigator.userAgent
+                    }, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    if (res.data?.session_id) return res.data.session_id;
+                    console.warn(`[ChatContext] Session registration attempt ${attempt}/3 — no session_id in response`, res.data);
+                } catch (err: unknown) {
+                    const status = (err as {response?: {status?: number}})?.response?.status;
+                    console.error(`[ChatContext] Session registration attempt ${attempt}/3 failed (HTTP ${status ?? 'network'})`, err);
+                }
+                if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 500));
+            }
+            return null;
+        };
+
         const initSession = async () => {
             let localDeviceId = localStorage.getItem('chat_device_id');
             if (!localDeviceId) {
@@ -170,22 +209,23 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 localStorage.setItem('chat_device_id', localDeviceId);
             }
             setDeviceId(localDeviceId);
+            deviceIdRef.current = localDeviceId;
 
-            try {
-                const res = await api.post('/session/register', {
-                    userId: user.id,
-                    deviceId: localDeviceId,
-                    userAgent: navigator.userAgent
-                });
-                if (res.data?.session_id) {
-                    setSessionId(res.data.session_id);
-                }
-            } catch (err) {
-                console.error('[ChatContext] Session registration failed', err);
+            const sid = await doRegister(localDeviceId, session.access_token);
+            if (sid && isMounted.current) {
+                setSessionId(sid);
+                sessionIdRef.current = sid;
+            } else if (!sid) {
+                console.warn('[ChatContext] Could not obtain sessionId after 3 attempts — messages will queue until session is ready');
             }
+            return sid;
         };
-        initSession();
-    }, [user]);
+
+        sessionInitPromiseRef.current = initSession();
+    // Re-run when session token refreshes (Supabase auto-refreshes every ~55 min)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id, session?.access_token, authReady]);
+
 
     const { isActiveWriter, isClaimingLease, markLeaseClaimStart, markLeaseClaimEnd, leases } = useSessionArbitration({
         sessionId,
@@ -750,7 +790,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     const flushQueue = useCallback(async () => {
-        if (!connected || !session || !user || !deviceId || !sessionId) return;
+        if (!connected || !session || !user) return;
+        // Use refs so we always have the latest IDs without stale closures
+        const currentDeviceId = deviceIdRef.current;
+        const currentSessionId = sessionIdRef.current;
+        if (!currentDeviceId || !currentSessionId) return;
         
         const intents = await offlineQueue.getPendingIntents();
         if (intents.length === 0) return;
@@ -764,8 +808,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 // Phase 5.5: Lease Barrier
                 await ensureLeaseOwnership(
                     intent.conversation_id, 
-                    sessionId, 
-                    deviceId, 
+                    currentSessionId, 
+                    currentDeviceId, 
                     api, 
                     (cid: string) => leases[cid], 
                     markLeaseClaimEnd // Optional UI sync
@@ -777,12 +821,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     attachmentId: intent.payload.attachmentId,
                     replyToId: intent.payload.replyToId,
                     eventId: intent.event_id,
-                    deviceId,
-                    sessionId
+                    deviceId: currentDeviceId,
+                    sessionId: currentSessionId
                 });
 
                 // Canonical backend collapse
-                const canonicalMessage = { ...res.data, isOwn: true, status: 'sent' };
+                const backendMsg = res.data.message || res.data;
+                const canonicalMessage = { ...backendMsg, isOwn: true, status: 'sent' };
                 setMessages(prev => {
                     const current = prev[intent.conversation_id] || [];
                     const { merged } = mergeMessages(current, [canonicalMessage]);
@@ -803,7 +848,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 });
             }
         }
-    }, [connected, session, user, deviceId, sessionId, offlineQueue, leases, markLeaseClaimEnd]);
+    }, [connected, session, user, offlineQueue, leases, markLeaseClaimEnd]);
 
     // Process Outbox when connection is restored
     useEffect(() => {
@@ -811,7 +856,52 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, [connected, flushQueue]);
 
     const sendMessageToConversation = async (conversationId: string, content: string, type: string = 'text', attachmentId?: string, replyToId?: string) => {
-        if (!session || !user || !deviceId || !sessionId) throw new Error('Cannot send message');
+        if (!session || !user) throw new Error('Cannot send message: not authenticated');
+
+        // Ensure device/session IDs are ready. If initSession is still in-flight,
+        // await it instead of throwing immediately (fixes the race condition).
+        let resolvedDeviceId = deviceIdRef.current;
+        let resolvedSessionId = sessionIdRef.current;
+
+        if (!resolvedDeviceId || !resolvedSessionId) {
+            if (sessionInitPromiseRef.current) {
+                resolvedSessionId = await sessionInitPromiseRef.current;
+                resolvedDeviceId = deviceIdRef.current;
+            }
+
+            // Final fallback: re-register on demand if still missing
+            if (!resolvedDeviceId || !resolvedSessionId) {
+                let localDeviceId = localStorage.getItem('chat_device_id');
+                if (!localDeviceId) {
+                    localDeviceId = `web-${Math.random().toString(36).substring(2, 9)}`;
+                    localStorage.setItem('chat_device_id', localDeviceId);
+                    setDeviceId(localDeviceId);
+                    deviceIdRef.current = localDeviceId;
+                }
+                resolvedDeviceId = localDeviceId;
+
+                try {
+                    const res = await api.post('/session/register', {
+                        userId: user.id,
+                        deviceId: localDeviceId,
+                        userAgent: navigator.userAgent
+                    }, {
+                        headers: { Authorization: `Bearer ${session.access_token}` }
+                    });
+                    if (res.data?.session_id) {
+                        resolvedSessionId = res.data.session_id;
+                        setSessionId(resolvedSessionId!);
+                        sessionIdRef.current = resolvedSessionId;
+                    }
+                } catch (err) {
+                    console.error('[ChatContext] On-demand session registration failed', err);
+                }
+            }
+
+            if (!resolvedDeviceId || !resolvedSessionId) {
+                throw new Error('Cannot send message: session not ready');
+            }
+        }
         
         // Phase 5: Soft Override Claim UI Hint
         if (!isActiveWriter(conversationId)) {
@@ -835,7 +925,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         // Generate Canonical Event ID
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-        const clientEventId = `evt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+        const clientEventId = crypto.randomUUID();
 
         const optimisticMessage: Message = {
             id: tempId,
@@ -861,7 +951,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             event_id: clientEventId,
             conversation_id: conversationId,
             payload: { content, type, attachmentId, replyToId },
-            leaseSnapshot: { device_id: deviceId, session_id: sessionId },
+            leaseSnapshot: { device_id: resolvedDeviceId, session_id: resolvedSessionId },
             created_at: Date.now()
         });
 
@@ -887,7 +977,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
 
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-        const clientEventId = `evt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+        const clientEventId = crypto.randomUUID();
         const fileName = (file as File).name || `audio_${Date.now()}.webm`;
         const fileSize = file.size;
         const fileType = file.type;

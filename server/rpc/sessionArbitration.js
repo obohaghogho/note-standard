@@ -10,10 +10,10 @@ async function registerDeviceSession({
   ipAddress,
   userAgent
 }) {
-  const { data, error } = await supabase.rpc('rpc_register_device_session', {
+  const { data, error } = await supabase.rpc('register_device_session', {
     p_user_id: userId,
     p_device_id: deviceId,
-    p_ip: ipAddress || null,
+    p_ip_address: ipAddress || null,
     p_user_agent: userAgent || null
   });
 
@@ -26,10 +26,14 @@ async function registerDeviceSession({
  * RPC: rpc_session_heartbeat
  */
 async function heartbeatSession({
-  sessionId
+  sessionId,
+  deviceId,
+  conversationIds
 }) {
-  const { data, error } = await supabase.rpc('rpc_session_heartbeat', {
-    p_session_id: sessionId
+  const { data, error } = await supabase.rpc('heartbeat_device_session', {
+    p_session_id: sessionId,
+    p_device_id: deviceId,
+    p_active_conversations: conversationIds || []
   });
 
   if (error) throw new Error(`heartbeatSession: ${error.message}`);

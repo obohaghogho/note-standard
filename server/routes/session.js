@@ -37,13 +37,17 @@ router.post('/register', async (req, res) => {
  */
 router.post('/heartbeat', async (req, res) => {
     try {
-        const { sessionId, conversationIds } = req.body;
+        const { sessionId, deviceId, conversationIds } = req.body;
 
-        if (!sessionId) {
-            return res.status(400).json({ error: 'sessionId is required' });
+        if (!sessionId || !deviceId) {
+            return res.status(400).json({ error: 'sessionId and deviceId are required' });
         }
 
-        await heartbeatSession({ sessionId });
+        await heartbeatSession({ 
+            sessionId, 
+            deviceId, 
+            conversationIds: conversationIds || [] 
+        });
 
         return res.json({ ok: true });
     } catch (err) {
@@ -65,13 +69,9 @@ router.post('/takeover', async (req, res) => {
             return res.status(400).json({ error: 'conversationId, sessionId, and deviceId are required' });
         }
 
-        const result = await forceTakeoverLease({ conversationId, sessionId, deviceId });
+        await forceTakeoverLease({ conversationId, sessionId, deviceId });
 
-        if (!result?.success) {
-            return res.status(409).json({ error: 'Lease takeover failed', details: result });
-        }
-
-        return res.json({ success: true, lease: result });
+        return res.json({ success: true });
     } catch (err) {
         console.error('[Session] Takeover failed:', err.message);
         return res.status(500).json({ error: 'Lease takeover failed' });

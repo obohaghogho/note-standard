@@ -16,6 +16,7 @@ class CausalWorker {
         this.lease = null;
         this.isRunning = false;
         this.HEARTBEAT_INTERVAL = 10000; // 10 seconds
+        this._lastSafeModeWarn = 0;       // Timestamp — throttle SAFE_MODE log spam
     }
 
     async start() {
@@ -68,7 +69,12 @@ class CausalWorker {
     async processNextBatch() {
         // 1. Governance Guard: Absolute Mutation Freeze
         if (SystemState.mode === 'SAFE') {
-            logger.warn(`[CausalWorker] Shard ${this.shardId} execution HALTED: System in SAFE_MODE.`);
+            // Throttle: log at most once per 60s per shard to prevent log-flood crash
+            const now = Date.now();
+            if (now - this._lastSafeModeWarn >= 60000) {
+                logger.warn(`[CausalWorker] Shard ${this.shardId} execution HALTED: System in SAFE_MODE.`);
+                this._lastSafeModeWarn = now;
+            }
             return;
         }
 

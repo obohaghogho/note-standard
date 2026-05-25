@@ -99,6 +99,6 @@ export function validateMessagePayload(raw: unknown): ValidationResult<Validated
 export function normalizeSequenceNumber(val: unknown): number | undefined {
     if (val === undefined || val === null) return undefined;
     const n = Number(val);
-    if (Number.isNaN(n) || !Number.isFinite(n) || n < 0) return undefined;
+    if (Number.isNaN(n) || !Number.isFinite(n) || n <= 0) return undefined;
     return n;
 }

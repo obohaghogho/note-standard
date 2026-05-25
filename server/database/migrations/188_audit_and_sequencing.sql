@@ -9,6 +9,12 @@ ADD COLUMN IF NOT EXISTS sequence_number BIGINT DEFAULT 0,
 ADD COLUMN IF NOT EXISTS event_id UUID UNIQUE,
 ADD COLUMN IF NOT EXISTS conversation_version BIGINT DEFAULT 1;
 
+ALTER TABLE public.messages DROP CONSTRAINT IF EXISTS messages_seq_positive;
+ALTER TABLE public.messages ADD CONSTRAINT messages_seq_positive CHECK (sequence_number >= 0);
+
+DROP INDEX IF EXISTS messages_conv_seq_key;
+CREATE UNIQUE INDEX messages_conv_seq_key ON public.messages (conversation_id, sequence_number) WHERE sequence_number > 0;
+
 -- 2. Versioning for Conversations
 ALTER TABLE conversations
 ADD COLUMN IF NOT EXISTS version BIGINT DEFAULT 1,

@@ -14,6 +14,12 @@ const api = axios.create({
 // Uses a retry loop to handle Supabase session hydration delay after Paystack redirect
 api.interceptors.request.use(
   async (config) => {
+    // If the caller already set an Authorization header (e.g. ChatContext session init
+    // passing the token directly to bypass safeAuth throttling), honour it as-is.
+    if (config.headers.Authorization) {
+      return config;
+    }
+
     // Attempt to get session using the resilient safeAuth helper
     const session = await safeAuth();
 
@@ -28,6 +34,7 @@ api.interceptors.request.use(
     return Promise.reject(error)
   }
 )
+
 
 // Add a response interceptor to apply financial quarantine and auto-retry on 503
 import FinancialSanitizer from "../utils/FinancialSanitizer";

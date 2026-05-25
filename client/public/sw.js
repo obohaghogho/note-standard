@@ -6,9 +6,10 @@
  */
 
 self.addEventListener('install', (event) => {
-    // We intentionally pause here to allow the React UI to prompt the user
-    // The UI handles posting a 'SKIP_WAITING' message!
+    // Force immediate update to bypass aggressive caching
+    self.skipWaiting();
 });
+// Cache Bust Timestamp: 2026-05-24T21:55:00
 
 self.addEventListener('activate', (event) => {
     event.waitUntil(

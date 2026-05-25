@@ -15,8 +15,8 @@ CREATE TABLE IF NOT EXISTS public.device_sessions (
     CONSTRAINT unique_user_device UNIQUE (user_id, device_id)
 );
 
-CREATE INDEX idx_device_sessions_user ON public.device_sessions(user_id);
-CREATE INDEX idx_device_sessions_session ON public.device_sessions(session_id);
+CREATE INDEX IF NOT EXISTS idx_device_sessions_user ON public.device_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_device_sessions_session ON public.device_sessions(session_id);
 
 -- =========================
 -- CONVERSATION LEASES
@@ -32,8 +32,8 @@ CREATE TABLE IF NOT EXISTS public.conversation_leases (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_conv_leases_device ON public.conversation_leases(active_device_id);
-CREATE INDEX idx_conv_leases_activity ON public.conversation_leases(last_heartbeat_at);
+CREATE INDEX IF NOT EXISTS idx_conv_leases_device ON public.conversation_leases(active_device_id);
+CREATE INDEX IF NOT EXISTS idx_conv_leases_activity ON public.conversation_leases(last_heartbeat_at);
 
 -- =========================
 -- RLS
@@ -42,11 +42,13 @@ CREATE INDEX idx_conv_leases_activity ON public.conversation_leases(last_heartbe
 ALTER TABLE public.device_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversation_leases ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users manage own sessions" ON public.device_sessions;
 CREATE POLICY "Users manage own sessions"
 ON public.device_sessions
 FOR ALL
 USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can view leases for their conversations" ON public.conversation_leases;
 CREATE POLICY "Users can view leases for their conversations"
 ON public.conversation_leases
 FOR SELECT
