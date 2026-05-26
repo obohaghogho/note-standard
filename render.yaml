@@ -38,6 +38,11 @@ services:
           type: web
           name: note-standard-frontend
           property: host
+      - key: REALTIME_GATEWAY_URL
+        fromService:
+          type: web
+          name: note-standard-gateway
+          property: host
 
   # 3. Realtime Gateway (Socket.IO)
   - type: web

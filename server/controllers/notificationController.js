@@ -186,6 +186,12 @@ const registerNativeToken = async (req, res, next) => {
       return res.status(400).json({ error: "Token, platform, type, and deviceId are required" });
     }
 
+    // First, delete any existing token mapping for this token to prevent unique constraint violations on token
+    await supabase
+      .from("native_device_tokens")
+      .delete()
+      .eq("token", token);
+
     const { error } = await supabase
       .from("native_device_tokens")
       .upsert({
@@ -196,7 +202,7 @@ const registerNativeToken = async (req, res, next) => {
         device_id: deviceId,
         updated_at: new Date().toISOString()
       }, {
-        onConflict: "device_id",
+        onConflict: "device_id,type",
       });
 
     if (error) throw error;

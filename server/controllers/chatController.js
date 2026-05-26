@@ -30,15 +30,16 @@ async function _hydrateReplyTo(messages) {
   try {
     const { data: parents } = await supabase
       .from('messages')
-      .select('id, content, sender_id, type, is_deleted')
+      .select('id, content, sender_id, type, is_deleted, sender:profiles(username, full_name)')
       .in('id', ids);
     if (!parents) return;
     const map = Object.fromEntries(parents.map(p => [p.id, p]));
     messages.forEach(m => {
       if (!m.reply_to_id || m.reply_to) return;
       const p = map[m.reply_to_id];
+      const senderName = p && p.sender ? (p.sender.full_name || p.sender.username) : null;
       m.reply_to = p
-        ? { id: p.id, content: p.content, sender_id: p.sender_id, message_type: p.type, deleted: p.is_deleted }
+        ? { id: p.id, content: p.content, sender_id: p.sender_id, message_type: p.type, deleted: p.is_deleted, sender_name: senderName }
         : { id: m.reply_to_id, content: '', sender_id: '', deleted: true };
     });
   } catch (e) {
@@ -695,7 +696,9 @@ exports.getMessages = async (req, res) => {
           const { data: fb1Data, error: fb1Error } = await fallbackQuery;
 
           if (!fb1Error) {
-            return res.json((fb1Data || []).reverse());
+            const fbArr = fb1Data || [];
+            await _hydrateReplyTo(fbArr);
+            return res.json(fbArr.reverse());
           }
 
           // Second fallback: plain select(*) + manual reply_to hydration
@@ -723,7 +726,9 @@ exports.getMessages = async (req, res) => {
       }
 
       // Primary query succeeded
-      res.json((data || []).reverse());
+      const primaryArr = data || [];
+      await _hydrateReplyTo(primaryArr);
+      res.json(primaryArr.reverse());
     } catch (innerErr) {
       console.warn("[Chat Controller] Inner query error:", innerErr.message);
       // Final fallback — also exclude deleted messages + manual reply_to hydration
@@ -1194,16 +1199,18 @@ exports.sendMessage = async (req, res) => {
           try {
             const { data: parentMsg } = await supabase
               .from('messages')
-              .select('id, content, sender_id, type, is_deleted')
+              .select('id, content, sender_id, type, is_deleted, sender:profiles(username, full_name)')
               .eq('id', simpleMessage.reply_to_id)
               .single();
             if (parentMsg) {
+              const senderName = parentMsg.sender ? (parentMsg.sender.full_name || parentMsg.sender.username) : null;
               simpleMessage.reply_to = {
                 id: parentMsg.id,
                 content: parentMsg.content,
                 sender_id: parentMsg.sender_id,
                 message_type: parentMsg.type,
                 deleted: parentMsg.is_deleted,
+                sender_name: senderName,
               };
             }
           } catch (replyErr) {
@@ -1222,16 +1229,18 @@ exports.sendMessage = async (req, res) => {
           try {
             const { data: parentMsg } = await supabase
               .from('messages')
-              .select('id, content, sender_id, type, is_deleted')
+              .select('id, content, sender_id, type, is_deleted, sender:profiles(username, full_name)')
               .eq('id', hydratedMessage.reply_to_id)
               .single();
             if (parentMsg) {
+              const senderName = parentMsg.sender ? (parentMsg.sender.full_name || parentMsg.sender.username) : null;
               hydratedMessage.reply_to = {
                 id: parentMsg.id,
                 content: parentMsg.content,
                 sender_id: parentMsg.sender_id,
                 message_type: parentMsg.type,
                 deleted: parentMsg.is_deleted,
+                sender_name: senderName,
               };
             }
           } catch (replyFallbackErr) {

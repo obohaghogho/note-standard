@@ -324,6 +324,7 @@ async function sendChatPush(params) {
         notification.mutableContent = true;
         notification.threadId = payload.conversationId || 'default'; // Forces grouping in iOS Notification Center
         notification.payload = {
+          type: payload.type || 'chat_message',
           conversationId: payload.conversationId,
           messageId: payload.messageId,
           url: payload.url || '/dashboard/chat',

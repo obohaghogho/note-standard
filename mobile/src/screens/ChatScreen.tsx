@@ -355,7 +355,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                     const outboxReply = msg.replyTo || pendingReplies.current[msg.id];
                     setMessages(prev => prev.map(m =>
                       m.id === msg.id
-                        ? { ...res.data, reply_to: outboxReply ?? res.data.reply_to }
+                        ? { ...res.data, reply_to: outboxReply ?? m.reply_to ?? res.data.reply_to }
                         : m
                     ));
                 } catch (e) {
@@ -404,7 +404,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 const next = [...prev];
                 next[optIndex] = {
                   ...msg,
-                  reply_to: savedReply ?? msg.reply_to,
+                  reply_to: savedReply ?? prev[optIndex].reply_to ?? msg.reply_to,
                 };
                 // Map the real server ID so the HTTP response path can find it too.
                 if (savedReply) {
@@ -585,7 +585,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               // Normal path: replace optimistic with server message
               return prev.map(m =>
                 m.id === optimisticId
-                  ? { ...serverMsg, reply_to: authReply ?? serverMsg.reply_to }
+                  ? { ...serverMsg, reply_to: authReply ?? m.reply_to ?? serverMsg.reply_to }
                   : m
               );
             }
