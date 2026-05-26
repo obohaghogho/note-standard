@@ -49,6 +49,10 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
 
         if (incomingSeq >= existingSeq) {
             const updatedMsg = { ...existingMsg, ...msg };
+            
+            // Critical fix: Incoming messages from server/socket are authoritative.
+            // If the local message was optimistic, clear it so it doesn't stay stuck.
+            delete updatedMsg._optimistic;
 
             // Guard: Prevent a null/absent reply_to from the server from wiping an
             // existing optimistic reply context. This handles the PostgREST FK join
