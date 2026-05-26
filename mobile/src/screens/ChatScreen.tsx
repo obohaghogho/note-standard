@@ -613,28 +613,32 @@ export default function ChatScreen({ navigation, route }: Props) {
               ?? pendingReplies.current[serverMsg.id]
               ?? builtReplyTo;
 
-            const optimisticInPrev = prev.find(m => m.id === optimisticId);
+            const hasSocketBeat = prev.some(m => m.id === serverMsg.id);
 
-            if (optimisticInPrev) {
-              // Normal path: replace optimistic with server message
-              return prev.map(m =>
-                m.id === optimisticId
-                  ? mergeMessage(m, { ...serverMsg, reply_to: authReply ?? serverMsg.reply_to })
-                  : m
-              );
+            // Socket beat HTTP: it already added the real server ID.
+            // Filter out the stale optimistic bubble to prevent duplicate keys.
+            if (hasSocketBeat) {
+              return prev
+                .filter(m => m.id !== optimisticId)
+                .map(m =>
+                  m.id === serverMsg.id
+                    ? mergeMessage(m, { ...serverMsg, _optimistic: false, reply_to: authReply ?? serverMsg.reply_to })
+                    : m
+                );
             }
 
-            // Socket beat HTTP: optimistic already replaced with real server ID
-            if (prev.some(m => m.id === serverMsg.id)) {
+            // Normal path: replace optimistic with server message directly
+            const optimisticInPrev = prev.some(m => m.id === optimisticId);
+            if (optimisticInPrev) {
               return prev.map(m =>
-                m.id === serverMsg.id
-                  ? mergeMessage(m, { ...serverMsg, reply_to: authReply ?? serverMsg.reply_to })
+                m.id === optimisticId
+                  ? mergeMessage(m, { ...serverMsg, _optimistic: false, reply_to: authReply ?? serverMsg.reply_to })
                   : m
               );
             }
 
             // Fallback: prepend the confirmed server message
-            return [mergeMessage(serverMsg, { reply_to: authReply ?? serverMsg.reply_to }), ...prev];
+            return [mergeMessage(serverMsg, { _optimistic: false, reply_to: authReply ?? serverMsg.reply_to }), ...prev];
           });
 
           // CRITICAL: Defer pendingReplies cleanup to AFTER React has executed
