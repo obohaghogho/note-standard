@@ -1005,7 +1005,8 @@ exports.sendMessage = async (req, res) => {
             p_type: type || "text",
             p_event_id: eventId,
             p_original_language: detectedLang,
-            p_attachment_id: attachmentId || null
+            p_attachment_id: attachmentId || null,
+            p_reply_to_id: replyToId || null
         });
 
         if (rpcError) throw rpcError;

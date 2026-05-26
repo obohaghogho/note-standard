@@ -468,6 +468,11 @@ export default function ChatScreen({ navigation, route }: Props) {
       sender_id: user?.id ?? '',
       created_at: new Date().toISOString(),
       _optimistic: true,
+      reply_to: replyTo ? {
+        id: replyTo.id,
+        content: replyTo.content,
+        sender_id: replyTo.sender_id,
+      } : undefined,
     };
     setMessages(prev => [optimisticMsg, ...prev]);
 
@@ -495,10 +500,12 @@ export default function ChatScreen({ navigation, route }: Props) {
       setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, _optimistic: false, type: 'failed' } : m));
       
       if (!editingMessage) {
-        // Save to Outbox
+        // Save to Outbox — replyToId is persisted so the retry will still thread correctly
         const outboxMsg = { id: optimisticId, content: contentToSend, attachmentId, replyToId: replyTo?.id };
         const currentOutbox = JSON.parse(await AsyncStorage.getItem(`chat_outbox_${conversationId}`) || '[]');
         await AsyncStorage.setItem(`chat_outbox_${conversationId}`, JSON.stringify([...currentOutbox, outboxMsg]));
+        // Clear the reply banner — replyToId is saved in outbox, no need to keep it active
+        setReplyTo(null);
       }
 
       if (!overrideContent) setText(contentToSend);
