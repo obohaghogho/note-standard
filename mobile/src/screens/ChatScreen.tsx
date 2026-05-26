@@ -125,6 +125,9 @@ const ChatMessageBubble = React.memo(({
   const swipeX = useRef(new Animated.Value(0)).current;
   const swipeFired = useRef(false);
 
+  // 🔴 DIAGNOSTIC LOG: Watch this in React Native debugger
+  console.log(`[BUBBLE RENDER] Msg ${item.id} -> reply_to:`, item.reply_to);
+
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => false,
     onMoveShouldSetPanResponder: (_, gs) =>
@@ -183,6 +186,13 @@ const ChatMessageBubble = React.memo(({
             item._optimistic && styles.bubbleOptimistic,
           ]}
         >
+          {/* 🔴 DIAGNOSTIC RENDER: If this stays visible while UI below dies, UI is bugged. If this dies, state is bugged. */}
+          {item.reply_to !== undefined && (
+            <Text style={{ color: 'red', fontSize: 10, backgroundColor: 'black', padding: 2 }}>
+              RAW: {JSON.stringify(item.reply_to)}
+            </Text>
+          )}
+
           {item.reply_to && (
             <View style={styles.replyContext}>
               {/* Accent bar */}
@@ -241,8 +251,9 @@ function mergeMessage(oldMsg: Message, newMsg: Partial<Message>): Message {
   return {
     ...oldMsg,
     ...newMsg,
-    reply_to: newMsg.reply_to ?? oldMsg.reply_to,
-    attachment: newMsg.attachment ?? oldMsg.attachment,
+    // Protect against empty object `{}` overwrites from malformed server payloads
+    reply_to: newMsg.reply_to?.id ? newMsg.reply_to : oldMsg.reply_to,
+    attachment: newMsg.attachment?.id ? newMsg.attachment : oldMsg.attachment,
   };
 }
 
@@ -881,9 +892,9 @@ export default function ChatScreen({ navigation, route }: Props) {
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          removeClippedSubviews={true}
+          removeClippedSubviews={false}
           maxToRenderPerBatch={10}
-          windowSize={11}
+          windowSize={21}
           initialNumToRender={15}
           updateCellsBatchingPeriod={50}
           contentContainerStyle={styles.msgList}
