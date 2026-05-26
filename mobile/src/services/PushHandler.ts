@@ -160,8 +160,10 @@ export class PushHandler {
   static async registerTokenWithBackend(token: string, type: 'fcm' | 'voip' | 'apns', retryCount = 0) {
     console.log(`[PushHandler] 📡 Registering ${type} token with backend (Try: ${retryCount + 1})...`);
     try {
+      const { getDeviceId } = require('../utils/notifications');
+      const deviceId = await getDeviceId();
       const response = await apiClient.post(`/notifications/register-native-token`, {
-        token, platform: Platform.OS, type
+        token, platform: Platform.OS, type, deviceId
       });
       if (response.data.success) {
         console.log(`[PushHandler] ✅ ${type} token registered successfully.`);

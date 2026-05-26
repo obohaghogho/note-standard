@@ -182,8 +182,8 @@ const registerNativeToken = async (req, res, next) => {
     const { id: userId } = req.user;
     const { token, platform, type, deviceId } = req.body;
 
-    if (!token || !platform || !type) {
-      return res.status(400).json({ error: "Token, platform, and type are required" });
+    if (!token || !platform || !type || !deviceId) {
+      return res.status(400).json({ error: "Token, platform, type, and deviceId are required" });
     }
 
     const { error } = await supabase
@@ -196,7 +196,7 @@ const registerNativeToken = async (req, res, next) => {
         device_id: deviceId,
         updated_at: new Date().toISOString()
       }, {
-        onConflict: "user_id,token",
+        onConflict: "device_id",
       });
 
     if (error) throw error;

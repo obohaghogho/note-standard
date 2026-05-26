@@ -105,6 +105,18 @@ if (apnsKey && process.env.APNS_KEY_ID && process.env.APNS_TEAM_ID) {
 }
 
 /**
+ * Helper to remove invalid tokens from database
+ */
+async function removeInvalidToken(token) {
+  try {
+    await supabase.from('native_device_tokens').delete().eq('token', token);
+    console.log(`[PushService] 🗑 Removed invalid token from DB: ${token.substring(0, 10)}...`);
+  } catch (e) {
+    console.error(`[PushService] ❌ Failed to remove invalid token:`, e.message);
+  }
+}
+
+/**
  * Helper to send APNs notification with automatic Sandbox fallback
  */
 async function sendApnsWithFallback(notification, token, label) {
@@ -123,11 +135,18 @@ async function sendApnsWithFallback(notification, token, label) {
         
         if (resultSandbox.failed && resultSandbox.failed.length > 0) {
           console.error(`[PushService] ❌ APNs Sandbox also failed for ${label}:`, JSON.stringify(resultSandbox.failed));
+          const sandboxFailure = resultSandbox.failed[0];
+          if (sandboxFailure.response && sandboxFailure.response.reason === 'BadDeviceToken') {
+            await removeInvalidToken(token);
+          }
         } else {
           console.log(`[PushService] ✅ APNs Sandbox delivery successful for ${label}.`);
         }
       } else {
         console.error(`[PushService] ❌ APNs Prod failed for ${label}:`, JSON.stringify(resultProd.failed));
+        if (failure.response && (failure.response.reason === 'Unregistered' || failure.response.reason === 'BadDeviceToken')) {
+          await removeInvalidToken(token);
+        }
       }
     } else {
       console.log(`[PushService] ✅ APNs Prod delivery successful for ${label}.`);
@@ -198,7 +217,12 @@ async function sendCallPush(params) {
         };
         console.log(`[PushService] 📤 Sending FCM Call push (Android) to: ${t.token.substring(0, 10)}...`);
         return admin.messaging().send(message)
-          .catch(err => console.error(`[PushService] ❌ FCM call push fail for ${t.token.substring(0, 10)}:`, err.message));
+          .catch(err => {
+            console.error(`[PushService] ❌ FCM call push fail for ${t.token.substring(0, 10)}:`, err.message);
+            if (err.code === 'messaging/registration-token-not-registered' || err.code === 'messaging/invalid-registration-token') {
+              removeInvalidToken(t.token);
+            }
+          });
       }
 
       // iOS VoIP - PushKit specific for immediate CallKit trigger
@@ -278,7 +302,12 @@ async function sendChatPush(params) {
         };
         console.log(`[PushService] 📤 Sending FCM chat notification (Android) to: ${t.token.substring(0, 10)}...`);
         return admin.messaging().send(message)
-          .catch(err => console.error(`[PushService] ❌ FCM chat fail:`, err.message));
+          .catch(err => {
+            console.error(`[PushService] ❌ FCM chat fail:`, err.message);
+            if (err.code === 'messaging/registration-token-not-registered' || err.code === 'messaging/invalid-registration-token') {
+              removeInvalidToken(t.token);
+            }
+          });
       }
 
       // iOS APNs — alert push (NOT voip) for regular chat notifications
