@@ -16,6 +16,7 @@ DELETE FROM public.native_device_tokens a USING (
 WHERE a.device_id = b.device_id AND a.type = b.type AND a.ctid <> b.ctid;
 
 -- Add new composite unique constraint
+ALTER TABLE public.native_device_tokens DROP CONSTRAINT IF EXISTS native_device_tokens_device_id_type_key;
 ALTER TABLE public.native_device_tokens ADD CONSTRAINT native_device_tokens_device_id_type_key UNIQUE (device_id, type);
 
 COMMIT;
