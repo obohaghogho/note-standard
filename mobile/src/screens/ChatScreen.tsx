@@ -175,7 +175,7 @@ const ChatMessageBubble = React.memo(({
           <Text style={styles.msgAvatarText}>{recipientName.charAt(0).toUpperCase()}</Text>
         </LinearGradient>
       )}
-      <Animated.View style={{ transform: [{ translateX: swipeX }] }}>
+      <View style={{ flex: 1 }}>
         <TouchableOpacity
           activeOpacity={0.85}
           onLongPress={() => onLongPress(item)}
@@ -186,35 +186,38 @@ const ChatMessageBubble = React.memo(({
             item._optimistic && styles.bubbleOptimistic,
           ]}
         >
-          {/* 🔴 DIAGNOSTIC RENDER: If this stays visible while UI below dies, UI is bugged. If this dies, state is bugged. */}
+          {/* 🔴 DIAGNOSTIC RENDER */}
           {item.reply_to !== undefined && (
             <Text style={{ color: 'red', fontSize: 10, backgroundColor: 'black', padding: 2 }}>
               RAW: {JSON.stringify(item.reply_to)}
             </Text>
           )}
 
-          {item.reply_to && (
-            <View style={styles.replyContext}>
-              {/* Accent bar */}
-              <View style={styles.replyContextBar} />
-              <View style={styles.replyContextBody}>
-                <Text style={styles.replyContextName}>
-                  {item.reply_to.sender_id === currentUserId
-                    ? 'You'
-                    : item.reply_to.sender_name || recipientName}
-                </Text>
-                <Text style={styles.replyContextText} numberOfLines={1}>
-                  {item.reply_to.deleted
-                    ? '🚫 Original message was deleted'
-                    : (item.reply_to.message_type || item.reply_to.type) === 'image'  ? '📷 Photo'
-                    : (item.reply_to.message_type || item.reply_to.type) === 'video'  ? '🎥 Video'
-                    : (item.reply_to.message_type || item.reply_to.type) === 'audio'  ? '🎤 Voice note'
-                    : (item.reply_to.message_type || item.reply_to.type) === 'document' ? '📄 Document'
-                    : item.reply_to.content}
-                </Text>
-              </View>
-            </View>
-          )}
+          {/* 🔴 PURE TEXT DIAGNOSTIC UI */}
+          {(() => {
+            try {
+              if (!item.reply_to) return null;
+              return (
+                <View
+                  style={{
+                    borderLeftWidth: 3,
+                    borderLeftColor: '#25D366',
+                    paddingLeft: 8,
+                    marginBottom: 6,
+                    backgroundColor: '#1F1F1F',
+                  }}
+                >
+                  <Text style={{ color: 'yellow', fontSize: 12 }}>REPLY EXISTS</Text>
+                  <Text style={{ color: 'white', fontSize: 14 }}>ID: {String(item.reply_to.id)}</Text>
+                  <Text style={{ color: 'white', fontSize: 14 }}>TEXT: {String(item.reply_to.content)}</Text>
+                  <Text style={{ color: 'white', fontSize: 14 }}>TYPE: {String(item.reply_to.message_type || item.reply_to.type)}</Text>
+                </View>
+              );
+            } catch (e: any) {
+              console.log("REPLY UI CRASH", e);
+              return <Text style={{ color: 'red', backgroundColor: 'black', padding: 4 }}>Reply UI crashed: {e.message}</Text>;
+            }
+          })()}
           {item.attachment && (
             <View style={styles.attachmentContainer}>
               {item.attachment.file_type?.startsWith('image') ? (
@@ -240,7 +243,7 @@ const ChatMessageBubble = React.memo(({
             {renderTicks(item as any)}
           </View>
         </TouchableOpacity>
-      </Animated.View>
+      </View>
     </View>
   );
 // ── Canonical Message Merger ─────────────────────────────────────────────
