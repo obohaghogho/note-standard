@@ -110,6 +110,21 @@ const MessageActionSheet = React.memo(({
   );
 });
 
+// ── Canonical Message Merger ─────────────────────────────────────────────
+// MODULE-SCOPE: must be here so both ChatMessageBubble and ChatScreen can use it.
+// Never raw-spread message objects in state updates. This guarantees nested
+// metadata (reply_to, attachments, etc.) is never destroyed by thin server payloads.
+function mergeMessage(oldMsg: Message, newMsg: Partial<Message>): Message {
+  return {
+    ...oldMsg,
+    ...newMsg,
+    // Guard against empty-object `{}` overwrites from malformed server payloads.
+    // `reply_to: {}` is truthy and would bypass `??`, so we require a valid id.
+    reply_to: newMsg.reply_to?.id ? newMsg.reply_to : oldMsg.reply_to,
+    attachment: newMsg.attachment?.id ? newMsg.attachment : oldMsg.attachment,
+  };
+}
+
 // ── ChatMessageBubble ────────────────────────────────────────────────────
 const ChatMessageBubble = React.memo(({
   item, currentUserId, recipientName, onLongPress, onSwipeRight, onPlayAudio,
@@ -246,20 +261,6 @@ const ChatMessageBubble = React.memo(({
       </View>
     </View>
   );
-// ── Canonical Message Merger ─────────────────────────────────────────────
-// Never raw spread message objects during state updates. Always use this to
-// guarantee nested metadata (reply_to, attachments, etc.) is never destroyed
-// by thin server payloads or partial event updates.
-function mergeMessage(oldMsg: Message, newMsg: Partial<Message>): Message {
-  return {
-    ...oldMsg,
-    ...newMsg,
-    // Protect against empty object `{}` overwrites from malformed server payloads
-    reply_to: newMsg.reply_to?.id ? newMsg.reply_to : oldMsg.reply_to,
-    attachment: newMsg.attachment?.id ? newMsg.attachment : oldMsg.attachment,
-  };
-}
-
 });
 
 export default function ChatScreen({ navigation, route }: Props) {
