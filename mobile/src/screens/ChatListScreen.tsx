@@ -227,19 +227,20 @@ export default function ChatListScreen({ navigation }: Props) {
           }).sort((a, b) => new Date(b.last_message?.created_at || b.updated_at).getTime() - new Date(a.last_message?.created_at || a.updated_at).getTime()));
         });
 
-        socket.on('chat:message_read', ({ messageId, conversationId }) => {
+        socket.on('chat:read_receipt', ({ messageIds, conversationId, readAt }) => {
           setConversations(prev => prev.map(conv => {
-             if (conv.id === conversationId && conv.last_message?.id === messageId) {
-               return { ...conv, last_message: { ...conv.last_message, read_at: new Date().toISOString() } };
+             // If the last message is in the read list
+             if (conv.id === conversationId && conv.last_message && messageIds?.includes(conv.last_message.id)) {
+               return { ...conv, last_message: { ...conv.last_message, read_at: readAt || new Date().toISOString() } };
              }
              return conv;
           }));
         });
 
-        socket.on('chat:message_delivered', ({ messageId, conversationId, delivered_at }) => {
+        socket.on('chat:delivery_receipt', ({ messageId, conversationId, deliveredAt }) => {
           setConversations(prev => prev.map(conv => {
              if (conv.id === conversationId && conv.last_message?.id === messageId) {
-               return { ...conv, last_message: { ...conv.last_message, delivered_at: delivered_at || new Date().toISOString() } };
+               return { ...conv, last_message: { ...conv.last_message, delivered_at: deliveredAt || new Date().toISOString() } };
              }
              return conv;
           }));
@@ -381,7 +382,11 @@ export default function ChatListScreen({ navigation }: Props) {
           <ConversationItem
             item={item}
             userId={user?.id || ''}
-            onPress={() => navigation.navigate('Chat', { conversationId: item.id, conversation: item })}
+            onPress={() => {
+               requestAnimationFrame(() => {
+                 navigation.navigate('Chat', { conversationId: item.id, conversation: item });
+               });
+            }}
             onAccept={() => handleAccept(item.id)}
           />
         )}

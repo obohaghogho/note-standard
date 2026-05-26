@@ -161,6 +161,42 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 ...prev,
                 [conversationId]: mergeMessages(prev[conversationId] || [], validated).merged
             }));
+
+            // PHASE 2: OFFLINE DELIVERY SYNC ENGINE
+            // Find messages from others that we haven't acknowledged as delivered yet
+            const unacknowledgedMessages = validated.filter(msg => 
+                !msg.isOwn && 
+                msg.status !== 'read' && 
+                !msg.delivered_at
+            );
+
+            if (unacknowledgedMessages.length > 0) {
+                // Acknowledge the latest one to mark the conversation up to that point
+                // Or loop through and ACK them (we'll just use the conversation level endpoint if available, 
+                // or the latest message id to avoid API spam)
+                const latestMsg = unacknowledgedMessages[unacknowledgedMessages.length - 1];
+                try {
+                    await apiClient.put(`/chat/conversations/${conversationId}/deliver`, {
+                        deviceId,
+                        lastMessageId: latestMsg.id
+                    });
+
+                    // Broadcast via socket for instant sender update
+                    const socket = socketManager.instance;
+                    if (socket) {
+                        unacknowledgedMessages.forEach(msg => {
+                            socket.emit('chat:delivered', {
+                                conversationId,
+                                messageId: msg.id,
+                                deliveredAt: new Date().toISOString()
+                            });
+                        });
+                    }
+                } catch (err) {
+                    console.error('[ChatContext] Offline delivery sync failed', err);
+                }
+            }
+
         } catch (err) {
             console.error('[ChatContext] Failed to load messages', err);
         }
@@ -226,12 +262,68 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
                 return { ...prev, [normalized.conversation_id]: merged };
             });
+
+            // PHASE 3: REALTIME DELIVERY ACK ENGINE
+            // If the message is not ours, send a delivery ACK back immediately
+            if (!incomingMessage.isOwn) {
+                try {
+                    // Call API to persist delivery status
+                    await apiClient.put(`/chat/messages/${incomingMessage.id}/deliver`, {
+                        deviceId,
+                        conversationId: incomingMessage.conversation_id
+                    });
+                    
+                    // Also emit via socket for instant realtime update to sender
+                    const socket = socketManager.instance;
+                    if (socket) {
+                        socket.emit('chat:delivered', {
+                            conversationId: incomingMessage.conversation_id,
+                            messageId: incomingMessage.id,
+                            deliveredAt: new Date().toISOString()
+                        });
+                    }
+                } catch (err) {
+                    console.error('[ChatContext] Failed to send delivery ACK', err);
+                }
+            }
+        });
+
+        socketManager.on('chat:delivery_receipt', (data: any) => {
+            const { conversationId, messageId, deliveredAt } = data;
+            setMessages(prev => {
+                const current = prev[conversationId] || [];
+                return {
+                    ...prev,
+                    [conversationId]: current.map(m => 
+                        m.id === messageId 
+                            ? { ...m, status: 'delivered', delivered_at: deliveredAt } 
+                            : m
+                    )
+                };
+            });
+        });
+
+        socketManager.on('chat:read_receipt', (data: any) => {
+            const { conversationId, messageIds, readAt } = data;
+            setMessages(prev => {
+                const current = prev[conversationId] || [];
+                return {
+                    ...prev,
+                    [conversationId]: current.map(m => 
+                        messageIds.includes(m.id)
+                            ? { ...m, status: 'read', read_at: readAt } 
+                            : m
+                    )
+                };
+            });
         });
 
         loadConversations();
 
         return () => {
             socketManager.offEvent('receive_message');
+            socketManager.offEvent('chat:delivery_receipt');
+            socketManager.offEvent('chat:read_receipt');
         };
     }, [session, user, activeConversationId]);
 

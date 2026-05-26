@@ -698,13 +698,17 @@ export default function ChatScreen({ navigation, route }: Props) {
         <FlatList
           ref={flatRef}
           data={messages}
-          keyExtractor={i => i?.id || Math.random().toString()}
+          keyExtractor={i => i?.id || i?._optimistic ? `opt-${Math.random()}` : Math.random().toString()}
           renderItem={renderMessage}
           inverted
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          removeClippedSubviews
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          windowSize={11}
+          initialNumToRender={15}
+          updateCellsBatchingPeriod={50}
           contentContainerStyle={styles.msgList}
           ListEmptyComponent={
             <View style={styles.emptyChat}>
