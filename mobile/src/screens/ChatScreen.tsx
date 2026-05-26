@@ -171,6 +171,11 @@ const ChatMessageBubble = React.memo(({
     return <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>{'  ✓'}</Text>;
   };
 
+  if (item.reply_to) {
+    console.log("REPLY DEBUG:", item.reply_to);
+    console.log("FULL MESSAGE:", item);
+  }
+
   return (
     <View style={[styles.msgRow, isMe && styles.msgRowMe]} {...panResponder.panHandlers}>
       {/* Swipe-to-reply arrow indicator */}
@@ -214,7 +219,7 @@ const ChatMessageBubble = React.memo(({
                     : (item.reply_to.message_type || item.reply_to.type) === 'video'   ? '🎥 Video'
                     : (item.reply_to.message_type || item.reply_to.type) === 'audio'   ? '🎤 Voice note'
                     : (item.reply_to.message_type || item.reply_to.type) === 'document' ? '📄 Document'
-                    : item.reply_to.content}
+                    : item.reply_to.content || 'Message'}
                 </Text>
               </View>
             </View>
