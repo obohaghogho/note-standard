@@ -1213,8 +1213,31 @@ exports.sendMessage = async (req, res) => {
 
         processAfterMsg(simpleMessage);
       } else {
-        // Primary hydration succeeded — ensure reply_to is normalized
-        // (PostgREST returns null for the join when reply_to_id is null, which is correct)
+        // Primary hydration succeeded — but PostgREST can silently return
+        // reply_to: null when the FK join can't be resolved (schema cache miss:
+        // the named constraint 'messages_reply_to_id_fkey' wasn't yet visible to
+        // PostgREST at query time). Detect this case and fall back to a manual lookup.
+        if (hydratedMessage.reply_to_id && !hydratedMessage.reply_to) {
+          console.warn('[Chat Controller] FK join returned null for reply_to despite reply_to_id being set. Falling back to manual lookup.');
+          try {
+            const { data: parentMsg } = await supabase
+              .from('messages')
+              .select('id, content, sender_id, type, is_deleted')
+              .eq('id', hydratedMessage.reply_to_id)
+              .single();
+            if (parentMsg) {
+              hydratedMessage.reply_to = {
+                id: parentMsg.id,
+                content: parentMsg.content,
+                sender_id: parentMsg.sender_id,
+                message_type: parentMsg.type,
+                deleted: parentMsg.is_deleted,
+              };
+            }
+          } catch (replyFallbackErr) {
+            console.warn('[Chat Controller] Manual reply_to fallback failed:', replyFallbackErr.message);
+          }
+        }
         processAfterMsg(hydratedMessage);
       }
     } catch (msgErr) {
@@ -1236,6 +1259,18 @@ exports.sendMessage = async (req, res) => {
           if (!safePayload) {
              console.error("[Chat Controller] Normalization failed. Dropping outbound broadcast.");
              return;
+          }
+      } else {
+          // Non-transactional: strip reply_to: null before sending to the client.
+          // When the PostgREST FK join fails (schema cache miss or migration not yet
+          // applied), the raw row has reply_to: null. Sending this as-is causes the
+          // client's merge engine to overwrite the valid optimistic reply context with
+          // null, making the reply bubble disappear from the sent message.
+          // The transactional path avoids this via normalizeOutboundMessage; we apply
+          // the same strip rule here for parity.
+          if (safePayload.reply_to === null) {
+              safePayload = { ...safePayload };
+              delete safePayload.reply_to;
           }
       }
 
