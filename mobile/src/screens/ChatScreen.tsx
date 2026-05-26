@@ -393,13 +393,21 @@ export default function ChatScreen({ navigation, route }: Props) {
               const optIndex = prev.findIndex(m =>
                 m._optimistic && (m.content === msg.content || m.type === msg.type)
               );
+
+              const getValidReplyTo = (srvReply: any, optReply: any) => {
+                if (srvReply && typeof srvReply === 'object' && Object.keys(srvReply).length > 0) {
+                  return { ...optReply, ...srvReply };
+                }
+                return optReply;
+              };
+
               if (optIndex !== -1) {
                 const next = [...prev];
                 const existingReplyTo = prev[optIndex].reply_to;
                 next[optIndex] = {
                   ...msg,
-                  // Keep local reply_to when server broadcast doesn't resolve it
-                  reply_to: msg.reply_to ?? existingReplyTo,
+                  // Aggressive validation: Keep local reply_to when server broadcast doesn't strictly resolve it
+                  reply_to: getValidReplyTo(msg.reply_to, existingReplyTo),
                 };
                 return next;
               }
@@ -556,8 +564,14 @@ export default function ChatScreen({ navigation, route }: Props) {
         const serverMsg: Message = res.data;
         if (serverMsg?.id) {
           setMessages(prev => {
-            // Try to find the optimistic by its temp ID first
             const optimisticInPrev = prev.find(m => m.id === optimisticId);
+
+            const getValidReplyTo = (srvReply: any, optReply: any) => {
+              if (srvReply && typeof srvReply === 'object' && Object.keys(srvReply).length > 0) {
+                return { ...optReply, ...srvReply };
+              }
+              return optReply;
+            };
 
             if (optimisticInPrev) {
               // Normal path: replace optimistic with server message
@@ -565,8 +579,8 @@ export default function ChatScreen({ navigation, route }: Props) {
                 m.id === optimisticId
                   ? {
                       ...serverMsg,
-                      // Prefer server's resolved reply_to; fall back to frozen snapshot
-                      reply_to: serverMsg.reply_to ?? optimisticMsg.reply_to,
+                      // Prefer server's resolved reply_to; fall back to frozen snapshot aggressively
+                      reply_to: getValidReplyTo(serverMsg.reply_to, optimisticMsg.reply_to),
                     }
                   : m
               );
@@ -579,13 +593,13 @@ export default function ChatScreen({ navigation, route }: Props) {
               // Already in list — ensure reply_to is preserved
               return prev.map(m =>
                 m.id === serverMsg.id
-                  ? { ...m, reply_to: m.reply_to ?? serverMsg.reply_to ?? optimisticMsg.reply_to }
+                  ? { ...m, reply_to: getValidReplyTo(m.reply_to, getValidReplyTo(serverMsg.reply_to, optimisticMsg.reply_to)) }
                   : m
               );
             }
 
             // Fallback: just prepend the confirmed server message
-            return [{ ...serverMsg, reply_to: serverMsg.reply_to ?? optimisticMsg.reply_to }, ...prev];
+            return [{ ...serverMsg, reply_to: getValidReplyTo(serverMsg.reply_to, optimisticMsg.reply_to) }, ...prev];
           });
         }
 
