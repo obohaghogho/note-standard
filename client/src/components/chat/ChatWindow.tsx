@@ -50,7 +50,7 @@ const ChatWindow: React.FC = () => {
 
     // Editing state
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-    const [replyTo, setReplyTo] = useState<Message | null>(null);
+    const [replyTo, setReplyTo] = useState<{ id: string; content: string; sender_id: string; type?: string; attachment?: any } | null>(null);
 
     const toggleMessageSelection = (msgId: string) => {
         setSelectedMessages(prev => {
@@ -68,7 +68,15 @@ const ChatWindow: React.FC = () => {
         onLongPress: (id) => toggleMessageSelection(id),
         onSwipeRight: (id) => {
             const msg = currentMessages.find(m => m.id === id);
-            if (msg) setReplyTo(msg);
+            if (msg) {
+                setReplyTo({
+                    id: msg.id,
+                    content: msg.content,
+                    sender_id: msg.sender_id,
+                    type: msg.type,
+                    attachment: msg.attachment
+                });
+            }
         },
         moveThreshold: 8,
         delay: 480,
