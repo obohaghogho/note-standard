@@ -264,6 +264,15 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [actionSheetMessage, setActionSheetMessage] = useState<Message | null>(null);
 
+  /**
+   * pendingReplies — the ONLY authoritative store for reply_to metadata during
+   * the send lifecycle. Keyed by both the optimistic temp ID and then the real
+   * server ID once we learn it. Every setMessages reconciliation path consults
+   * this ref so reply_to can never be dropped by a server response with a null
+   * or empty reply_to join.
+   */
+  const pendingReplies = useRef<Record<string, Message['reply_to']>>({});
+
   // Inverted FlatList auto-scrolls to latest message (offset 0) natively.
   // No manual keyboard listener needed — KeyboardAvoidingView handles layout.
 
@@ -341,7 +350,13 @@ export default function ChatScreen({ navigation, route }: Props) {
                         attachmentId: msg.attachmentId,
                         replyToId: msg.replyToId
                     });
-                    setMessages(prev => prev.map(m => m.id === msg.id ? { ...res.data } : m));
+                    // Preserve reply_to from the outbox entry — res.data JOIN may return null
+                    const outboxReply = msg.replyTo || pendingReplies.current[msg.id];
+                    setMessages(prev => prev.map(m =>
+                      m.id === msg.id
+                        ? { ...res.data, reply_to: outboxReply ?? res.data.reply_to }
+                        : m
+                    ));
                 } catch (e) {
                     remainingOutbox.push(msg);
                 }
@@ -365,54 +380,42 @@ export default function ChatScreen({ navigation, route }: Props) {
           }
         });
 
-        // Incoming real-time message from another user
+        // Incoming real-time message
         socket.on('chat:message', (msg: Message) => {
           console.log('[ChatScreen] Received realtime message:', msg.id);
           const currentUser = userRef.current;
           setMessages(prev => {
+            // Guard: skip if already in state (e.g. HTTP beat socket)
             if (prev.some(m => m.id === msg.id)) return prev;
 
-            // If we are the sender, and we have an optimistic message, replace it.
-            // IMPORTANT: preserve the local reply_to object if the broadcast
-            // payload doesn't carry the fully-resolved nested object yet
-            // (e.g. RPC path before migration 199 is applied).
             if (msg.sender_id === currentUser?.id) {
+              // This is our own message echoed back from the server.
+              // Find the optimistic placeholder by content match.
               const optIndex = prev.findIndex(m =>
-                m._optimistic && (m.content === msg.content || m.type === msg.type)
+                m._optimistic && m.content === msg.content
               );
 
-              const getValidReplyTo = (srvReply: any, optReply: any) => {
-                if (!srvReply) return optReply;
-                let validSrv = srvReply;
-                if (Array.isArray(srvReply)) {
-                  if (srvReply.length > 0) validSrv = srvReply[0];
-                  else return optReply;
-                }
-                try {
-                  if (typeof validSrv === 'object' && Object.keys(validSrv).length > 0) {
-                    return { ...optReply, ...validSrv };
-                  }
-                } catch (e) {}
-                return optReply;
-              };
-
               if (optIndex !== -1) {
+                const optimisticId = prev[optIndex].id;
+                // Retrieve the authoritative reply_to from our persistent store.
+                // Falls back to whatever the server broadcast sent.
+                const savedReply = pendingReplies.current[optimisticId];
                 const next = [...prev];
-                const existingReplyTo = prev[optIndex].reply_to;
                 next[optIndex] = {
                   ...msg,
-                  // Aggressive validation: Keep local reply_to when server broadcast doesn't strictly resolve it
-                  reply_to: getValidReplyTo(msg.reply_to, existingReplyTo),
+                  reply_to: savedReply ?? msg.reply_to,
                 };
+                // Map the real server ID so the HTTP response path can find it too.
+                if (savedReply) {
+                  pendingReplies.current[msg.id] = savedReply;
+                }
                 return next;
               }
             }
 
-            // Mark as delivered+read immediately since user is actively in the chat.
-            // Optimistically set timestamp locally so sender's tick updates fast.
+            // Incoming from another user — mark delivered+read immediately.
             if (msg.sender_id !== currentUser?.id) {
               const now = new Date().toISOString();
-              // Background HTTP calls to persist in DB + broadcast receipt to sender
               apiClient.put(`/chat/messages/${msg.id}/deliver`).catch(() => {});
               apiClient.put(`/chat/messages/${msg.id}/read`).catch(() => {});
               return [{ ...msg, delivered_at: now, read_at: now } as any, ...prev];
@@ -505,33 +508,41 @@ export default function ChatScreen({ navigation, route }: Props) {
     if (sending) return;
 
     // ── Snapshot reply state NOW, before any await or state mutation ──
-    // Capture from direct state since sendMessage is completely recreated on
-    // every render, guaranteeing that this closure contains the very latest
-    // synchronous UI state at the exact moment the user presses 'Send'.
     const replySnapshot = replyTo;
 
     if (!overrideContent) setText('');
     setSending(true);
 
-    // Build optimistic message with frozen reply snapshot
     const optimisticId = `opt-${Date.now()}`;
+
+    // Build the reply_to sub-object once from the snapshot
+    const builtReplyTo: Message['reply_to'] = replySnapshot
+      ? {
+          id: replySnapshot.id,
+          content: replySnapshot.content,
+          sender_id: replySnapshot.sender_id,
+          sender_name: replySnapshot.sender
+            ? (replySnapshot.sender.full_name || replySnapshot.sender.username)
+            : undefined,
+          message_type: replySnapshot.type,
+        }
+      : undefined;
+
+    // ── Persist reply_to authoritatively in the ref ──────────────────────
+    // This is the SINGLE SOURCE OF TRUTH for reply metadata during the entire
+    // send lifecycle (optimistic insert → socket echo → HTTP response).
+    // All subsequent setMessages callbacks consult this ref directly.
+    if (builtReplyTo) {
+      pendingReplies.current[optimisticId] = builtReplyTo;
+    }
+
     const optimisticMsg: Message = {
       id: optimisticId,
       content: contentToSend,
       sender_id: user?.id ?? '',
       created_at: new Date().toISOString(),
       _optimistic: true,
-      reply_to: replySnapshot
-        ? {
-            id: replySnapshot.id,
-            content: replySnapshot.content,
-            sender_id: replySnapshot.sender_id,
-            sender_name: replySnapshot.sender
-              ? (replySnapshot.sender.full_name || replySnapshot.sender.username)
-              : undefined,
-            message_type: replySnapshot.type,
-          }
-        : undefined,
+      reply_to: builtReplyTo,
     };
     // Insert optimistic immediately so the user sees the bubble with reply context
     setMessages(prev => [optimisticMsg, ...prev]);
@@ -556,56 +567,46 @@ export default function ChatScreen({ navigation, route }: Props) {
 
         const serverMsg: Message = res.data;
         if (serverMsg?.id) {
-          setMessages(prev => {
-            const optimisticInPrev = prev.find(m => m.id === optimisticId);
+          // Also register the server ID so any late socket events use the right reply
+          if (builtReplyTo) {
+            pendingReplies.current[serverMsg.id] = builtReplyTo;
+          }
 
-            const getValidReplyTo = (srvReply: any, optReply: any) => {
-              if (!srvReply) return optReply;
-              let validSrv = srvReply;
-              if (Array.isArray(srvReply)) {
-                if (srvReply.length > 0) validSrv = srvReply[0];
-                else return optReply;
-              }
-              try {
-                if (typeof validSrv === 'object' && Object.keys(validSrv).length > 0) {
-                  return { ...optReply, ...validSrv };
-                }
-              } catch (e) {}
-              return optReply;
-            };
+          setMessages(prev => {
+            // authoritative reply_to: pendingReplies ref wins over everything
+            const authReply = pendingReplies.current[optimisticId]
+              ?? pendingReplies.current[serverMsg.id]
+              ?? builtReplyTo;
+
+            const optimisticInPrev = prev.find(m => m.id === optimisticId);
 
             if (optimisticInPrev) {
               // Normal path: replace optimistic with server message
               return prev.map(m =>
                 m.id === optimisticId
-                  ? {
-                      ...serverMsg,
-                      // Prefer server's resolved reply_to; fall back to frozen snapshot aggressively
-                      reply_to: getValidReplyTo(serverMsg.reply_to, optimisticMsg.reply_to),
-                    }
+                  ? { ...serverMsg, reply_to: authReply ?? serverMsg.reply_to }
                   : m
               );
             }
 
-            // WebSocket beat the HTTP response: optimistic was already replaced
-            // by chat:message event (its ID changed to the real server ID).
-            // Check if the server message is already present.
+            // Socket beat HTTP: optimistic already replaced with real server ID
             if (prev.some(m => m.id === serverMsg.id)) {
-              // Already in list — ensure reply_to is preserved
               return prev.map(m =>
                 m.id === serverMsg.id
-                  ? { ...m, reply_to: getValidReplyTo(m.reply_to, getValidReplyTo(serverMsg.reply_to, optimisticMsg.reply_to)) }
+                  ? { ...m, reply_to: authReply ?? m.reply_to ?? serverMsg.reply_to }
                   : m
               );
             }
 
-            // Fallback: just prepend the confirmed server message
-            return [{ ...serverMsg, reply_to: getValidReplyTo(serverMsg.reply_to, optimisticMsg.reply_to) }, ...prev];
+            // Fallback: prepend the confirmed server message
+            return [{ ...serverMsg, reply_to: authReply ?? serverMsg.reply_to }, ...prev];
           });
         }
 
-        // Clear reply banner ONLY after successful server acknowledgement
+        // Clear reply banner and clean up the pending reply store
         setReplyTo(null);
+        delete pendingReplies.current[optimisticId];
+        if (serverMsg?.id) delete pendingReplies.current[serverMsg.id];
       }
     } catch (e: any) {
       console.error('[ChatScreen] Send failed:', e);
