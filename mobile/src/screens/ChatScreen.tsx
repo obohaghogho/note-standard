@@ -300,9 +300,26 @@ export default function ChatScreen({ navigation, route }: Props) {
       const data = Array.isArray(res.data) ? res.data : [];
       const newestFirst = [...data].reverse();
 
-      setMessages(newestFirst);
+      // Merge server messages into state instead of replacing.
+      // This preserves any optimistic messages (with reply_to) that are still in-flight
+      // and haven't been confirmed yet. We merge by id: server wins for confirmed IDs,
+      // optimistic messages without a server match are kept as-is.
+      setMessages(prev => {
+        const serverById = new Map(newestFirst.map((m: Message) => [m.id, m]));
+        // Keep optimistic messages not yet confirmed
+        const optimisticOnly = prev.filter(m => m._optimistic && !serverById.has(m.id));
+        // For server messages, preserve reply_to from existing state if server sent null
+        const merged = newestFirst.map((m: Message) => {
+          const existing = prev.find(p => p.id === m.id);
+          return {
+            ...m,
+            reply_to: m.reply_to ?? existing?.reply_to,
+          };
+        });
+        return [...optimisticOnly, ...merged];
+      });
       initialLoadDoneRef.current = true;
-      // Save to cache
+      // Save to cache (save server data directly)
       await AsyncStorage.setItem(`cache_messages_${conversationId}`, JSON.stringify(newestFirst));
 
       // Mark conversation as delivered and read in one go
@@ -426,7 +443,14 @@ export default function ChatScreen({ navigation, route }: Props) {
         });
 
         socket.on('chat:message_edited', (editedMsg: Message) => {
-          setMessages(prev => prev.map(m => m.id === editedMsg.id ? { ...m, ...editedMsg } : m));
+          setMessages(prev => prev.map(m => {
+            if (m.id !== editedMsg.id) return m;
+            // CRITICAL: Always preserve the existing reply_to from local state.
+            // The server's edited-message broadcast only contains updated text/content,
+            // not the full reply_to join. Spreading editedMsg would overwrite reply_to
+            // with null/undefined and destroy the reply bubble.
+            return { ...m, ...editedMsg, reply_to: m.reply_to ?? editedMsg.reply_to };
+          }));
         });
 
         socket.on('chat:message_deleted', ({ messageId }: { messageId: string }) => {
@@ -602,12 +626,20 @@ export default function ChatScreen({ navigation, route }: Props) {
             // Fallback: prepend the confirmed server message
             return [{ ...serverMsg, reply_to: authReply ?? serverMsg.reply_to }, ...prev];
           });
+
+          // CRITICAL: Defer pendingReplies cleanup to AFTER React has executed
+          // the setMessages callback above. Deleting the ref synchronously here
+          // (before React batches run) means the updater function reads an
+          // already-deleted key when it eventually runs in a later microtask.
+          // setTimeout(0) pushes the cleanup past the current React flush.
+          setTimeout(() => {
+            delete pendingReplies.current[optimisticId];
+            if (serverMsg?.id) delete pendingReplies.current[serverMsg.id];
+          }, 0);
         }
 
-        // Clear reply banner and clean up the pending reply store
+        // Clear reply banner immediately (safe — this is only UI state)
         setReplyTo(null);
-        delete pendingReplies.current[optimisticId];
-        if (serverMsg?.id) delete pendingReplies.current[serverMsg.id];
       }
     } catch (e: any) {
       console.error('[ChatScreen] Send failed:', e);

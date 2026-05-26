@@ -35,7 +35,9 @@ async function _hydrateReplyTo(messages) {
     if (!parents) return;
     const map = Object.fromEntries(parents.map(p => [p.id, p]));
     messages.forEach(m => {
-      if (!m.reply_to_id || m.reply_to) return;
+      // Always overwrite (even when reply_to was set by FK join) to ensure
+      // sender_name is resolved — the FK join cannot traverse two levels.
+      if (!m.reply_to_id) return;
       const p = map[m.reply_to_id];
       const senderName = p && p.sender ? (p.sender.full_name || p.sender.username) : null;
       m.reply_to = p
@@ -654,7 +656,7 @@ exports.getMessages = async (req, res) => {
     // IMPORTANT: .eq('is_deleted', false) ensures soft-deleted messages never reach clients.
     let query = supabase
       .from("messages")
-      .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url), reply_to:messages!reply_to_id(id, content, sender_id, type)")
+      .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url), reply_to:messages!reply_to_id(id, content, sender_id, type, is_deleted)")
       .eq("conversation_id", conversationId)
       .eq("is_deleted", false)
       .order("created_at", { ascending: false })
@@ -684,7 +686,7 @@ exports.getMessages = async (req, res) => {
           );
           let fallbackQuery = supabase
             .from("messages")
-            .select("*, reply_to:messages!reply_to_id(id, content, sender_id, type)")
+            .select("*, reply_to:messages!reply_to_id(id, content, sender_id, type, is_deleted)")
             .eq("conversation_id", conversationId)
             .eq("is_deleted", false)
             .order("created_at", { ascending: false })
@@ -1164,7 +1166,7 @@ exports.sendMessage = async (req, res) => {
 
       const { data: hydratedMessage, error: hydrateError } = await supabase
         .from("messages")
-        .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url), reply_to:messages!reply_to_id(id, content, sender_id, type)")
+        .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url), reply_to:messages!reply_to_id(id, content, sender_id, type, is_deleted)")
         .eq("id", createdMessageId)
         .single();
 
@@ -1270,14 +1272,26 @@ exports.sendMessage = async (req, res) => {
              return;
           }
       } else {
-          // Non-transactional: strip reply_to: null before sending to the client.
-          // When the PostgREST FK join fails (schema cache miss or migration not yet
-          // applied), the raw row has reply_to: null. Sending this as-is causes the
-          // client's merge engine to overwrite the valid optimistic reply context with
-          // null, making the reply bubble disappear from the sent message.
-          // The transactional path avoids this via normalizeOutboundMessage; we apply
-          // the same strip rule here for parity.
-          if (safePayload.reply_to === null) {
+          // Non-transactional: normalize reply_to shape before sending to clients.
+          // _hydrateReplyTo sets message_type, but the PostgREST FK join uses the
+          // raw column name 'type'. Normalize to 'message_type' for consistency.
+          if (safePayload.reply_to && typeof safePayload.reply_to === 'object') {
+              const rt = safePayload.reply_to;
+              safePayload = {
+                  ...safePayload,
+                  reply_to: {
+                      id: rt.id,
+                      content: rt.content,
+                      sender_id: rt.sender_id,
+                      // _hydrateReplyTo uses message_type; FK join uses type — normalize both
+                      message_type: rt.message_type || rt.type,
+                      deleted: rt.deleted ?? rt.is_deleted ?? false,
+                      sender_name: rt.sender_name,
+                  },
+              };
+          } else if (safePayload.reply_to === null) {
+              // Strip null reply_to: prevents client merge engine from overwriting
+              // valid optimistic reply context with null (schema cache miss path).
               safePayload = { ...safePayload };
               delete safePayload.reply_to;
           }
