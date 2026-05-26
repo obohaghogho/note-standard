@@ -827,7 +827,22 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
                 // Canonical backend collapse
                 const backendMsg = res.data.message || res.data;
-                const canonicalMessage = { ...backendMsg, isOwn: true, status: 'sent' };
+                let canonicalMessage: Message = { ...backendMsg, isOwn: true, status: 'sent' };
+
+                // Guard: if the server didn't return a populated reply_to (FK join failed,
+                // schema cache miss, or non-transactional path) but this intent had a
+                // replyToId, fall back to the reply_to we already stored on the optimistic
+                // message. This prevents the reply bubble from disappearing on confirmation.
+                if (intent.payload.replyToId && !canonicalMessage.reply_to) {
+                    const existingMsgs = messagesRef.current[intent.conversation_id] || [];
+                    const optimistic = existingMsgs.find(
+                        (m: Message) => m.event_id === intent.event_id
+                    );
+                    if (optimistic?.reply_to) {
+                        canonicalMessage = { ...canonicalMessage, reply_to: optimistic.reply_to };
+                    }
+                }
+
                 setMessages(prev => {
                     const current = prev[intent.conversation_id] || [];
                     const { merged } = mergeMessages(current, [canonicalMessage]);

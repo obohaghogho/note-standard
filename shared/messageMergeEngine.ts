@@ -49,7 +49,15 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
 
         if (incomingSeq >= existingSeq) {
             const updatedMsg = { ...existingMsg, ...msg };
-            
+
+            // Guard: Prevent a null/absent reply_to from the server from wiping an
+            // existing optimistic reply context. This handles the PostgREST FK join
+            // returning null due to a schema cache miss, migration not yet applied,
+            // or the non-transactional path returning the raw row without join resolution.
+            if (!updatedMsg.reply_to && existingMsg.reply_to) {
+                updatedMsg.reply_to = existingMsg.reply_to;
+            }
+
             // If the incoming message has a canonical UUID from the server, 
             // and the existing was a 'temp-' ID, we must update the byId map to reflect the real ID
             // while removing the old temp ID to prevent map bloat/leaks.
