@@ -52,6 +52,7 @@ interface Message {
     sender_name?: string;
     /** Original message type, used for media-type labels in reply bubble */
     message_type?: string;
+    type?: string;
     /** True when the original message was soft-deleted */
     deleted?: boolean;
   };
@@ -195,10 +196,10 @@ const ChatMessageBubble = React.memo(({
                 <Text style={styles.replyContextText} numberOfLines={1}>
                   {item.reply_to.deleted
                     ? '🚫 Original message was deleted'
-                    : item.reply_to.message_type === 'image'  ? '📷 Photo'
-                    : item.reply_to.message_type === 'video'  ? '🎥 Video'
-                    : item.reply_to.message_type === 'audio'  ? '🎤 Voice note'
-                    : item.reply_to.message_type === 'document' ? '📄 Document'
+                    : (item.reply_to.message_type || item.reply_to.type) === 'image'  ? '📷 Photo'
+                    : (item.reply_to.message_type || item.reply_to.type) === 'video'  ? '🎥 Video'
+                    : (item.reply_to.message_type || item.reply_to.type) === 'audio'  ? '🎤 Voice note'
+                    : (item.reply_to.message_type || item.reply_to.type) === 'document' ? '📄 Document'
                     : item.reply_to.content}
                 </Text>
               </View>
@@ -833,7 +834,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         <FlatList
           ref={flatRef}
           data={messages}
-          keyExtractor={i => i?.id || i?._optimistic ? `opt-${Math.random()}` : Math.random().toString()}
+          keyExtractor={i => i?.id ? i.id : Math.random().toString()}
           renderItem={renderMessage}
           inverted
           keyboardDismissMode="interactive"
