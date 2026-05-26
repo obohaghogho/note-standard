@@ -31,7 +31,7 @@ interface Message {
   content: string;
   sender_id: string;
   created_at: string;
-  sender?: { full_name?: string; avatar_url?: string };
+  sender?: { full_name?: string; avatar_url?: string; username?: string };
   attachment?: {
     id: string;
     file_type: string;
@@ -39,12 +39,21 @@ interface Message {
     file_name: string;
   };
   type?: string;
-  _optimistic?: boolean; 
+  _optimistic?: boolean;
   is_edited?: boolean;
+  /** Raw FK from DB — present when no JOIN was performed */
+  reply_to_id?: string;
+  /** Resolved reply-to object — present after JOIN or manual hydration */
   reply_to?: {
     id: string;
     content: string;
     sender_id: string;
+    /** Pre-resolved sender display name (from profiles JOIN) */
+    sender_name?: string;
+    /** Original message type, used for media-type labels in reply bubble */
+    message_type?: string;
+    /** True when the original message was soft-deleted */
+    deleted?: boolean;
   };
 }
 
@@ -175,10 +184,24 @@ const ChatMessageBubble = React.memo(({
         >
           {item.reply_to && (
             <View style={styles.replyContext}>
-              <Text style={styles.replyContextName}>
-                {item.reply_to.sender_id === currentUserId ? 'You' : recipientName}
-              </Text>
-              <Text style={styles.replyContextText} numberOfLines={1}>{item.reply_to.content}</Text>
+              {/* Accent bar */}
+              <View style={styles.replyContextBar} />
+              <View style={styles.replyContextBody}>
+                <Text style={styles.replyContextName}>
+                  {item.reply_to.sender_id === currentUserId
+                    ? 'You'
+                    : item.reply_to.sender_name || recipientName}
+                </Text>
+                <Text style={styles.replyContextText} numberOfLines={1}>
+                  {item.reply_to.deleted
+                    ? '🚫 Original message was deleted'
+                    : item.reply_to.message_type === 'image'  ? '📷 Photo'
+                    : item.reply_to.message_type === 'video'  ? '🎥 Video'
+                    : item.reply_to.message_type === 'audio'  ? '🎤 Voice note'
+                    : item.reply_to.message_type === 'document' ? '📄 Document'
+                    : item.reply_to.content}
+                </Text>
+              </View>
             </View>
           )}
           {item.attachment && (
@@ -349,14 +372,22 @@ export default function ChatScreen({ navigation, route }: Props) {
           setMessages(prev => {
             if (prev.some(m => m.id === msg.id)) return prev;
 
-            // If we are the sender, and we have an optimistic message, replace it
+            // If we are the sender, and we have an optimistic message, replace it.
+            // IMPORTANT: preserve the local reply_to object if the broadcast
+            // payload doesn't carry the fully-resolved nested object yet
+            // (e.g. RPC path before migration 199 is applied).
             if (msg.sender_id === currentUser?.id) {
-              const optIndex = prev.findIndex(m => 
+              const optIndex = prev.findIndex(m =>
                 m._optimistic && (m.content === msg.content || m.type === msg.type)
               );
               if (optIndex !== -1) {
                 const next = [...prev];
-                next[optIndex] = { ...msg };
+                const existingReplyTo = prev[optIndex].reply_to;
+                next[optIndex] = {
+                  ...msg,
+                  // Keep local reply_to when server broadcast doesn't resolve it
+                  reply_to: msg.reply_to ?? existingReplyTo,
+                };
                 return next;
               }
             }
@@ -488,9 +519,20 @@ export default function ChatScreen({ navigation, route }: Props) {
 
         const serverMsg: Message = res.data;
         if (serverMsg?.id) {
-          setMessages(prev =>
-            prev.map(m => m.id === optimisticId ? { ...serverMsg } : m)
-          );
+          setMessages(prev => {
+            const optimistic = prev.find(m => m.id === optimisticId);
+            return prev.map(m =>
+              m.id === optimisticId
+                ? {
+                    ...serverMsg,
+                    // Preserve the local reply_to when server hasn't resolved
+                    // the nested object yet (e.g. FK join failed or migration
+                    // not applied). Once server sends it, serverMsg.reply_to wins.
+                    reply_to: serverMsg.reply_to ?? optimistic?.reply_to,
+                  }
+                : m
+            );
+          });
         }
         setReplyTo(null);
       }
@@ -857,15 +899,26 @@ const styles = StyleSheet.create({
   editedTag: { color: 'rgba(255,255,255,0.4)', fontSize: 10, fontStyle: 'italic', marginRight: 4 },
   bubbleTime: { color: 'rgba(255,255,255,0.4)', fontSize: 10 },
   replyContext: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderLeftWidth: 3,
-    borderLeftColor: '#6366f1',
-    padding: 6,
-    borderRadius: 4,
+    flexDirection: 'row',
+    backgroundColor: 'rgba(99,102,241,0.08)',
+    borderRadius: 6,
     marginBottom: 6,
+    overflow: 'hidden',
   },
-  replyContextName: { color: '#6366f1', fontSize: 12, fontWeight: '700', marginBottom: 2 },
-  replyContextText: { color: '#aaa', fontSize: 12 },
+  replyContextBar: {
+    width: 3,
+    backgroundColor: '#6366f1',
+    borderTopLeftRadius: 6,
+    borderBottomLeftRadius: 6,
+    flexShrink: 0,
+  },
+  replyContextBody: {
+    flex: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  replyContextName: { color: '#818cf8', fontSize: 11, fontWeight: '700', marginBottom: 2 },
+  replyContextText: { color: 'rgba(255,255,255,0.55)', fontSize: 12, lineHeight: 16 },
   actionPreview: {
     flexDirection: 'row',
     alignItems: 'center',

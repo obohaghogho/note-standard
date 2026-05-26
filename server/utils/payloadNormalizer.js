@@ -37,12 +37,25 @@ const normalizeOutboundMessage = (rawMessage) => {
             return null;
         }
         
-        // Strip out unsafe properties, ensure timestamps are strings
+        // Strip out unsafe properties, ensure timestamps are strings.
+        // IMPORTANT: reply_to is a nested join object — it must be preserved
+        // intact so clients can render reply bubbles. stripUndefinedAndNull
+        // keeps non-null nested objects by design, but we explicitly protect
+        // reply_to here as documentation and a safety guard.
         const safePayload = stripUndefinedAndNull({
             ...rawMessage,
-            server_timestamp: new Date().toISOString()
+            server_timestamp: new Date().toISOString(),
+            // Preserve reply_to — may be null (no reply) or a nested object
+            // { id, content, sender_id, sender_name, message_type, deleted }
+            // stripUndefinedAndNull removes null, so we re-attach after if present.
         });
-        
+
+        // Re-attach reply_to after stripping: null means "not a reply" (correct),
+        // object means "has a reply context" — keep it exactly as received.
+        if (rawMessage.reply_to && typeof rawMessage.reply_to === 'object') {
+            safePayload.reply_to = rawMessage.reply_to;
+        }
+
         return safePayload;
     } catch (err) {
         diagnosticLogger.logQuarantine('NORMALIZATION_CRASH', rawMessage);

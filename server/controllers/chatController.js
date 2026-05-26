@@ -8,6 +8,44 @@ const replayGuard = require("../utils/replayGuard");
 const crypto = require("crypto");
 const { emitMessageEvent } = require("../rpc/eventLedger");
 
+/**
+ * _hydrateReplyTo — batch-resolve reply_to nested objects in place.
+ *
+ * Called by getMessages fallback paths when the Supabase FK join fails
+ * (e.g. migration 199 not yet applied, schema cache stale, or PostgREST
+ * version doesn't support the self-referencing join syntax).
+ *
+ * Performs a SINGLE IN-query for all unique reply_to_id values found in
+ * the message array, then mutates each message in place with the
+ * resolved { id, content, sender_id, message_type, deleted } object.
+ *
+ * @param {Array<Object>} messages - mutable array of message rows
+ */
+async function _hydrateReplyTo(messages) {
+  if (!messages || messages.length === 0) return;
+  const ids = [...new Set(
+    messages.filter(m => m.reply_to_id && !m.reply_to).map(m => m.reply_to_id)
+  )];
+  if (ids.length === 0) return;
+  try {
+    const { data: parents } = await supabase
+      .from('messages')
+      .select('id, content, sender_id, type, is_deleted')
+      .in('id', ids);
+    if (!parents) return;
+    const map = Object.fromEntries(parents.map(p => [p.id, p]));
+    messages.forEach(m => {
+      if (!m.reply_to_id || m.reply_to) return;
+      const p = map[m.reply_to_id];
+      m.reply_to = p
+        ? { id: p.id, content: p.content, sender_id: p.sender_id, message_type: p.type, deleted: p.is_deleted }
+        : { id: m.reply_to_id, content: '', sender_id: '', deleted: true };
+    });
+  } catch (e) {
+    console.warn('[Chat Controller] _hydrateReplyTo batch failed:', e.message);
+  }
+}
+
 function getNotificationPreview(type, content) {
   switch (type) {
     case 'audio':
@@ -615,7 +653,7 @@ exports.getMessages = async (req, res) => {
     // IMPORTANT: .eq('is_deleted', false) ensures soft-deleted messages never reach clients.
     let query = supabase
       .from("messages")
-      .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url), reply_to:messages(id, content, sender_id)")
+      .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url), reply_to:messages!reply_to_id(id, content, sender_id, type)")
       .eq("conversation_id", conversationId)
       .eq("is_deleted", false)
       .order("created_at", { ascending: false })
@@ -633,7 +671,8 @@ exports.getMessages = async (req, res) => {
       const { data, error } = await query;
 
       if (error) {
-        // If the error is about missing relationship/table, fallback to basic query
+        // PGRST200/42703 = missing table/column. Fall back to a basic query that
+        // still attempts the reply_to join. If that also fails, use select(*).
         if (
           error.code === "PGRST200" ||
           error.code === "42703" ||
@@ -644,35 +683,61 @@ exports.getMessages = async (req, res) => {
           );
           let fallbackQuery = supabase
             .from("messages")
+            .select("*, reply_to:messages!reply_to_id(id, content, sender_id, type)")
+            .eq("conversation_id", conversationId)
+            .eq("is_deleted", false)
+            .order("created_at", { ascending: false })
+            .limit(parseInt(limit));
+
+          if (before) fallbackQuery = fallbackQuery.lt("created_at", before);
+          if (clearedAt) fallbackQuery = fallbackQuery.gt("created_at", clearedAt);
+
+          const { data: fb1Data, error: fb1Error } = await fallbackQuery;
+
+          if (!fb1Error) {
+            return res.json((fb1Data || []).reverse());
+          }
+
+          // Second fallback: plain select(*) + manual reply_to hydration
+          console.warn("[Chat Controller] reply_to join also failed, using select(*) + manual hydration");
+          let plainQuery = supabase
+            .from("messages")
             .select("*")
             .eq("conversation_id", conversationId)
             .eq("is_deleted", false)
             .order("created_at", { ascending: false })
             .limit(parseInt(limit));
-          
-          if (before) fallbackQuery = fallbackQuery.lt("created_at", before);
-          if (clearedAt) fallbackQuery = fallbackQuery.gt("created_at", clearedAt);
 
-          const { data: simpleData, error: simpleError } = await fallbackQuery;
+          if (before) plainQuery = plainQuery.lt("created_at", before);
+          if (clearedAt) plainQuery = plainQuery.gt("created_at", clearedAt);
 
+          const { data: simpleData, error: simpleError } = await plainQuery;
           if (simpleError) throw simpleError;
-          return res.json((simpleData || []).reverse());
+
+          // Manual reply_to hydration — batch load all referenced parent messages
+          const simpleArr = simpleData || [];
+          await _hydrateReplyTo(simpleArr);
+          return res.json(simpleArr.reverse());
         }
         throw error;
       }
+
+      // Primary query succeeded
       res.json((data || []).reverse());
     } catch (innerErr) {
       console.warn("[Chat Controller] Inner query error:", innerErr.message);
-      // Final fallback — also exclude deleted messages
-      const { data, error } = await supabase
+      // Final fallback — also exclude deleted messages + manual reply_to hydration
+      const { data: finalData, error: finalError } = await supabase
         .from("messages")
         .select("*")
         .eq("conversation_id", conversationId)
         .eq("is_deleted", false)
         .order("created_at", { ascending: false })
         .limit(parseInt(limit));
-      if (error) throw error;
-      res.json((data || []).reverse());
+      if (finalError) throw finalError;
+      const finalArr = finalData || [];
+      await _hydrateReplyTo(finalArr);
+      res.json(finalArr.reverse());
     }
   } catch (err) {
     console.error("Error fetching messages:", err.message);
@@ -1094,7 +1159,7 @@ exports.sendMessage = async (req, res) => {
 
       const { data: hydratedMessage, error: hydrateError } = await supabase
         .from("messages")
-        .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url), reply_to:messages(id, content, sender_id)")
+        .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url), reply_to:messages!reply_to_id(id, content, sender_id, type)")
         .eq("id", createdMessageId)
         .single();
 
@@ -1122,8 +1187,34 @@ exports.sendMessage = async (req, res) => {
           console.warn("[Chat Controller] Manual profile hydration failed:", e);
         }
 
+        // ── Gap 3 fix: manually resolve reply_to after fallback select(*) ──
+        // The FK join failed (migration 199 not yet applied, or schema cache stale).
+        // Look up the parent message directly so the client gets the nested object.
+        if (simpleMessage.reply_to_id) {
+          try {
+            const { data: parentMsg } = await supabase
+              .from('messages')
+              .select('id, content, sender_id, type, is_deleted')
+              .eq('id', simpleMessage.reply_to_id)
+              .single();
+            if (parentMsg) {
+              simpleMessage.reply_to = {
+                id: parentMsg.id,
+                content: parentMsg.content,
+                sender_id: parentMsg.sender_id,
+                message_type: parentMsg.type,
+                deleted: parentMsg.is_deleted,
+              };
+            }
+          } catch (replyErr) {
+            console.warn('[Chat Controller] Could not hydrate reply_to manually:', replyErr.message);
+          }
+        }
+
         processAfterMsg(simpleMessage);
       } else {
+        // Primary hydration succeeded — ensure reply_to is normalized
+        // (PostgREST returns null for the join when reply_to_id is null, which is correct)
         processAfterMsg(hydratedMessage);
       }
     } catch (msgErr) {
