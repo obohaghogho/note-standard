@@ -233,6 +233,19 @@ const ChatMessageBubble = React.memo(({
       </Animated.View>
     </View>
   );
+// ── Canonical Message Merger ─────────────────────────────────────────────
+// Never raw spread message objects during state updates. Always use this to
+// guarantee nested metadata (reply_to, attachments, etc.) is never destroyed
+// by thin server payloads or partial event updates.
+function mergeMessage(oldMsg: Message, newMsg: Partial<Message>): Message {
+  return {
+    ...oldMsg,
+    ...newMsg,
+    reply_to: newMsg.reply_to ?? oldMsg.reply_to,
+    attachment: newMsg.attachment ?? oldMsg.attachment,
+  };
+}
+
 });
 
 export default function ChatScreen({ navigation, route }: Props) {
@@ -372,7 +385,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                     const outboxReply = msg.replyTo || pendingReplies.current[msg.id];
                     setMessages(prev => prev.map(m =>
                       m.id === msg.id
-                        ? { ...res.data, reply_to: outboxReply ?? m.reply_to ?? res.data.reply_to }
+                        ? mergeMessage(m, { ...res.data, reply_to: outboxReply ?? res.data.reply_to })
                         : m
                     ));
                 } catch (e) {
@@ -419,10 +432,10 @@ export default function ChatScreen({ navigation, route }: Props) {
                 // Falls back to whatever the server broadcast sent.
                 const savedReply = pendingReplies.current[optimisticId];
                 const next = [...prev];
-                next[optIndex] = {
+                next[optIndex] = mergeMessage(prev[optIndex], {
                   ...msg,
-                  reply_to: savedReply ?? prev[optIndex].reply_to ?? msg.reply_to,
-                };
+                  reply_to: savedReply ?? msg.reply_to,
+                });
                 // Map the real server ID so the HTTP response path can find it too.
                 if (savedReply) {
                   pendingReplies.current[msg.id] = savedReply;
@@ -436,7 +449,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               const now = new Date().toISOString();
               apiClient.put(`/chat/messages/${msg.id}/deliver`).catch(() => {});
               apiClient.put(`/chat/messages/${msg.id}/read`).catch(() => {});
-              return [{ ...msg, delivered_at: now, read_at: now } as any, ...prev];
+              return [mergeMessage(msg, { delivered_at: now, read_at: now } as any), ...prev];
             }
             return [msg, ...prev];
           });
@@ -445,11 +458,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         socket.on('chat:message_edited', (editedMsg: Message) => {
           setMessages(prev => prev.map(m => {
             if (m.id !== editedMsg.id) return m;
-            // CRITICAL: Always preserve the existing reply_to from local state.
-            // The server's edited-message broadcast only contains updated text/content,
-            // not the full reply_to join. Spreading editedMsg would overwrite reply_to
-            // with null/undefined and destroy the reply bubble.
-            return { ...m, ...editedMsg, reply_to: m.reply_to ?? editedMsg.reply_to };
+            return mergeMessage(m, editedMsg);
           }));
         });
 
@@ -460,13 +469,13 @@ export default function ChatScreen({ navigation, route }: Props) {
         // Message status updates — use server-provided timestamps for accuracy
         socket.on('chat:message_read', ({ messageId, readAt }: { messageId: string; readAt?: string }) => {
           setMessages(prev => prev.map(m =>
-            m.id === messageId ? { ...m, read_at: readAt || new Date().toISOString() } as any : m
+            m.id === messageId ? mergeMessage(m, { read_at: readAt || new Date().toISOString() } as any) : m
           ));
         });
 
         socket.on('chat:message_delivered', ({ messageId, delivered_at }: { messageId: string; delivered_at?: string }) => {
           setMessages(prev => prev.map(m =>
-            m.id === messageId ? { ...m, delivered_at: delivered_at || new Date().toISOString() } as any : m
+            m.id === messageId ? mergeMessage(m, { delivered_at: delivered_at || new Date().toISOString() } as any) : m
           ));
         });
 
@@ -475,7 +484,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           const currentUser = userRef.current;
           if (readConvId === conversationId && readerId !== currentUser?.id) {
             setMessages(prev => prev.map(m =>
-              m.sender_id === currentUser?.id ? { ...m, read_at: readAt, delivered_at: readAt } as any : m
+              m.sender_id === currentUser?.id ? mergeMessage(m, { read_at: readAt, delivered_at: readAt } as any) : m
             ));
           }
         });
@@ -484,7 +493,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           const currentUser = userRef.current;
           if (delConvId === conversationId && delUserId !== currentUser?.id) {
             setMessages(prev => prev.map(m =>
-              m.sender_id === currentUser?.id && !(m as any).read_at ? { ...m, delivered_at: delivered_at } as any : m
+              m.sender_id === currentUser?.id && !(m as any).read_at ? mergeMessage(m, { delivered_at: delivered_at } as any) : m
             ));
           }
         });
@@ -609,7 +618,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               // Normal path: replace optimistic with server message
               return prev.map(m =>
                 m.id === optimisticId
-                  ? { ...serverMsg, reply_to: authReply ?? m.reply_to ?? serverMsg.reply_to }
+                  ? mergeMessage(m, { ...serverMsg, reply_to: authReply ?? serverMsg.reply_to })
                   : m
               );
             }
@@ -618,13 +627,13 @@ export default function ChatScreen({ navigation, route }: Props) {
             if (prev.some(m => m.id === serverMsg.id)) {
               return prev.map(m =>
                 m.id === serverMsg.id
-                  ? { ...m, reply_to: authReply ?? m.reply_to ?? serverMsg.reply_to }
+                  ? mergeMessage(m, { ...serverMsg, reply_to: authReply ?? serverMsg.reply_to })
                   : m
               );
             }
 
             // Fallback: prepend the confirmed server message
-            return [{ ...serverMsg, reply_to: authReply ?? serverMsg.reply_to }, ...prev];
+            return [mergeMessage(serverMsg, { reply_to: authReply ?? serverMsg.reply_to }), ...prev];
           });
 
           // CRITICAL: Defer pendingReplies cleanup to AFTER React has executed
