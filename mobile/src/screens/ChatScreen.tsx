@@ -261,8 +261,21 @@ export default function ChatScreen({ navigation, route }: Props) {
   const initialLoadDoneRef = useRef(false);
   const [audioPlayer, setAudioPlayer] = useState<Audio.Sound | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  /**
+   * replyToRef — always holds the current replyTo value.
+   * React 18 concurrent mode can cause async functions like sendMessage to
+   * capture a STALE closure over replyTo (e.g. reading null even after the
+   * user swiped to set a reply). The ref is mutation-safe and always current.
+   */
+  const replyToRef = useRef<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [actionSheetMessage, setActionSheetMessage] = useState<Message | null>(null);
+
+  // Keep replyToRef in sync with replyTo state so async callbacks always
+  // read the latest value regardless of when React schedules their render.
+  useEffect(() => {
+    replyToRef.current = replyTo;
+  }, [replyTo]);
 
   // Inverted FlatList auto-scrolls to latest message (offset 0) natively.
   // No manual keyboard listener needed — KeyboardAvoidingView handles layout.
@@ -487,11 +500,19 @@ export default function ChatScreen({ navigation, route }: Props) {
     const contentToSend = overrideContent || text.trim();
     if (!contentToSend && !attachmentId) return;
     if (sending) return;
-    
+
+    // ── Snapshot reply state NOW, before any await or state mutation ──
+    // This is the WhatsApp-grade fix: replyToRef.current is always the latest
+    // value even if React's concurrent scheduler deferred the render that
+    // would have updated the closure. We freeze it as replySnapshot so the
+    // entire send lifecycle (optimistic insert → API call → server replace)
+    // uses the exact same reply context.
+    const replySnapshot = replyToRef.current;
+
     if (!overrideContent) setText('');
     setSending(true);
 
-    // FIX: Optimistic update
+    // Build optimistic message with frozen reply snapshot
     const optimisticId = `opt-${Date.now()}`;
     const optimisticMsg: Message = {
       id: optimisticId,
@@ -499,55 +520,105 @@ export default function ChatScreen({ navigation, route }: Props) {
       sender_id: user?.id ?? '',
       created_at: new Date().toISOString(),
       _optimistic: true,
-      reply_to: replyTo ? {
-        id: replyTo.id,
-        content: replyTo.content,
-        sender_id: replyTo.sender_id,
-      } : undefined,
+      reply_to: replySnapshot
+        ? {
+            id: replySnapshot.id,
+            content: replySnapshot.content,
+            sender_id: replySnapshot.sender_id,
+            sender_name: replySnapshot.sender
+              ? (replySnapshot.sender.full_name || replySnapshot.sender.username)
+              : undefined,
+            message_type: replySnapshot.type,
+          }
+        : undefined,
     };
+    // Insert optimistic immediately so the user sees the bubble with reply context
     setMessages(prev => [optimisticMsg, ...prev]);
 
     try {
       if (editingMessage) {
         await apiClient.patch(`/chat/messages/${editingMessage.id}`, { content: contentToSend });
         setEditingMessage(null);
+        // Remove the erroneous optimistic that was added for the edit path
+        setMessages(prev => prev.filter(m => m.id !== optimisticId));
       } else {
         const res = await apiClient.post(
           `/chat/conversations/${conversationId}/messages`,
-          { content: contentToSend, attachmentId, replyToId: replyTo?.id }
+          {
+            content: contentToSend,
+            attachmentId,
+            // Send the frozen snapshot ID — guarantees replyToId is set even if
+            // replyTo state was cleared by a concurrent render before this await
+            replyToId: replySnapshot?.id,
+          }
         );
 
         const serverMsg: Message = res.data;
         if (serverMsg?.id) {
           setMessages(prev => {
-            const optimistic = prev.find(m => m.id === optimisticId);
-            return prev.map(m =>
-              m.id === optimisticId
-                ? {
-                    ...serverMsg,
-                    // Preserve the local reply_to when server hasn't resolved
-                    // the nested object yet (e.g. FK join failed or migration
-                    // not applied). Once server sends it, serverMsg.reply_to wins.
-                    reply_to: serverMsg.reply_to ?? optimistic?.reply_to,
-                  }
-                : m
-            );
+            // Try to find the optimistic by its temp ID first
+            const optimisticInPrev = prev.find(m => m.id === optimisticId);
+
+            if (optimisticInPrev) {
+              // Normal path: replace optimistic with server message
+              return prev.map(m =>
+                m.id === optimisticId
+                  ? {
+                      ...serverMsg,
+                      // Prefer server's resolved reply_to; fall back to frozen snapshot
+                      reply_to: serverMsg.reply_to ?? optimisticMsg.reply_to,
+                    }
+                  : m
+              );
+            }
+
+            // WebSocket beat the HTTP response: optimistic was already replaced
+            // by chat:message event (its ID changed to the real server ID).
+            // Check if the server message is already present.
+            if (prev.some(m => m.id === serverMsg.id)) {
+              // Already in list — ensure reply_to is preserved
+              return prev.map(m =>
+                m.id === serverMsg.id
+                  ? { ...m, reply_to: m.reply_to ?? serverMsg.reply_to ?? optimisticMsg.reply_to }
+                  : m
+              );
+            }
+
+            // Fallback: just prepend the confirmed server message
+            return [{ ...serverMsg, reply_to: serverMsg.reply_to ?? optimisticMsg.reply_to }, ...prev];
           });
         }
+
+        // Clear reply banner ONLY after successful server acknowledgement
         setReplyTo(null);
+        replyToRef.current = null;
       }
     } catch (e: any) {
       console.error('[ChatScreen] Send failed:', e);
-      // Change to failed state instead of deleting
-      setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, _optimistic: false, type: 'failed' } : m));
-      
+      setMessages(prev => prev.map(m =>
+        m.id === optimisticId ? { ...m, _optimistic: false, type: 'failed' } : m
+      ));
+
       if (!editingMessage) {
-        // Save to Outbox — replyToId is persisted so the retry will still thread correctly
-        const outboxMsg = { id: optimisticId, content: contentToSend, attachmentId, replyToId: replyTo?.id };
-        const currentOutbox = JSON.parse(await AsyncStorage.getItem(`chat_outbox_${conversationId}`) || '[]');
-        await AsyncStorage.setItem(`chat_outbox_${conversationId}`, JSON.stringify([...currentOutbox, outboxMsg]));
-        // Clear the reply banner — replyToId is saved in outbox, no need to keep it active
+        // Persist to outbox with frozen reply snapshot so retry is correct
+        const outboxMsg = {
+          id: optimisticId,
+          content: contentToSend,
+          attachmentId,
+          replyToId: replySnapshot?.id,
+          // Store full reply snapshot so the bubble shows correctly after reconnect
+          replyTo: optimisticMsg.reply_to,
+        };
+        const currentOutbox = JSON.parse(
+          await AsyncStorage.getItem(`chat_outbox_${conversationId}`) || '[]'
+        );
+        await AsyncStorage.setItem(
+          `chat_outbox_${conversationId}`,
+          JSON.stringify([...currentOutbox, outboxMsg])
+        );
+        // Clear banner — reply is safely queued in the outbox
         setReplyTo(null);
+        replyToRef.current = null;
       }
 
       if (!overrideContent) setText(contentToSend);
@@ -556,6 +627,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       setSending(false);
     }
   };
+
 
   const handlePickMedia = async () => {
     try {
