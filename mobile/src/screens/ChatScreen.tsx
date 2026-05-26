@@ -261,21 +261,8 @@ export default function ChatScreen({ navigation, route }: Props) {
   const initialLoadDoneRef = useRef(false);
   const [audioPlayer, setAudioPlayer] = useState<Audio.Sound | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
-  /**
-   * replyToRef — always holds the current replyTo value.
-   * React 18 concurrent mode can cause async functions like sendMessage to
-   * capture a STALE closure over replyTo (e.g. reading null even after the
-   * user swiped to set a reply). The ref is mutation-safe and always current.
-   */
-  const replyToRef = useRef<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [actionSheetMessage, setActionSheetMessage] = useState<Message | null>(null);
-
-  // Keep replyToRef in sync with replyTo state so async callbacks always
-  // read the latest value regardless of when React schedules their render.
-  useEffect(() => {
-    replyToRef.current = replyTo;
-  }, [replyTo]);
 
   // Inverted FlatList auto-scrolls to latest message (offset 0) natively.
   // No manual keyboard listener needed — KeyboardAvoidingView handles layout.
@@ -395,9 +382,17 @@ export default function ChatScreen({ navigation, route }: Props) {
               );
 
               const getValidReplyTo = (srvReply: any, optReply: any) => {
-                if (srvReply && typeof srvReply === 'object' && Object.keys(srvReply).length > 0) {
-                  return { ...optReply, ...srvReply };
+                if (!srvReply) return optReply;
+                let validSrv = srvReply;
+                if (Array.isArray(srvReply)) {
+                  if (srvReply.length > 0) validSrv = srvReply[0];
+                  else return optReply;
                 }
+                try {
+                  if (typeof validSrv === 'object' && Object.keys(validSrv).length > 0) {
+                    return { ...optReply, ...validSrv };
+                  }
+                } catch (e) {}
                 return optReply;
               };
 
@@ -510,12 +505,10 @@ export default function ChatScreen({ navigation, route }: Props) {
     if (sending) return;
 
     // ── Snapshot reply state NOW, before any await or state mutation ──
-    // This is the WhatsApp-grade fix: replyToRef.current is always the latest
-    // value even if React's concurrent scheduler deferred the render that
-    // would have updated the closure. We freeze it as replySnapshot so the
-    // entire send lifecycle (optimistic insert → API call → server replace)
-    // uses the exact same reply context.
-    const replySnapshot = replyToRef.current;
+    // Capture from direct state since sendMessage is completely recreated on
+    // every render, guaranteeing that this closure contains the very latest
+    // synchronous UI state at the exact moment the user presses 'Send'.
+    const replySnapshot = replyTo;
 
     if (!overrideContent) setText('');
     setSending(true);
@@ -567,9 +560,17 @@ export default function ChatScreen({ navigation, route }: Props) {
             const optimisticInPrev = prev.find(m => m.id === optimisticId);
 
             const getValidReplyTo = (srvReply: any, optReply: any) => {
-              if (srvReply && typeof srvReply === 'object' && Object.keys(srvReply).length > 0) {
-                return { ...optReply, ...srvReply };
+              if (!srvReply) return optReply;
+              let validSrv = srvReply;
+              if (Array.isArray(srvReply)) {
+                if (srvReply.length > 0) validSrv = srvReply[0];
+                else return optReply;
               }
+              try {
+                if (typeof validSrv === 'object' && Object.keys(validSrv).length > 0) {
+                  return { ...optReply, ...validSrv };
+                }
+              } catch (e) {}
               return optReply;
             };
 
@@ -605,7 +606,6 @@ export default function ChatScreen({ navigation, route }: Props) {
 
         // Clear reply banner ONLY after successful server acknowledgement
         setReplyTo(null);
-        replyToRef.current = null;
       }
     } catch (e: any) {
       console.error('[ChatScreen] Send failed:', e);
@@ -632,7 +632,6 @@ export default function ChatScreen({ navigation, route }: Props) {
         );
         // Clear banner — reply is safely queued in the outbox
         setReplyTo(null);
-        replyToRef.current = null;
       }
 
       if (!overrideContent) setText(contentToSend);
