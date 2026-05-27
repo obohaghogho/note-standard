@@ -1950,7 +1950,7 @@ exports.editMessage = async (req, res) => {
       .eq("id", messageId)
       .eq("sender_id", userId) // Force ownership
       .eq("is_deleted", false) // Cannot edit deleted messages
-      .select("*, attachment:media_attachments(*)")
+      .select("*, attachment:media_attachments(*), reply_to:messages!reply_to_id(id, content, sender_id, type, is_deleted)")
       .single();
 
     if (error) {
@@ -1968,14 +1968,22 @@ exports.editMessage = async (req, res) => {
            .eq("id", messageId)
            .eq("sender_id", userId)
            .eq("is_deleted", false)
-           .select("*, attachment:media_attachments(*)")
+           .select("*, attachment:media_attachments(*), reply_to:messages!reply_to_id(id, content, sender_id, type, is_deleted)")
            .single();
          if (retryErr) throw retryErr;
-         
+         // Ensure reply_to is hydrated even if FK join returned null (schema cache miss)
+         if (retryData.reply_to_id && !retryData.reply_to) {
+           await _hydrateReplyTo([retryData]);
+         }
          await realtime.emitToConversation(retryData.conversation_id, "chat:message_edited", retryData);
          return res.json(retryData);
       }
       throw error;
+    }
+
+    // Ensure reply_to is hydrated even if FK join returned null (schema cache miss)
+    if (data.reply_to_id && !data.reply_to) {
+      await _hydrateReplyTo([data]);
     }
 
     // Notify via Gateway

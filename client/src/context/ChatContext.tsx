@@ -557,7 +557,20 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         const onMessageEdited = (editedMsg: Message) => {
             setMessages(prev => {
                 const current = prev[editedMsg.conversation_id] || [];
-                return { ...prev, [editedMsg.conversation_id]: current.map(m => m.id === editedMsg.id ? { ...m, ...editedMsg } : m) };
+                return {
+                    ...prev,
+                    [editedMsg.conversation_id]: current.map(m => {
+                        if (m.id !== editedMsg.id) return m;
+                        return {
+                            ...m,
+                            ...editedMsg,
+                            // Phase 8: reply_to guard — server edit payload may not carry the
+                            // full reply_to join. Never let a partial broadcast overwrite a
+                            // valid local reply snapshot.
+                            reply_to: editedMsg.reply_to ?? m.reply_to,
+                        };
+                    })
+                };
             });
         };
 
