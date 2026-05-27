@@ -71,6 +71,16 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
             
             byId.set(updatedMsg.id, updatedMsg);
             if (updatedMsg.event_id) byEvent.set(updatedMsg.event_id, updatedMsg);
+
+            console.log('[SYNC_FORENSICS]', {
+                stage: 'mergeMessages',
+                event: 'conflict_resolution',
+                messageId: updatedMsg.id,
+                incomingReplyTo: msg.reply_to,
+                existingReplyTo: existingMsg.reply_to,
+                mergedReplyTo: updatedMsg.reply_to,
+                payload: msg,
+            });
         }
     }
 

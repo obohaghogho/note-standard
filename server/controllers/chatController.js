@@ -35,9 +35,10 @@ async function _hydrateReplyTo(messages) {
     if (!parents) return;
     const map = Object.fromEntries(parents.map(p => [p.id, p]));
     messages.forEach(m => {
-      // Always overwrite (even when reply_to was set by FK join) to ensure
-      // sender_name is resolved — the FK join cannot traverse two levels.
-      if (!m.reply_to_id) return;
+      // If the message already has a fully formed reply_to object, DO NOT overwrite it.
+      // But if it's missing (and it has a reply_to_id), populate it from our map.
+      if (!m.reply_to_id || m.reply_to) return;
+      
       const p = map[m.reply_to_id];
       const senderName = p && p.sender ? (p.sender.full_name || p.sender.username) : null;
       m.reply_to = p

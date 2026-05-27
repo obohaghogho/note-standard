@@ -397,6 +397,14 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 setMessages(prev => {
                     const current = prev[conversationId] || [];
                     const { merged } = mergeMessages(current, filtered);
+
+                    console.log('[SYNC_FORENSICS]', {
+                        stage: 'loadMessages',
+                        event: 'rest_sync',
+                        conversationId,
+                        incomingPayloadCount: filtered.length,
+                    });
+
                     return { ...prev, [conversationId]: merged };
                 });
             }
@@ -485,6 +493,14 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
             const newMessage: Message = { ...msg, isOwn: isOwnMessage };
             
+            console.log('[SYNC_FORENSICS]', {
+                stage: 'receive_message',
+                event: 'websocket_sync',
+                messageId: newMessage.id,
+                incomingReplyTo: newMessage.reply_to,
+                payload: newMessage,
+            });
+
             // Mark as read immediately if this conversation is active
             if (activeConversationIdRef.current === msg.conversation_id && !isOwnMessage) {
                 markMessageRead(msg.id, msg.conversation_id);
@@ -849,6 +865,16 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 if (intent.payload.replyTo && !canonicalMessage.reply_to) {
                     canonicalMessage = { ...canonicalMessage, reply_to: intent.payload.replyTo };
                 }
+
+                console.log('[SYNC_FORENSICS]', {
+                    stage: 'flushQueue',
+                    event: 'offline_queue_sync',
+                    messageId: canonicalMessage.id,
+                    eventId: intent.event_id,
+                    incomingReplyTo: canonicalMessage.reply_to,
+                    intentReplyTo: intent.payload.replyTo,
+                    payload: canonicalMessage,
+                });
 
                 setMessages(prev => {
                     const current = prev[intent.conversation_id] || [];
