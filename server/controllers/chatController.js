@@ -164,7 +164,10 @@ exports.getConversations = async (req, res) => {
                 full_name,
                 avatar_url,
                 is_verified,
-                plan_tier
+                plan_tier,
+                is_online,
+                show_online_status,
+                last_seen
               )
             `)
             .eq("conversation_id", conv.id);
@@ -179,7 +182,9 @@ exports.getConversations = async (req, res) => {
                   id,
                   username,
                   full_name,
-                  avatar_url
+                  avatar_url,
+                  is_online,
+                  last_seen
                 )
               `)
               .eq("conversation_id", conv.id);

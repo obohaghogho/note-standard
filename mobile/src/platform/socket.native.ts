@@ -21,6 +21,7 @@ type Listener = { event: string; handler: (...args: any[]) => void };
 class NativeSocketLifecycleManager {
   private socket: Socket | null = null;
   private listeners: Listener[] = [];
+  private joinedRooms: Set<string> = new Set(); // Persists across reconnects
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
@@ -68,6 +69,7 @@ class NativeSocketLifecycleManager {
       this.isConnecting = false;
       this._startHeartbeat(socket);
       this._reattachListeners(socket);
+      this._rejoinRooms(socket); // Re-join all tracked rooms on every connect
       this._registerAppStateListener();
     });
 
@@ -132,6 +134,31 @@ class NativeSocketLifecycleManager {
     this.socket.emit(event, data);
   }
 
+  /**
+   * Join a room and persist it so it is automatically re-joined on reconnect.
+   * Safe to call before the socket is connected — the join will be replayed
+   * in _rejoinRooms() when the 'connect' event fires.
+   */
+  joinRoom(roomId: string) {
+    if (!roomId) return;
+    this.joinedRooms.add(roomId);
+    if (this.socket?.connected) {
+      this.socket.emit('chat:join', roomId);
+      console.log(`[SocketLifecycle:Native] Joined room: ${roomId}`);
+    }
+  }
+
+  /**
+   * Leave a room and stop tracking it for reconnects.
+   */
+  leaveRoom(roomId: string) {
+    if (!roomId) return;
+    this.joinedRooms.delete(roomId);
+    if (this.socket?.connected) {
+      this.socket.emit('chat:leave', roomId);
+    }
+  }
+
   get connected(): boolean {
     return this.socket?.connected ?? false;
   }
@@ -148,6 +175,14 @@ class NativeSocketLifecycleManager {
       socket.on(event, handler);
     }
     console.log(`[SocketLifecycle:Native] Re-attached ${this.listeners.length} listeners`);
+  }
+
+  private _rejoinRooms(socket: Socket) {
+    if (this.joinedRooms.size === 0) return;
+    for (const roomId of this.joinedRooms) {
+      socket.emit('chat:join', roomId);
+    }
+    console.log(`[SocketLifecycle:Native] Re-joined ${this.joinedRooms.size} rooms`);
   }
 
   private _scheduleReconnect() {
@@ -222,6 +257,7 @@ class NativeSocketLifecycleManager {
     }
     if (fullReset) {
       this.listeners = [];
+      this.joinedRooms.clear();
       this.reconnectAttempts = 0;
       this._removeAppStateListener();
     }

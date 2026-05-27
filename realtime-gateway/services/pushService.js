@@ -312,11 +312,15 @@ async function sendGenericPush(params) {
 
       // iOS APNs — alert push (NOT voip) for regular chat notifications
       // voip push is reserved for calls only (PushKit)
-      if (t.platform === 'ios' && t.type === 'apns' && (apnProviderProd || apnProviderSandbox)) {
+      if (t.platform === 'ios' && t.type === 'apns') {
+        if (!apnProviderProd && !apnProviderSandbox) {
+          console.warn('[PushService] ⚠️ iOS APNs provider not initialised — APNS_KEY/APNS_KEY_ID/APNS_TEAM_ID env vars likely missing. Notification skipped for user:', userId);
+          return;
+        }
         const notification = new apn.Notification();
         notification.topic = process.env.APNS_BUNDLE_ID || 'com.notestandard.app'; // Standard bundle, NOT .voip
         notification.priority = 10;
-        notification.pushType = 'alert';
+        notification.pushType = 'alert'; // Required iOS 13+ header
         notification.alert = { title, body };
         notification.sound = 'default';
         notification.badge = 1;

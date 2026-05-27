@@ -39,9 +39,16 @@ export class PushHandler {
       this.setupVoIP();
     }
 
-    this.registerDeviceToken().catch(err => {
-      console.warn('[PushHandler] Graceful initial register Device Token fail:', err);
-    });
+    if (finalStatus === 'granted') {
+      // Only try to get/register the device push token if the user has granted
+      // permission. On iOS, getDevicePushTokenAsync() throws if permissions
+      // are denied, and even though we catch the error it pollutes the logs.
+      this.registerDeviceToken().catch(err => {
+        console.warn('[PushHandler] Graceful initial register Device Token fail:', err);
+      });
+    } else {
+      console.warn(`[PushHandler] ⚠️ Push permission not granted (status: ${finalStatus}). Device token registration skipped.`);
+    }
 
     Notifications.addNotificationReceivedListener(notification => {
       const { data, title, body } = notification.request.content;

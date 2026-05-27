@@ -30,7 +30,11 @@ function ConversationItem({
   const otherMember = item.members?.find(m => m.user_id !== userId);
   const myMember = item.members?.find(m => m.user_id === userId);
   const profile = otherMember?.profile;
-  const name = profile?.full_name || profile?.username || 'Unknown User';
+  // Graceful fallback: if the profile JOIN returned null (orphaned member or
+  // profile not yet synced), show a shortened user ID instead of "Unknown User"
+  const name = profile?.full_name?.trim()
+    || profile?.username?.trim()
+    || (otherMember?.user_id ? `User ${otherMember.user_id.substring(0, 6)}` : 'Unknown');
   const isPending = myMember?.status === 'pending';
   const otherPending = otherMember?.status === 'pending';
   const initial = name.charAt(0).toUpperCase();

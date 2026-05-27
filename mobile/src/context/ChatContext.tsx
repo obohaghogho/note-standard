@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../api/apiClient';
+import { AuthService } from '../services/AuthService';
 import { socketManager } from '../platform/socket.native';
 import { mobileTransportAdapter } from '../utils/mobileTransportAdapter';
 import { mergeMessages } from 'shared/messageMergeEngine';
@@ -47,13 +48,21 @@ const ChatContext = createContext<ChatContextType>({
 });
 
 export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
-    const { user, session } = useAuth();
+    const { user } = useAuth();
     const [conversations, setConversations] = useState<any[]>([]);
     const [messages, setMessages] = useState<Record<string, Message[]>>({});
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
 
     const [deviceId, setDeviceId] = useState<string | null>(null);
     const [sessionId, setSessionId] = useState<string | null>(null);
+    const deviceIdRef = useRef<string | null>(null);
+    const sessionIdRef = useRef<string | null>(null);
+    const userRef = useRef(user);
+
+    // Keep refs in sync with state
+    useEffect(() => { userRef.current = user; }, [user]);
+    useEffect(() => { deviceIdRef.current = deviceId; }, [deviceId]);
+    useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
 
     // Initialize Device and Session — persisting deviceId across restarts
     useEffect(() => {
@@ -64,7 +73,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 localDeviceId = `mobile-${Math.random().toString(36).substring(2, 9)}`;
                 await AsyncStorage.setItem('chat_device_id', localDeviceId);
             }
+            // Write to both state (for renders) AND ref (for immediate use in
+            // sendMessage without waiting for a render cycle to flush).
             setDeviceId(localDeviceId);
+            deviceIdRef.current = localDeviceId;
 
             try {
                 const res = await apiClient.post('/session/register', {
@@ -74,6 +86,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 });
                 if (res.data?.session_id) {
                     setSessionId(res.data.session_id);
+                    sessionIdRef.current = res.data.session_id;
+                    console.log('[ChatContext] ✓ Session registered:', res.data.session_id);
+                } else {
+                    console.warn('[ChatContext] Session registration returned no session_id — messages will send without session tracking');
                 }
             } catch (err) {
                 console.error('[ChatContext] Session registration failed', err);
@@ -203,12 +219,30 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     // ── 3. SOCKET PIPELINE ──────────────────────────────────────────────────
+    // FIXED: mobile AuthContext never exposes `session`, so we retrieve the
+    // token directly from AuthService (AsyncStorage) instead.
     useEffect(() => {
-        if (!session || !user) return;
+        if (!user) return;
 
-        const socket = socketManager.connect(session.access_token, user.id);
-        
-        socketManager.on('receive_message', async (rawMsg: any) => {
+        let cancelled = false;
+
+        const setupSocket = async () => {
+            const token = await AuthService.getToken();
+            if (!token || cancelled) return;
+
+            socketManager.connect(token, user.id);
+
+            // Use joinRoom() — safe to call before the handshake completes.
+            // Rooms are tracked and auto re-joined on every connect/reconnect.
+            if (activeConversationId) {
+                socketManager.joinRoom(activeConversationId);
+            }
+        };
+
+        setupSocket();
+
+        // FIXED: gateway emits 'chat:message', NOT 'receive_message'
+        socketManager.on('chat:message', async (rawMsg: any) => {
             // 1. Decrypt via Transport Adapter
             const plainContent = await mobileTransportAdapter.decodeIncomingMessage(rawMsg, user.id);
             const processedMsg = { ...rawMsg, content: plainContent || '[Decryption Failed]' };
@@ -321,11 +355,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         loadConversations();
 
         return () => {
-            socketManager.offEvent('receive_message');
+            cancelled = true;
+            socketManager.offEvent('chat:message');
             socketManager.offEvent('chat:delivery_receipt');
             socketManager.offEvent('chat:read_receipt');
         };
-    }, [session, user, activeConversationId]);
+    }, [user, activeConversationId]);
 
     // Fetch messages when active conversation changes
     useEffect(() => {
@@ -372,12 +407,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             const payload = await mobileTransportAdapter.encodeOutgoingPayload(conversationId, text, user.id);
 
             // Step 3: Send via API (include canonical eventId)
+            // Use refs to always get the latest IDs even if state hasn't re-rendered yet
+            const currentDeviceId = deviceIdRef.current;
+            const currentSessionId = sessionIdRef.current;
             const res = await apiClient.post(`/chat/conversations/${conversationId}/messages`, {
                 ...payload,
                 eventId: clientEventId,
                 type: 'text',
-                deviceId,
-                sessionId
+                ...(currentDeviceId ? { deviceId: currentDeviceId } : {}),
+                ...(currentSessionId ? { sessionId: currentSessionId } : {})
             });
 
             // Step 4: Backend Collapse via Merge Engine

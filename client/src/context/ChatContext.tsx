@@ -965,7 +965,20 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }
 
             if (!resolvedDeviceId || !resolvedSessionId) {
-                throw new Error('Cannot send message: session not ready');
+                // Do NOT throw — that blocks the message entirely on iOS Safari after
+                // a cold-start or network flap. Instead, degrade gracefully:
+                // generate ephemeral IDs so the message still queues and sends.
+                // Lease arbitration runs in degraded (non-arbitrated) mode but the
+                // content always reaches the server.
+                console.warn('[ChatContext] Session not ready — proceeding with ephemeral session (degraded mode)');
+                if (!resolvedDeviceId) {
+                    resolvedDeviceId = `web-${Math.random().toString(36).substring(2, 9)}`;
+                    localStorage.setItem('chat_device_id', resolvedDeviceId);
+                    deviceIdRef.current = resolvedDeviceId;
+                }
+                if (!resolvedSessionId) {
+                    resolvedSessionId = `eph-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+                }
             }
         }
         
