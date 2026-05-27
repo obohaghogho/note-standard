@@ -69,27 +69,25 @@ const createNotification = async ({
 
     // 4. Native Push (FCM for Android, APNs for iOS) via the realtime-gateway.
     //    The gateway already holds Firebase Admin and APNs credentials (used for call push).
-    //    For chat messages, we route through the gateway's /internal/push endpoint.
+    //    We route through the gateway's /internal/push endpoint for all notifications.
     //    This ensures iOS users receive push notifications even when the PWA is closed.
-    if (type === 'chat_message' || type === 'mention') {
-      const gatewayUrl = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
-      const body = message || title;
-      fetch(`${gatewayUrl}/internal/push`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: receiverId,
-          title,
-          body,
-          payload: {
-            type,
-            conversationId: conversationId || null,
-            messageId: messageId || null,
-            url: link || '/dashboard/chat',
-          },
-        }),
-      }).catch(err => console.error('[NotificationService] Native push via gateway failed:', err.message));
-    }
+    const gatewayUrl = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
+    const body = message || title;
+    fetch(`${gatewayUrl}/internal/push`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: receiverId,
+        title,
+        body,
+        payload: {
+          type,
+          conversationId: conversationId || null,
+          messageId: messageId || null,
+          url: link || '/dashboard/notifications',
+        },
+      }),
+    }).catch(err => console.error('[NotificationService] Native push via gateway failed:', err.message));
 
     return true;
   } catch (err) {
@@ -239,6 +237,21 @@ const broadcastNotification = async ({
         );
       }
     }
+
+    // 5. Native Push Broadcast (FCM/APNs) via Gateway
+    const gatewayUrl = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
+    fetch(`${gatewayUrl}/internal/push/broadcast`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title,
+        body: message,
+        payload: {
+          type,
+          url: link || '/dashboard/notifications',
+        },
+      }),
+    }).catch(err => console.error('[NotificationService] Native broadcast via gateway failed:', err.message));
 
     return true;
   } catch (err) {

@@ -133,7 +133,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
       
       if (user?.id) {
-        accountManager.removeAccount(user.id);
+        accountManager.updateAccountTokens(user.id, { access_token: '', refresh_token: '', expires_at: 0 });
       }
       
       // Rule 9: state will be updated by onAuthStateChange listener
@@ -204,7 +204,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (currentSwitchId !== switchIdRef.current) return;
 
       if (!freshSession) {
-        throw new Error(`Session for ${target.email} has expired. Please log in again to that account.`);
+        toast.error(`Session for ${target.email} has expired. Please re-authenticate.`);
+        setIsSwitching(false);
+        switchInProgress.current = false;
+        window.location.href = `/login?add_account=true&hint=${encodeURIComponent(target.email)}`;
+        return;
       }
 
       // Rule 3: Update active account ID FIRST

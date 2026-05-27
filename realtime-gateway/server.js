@@ -86,8 +86,22 @@ app.post('/internal/push', async (req, res) => {
     if (!userId) return res.status(400).json({ error: 'userId required' });
 
     // Fire-and-forget so the API server isn't blocked waiting for APNs/FCM
-    pushService.sendChatPush({ userId, title, body: body || '', payload: payload || {} })
+    pushService.sendGenericPush({ userId, title, body: body || '', payload: payload || {} })
       .catch(err => console.error('[Gateway] /internal/push error:', err.message));
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/internal/push/broadcast', async (req, res) => {
+  try {
+    const { title, body, payload } = req.body;
+
+    // Fire-and-forget
+    pushService.sendBroadcastPush({ title, body: body || '', payload: payload || {} })
+      .catch(err => console.error('[Gateway] /internal/push/broadcast error:', err.message));
 
     res.json({ ok: true });
   } catch (err) {

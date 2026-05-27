@@ -257,13 +257,13 @@ async function sendCallPush(params) {
 }
 
 /**
- * Sends chat message push notifications to native apps.
+ * Sends generic push notifications to native apps.
  * Uses FCM notification messages (Android) and APNs alert push (iOS).
  * NOTE: This is separate from sendCallPush which uses VoIP-only channels.
  *
  * @param {Object} params - { userId, title, body, payload }
  */
-async function sendChatPush(params) {
+async function sendGenericPush(params) {
   const { userId, title, body, payload } = params;
 
   try {
@@ -287,20 +287,20 @@ async function sendChatPush(params) {
             body: body,
           },
           data: {
-            type: 'chat_message',
+            type: String(payload.type || 'notification'),
             conversationId: String(payload.conversationId || ''),
             messageId: String(payload.messageId || ''),
-            url: String(payload.url || '/dashboard/chat'),
+            url: String(payload.url || '/dashboard/notifications'),
           },
           android: {
             priority: 'high',
             notification: {
               sound: 'default',
-              tag: `chat-${payload.conversationId || 'default'}`, // Forces grouping per conversation on Android
+              tag: payload.conversationId ? `chat-${payload.conversationId}` : `type-${payload.type || 'notification'}`,
             },
           },
         };
-        console.log(`[PushService] 📤 Sending FCM chat notification (Android) to: ${t.token.substring(0, 10)}...`);
+        console.log(`[PushService] 📤 Sending FCM notification (Android) to: ${t.token.substring(0, 10)}...`);
         return admin.messaging().send(message)
           .catch(err => {
             console.error(`[PushService] ❌ FCM chat fail:`, err.message);
@@ -322,27 +322,99 @@ async function sendChatPush(params) {
         notification.badge = 1;
         notification.contentAvailable = true;
         notification.mutableContent = true;
-        notification.threadId = payload.conversationId || 'default'; // Forces grouping in iOS Notification Center
+        notification.threadId = payload.conversationId || payload.type || 'default';
         notification.payload = {
-          type: payload.type || 'chat_message',
+          type: payload.type || 'notification',
           conversationId: payload.conversationId,
           messageId: payload.messageId,
-          url: payload.url || '/dashboard/chat',
+          url: payload.url || '/dashboard/notifications',
         };
 
-        console.log(`[PushService] 📤 Initiating APNs alert (iOS chat) to topic: ${notification.topic}`);
+        console.log(`[PushService] 📤 Initiating APNs alert (iOS) to topic: ${notification.topic}`);
         return sendApnsWithFallback(notification, t.token, 'Chat');
       }
     });
 
     await Promise.all(pushPromises.filter(Boolean));
-    console.log(`[PushService] ✅ Chat push completed for user ${userId}.`);
+    console.log(`[PushService] ✅ Push completed for user ${userId}.`);
   } catch (err) {
-    console.error('[PushService] sendChatPush error:', err.message);
+    console.error('[PushService] sendGenericPush error:', err.message);
+  }
+}
+
+/**
+ * Sends a broadcast push notification to all native devices.
+ * Uses pagination to avoid overwhelming memory or API limits.
+ *
+ * @param {Object} params - { title, body, payload }
+ */
+async function sendBroadcastPush(params) {
+  const { title, body, payload } = params;
+  try {
+    const { data: tokens, error } = await supabase
+      .from('native_device_tokens')
+      .select('token, platform, type, user_id');
+
+    if (error || !tokens || tokens.length === 0) {
+      console.log(`[PushService] No native tokens found for broadcast`);
+      return;
+    }
+
+    console.log(`[PushService] 📡 Broadcasting to ${tokens.length} native devices...`);
+    
+    // Process in chunks to respect FCM/APNs rate limits
+    const chunkSize = 500;
+    for (let i = 0; i < tokens.length; i += chunkSize) {
+      const chunk = tokens.slice(i, i + chunkSize);
+      const pushPromises = chunk.map(async (t) => {
+        if (t.platform === 'android' && t.type === 'fcm' && firebaseApp) {
+          const message = {
+            token: t.token,
+            notification: { title, body },
+            data: {
+              type: String(payload.type || 'notification'),
+              url: String(payload.url || '/dashboard/notifications'),
+            },
+            android: {
+              priority: 'high',
+              notification: { sound: 'default', tag: `type-${payload.type || 'notification'}` },
+            },
+          };
+          return admin.messaging().send(message).catch(err => {
+            if (err.code === 'messaging/registration-token-not-registered' || err.code === 'messaging/invalid-registration-token') {
+              removeInvalidToken(t.token);
+            }
+          });
+        }
+        
+        if (t.platform === 'ios' && t.type === 'apns' && (apnProviderProd || apnProviderSandbox)) {
+          const notification = new apn.Notification();
+          notification.topic = process.env.APNS_BUNDLE_ID || 'com.notestandard.app';
+          notification.priority = 10;
+          notification.pushType = 'alert';
+          notification.alert = { title, body };
+          notification.sound = 'default';
+          notification.badge = 1;
+          notification.contentAvailable = true;
+          notification.mutableContent = true;
+          notification.threadId = payload.type || 'default';
+          notification.payload = {
+            type: payload.type || 'notification',
+            url: payload.url || '/dashboard/notifications',
+          };
+          return sendApnsWithFallback(notification, t.token, 'Broadcast');
+        }
+      });
+      await Promise.all(pushPromises.filter(Boolean));
+    }
+    console.log(`[PushService] ✅ Broadcast completed.`);
+  } catch (err) {
+    console.error('[PushService] sendBroadcastPush error:', err.message);
   }
 }
 
 module.exports = {
   sendCallPush,
-  sendChatPush,
+  sendGenericPush,
+  sendBroadcastPush,
 };
