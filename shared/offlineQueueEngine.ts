@@ -5,7 +5,17 @@ export type PendingMessageIntent = {
         content: string;
         type: string;
         attachmentId?: string;
-        replyToId?: string;
+        // Full snapshot of the reply-to context stored at send time.
+        // We store the complete object (not just the ID) so flushQueue can
+        // restore reply_to on the canonical message even if the server-side
+        // FK join fails due to a schema cache miss or missing migration.
+        replyTo?: {
+            id: string;
+            content?: string;
+            sender_id?: string;
+            type?: string;
+            attachment?: unknown;
+        };
     };
     status: "queued" | "sending" | "failed";
     leaseSnapshot: {

@@ -517,7 +517,24 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             // without needing mutable refs.
             setMessages(prev => {
                 const current = prev[msg.conversation_id] || [];
-                const { merged, newlyAddedCount } = mergeMessages(current, [newMessage]);
+
+                // ── Pre-injection guard ───────────────────────────────────────────────────
+                // If the incoming WebSocket message is missing reply_to (or has an empty
+                // one without a valid id), look up whether the existing state already has
+                // a valid reply_to for this message (by event_id or id). If so, inject it
+                // BEFORE mergeMessages runs. The merge engine has its own guard too, but
+                // having two independent layers makes this bulletproof.
+                let safeNewMessage = newMessage;
+                if (!newMessage.reply_to?.id) {
+                    const existingInState = current.find(
+                        m => (msg.event_id && m.event_id === msg.event_id) || m.id === msg.id
+                    );
+                    if (existingInState?.reply_to?.id) {
+                        safeNewMessage = { ...newMessage, reply_to: existingInState.reply_to };
+                    }
+                }
+
+                const { merged, newlyAddedCount } = mergeMessages(current, [safeNewMessage]);
 
                 // Only update conversations if something materially changed (new message, or sequence update)
                 if (newlyAddedCount > 0 || msg.sequence_number !== undefined) {

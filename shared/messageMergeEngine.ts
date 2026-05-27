@@ -54,11 +54,14 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
             // If the local message was optimistic, clear it so it doesn't stay stuck.
             delete updatedMsg._optimistic;
 
-            // Guard: Prevent a null/absent reply_to from the server from wiping an
-            // existing optimistic reply context. This handles the PostgREST FK join
-            // returning null due to a schema cache miss, migration not yet applied,
-            // or the non-transactional path returning the raw row without join resolution.
-            if (!updatedMsg.reply_to && existingMsg.reply_to) {
+            // Guard: Prevent a null/absent/empty reply_to from the server from wiping an
+            // existing optimistic reply context. This handles:
+            //   - PostgREST FK join returning null (schema cache miss / migration not applied)
+            //   - Server normalizer returning {} (empty object after null-stripping)
+            //   - Any payload where reply_to exists but lacks a valid id field
+            // We check reply_to?.id (not just reply_to) because an empty object {} is
+            // truthy but has no id, which would make the reply bubble vanish silently.
+            if (!updatedMsg.reply_to?.id && existingMsg.reply_to?.id) {
                 updatedMsg.reply_to = existingMsg.reply_to;
             }
 
