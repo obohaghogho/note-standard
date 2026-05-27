@@ -42,7 +42,7 @@ async function _hydrateReplyTo(messages) {
       const p = map[m.reply_to_id];
       const senderName = p && p.sender ? (p.sender.full_name || p.sender.username) : null;
       m.reply_to = p
-        ? { id: p.id, content: p.content, sender_id: p.sender_id, message_type: p.type, deleted: p.is_deleted, sender_name: senderName }
+        ? { id: p.id, content: p.content, sender_id: p.sender_id, type: p.type, deleted: p.is_deleted, sender_name: senderName }
         : { id: m.reply_to_id, content: '', sender_id: '', deleted: true };
     });
   } catch (e) {
@@ -657,7 +657,7 @@ exports.getMessages = async (req, res) => {
     // IMPORTANT: .eq('is_deleted', false) ensures soft-deleted messages never reach clients.
     let query = supabase
       .from("messages")
-      .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url), reply_to:messages!reply_to_id(id, content, sender_id, type, is_deleted)")
+      .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url)")
       .eq("conversation_id", conversationId)
       .eq("is_deleted", false)
       .order("created_at", { ascending: false })
@@ -687,7 +687,7 @@ exports.getMessages = async (req, res) => {
           );
           let fallbackQuery = supabase
             .from("messages")
-            .select("*, reply_to:messages!reply_to_id(id, content, sender_id, type, is_deleted)")
+            .select("*")
             .eq("conversation_id", conversationId)
             .eq("is_deleted", false)
             .order("created_at", { ascending: false })
@@ -1167,7 +1167,7 @@ exports.sendMessage = async (req, res) => {
 
       const { data: hydratedMessage, error: hydrateError } = await supabase
         .from("messages")
-        .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url), reply_to:messages!reply_to_id(id, content, sender_id, type, is_deleted)")
+        .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url)")
         .eq("id", createdMessageId)
         .single();
 
@@ -1211,7 +1211,7 @@ exports.sendMessage = async (req, res) => {
                 id: parentMsg.id,
                 content: parentMsg.content,
                 sender_id: parentMsg.sender_id,
-                message_type: parentMsg.type,
+                type: parentMsg.type,
                 deleted: parentMsg.is_deleted,
                 sender_name: senderName,
               };
@@ -1241,7 +1241,7 @@ exports.sendMessage = async (req, res) => {
                 id: parentMsg.id,
                 content: parentMsg.content,
                 sender_id: parentMsg.sender_id,
-                message_type: parentMsg.type,
+                type: parentMsg.type,
                 deleted: parentMsg.is_deleted,
                 sender_name: senderName,
               };
@@ -1951,7 +1951,7 @@ exports.editMessage = async (req, res) => {
       .eq("id", messageId)
       .eq("sender_id", userId) // Force ownership
       .eq("is_deleted", false) // Cannot edit deleted messages
-      .select("*, attachment:media_attachments(*), reply_to:messages!reply_to_id(id, content, sender_id, type, is_deleted)")
+      .select("*, attachment:media_attachments(*)")
       .single();
 
     if (error) {
@@ -1969,7 +1969,7 @@ exports.editMessage = async (req, res) => {
            .eq("id", messageId)
            .eq("sender_id", userId)
            .eq("is_deleted", false)
-           .select("*, attachment:media_attachments(*), reply_to:messages!reply_to_id(id, content, sender_id, type, is_deleted)")
+           .select("*, attachment:media_attachments(*)")
            .single();
          if (retryErr) throw retryErr;
          // Ensure reply_to is hydrated even if FK join returned null (schema cache miss)
