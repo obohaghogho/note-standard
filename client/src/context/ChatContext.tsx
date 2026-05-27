@@ -95,7 +95,7 @@ export interface ChatContextValue {
     loading: boolean;
     connected: boolean;
     setActiveConversationId: (id: string | null) => void;
-    sendMessage: (content: string, type?: string, attachmentId?: string, replyToId?: string) => Promise<void>;
+    sendMessage: (payload: { content: string; type?: string; attachmentId?: string; replyTo?: { id: string; content: string; sender_id: string; type?: string; attachment?: any } }) => Promise<void>;
     sendMediaMessage: (file: File | Blob, type: 'image' | 'video' | 'audio' | 'file', conversationId?: string) => Promise<void>;
     loadMoreMessages: (conversationId: string) => Promise<void>;
     markMessageRead: (messageId: string, conversationId: string) => Promise<void>;
@@ -114,7 +114,7 @@ export interface ChatContextValue {
     drafts: Record<string, string>;
     setDraft: (conversationId: string, content: string) => void;
     hasMore: Record<string, boolean>;
-    sendMessageToConversation: (conversationId: string, content: string, type?: string, attachmentId?: string, replyToId?: string) => Promise<void>;
+    sendMessageToConversation: (payload: { conversationId: string; content: string; type?: string; attachmentId?: string; replyTo?: any }) => Promise<void>;
     markConversationRead: (conversationId: string) => Promise<void>;
     markConversationDelivered: (conversationId: string) => Promise<void>;
     isActiveWriter: (conversationId: string) => boolean;
@@ -819,7 +819,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     content: intent.payload.content,
                     type: intent.payload.type,
                     attachmentId: intent.payload.attachmentId,
-                    replyToId: intent.payload.replyToId,
+                    replyToId: intent.payload.replyTo?.id,
                     eventId: intent.event_id,
                     deviceId: currentDeviceId,
                     sessionId: currentSessionId
@@ -831,16 +831,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
                 // Guard: if the server didn't return a populated reply_to (FK join failed,
                 // schema cache miss, or non-transactional path) but this intent had a
-                // replyToId, fall back to the reply_to we already stored on the optimistic
-                // message. This prevents the reply bubble from disappearing on confirmation.
-                if (intent.payload.replyToId && !canonicalMessage.reply_to) {
-                    const existingMsgs = messagesRef.current[intent.conversation_id] || [];
-                    const optimistic = existingMsgs.find(
-                        (m: Message) => m.event_id === intent.event_id
-                    );
-                    if (optimistic?.reply_to) {
-                        canonicalMessage = { ...canonicalMessage, reply_to: optimistic.reply_to };
-                    }
+                // replyTo snapshot, fall back to the reply_to we already stored.
+                // This prevents the reply bubble from disappearing on confirmation.
+                if (intent.payload.replyTo && !canonicalMessage.reply_to) {
+                    canonicalMessage = { ...canonicalMessage, reply_to: intent.payload.replyTo };
                 }
 
                 setMessages(prev => {
@@ -870,7 +864,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         if (connected) flushQueue();
     }, [connected, flushQueue]);
 
-    const sendMessageToConversation = async (conversationId: string, content: string, type: string = 'text', attachmentId?: string, replyToId?: string) => {
+    const sendMessageToConversation = async (payload: { conversationId: string; content: string; type?: string; attachmentId?: string; replyTo?: any }) => {
+        const { conversationId, content, type = 'text', attachmentId, replyTo } = payload;
         if (!session || !user) throw new Error('Cannot send message: not authenticated');
 
         // Ensure device/session IDs are ready. If initSession is still in-flight,
@@ -924,19 +919,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             toast('Switching chat control to this device...', { icon: '🔄', id: 'lease_claim' });
         }
 
-        let replyToData = undefined;
-        if (replyToId) {
-            const allMsgs = messagesRef.current[conversationId] || [];
-            const originalMsg = allMsgs.find((m: Message) => m.id === replyToId);
-            if (originalMsg) {
-                replyToData = {
-                    id: originalMsg.id,
-                    content: originalMsg.content,
-                    sender_id: originalMsg.sender_id,
-                    type: originalMsg.type
-                };
-            }
-        }
+
 
         // Generate Canonical Event ID
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -952,7 +935,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             type: (type || 'text') as Message['type'],
             isOwn: true,
             status: 'sending',
-            reply_to: replyToData
+            reply_to: replyTo
         };
         
         setMessages(prev => {
@@ -965,7 +948,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         await offlineQueue.pushIntent({
             event_id: clientEventId,
             conversation_id: conversationId,
-            payload: { content, type, attachmentId, replyToId },
+            payload: { content, type, attachmentId, replyTo },
             leaseSnapshot: { device_id: resolvedDeviceId, session_id: resolvedSessionId },
             created_at: Date.now()
         });
@@ -1288,7 +1271,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const value: ChatContextValue = {
         conversations, messages, activeConversationId, loading, connected,
         setActiveConversationId,
-        sendMessage: (content, type, attachmentId, replyToId) => sendMessageToConversation(activeConversationId!, content, type, attachmentId, replyToId),
+        sendMessage: (payload) => sendMessageToConversation({ conversationId: activeConversationId!, ...payload }),
         sendMediaMessage,
         loadMoreMessages: async () => {},
         markMessageRead, markMessageDelivered,

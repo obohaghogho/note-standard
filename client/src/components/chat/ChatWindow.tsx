@@ -411,7 +411,11 @@ const ChatWindow: React.FC = () => {
             if (currentEditingId) {
                 await editMessage(currentEditingId, textToSend);
             } else {
-                await sendMessage(textToSend, 'text', undefined, replyTo?.id);
+                await sendMessage({
+                    content: textToSend,
+                    type: 'text',
+                    replyTo: replyTo ? { ...replyTo } : undefined
+                });
                 setReplyTo(null);
             }
         } catch (err: unknown) {
