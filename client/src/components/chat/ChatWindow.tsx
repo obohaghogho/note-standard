@@ -8,7 +8,7 @@ import { usePresence } from '../../context/PresenceContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../common/SecureImage';
-import { Send, Languages, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Maximize, Trash2, Share2, X, Copy, Menu, Pencil, MessageCircle } from 'lucide-react';
+import { Send, Languages, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Maximize, Trash2, Share2, X, Copy, Menu, Pencil, MessageCircle, Reply } from 'lucide-react';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { MediaUpload } from './MediaUpload';
 import { VoiceRecorder } from './VoiceRecorder';
@@ -653,7 +653,7 @@ const ChatWindow: React.FC = () => {
                             </span>
                         </div>
                         <div className="flex items-center gap-1 md:gap-2">
-                             <button 
+                            <button 
                                 onClick={() => {
                                     const selectedMsgs = currentMessages
                                         .filter(m => selectedMessages.has(m.id))
@@ -665,6 +665,28 @@ const ChatWindow: React.FC = () => {
                                 <Share2 size={18} />
                                 <span className="hidden sm:inline">Forward</span>
                             </button>
+                            {selectedMessages.size === 1 && (
+                                <button 
+                                    onClick={() => {
+                                        const msgId = Array.from(selectedMessages)[0];
+                                        const msg = currentMessages.find(m => m.id === msgId);
+                                        if (msg) {
+                                            setReplyTo({
+                                                id: msg.id,
+                                                content: msg.content,
+                                                sender_id: msg.sender_id,
+                                                type: msg.type,
+                                                attachment: msg.attachment
+                                            });
+                                            clearSelection();
+                                        }
+                                    }}
+                                    className="flex items-center gap-2 px-3 md:px-4 py-2 text-sm font-semibold text-purple-400 hover:text-purple-300 hover:bg-purple-500/15 rounded-xl transition-all"
+                                >
+                                    <Reply size={18} />
+                                    <span className="hidden sm:inline">Reply</span>
+                                </button>
+                            )}
                             {selectedMessages.size === 1 && (
                                 (() => {
                                     const msgId = Array.from(selectedMessages)[0];
