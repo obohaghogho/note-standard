@@ -1121,15 +1121,24 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     }
                 }, 300);
 
-                const { error: uploadError } = await supabase.storage
-                    .from('chat-media')
-                    .upload(filePath, file, {
-                        cacheControl: '3600',
-                        upsert: false,
-                        contentType: fileType || (type === 'audio' ? 'audio/webm' : undefined)
-                    });
+                // Bypass Supabase JS SDK to prevent RLS failures due to custom backend tokens
+                const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://tngcvgisfctggvivcnva.supabase.co';
+                const uploadUrl = `${supabaseUrl}/storage/v1/object/chat-media/${filePath}`;
+                
+                const res = await fetch(uploadUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${session?.access_token}`,
+                        'Content-Type': fileType || (type === 'audio' ? 'audio/webm' : 'application/octet-stream'),
+                        'x-upsert': 'false'
+                    },
+                    body: file, // Works with File or Blob natively in browser
+                });
 
-                if (uploadError) throw uploadError;
+                if (!res.ok) {
+                    const errorText = await res.text();
+                    throw new Error(`Storage upload failed: ${errorText}`);
+                }
 
                 let attachment = null;
                 if (type === 'audio') {

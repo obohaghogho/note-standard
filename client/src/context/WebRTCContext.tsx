@@ -316,7 +316,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             setLocalStream(stream);
 
             socket?.emit('call:initiate', { to: targetUserId, type, callType: type, conversationId });
-            sendMessageToConversation(conversationId, `Started a ${type} call`, 'call');
+            sendMessageToConversation({ conversationId, content: `Started a ${type} call`, type: 'call' });
 
             callTimeoutRef.current = setTimeout(() => {
                 if (currentStatus.current === 'calling' || currentStatus.current === 'ringing') {
