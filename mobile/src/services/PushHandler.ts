@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import EventEmitter from './EventEmitter';
 import VoipPushNotification from 'react-native-voip-push-notification';
 import RNCallKeep from 'react-native-callkeep';
+import messaging from '@react-native-firebase/messaging';
 import { navigate } from '../navigation/AppNavigator';
 import apiClient from '../api/apiClient';
 
@@ -40,9 +41,6 @@ export class PushHandler {
     }
 
     if (finalStatus === 'granted') {
-      // Only try to get/register the device push token if the user has granted
-      // permission. On iOS, getDevicePushTokenAsync() throws if permissions
-      // are denied, and even though we catch the error it pollutes the logs.
       this.registerDeviceToken().catch(err => {
         console.warn('[PushHandler] Graceful initial register Device Token fail:', err);
       });
@@ -50,14 +48,19 @@ export class PushHandler {
       console.warn(`[PushHandler] ⚠️ Push permission not granted (status: ${finalStatus}). Device token registration skipped.`);
     }
 
+    // Foreground listener for React Native Firebase Messaging (Data-only pushes)
+    messaging().onMessage(async remoteMessage => {
+      console.log('[PushHandler] 🔔 Firebase Foreground Message:', remoteMessage.data);
+      if (remoteMessage.data && remoteMessage.data.type === 'incoming_call' && Platform.OS === 'android') {
+        this.handleIncomingCall(remoteMessage.data as unknown as CallData);
+      }
+    });
+
     Notifications.addNotificationReceivedListener(notification => {
       const { data, title, body } = notification.request.content;
       console.log('[PushHandler] 🔔 Standard Push Received:', JSON.stringify(data));
       
       if (data.type === 'incoming_call' && Platform.OS === 'android') {
-        // Android handles call signaling via standard high-priority FCM
-        // RNCallKeep is triggered by the headless JS task in index.ts for background cases,
-        // but this covers the foreground case.
         this.handleIncomingCall(data as unknown as CallData);
       } else if (data.type === 'message' || data.type === 'chat_message') {
         if (data.messageId) {
@@ -80,6 +83,17 @@ export class PushHandler {
     });
 
     console.log('[PushHandler] ✅ Initialization finished.');
+  }
+
+  static handleIncomingCall(data: any) {
+    console.log('[PushHandler] Handling incoming call payload:', data);
+    CallService.displayIncomingCall({
+      callerId: data.callerId || data.caller_id || '',
+      callerName: data.callerName || data.caller_name || 'Someone',
+      callType: data.callType || data.call_type || 'audio',
+      conversationId: data.conversationId || data.conversation_id || '',
+      sessionId: data.sessionId || data.call_id || '',
+    }).catch(e => console.error('[PushHandler] Call display failed:', e));
   }
 
   static async registerDeviceToken() {

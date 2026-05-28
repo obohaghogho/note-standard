@@ -172,7 +172,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const cleanup = useCallback(() => {
         if (isCleaningUp.current) return;
         isCleaningUp.current = true;
-        console.log('[WebRTC] cleanup()');
+        console.log('[WebRTC] cleanup() called from:', new Error().stack);
 
         if (callTimeoutRef.current)   { clearTimeout(callTimeoutRef.current);   callTimeoutRef.current = null; }
         if (reconnectTimerRef.current){ clearTimeout(reconnectTimerRef.current); reconnectTimerRef.current = null; }
@@ -315,6 +315,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             localStreamRef.current = stream;
             setLocalStream(stream);
 
+            console.log('[WebRTC] Emitting call:initiate to gateway:', { to: targetUserId, type, callType: type, conversationId });
             socket?.emit('call:initiate', { to: targetUserId, type, callType: type, conversationId });
             sendMessageToConversation({ conversationId, content: `Started a ${type} call`, type: 'call' });
 
@@ -392,7 +393,9 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             type?: 'voice' | 'video'; callType?: 'voice' | 'video';
             conversationId: string; sessionId?: string;
         }) => {
+            console.log('[WebRTC] Received call:incoming event!', data);
             if (currentStatus.current !== 'idle') {
+                console.log('[WebRTC] Auto-rejecting because status is not idle. Current status:', currentStatus.current);
                 socket.emit('call:reject', { to: data.from, sessionId: data.sessionId });
                 return;
             }

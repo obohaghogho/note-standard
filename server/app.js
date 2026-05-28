@@ -143,6 +143,8 @@ app.use("/api/notes", notesRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/users", require("./routes/usersRoutes"));
 app.use("/api/upload", uploadRoutes);
+app.use("/api/media", require("./routes/media"));
+app.use("/api/version", require("./routes/version"));
 app.use("/api/subscription", subscriptionRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/notifications", notificationRoutes);
@@ -233,9 +235,6 @@ app.post("/api/verify-payment", requireAuth, paymentController.verifyPayment);
 // ─── Flutterwave (Legacy → Fincra) ───────────────────────────
 // DEPRECATED: Standard Flutterwave logic is now routed through the Fincra engine 
 // or the unified webhook router. Direct Flutterwave endpoints are being retired.
-
-app.use("/api/media", require("./routes/media"));
-app.use("/api/version", require("./routes/version"));
 
 // ─── Dynamic App Downloads ───────────────────────────────────
 const downloadService = require("./services/DownloadService");
