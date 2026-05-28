@@ -4,6 +4,7 @@ import * as FileSystem from 'expo-file-system';
 import { Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
 import apiClient from '../api/apiClient';
+import { AuthService } from './AuthService';
 
 export class MediaService {
   static async pickImage() {
@@ -79,40 +80,40 @@ export class MediaService {
 
       console.log(`[MediaService] Uploading ${storagePath} (${arrayBuffer.byteLength} bytes, type: ${fileType})`);
 
-      // Upload to Supabase Storage with retry logic
+      // Upload to Supabase Storage using direct REST API to bypass JS client auth state bugs
       let uploadData = null;
       let uploadRetries = 3;
 
-      try {
-        const { AuthService } = require('./AuthService');
-        const token = await AuthService.getToken();
-        const refreshToken = await AuthService.getRefreshToken();
-        if (token && refreshToken) {
-          await supabase.auth.setSession({ access_token: token, refresh_token: refreshToken });
-        }
-      } catch (err) {
-        console.warn('[MediaService] Failed to sync auth session:', err);
-      }
-
       while (uploadRetries > 0) {
-        const { data, error } = await supabase.storage
-          .from('chat-media')
-          .upload(storagePath, arrayBuffer, {
-            contentType: fileType,
-            cacheControl: '3600',
-            upsert: false,
+        try {
+          const token = await AuthService.getToken();
+          const supabaseUrl = 'https://tngcvgisfctggvivcnva.supabase.co';
+          const uploadUrl = `${supabaseUrl}/storage/v1/object/chat-media/${storagePath}`;
+
+          const res = await fetch(uploadUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': fileType,
+              'x-upsert': 'false'
+            },
+            body: arrayBuffer,
           });
-          
-        if (error) {
+
+          if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(errText);
+          }
+
+          uploadData = { path: storagePath };
+          break;
+        } catch (error: any) {
           uploadRetries--;
           if (uploadRetries === 0) {
-            console.error('[MediaService] Supabase upload error:', error);
+            console.error('[MediaService] Supabase REST upload error:', error);
             throw new Error(`Storage upload failed: ${error.message}`);
           }
           await new Promise(r => setTimeout(r, 3000)); // wait before retry
-        } else {
-          uploadData = data;
-          break;
         }
       }
  

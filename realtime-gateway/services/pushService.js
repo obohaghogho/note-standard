@@ -192,10 +192,10 @@ async function sendCallPush(params) {
 
         const message = {
           token: t.token,
-          notification: {
-            title: title || `Incoming ${payload.callType || 'call'}`,
-            body: body || `${payload.callerName || 'Someone'} is calling you...`,
-          },
+          // REMOVED notification block to ensure this acts as a "data-only" message.
+          // Data-only messages bypass the Android system tray and instantly wake up the 
+          // React Native headless JS engine (setBackgroundMessageHandler), which is required 
+          // to trigger RNCallKeep's ringing UI when the app is killed.
           data: {
             ...safeData,
             // Native layer expects string values for remoteMessage.getData()
@@ -209,10 +209,6 @@ async function sendCallPush(params) {
           android: {
             priority: 'high',
             ttl: 0, // No delay, no queueing if expired
-            notification: {
-              sound: 'default',
-              clickAction: 'FLUTTER_NOTIFICATION_CLICK',
-            }
           }
         };
         console.log(`[PushService] 📤 Sending FCM Call push (Android) to: ${t.token.substring(0, 10)}...`);

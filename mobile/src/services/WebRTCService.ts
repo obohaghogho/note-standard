@@ -297,7 +297,14 @@ class WebRTCService {
     };
 
     try {
-      this.localStream = await mediaDevices.getUserMedia(constraints) as MediaStream;
+      // Add a 5 second timeout to getUserMedia. If the hardware is locked up from a previous call, 
+      // this prevents the entire WebRTC pipeline from freezing indefinitely on "connecting..."
+      const streamPromise = mediaDevices.getUserMedia(constraints) as unknown as Promise<MediaStream>;
+      const timeoutPromise = new Promise<MediaStream>((_, reject) => {
+        setTimeout(() => reject(new Error('Timeout acquiring media devices (Hardware lock)')), 5000);
+      });
+
+      this.localStream = await Promise.race([streamPromise, timeoutPromise]);
       console.log('[WebRTC] Local media stream successfully captured');
     } catch (err) {
       console.error('[WebRTC] Failed to capture local media stream:', err);
@@ -363,16 +370,25 @@ class WebRTCService {
     // Stop all local media tracks to ensure immediate release of camera/microphone hardware
     if (this.localStream) {
       try {
-        this.localStream.getTracks().forEach(track => {
-          track.enabled = false;
-          track.stop();
-          console.log(`[WebRTC] Hardware release: Stopped local track: ${track.kind}`);
-        });
-        this.localStream.release();
+        const streamToStop = this.localStream;
+        this.localStream = null; // Clear immediately to prevent UI usage
+        // Run track stop asynchronously. In some Android versions, synchronous stop() 
+        // immediately followed by a new getUserMedia causes deadlocks.
+        setTimeout(() => {
+          try {
+            streamToStop.getTracks().forEach(track => {
+              track.enabled = false;
+              track.stop();
+              console.log(`[WebRTC] Hardware release: Stopped local track: ${track.kind}`);
+            });
+            streamToStop.release();
+          } catch (e) {
+            console.warn('[WebRTC] Async hardware release error:', e);
+          }
+        }, 150);
       } catch (err) {
         console.warn('[WebRTC] Error releasing local stream tracks:', err);
       }
-      this.localStream = null;
     }
 
     // Stop and release remote stream tracks
