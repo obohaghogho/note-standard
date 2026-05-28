@@ -26,6 +26,7 @@ export interface CallData {
   callerName: string;
   callType: 'audio' | 'video';
   conversationId: string;
+  sessionId?: string; // WebRTC Session ID for signaling
   uuid?: string; // Native call UUID
 }
 

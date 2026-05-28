@@ -30,6 +30,7 @@ try {
 
 import App from './App';
 import { PushHandler } from './src/services/PushHandler';
+import CallService from './src/services/CallService';
 import { v4 as uuidv4 } from 'uuid';
 
 // Bind CallKeep listeners globally so they work in headless mode
@@ -47,11 +48,18 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
        await fetch(url, { method: 'POST' });
        console.log('[FCM Background] Delivery webhook triggered for message:', messageId);
     } else if (data?.type === 'incoming_call' && Platform.OS === 'android') {
-       console.log('[FCM Background] Incoming call detected. Triggering CallKeep...');
+       console.log('[FCM Background] Incoming call detected. Triggering CallService...');
        const callId = data.call_id || data.sessionId || data.caller_id || uuidv4();
        const callerName = data.caller_name || data.callerName || 'Someone';
        
-       RNCallKeep.displayIncomingCall(callId, callerName, callerName, 'generic', data.call_type === 'video');
+       CallService.displayIncomingCall({
+         uuid: callId,
+         callerId: data.callerId || data.from || '',
+         callerName: callerName,
+         callType: data.callType || data.type || 'audio',
+         conversationId: data.conversationId,
+         sessionId: data.sessionId,
+       });
     }
   } catch (e) {
     console.error('[FCM Background] Error in background handler:', e);

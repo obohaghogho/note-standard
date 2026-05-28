@@ -111,6 +111,11 @@ export class PushHandler {
       // Navigate to the call screen automatically
       const callData = CallService.getCurrentCall();
       if (callData) {
+        SignalingService.activeTargetId = callData.callerId;
+        SignalingService.activeConversationId = callData.conversationId;
+        SignalingService.activeCallType = callData.callType;
+        SignalingService.activeSessionId = callData.sessionId || null;
+
         await SignalingService.answerCall();
         navigate('Call', {
           type: callData.callType,
@@ -150,7 +155,8 @@ export class PushHandler {
         callerName: notification.callerName || notification.fromName,
         callType: notification.callType || notification.type,
         conversationId: notification.conversationId,
-        peerId: notification.peerId || notification.from
+        peerId: notification.peerId || notification.from,
+        sessionId: notification.sessionId
       } as CallData;
 
       if (notification.type === 'incoming_call' || notification.type === 'call_incoming') {
