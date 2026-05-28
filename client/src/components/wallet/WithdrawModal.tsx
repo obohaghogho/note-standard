@@ -80,7 +80,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                 let fee = 0;
                 if (settings && settings.length > 0) {
                     const s = settings[0];
-                    if (s.commission_type === 'PERCENTAGE') fee = val * s.value;
+                    if (s.commission_type === 'PERCENTAGE') fee = val * (s.value / 100);
                     else fee = s.value;
                     if (s.min_fee && fee < s.min_fee) fee = s.min_fee;
                     if (s.max_fee && fee > s.max_fee) fee = s.max_fee;
@@ -152,7 +152,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
             
             if (settings && settings.length > 0) {
                 const s = settings[0];
-                const rateValue = s.value > 1 ? s.value / 100 : s.value;
+                const rateValue = s.commission_type === 'PERCENTAGE' ? s.value / 100 : s.value;
 
                 if (s.commission_type === 'PERCENTAGE') {
                     // amount + (amount * rate) = balance => amount = balance / (1 + rate)

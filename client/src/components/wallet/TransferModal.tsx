@@ -61,7 +61,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
                 if (settings && settings.length > 0) {
                     const s = settings[0];
                     if (s.commission_type === 'PERCENTAGE') {
-                        const rateValue = s.value > 1 ? s.value / 100 : s.value;
+                        const rateValue = s.value / 100;
                         fee = val * rateValue;
                     } else {
                         fee = s.value;
@@ -146,7 +146,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
             
             if (settings && settings.length > 0) {
                 const s = settings[0];
-                const rateValue = s.value > 1 ? s.value / 100 : s.value;
+                const rateValue = s.commission_type === 'PERCENTAGE' ? s.value / 100 : s.value;
 
                 if (s.commission_type === 'PERCENTAGE') {
                     // amount + amount * rate = balance => amount = balance / (1 + rate)
