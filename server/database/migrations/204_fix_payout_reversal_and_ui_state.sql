@@ -12,6 +12,7 @@ DECLARE
     v_tx_id UUID;
     v_reversal_tx_id UUID;
     v_entry RECORD;
+    v_status settlement_status_v6;
 BEGIN
     -- 1. Look up the payout request
     SELECT * INTO v_payout_req FROM public.payout_requests WHERE id = p_payout_id;
@@ -20,14 +21,14 @@ BEGIN
     END IF;
 
     -- 2. Find the associated ledger transaction
-    SELECT id, status INTO v_tx_id, v_entry.status 
+    SELECT id, status INTO v_tx_id, v_status 
     FROM public.ledger_transactions_v6 
     WHERE idempotency_key = v_payout_req.idempotency_key::text;
 
     IF v_tx_id IS NULL THEN
         -- It's possible the ledger transaction hasn't been committed yet or uses a different key mapping.
         -- Let's try matching via transaction_id column in payout_requests
-        SELECT id, status INTO v_tx_id, v_entry.status
+        SELECT id, status INTO v_tx_id, v_status
         FROM public.ledger_transactions_v6
         WHERE id = v_payout_req.transaction_id;
         
@@ -38,7 +39,7 @@ BEGIN
     END IF;
 
     -- 3. Check if already reversed
-    IF v_entry.status = 'REVERSED' THEN
+    IF v_status = 'REVERSED' THEN
         RAISE NOTICE 'REVERSAL_SKIPPED: Payout % is already reversed.', p_payout_id;
         RETURN;
     END IF;
