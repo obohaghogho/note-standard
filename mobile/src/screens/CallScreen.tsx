@@ -116,7 +116,8 @@ export default function CallScreen({ navigation, route }: Props) {
               conversationId: route.params.conversationId,
             });
           }
-          await SignalingService.answerCall();
+          // Note: SignalingService.answerCall() was already called by the modal/push handler before navigating here.
+          // Calling it again causes WebRTC negotiation to reset and break (stuck on 'connecting...').
           // Local stream isn't ready yet — it will be set when WebRTC connects
           setCallState('connecting');
         } else {

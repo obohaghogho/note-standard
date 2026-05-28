@@ -117,16 +117,15 @@ const sessionMap = new Map();
 
 async function sendCallPush(io, targetUserId, type, data) {
   try {
-    // Only push if user has no live socket (offline wake-up)
-    const sockets = await io.in(`user:${targetUserId}`).fetchSockets();
-    if (sockets.length === 0) {
-      await pushService.sendCallPush({
-        userId: targetUserId,
-        title: data.title,
-        body: data.body,
-        payload: data.payload,
-      });
-    }
+    // For calls, ALWAYS send the push to wake up native devices
+    // even if they have an active socket on another device (e.g. Web App)
+    // because we want their phone to ring!
+    await pushService.sendCallPush({
+      userId: targetUserId,
+      title: data.title,
+      body: data.body,
+      payload: data.payload,
+    });
   } catch (err) {
     console.error('[Call] Push dispatch error:', err.message);
   }

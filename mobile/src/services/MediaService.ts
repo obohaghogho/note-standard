@@ -82,6 +82,18 @@ export class MediaService {
       // Upload to Supabase Storage with retry logic
       let uploadData = null;
       let uploadRetries = 3;
+
+      try {
+        const { AuthService } = require('./AuthService');
+        const token = await AuthService.getToken();
+        const refreshToken = await AuthService.getRefreshToken();
+        if (token && refreshToken) {
+          await supabase.auth.setSession({ access_token: token, refresh_token: refreshToken });
+        }
+      } catch (err) {
+        console.warn('[MediaService] Failed to sync auth session:', err);
+      }
+
       while (uploadRetries > 0) {
         const { data, error } = await supabase.storage
           .from('chat-media')
