@@ -1129,7 +1129,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${session?.access_token}`,
-                        'Content-Type': fileType || (type === 'audio' ? 'audio/webm' : 'application/octet-stream'),
+                        'Content-Type': (fileType ? fileType.split(';')[0] : (type === 'audio' ? 'audio/webm' : 'application/octet-stream')),
                         'x-upsert': 'false'
                     },
                     body: file, // Works with File or Blob natively in browser
