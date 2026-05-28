@@ -163,7 +163,7 @@ class CausalWorker {
                         walletId: walletToSync,
                         currency: w.currency,
                         balance: w.balance,
-                        status: 'COMPLETED'
+                        status: intent.intent_type === 'payout_create' ? 'PENDING' : 'COMPLETED'
                     });
                 }
             }

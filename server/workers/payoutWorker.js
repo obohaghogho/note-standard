@@ -94,6 +94,13 @@ class PayoutWorker {
                     failure_code: "TREASURY_RESERVE_BREACH"
                 });
 
+                // Automated Reversal: Refund the user's ledger and wallet
+                try {
+                    await supabase.rpc('reverse_failed_payout_v6', { p_payout_id: payout.id });
+                } catch (revErr) {
+                    logger.error(`[PayoutWorker] Failed to apply reversal for payout ${payout.id}:`, revErr.message);
+                }
+
                 const adminId = treasuryWallet ? treasuryWallet.user_id : payout.user_id;
 
                 await supabase.from("security_audit_logs").insert({
@@ -189,6 +196,13 @@ class PayoutWorker {
                     latency: result.latency,
                     rawResponse: result.rawResponse
                 });
+                
+                // Automated Reversal: Refund the user's ledger and wallet
+                try {
+                    await supabase.rpc('reverse_failed_payout_v6', { p_payout_id: payout.id });
+                } catch (revErr) {
+                    logger.error(`[PayoutWorker] Failed to apply reversal for payout ${payout.id}:`, revErr.message);
+                }
                 logger.error(`[PayoutWorker] Payout ${payout.id} REJECTED by provider: ${result.error}`);
             }
 
