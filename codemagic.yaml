@@ -41,7 +41,7 @@ workflows:
           cd mobile
           printf "EXPO_PUBLIC_SUPABASE_URL=%s\n" "$EXPO_PUBLIC_SUPABASE_URL" > .env
           printf "EXPO_PUBLIC_SUPABASE_ANON_KEY=%s\n" "$EXPO_PUBLIC_SUPABASE_ANON_KEY" >> .env
-          printf "EXPO_PUBLIC_SOCKET_URL=%s\n" "$EXPO_PUBLIC_SOCKET_URL" >> .env
+          printf "EXPO_PUBLIC_GATEWAY_URL=%s\n" "$EXPO_PUBLIC_GATEWAY_URL" >> .env
           printf "EXPO_PUBLIC_API_URL=%s\n" "$EXPO_PUBLIC_API_URL" >> .env
 
       # 4. Build signed release APK
@@ -124,7 +124,7 @@ workflows:
           cd mobile
           printf "EXPO_PUBLIC_SUPABASE_URL=%s\n" "$EXPO_PUBLIC_SUPABASE_URL" > .env
           printf "EXPO_PUBLIC_SUPABASE_ANON_KEY=%s\n" "$EXPO_PUBLIC_SUPABASE_ANON_KEY" >> .env
-          printf "EXPO_PUBLIC_SOCKET_URL=%s\n" "$EXPO_PUBLIC_SOCKET_URL" >> .env
+          printf "EXPO_PUBLIC_GATEWAY_URL=%s\n" "$EXPO_PUBLIC_GATEWAY_URL" >> .env
           printf "EXPO_PUBLIC_API_URL=%s\n" "$EXPO_PUBLIC_API_URL" >> .env
 
       - name: Install CocoaPods
