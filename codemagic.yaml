@@ -10,9 +10,7 @@ workflows:
 
     environment:
       android_signing:
-        - notestandard_keystore        # Create this in Codemagic → Teams → Code signing
-      groups:
-        - notestandard_env             # Create this in Codemagic → Teams → Environment variables
+        - notestandard_keystore
       vars:
         PACKAGE_NAME: "com.notestandard.app"
       node: 20.17.0
@@ -98,8 +96,6 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.notestandard.app
-      groups:
-        - notestandard_env
       vars:
         BUNDLE_ID: "com.notestandard.app"
         XCODE_WORKSPACE: "mobile/ios/NoteStandard.xcworkspace"
