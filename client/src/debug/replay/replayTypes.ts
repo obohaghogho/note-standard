@@ -10,7 +10,7 @@ export type ReplayEvent = {
 
 export type ReplayResponse = {
   conversation_id: string;
-  final_state: any;
+  final_state: Record<string, unknown>;
   timeline: ReplayEvent[];
   anomalies: {
     type: string;

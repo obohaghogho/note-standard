@@ -922,7 +922,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         if (connected) flushQueue();
     }, [connected, flushQueue]);
 
-    const sendMessageToConversation = async (payload: { conversationId: string; content: string; type?: string; attachmentId?: string; replyTo?: any }) => {
+    const sendMessageToConversation = async (payload: { conversationId: string; content: string; type?: string; attachmentId?: string; replyTo?: { id: string; content: string; sender_id: string; type?: string } }) => {
         const { conversationId, content, type = 'text', attachmentId, replyTo } = payload;
         if (!session || !user) throw new Error('Cannot send message: not authenticated');
 
@@ -1218,7 +1218,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         };
 
         runBackgroundUpload();
-    }, [activeConversationId, session, user]);
+    }, [activeConversationId, session, user, isActiveWriter, markLeaseClaimStart, deviceId, sessionId]);
 
     const startConversation = async (username: string): Promise<string | null> => {
         try {

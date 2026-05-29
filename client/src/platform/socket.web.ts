@@ -26,7 +26,7 @@ declare global {
   }
 }
 
-type Listener = { event: string; handler: (...args: any[]) => void };
+type Listener = { event: string; handler: (...args: unknown[]) => void };
 
 class SocketLifecycleManager {
   private socket: Socket | null = null;
@@ -47,11 +47,12 @@ class SocketLifecycleManager {
     // prevents a second socket from being instantiated within a 500ms window,
     // which is the typical Strict Mode double-invocation timing.
     const now = Date.now();
-    if ((this as any)._lastConnectAttemptAt && now - (this as any)._lastConnectAttemptAt < 500) {
+    const self = this as unknown as { _lastConnectAttemptAt?: number };
+    if (self._lastConnectAttemptAt && now - self._lastConnectAttemptAt < 500) {
       console.log('[SocketLifecycle:Web] Strict Mode double-invoke guard triggered — skipping duplicate connect');
       return this.socket!;
     }
-    (this as any)._lastConnectAttemptAt = now;
+    self._lastConnectAttemptAt = now;
 
     // Singleton enforcement: reuse connected socket for same user
     if (this.socket?.connected && this.currentUserId === userId) {
@@ -85,14 +86,14 @@ class SocketLifecycleManager {
     });
 
     socket.on('connect', () => {
-      const transport = (socket as any).io.engine.transport.name;
-      console.log(`[SocketLifecycle:Web] ✓ Connected via ${transport}`);
+      const engine = (socket.io as unknown as { engine: { transport: { name: string }; on: (event: string, cb: (t: { name: string }) => void) => void } }).engine;
+      console.log(`[SocketLifecycle:Web] ✓ Connected via ${engine.transport.name}`);
       this.reconnectAttempts = 0;
       this.isConnecting = false;
       this._startHeartbeat(socket);
       this._reattachListeners(socket);
 
-      (socket as any).io.engine.on('upgrade', (t: { name: string }) => {
+      engine.on('upgrade', (t: { name: string }) => {
         console.log(`[SocketLifecycle:Web] ↑ Upgraded transport to ${t.name}`);
       });
     });
@@ -131,7 +132,7 @@ class SocketLifecycleManager {
    * Register a lifecycle-persistent listener.
    * Deduplicates: calling this twice with the same event+handler is a no-op.
    */
-  on(event: string, handler: (...args: any[]) => void) {
+  on(event: string, handler: (...args: unknown[]) => void) {
     const isDuplicate = this.listeners.some(l => l.event === event && l.handler === handler);
     if (!isDuplicate) {
       this.listeners.push({ event, handler });
@@ -140,7 +141,7 @@ class SocketLifecycleManager {
   }
 
   /** Remove a listener by event + handler reference. */
-  off(event: string, handler: (...args: any[]) => void) {
+  off(event: string, handler: (...args: unknown[]) => void) {
     this.listeners = this.listeners.filter(l => !(l.event === event && l.handler === handler));
     this.socket?.off(event, handler);
   }
@@ -151,7 +152,7 @@ class SocketLifecycleManager {
     this.socket?.removeAllListeners(event);
   }
 
-  emit(event: string, data?: any) {
+  emit(event: string, data?: unknown) {
     if (!this.socket?.connected) {
       console.warn(`[SocketLifecycle:Web] Dropping emit — not connected: ${event}`);
       return;

@@ -302,76 +302,37 @@ class ReconciliationWorker {
      * Detects discrepancies between materialized wallet stores and the cryptographic ledger.
      */
     static async assertLedgerIntegrity() {
-        try {
-            // TEMPORARY FIX: Disable to prevent memory crash during testing.
-            // This query fetches the entire database into V8 memory and causes Access Violations.
-            return;
-            
-            logger.info("[ReconciliationWorker] Running Active Ledger Integrity Sweep...");
-            
-            // 1. Fetch Materialized Balances
-            const { data: wallets, error } = await supabase.from('wallets_store').select('id, balance, user_id');
-            if (error || !wallets) return;
-
-            // 2. Fetch Ledger Truth from v6 Consolidated View
-            // We join entries with transactions to ensure we only sum FINALIZED funds
-            const { data: ledgerTruth, error: ledgerError } = await supabase
-              .from('ledger_entries_v6')
-              .select(`
-                wallet_id,
-                amount,
-                side,
-                ledger_transactions_v6!inner(status)
-              `);
-
-            if (ledgerError) throw ledgerError;
-
-            // 3. Aggregate Journal Truth
-            const validStatuses = ['SETTLED', 'RECONCILED'];
-            const ledgerTruthMap = ledgerTruth.reduce((acc, curr) => {
-                const status = curr.ledger_transactions_v6.status;
-                const amount = Number(curr.amount);
-                
-                // --- TRUTH RECONCILIATION LOGIC ---
-                // 1. Credits (positive) are ONLY included if SETTLED/RECONCILED
-                // 2. Debits (negative) are included if they are at least RESERVED/APPROVED
-                //    because the materialized balance is already debited.
-                const isSuccess = ['SETTLED', 'RECONCILED'].includes(status);
-                const isPendingDebit = amount < 0 && ['RESERVED', 'APPROVED', 'PROCESSING', 'SENT', 'CONFIRMING'].includes(status);
-
-                if (isSuccess || isPendingDebit) {
-                    acc[curr.wallet_id] = (acc[curr.wallet_id] || 0) + amount;
-                }
-                return acc;
-            }, {});
-
-            let driftCount = 0;
-            const tolerance = 0.00000001; // 1e-8 (Satoshi-level precision)
-
-            for (const wallet of wallets) {
-                const truthSum = Math.max(0, ledgerTruthMap[wallet.id] || 0);
-                const materialized = Number(wallet.balance) || 0;
-                
-                // Use a slightly more robust comparison for floating point jitter
-                const drift = Math.abs(materialized - truthSum);
-
-                if (drift > tolerance) {
-                    logger.error(`[SYSTEM_DRIFT_DETECTED] Wallet ${wallet.id} (User: ${wallet.user_id}) drift: ${drift.toFixed(8)}. Materialized: ${materialized}, Ledger Truth: ${truthSum}`);
-                    SystemState.updateMetrics({ hasDrift: true, drift: drift });
-                    SystemState.enterSafeMode(`Ledger drift detected on Wallet ${wallet.id}`);
-                    driftCount++;
-                }
-            }
-
-            if (driftCount === 0) {
-                logger.info("[ReconciliationWorker] Ledger Integrity Sweep PASSED. Zero drift detected.");
-                SystemState.updateMetrics({ hasDrift: false, drift: 0 });
-            } else {
-                logger.error(`[ReconciliationWorker] Ledger Integrity Sweep FAILED. ${driftCount} accounts show mathematical drift.`);
-            }
-        } catch (err) {
-            logger.error("[ReconciliationWorker] Integrity assertion crashed:", err.message);
-        }
+        // TEMPORARILY DISABLED: This query fetches the entire ledger dataset into Node.js
+        // heap memory and causes a Windows Access Violation (OOM crash, exit code 3221225786).
+        // Re-enable only after converting to a paginated or DB-side aggregated query.
+        //
+        // Preserved implementation for future restoration:
+        // const { data: wallets, error } = await supabase.from('wallets_store').select('id, balance, user_id');
+        // if (error || !wallets) return;
+        // const { data: ledgerTruth, error: ledgerError } = await supabase
+        //   .from('ledger_entries_v6')
+        //   .select('wallet_id, amount, side, ledger_transactions_v6!inner(status)');
+        // if (ledgerError) throw ledgerError;
+        // const ledgerTruthMap = ledgerTruth.reduce((acc, curr) => {
+        //     const isSuccess = ['SETTLED', 'RECONCILED'].includes(curr.ledger_transactions_v6.status);
+        //     const amount = Number(curr.amount);
+        //     const isPendingDebit = amount < 0 && ['RESERVED','APPROVED','PROCESSING','SENT','CONFIRMING']
+        //         .includes(curr.ledger_transactions_v6.status);
+        //     if (isSuccess || isPendingDebit) acc[curr.wallet_id] = (acc[curr.wallet_id] || 0) + amount;
+        //     return acc;
+        // }, {});
+        // const tolerance = 0.00000001;
+        // let driftCount = 0;
+        // for (const wallet of wallets) {
+        //     const drift = Math.abs((Number(wallet.balance) || 0) - Math.max(0, ledgerTruthMap[wallet.id] || 0));
+        //     if (drift > tolerance) {
+        //         logger.error('[SYSTEM_DRIFT_DETECTED] Wallet ' + wallet.id + ' drift: ' + drift.toFixed(8));
+        //         SystemState.updateMetrics({ hasDrift: true, drift });
+        //         SystemState.enterSafeMode('Ledger drift on Wallet ' + wallet.id);
+        //         driftCount++;
+        //     }
+        // }
+        // if (driftCount === 0) SystemState.updateMetrics({ hasDrift: false, drift: 0 });
     }
 
     /**
