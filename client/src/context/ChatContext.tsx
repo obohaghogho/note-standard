@@ -63,6 +63,8 @@ export interface Conversation {
         content: string;
         sender_id: string;
         created_at: string;
+        type?: string;
+        is_edited?: boolean;
         read_at?: string;
         delivered_at?: string;
     };
@@ -95,7 +97,7 @@ export interface ChatContextValue {
     loading: boolean;
     connected: boolean;
     setActiveConversationId: (id: string | null) => void;
-    sendMessage: (payload: { content: string; type?: string; attachmentId?: string; replyTo?: { id: string; content: string; sender_id: string; type?: string; attachment?: any } }) => Promise<void>;
+    sendMessage: (payload: { content: string; type?: string; attachmentId?: string; replyTo?: { id: string; content: string; sender_id: string; type?: string; attachment?: { id: string; file_name: string; file_type: string; file_size: number; storage_path: string; metadata: Record<string, unknown> } } }) => Promise<void>;
     sendMediaMessage: (file: File | Blob, type: 'image' | 'video' | 'audio' | 'file', conversationId?: string) => Promise<void>;
     loadMoreMessages: (conversationId: string) => Promise<void>;
     markMessageRead: (messageId: string, conversationId: string) => Promise<void>;
@@ -114,7 +116,7 @@ export interface ChatContextValue {
     drafts: Record<string, string>;
     setDraft: (conversationId: string, content: string) => void;
     hasMore: Record<string, boolean>;
-    sendMessageToConversation: (payload: { conversationId: string; content: string; type?: string; attachmentId?: string; replyTo?: any }) => Promise<void>;
+    sendMessageToConversation: (payload: { conversationId: string; content: string; type?: string; attachmentId?: string; replyTo?: { id: string; content: string; sender_id: string; type?: string } }) => Promise<void>;
     markConversationRead: (conversationId: string) => Promise<void>;
     markConversationDelivered: (conversationId: string) => Promise<void>;
     isActiveWriter: (conversationId: string) => boolean;
@@ -669,7 +671,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 if (c.id === conversationId && c.lastMessage && messageIds.includes(c.lastMessage.id)) {
                     return {
                         ...c,
-                        lastMessage: mergeMessageStatus(c.lastMessage as any, { read_at: nowStr, delivered_at: nowStr }) as any
+                        lastMessage: mergeMessageStatus(c.lastMessage, { read_at: nowStr, delivered_at: nowStr })
                     };
                 }
                 return c;
@@ -692,7 +694,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 if (c.id === conversationId && c.lastMessage && c.lastMessage.id === messageId) {
                     return {
                         ...c,
-                        lastMessage: mergeMessageStatus(c.lastMessage as any, { delivered_at: nowStr }) as any
+                        lastMessage: mergeMessageStatus(c.lastMessage, { delivered_at: nowStr })
                     };
                 }
                 return c;
@@ -728,7 +730,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     if (c.id === conversationId && c.lastMessage && c.lastMessage.sender_id === user?.id) {
                         return {
                             ...c,
-                            lastMessage: mergeMessageStatus(c.lastMessage as any, { read_at: readAt, delivered_at: readAt }) as any
+                        lastMessage: mergeMessageStatus(c.lastMessage, { read_at: readAt, delivered_at: readAt })
                         };
                     }
                     return c;
@@ -764,7 +766,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     if (c.id === conversationId && c.lastMessage && c.lastMessage.sender_id === user?.id && !c.lastMessage.read_at) {
                         return {
                             ...c,
-                            lastMessage: mergeMessageStatus(c.lastMessage as any, { delivered_at: delivered_at }) as any
+                        lastMessage: mergeMessageStatus(c.lastMessage, { delivered_at: delivered_at })
                         };
                     }
                     return c;

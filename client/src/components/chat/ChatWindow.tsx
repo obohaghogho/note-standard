@@ -50,7 +50,7 @@ const ChatWindow: React.FC = () => {
 
     // Editing state
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-    const [replyTo, setReplyTo] = useState<{ id: string; content: string; sender_id: string; type?: string; attachment?: any } | null>(null);
+    const [replyTo, setReplyTo] = useState<{ id: string; content: string; sender_id: string; type?: string; attachment?: { id: string; file_name: string; file_type: string; file_size: number; storage_path: string; metadata: Record<string, unknown> } } | null>(null);
 
     const toggleMessageSelection = (msgId: string) => {
         setSelectedMessages(prev => {
