@@ -4,13 +4,14 @@ import toast from 'react-hot-toast';
 import { useAuth } from './AuthContext';
 
 // ─── Config ──────────────────────────────────────────────────────
-// Vite loads the correct URL from .env.development or .env.production
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
 
 if (!SOCKET_URL && import.meta.env.PROD) {
     console.error('❌ CRITICAL: VITE_SOCKET_URL is not defined in production environment!');
 }
 
+// Requirement 3: Stable module singleton strategy
+let globalSocket: Socket | null = null;
 
 // ─── Types ───────────────────────────────────────────────────────
 interface SocketContextValue {
@@ -41,37 +42,46 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const { session, authReady, user } = useAuth();
     const [connected, setConnected] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const socketRef = useRef<Socket | null>(null);
     const retryCount = useRef(0);
     const MAX_RETRIES = 10;
 
+    // We no longer rely on effect cleanup to manage socket lifecycle.
+    // This allows the socket to persist across React component unmount/remounts and token refreshes.
     useEffect(() => {
-        // ── Gate: wait until auth is fully ready ──────────────
+        if (!authReady) return;
+
         const token = session?.access_token;
         const isValidToken = token && typeof token === 'string' && token.length > 20;
 
-        if (!authReady || !isValidToken || !user) {
-            // Tear down existing socket if session is lost
-            if (socketRef.current) {
-                console.log('[Socket] Auth lost or token invalid — disconnecting');
-                socketRef.current.disconnect();
-                socketRef.current = null;
+        // 1. Explicit Sign-Out Teardown
+        // We ONLY destroy the socket if the user is truly signed out.
+        if (!isValidToken || !user) {
+            if (globalSocket) {
+                console.log(`[Socket Forensic] Explicit Sign-Out — disconnecting socket at ${Date.now()}`);
+                globalSocket.disconnect();
+                globalSocket = null;
                 setConnected(false);
             }
             return;
         }
 
-        // ── Guard: prevent double creation ───────────────────
-        if (socketRef.current) return;
+        // 2. Token Refresh Guard
+        // If already connected, just dynamically update the auth token for the next reconnect.
+        // Requirement 1, 4, 5, 10
+        if (globalSocket) {
+            if ((globalSocket as any).auth?.token !== token) {
+                console.log(`[Socket Forensic] Auth Refresh Detected at ${Date.now()}. Updating internal socket auth token without tearing down transport.`);
+                (globalSocket as any).auth = { token };
+            }
+            return;
+        }
 
-        console.log('[Socket] Connecting to', SOCKET_URL);
-
+        // 3. Initial Boot Creation
+        console.log(`[Socket Forensic] Initializing persistent socket singleton at ${Date.now()}`);
+        
         const socket = io(SOCKET_URL, {
-            auth: { token: session.access_token },
+            auth: { token },
             withCredentials: true,
-            // IMPORTANT: start with polling, then upgrade.
-            // This avoids "WebSocket closed before established" errors and
-            // ensures the auth token is validated in the HTTP handshake.
             transports: ['polling', 'websocket'],
             reconnection: true,
             reconnectionAttempts: MAX_RETRIES,
@@ -79,60 +89,46 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             timeout: 60000,
         });
 
+        globalSocket = socket;
+
         socket.on('connect', () => {
-            const transport = socket.io.engine.transport.name;
-            console.log(`[Socket] ✓ Connected via ${transport}`);
+            console.log(`[Socket Forensic] ✓ Connected via ${socket.io.engine.transport.name} at ${Date.now()}`);
             setConnected(true);
             setError(null);
             retryCount.current = 0;
 
-            // Log the upgrade when it happens
             socket.io.engine.on('upgrade', (t: { name: string }) => {
-                console.log(`[Socket] ↑ Upgraded to ${t.name}`);
+                console.log(`[Socket Forensic] ↑ Upgraded to ${t.name} at ${Date.now()}`);
             });
         });
 
         socket.on('disconnect', (reason) => {
-            console.log('[Socket] Disconnected:', reason);
+            console.log(`[Socket Forensic] Disconnected at ${Date.now()}. Reason: ${reason}`);
             setConnected(false);
-            // If the server kicked us, reconnect manually
             if (reason === 'io server disconnect') {
-                socket.connect();
+                socket.connect(); // Server kicked us, manually reconnect
             }
         });
 
         socket.on('connect_error', (err) => {
-            console.error('[Socket] Connection error:', err.message);
+            console.error(`[Socket Forensic] Connection error at ${Date.now()}:`, err.message);
             setError(err.message);
             setConnected(false);
 
             if (retryCount.current < MAX_RETRIES) {
                 retryCount.current++;
-                console.log(`[Socket] Retrying (${retryCount.current}/${MAX_RETRIES})…`);
+                console.log(`[Socket Forensic] Retrying (${retryCount.current}/${MAX_RETRIES})…`);
             } else {
                 toast.error('Real-time connection failed. Please refresh.');
             }
         });
 
-        // NOTE: Notification toasts are handled exclusively by NotificationContext
-        // to avoid duplicate popups. Only log here for debugging.
-        socket.on('notification', (data: RealtimeNotification) => {
-            console.log('[Socket] Notification event received (handled by NotificationContext):', data?.type);
-        });
-
-        socketRef.current = socket;
-
-        // ── Cleanup on unmount or dependency change ──────────
-        return () => {
-            console.log('[Socket] Cleaning up…');
-            socket.disconnect();
-            socketRef.current = null;
-            setConnected(false);
-        };
-    }, [authReady, session, user]);
+        // We intentionally DO NOT return a cleanup function that calls socket.disconnect().
+        // Requirement 7.
+    }, [authReady, session, user]); // Re-evaluates when session refreshes, but guarded against disconnect.
 
     return (
-        <SocketContext.Provider value={{ socket: socketRef.current, connected, error }}>
+        <SocketContext.Provider value={{ socket: globalSocket, connected, error }}>
             {children}
         </SocketContext.Provider>
     );

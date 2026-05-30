@@ -328,7 +328,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!isMounted.current) return;
       
       const currentId = switchIdRef.current;
-      console.log(`[Auth] Event: ${event} (#${currentId})`, { email: newSession?.user?.email });
+      console.log(`[Auth Forensic] Event: ${event} (#${currentId}) at ${Date.now()}`, { 
+        email: newSession?.user?.email,
+        hasSession: !!newSession,
+        hasUser: !!newSession?.user
+      });
 
       if (event === 'SIGNED_OUT') {
         // If we are switching, we ignore SIGNED_OUT from the old account
@@ -346,6 +350,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
         const currentUser = newSession?.user ?? null;
         
+        console.log(`[Auth Forensic] State update triggering for ${event} at ${Date.now()}`);
         setSession(newSession);
         setUser(currentUser);
 

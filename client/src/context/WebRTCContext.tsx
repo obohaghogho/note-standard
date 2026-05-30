@@ -232,8 +232,11 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         // FIX #1: Send ICE candidates via call:ice-candidate (not call:signal)
         pc.onicecandidate = (e) => {
+            if (e.candidate) {
+                console.log(`[WebRTC Forensic] ICE Emission at ${Date.now()}:`, e.candidate.candidate);
+            }
             if (e.candidate && socket) {
-                console.log('[WebRTC] Sending ICE candidate:', e.candidate.type);
+                console.log(`[WebRTC Forensic] Sending ICE candidate to remote at ${Date.now()}`);
                 socket.emit('call:ice-candidate', {
                     to: targetUserId, candidate: e.candidate.toJSON(), sessionId: sessionIdRef.current,
                 });
@@ -253,11 +256,28 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
         };
 
-        pc.onconnectionstatechange = () => {
+        pc.onconnectionstatechange = async () => {
             const state = pc.connectionState;
-            console.log('[WebRTC] connectionState:', state);
+            const iceState = pc.iceConnectionState;
+            const sigState = pc.signalingState;
+            console.log(`[WebRTC Forensic] Connection State Timeline -> Connection: ${state} | ICE: ${iceState} | Signaling: ${sigState}`);
 
             if (state === 'connected') {
+                try {
+                    const stats = await pc.getStats();
+                    stats.forEach(report => {
+                        if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.nominated) {
+                            console.log('[WebRTC Forensic] Selected candidate pair:', report);
+                            const local = stats.get(report.localCandidateId);
+                            const remote = stats.get(report.remoteCandidateId);
+                            console.log('[WebRTC Forensic] Local candidate type:', local?.candidateType);
+                            console.log('[WebRTC Forensic] Remote candidate type:', remote?.candidateType);
+                        }
+                    });
+                } catch (err) {
+                    console.warn('[WebRTC Forensic] Error getting stats', err);
+                }
+
                 if (reconnectTimerRef.current) { clearTimeout(reconnectTimerRef.current); reconnectTimerRef.current = null; }
                 setCallState(p => ({ ...p, status: 'connected', connectedAt: p.connectedAt || Date.now() }));
             }
@@ -292,7 +312,20 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
         };
 
-        pc.oniceconnectionstatechange = () => console.log('[WebRTC] iceConnectionState:', pc.iceConnectionState);
+        pc.oniceconnectionstatechange = () => {
+            const state = pc.connectionState;
+            const iceState = pc.iceConnectionState;
+            const sigState = pc.signalingState;
+            console.log(`[WebRTC Forensic] Connection State Timeline -> Connection: ${state} | ICE: ${iceState} | Signaling: ${sigState}`);
+        };
+        
+        pc.onsignalingstatechange = () => {
+            const state = pc.connectionState;
+            const iceState = pc.iceConnectionState;
+            const sigState = pc.signalingState;
+            console.log(`[WebRTC Forensic] Connection State Timeline -> Connection: ${state} | ICE: ${iceState} | Signaling: ${sigState}`);
+        };
+        
         pc.onicegatheringstatechange  = () => console.log('[WebRTC] iceGatheringState:', pc.iceGatheringState);
 
         pcRef.current = pc;
@@ -443,7 +476,12 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     offerToReceiveVideo: callTypeRef.current === 'video',
                 });
                 const sdp = { type: offer.type, sdp: optimizeSDP(offer.sdp || '') } as RTCSessionDescriptionInit;
+                if (pc.signalingState !== 'stable') {
+                    console.error(`[WebRTC Forensic] Cannot set local offer, signalingState is ${pc.signalingState}`);
+                    return;
+                }
                 await pc.setLocalDescription(sdp);
+                console.log(`[WebRTC Forensic] LOCAL SDP (Offer) Set at ${Date.now()}`);
 
                 socket.emit('call:signal', { to: data.from, signal: sdp, sessionId: sessionIdRef.current });
                 setCallState(p => ({ ...p, status: 'connecting' }));
@@ -474,12 +512,20 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                         localStreamRef.current.getTracks().forEach(t => { try { pc.addTrack(t, localStreamRef.current!); } catch { /* already added */ } });
                     }
                     const sdp = { type: signal.type, sdp: optimizeSDP(signal.sdp || '') } as RTCSessionDescriptionInit;
+                    if (pc.signalingState !== 'stable' && pc.signalingState !== 'have-local-offer') {
+                        console.error(`[WebRTC Forensic] Cannot set remote offer, signalingState is ${pc.signalingState}`);
+                    }
                     await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+                    console.log(`[WebRTC Forensic] REMOTE SDP (Offer) Set at ${Date.now()}`);
                     await drainIceQueue(pc); // FIX #3
 
                     const answer = await pc.createAnswer();
                     const answerSdp = { type: answer.type, sdp: optimizeSDP(answer.sdp || '') } as RTCSessionDescriptionInit;
+                    if (pc.signalingState !== 'have-remote-offer') {
+                        console.error(`[WebRTC Forensic] Cannot set local answer, signalingState is ${pc.signalingState}`);
+                    }
                     await pc.setLocalDescription(answerSdp);
+                    console.log(`[WebRTC Forensic] LOCAL SDP (Answer) Set at ${Date.now()}`);
                     socket.emit('call:signal', { to: from, signal: answerSdp, sessionId: sessionIdRef.current });
                 } catch (err) {
                     console.error('[WebRTC] offer handling error:', err);
@@ -493,7 +539,12 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 if (!pc) { console.error('[WebRTC] No PC for answer'); return; }
                 try {
                     const sdp = { type: signal.type, sdp: optimizeSDP(signal.sdp || '') } as RTCSessionDescriptionInit;
+                    if (pc.signalingState !== 'have-local-offer') {
+                        console.error(`[WebRTC Forensic] Cannot set remote answer, signalingState is ${pc.signalingState}`);
+                        return;
+                    }
                     await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+                    console.log(`[WebRTC Forensic] REMOTE SDP (Answer) Set at ${Date.now()}`);
                     await drainIceQueue(pc); // FIX #3
                 } catch (err) {
                     console.error('[WebRTC] answer handling error:', err);
@@ -504,22 +555,23 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         // FIX #1: Receive ICE candidates via call:ice-candidate (not call:signal)
         // FIX #3: Queue candidates if remote description not yet set
         const onIceCandidate = async (data: { from: string; candidate: RTCIceCandidateInit; sessionId?: string }) => {
+            console.log(`[WebRTC Forensic] ICE Reception at ${Date.now()}`);
             const pc = pcRef.current;
             if (!pc) {
-                // PC doesn't exist yet — queue for later
+                console.log(`[WebRTC Forensic] Queuing ICE candidate (No PC yet) at ${Date.now()}`);
                 iceCandidateQueue.current.push(data.candidate);
                 return;
             }
-            // FIX #7: iOS Safari throws hard error if addIceCandidate before remoteDescription
             if (!pc.remoteDescription) {
-                console.log('[WebRTC] Queuing ICE candidate (no remote desc yet)');
+                console.log(`[WebRTC Forensic] Queuing ICE candidate (no remote desc yet) at ${Date.now()}`);
                 iceCandidateQueue.current.push(data.candidate);
                 return;
             }
             try {
                 await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+                console.log(`[WebRTC Forensic] ICE Candidate added successfully at ${Date.now()}`);
             } catch (e) {
-                console.error('[WebRTC] addIceCandidate error:', e);
+                console.error(`[WebRTC Forensic] addIceCandidate error at ${Date.now()}:`, e);
             }
         };
 

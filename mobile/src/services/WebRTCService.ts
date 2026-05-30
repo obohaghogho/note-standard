@@ -134,6 +134,7 @@ class WebRTCService {
     const offer = await this.peerConnection!.createOffer({});
     const mungedSdp = { type: offer.type, sdp: this.enforceH264(offer.sdp || '') };
     await this.peerConnection!.setLocalDescription(mungedSdp);
+    console.log('[WebRTC Forensic] LOCAL SDP (Offer):', this.peerConnection!.localDescription?.sdp);
     
     // Start InCallManager for proper iOS audio routing
     InCallManager.start({ media: callType === 'video' ? 'video' : 'audio' });
@@ -164,10 +165,13 @@ class WebRTCService {
 
     this.remoteDescriptionPromise = this.peerConnection!.setRemoteDescription(new RTCSessionDescription(offerSdp));
     await this.remoteDescriptionPromise;
+    console.log('[WebRTC Forensic] REMOTE SDP (Offer):', this.peerConnection!.remoteDescription?.sdp);
+    
     await this.drainPendingCandidates(); // flush any queued ICE candidates
     const answer = await this.peerConnection!.createAnswer();
     const mungedSdp = { type: answer.type, sdp: this.enforceH264(answer.sdp || '') };
     await this.peerConnection!.setLocalDescription(mungedSdp);
+    console.log('[WebRTC Forensic] LOCAL SDP (Answer):', this.peerConnection!.localDescription?.sdp);
     
     // Start InCallManager for proper iOS audio routing
     InCallManager.start({ media: callType === 'video' ? 'video' : 'audio' });
@@ -179,6 +183,7 @@ class WebRTCService {
     if (!this.peerConnection) return;
     this.remoteDescriptionPromise = this.peerConnection.setRemoteDescription(new RTCSessionDescription(answerSdp));
     await this.remoteDescriptionPromise;
+    console.log('[WebRTC Forensic] REMOTE SDP (Answer):', this.peerConnection.remoteDescription?.sdp);
     await this.drainPendingCandidates(); // flush any queued ICE candidates
   }
 
@@ -267,10 +272,29 @@ class WebRTCService {
     console.log('[WebRTC] Creating PeerConnection with config:', JSON.stringify(config));
     this.peerConnection = new RTCPeerConnection(config);
 
-    this.peerConnection.onconnectionstatechange = () => {
+    this.peerConnection.onconnectionstatechange = async () => {
       const state = this.peerConnection?.connectionState as WebRTCConnectionState;
       const iceState = this.peerConnection?.iceConnectionState;
-      console.log(`[WebRTC] Connection State changed: ${state} | ICE: ${iceState}`);
+      const signalingState = this.peerConnection?.signalingState;
+      console.log(`[WebRTC Forensic] Connection State Timeline -> Connection: ${state} | ICE: ${iceState} | Signaling: ${signalingState}`);
+
+      if (state === 'connected' && this.peerConnection) {
+        try {
+          const stats = await this.peerConnection.getStats();
+          stats.forEach(report => {
+            if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.nominated) {
+              console.log('[WebRTC Forensic] Selected candidate pair:', report);
+              const local = stats.get(report.localCandidateId);
+              const remote = stats.get(report.remoteCandidateId);
+              console.log('[WebRTC Forensic] Local candidate type:', local?.candidateType);
+              console.log('[WebRTC Forensic] Remote candidate type:', remote?.candidateType);
+            }
+          });
+        } catch (err) {
+          console.warn('[WebRTC Forensic] Error getting stats', err);
+        }
+      }
+
       if (this.onConnectionStateChangeCallback) {
         this.onConnectionStateChangeCallback(state, iceState);
       }
@@ -279,13 +303,24 @@ class WebRTCService {
     this.peerConnection.oniceconnectionstatechange = () => {
       const state = this.peerConnection?.connectionState as WebRTCConnectionState;
       const iceState = this.peerConnection?.iceConnectionState;
-      console.log(`[WebRTC] ICE Connection State changed: ${iceState}`);
+      const signalingState = this.peerConnection?.signalingState;
+      console.log(`[WebRTC Forensic] Connection State Timeline -> Connection: ${state} | ICE: ${iceState} | Signaling: ${signalingState}`);
       if (this.onConnectionStateChangeCallback) {
         this.onConnectionStateChangeCallback(state, iceState);
       }
     };
 
+    this.peerConnection.onsignalingstatechange = () => {
+      const state = this.peerConnection?.connectionState as WebRTCConnectionState;
+      const iceState = this.peerConnection?.iceConnectionState;
+      const signalingState = this.peerConnection?.signalingState;
+      console.log(`[WebRTC Forensic] Connection State Timeline -> Connection: ${state} | ICE: ${iceState} | Signaling: ${signalingState}`);
+    };
+
     this.peerConnection.onicecandidate = (event: any) => {
+      if (event.candidate) {
+        console.log('[WebRTC Forensic] ICE Candidate:', event.candidate.candidate);
+      }
       if (event.candidate && this.onIceCandidateCallback) {
         this.onIceCandidateCallback(event.candidate);
       }
