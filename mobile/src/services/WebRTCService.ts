@@ -35,13 +35,15 @@ class WebRTCService {
   private peerConnection: RTCPeerConnection | null = null;
   private localStream: MediaStream | null = null;
   private remoteStream: MediaStream | null = null;
+  private remoteAudioTrack: any = null;
+  private remoteVideoTrack: any = null;
   private isInitialized = false;
   private iceServers: any[] = [];
   private pendingCandidates: any[] = []; // queued until setRemoteDescription done
-  private remoteDescriptionSet = false;
+  private remoteDescriptionPromise: Promise<void> | null = null;
   
   // Callbacks for UI updates
-  private onConnectionStateChangeCallback: ((state: WebRTCConnectionState) => void) | null = null;
+  private onConnectionStateChangeCallback: ((state: WebRTCConnectionState, iceState?: string) => void) | null = null;
   private onRemoteStreamCallback: ((stream: MediaStream | null) => void) | null = null;
   private onIceCandidateCallback: ((candidate: any) => void) | null = null;
   private onSignalCallback: ((signal: any) => void) | null = null;
@@ -114,10 +116,17 @@ class WebRTCService {
     // This is critical for iOS to ensure proper bidirectional negotiation
     if (this.localStream) {
       this.localStream.getTracks().forEach(track => {
-        this.peerConnection?.addTransceiver(track, {
-          direction: 'sendrecv',
-          streams: [this.localStream!]
-        });
+        const existingTransceivers = this.peerConnection?.getTransceivers() || [];
+        const hasKind = existingTransceivers.some(t => t.sender && t.sender.track && t.sender.track.kind === track.kind);
+        if (!hasKind) {
+          this.peerConnection?.addTransceiver(track, {
+            direction: 'sendrecv',
+            streams: [this.localStream!]
+          });
+          console.log(`[WebRTC] Added transceiver for ${track.kind}`);
+        } else {
+          console.log(`[WebRTC] Transceiver for ${track.kind} already exists. Skipping.`);
+        }
       });
     }
 
@@ -139,15 +148,22 @@ class WebRTCService {
 
     if (this.localStream) {
       this.localStream.getTracks().forEach(track => {
-        this.peerConnection?.addTransceiver(track, {
-          direction: 'sendrecv',
-          streams: [this.localStream!]
-        });
+        const existingTransceivers = this.peerConnection?.getTransceivers() || [];
+        const hasKind = existingTransceivers.some(t => t.sender && t.sender.track && t.sender.track.kind === track.kind);
+        if (!hasKind) {
+          this.peerConnection?.addTransceiver(track, {
+            direction: 'sendrecv',
+            streams: [this.localStream!]
+          });
+          console.log(`[WebRTC] Added transceiver for ${track.kind}`);
+        } else {
+          console.log(`[WebRTC] Transceiver for ${track.kind} already exists. Skipping.`);
+        }
       });
     }
 
-    await this.peerConnection!.setRemoteDescription(new RTCSessionDescription(offerSdp));
-    this.remoteDescriptionSet = true;
+    this.remoteDescriptionPromise = this.peerConnection!.setRemoteDescription(new RTCSessionDescription(offerSdp));
+    await this.remoteDescriptionPromise;
     await this.drainPendingCandidates(); // flush any queued ICE candidates
     const answer = await this.peerConnection!.createAnswer();
     const mungedSdp = { type: answer.type, sdp: this.enforceH264(answer.sdp || '') };
@@ -161,22 +177,25 @@ class WebRTCService {
 
   async handleAnswer(answerSdp: any) {
     if (!this.peerConnection) return;
-    await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answerSdp));
-    this.remoteDescriptionSet = true;
+    this.remoteDescriptionPromise = this.peerConnection.setRemoteDescription(new RTCSessionDescription(answerSdp));
+    await this.remoteDescriptionPromise;
     await this.drainPendingCandidates(); // flush any queued ICE candidates
   }
 
   async addIceCandidate(candidate: any) {
-    if (!this.peerConnection || !this.remoteDescriptionSet) {
+    if (!this.peerConnection) return;
+    
+    if (this.remoteDescriptionPromise) {
+      try {
+        await this.remoteDescriptionPromise;
+        await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (e) {
+        console.warn('[WebRTC] Error adding ICE candidate after promise:', e);
+      }
+    } else {
       // Queue until setRemoteDescription is done — adding before it causes silent drops
       console.log('[WebRTC] Queuing ICE candidate (remote description not set yet)');
       this.pendingCandidates.push(candidate);
-      return;
-    }
-    try {
-      await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-    } catch (e) {
-      console.warn('[WebRTC] Error adding ICE candidate:', e);
     }
   }
 
@@ -197,6 +216,7 @@ class WebRTCService {
   // ── SDP Munging for iOS Video Stability ────────────────────────────────────
   private enforceH264(sdp: string): string {
     // Prioritize H264 for iOS hardware compatibility (prevents black screen on iOS)
+    if (!sdp) return sdp;
     const lines = sdp.split('\r\n');
     const mLineIndex = lines.findIndex(line => line.startsWith('m=video'));
     if (mLineIndex === -1) return sdp;
@@ -211,9 +231,15 @@ class WebRTCService {
       }
     });
 
-    if (payloadTypes.length === 0) return sdp;
+    if (payloadTypes.length === 0) {
+      console.log('[WebRTC] H264 payload type not found in SDP. Safely preserving original SDP.');
+      return sdp;
+    }
 
     const mLineParts = lines[mLineIndex].split(' ');
+    // If the m=video line is malformed, don't touch it
+    if (mLineParts.length < 4) return sdp;
+
     const originalPayloads = mLineParts.slice(3);
     const newPayloads = [
       ...payloadTypes,
@@ -221,6 +247,7 @@ class WebRTCService {
     ];
     lines[mLineIndex] = [...mLineParts.slice(0, 3), ...newPayloads].join(' ');
     
+    console.log(`[WebRTC] Safely promoted H264 payloads: ${payloadTypes.join(', ')}`);
     return lines.join('\r\n');
   }
 
@@ -230,7 +257,7 @@ class WebRTCService {
     }
     // Reset ICE candidate state for fresh connection
     this.pendingCandidates = [];
-    this.remoteDescriptionSet = false;
+    this.remoteDescriptionPromise = null;
 
     const config = {
       iceServers: this.iceServers,
@@ -242,9 +269,19 @@ class WebRTCService {
 
     this.peerConnection.onconnectionstatechange = () => {
       const state = this.peerConnection?.connectionState as WebRTCConnectionState;
-      console.log('[WebRTC] Connection State changed:', state);
+      const iceState = this.peerConnection?.iceConnectionState;
+      console.log(`[WebRTC] Connection State changed: ${state} | ICE: ${iceState}`);
       if (this.onConnectionStateChangeCallback) {
-        this.onConnectionStateChangeCallback(state);
+        this.onConnectionStateChangeCallback(state, iceState);
+      }
+    };
+
+    this.peerConnection.oniceconnectionstatechange = () => {
+      const state = this.peerConnection?.connectionState as WebRTCConnectionState;
+      const iceState = this.peerConnection?.iceConnectionState;
+      console.log(`[WebRTC] ICE Connection State changed: ${iceState}`);
+      if (this.onConnectionStateChangeCallback) {
+        this.onConnectionStateChangeCallback(state, iceState);
       }
     };
 
@@ -255,24 +292,33 @@ class WebRTCService {
     };
 
     // CRITICAL FIX: Replace deprecated onaddstream with modern ontrack.
-    // react-native-webrtc v124+ no longer fires onaddstream.
     // We must collect incoming tracks and assemble a remote MediaStream manually.
     this.peerConnection.ontrack = (event: any) => {
-      console.log('[WebRTC] ontrack fired — kind:', event.track?.kind);
+      console.log('[WebRTC] ontrack fired — kind:', event.track?.kind, 'id:', event.track?.id);
       const track = event.track;
       if (!track) return;
 
-      if (!this.remoteStream) {
-        // @ts-ignore — react-native-webrtc provides MediaStream constructor
-        this.remoteStream = new MediaStream();
+      if (track.kind === 'audio') {
+        this.remoteAudioTrack = track;
+      } else if (track.kind === 'video') {
+        this.remoteVideoTrack = track;
       }
-      this.remoteStream.addTrack(track);
+
+      // 1. NEVER mutate and reuse the same MediaStream reference for UI state propagation.
+      // 2. Maintain an internal track registry.
+      // 3. When tracks change, create a NEW MediaStream instance.
+      // @ts-ignore — react-native-webrtc provides MediaStream constructor
+      const newStream = new MediaStream();
+      
+      if (this.remoteAudioTrack) newStream.addTrack(this.remoteAudioTrack);
+      if (this.remoteVideoTrack) newStream.addTrack(this.remoteVideoTrack);
+
+      this.remoteStream = newStream;
 
       // Notify the UI on every track addition so it can render the stream
-      // as soon as the first track (audio) arrives, not waiting for video.
       if (this.onRemoteStreamCallback) {
         this.onRemoteStreamCallback(this.remoteStream);
-        console.log('[WebRTC] Remote stream updated and dispatched to UI');
+        console.log(`[WebRTC] Remote stream updated and dispatched to UI (Tracks: ${newStream.getTracks().length})`);
       }
     };
   }
@@ -348,7 +394,7 @@ class WebRTCService {
   // ── Callbacks registration ─────────────────────────────────────────────────
 
   registerCallbacks(handlers: {
-    onConnectionStateChange?: (state: WebRTCConnectionState) => void;
+    onConnectionStateChange?: (state: WebRTCConnectionState, iceState?: string) => void;
     onRemoteStream?: (stream: MediaStream | null) => void;
     onIceCandidate?: (candidate: any) => void;
     onSignal?: (signal: any) => void;
@@ -408,8 +454,18 @@ class WebRTCService {
       try {
         // Discard listeners to avoid reference cycle leaks
         this.peerConnection.onconnectionstatechange = null;
+        this.peerConnection.oniceconnectionstatechange = null;
         this.peerConnection.onicecandidate = null;
         this.peerConnection.onaddstream = null;
+        this.peerConnection.ontrack = null;
+        
+        // Stop all senders to thoroughly clean up duplicate transceivers
+        this.peerConnection.getSenders().forEach(sender => {
+           if (sender.track) {
+              sender.track.stop();
+           }
+        });
+        
         this.peerConnection.close();
         console.log('[WebRTC] RTCPeerConnection closed cleanly.');
       } catch (err) {
@@ -420,7 +476,9 @@ class WebRTCService {
 
     this.isInitialized = false;
     this.pendingCandidates = [];
-    this.remoteDescriptionSet = false;
+    this.remoteDescriptionPromise = null;
+    this.remoteAudioTrack = null;
+    this.remoteVideoTrack = null;
 
     // Discard callback references to prevent garbage collector memory leaks
     if (this.onRemoteStreamCallback) {

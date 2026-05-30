@@ -79,9 +79,9 @@ export default function CallScreen({ navigation, route }: Props) {
 
         // Register callbacks inline — avoids stale closure from useCallback
         WebRTCService.registerCallbacks({
-          onConnectionStateChange: (state: WebRTCConnectionState) => {
+          onConnectionStateChange: (state: WebRTCConnectionState, iceState?: string) => {
             if (!isMounted) return;
-            console.log('[CallScreen] Connection state:', state);
+            console.log(`[CallScreen] Connection state: ${state} | ICE: ${iceState}`);
             if (state === 'connected') {
               setCallState('connected');
               CallService.onCallConnected();
@@ -216,7 +216,7 @@ export default function CallScreen({ navigation, route }: Props) {
         // ── Video call layout ─────────────────────────────────────────────
         <View style={styles.videoContainer}>
           {/* Remote video fullscreen */}
-          {remoteStream ? (
+          {remoteStream && remoteStream.getVideoTracks().length > 0 ? (
             <RTCView
               streamURL={remoteStream.toURL()}
               style={styles.remoteVideo}
@@ -233,7 +233,7 @@ export default function CallScreen({ navigation, route }: Props) {
           )}
 
           {/* Local video PiP */}
-          {!isMinimized && localStream && (
+          {!isMinimized && localStream && localStream.getVideoTracks().length > 0 && (
             <RTCView
               streamURL={localStream.toURL()}
               style={styles.localVideo}
