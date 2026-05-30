@@ -19,7 +19,7 @@ export const LandingPage = () => {
     }, [authReady, user, navigate]);
 
     return (
-        <div className="min-h-[100dvh] bg-crystal text-foreground selection:bg-primary/30 w-full">
+        <div className="h-full overflow-y-auto min-h-[100dvh] bg-crystal text-foreground selection:bg-primary/30 w-full">
             <SEO 
                 title="Professional Digital Solutions & Asset Management"
                 description="NoteStandard by Aghogho Plyboard Enterprise provides user-friendly digital solutions for businesses and consumers. Securely manage notes, financial assets, and team collaboration."

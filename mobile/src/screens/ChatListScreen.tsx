@@ -10,12 +10,11 @@ import { ChatService, Conversation } from '../services/ChatService';
 import { AuthService } from '../services/AuthService';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ChatStackParamList } from '../navigation/ChatStack';
-import { io, Socket } from 'socket.io-client';
-import { GATEWAY_URL } from '../Config';
 import { useIsFocused } from '@react-navigation/native';
 import { FriendsList } from '../components/FriendsList';
 import apiClient from '../api/apiClient';
 import { Alert } from 'react-native';
+import { useChat } from '../context/ChatContext';
 
 type Props = { navigation: NativeStackNavigationProp<ChatStackParamList, 'ChatList'> };
 
@@ -118,182 +117,28 @@ function ConversationItem({
 
 export default function ChatListScreen({ navigation }: Props) {
   const { user } = useAuth();
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const { conversations, loadConversations } = useChat();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const isFocused = useIsFocused();
 
   const load = useCallback(async () => {
     try {
-      // 1. Load from Cache first for instant UI
-      const cached = await AsyncStorage.getItem('cache_conversations');
-      if (cached) {
-        // Prevent setting cache if we already have data to stop flashing
-        setConversations(prev => prev.length === 0 ? JSON.parse(cached) : prev);
-        setLoading(false);
-      }
-
-      const data = await ChatService.getConversations();
-      // data is guaranteed to be an array
-      const sorted = [...data].sort((a, b) => {
-        const myA = a.members?.find(m => m.user_id === user?.id);
-        const myB = b.members?.find(m => m.user_id === user?.id);
-        const aAccepted = myA?.status === 'accepted' ? 0 : 1;
-        const bAccepted = myB?.status === 'accepted' ? 0 : 1;
-        return aAccepted - bAccepted;
-      });
-
-      // ── Tick Preservation: merge socket-applied ticks into fresh server data ──
-      // The isFocused re-fetch can race against a socket delivery event.
-      // If the socket already set delivered_at / read_at in local state, we must
-      // NOT regress that back to null just because the API call happened to
-      // complete slightly before or slightly after the DB commit.
-      setConversations(prev => {
-        // Build a lookup of current in-memory tick state keyed by conversation id
-        const tickMap: Record<string, { delivered_at?: string | null; read_at?: string | null }> = {};
-        prev.forEach(c => {
-          if (c.last_message) {
-            tickMap[c.id] = {
-              delivered_at: (c.last_message as any).delivered_at,
-              read_at: (c.last_message as any).read_at,
-            };
-          }
-        });
-
-        return sorted.map(conv => {
-          const inMem = tickMap[conv.id];
-          if (!inMem || !conv.last_message) return conv;
-          // Take the "better" (more advanced) tick status — never regress
-          const serverDelivered = (conv.last_message as any).delivered_at;
-          const serverRead     = (conv.last_message as any).read_at;
-          const mergedDelivered = serverDelivered || inMem.delivered_at || null;
-          const mergedRead      = serverRead      || inMem.read_at      || null;
-          if (mergedDelivered === serverDelivered && mergedRead === serverRead) {
-            return conv; // nothing changed, avoid re-render
-          }
-          return {
-            ...conv,
-            last_message: {
-              ...conv.last_message,
-              delivered_at: mergedDelivered,
-              read_at: mergedRead,
-            } as any,
-          };
-        });
-      });
-
-      // 2. Persist to Cache — ONLY if we actually got data.
-      // CRITICAL FIX: Never overwrite cache with an empty array.
-      // An empty result may be a transient auth/network error, not a real empty state.
-      if (sorted.length > 0) {
-        await AsyncStorage.setItem('cache_conversations', JSON.stringify(sorted));
-      }
+      await loadConversations();
     } catch (e) {
       console.error('[ChatList] Load failed:', e);
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [loadConversations]);
 
   useEffect(() => {
-    if (isFocused) load();
+    if (isFocused) {
+      load();
+    }
   }, [isFocused, load]);
 
-  useEffect(() => {
-    // Realtime socket on GATEWAY_URL for list-level events (new conversations)
-    let socket: Socket;
-    const initSocket = async () => {
-      const token = await AuthService.getToken();
-      socket = io(GATEWAY_URL, {
-        auth: { token },
-        transports: ['websocket'],
-        reconnection: true,
-        reconnectionAttempts: 5,
-      });
-        socket.on('connect', () => {
-          console.log('[ChatList] Socket connected');
-          // Join all loaded conversation rooms so we receive room-based status events
-          // even when ChatListScreen is the active screen (not ChatScreen).
-          setConversations(current => {
-            current.forEach(conv => socket.emit('chat:join', conv.id));
-            return current;
-          });
-        });
-        socket.on('chat:new_conversation', () => load());
-        socket.on('chat:conversation_updated', () => load());
-        
-        socket.on('chat:message', (msg) => {
-          setConversations(prev => prev.map(conv => {
-            if (conv.id === msg.conversation_id) {
-               return { ...conv, last_message: msg, unreadCount: msg.sender_id !== user?.id ? (conv as any).unreadCount + 1 : (conv as any).unreadCount };
-            }
-            return conv;
-          }).sort((a, b) => new Date(b.last_message?.created_at || b.updated_at).getTime() - new Date(a.last_message?.created_at || a.updated_at).getTime()));
-        });
 
-        socket.on('chat:read_receipt', ({ messageIds, conversationId, readAt }) => {
-          setConversations(prev => prev.map(conv => {
-             // If the last message is in the read list
-             if (conv.id === conversationId && conv.last_message && messageIds?.includes(conv.last_message.id)) {
-               return { ...conv, last_message: { ...conv.last_message, read_at: readAt || new Date().toISOString() } };
-             }
-             return conv;
-          }));
-        });
-
-        socket.on('chat:delivery_receipt', ({ messageId, conversationId, deliveredAt }) => {
-          setConversations(prev => prev.map(conv => {
-             if (conv.id === conversationId && conv.last_message?.id === messageId) {
-               return { ...conv, last_message: { ...conv.last_message, delivered_at: deliveredAt || new Date().toISOString() } };
-             }
-             return conv;
-          }));
-        });
-
-        socket.on('chat:conversation_read', ({ conversationId, readerId, readAt }) => {
-          if (readerId !== user?.id) {
-            setConversations(prev => prev.map(conv => {
-              if (conv.id === conversationId && conv.last_message && conv.last_message.sender_id === user?.id) {
-                return { ...conv, last_message: { ...conv.last_message, read_at: readAt, delivered_at: readAt } };
-              }
-              return conv;
-            }));
-          } else {
-             // We read it, so clear our unread count
-             setConversations(prev => prev.map(conv => conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv));
-          }
-        });
-
-        socket.on('chat:conversation_delivered', ({ conversationId, userId: delUserId, delivered_at }) => {
-          if (delUserId !== user?.id) {
-            setConversations(prev => prev.map(conv => {
-              if (conv.id === conversationId && conv.last_message && conv.last_message.sender_id === user?.id && !conv.last_message.read_at) {
-                return { ...conv, last_message: { ...conv.last_message, delivered_at } };
-              }
-              return conv;
-            }));
-          }
-        });
-
-        // Real-time presence updates for the list
-        socket.on('user_online', ({ userId, online }) => {
-          setConversations(prev => prev.map(conv => {
-            const hasUser = conv.members?.some(m => m.user_id === userId);
-            if (!hasUser) return conv;
-            return {
-              ...conv,
-              members: conv.members.map(m => 
-                m.user_id === userId 
-                  ? { ...m, profile: m.profile ? { ...m.profile, is_online: online } : m.profile } 
-                  : m
-              )
-            };
-          }));
-        });
-      };
-      initSocket();
-      return () => { if (socket) socket.disconnect(); };
-    }, [load]);
 
   const onRefresh = async () => {
     setRefreshing(true);

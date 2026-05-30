@@ -6,10 +6,13 @@ import walletApi from '../api/walletApi';
 import { WalletContext } from '../context/WalletContext';
 
 interface DepositStatus {
-    id: string;
+    id?: string;
     status: string;
-    amount: number;
-    currency: string;
+    amount?: number;
+    currency?: string;
+    rateLimited?: boolean;
+    data?: unknown;
+    success?: boolean;
 }
 
 type UIStatus = 'loading' | 'success' | 'timed_out' | 'failed' | 'verifying';
@@ -197,7 +200,7 @@ export const ActivitySuccess: React.FC = () => {
     const pollingRef = resolveRef();
 
     return (
-        <div className="min-h-[100dvh] bg-[#0a0a0a] flex items-center justify-center p-4 w-full max-w-full overflow-hidden">
+        <div className="h-full overflow-y-auto min-h-[100dvh] bg-[#0a0a0a] flex items-center justify-center p-4 w-full max-w-full">
             <div className="bg-gray-800 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl border border-gray-700/50">
 
                 {/* Loading / polling */}

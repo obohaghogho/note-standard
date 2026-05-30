@@ -128,7 +128,7 @@ export const Signup = () => {
 
 
     return (
-        <div className="min-h-screen flex flex-col justify-start sm:justify-center items-center p-4 relative overflow-x-hidden overflow-y-auto bg-[#0a0a0a] w-full selection:bg-primary/30">
+        <div className="h-full overflow-y-auto min-h-screen flex flex-col justify-start sm:justify-center items-center p-4 relative overflow-x-hidden bg-[#0a0a0a] w-full selection:bg-primary/30">
             {/* Rich Background Aesthetics */}
             <div className="absolute top-0 right-[-10%] w-[600px] h-[600px] bg-primary/20 rounded-full blur-[120px] -z-10 animate-pulse" />
             <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-[100px] -z-10" />

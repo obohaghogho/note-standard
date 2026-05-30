@@ -27,7 +27,10 @@ interface Message {
 interface ChatContextType {
     conversations: any[];
     messages: Record<string, Message[]>;
-    sendMessage: (conversationId: string, text: string) => Promise<void>;
+    sendMessage: (conversationId: string, text: string, attachmentId?: string, replyToId?: string) => Promise<void>;
+    editMessage: (conversationId: string, messageId: string, content: string) => Promise<void>;
+    deleteMessage: (conversationId: string, messageId: string) => Promise<void>;
+    loadConversations: () => Promise<void>;
     activeConversationId: string | null;
     setActiveConversationId: (id: string | null) => void;
     isActiveWriter: (conversationId: string) => boolean;
@@ -40,6 +43,9 @@ const ChatContext = createContext<ChatContextType>({
     conversations: [],
     messages: {},
     sendMessage: async () => { },
+    editMessage: async () => { },
+    deleteMessage: async () => { },
+    loadConversations: async () => { },
     activeConversationId: null,
     setActiveConversationId: () => { },
     isActiveWriter: () => true,
@@ -352,6 +358,29 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             });
         });
 
+        socketManager.on('chat:message_edited', (editedMsg: any) => {
+            if (!editedMsg.conversation_id) return;
+            setMessages(prev => {
+                const current = prev[editedMsg.conversation_id] || [];
+                return {
+                    ...prev,
+                    [editedMsg.conversation_id]: current.map(m => m.id === editedMsg.id ? { ...m, ...editedMsg } : m)
+                };
+            });
+        });
+
+        socketManager.on('chat:message_deleted', (data: any) => {
+            const { messageId, conversationId } = data;
+            if (!conversationId) return;
+            setMessages(prev => {
+                const current = prev[conversationId] || [];
+                return {
+                    ...prev,
+                    [conversationId]: current.filter(m => m.id !== messageId)
+                };
+            });
+        });
+
         loadConversations();
 
         return () => {
@@ -359,6 +388,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             socketManager.offEvent('chat:message');
             socketManager.offEvent('chat:delivery_receipt');
             socketManager.offEvent('chat:read_receipt');
+            socketManager.offEvent('chat:message_edited');
+            socketManager.offEvent('chat:message_deleted');
         };
     }, [user, activeConversationId]);
 
@@ -370,7 +401,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, [activeConversationId]);
 
     // ── 4. OPTIMISTIC SEND PIPELINE ─────────────────────────────────────────
-    const sendMessage = async (conversationId: string, text: string) => {
+    const sendMessage = async (conversationId: string, text: string, attachmentId?: string, replyToId?: string) => {
         if (!user) return;
 
         // Phase 5: Soft Override Claim
@@ -412,6 +443,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             const currentSessionId = sessionIdRef.current;
             const res = await apiClient.post(`/chat/conversations/${conversationId}/messages`, {
                 ...payload,
+                attachmentId,
+                replyToId,
                 eventId: clientEventId,
                 type: 'text',
                 ...(currentDeviceId ? { deviceId: currentDeviceId } : {}),
@@ -438,11 +471,36 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     };
 
+    const editMessage = async (conversationId: string, messageId: string, content: string) => {
+        try {
+            await apiClient.patch(`/chat/messages/${messageId}`, { content });
+        } catch (err) {
+            console.error('[ChatContext] Edit failed:', err);
+            throw err;
+        }
+    };
+
+    const deleteMessage = async (conversationId: string, messageId: string) => {
+        try {
+            await apiClient.delete(`/chat/messages/${messageId}`);
+            setMessages(prev => ({
+                ...prev,
+                [conversationId]: (prev[conversationId] || []).filter(m => m.id !== messageId)
+            }));
+        } catch (err) {
+            console.error('[ChatContext] Delete failed:', err);
+            throw err;
+        }
+    };
+
     return (
         <ChatContext.Provider value={{
             conversations,
             messages,
             sendMessage,
+            editMessage,
+            deleteMessage,
+            loadConversations,
             activeConversationId,
             setActiveConversationId,
             isActiveWriter,
