@@ -536,7 +536,10 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             } else if (signal.type === 'answer') {
                 // Caller side
                 const pc = pcRef.current;
-                if (!pc) { console.error('[WebRTC] No PC for answer'); return; }
+                if (!pc) { 
+                    console.warn('[WebRTC] Ignored answer SDP (No active PC in this tab. Expected in multi-tab or self-calling tests).'); 
+                    return; 
+                }
                 try {
                     const sdp = { type: signal.type, sdp: optimizeSDP(signal.sdp || '') } as RTCSessionDescriptionInit;
                     if (pc.signalingState !== 'have-local-offer') {
