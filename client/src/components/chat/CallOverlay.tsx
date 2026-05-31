@@ -113,7 +113,6 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
     const showRemoteVideo = isVideoCall && !!remoteStream && remoteStream.getVideoTracks().length > 0;
     const avatarLetter    = otherUserName?.charAt(0).toUpperCase() || '?';
     const isIncoming      = callState.status === 'incoming';
-    const isActive        = ['connecting', 'connected', 'reconnecting'].includes(callState.status);
     const isWaiting       = ['calling', 'ringing', 'connecting'].includes(callState.status);
 
     return (

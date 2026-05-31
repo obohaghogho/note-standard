@@ -69,9 +69,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         // If already connected, just dynamically update the auth token for the next reconnect.
         // Requirement 1, 4, 5, 10
         if (globalSocket) {
-            if ((globalSocket as any).auth?.token !== token) {
+            const socketWithAuth = globalSocket as Socket & { auth?: { token?: string } };
+            if (socketWithAuth.auth?.token !== token) {
                 console.log(`[Socket Forensic] Auth Refresh Detected at ${Date.now()}. Updating internal socket auth token without tearing down transport.`);
-                (globalSocket as any).auth = { token };
+                socketWithAuth.auth = { token };
             }
             return;
         }

@@ -191,7 +191,12 @@ export default function CallScreen({ navigation, route }: Props) {
         <View style={styles.fill}>
           {/* Remote video fullscreen */}
           {hasRemoteVideo ? (
-            <RTCView streamURL={remoteStream!.toURL()} style={styles.remoteVideo} objectFit="cover" />
+            <RTCView 
+              key={`remote-${remoteStream!.getVideoTracks().map(t => t.id).join('-')}`}
+              streamURL={remoteStream!.toURL()} 
+              style={styles.remoteVideo} 
+              objectFit="cover" 
+            />
           ) : (
             <LinearGradient colors={GRADIENT_COLORS.video} style={styles.remoteVideo}>
               <Animated.View style={[styles.avatarRing, { transform: [{ scale: pulseAnim }] }]} />
@@ -206,7 +211,12 @@ export default function CallScreen({ navigation, route }: Props) {
           {/* Local video PiP */}
           {hasLocalVideo && (
             <View style={styles.pip}>
-              <RTCView streamURL={localStream!.toURL()} style={styles.fill} objectFit="cover" />
+              <RTCView 
+                key={`local-${localStream!.getVideoTracks().map(t => t.id).join('-')}`}
+                streamURL={localStream!.toURL()} 
+                style={styles.fill} 
+                objectFit="cover" 
+              />
             </View>
           )}
 

@@ -64,17 +64,20 @@ class SignalingService {
       console.log('[Signaling] ✅ Callee answered — creating offer');
       this.activeSessionId = data.sessionId;
 
+      const targetId = this.activeTargetId;
+      const sessId   = this.activeSessionId;
+
       try {
         // Register ICE callback BEFORE creating the PC so no candidates are missed
         WebRTCService.registerCallbacks({
           onIceCandidate: (candidate) => {
-            this.emit('call:ice-candidate', { to: this.activeTargetId, candidate, sessionId: this.activeSessionId });
+            this.emit('call:ice-candidate', { to: targetId, candidate, sessionId: sessId });
           },
         });
 
         // Phase 2a: create PC + add already-acquired tracks + create offer
         const offer = await WebRTCService.createPeerConnectionAndOffer();
-        this.emit('call:signal', { to: this.activeTargetId, signal: offer, sessionId: this.activeSessionId });
+        this.emit('call:signal', { to: targetId, signal: offer, sessionId: sessId });
       } catch (err) {
         console.error('[Signaling] createPeerConnectionAndOffer failed:', err);
         await this.endActiveCall();
@@ -83,22 +86,22 @@ class SignalingService {
 
     // ── 3. SDP relay ───────────────────────────────────────────────────────
     this.socket.on('call:signal', async (data) => {
-      const { signal } = data;
-      console.log(`[Signaling] 📡 SDP: ${signal.type}`);
+      const { signal, from, sessionId } = data;
+      console.log(`[Signaling] 📡 SDP: ${signal.type} from ${from}`);
 
       try {
         if (signal.type === 'offer') {
           // CALLEE: PC already exists (created in answerCall) — just set remote desc
           const answer = await WebRTCService.handleOffer(signal);
-          this.emit('call:signal', { to: this.activeTargetId, signal: answer, sessionId: this.activeSessionId });
+          this.emit('call:signal', { to: from, signal: answer, sessionId: sessionId || this.activeSessionId });
           // Request any ICE candidates the caller buffered while waiting
-          this.emit('call:request-buffered-ice', { sessionId: this.activeSessionId, fromUserId: this.activeTargetId });
+          this.emit('call:request-buffered-ice', { sessionId: sessionId || this.activeSessionId, fromUserId: from });
 
         } else if (signal.type === 'answer') {
           // CALLER: set remote description from callee's answer
           await WebRTCService.handleAnswer(signal);
           // Request any ICE candidates the callee buffered while creating their answer
-          this.emit('call:request-buffered-ice', { sessionId: this.activeSessionId, fromUserId: this.activeTargetId });
+          this.emit('call:request-buffered-ice', { sessionId: sessionId || this.activeSessionId, fromUserId: from });
         }
       } catch (err) {
         console.error('[Signaling] SDP handling failed:', err);
@@ -167,10 +170,13 @@ class SignalingService {
     // Phase 1: acquire media
     await WebRTCService.acquireMedia(this.activeCallType);
 
+    const targetId = this.activeTargetId;
+    const sessId   = this.activeSessionId;
+
     // Register ICE callback before creating PC so no candidates are dropped
     WebRTCService.registerCallbacks({
       onIceCandidate: (candidate) => {
-        this.emit('call:ice-candidate', { to: this.activeTargetId, candidate, sessionId: this.activeSessionId });
+        this.emit('call:ice-candidate', { to: targetId, candidate, sessionId: sessId });
       },
     });
 
@@ -178,7 +184,7 @@ class SignalingService {
     await WebRTCService.prepareForIncomingCall();
 
     // NOW tell the caller we're ready — offer will arrive to a fully prepared PC
-    this.emit('call:answer', { to: this.activeTargetId, sessionId: this.activeSessionId });
+    this.emit('call:answer', { to: targetId, sessionId: sessId });
     console.log('[Signaling] call:answer emitted — PC ready for offer');
   }
 

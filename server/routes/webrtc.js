@@ -14,7 +14,7 @@ const supabase = require('../config/database');
 const logger = require('../utils/logger');
 const fetch = require('node-fetch');
 
-const GATEWAY_INTERNAL_URL = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
+const GATEWAY_INTERNAL_URL = process.env.REALTIME_GATEWAY_URL || process.env.API_URL || 'http://localhost:5000';
 
 /**
  * GET /api/webrtc/ice-servers

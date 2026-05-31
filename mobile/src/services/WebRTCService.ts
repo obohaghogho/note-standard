@@ -173,8 +173,8 @@ class WebRTCService {
       this.peerConnection.close();
       this.peerConnection = null;
     }
-    // Reset ICE state for fresh connection
-    this.pendingCandidates    = [];
+    // Do NOT wipe pendingCandidates here to preserve early trickled candidates.
+    // They are already cleared on leaveChannel() when the call ends.
     this.remoteDescriptionSet = false;
     this.remoteAudioTrack     = null;
     this.remoteVideoTrack     = null;
@@ -208,17 +208,19 @@ class WebRTCService {
     // This prevents the black screen bug from recreating the stream on every ontrack.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (this.peerConnection as any).ontrack = (event: any) => {
+      console.log('[WebRTC] ontrack streams:', event.streams);
+      const stream = event.streams && event.streams[0];
+      if (!stream) {
+        console.warn('[WebRTC] ontrack fired but event.streams is empty');
+        return;
+      }
+
       const track = event.track;
-      if (!track) return;
-      console.log('[WebRTC] ontrack:', track.kind, track.id);
+      console.log('[WebRTC] ontrack track kind:', track?.kind, 'id:', track?.id);
 
-      if (track.kind === 'audio') this.remoteAudioTrack = track;
-      if (track.kind === 'video') this.remoteVideoTrack = track;
+      if (track?.kind === 'audio') this.remoteAudioTrack = track;
+      if (track?.kind === 'video') this.remoteVideoTrack = track;
 
-      // @ts-ignore
-      const stream = new MediaStream();
-      if (this.remoteAudioTrack) stream.addTrack(this.remoteAudioTrack);
-      if (this.remoteVideoTrack) stream.addTrack(this.remoteVideoTrack);
       this.remoteStream = stream;
       this.onRemoteStreamCallback?.(stream);
     };
@@ -227,11 +229,11 @@ class WebRTCService {
   private addLocalTracks(): void {
     if (!this.localStream || !this.peerConnection) return;
     this.localStream.getTracks().forEach(track => {
-      const existing = this.peerConnection?.getTransceivers() || [];
-      const has = existing.some(t => t.sender?.track?.kind === track.kind);
+      const senders = this.peerConnection?.getSenders() || [];
+      const has = senders.some(s => s.track?.kind === track.kind);
       if (!has) {
-        this.peerConnection?.addTransceiver(track, { direction: 'sendrecv', streams: [this.localStream!] });
-        console.log(`[WebRTC] Transceiver added for ${track.kind}`);
+        this.peerConnection?.addTrack(track, this.localStream!);
+        console.log(`[WebRTC] Track added for ${track.kind}`);
       }
     });
   }

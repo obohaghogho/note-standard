@@ -10,6 +10,7 @@ import { toast } from 'react-hot-toast';
 import api from '../api/axiosInstance';
 import { saveAccount, clearAccountStale } from '../utils/accountManager';
 import { API_URL } from '../lib/api';
+import type { Profile } from '../types/auth';
 
 export const Login = () => {
     const navigate = useNavigate();
@@ -126,7 +127,7 @@ export const Login = () => {
                 if (!profileData.email) profileData.email = data.user.email || '';
 
                 // Save Account B to the account list
-                saveAccount(data.session, profileData as any);
+                saveAccount(data.session, profileData as Profile);
 
                 console.log('[Login] New account saved:', data.user.email);
                 toast.success(`Account ${data.user.email} added!`);
