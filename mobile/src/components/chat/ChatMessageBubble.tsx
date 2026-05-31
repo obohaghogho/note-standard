@@ -162,6 +162,7 @@ export const ChatMessageBubble = React.memo(({
     prev.item.read_at === next.item.read_at &&
     prev.item.delivered_at === next.item.delivered_at &&
     prev.item.is_edited === next.item.is_edited &&
+    prev.item._optimistic === next.item._optimistic &&
     prev.currentUserId === next.currentUserId
   );
 });

@@ -1,9 +1,10 @@
 import React, { useCallback, useRef, useState, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, FlatList,
+  View, Text, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Image,
   Alert, Share,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
@@ -36,7 +37,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [actionSheetMessage, setActionSheetMessage] = useState<Message | null>(null);
   
-  const flatRef = useRef<FlatList>(null);
+  const flatRef = useRef<FlashList<Message>>(null);
   const messages = allMessages[conversationId] || [];
 
   const members = conversation?.members ?? [];
@@ -162,27 +163,25 @@ export default function ChatScreen({ navigation, route }: Props) {
         </View>
       </View>
 
-      <FlatList
-        ref={flatRef}
-        data={messages}
-        keyExtractor={i => i?.id ? i.id : Math.random().toString()}
-        renderItem={renderMessage}
-        inverted
-        keyboardDismissMode="interactive"
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        removeClippedSubviews={false}
-        maxToRenderPerBatch={10}
-        windowSize={21}
-        initialNumToRender={15}
-        updateCellsBatchingPeriod={50}
-        contentContainerStyle={styles.msgList}
-        ListEmptyComponent={
-          <View style={styles.emptyChat}>
-            <Text style={styles.emptyChatText}>No messages yet. Say hello! 👋</Text>
-          </View>
-        }
-      />
+      <View style={{ flex: 1 }}>
+        <FlashList
+          ref={flatRef}
+          data={messages}
+          keyExtractor={i => i?.id ? i.id : Math.random().toString()}
+          renderItem={renderMessage}
+          inverted
+          keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          estimatedItemSize={80}
+          contentContainerStyle={styles.msgList}
+          ListEmptyComponent={
+            <View style={styles.emptyChat}>
+              <Text style={styles.emptyChatText}>No messages yet. Say hello! 👋</Text>
+            </View>
+          }
+        />
+      </View>
 
       {actionSheetMessage && (
         <MessageActionSheet

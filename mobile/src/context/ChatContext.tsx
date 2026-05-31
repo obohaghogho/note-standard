@@ -63,12 +63,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const [sessionId, setSessionId] = useState<string | null>(null);
     const deviceIdRef = useRef<string | null>(null);
     const sessionIdRef = useRef<string | null>(null);
+    const activeConversationIdRef = useRef<string | null>(null);
     const userRef = useRef(user);
+
+    // Event Deduplication Buffer
+    const processedEventsRef = useRef(new Set<string>());
 
     // Keep refs in sync with state
     useEffect(() => { userRef.current = user; }, [user]);
     useEffect(() => { deviceIdRef.current = deviceId; }, [deviceId]);
     useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
+    useEffect(() => { activeConversationIdRef.current = activeConversationId; }, [activeConversationId]);
 
     // Initialize Device and Session — persisting deviceId across restarts
     useEffect(() => {
@@ -249,6 +254,18 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         // FIXED: gateway emits 'chat:message', NOT 'receive_message'
         socketManager.on('chat:message', async (rawMsg: any) => {
+            // Deduplication Check early on rawMsg.id or event_id
+            const dedupId = rawMsg.id || rawMsg.event_id;
+            if (dedupId) {
+                if (processedEventsRef.current.has(dedupId)) return;
+                processedEventsRef.current.add(dedupId);
+                // Keep set bounded
+                if (processedEventsRef.current.size > 1000) {
+                    const firstItem = processedEventsRef.current.values().next().value;
+                    if (firstItem !== undefined) processedEventsRef.current.delete(firstItem);
+                }
+            }
+
             // 1. Decrypt via Transport Adapter
             const plainContent = await mobileTransportAdapter.decodeIncomingMessage(rawMsg, user.id);
             const processedMsg = { ...rawMsg, content: plainContent || '[Decryption Failed]' };
@@ -274,7 +291,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 
                 // Keep conversations state updated using the engine's deterministic delta
                 if (newlyAddedCount > 0 || incomingMessage.sequence_number !== undefined) {
-                    const isCurrentlyOpen = activeConversationId === incomingMessage.conversation_id;
+                    const isCurrentlyOpen = activeConversationIdRef.current === incomingMessage.conversation_id;
                     setConversations(cPrev => cPrev.map(conv => {
                         if (conv.id !== incomingMessage.conversation_id) return conv;
 
@@ -391,7 +408,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             socketManager.offEvent('chat:message_edited');
             socketManager.offEvent('chat:message_deleted');
         };
-    }, [user, activeConversationId]);
+    }, [user]); // Removed activeConversationId so socket listeners are stable
 
     // Fetch messages when active conversation changes
     useEffect(() => {
