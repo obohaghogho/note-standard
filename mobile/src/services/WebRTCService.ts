@@ -183,99 +183,69 @@ class WebRTCService {
     console.log('[WebRTC] Building PeerConnection with', this.iceServers.length, 'ICE servers');
     this.peerConnection = new RTCPeerConnection(config);
 
-    // react-native-webrtc uses slightly different event handler names — use bracket notation
+    // ── Event handlers via addEventListener (EventTarget API for react-native-webrtc v124)
+    // Source confirmed: RTCPeerConnection.ts dispatches all events via EventTarget.dispatchEvent().
+    // Property handlers (pc.onX = fn) also work for EventTarget events, but we standardize
+    // on addEventListener for clarity. The ICE candidate handler uses the native bridge listener.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (this.peerConnection as any).onconnectionstatechange = () => {
-      const state = (this.peerConnection as any)?.connectionState as WebRTCConnectionState;
+    const pcAny = this.peerConnection as any;
+
+    pcAny.addEventListener('connectionstatechange', () => {
+      const state = (this.peerConnection?.connectionState) as WebRTCConnectionState;
       const ice   = this.peerConnection?.iceConnectionState;
       console.log(`[WebRTC] Connection: ${state} | ICE: ${ice}`);
       this.onConnectionStateChangeCallback?.(state, ice);
-
-      // When connected, re-deliver remoteStream to the UI in case it arrived
-      // before CallScreen had a chance to register its onRemoteStream callback.
       if (state === 'connected' && this.remoteStream) {
-        console.log('[WebRTC] Connected — re-delivering remoteStream to callback');
         this.onRemoteStreamCallback?.(this.remoteStream);
       }
-    };
+    });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (this.peerConnection as any).oniceconnectionstatechange = () => {
-      const state = (this.peerConnection as any)?.connectionState as WebRTCConnectionState;
+    pcAny.addEventListener('iceconnectionstatechange', () => {
+      const state = (this.peerConnection?.connectionState) as WebRTCConnectionState;
       const ice   = this.peerConnection?.iceConnectionState;
-      console.log(`[WebRTC] ICE state: ${ice}`);
+      console.log(`[WebRTC] ICE: ${ice}`);
       this.onConnectionStateChangeCallback?.(state, ice);
+    });
 
-      // ICE recovery path for Android: when ICE reaches connected/completed,
-      // pull the remote stream directly from getReceivers() if we still have no stream.
-      // getReceivers() returns natively-tracked receiver objects with valid tracks.
-      if ((ice === 'connected' || ice === 'completed') && !this.remoteStream) {
-        console.log('[WebRTC] ICE connected with no remoteStream — building from getReceivers()');
-        try {
-          const receivers = this.peerConnection!.getReceivers();
-          console.log('[WebRTC] getReceivers count:', receivers.length);
-          if (receivers.length > 0) {
-            // We cannot use new MediaStream(tracks) as it produces an unregistered stream.
-            // Instead, signal to the callback that receivers are available;
-            // CallScreen's stream poll will pick up the stream once onaddstream fires.
-            receivers.forEach((r: any) => {
-              if (r.track?.kind === 'audio') this.remoteAudioTrack = r.track;
-              if (r.track?.kind === 'video') this.remoteVideoTrack = r.track;
-              console.log('[WebRTC] Receiver track:', r.track?.kind, r.track?.id);
-            });
-          }
-        } catch (e) {
-          console.warn('[WebRTC] getReceivers() failed:', e);
-        }
-      }
-    };
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (this.peerConnection as any).onicecandidate = (event: any) => {
+    pcAny.addEventListener('icecandidate', (event: any) => {
       if (event.candidate) this.onIceCandidateCallback?.(event.candidate);
-    };
+    });
 
-    // ── ontrack: primary path (works reliably on iOS) ────────────────────────
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (this.peerConnection as any).ontrack = (event: any) => {
+    // ── track: stream delivery ─────────────────────────────────────────────────
+    // react-native-webrtc v124 source (RTCPeerConnection.ts:285-305):
+    //   const streams = ev.streams.map(streamInfo => { ... this._remoteStreams.set(...) })
+    //   this.dispatchEvent(new RTCTrackEvent('track', { streams, track, ... }))
+    //
+    // event.streams[0] is a natively-registered MediaStream built from remote SDP a=msid.
+    // If ev.streams was empty at native level, we fall back to pc._remoteStreams which is
+    // always populated by setRemoteDescription from the SDP stream IDs.
+    pcAny.addEventListener('track', (event: any) => {
       const track = event.track;
       if (!track) return;
-      console.log('[WebRTC] ontrack kind:', track.kind, 'streams:', event.streams?.length);
+      console.log('[WebRTC] track kind:', track.kind, 'streams:', event.streams?.length);
 
       if (track.kind === 'audio') this.remoteAudioTrack = track;
       if (track.kind === 'video') this.remoteVideoTrack = track;
 
-      // event.streams[0] is populated when peer uses addTrack(track, stream) — reliable on iOS
-      const stream = event.streams && event.streams[0];
+      let stream = event.streams && event.streams[0];
+
+      if (!stream) {
+        // _remoteStreams is the PC's internal registry built from SDP a=msid during sRD.
+        // Falls back here when peer's a=msid is missing or stream not yet associated.
+        const registry: Map<string, any> = pcAny._remoteStreams;
+        if (registry && registry.size > 0) {
+          stream = Array.from(registry.values())[0];
+          console.log('[WebRTC] track: _remoteStreams fallback, tracks:', stream?.getTracks?.()?.length);
+        }
+      }
+
       if (stream) {
         this.remoteStream = stream;
-        console.log('[WebRTC] ontrack → using native event.streams[0]');
         this.onRemoteStreamCallback?.(stream);
       } else {
-        // On Android, event.streams can be empty even with valid tracks.
-        // We do NOT construct a MediaStream here — new MediaStream([track]) creates
-        // a JS-only object whose toURL() is unresolvable by RTCView's native renderer.
-        // Instead, we rely on onaddstream (below) and the ICE-connected recovery path.
-        console.warn('[WebRTC] ontrack: event.streams empty — deferring to onaddstream / ICE recovery');
+        console.warn('[WebRTC] track: no stream found — will retry on connectionstatechange=connected');
       }
-    };
-
-    // ── onaddstream: Android-reliable fallback ────────────────────────────────
-    // Fires on Android with a natively-registered MediaStream whose toURL() works in RTCView.
-    // Deprecated in spec but still dispatched by react-native-webrtc on Android.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (this.peerConnection as any).onaddstream = (event: any) => {
-      const stream = event.stream;
-      if (!stream) return;
-      console.log('[WebRTC] onaddstream → natively registered stream, tracks:', stream.getTracks?.()?.length);
-      this.remoteStream = stream;
-      // Update track refs from stream
-      stream.getTracks?.()?.forEach((t: any) => {
-        if (t.kind === 'audio') this.remoteAudioTrack = t;
-        if (t.kind === 'video') this.remoteVideoTrack = t;
-      });
-      this.onRemoteStreamCallback?.(stream);
-    };
+    });
 
   }
 
