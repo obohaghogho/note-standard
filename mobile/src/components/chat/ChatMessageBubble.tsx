@@ -30,6 +30,8 @@ export interface Message {
   status?: string;
   read_at?: string;
   delivered_at?: string;
+  isOwn?: boolean;
+  event_id?: string;
 }
 
 interface Props {

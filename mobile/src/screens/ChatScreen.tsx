@@ -5,6 +5,7 @@ import {
   Alert, Share,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
+const SafeFlashList = FlashList as any;
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
@@ -36,8 +37,13 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [actionSheetMessage, setActionSheetMessage] = useState<Message | null>(null);
+
+  const editingMessageRef = useRef<Message | null>(null);
+  editingMessageRef.current = editingMessage;
+  const replyToRef = useRef<Message | null>(null);
+  replyToRef.current = replyTo;
   
-  const flatRef = useRef<FlashList<Message>>(null);
+  const flatRef = useRef<any>(null);
   const messages = allMessages[conversationId] || [];
 
   const members = conversation?.members ?? [];
@@ -55,14 +61,16 @@ export default function ChatScreen({ navigation, route }: Props) {
   }, [isFocused, conversationId, setActiveConversationId]);
 
   const handleSend = useCallback(async (content: string, attachmentId?: string) => {
-    if (editingMessage) {
-      await editMessage(conversationId, editingMessage.id, content);
+    const editMsg = editingMessageRef.current;
+    const repTo = replyToRef.current;
+    if (editMsg) {
+      await editMessage(conversationId, editMsg.id, content);
       setEditingMessage(null);
     } else {
-      await sendMessage(conversationId, content, attachmentId, replyTo?.id);
+      await sendMessage(conversationId, content, attachmentId, repTo?.id);
       setReplyTo(null);
     }
-  }, [editingMessage, conversationId, replyTo, editMessage, sendMessage]);
+  }, [conversationId, editMessage, sendMessage]);
 
   const handleDeleteMsg = useCallback(async (msg: Message) => {
     Alert.alert('Delete Message', 'This message will be permanently deleted.', [
@@ -164,10 +172,10 @@ export default function ChatScreen({ navigation, route }: Props) {
       </View>
 
       <View style={{ flex: 1 }}>
-        <FlashList
+        <SafeFlashList
           ref={flatRef}
           data={messages}
-          keyExtractor={i => i?.id ? i.id : Math.random().toString()}
+          keyExtractor={(i: Message) => i.id || i.event_id || i.created_at}
           renderItem={renderMessage}
           inverted
           keyboardDismissMode="interactive"
@@ -175,6 +183,9 @@ export default function ChatScreen({ navigation, route }: Props) {
           showsVerticalScrollIndicator={false}
           estimatedItemSize={80}
           contentContainerStyle={styles.msgList}
+          removeClippedSubviews={true}
+          initialNumToRender={15}
+          maxToRenderPerBatch={15}
           ListEmptyComponent={
             <View style={styles.emptyChat}>
               <Text style={styles.emptyChatText}>No messages yet. Say hello! 👋</Text>

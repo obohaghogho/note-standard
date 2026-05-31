@@ -46,16 +46,27 @@ export function useSessionArbitration({
         }
     }, [initialConversations]);
 
+    const leasesRef = useRef(leases);
+    const claimingLeasesRef = useRef(claimingLeases);
+
+    useEffect(() => {
+        leasesRef.current = leases;
+    }, [leases]);
+
+    useEffect(() => {
+        claimingLeasesRef.current = claimingLeases;
+    }, [claimingLeases]);
+
     const isActiveWriter = useCallback((conversationId: string) => {
         if (!sessionId) return false;
-        const lease = leases[conversationId];
+        const lease = leasesRef.current[conversationId];
         if (!lease) return true; // Default to true if unknown, will correct upon first hydration
         return lease.active_session_id === sessionId;
-    }, [leases, sessionId]);
+    }, [sessionId]);
 
     const isClaimingLease = useCallback((conversationId: string) => {
-        return !!claimingLeases[conversationId];
-    }, [claimingLeases]);
+        return !!claimingLeasesRef.current[conversationId];
+    }, []);
 
     const markLeaseClaimStart = useCallback((conversationId: string) => {
         setClaimingLeases(prev => ({ ...prev, [conversationId]: true }));

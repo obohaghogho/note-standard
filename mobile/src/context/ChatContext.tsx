@@ -14,6 +14,7 @@ import { supabase } from '../lib/supabase';
 
 interface Message {
     id: string;
+    event_id?: string;
     conversation_id: string;
     sender_id: string;
     content: string;
@@ -21,7 +22,10 @@ interface Message {
     created_at: string;
     type: string;
     isOwn: boolean;
-    status?: 'sending' | 'sent' | 'failed';
+    status?: 'sending' | 'sent' | 'failed' | string;
+    read_at?: string;
+    delivered_at?: string;
+    reply_to?: any;
 }
 
 interface ChatContextType {
@@ -121,9 +125,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         apiClient,
         () => deviceId,
         () => sessionId,
-        (cid) => isActiveWriter(cid),
+        (cid: string) => isActiveWriter(cid),
         // markLocalReadState: optimistic local update (blue ticks appear instantly on this device)
-        (conversationId, lastMessageId) => {
+        (conversationId: string, lastMessageId: string) => {
             const nowStr = new Date().toISOString();
             setMessages(prev => {
                 const current = prev[conversationId] || [];
@@ -156,31 +160,32 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     // ── 1. REST HYDRATION (Conversations) ───────────────────────────────────
-    const loadConversations = async () => {
+    const loadConversations = useCallback(async () => {
         try {
             const res = await apiClient.get('/chat/conversations');
             setConversations(res.data || []);
         } catch (err) {
             console.error('[ChatContext] Failed to load conversations', err);
         }
-    };
+    }, []);
 
     // ── 2. REST HYDRATION (Messages) ────────────────────────────────────────
-    const loadMessages = async (conversationId: string) => {
+    const loadMessages = useCallback(async (conversationId: string) => {
+        if (!user) return;
         try {
             const res = await apiClient.get(`/chat/conversations/${conversationId}/messages`);
             const rawData = res.data || [];
             
             // Decrypt payloads (if any are encrypted) and normalize
             const processedData = await Promise.all(rawData.map(async (rawMsg: any) => {
-                const plainContent = await mobileTransportAdapter.decodeIncomingMessage(rawMsg, user!.id);
+                const plainContent = await mobileTransportAdapter.decodeIncomingMessage(rawMsg, user.id);
                 return { ...rawMsg, content: plainContent || '[Decryption Failed]' };
             }));
 
             const normalized = processedData.map(normalizeEvent);
-            const validated = normalized.filter(msg => validateMessagePayload(msg).valid).map(msg => ({
+            const validated = (normalized as any[]).filter((msg: any) => validateMessagePayload(msg).valid).map((msg: any) => ({
                 ...msg,
-                isOwn: msg.sender_id === user!.id
+                isOwn: msg.sender_id === user.id
             }));
 
             // Use the single source of truth merge engine
@@ -227,7 +232,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         } catch (err) {
             console.error('[ChatContext] Failed to load messages', err);
         }
-    };
+    }, [user, deviceId]);
 
     // ── 3. SOCKET PIPELINE ──────────────────────────────────────────────────
     // FIXED: mobile AuthContext never exposes `session`, so we retrieve the
@@ -298,7 +303,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             const processedMsg = { ...rawMsg, content: plainContent || '[Decryption Failed]' };
 
             // 2. Normalize
-            const normalized = normalizeEvent(processedMsg);
+            const normalized = normalizeEvent(processedMsg) as any;
             
             // 3. Validate Schema
             if (!validateMessagePayload(normalized).valid) {
@@ -445,7 +450,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, [activeConversationId]);
 
     // ── 4. OPTIMISTIC SEND PIPELINE ─────────────────────────────────────────
-    const sendMessage = async (conversationId: string, text: string, attachmentId?: string, replyToId?: string) => {
+    const sendMessage = useCallback(async (conversationId: string, text: string, attachmentId?: string, replyToId?: string) => {
         if (!user) return;
 
         // Phase 5: Soft Override Claim
@@ -524,18 +529,18 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 };
             });
         }
-    };
+    }, [user, isActiveWriter]);
 
-    const editMessage = async (conversationId: string, messageId: string, content: string) => {
+    const editMessage = useCallback(async (conversationId: string, messageId: string, content: string) => {
         try {
             await apiClient.patch(`/chat/messages/${messageId}`, { content });
         } catch (err) {
             console.error('[ChatContext] Edit failed:', err);
             throw err;
         }
-    };
+    }, []);
 
-    const deleteMessage = async (conversationId: string, messageId: string) => {
+    const deleteMessage = useCallback(async (conversationId: string, messageId: string) => {
         try {
             await apiClient.delete(`/chat/messages/${messageId}`);
             setMessages(prev => ({
@@ -546,22 +551,39 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             console.error('[ChatContext] Delete failed:', err);
             throw err;
         }
-    };
+    }, []);
+
+    const onMessageVisible = useCallback((conversationId: string, messageId: string) => {
+        readReceiptEngine.onMessageVisible(conversationId, messageId);
+    }, [readReceiptEngine]);
+
+    const contextValue = useMemo(() => ({
+        conversations,
+        messages,
+        sendMessage,
+        editMessage,
+        deleteMessage,
+        loadConversations,
+        activeConversationId,
+        setActiveConversationId,
+        isActiveWriter,
+        isClaimingLease,
+        onMessageVisible
+    }), [
+        conversations,
+        messages,
+        sendMessage,
+        editMessage,
+        deleteMessage,
+        loadConversations,
+        activeConversationId,
+        isActiveWriter,
+        isClaimingLease,
+        onMessageVisible
+    ]);
 
     return (
-        <ChatContext.Provider value={{
-            conversations,
-            messages,
-            sendMessage,
-            editMessage,
-            deleteMessage,
-            loadConversations,
-            activeConversationId,
-            setActiveConversationId,
-            isActiveWriter,
-            isClaimingLease,
-            onMessageVisible: (conversationId, messageId) => readReceiptEngine.onMessageVisible(conversationId, messageId)
-        }}>
+        <ChatContext.Provider value={contextValue}>
             {children}
         </ChatContext.Provider>
     );
