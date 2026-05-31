@@ -190,6 +190,13 @@ class WebRTCService {
       const ice   = this.peerConnection?.iceConnectionState;
       console.log(`[WebRTC] Connection: ${state} | ICE: ${ice}`);
       this.onConnectionStateChangeCallback?.(state, ice);
+
+      // When connected, re-deliver remoteStream to the UI in case it arrived
+      // before CallScreen had a chance to register its onRemoteStream callback.
+      if (state === 'connected' && this.remoteStream) {
+        console.log('[WebRTC] Connected — re-delivering remoteStream to callback');
+        this.onRemoteStreamCallback?.(this.remoteStream);
+      }
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -208,20 +215,39 @@ class WebRTCService {
     // This prevents the black screen bug from recreating the stream on every ontrack.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (this.peerConnection as any).ontrack = (event: any) => {
-      console.log('[WebRTC] ontrack streams:', event.streams);
-      const stream = event.streams && event.streams[0];
-      if (!stream) {
-        console.warn('[WebRTC] ontrack fired but event.streams is empty');
+      const track = event.track;
+      if (!track) {
+        console.warn('[WebRTC] ontrack fired but no track in event');
         return;
       }
 
-      const track = event.track;
-      console.log('[WebRTC] ontrack track kind:', track?.kind, 'id:', track?.id);
+      console.log('[WebRTC] ontrack kind:', track.kind, 'id:', track.id, 'streams:', event.streams?.length);
 
-      if (track?.kind === 'audio') this.remoteAudioTrack = track;
-      if (track?.kind === 'video') this.remoteVideoTrack = track;
+      // Prefer event.streams[0] which is populated when the peer uses addTrack(track, stream).
+      // However, on Android (react-native-webrtc) event.streams can be empty even with valid
+      // tracks. In that case, we build/update a persistent remoteStream from the track directly.
+      let stream = event.streams && event.streams[0];
+
+      if (!stream) {
+        console.warn('[WebRTC] ontrack: event.streams empty — building persistent stream from track (Android fallback)');
+        if (!this.remoteStream) {
+          // First track: create the stream
+          this.remoteStream = new MediaStream([track]);
+        } else {
+          // Subsequent tracks: add to existing stream if not already present
+          const already = (this.remoteStream as any).getTracks?.()?.some((t: any) => t.id === track.id);
+          if (!already) {
+            (this.remoteStream as any).addTrack(track);
+          }
+        }
+        stream = this.remoteStream;
+      }
+
+      if (track.kind === 'audio') this.remoteAudioTrack = track;
+      if (track.kind === 'video') this.remoteVideoTrack = track;
 
       this.remoteStream = stream;
+      console.log('[WebRTC] remoteStream now has', (stream as any).getTracks?.()?.length, 'tracks');
       this.onRemoteStreamCallback?.(stream);
     };
   }

@@ -95,7 +95,9 @@ export default function CallScreen({ navigation, route }: Props) {
           CallService.onCallConnected();
           startTimer();
           setLocalStream(WebRTCService.getLocalStream());
-          setRemoteStream(WebRTCService.getRemoteStream());
+          // Also fetch remote stream in case ontrack already fired
+          const rs = WebRTCService.getRemoteStream();
+          if (rs) setRemoteStream(rs);
         } else if (state === 'failed') {
           setCallState('failed');
           SignalingService.endActiveCall();
@@ -105,7 +107,10 @@ export default function CallScreen({ navigation, route }: Props) {
         }
       },
       onRemoteStream: (stream: MediaStream | null) => {
-        if (isMounted.current) setRemoteStream(stream);
+        if (isMounted.current) {
+          console.log('[CallScreen] onRemoteStream received, tracks:', stream?.getTracks().length);
+          setRemoteStream(stream);
+        }
       },
     });
 
@@ -114,6 +119,19 @@ export default function CallScreen({ navigation, route }: Props) {
     const rs = WebRTCService.getRemoteStream();
     if (ls) setLocalStream(ls);
     if (rs) setRemoteStream(rs);
+
+    // Stream recovery poll: if ontrack fired before this screen mounted, the callback
+    // was not registered yet. Poll every 500ms for up to 10 seconds to catch late streams.
+    // Stops automatically once a remote stream with video is detected.
+    const streamPoll = setInterval(() => {
+      if (!isMounted.current) { clearInterval(streamPoll); return; }
+      const currentRemote = WebRTCService.getRemoteStream();
+      if (currentRemote && currentRemote.getVideoTracks().length > 0) {
+        setRemoteStream(currentRemote);
+        clearInterval(streamPoll);
+      }
+    }, 500);
+    setTimeout(() => clearInterval(streamPoll), 10000);
 
     const unsubEnded = CallService.onCallEnded(() => {
       if (!isMounted.current) return;
@@ -127,7 +145,8 @@ export default function CallScreen({ navigation, route }: Props) {
       if (state === 'connected') {
         startTimer();
         setLocalStream(WebRTCService.getLocalStream());
-        setRemoteStream(WebRTCService.getRemoteStream());
+        const rs2 = WebRTCService.getRemoteStream();
+        if (rs2) setRemoteStream(rs2);
       }
       if (state === 'ended' || state === 'failed') {
         stopTimer();
@@ -137,6 +156,7 @@ export default function CallScreen({ navigation, route }: Props) {
 
     return () => {
       isMounted.current = false;
+      clearInterval(streamPoll);
       unsubEnded();
       unsubState();
       stopTimer();
