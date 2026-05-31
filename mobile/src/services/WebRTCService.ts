@@ -41,6 +41,10 @@ class WebRTCService {
   private iceServers: any[] = [];
   private pendingCandidates: any[] = []; // queued until setRemoteDescription done
   private remoteDescriptionPromise: Promise<void> | null = null;
+  // BUG 4 FIX: Debounce timer to wait for both audio + video tracks before dispatching remote stream
+  private onTrackDispatchTimer: ReturnType<typeof setTimeout> | null = null;
+  // Whether the current call is a video call (set in startCall / handleIncomingOffer)
+  private currentCallType: 'audio' | 'video' = 'audio';
   
   // Callbacks for UI updates
   private onConnectionStateChangeCallback: ((state: WebRTCConnectionState, iceState?: string) => void) | null = null;
@@ -108,6 +112,7 @@ class WebRTCService {
   // ── Connection Management ──────────────────────────────────────────────────
 
   async startCall(callType: 'audio' | 'video' = 'audio'): Promise<RTCSessionDescription> {
+    this.currentCallType = callType; // BUG 4 FIX: track call type for ontrack debounce
     await this.init(callType);
     await this.setupLocalStream(callType);
     this.createPeerConnection();
@@ -143,6 +148,7 @@ class WebRTCService {
   }
 
   async handleIncomingOffer(offerSdp: any, callType: 'audio' | 'video' = 'audio'): Promise<RTCSessionDescription> {
+    this.currentCallType = callType; // BUG 4 FIX: track call type for ontrack debounce
     await this.init(callType);
     await this.setupLocalStream(callType);
     this.createPeerConnection();
@@ -326,8 +332,13 @@ class WebRTCService {
       }
     };
 
-    // CRITICAL FIX: Replace deprecated onaddstream with modern ontrack.
-    // We must collect incoming tracks and assemble a remote MediaStream manually.
+    // BUG 4 FIX: ontrack fires separately for audio and video.
+    // On Android receiving an iOS H264 stream, the video ontrack may arrive
+    // up to 800ms after the audio ontrack. If we dispatch immediately after
+    // the first (audio) ontrack, RTCView renders a blank black screen because
+    // there are no video tracks yet.
+    // Solution: debounce the dispatch. For video calls wait up to 800ms for
+    // both tracks. For audio calls dispatch immediately on first track.
     this.peerConnection.ontrack = (event: any) => {
       console.log('[WebRTC] ontrack fired — kind:', event.track?.kind, 'id:', event.track?.id);
       const track = event.track;
@@ -339,22 +350,45 @@ class WebRTCService {
         this.remoteVideoTrack = track;
       }
 
-      // 1. NEVER mutate and reuse the same MediaStream reference for UI state propagation.
-      // 2. Maintain an internal track registry.
-      // 3. When tracks change, create a NEW MediaStream instance.
+      // Always rebuild the stream with all currently available tracks
       // @ts-ignore — react-native-webrtc provides MediaStream constructor
       const newStream = new MediaStream();
-      
       if (this.remoteAudioTrack) newStream.addTrack(this.remoteAudioTrack);
       if (this.remoteVideoTrack) newStream.addTrack(this.remoteVideoTrack);
-
       this.remoteStream = newStream;
 
-      // Notify the UI on every track addition so it can render the stream
-      if (this.onRemoteStreamCallback) {
-        this.onRemoteStreamCallback(this.remoteStream);
-        console.log(`[WebRTC] Remote stream updated and dispatched to UI (Tracks: ${newStream.getTracks().length})`);
+      if (this.currentCallType === 'audio') {
+        // Audio call: dispatch as soon as audio track arrives
+        if (this.onRemoteStreamCallback) {
+          this.onRemoteStreamCallback(this.remoteStream);
+          console.log('[WebRTC] Audio-only remote stream dispatched to UI');
+        }
+        return;
       }
+
+      // Video call: debounce — wait up to 800ms for the video track before dispatching
+      if (this.onTrackDispatchTimer) {
+        clearTimeout(this.onTrackDispatchTimer);
+      }
+
+      // If both tracks already present, dispatch immediately
+      if (this.remoteAudioTrack && this.remoteVideoTrack) {
+        if (this.onRemoteStreamCallback) {
+          this.onRemoteStreamCallback(this.remoteStream);
+          console.log(`[WebRTC] ✅ Full A/V remote stream dispatched (${newStream.getTracks().length} tracks)`);
+        }
+        return;
+      }
+
+      // Otherwise, set a 800ms deadline: dispatch with whatever tracks we have
+      this.onTrackDispatchTimer = setTimeout(() => {
+        this.onTrackDispatchTimer = null;
+        if (this.onRemoteStreamCallback && this.remoteStream) {
+          this.onRemoteStreamCallback(this.remoteStream);
+          const tc = this.remoteStream.getTracks().length;
+          console.log(`[WebRTC] ⏱ ontrack deadline: dispatching remote stream (${tc} track${tc !== 1 ? 's' : ''}) — video may arrive soon via ontrack`);
+        }
+      }, 800);
     };
   }
 
@@ -444,31 +478,36 @@ class WebRTCService {
 
   async leaveChannel() {
     console.log('[WebRTC] Initiating comprehensive hardware and media resource cleanup');
+
+    // BUG 3 FIX: Clear the ontrack debounce timer to prevent stale dispatch after cleanup
+    if (this.onTrackDispatchTimer) {
+      clearTimeout(this.onTrackDispatchTimer);
+      this.onTrackDispatchTimer = null;
+    }
     
     // Stop InCallManager to release iOS audio session correctly
     InCallManager.stop();
     
-    // Stop all local media tracks to ensure immediate release of camera/microphone hardware
+    // BUG 3 FIX: Stop local tracks SYNCHRONOUSLY before nulling the stream reference.
+    // The previous async setTimeout(150ms) caused a race: if a new call started within
+    // that 150ms window, getUserMedia would contend with the still-active hardware,
+    // causing a camera lock on Android (manifesting as the 5-second timeout firing).
     if (this.localStream) {
       try {
         const streamToStop = this.localStream;
-        this.localStream = null; // Clear immediately to prevent UI usage
-        // Run track stop asynchronously. In some Android versions, synchronous stop() 
-        // immediately followed by a new getUserMedia causes deadlocks.
-        setTimeout(() => {
+        this.localStream = null; // Null immediately so UI stops rendering
+        streamToStop.getTracks().forEach(track => {
           try {
-            streamToStop.getTracks().forEach(track => {
-              track.enabled = false;
-              track.stop();
-              console.log(`[WebRTC] Hardware release: Stopped local track: ${track.kind}`);
-            });
-            streamToStop.release();
+            track.enabled = false;
+            track.stop();
+            console.log(`[WebRTC] Hardware release: Stopped local track: ${track.kind}`);
           } catch (e) {
-            console.warn('[WebRTC] Async hardware release error:', e);
+            console.warn('[WebRTC] Error stopping local track:', e);
           }
-        }, 150);
+        });
+        try { streamToStop.release(); } catch (_) {}
       } catch (err) {
-        console.warn('[WebRTC] Error releasing local stream tracks:', err);
+        console.warn('[WebRTC] Error releasing local stream:', err);
       }
     }
 
@@ -514,6 +553,7 @@ class WebRTCService {
     this.remoteDescriptionPromise = null;
     this.remoteAudioTrack = null;
     this.remoteVideoTrack = null;
+    this.currentCallType = 'audio';
 
     // Discard callback references to prevent garbage collector memory leaks
     if (this.onRemoteStreamCallback) {

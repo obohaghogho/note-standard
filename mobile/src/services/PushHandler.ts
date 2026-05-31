@@ -87,12 +87,29 @@ export class PushHandler {
 
   static handleIncomingCall(data: any) {
     console.log('[PushHandler] Handling incoming call payload:', data);
+
+    const callerId       = data.callerId || data.caller_id || '';
+    const callerName     = data.callerName || data.caller_name || 'Someone';
+    const callType: 'audio' | 'video' = (data.callType || data.call_type || 'audio') === 'video' ? 'video' : 'audio';
+    const conversationId = data.conversationId || data.conversation_id || '';
+    const sessionId      = data.sessionId || data.call_id || '';
+
+    // BUG FIX (Bug 6): The push notification path bypasses SignalingService's
+    // socket 'call:incoming' handler, so SignalingService never gets the session
+    // context. When the user answers, answerCall() emits { sessionId: null },
+    // which breaks call tracking on the gateway and in the DB.
+    // Fix: sync SignalingService state directly from the push payload.
+    SignalingService.activeTargetId       = callerId;
+    SignalingService.activeConversationId = conversationId;
+    SignalingService.activeCallType       = callType;
+    SignalingService.activeSessionId      = sessionId;
+
     CallService.displayIncomingCall({
-      callerId: data.callerId || data.caller_id || '',
-      callerName: data.callerName || data.caller_name || 'Someone',
-      callType: data.callType || data.call_type || 'audio',
-      conversationId: data.conversationId || data.conversation_id || '',
-      sessionId: data.sessionId || data.call_id || '',
+      callerId,
+      callerName,
+      callType,
+      conversationId,
+      sessionId,
     }).catch(e => console.error('[PushHandler] Call display failed:', e));
   }
 
@@ -204,8 +221,4 @@ export class PushHandler {
     }
   }
 
-  static handleIncomingCall(data: CallData) {
-    console.log('[PushHandler] 🎬 Triggering CallKit/Ringing:', data);
-    CallService.displayIncomingCall(data);
-  }
 }

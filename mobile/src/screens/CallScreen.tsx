@@ -75,9 +75,10 @@ export default function CallScreen({ navigation, route }: Props) {
 
     const setup = async () => {
       try {
-        await WebRTCService.init(type);
-
-        // Register callbacks inline — avoids stale closure from useCallback
+        // BUG FIX (Bugs 1 & 7): Register callbacks FIRST — before WebRTCService.init().
+        // If the remote peer is fast (e.g. SDP exchange completes before CallScreen fully
+        // mounts), onconnectionstatechange may fire while the callback is still null.
+        // Registering here guarantees the callback is in place before any async signaling.
         WebRTCService.registerCallbacks({
           onConnectionStateChange: (state: WebRTCConnectionState, iceState?: string) => {
             if (!isMounted) return;
@@ -86,11 +87,11 @@ export default function CallScreen({ navigation, route }: Props) {
               setCallState('connected');
               CallService.onCallConnected();
               startDurationTimer();
+              // Refresh streams — tracks may have arrived before this callback was set
               setLocalStream(WebRTCService.getLocalStream());
               setRemoteStream(WebRTCService.getRemoteStream());
             } else if (state === 'failed') {
               setCallState('failed');
-              // Clean up without re-signaling (peer already dropped)
               WebRTCService.leaveChannel();
               CallService.handleCallEnded('error');
               setTimeout(() => { if (isMounted) navigation.goBack(); }, 1500);
@@ -105,6 +106,8 @@ export default function CallScreen({ navigation, route }: Props) {
           },
         });
 
+        await WebRTCService.init(type);
+
         if (isIncoming) {
           // Ensure CallService is in ringing state (may have been set by push notification path)
           if (CallService.getState() === 'idle') {
@@ -116,9 +119,8 @@ export default function CallScreen({ navigation, route }: Props) {
               conversationId: route.params.conversationId,
             });
           }
-          // Note: SignalingService.answerCall() was already called by the modal/push handler before navigating here.
-          // Calling it again causes WebRTC negotiation to reset and break (stuck on 'connecting...').
-          // Local stream isn't ready yet — it will be set when WebRTC connects
+          // Note: SignalingService.answerCall() was already called by the modal/push handler
+          // before navigating here. Do NOT call it again — double answering resets the PC.
           setCallState('connecting');
         } else {
           setCallState('calling');
@@ -146,6 +148,7 @@ export default function CallScreen({ navigation, route }: Props) {
       setCallState(state);
       if (state === 'connected') {
         startDurationTimer();
+        // BUG FIX: Re-fetch streams in case they were set before this callback fired
         setLocalStream(WebRTCService.getLocalStream());
         setRemoteStream(WebRTCService.getRemoteStream());
       }
