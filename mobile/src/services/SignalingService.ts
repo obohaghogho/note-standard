@@ -61,8 +61,13 @@ class SignalingService {
 
     // ── 2. Caller: callee answered — now create PC and send offer ──────────
     this.socket.on('call:answered', async (data) => {
+      const { sessionId } = data;
+      if (sessionId && this.activeSessionId && sessionId !== this.activeSessionId) {
+        console.warn('[Signaling] Ignoring stray call:answered for session:', sessionId);
+        return;
+      }
       console.log('[Signaling] ✅ Callee answered — creating offer');
-      this.activeSessionId = data.sessionId;
+      this.activeSessionId = sessionId || this.activeSessionId;
 
       const targetId = this.activeTargetId;
       const sessId   = this.activeSessionId;
@@ -87,7 +92,11 @@ class SignalingService {
     // ── 3. SDP relay ───────────────────────────────────────────────────────
     this.socket.on('call:signal', async (data) => {
       const { signal, from, sessionId } = data;
-      console.log(`[Signaling] 📡 SDP: ${signal.type} from ${from}`);
+      if (sessionId && this.activeSessionId && sessionId !== this.activeSessionId) {
+        console.warn('[Signaling] Ignoring stray call:signal for session:', sessionId);
+        return;
+      }
+      console.log(`[Signaling] 📡 SDP: ${signal.type} from ${from} session: ${sessionId}`);
 
       try {
         if (signal.type === 'offer') {
@@ -110,7 +119,12 @@ class SignalingService {
 
     // ── 4. ICE trickle ─────────────────────────────────────────────────────
     this.socket.on('call:ice-candidate', async (data) => {
-      if (data.candidate) await WebRTCService.addIceCandidate(data.candidate);
+      const { candidate, sessionId } = data;
+      if (sessionId && this.activeSessionId && sessionId !== this.activeSessionId) {
+        console.warn('[Signaling] Ignoring stray call:ice-candidate for session:', sessionId);
+        return;
+      }
+      if (candidate) await WebRTCService.addIceCandidate(candidate);
     });
 
     // ── 5. Remote ended ────────────────────────────────────────────────────

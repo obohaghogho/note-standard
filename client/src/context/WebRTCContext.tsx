@@ -435,11 +435,17 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         // ── Caller: callee answered — NOW create PC and send offer ───────────
         const onCallAnswered = async (data: { from: string; sessionId?: string }) => {
             if (currentStatus.current !== 'calling' && currentStatus.current !== 'ringing') return;
-            console.log('[WebRTC] call:answered by', data.from, '— creating offer');
+            const { from, sessionId } = data;
+            console.log('[WebRTC] call:answered by', from, '— session:', sessionId);
 
-            if (data.sessionId) {
-                sessionIdRef.current = data.sessionId;
-                setCallState(p => ({ ...p, sessionId: data.sessionId || null }));
+            if (sessionId && sessionIdRef.current && sessionId !== sessionIdRef.current) {
+                console.warn('[WebRTC] Ignoring stray call:answered for session:', sessionId);
+                return;
+            }
+
+            if (sessionId) {
+                sessionIdRef.current = sessionId;
+                setCallState(p => ({ ...p, sessionId: sessionId || null }));
             }
 
             const stream = localStreamRef.current;
@@ -472,9 +478,15 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         // ── SDP offer / answer relay ─────────────────────────────────────────
         const onCallSignal = async (data: { from: string; signal: RTCSessionDescriptionInit; sessionId?: string }) => {
-            const { signal, from } = data;
-            if (data.sessionId) sessionIdRef.current = data.sessionId;
-            console.log('[WebRTC] call:signal type:', signal.type, 'from:', from);
+            const { signal, from, sessionId } = data;
+            console.log('[WebRTC] call:signal type:', signal.type, 'from:', from, 'session:', sessionId);
+
+            if (sessionId && sessionIdRef.current && sessionId !== sessionIdRef.current) {
+                console.warn('[WebRTC] Ignoring stray SDP signal for session:', sessionId, '(active:', sessionIdRef.current, ')');
+                return;
+            }
+
+            if (sessionId) sessionIdRef.current = sessionId;
 
             if (signal.type === 'offer') {
                 // ★ FIX (Bug 1 complement): Use EXISTING PC — never create a new one here.
@@ -513,10 +525,15 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         // ── ICE trickle ──────────────────────────────────────────────────────
         const onIceCandidate = async (data: { from: string; candidate: RTCIceCandidateInit; sessionId?: string }) => {
+            const { candidate, sessionId } = data;
+            if (sessionId && sessionIdRef.current && sessionId !== sessionIdRef.current) {
+                console.warn('[WebRTC] Ignoring stray ICE candidate for session:', sessionId);
+                return;
+            }
             const pc = pcRef.current;
             if (!pc || !pc.remoteDescription) {
                 // Queue candidates until remote description is set
-                iceCandidateQueue.current.push(data.candidate);
+                iceCandidateQueue.current.push(candidate);
                 return;
             }
             try {
