@@ -139,11 +139,21 @@ module.exports = (io, socket) => {
   const userAvatar = socket.userAvatar || null;
 
   // ── 0. Late-joiner Sync ────────────────────────────────────────────────────
-  // On reconnect: replay any pending incoming calls from DB
+  // On reconnect: replay any pending incoming calls from DB.
+  // GUARD: Only replay sessions started within the last 5 minutes.
+  // This prevents stale sessions from being replayed on every token refresh,
+  // which would inject a call:incoming with an old sessionId and corrupt
+  // the active call state on clients that are mid-call.
   (async () => {
     try {
+      const FIVE_MINUTES_AGO = new Date(Date.now() - 5 * 60 * 1000).toISOString();
       const sessions = await getActiveSessions(userId);
       for (const session of sessions) {
+        // Skip stale sessions — only replay genuinely recent ones
+        if (session.started_at < FIVE_MINUTES_AGO) {
+          console.log(`[Call] Skipping stale session replay ${session.id} (started ${session.started_at})`);
+          continue;
+        }
         // Only notify if WE are the callee (someone is calling us)
         if (String(session.callee_id) === String(userId) && session.status === 'ringing') {
           console.log(`[Call] 🔄 Replaying pending call session ${session.id} to late-joiner ${userId}`);
@@ -154,7 +164,7 @@ module.exports = (io, socket) => {
             callType:       session.call_type,
             type:           session.call_type, // support both type and callType
             conversationId: session.conversation_id,
-            isSync:         true,
+            isSync:         true, // flag so the client won't auto-reject if already in a different state
           });
         }
         // If we are the caller and it's still ringing, let us know
@@ -172,6 +182,7 @@ module.exports = (io, socket) => {
       console.error('[Call] Late-joiner sync error:', err.message);
     }
   })();
+
 
   // ── 1. call:initiate ───────────────────────────────────────────────────────
   socket.on('call:initiate', async (data) => {

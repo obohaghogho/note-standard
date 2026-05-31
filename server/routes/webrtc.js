@@ -14,7 +14,13 @@ const supabase = require('../config/database');
 const logger = require('../utils/logger');
 const fetch = require('node-fetch');
 
-const GATEWAY_INTERNAL_URL = process.env.REALTIME_GATEWAY_URL || process.env.API_URL || 'http://localhost:5000';
+let GATEWAY_INTERNAL_URL = process.env.REALTIME_GATEWAY_URL || process.env.API_URL || 'http://localhost:5000';
+
+// Self-healing fallback: socket.notestandard.com does not serve HTTP GET routes on Render.
+// Redirect express proxy requests directly to the verified Render gateway URL so TURN server config can be resolved.
+if (GATEWAY_INTERNAL_URL.includes('socket.notestandard.com')) {
+  GATEWAY_INTERNAL_URL = 'https://realtime-gateway-gsb5.onrender.com';
+}
 
 /**
  * GET /api/webrtc/ice-servers

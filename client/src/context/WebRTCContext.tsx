@@ -213,9 +213,11 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             pcRef.current = null;
         }
 
-        // FIX: Always reset ICE queue when creating a fresh PC so stale candidates
-        // from a prior signaling attempt never pollute the new connection.
-        iceCandidateQueue.current = [];
+        // NOTE: Do NOT wipe iceCandidateQueue here.
+        // The caller creates the PC AFTER the callee answers, so ICE candidates
+        // from the callee may have already arrived and been queued during that gap.
+        // Clearing them here loses them permanently and breaks ICE negotiation.
+        // The queue is only cleared in cleanup() when the call actually ends.
 
         // FIX: Create ONE persistent MediaStream object per call.
         // Tracks are added to it as they arrive. We never recreate the stream —
@@ -406,16 +408,31 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             from: string; fromName?: string; fromAvatar?: string;
             type?: 'voice' | 'video'; callType?: 'voice' | 'video';
             conversationId: string; sessionId?: string;
+            isSync?: boolean;
         }) => {
-            console.log('[WebRTC] call:incoming', data);
+            console.log('[WebRTC] call:incoming', data, 'currentStatus:', currentStatus.current);
+
+            // If we are already in an active call, reject this incoming signal.
+            // This also correctly rejects late-joiner replays from the gateway on reconnect
+            // when we are already mid-call, preventing sessionIdRef from being overwritten.
             if (currentStatus.current !== 'idle') {
-                socket.emit('call:reject', { to: data.from, sessionId: data.sessionId });
+                // Only auto-reject if it's a fresh call, not a sync replay
+                if (!data.isSync) {
+                    socket.emit('call:reject', { to: data.from, sessionId: data.sessionId });
+                }
+                console.warn('[WebRTC] Ignoring call:incoming — already in state:', currentStatus.current);
                 return;
             }
+
             const resolvedType = data.type || data.callType || 'voice';
             targetUserIdRef.current = data.from;
-            sessionIdRef.current    = data.sessionId || null;
-            currentStatus.current   = 'incoming';
+            // BUG FIX: Only set sessionIdRef if we have no active session.
+            // Gateway replays on reconnect could otherwise overwrite the sessionId
+            // for a call already in progress, causing subsequent session guards to block it.
+            if (!sessionIdRef.current) {
+                sessionIdRef.current = data.sessionId || null;
+            }
+            currentStatus.current = 'incoming';
             setCallState({
                 type: resolvedType, status: 'incoming',
                 otherUser: { id: data.from, full_name: data.fromName || 'Unknown', avatar_url: data.fromAvatar },
@@ -531,13 +548,25 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 return;
             }
             const pc = pcRef.current;
-            if (!pc || !pc.remoteDescription) {
-                // Queue candidates until remote description is set
+            if (!pc) {
+                // No PC yet — queue for later
                 iceCandidateQueue.current.push(candidate);
                 return;
             }
+            if (!pc.remoteDescription) {
+                // PC exists but remote description not yet set — queue and return
+                iceCandidateQueue.current.push(candidate);
+                return;
+            }
+            // BUG FIX: remoteDescription is already set, so drain the full queue first
+            // then add this candidate. This closes the async timing gap where candidates
+            // arrive after setRemoteDescription completes but before drainIceQueue runs.
+            if (iceCandidateQueue.current.length > 0) {
+                console.log('[WebRTC] ICE candidate arrived with existing queue — draining first');
+                await drainIceQueue(pc);
+            }
             try {
-                await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+                await pc.addIceCandidate(new RTCIceCandidate(candidate));
             } catch (e) {
                 console.warn('[WebRTC] addIceCandidate error:', e);
             }
