@@ -203,7 +203,31 @@ class WebRTCService {
     (this.peerConnection as any).oniceconnectionstatechange = () => {
       const state = (this.peerConnection as any)?.connectionState as WebRTCConnectionState;
       const ice   = this.peerConnection?.iceConnectionState;
+      console.log(`[WebRTC] ICE state: ${ice}`);
       this.onConnectionStateChangeCallback?.(state, ice);
+
+      // ICE recovery path for Android: when ICE reaches connected/completed,
+      // pull the remote stream directly from getReceivers() if we still have no stream.
+      // getReceivers() returns natively-tracked receiver objects with valid tracks.
+      if ((ice === 'connected' || ice === 'completed') && !this.remoteStream) {
+        console.log('[WebRTC] ICE connected with no remoteStream — building from getReceivers()');
+        try {
+          const receivers = this.peerConnection!.getReceivers();
+          console.log('[WebRTC] getReceivers count:', receivers.length);
+          if (receivers.length > 0) {
+            // We cannot use new MediaStream(tracks) as it produces an unregistered stream.
+            // Instead, signal to the callback that receivers are available;
+            // CallScreen's stream poll will pick up the stream once onaddstream fires.
+            receivers.forEach((r: any) => {
+              if (r.track?.kind === 'audio') this.remoteAudioTrack = r.track;
+              if (r.track?.kind === 'video') this.remoteVideoTrack = r.track;
+              console.log('[WebRTC] Receiver track:', r.track?.kind, r.track?.id);
+            });
+          }
+        } catch (e) {
+          console.warn('[WebRTC] getReceivers() failed:', e);
+        }
+      }
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -211,45 +235,48 @@ class WebRTCService {
       if (event.candidate) this.onIceCandidateCallback?.(event.candidate);
     };
 
-    // Persistent remote stream — audio and video tracks are added as they arrive.
-    // This prevents the black screen bug from recreating the stream on every ontrack.
+    // ── ontrack: primary path (works reliably on iOS) ────────────────────────
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (this.peerConnection as any).ontrack = (event: any) => {
       const track = event.track;
-      if (!track) {
-        console.warn('[WebRTC] ontrack fired but no track in event');
-        return;
-      }
-
-      console.log('[WebRTC] ontrack kind:', track.kind, 'id:', track.id, 'streams:', event.streams?.length);
-
-      // Prefer event.streams[0] which is populated when the peer uses addTrack(track, stream).
-      // However, on Android (react-native-webrtc) event.streams can be empty even with valid
-      // tracks. In that case, we build/update a persistent remoteStream from the track directly.
-      let stream = event.streams && event.streams[0];
-
-      if (!stream) {
-        console.warn('[WebRTC] ontrack: event.streams empty — building persistent stream from track (Android fallback)');
-        if (!this.remoteStream) {
-          // First track: create the stream
-          this.remoteStream = new MediaStream([track]);
-        } else {
-          // Subsequent tracks: add to existing stream if not already present
-          const already = (this.remoteStream as any).getTracks?.()?.some((t: any) => t.id === track.id);
-          if (!already) {
-            (this.remoteStream as any).addTrack(track);
-          }
-        }
-        stream = this.remoteStream;
-      }
+      if (!track) return;
+      console.log('[WebRTC] ontrack kind:', track.kind, 'streams:', event.streams?.length);
 
       if (track.kind === 'audio') this.remoteAudioTrack = track;
       if (track.kind === 'video') this.remoteVideoTrack = track;
 
+      // event.streams[0] is populated when peer uses addTrack(track, stream) — reliable on iOS
+      const stream = event.streams && event.streams[0];
+      if (stream) {
+        this.remoteStream = stream;
+        console.log('[WebRTC] ontrack → using native event.streams[0]');
+        this.onRemoteStreamCallback?.(stream);
+      } else {
+        // On Android, event.streams can be empty even with valid tracks.
+        // We do NOT construct a MediaStream here — new MediaStream([track]) creates
+        // a JS-only object whose toURL() is unresolvable by RTCView's native renderer.
+        // Instead, we rely on onaddstream (below) and the ICE-connected recovery path.
+        console.warn('[WebRTC] ontrack: event.streams empty — deferring to onaddstream / ICE recovery');
+      }
+    };
+
+    // ── onaddstream: Android-reliable fallback ────────────────────────────────
+    // Fires on Android with a natively-registered MediaStream whose toURL() works in RTCView.
+    // Deprecated in spec but still dispatched by react-native-webrtc on Android.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (this.peerConnection as any).onaddstream = (event: any) => {
+      const stream = event.stream;
+      if (!stream) return;
+      console.log('[WebRTC] onaddstream → natively registered stream, tracks:', stream.getTracks?.()?.length);
       this.remoteStream = stream;
-      console.log('[WebRTC] remoteStream now has', (stream as any).getTracks?.()?.length, 'tracks');
+      // Update track refs from stream
+      stream.getTracks?.()?.forEach((t: any) => {
+        if (t.kind === 'audio') this.remoteAudioTrack = t;
+        if (t.kind === 'video') this.remoteVideoTrack = t;
+      });
       this.onRemoteStreamCallback?.(stream);
     };
+
   }
 
   private addLocalTracks(): void {
@@ -275,25 +302,14 @@ class WebRTCService {
     }
   }
 
-  private enforceH264(sdp: string): string {
-    if (!sdp) return sdp;
-    const lines = sdp.split('\r\n');
-    const mIdx  = lines.findIndex(l => l.startsWith('m=video'));
-    if (mIdx === -1) return sdp;
-    const h264Payloads: string[] = [];
-    lines.forEach(l => {
-      if (l.startsWith('a=rtpmap:') && l.toLowerCase().includes('h264')) {
-        const m = l.match(/a=rtpmap:(\d+)/);
-        if (m) h264Payloads.push(m[1]);
-      }
-    });
-    if (h264Payloads.length === 0) return sdp;
-    const parts = lines[mIdx].split(' ');
-    if (parts.length < 4) return sdp;
-    const rest = parts.slice(3).filter(pt => !h264Payloads.includes(pt));
-    lines[mIdx] = [...parts.slice(0, 3), ...h264Payloads, ...rest].join(' ');
-    return lines.join('\r\n');
-  }
+  // H264 enforcement intentionally removed.
+  // Manually reordering H264 codec payload types in the m=video line causes
+  // profile-level-id mismatches between Android (42e01f / 640c28) and iOS (42001f).
+  // This makes iOS video silently fail to decode on Android while still appearing
+  // to negotiate successfully — causing exactly the one-directional video bug.
+  // WebRTC auto-negotiates the best common codec (VP8 universally, or compatible H264).
+  private enforceH264(sdp: string): string { return sdp; }
+
 
   private async requestAndroidPermissions(callType: 'audio' | 'video'): Promise<boolean> {
     const perms = [PermissionsAndroid.PERMISSIONS.RECORD_AUDIO];
