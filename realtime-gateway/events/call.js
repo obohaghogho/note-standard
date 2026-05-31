@@ -255,8 +255,12 @@ module.exports = (io, socket) => {
     // Relay to caller — client listens for call:answered to create RTCPeerConnection
     io.to(`user:${to}`).emit('call:answered', {
       from:      userId,
-      sessionId, // FIX: pass sessionId so caller can track it
+      sessionId,
     });
+
+    // Confirm back to the callee that their answer was received and the caller was notified.
+    // This gives the callee a synchronization event before the SDP offer arrives.
+    socket.emit('call:accepted', { from: to, sessionId });
   }
 
   socket.on('call:answer', handleCallAnswer);

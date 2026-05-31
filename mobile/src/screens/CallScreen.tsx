@@ -1,9 +1,9 @@
 /**
- * CallScreen – In-app WebRTC Video/Audio VoIP call screen.
+ * CallScreen – Native WebRTC Audio/Video Call Screen.
  *
- * ❌ Zero Agora code, Zero carrier GSM redirects, Zero SIM calls.
- * ✅ Pure WebRTC rendering utilizing react-native-webrtc.
- * ✅ Seamless peer connections and layout scaling.
+ * This screen is navigated to AFTER the call has been initiated/answered
+ * through SignalingService. Media and PeerConnection are already set up.
+ * This screen only renders state and provides controls.
  */
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
@@ -12,8 +12,10 @@ import {
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
-  Dimensions,
   StatusBar,
+  Dimensions,
+  Animated,
+  Easing,
 } from 'react-native';
 import { RTCView, MediaStream } from 'react-native-webrtc';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -29,274 +31,246 @@ type Props = {
   route: RouteProp<ChatStackParamList, 'Call'>;
 };
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
+
+const GRADIENT_COLORS: Record<string, [string, string, string]> = {
+  default: ['#0f0c29', '#302b63', '#24243e'],
+  video:   ['#0d0d2b', '#1a0533', '#0a0a1a'],
+  audio:   ['#0f2027', '#203a43', '#2c5364'],
+};
 
 export default function CallScreen({ navigation, route }: Props) {
   const { type, conversationId, targetUserId, targetName, isIncoming } = route.params;
 
-  const [callState, setCallState] = useState<CallState>(isIncoming ? 'connecting' : 'calling');
-  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [callState, setCallState]       = useState<CallState>(isIncoming ? 'connecting' : 'calling');
+  const [localStream, setLocalStream]   = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isSpeaker, setIsSpeaker] = useState(type === 'video');
-  const [isMinimized, setIsMinimized] = useState(false);
+  const [isMuted, setIsMuted]           = useState(false);
+  const [isSpeaker, setIsSpeaker]       = useState(type === 'video');
+  const [durationSecs, setDuration]     = useState(0);
 
-  // Call duration timer
-  const [durationSecs, setDurationSecs] = useState(0);
-  const durationTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const durationRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pulseAnim    = useRef(new Animated.Value(1)).current;
+  const isMounted    = useRef(true);
 
-  // ── Duration timer ─────────────────────────────────────────────────────
+  // ── Pulsing animation for avatar ring ─────────────────────────────────────
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.18, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1,    duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
 
-  const startDurationTimer = useCallback(() => {
-    if (durationTimer.current) return;
-    durationTimer.current = setInterval(() => {
-      setDurationSecs(s => s + 1);
+  const startTimer = useCallback(() => {
+    if (durationRef.current) return;
+    durationRef.current = setInterval(() => {
+      if (isMounted.current) setDuration(s => s + 1);
     }, 1000);
   }, []);
 
-  const stopDurationTimer = useCallback(() => {
-    if (durationTimer.current) {
-      clearInterval(durationTimer.current);
-      durationTimer.current = null;
-    }
+  const stopTimer = useCallback(() => {
+    if (durationRef.current) { clearInterval(durationRef.current); durationRef.current = null; }
   }, []);
 
-  const formatDuration = (secs: number) => {
-    const m = Math.floor(secs / 60).toString().padStart(2, '0');
-    const s = (secs % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-  };
+  const fmt = (s: number) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
 
-  // ── Setup on mount ─────────────────────────────────────────────────────
-
+  // ── Mount setup ────────────────────────────────────────────────────────────
   useEffect(() => {
     StatusBar.setHidden(false);
-    let isMounted = true;
+    isMounted.current = true;
 
-    const setup = async () => {
-      try {
-        // BUG FIX (Bugs 1 & 7): Register callbacks FIRST — before WebRTCService.init().
-        // If the remote peer is fast (e.g. SDP exchange completes before CallScreen fully
-        // mounts), onconnectionstatechange may fire while the callback is still null.
-        // Registering here guarantees the callback is in place before any async signaling.
-        WebRTCService.registerCallbacks({
-          onConnectionStateChange: (state: WebRTCConnectionState, iceState?: string) => {
-            if (!isMounted) return;
-            console.log(`[CallScreen] Connection state: ${state} | ICE: ${iceState}`);
-            if (state === 'connected') {
-              setCallState('connected');
-              CallService.onCallConnected();
-              startDurationTimer();
-              // Refresh streams — tracks may have arrived before this callback was set
-              setLocalStream(WebRTCService.getLocalStream());
-              setRemoteStream(WebRTCService.getRemoteStream());
-            } else if (state === 'failed') {
-              setCallState('failed');
-              WebRTCService.leaveChannel();
-              CallService.handleCallEnded('error');
-              setTimeout(() => { if (isMounted) navigation.goBack(); }, 1500);
-            } else if (state === 'disconnected') {
-              setCallState('reconnecting');
-            } else if (state === 'closed') {
-              setCallState('ended');
-            }
-          },
-          onRemoteStream: (stream: MediaStream | null) => {
-            if (isMounted) setRemoteStream(stream);
-          },
-        });
-
-        await WebRTCService.init(type);
-
-        if (isIncoming) {
-          // Ensure CallService is in ringing state (may have been set by push notification path)
-          if (CallService.getState() === 'idle') {
-            console.warn('[CallScreen] CallService was idle for incoming call — forcing ringing state');
-            await CallService.displayIncomingCall({
-              callerId: SignalingService.activeTargetId || '',
-              callerName: route.params.targetName,
-              callType: type,
-              conversationId: route.params.conversationId,
-            });
-          }
-          // Note: SignalingService.answerCall() was already called by the modal/push handler
-          // before navigating here. Do NOT call it again — double answering resets the PC.
-          setCallState('connecting');
-        } else {
-          setCallState('calling');
-        }
-      } catch (err) {
-        console.error('[CallScreen] WebRTC setup failure:', err);
-        if (isMounted) {
+    // Register stream + connection callbacks on mount.
+    // NOTE: Do NOT call WebRTCService.acquireMedia() or prepareForIncomingCall() here.
+    // Those are already done in SignalingService.startCall() / answerCall().
+    WebRTCService.registerCallbacks({
+      onConnectionStateChange: (state: WebRTCConnectionState) => {
+        if (!isMounted.current) return;
+        console.log('[CallScreen] Connection state:', state);
+        if (state === 'connected') {
+          setCallState('connected');
+          CallService.onCallConnected();
+          startTimer();
+          setLocalStream(WebRTCService.getLocalStream());
+          setRemoteStream(WebRTCService.getRemoteStream());
+        } else if (state === 'failed') {
           setCallState('failed');
-          setTimeout(() => navigation.goBack(), 2000);
+          SignalingService.endActiveCall();
+          setTimeout(() => { if (isMounted.current) navigation.goBack(); }, 1500);
+        } else if (state === 'disconnected') {
+          setCallState('reconnecting');
         }
-      }
-    };
+      },
+      onRemoteStream: (stream: MediaStream | null) => {
+        if (isMounted.current) setRemoteStream(stream);
+      },
+    });
 
-    setup();
+    // Populate streams from service in case they were set before this screen mounted
+    const ls = WebRTCService.getLocalStream();
+    const rs = WebRTCService.getRemoteStream();
+    if (ls) setLocalStream(ls);
+    if (rs) setRemoteStream(rs);
 
     const unsubEnded = CallService.onCallEnded(() => {
-      if (isMounted) {
-        stopDurationTimer();
-        setTimeout(() => navigation.goBack(), 800);
-      }
+      if (!isMounted.current) return;
+      stopTimer();
+      setTimeout(() => navigation.goBack(), 800);
     });
 
     const unsubState = CallService.onStateChange(({ state }: { state: CallState }) => {
-      if (!isMounted) return;
+      if (!isMounted.current) return;
       setCallState(state);
       if (state === 'connected') {
-        startDurationTimer();
-        // BUG FIX: Re-fetch streams in case they were set before this callback fired
+        startTimer();
         setLocalStream(WebRTCService.getLocalStream());
         setRemoteStream(WebRTCService.getRemoteStream());
       }
       if (state === 'ended' || state === 'failed') {
-        stopDurationTimer();
+        stopTimer();
         setTimeout(() => navigation.goBack(), 1000);
       }
     });
 
     return () => {
-      isMounted = false;
+      isMounted.current = false;
       unsubEnded();
       unsubState();
-      stopDurationTimer();
-      WebRTCService.leaveChannel();
+      stopTimer();
     };
   }, []);
 
-  // ── Controls ───────────────────────────────────────────────────────────
-
-  const handleEndCall = useCallback(async (emit = true) => {
-    stopDurationTimer();
-    if (emit) {
-      await SignalingService.endActiveCall();
-    } else {
-      await WebRTCService.leaveChannel();
-      await CallService.handleCallEnded('normal');
-    }
+  // ── Controls ───────────────────────────────────────────────────────────────
+  const handleEnd = useCallback(async () => {
+    stopTimer();
+    await SignalingService.endActiveCall();
     navigation.goBack();
-  }, [navigation, stopDurationTimer]);
+  }, [navigation, stopTimer]);
 
   const toggleMute = useCallback(() => {
-    WebRTCService.muteLocalAudio(!isMuted);
-    setIsMuted(m => !m);
+    const next = !isMuted;
+    WebRTCService.muteLocalAudio(next);
+    setIsMuted(next);
   }, [isMuted]);
 
   const toggleSpeaker = useCallback(() => {
-    WebRTCService.setEnableSpeakerphone(!isSpeaker);
-    setIsSpeaker(s => !s);
+    const next = !isSpeaker;
+    WebRTCService.setEnableSpeakerphone(next);
+    setIsSpeaker(next);
   }, [isSpeaker]);
 
-  const toggleCamera = useCallback(() => {
-    WebRTCService.switchCamera();
-  }, []);
-
-  // ── Status label ───────────────────────────────────────────────────────
+  const flipCamera = useCallback(() => { WebRTCService.switchCamera(); }, []);
 
   const statusLabel = () => {
     switch (callState) {
       case 'calling':      return 'Calling...';
       case 'ringing':      return 'Ringing...';
       case 'connecting':   return 'Connecting...';
-      case 'connected':    return formatDuration(durationSecs);
-      case 'reconnecting': return '⚠️ Reconnecting...';
+      case 'connected':    return fmt(durationSecs);
+      case 'reconnecting': return 'Reconnecting...';
       case 'ended':        return 'Call ended';
-      case 'failed':       return '❌ Call failed';
+      case 'failed':       return 'Call failed';
       default:             return '';
     }
   };
 
-  // ── Render ─────────────────────────────────────────────────────────────
+  const isConnected   = callState === 'connected';
+  const gradientKey   = type === 'video' ? 'video' : 'audio';
+  const hasRemoteVideo = !!remoteStream && remoteStream.getVideoTracks().length > 0;
+  const hasLocalVideo  = !!localStream  && localStream.getVideoTracks().length > 0;
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
 
       {type === 'video' ? (
-        // ── Video call layout ─────────────────────────────────────────────
-        <View style={styles.videoContainer}>
+        // ── Video call ──────────────────────────────────────────────────────
+        <View style={styles.fill}>
           {/* Remote video fullscreen */}
-          {remoteStream && remoteStream.getVideoTracks().length > 0 ? (
-            <RTCView
-              streamURL={remoteStream.toURL()}
-              style={styles.remoteVideo}
-              objectFit="cover"
-            />
+          {hasRemoteVideo ? (
+            <RTCView streamURL={remoteStream!.toURL()} style={styles.remoteVideo} objectFit="cover" />
           ) : (
-            <LinearGradient colors={['#0f172a', '#1e1b4b']} style={styles.remoteVideo}>
-              <View style={styles.avatarLarge}>
-                <Text style={styles.avatarText}>{targetName.charAt(0).toUpperCase()}</Text>
+            <LinearGradient colors={GRADIENT_COLORS.video} style={styles.remoteVideo}>
+              <Animated.View style={[styles.avatarRing, { transform: [{ scale: pulseAnim }] }]} />
+              <View style={styles.avatarCircle}>
+                <Text style={styles.avatarLetter}>{targetName.charAt(0).toUpperCase()}</Text>
               </View>
-              <Text style={styles.nameText}>{targetName}</Text>
-              <Text style={styles.statusText}>{statusLabel()}</Text>
+              <Text style={styles.name}>{targetName}</Text>
+              <Text style={styles.status}>{statusLabel()}</Text>
             </LinearGradient>
           )}
 
           {/* Local video PiP */}
-          {!isMinimized && localStream && localStream.getVideoTracks().length > 0 && (
-            <RTCView
-              streamURL={localStream.toURL()}
-              style={styles.localVideo}
-              objectFit="cover"
-            />
+          {hasLocalVideo && (
+            <View style={styles.pip}>
+              <RTCView streamURL={localStream!.toURL()} style={styles.fill} objectFit="cover" />
+            </View>
           )}
 
-          {/* Camera Flip */}
-          {type === 'video' && (
-            <TouchableOpacity style={styles.switchCameraBtn} onPress={toggleCamera}>
-              <Text style={styles.switchCameraIcon}>🔄</Text>
-            </TouchableOpacity>
+          {/* Flip camera */}
+          <TouchableOpacity style={styles.flipBtn} onPress={flipCamera}>
+            <Text style={styles.controlIcon}>🔄</Text>
+          </TouchableOpacity>
+
+          {/* Status when connected */}
+          {isConnected && hasRemoteVideo && (
+            <View style={styles.topBar}>
+              <Text style={styles.timerText}>{fmt(durationSecs)}</Text>
+            </View>
           )}
         </View>
       ) : (
-        // ── Audio call layout ─────────────────────────────────────────────
-        <LinearGradient colors={['#0f172a', '#1e1b4b']} style={styles.audioContainer}>
-          <View style={styles.avatarLarge}>
-            <Text style={styles.avatarText}>{targetName.charAt(0).toUpperCase()}</Text>
+        // ── Audio call ──────────────────────────────────────────────────────
+        <LinearGradient colors={GRADIENT_COLORS.audio} style={styles.fill}>
+          <View style={styles.audioContent}>
+            <Animated.View style={[styles.avatarRing, { transform: [{ scale: pulseAnim }] }]} />
+            <View style={styles.avatarCircle}>
+              <Text style={styles.avatarLetter}>{targetName.charAt(0).toUpperCase()}</Text>
+            </View>
+            <Text style={styles.name}>{targetName}</Text>
+            <Text style={[
+              styles.status,
+              callState === 'connected'    && styles.statusConnected,
+              callState === 'reconnecting' && styles.statusWarning,
+            ]}>
+              {statusLabel()}
+            </Text>
           </View>
-          <Text style={styles.nameText}>{targetName}</Text>
-          <Text style={styles.statusText}>{statusLabel()}</Text>
         </LinearGradient>
       )}
 
-      {/* ── Floating controls ── */}
+      {/* ── Bottom controls ────────────────────────────────────────────────── */}
       <View style={styles.controls}>
         {/* Mute */}
-        <View style={styles.ctrlWrap}>
-          <TouchableOpacity
-            onPress={toggleMute}
-            style={[styles.controlBtn, isMuted && styles.btnActive]}
-          >
+        <View style={styles.ctrlItem}>
+          <TouchableOpacity style={[styles.ctrlBtn, isMuted && styles.ctrlBtnActive]} onPress={toggleMute}>
             <Text style={styles.controlIcon}>{isMuted ? '🔇' : '🎤'}</Text>
           </TouchableOpacity>
           <Text style={styles.ctrlLabel}>{isMuted ? 'Unmute' : 'Mute'}</Text>
         </View>
 
         {/* End call */}
-        <View style={styles.ctrlWrap}>
-          <TouchableOpacity onPress={() => handleEndCall(true)} style={styles.endBtn}>
-            <Text style={styles.controlIcon}>📵</Text>
+        <View style={styles.ctrlItem}>
+          <TouchableOpacity style={styles.endBtn} onPress={handleEnd}>
+            <Text style={[styles.controlIcon, { fontSize: 30 }]}>📵</Text>
           </TouchableOpacity>
           <Text style={styles.ctrlLabel}>End</Text>
         </View>
 
-        {/* Speaker / Camera toggle */}
+        {/* Speaker / flip camera */}
         {type === 'video' ? (
-          <View style={styles.ctrlWrap}>
-            <TouchableOpacity onPress={toggleCamera} style={styles.controlBtn}>
+          <View style={styles.ctrlItem}>
+            <TouchableOpacity style={styles.ctrlBtn} onPress={flipCamera}>
               <Text style={styles.controlIcon}>🔄</Text>
             </TouchableOpacity>
             <Text style={styles.ctrlLabel}>Flip</Text>
           </View>
         ) : (
-          <View style={styles.ctrlWrap}>
-            <TouchableOpacity
-              onPress={toggleSpeaker}
-              style={[styles.controlBtn, isSpeaker && styles.btnActive]}
-            >
+          <View style={styles.ctrlItem}>
+            <TouchableOpacity style={[styles.ctrlBtn, isSpeaker && styles.ctrlBtnActive]} onPress={toggleSpeaker}>
               <Text style={styles.controlIcon}>{isSpeaker ? '🔊' : '🔈'}</Text>
             </TouchableOpacity>
             <Text style={styles.ctrlLabel}>{isSpeaker ? 'Earpiece' : 'Speaker'}</Text>
@@ -308,126 +282,66 @@ export default function CallScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-  videoContainer: {
-    flex: 1,
-  },
-  remoteVideo: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  localVideo: {
+  container:        { flex: 1, backgroundColor: '#000' },
+  fill:             { flex: 1 },
+  remoteVideo:      { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  audioContent:     { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  avatarRing: {
     position: 'absolute',
-    top: 60,
-    right: 16,
-    width: 110,
-    height: 165,
-    borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: '#1a1a2e',
-    borderWidth: 2,
-    borderColor: '#6366f1',
+    width: 160, height: 160, borderRadius: 80,
+    borderWidth: 2, borderColor: 'rgba(139,92,246,0.35)',
+    backgroundColor: 'rgba(139,92,246,0.1)',
   },
-  audioContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarLarge: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+  avatarCircle: {
+    width: 120, height: 120, borderRadius: 60,
     backgroundColor: '#4f46e5',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'center', alignItems: 'center',
     marginBottom: 24,
-    shadowColor: '#6366f1',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 10,
+    shadowColor: '#7c3aed', shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.6, shadowRadius: 16, elevation: 12,
   },
-  avatarText: {
-    color: '#fff',
-    fontSize: 48,
-    fontWeight: 'bold',
+  avatarLetter: { color: '#fff', fontSize: 48, fontWeight: 'bold' },
+  name:         { color: '#fff', fontSize: 26, fontWeight: '700', textAlign: 'center', marginBottom: 8 },
+  status:       { color: '#94a3b8', fontSize: 16, textAlign: 'center' },
+  statusConnected: { color: '#34d399' },
+  statusWarning:   { color: '#fbbf24' },
+  pip: {
+    position: 'absolute', top: 56, right: 16,
+    width: 110, height: 165, borderRadius: 14,
+    overflow: 'hidden', backgroundColor: '#111',
+    borderWidth: 2, borderColor: 'rgba(139,92,246,0.6)',
   },
-  nameText: {
-    color: '#fff',
-    fontSize: 26,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  statusText: {
-    color: '#94a3b8',
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  switchCameraBtn: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center',
+  topBar: {
+    position: 'absolute', top: 20, left: 0, right: 0,
     alignItems: 'center',
   },
-  switchCameraIcon: {
-    fontSize: 22,
+  timerText: { color: '#34d399', fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  flipBtn: {
+    position: 'absolute', top: 16, left: 16,
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    justifyContent: 'center', alignItems: 'center',
   },
   controls: {
-    position: 'absolute',
-    bottom: 48,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    gap: 28,
-    paddingHorizontal: 20,
+    position: 'absolute', bottom: 48, left: 0, right: 0,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-end', gap: 28,
+    paddingHorizontal: 24,
   },
-  ctrlWrap: {
-    alignItems: 'center',
-    gap: 6,
+  ctrlItem:  { alignItems: 'center', gap: 8 },
+  ctrlBtn: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
   },
-  controlBtn: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  btnActive: {
-    backgroundColor: '#4f46e5',
-  },
+  ctrlBtnActive: { backgroundColor: '#4f46e5' },
   endBtn: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 76, height: 76, borderRadius: 38,
     backgroundColor: '#ef4444',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#ef4444',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.6,
-    shadowRadius: 8,
-    elevation: 10,
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: '#ef4444', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.7, shadowRadius: 12, elevation: 12,
   },
-  controlIcon: {
-    fontSize: 26,
-    color: '#fff',
-  },
-  ctrlLabel: {
-    color: '#94a3b8',
-    fontSize: 12,
-    fontWeight: '600',
-  },
+  controlIcon: { fontSize: 26 },
+  ctrlLabel:   { color: '#94a3b8', fontSize: 12, fontWeight: '600' },
 });
