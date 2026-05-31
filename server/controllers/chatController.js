@@ -1310,7 +1310,10 @@ exports.sendMessage = async (req, res) => {
 
       // 2. Broadcast to other members immediately if it's not a duplicate
       if (!isDuplicate) {
-          await realtime.emitToConversation(conversationId, "chat:message", safePayload);
+          // Pass excludeUserId so the gateway excludes the sender's socket(s) from
+          // the pg_notify broadcast. This prevents the sender receiving an echo of
+          // their own message which would trigger a duplicate merge on the client.
+          await realtime.emitToConversation(conversationId, "chat:message", safePayload, { excludeUserId: userId });
       }
 
       // 3. Background tasks (non-blocking)

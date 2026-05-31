@@ -112,10 +112,13 @@ app.post('/internal/push/broadcast', async (req, res) => {
 
 /**
  * Global Dispatcher for Socket Events
- * Standardized envelope: { type: string, room: string, event: string, payload: any }
+ * Standardized envelope: { type: string, room: string, event: string, payload: any, exclude_user_id?: string }
+ *
+ * Optional exclude_user_id: when set, the sender's socket(s) are excluded from
+ * the broadcast so they do not receive an echo of their own message.
  */
 function dispatchSocketEvent(envelope) {
-  const { type, room, event, payload } = envelope;
+  const { type, room, event, payload, exclude_user_id } = envelope;
 
   if (!type || !room || !event) {
     console.warn('[Gateway] ⚠ Received malformed event envelope:', JSON.stringify(envelope).substring(0, 100));
@@ -125,10 +128,30 @@ function dispatchSocketEvent(envelope) {
   // Consistent Room Resolver
   const targetRoom = type === 'to_user' ? `user:${room}` : room;
 
-  console.log(`[Gateway] 📡 [${type}] room:${targetRoom} event:${event}`);
+  console.log(`[Gateway] 📡 [${type}] room:${targetRoom} event:${event}${exclude_user_id ? ` (excluding user:${exclude_user_id})` : ''}`);
 
   if (type === 'broadcast') {
     io.emit(event, payload);
+  } else if (exclude_user_id) {
+    // Find all socket IDs belonging to the excluded user and exclude them.
+    // This prevents the sender from receiving an echo of their own message.
+    const userRoom = `user:${exclude_user_id}`;
+    const excludedSocketIds = [];
+    try {
+      const socketsInUserRoom = io.sockets.adapter.rooms.get(userRoom);
+      if (socketsInUserRoom) {
+        socketsInUserRoom.forEach(sid => excludedSocketIds.push(sid));
+      }
+    } catch (e) {
+      // adapter.rooms may not exist in all Socket.IO versions — fallback gracefully
+    }
+
+    if (excludedSocketIds.length > 0) {
+      io.to(targetRoom).except(excludedSocketIds).emit(event, payload);
+    } else {
+      // User has no active sockets — broadcast to all (they'll handle dedup client-side)
+      io.to(targetRoom).emit(event, payload);
+    }
   } else {
     io.to(targetRoom).emit(event, payload);
   }

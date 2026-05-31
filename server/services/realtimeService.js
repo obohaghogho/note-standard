@@ -95,6 +95,7 @@ const validateEventPayload = (payload, isFinancial) => {
 const emit = async (type, room, event, payload, options = {}) => {
     try {
         const isFinancial = options.isFinancial === true;
+        const excludeUserId = options.excludeUserId || null;
 
         // 1. Firewall validation
         const validation = validateEventPayload(payload, isFinancial);
@@ -114,6 +115,10 @@ const emit = async (type, room, event, payload, options = {}) => {
         }
 
         const envelope = { type, room: targetRoom, event, payload: protectedPayload };
+        // Pass the sender exclusion hint to the gateway dispatcher
+        if (excludeUserId) {
+            envelope.exclude_user_id = excludeUserId;
+        }
         const payloadString = JSON.stringify(envelope);
 
         // 3. Size guard — prevent oversized payloads
@@ -160,6 +165,7 @@ const emitToUser = (userId, event, payload, options = {}) =>
 
 const emitToConversation = (conversationId, event, payload, options = {}) =>
     emit('to_room', conversationId, event, payload, options);
+
 
 const emitToAdmin = (event, payload, options = {}) =>
     emit('to_room', 'admin', event, payload, options);

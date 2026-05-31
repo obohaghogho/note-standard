@@ -254,16 +254,43 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         // FIXED: gateway emits 'chat:message', NOT 'receive_message'
         socketManager.on('chat:message', async (rawMsg: any) => {
-            // Deduplication Check early on rawMsg.id or event_id
-            const dedupId = rawMsg.id || rawMsg.event_id;
-            if (dedupId) {
-                if (processedEventsRef.current.has(dedupId)) return;
-                processedEventsRef.current.add(dedupId);
-                // Keep set bounded
-                if (processedEventsRef.current.size > 1000) {
-                    const firstItem = processedEventsRef.current.values().next().value;
-                    if (firstItem !== undefined) processedEventsRef.current.delete(firstItem);
-                }
+            // ── Own-message gateway echo guard ──────────────────────────────────
+            // The gateway dispatches via pg_notify which broadcasts to ALL room
+            // members including the sender. We pre-register sent messages in
+            // processedEventsRef so echoes are silently dropped here.
+            const isOwnIncoming = rawMsg.sender_id === user.id;
+
+            // Deduplication: use prefixed composite keys for precision
+            const dedupEventKey = rawMsg.event_id ? `evt:${rawMsg.event_id}` : null;
+            const dedupIdKey    = rawMsg.id && !String(rawMsg.id).startsWith('temp-') ? `id:${rawMsg.id}` : null;
+
+            if (dedupEventKey && processedEventsRef.current.has(dedupEventKey)) {
+                console.log('[DEDUP/mobile] Dropping duplicate by event_id:', rawMsg.event_id);
+                return;
+            }
+            if (dedupIdKey && processedEventsRef.current.has(dedupIdKey)) {
+                console.log('[DEDUP/mobile] Dropping duplicate by id:', rawMsg.id);
+                return;
+            }
+
+            // Register keys now so any subsequent delivery of this event is dropped
+            if (dedupEventKey) processedEventsRef.current.add(dedupEventKey);
+            if (dedupIdKey)    processedEventsRef.current.add(dedupIdKey);
+
+            // Bound the set size to avoid memory leaks
+            if (processedEventsRef.current.size > 2000) {
+                const firstItem = processedEventsRef.current.values().next().value;
+                if (firstItem !== undefined) processedEventsRef.current.delete(firstItem);
+            }
+
+            // If this is our own message being echoed back AND we already have it
+            // in state (from optimistic update + API confirmation), drop the echo.
+            // This covers the race where the dedup keys were registered by sendMessage
+            // after the echo already passed through the early guards above.
+            if (isOwnIncoming) {
+                // Keys were already present — echo was handled above. If we reach
+                // here, this is a fresh send from another device/tab of the same user.
+                // Allow it to proceed so multi-device sync works correctly.
             }
 
             // 1. Decrypt via Transport Adapter
@@ -470,6 +497,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
             // Step 4: Backend Collapse via Merge Engine
             const canonicalMessage = { ...res.data, isOwn: true, status: 'sent' };
+
+            // Pre-register canonical IDs in the dedup buffer BEFORE merging state.
+            // This ensures the gateway echo (which arrives shortly after) is cleanly
+            // dropped by the socket listener above without reaching mergeMessages.
+            const canonEventKey = canonicalMessage.event_id ? `evt:${canonicalMessage.event_id}` : null;
+            const canonIdKey    = canonicalMessage.id && !String(canonicalMessage.id).startsWith('temp-') ? `id:${canonicalMessage.id}` : null;
+            if (canonEventKey) processedEventsRef.current.add(canonEventKey);
+            if (canonIdKey)    processedEventsRef.current.add(canonIdKey);
+            // Also register the client event ID as a fallback key
+            processedEventsRef.current.add(`evt:${clientEventId}`);
+
             setMessages(prev => ({
                 ...prev,
                 [conversationId]: mergeMessages(prev[conversationId] || [], [canonicalMessage]).merged

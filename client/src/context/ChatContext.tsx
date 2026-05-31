@@ -279,6 +279,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     // Phase 3: per-conversation sequence high-water mark (mirrors server-side replayGuard)
     // Sentinel -1 means "not yet seen any sequenced message for this conversation".
     const lastSeenSequenceRef = useRef<Record<string, number>>({});
+    // Deduplication buffer: tracks processed event_id and canonical id values to prevent
+    // gateway echo (pg_notify broadcasts to ALL room members including sender) from
+    // triggering duplicate merge operations. Bounded at 2000 entries to prevent memory leak.
+    const processedEventIdsRef = useRef<Set<string>>(new Set());
 
     const sendTypingStatus = useCallback((isTyping: boolean) => {
         if (!socket || !connected || !activeConversationIdRef.current) return;
@@ -472,9 +476,40 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             // ── Phase 3: User guard — ensure user is hydrated before unread logic
             if (!user?.id) return;
 
+            // ── Own-message echo guard ────────────────────────────────────────
+            // The gateway uses pg_notify which broadcasts to ALL room members
+            // including the sender. The sender already has the canonical message
+            // from the API response (flushQueue → setMessages). We must drop
+            // this echo before it reaches mergeMessages to prevent duplication.
+            const isOwnMessage = msg.sender_id === user.id;
+            if (isOwnMessage) {
+                // Check by event_id first (most reliable — set at send time)
+                const dedupEventKey = msg.event_id;
+                const dedupIdKey = msg.id;
+                const alreadyTrackedByEvent = dedupEventKey ? processedEventIdsRef.current.has(`evt:${dedupEventKey}`) : false;
+                const alreadyTrackedById = dedupIdKey && !dedupIdKey.startsWith('temp-') ? processedEventIdsRef.current.has(`id:${dedupIdKey}`) : false;
+
+                if (alreadyTrackedByEvent || alreadyTrackedById) {
+                    // This is a gateway echo of a message we already committed to state — drop it
+                    console.log('[DEDUP] Dropping own-message gateway echo:', { event_id: msg.event_id, id: msg.id });
+                    return;
+                }
+                // Track this canonical server ID going forward so re-deliveries are also dropped
+                if (dedupIdKey && !dedupIdKey.startsWith('temp-')) {
+                    processedEventIdsRef.current.add(`id:${dedupIdKey}`);
+                }
+                if (dedupEventKey) {
+                    processedEventIdsRef.current.add(`evt:${dedupEventKey}`);
+                }
+                // Bound the set to prevent memory leaks
+                if (processedEventIdsRef.current.size > 2000) {
+                    const firstKey = processedEventIdsRef.current.values().next().value;
+                    if (firstKey !== undefined) processedEventIdsRef.current.delete(firstKey);
+                }
+            }
+
             // ── Phase 3: Type-safe sequence deduplication ─────────────────────
             const seq = normalizeSequenceNumber(msg.sequence_number);
-            const isOwnMessage = msg.sender_id === user.id;
 
             if (seq !== undefined) {
                 // Sentinel -1 = not yet seen any sequenced message
@@ -884,6 +919,19 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 if (intent.payload.replyTo && !canonicalMessage.reply_to) {
                     canonicalMessage = { ...canonicalMessage, reply_to: intent.payload.replyTo };
                 }
+
+                // Pre-register in dedup buffer BEFORE setMessages so that when the
+                // gateway echo of this message arrives it is dropped cleanly.
+                // We register both the canonical server id and the event_id so any
+                // variation of the echo key is covered.
+                if (canonicalMessage.id && !canonicalMessage.id.startsWith('temp-')) {
+                    processedEventIdsRef.current.add(`id:${canonicalMessage.id}`);
+                }
+                if (canonicalMessage.event_id) {
+                    processedEventIdsRef.current.add(`evt:${canonicalMessage.event_id}`);
+                }
+                // Also register the intent's client event_id for composite coverage
+                processedEventIdsRef.current.add(`evt:${intent.event_id}`);
 
                 console.log('[SYNC_FORENSICS]', {
                     stage: 'flushQueue',
