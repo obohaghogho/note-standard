@@ -45,6 +45,7 @@ export default function CallScreen({ navigation, route }: Props) {
   const [callState, setCallState]       = useState<CallState>(isIncoming ? 'connecting' : 'calling');
   const [localStream, setLocalStream]   = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [remoteVideoTrack, setRemoteVideoTrack] = useState<any>(null);
   const [isMuted, setIsMuted]           = useState(false);
   const [isSpeaker, setIsSpeaker]       = useState(type === 'video');
   const [durationSecs, setDuration]     = useState(0);
@@ -97,7 +98,11 @@ export default function CallScreen({ navigation, route }: Props) {
           setLocalStream(WebRTCService.getLocalStream());
           // Also fetch remote stream in case ontrack already fired
           const rs = WebRTCService.getRemoteStream();
-          if (rs) setRemoteStream(rs);
+          if (rs) {
+            setRemoteStream(rs);
+            const vt = rs.getVideoTracks()[0];
+            if (vt) setRemoteVideoTrack(vt);
+          }
         } else if (state === 'failed') {
           setCallState('failed');
           SignalingService.endActiveCall();
@@ -110,6 +115,8 @@ export default function CallScreen({ navigation, route }: Props) {
         if (isMounted.current) {
           console.log('[CallScreen] onRemoteStream received, tracks:', stream?.getTracks().length);
           setRemoteStream(stream);
+          const vt = stream ? stream.getVideoTracks()[0] : null;
+          setRemoteVideoTrack(vt || null);
         }
       },
     });
@@ -118,7 +125,11 @@ export default function CallScreen({ navigation, route }: Props) {
     const ls = WebRTCService.getLocalStream();
     const rs = WebRTCService.getRemoteStream();
     if (ls) setLocalStream(ls);
-    if (rs) setRemoteStream(rs);
+    if (rs) {
+      setRemoteStream(rs);
+      const vt = rs.getVideoTracks()[0];
+      if (vt) setRemoteVideoTrack(vt);
+    }
 
     // Stream recovery poll: if ontrack fired before this screen mounted, the callback
     // was not registered yet. Poll every 500ms for up to 10 seconds to catch late streams.
@@ -126,9 +137,13 @@ export default function CallScreen({ navigation, route }: Props) {
     const streamPoll = setInterval(() => {
       if (!isMounted.current) { clearInterval(streamPoll); return; }
       const currentRemote = WebRTCService.getRemoteStream();
-      if (currentRemote && currentRemote.getVideoTracks().length > 0) {
-        setRemoteStream(currentRemote);
-        clearInterval(streamPoll);
+      if (currentRemote) {
+        const vt = currentRemote.getVideoTracks()[0];
+        if (vt) {
+          setRemoteStream(currentRemote);
+          setRemoteVideoTrack(vt);
+          clearInterval(streamPoll);
+        }
       }
     }, 500);
     setTimeout(() => clearInterval(streamPoll), 10000);
@@ -146,7 +161,11 @@ export default function CallScreen({ navigation, route }: Props) {
         startTimer();
         setLocalStream(WebRTCService.getLocalStream());
         const rs2 = WebRTCService.getRemoteStream();
-        if (rs2) setRemoteStream(rs2);
+        if (rs2) {
+          setRemoteStream(rs2);
+          const vt = rs2.getVideoTracks()[0];
+          if (vt) setRemoteVideoTrack(vt);
+        }
       }
       if (state === 'ended' || state === 'failed') {
         stopTimer();
@@ -199,7 +218,7 @@ export default function CallScreen({ navigation, route }: Props) {
 
   const isConnected   = callState === 'connected';
   const gradientKey   = type === 'video' ? 'video' : 'audio';
-  const hasRemoteVideo = !!remoteStream && remoteStream.getVideoTracks().length > 0;
+  const hasRemoteVideo = !!remoteStream && !!remoteVideoTrack;
   const hasLocalVideo  = !!localStream  && localStream.getVideoTracks().length > 0;
 
   return (
@@ -212,7 +231,7 @@ export default function CallScreen({ navigation, route }: Props) {
           {/* Remote video fullscreen */}
           {hasRemoteVideo ? (
             <RTCView 
-              key={`remote-${remoteStream!.getVideoTracks().map(t => t.id).join('-')}`}
+              key={`remote-${remoteVideoTrack.id}`}
               streamURL={remoteStream!.toURL()} 
               style={styles.remoteVideo} 
               objectFit="cover" 
