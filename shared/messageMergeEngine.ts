@@ -9,7 +9,21 @@
  * 3. Sort by sequence_number (fallback to created_at)
  */
 
-import { Message } from '../context/ChatContext';
+export interface Message {
+    id: string;
+    event_id?: string;
+    sequence_number?: number;
+    _optimistic?: boolean;
+    reply_to?: {
+        id: string;
+        content: string;
+        sender_id: string;
+    };
+    created_at: string;
+    content: string;
+    sender_id: string;
+    [key: string]: any;
+}
 
 export interface MergeResult {
     merged: Message[];

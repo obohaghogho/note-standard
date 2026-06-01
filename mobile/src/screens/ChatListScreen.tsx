@@ -152,7 +152,7 @@ export default function ChatListScreen({ navigation }: Props) {
   };
 
   const pendingCount = conversations.filter(c => {
-    const my = c.members?.find(m => m.user_id === user?.id);
+    const my = c.members?.find((m: any) => m.user_id === user?.id);
     return my?.status === 'pending';
   }).length;
 

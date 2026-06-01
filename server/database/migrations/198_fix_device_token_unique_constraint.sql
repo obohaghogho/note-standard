@@ -5,6 +5,7 @@
 -- Drop the old constraint
 ALTER TABLE public.native_device_tokens DROP CONSTRAINT IF EXISTS native_device_tokens_user_id_token_key;
 ALTER TABLE public.native_device_tokens DROP CONSTRAINT IF EXISTS native_device_tokens_device_id_key;
+ALTER TABLE public.native_device_tokens DROP CONSTRAINT IF EXISTS native_device_tokens_token_key;
 
 -- Ensure device_id is not null before making it unique
 -- If there are null device_ids, generate a temporary one

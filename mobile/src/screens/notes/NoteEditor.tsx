@@ -4,6 +4,9 @@ import { theme } from '../../styles/theme';
 import { useNotes } from '../../hooks/useNotes';
 import { Save, ArrowLeft } from 'lucide-react-native';
 
+const ArrowLeftIcon = ArrowLeft as any;
+const SaveIcon = Save as any;
+
 export const NoteEditor = ({ route, navigation }: any) => {
     const { noteId } = route.params || {};
     const { notes, addNote } = useNotes();
@@ -29,11 +32,11 @@ export const NoteEditor = ({ route, navigation }: any) => {
         <View style={styles.container}>
             <View style={styles.appBar}>
                 <Pressable onPress={() => navigation.goBack()}>
-                    <ArrowLeft color={theme.colors.text} size={24} />
+                    <ArrowLeftIcon color={theme.colors.text} size={24} />
                 </Pressable>
                 <Text style={styles.appBarTitle}>{noteId ? 'Edit Note' : 'New Note'}</Text>
                 <Pressable onPress={handleSave}>
-                    <Save color={theme.colors.primary} size={24} />
+                    <SaveIcon color={theme.colors.primary} size={24} />
                 </Pressable>
             </View>
 

@@ -49,16 +49,21 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
        console.log('[FCM Background] Delivery webhook triggered for message:', messageId);
     } else if (data?.type === 'incoming_call' && Platform.OS === 'android') {
        console.log('[FCM Background] Incoming call detected. Triggering CallService...');
-       const callId = data.call_id || data.sessionId || data.caller_id || uuidv4();
-       const callerName = data.caller_name || data.callerName || 'Someone';
+       const callId = typeof data.call_id === 'string' ? data.call_id : typeof data.sessionId === 'string' ? data.sessionId : typeof data.caller_id === 'string' ? data.caller_id : uuidv4();
+       const callerName = typeof data.caller_name === 'string' ? data.caller_name : typeof data.callerName === 'string' ? data.callerName : 'Someone';
        
+       const callType = (data.callType === 'video' || (data.type as any) === 'video') ? 'video' : 'audio';
+       const callerId = typeof data.callerId === 'string' ? data.callerId : typeof data.from === 'string' ? data.from : '';
+       const conversationId = typeof data.conversationId === 'string' ? data.conversationId : '';
+       const sessionId = typeof data.sessionId === 'string' ? data.sessionId : undefined;
+
        CallService.displayIncomingCall({
          uuid: callId,
-         callerId: data.callerId || data.from || '',
+         callerId: callerId,
          callerName: callerName,
-         callType: data.callType || data.type || 'audio',
-         conversationId: data.conversationId,
-         sessionId: data.sessionId,
+         callType: callType,
+         conversationId: conversationId,
+         sessionId: sessionId,
        });
     }
   } catch (e) {

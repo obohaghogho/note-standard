@@ -43,9 +43,9 @@ export class MediaService {
       // We must first copy the file to an accessible cache directory (file:// path).
       let readableUri = uri;
       if (Platform.OS === 'android' && uri.startsWith('content://')) {
-        const destPath = `${FileSystem.cacheDirectory}upload_${Date.now()}.${fileExt}`;
+        const destPath = `${(FileSystem as any).cacheDirectory}upload_${Date.now()}.${fileExt}`;
         try {
-          await FileSystem.copyAsync({ from: uri, to: destPath });
+          await (FileSystem as any).copyAsync({ from: uri, to: destPath });
           readableUri = destPath;
           console.log('[MediaService] Copied content:// to file:// cache for Android:', destPath);
         } catch (copyErr) {
@@ -81,7 +81,7 @@ export class MediaService {
       console.log(`[MediaService] Uploading ${storagePath} (${arrayBuffer.byteLength} bytes, type: ${fileType})`);
 
       // Upload to Supabase Storage using direct REST API to bypass JS client auth state bugs
-      let uploadData = null;
+      let uploadData: { path: string } | null = null;
       let uploadRetries = 3;
 
       while (uploadRetries > 0) {
@@ -116,6 +116,8 @@ export class MediaService {
           await new Promise(r => setTimeout(r, 3000)); // wait before retry
         }
       }
+ 
+      if (!uploadData) throw new Error('Storage upload failed');
  
       console.log('[MediaService] Upload successful, creating attachment record...');
  

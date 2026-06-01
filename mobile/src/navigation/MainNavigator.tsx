@@ -1,14 +1,19 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, Text } from 'react-native';
 import { Home, MessageCircle, Globe, Settings } from 'lucide-react-native';
 
 import { NotesDashboard } from '../screens/notes/NotesDashboard';
 import { NoteEditor } from '../screens/notes/NoteEditor';
 
+const HomeIcon = Home as any;
+const MessageCircleIcon = MessageCircle as any;
+const GlobeIcon = Globe as any;
+const SettingsIcon = Settings as any;
+
 const Tab = createBottomTabNavigator();
-const Stack = createStackNavigator();
+const Stack = createNativeStackNavigator();
 
 const NotesStack = () => (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -43,22 +48,22 @@ export const MainNavigator = () => (
         <Tab.Screen
             name="Notes"
             component={NotesStack}
-            options={{ tabBarIcon: ({ color }) => <Home size={24} color={color} /> }}
+            options={{ tabBarIcon: ({ color }) => <HomeIcon size={24} color={color} /> }}
         />
         <Tab.Screen
             name="Chat"
             component={() => <DummyScreen name="Chat" />}
-            options={{ tabBarIcon: ({ color }) => <MessageCircle size={24} color={color} /> }}
+            options={{ tabBarIcon: ({ color }) => <MessageCircleIcon size={24} color={color} /> }}
         />
         <Tab.Screen
             name="Feed"
             component={() => <DummyScreen name="Feed" />}
-            options={{ tabBarIcon: ({ color }) => <Globe size={24} color={color} /> }}
+            options={{ tabBarIcon: ({ color }) => <GlobeIcon size={24} color={color} /> }}
         />
         <Tab.Screen
             name="Account"
             component={() => <DummyScreen name="Account" />}
-            options={{ tabBarIcon: ({ color }) => <Settings size={24} color={color} /> }}
+            options={{ tabBarIcon: ({ color }) => <SettingsIcon size={24} color={color} /> }}
         />
     </Tab.Navigator>
 );

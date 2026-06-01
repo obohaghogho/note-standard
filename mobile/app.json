@@ -94,7 +94,8 @@
             }
           }
         }
-      ]
+      ],
+      "expo-sqlite"
     ],
     "extra": {
       "eas": {

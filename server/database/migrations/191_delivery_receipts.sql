@@ -30,6 +30,7 @@ CREATE INDEX IF NOT EXISTS idx_message_receipts_message ON public.message_receip
 ALTER TABLE public.message_receipts ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Users can view receipts for conversations they are members of
+DROP POLICY IF EXISTS "Users can view receipts for their conversations" ON public.message_receipts;
 CREATE POLICY "Users can view receipts for their conversations"
     ON public.message_receipts FOR SELECT
     USING (
@@ -39,6 +40,7 @@ CREATE POLICY "Users can view receipts for their conversations"
     );
 
 -- Policy: Users can only insert/update their own device receipts
+DROP POLICY IF EXISTS "Users can manage their own device receipts" ON public.message_receipts;
 CREATE POLICY "Users can manage their own device receipts"
     ON public.message_receipts FOR ALL
     USING (user_id = auth.uid())

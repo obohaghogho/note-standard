@@ -5,6 +5,8 @@ import { NoteCard } from '../../components/notes/NoteCard';
 import { theme } from '../../styles/theme';
 import { Plus } from 'lucide-react-native';
 
+const PlusIcon = Plus as any;
+
 export const NotesDashboard = ({ navigation }: any) => {
     const { notes, loading, refresh } = useNotes();
 
@@ -44,7 +46,7 @@ export const NotesDashboard = ({ navigation }: any) => {
                 style={styles.fab}
                 onPress={() => navigation.navigate('NoteEditor')}
             >
-                <Plus size={32} color="#fff" />
+                <PlusIcon size={32} color="#fff" />
             </Pressable>
         </View>
     );

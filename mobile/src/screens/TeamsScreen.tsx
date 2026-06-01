@@ -124,6 +124,7 @@ function TeamChatModal({
   isRecording,
   onDeleteMessage,
   onEditMessage,
+  onRemoveMember,
 }: {
   team: Team;
   onClose: () => void;

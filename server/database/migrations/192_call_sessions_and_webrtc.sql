@@ -216,10 +216,18 @@ END;
 $$;
 
 DROP TRIGGER IF EXISTS trg_call_session_notify ON call_sessions;
-CREATE TRIGGER trg_call_session_notify
-  AFTER INSERT OR UPDATE OF status ON call_sessions
+DROP TRIGGER IF EXISTS trg_call_session_notify_insert ON call_sessions;
+DROP TRIGGER IF EXISTS trg_call_session_notify_update ON call_sessions;
+
+CREATE TRIGGER trg_call_session_notify_insert
+  AFTER INSERT ON call_sessions
   FOR EACH ROW
-  WHEN (OLD IS NULL OR OLD.status IS DISTINCT FROM NEW.status)
+  EXECUTE FUNCTION notify_call_session_change();
+
+CREATE TRIGGER trg_call_session_notify_update
+  AFTER UPDATE OF status ON call_sessions
+  FOR EACH ROW
+  WHEN (OLD.status IS DISTINCT FROM NEW.status)
   EXECUTE FUNCTION notify_call_session_change();
 
 -- ── Done ──────────────────────────────────────────────────────

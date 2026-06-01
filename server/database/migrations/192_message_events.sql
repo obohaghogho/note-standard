@@ -40,6 +40,7 @@ CREATE INDEX IF NOT EXISTS idx_message_events_created ON public.message_events(c
 ALTER TABLE public.message_events ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Users can view events for conversations they are members of
+DROP POLICY IF EXISTS "Users can view events for their conversations" ON public.message_events;
 CREATE POLICY "Users can view events for their conversations"
     ON public.message_events FOR SELECT
     USING (
@@ -49,6 +50,7 @@ CREATE POLICY "Users can view events for their conversations"
     );
 
 -- Policy: Users can only insert their own device events
+DROP POLICY IF EXISTS "Users can insert their own events" ON public.message_events;
 CREATE POLICY "Users can insert their own events"
     ON public.message_events FOR INSERT
     WITH CHECK (user_id = auth.uid());

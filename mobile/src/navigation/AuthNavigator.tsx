@@ -1,8 +1,8 @@
 import React from 'react';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 
-const Stack = createStackNavigator();
+const Stack = createNativeStackNavigator();
 
 // Simple Login Screen Placeholder
 const LoginScreen = () => (

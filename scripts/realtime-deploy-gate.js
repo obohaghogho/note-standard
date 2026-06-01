@@ -114,10 +114,11 @@ async function run() {
 
     await check('No zero sequence_numbers on recent messages (last 1000)', async () => {
         const { rows } = await pool.query(`
-            SELECT COUNT(*) as cnt FROM messages
-            WHERE sequence_number = 0
-            ORDER BY created_at DESC
-            LIMIT 1000;
+            SELECT COUNT(*) as cnt FROM (
+                SELECT sequence_number FROM messages
+                ORDER BY created_at DESC
+                LIMIT 1000
+            ) sub WHERE sequence_number = 0;
         `);
         const count = parseInt(rows[0].cnt, 10);
         return count === 0
@@ -127,19 +128,19 @@ async function run() {
 
     // ── 3. Unread Count Integrity ──────────────────────────────────────────────
     console.log('\n[ Section 3: Unread Count Integrity ]');
-    await check('unread_counts table exists', async () => {
+    await check('conversation_unread_state table exists', async () => {
         const { rows } = await pool.query(`
             SELECT table_name FROM information_schema.tables
-            WHERE table_schema = 'public' AND table_name = 'unread_counts';
+            WHERE table_schema = 'public' AND table_name = 'conversation_unread_state';
         `);
         return rows.length > 0
             ? { pass: true }
-            : { pass: false, reason: 'unread_counts table not found — check schema' };
+            : { pass: false, reason: 'conversation_unread_state table not found — check schema' };
     });
 
     await check('No negative unread counts', async () => {
         const { rows } = await pool.query(`
-            SELECT COUNT(*) as cnt FROM unread_counts WHERE count < 0;
+            SELECT COUNT(*) as cnt FROM conversation_unread_state WHERE unread_count < 0;
         `).catch(() => ({ rows: [{ cnt: 0 }] }));
         const count = parseInt(rows[0].cnt, 10);
         return count === 0
@@ -175,14 +176,14 @@ async function run() {
 
     // ── 5. Conversation Version Drift ─────────────────────────────────────────
     console.log('\n[ Section 5: Conversation Version Drift ]');
-    await check('conversation_version column exists on conversations', async () => {
+    await check('version column exists on conversations', async () => {
         const { rows } = await pool.query(`
             SELECT column_name FROM information_schema.columns
-            WHERE table_name = 'conversations' AND column_name = 'conversation_version';
+            WHERE table_name = 'conversations' AND column_name = 'version';
         `);
         return rows.length > 0
             ? { pass: true }
-            : { pass: false, reason: 'conversation_version column missing on conversations table' };
+            : { pass: false, reason: 'version column missing on conversations table' };
     });
 
     // ── 6. Replay Guard & RPC Completeness ────────────────────────────────────

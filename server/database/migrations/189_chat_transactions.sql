@@ -6,6 +6,7 @@ BEGIN;
 -- Drop constraints if they exist to allow idempotency when re-running
 ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_event_id_key;
 ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_conv_seq_key;
+DROP INDEX IF EXISTS public.messages_conv_seq_key;
 ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_seq_positive;
 
 -- Backfill sequence_number for existing messages to avoid unique constraint violations

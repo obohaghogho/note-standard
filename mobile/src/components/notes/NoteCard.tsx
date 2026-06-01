@@ -10,12 +10,15 @@ interface NoteCardProps {
     onPress: () => void;
 }
 
+const StarIcon = Star as any;
+const ChevronRightIcon = ChevronRight as any;
+
 export const NoteCard = ({ note, onPress }: NoteCardProps) => {
     return (
         <Pressable style={styles.card} onPress={onPress}>
             <View style={styles.header}>
                 <Text style={styles.title} numberOfLines={1}>{note.title || 'Untitled'}</Text>
-                {note.is_favorite && <Star size={16} color={theme.colors.primary} fill={theme.colors.primary} />}
+                {note.is_favorite && <StarIcon size={16} color={theme.colors.primary} fill={theme.colors.primary} />}
             </View>
             <Text style={styles.content} numberOfLines={2}>{note.content}</Text>
             <View style={styles.footer}>
@@ -24,7 +27,7 @@ export const NoteCard = ({ note, onPress }: NoteCardProps) => {
                 </Text>
                 <View style={styles.meta}>
                     {!note.synced && <View style={styles.offlineBadge} />}
-                    <ChevronRight size={16} color={theme.colors.textMuted} />
+                    <ChevronRightIcon size={16} color={theme.colors.textMuted} />
                 </View>
             </View>
         </Pressable>
