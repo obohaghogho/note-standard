@@ -49,8 +49,6 @@ const getAudioConstraints = (): MediaTrackConstraints => ({
     echoCancellation: true,
     noiseSuppression: true,
     autoGainControl: true,
-    channelCount: { ideal: 1 },
-    sampleRate: { ideal: 48000 },
 });
 
 /**

@@ -86,17 +86,18 @@ export class PushHandler {
         // ── Account switching ────────────────────────────────────────────────
         // If the notification targets a different account, switch to it first.
         // recipientId is injected by notificationService.js into every native push.
-        if (data?.recipientId) {
+        if (data && typeof data === 'object' && 'recipientId' in data && data.recipientId) {
+          const recipientId = String(data.recipientId);
           const currentUser = await AuthService.getUser();
-          if (currentUser?.id !== data.recipientId) {
-            console.log(`[PushHandler] 🔄 Switching account: ${currentUser?.id} → ${data.recipientId}`);
-            const switched = await AuthService.switchAccount(data.recipientId);
+          if (currentUser?.id !== recipientId) {
+            console.log(`[PushHandler] 🔄 Switching account: ${currentUser?.id} → ${recipientId}`);
+            const switched = await AuthService.switchAccount(recipientId);
             if (switched) {
-              console.log('[PushHandler] ✅ Account switched to:', data.recipientId);
+              console.log('[PushHandler] ✅ Account switched to:', recipientId);
               // Allow React to re-render with the new user before navigating
               await new Promise(resolve => setTimeout(resolve, 400));
             } else {
-              console.warn('[PushHandler] ⚠️ Could not switch to account:', data.recipientId, '— account may not be stored locally.');
+              console.warn('[PushHandler] ⚠️ Could not switch to account:', recipientId, '— account may not be stored locally.');
             }
           }
         }

@@ -287,6 +287,7 @@ async function sendGenericPush(params) {
             conversationId: String(payload.conversationId || ''),
             messageId: String(payload.messageId || ''),
             url: String(payload.url || '/dashboard/notifications'),
+            recipientId: String(payload.recipientId || ''),
           },
           android: {
             priority: 'high',
@@ -305,7 +306,7 @@ async function sendGenericPush(params) {
             }
           });
       }
-
+ 
       // iOS APNs — alert push (NOT voip) for regular chat notifications
       // voip push is reserved for calls only (PushKit)
       if (t.platform === 'ios' && t.type === 'apns') {
@@ -328,6 +329,7 @@ async function sendGenericPush(params) {
           conversationId: payload.conversationId,
           messageId: payload.messageId,
           url: payload.url || '/dashboard/notifications',
+          recipientId: payload.recipientId || null,
         };
 
         console.log(`[PushService] 📤 Initiating APNs alert (iOS) to topic: ${notification.topic}`);

@@ -69,6 +69,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const sessionIdRef = useRef<string | null>(null);
     const activeConversationIdRef = useRef<string | null>(null);
     const userRef = useRef(user);
+    const messagesRef = useRef<Record<string, Message[]>>({});
 
     // Event Deduplication Buffer
     const processedEventsRef = useRef(new Set<string>());
@@ -78,6 +79,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => { deviceIdRef.current = deviceId; }, [deviceId]);
     useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
     useEffect(() => { activeConversationIdRef.current = activeConversationId; }, [activeConversationId]);
+    useEffect(() => { messagesRef.current = messages; }, [messages]);
 
     // Initialize Device and Session — persisting deviceId across restarts
     useEffect(() => {
@@ -159,15 +161,22 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         );
     }
 
+    const joinAllRooms = useCallback((convList: any[]) => {
+        if (convList.length === 0) return;
+        convList.forEach(conv => socketManager.joinRoom(conv.id));
+    }, []);
+
     // ── 1. REST HYDRATION (Conversations) ───────────────────────────────────
     const loadConversations = useCallback(async () => {
         try {
             const res = await apiClient.get('/chat/conversations');
-            setConversations(res.data || []);
+            const data = res.data || [];
+            setConversations(data);
+            joinAllRooms(data);
         } catch (err) {
             console.error('[ChatContext] Failed to load conversations', err);
         }
-    }, []);
+    }, [joinAllRooms]);
 
     // ── 2. REST HYDRATION (Messages) ────────────────────────────────────────
     const loadMessages = useCallback(async (conversationId: string) => {
@@ -318,7 +327,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
             // 4. Merge Engine (Deterministic atomic state mutation)
             // Extract conversation update OUTSIDE setMessages to avoid nested-setState anti-pattern
-            const currentMsgs = messages[normalized.conversation_id] || [];
+            const currentMsgs = messagesRef.current[normalized.conversation_id] || [];
             const { merged, newlyAddedCount } = mergeMessages(currentMsgs, [incomingMessage]);
 
             setMessages(prev => ({
@@ -450,10 +459,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         };
     }, [user]); // Removed activeConversationId so socket listeners are stable
 
-    // Fetch messages when active conversation changes
+    // Fetch messages and join room when active conversation changes
     useEffect(() => {
         if (activeConversationId) {
             loadMessages(activeConversationId);
+            socketManager.joinRoom(activeConversationId);
         }
     }, [activeConversationId]);
 
