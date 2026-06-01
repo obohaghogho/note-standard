@@ -44,9 +44,6 @@ const FALLBACK_ICE: RTCIceServer[] = [
     { urls: 'stun:stun2.l.google.com:19302' },
 ];
 
-const isIOS = (): boolean =>
-    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
 const getAudioConstraints = (): MediaTrackConstraints => ({
     echoCancellation: true,
@@ -360,11 +357,12 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     cleanup();
                 }
             }, 60000);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('[WebRTC] startCall error:', err);
-            if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+            const name = (err as { name?: string })?.name;
+            if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
                 toast.error('Microphone access denied. Please allow microphone access in your browser settings.');
-            } else if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {
+            } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
                 toast.error('No microphone found. Please connect a microphone and try again.');
             } else {
                 toast.error('Could not access microphone. Check your browser permissions.');
@@ -408,9 +406,10 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             socket?.emit('call:answer', { to: otherUser.id, sessionId });
             currentStatus.current = 'connecting';
             setCallState(p => ({ ...p, status: 'connecting' }));
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('[WebRTC] acceptCall error:', err);
-            if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+            const name = (err as { name?: string })?.name;
+            if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
                 toast.error('Microphone access denied. Please allow microphone access in your browser settings.');
             } else {
                 toast.error('Could not access microphone. Check your browser permissions.');
