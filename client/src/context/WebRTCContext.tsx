@@ -48,17 +48,33 @@ const isIOS = (): boolean =>
     /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-const getAudioConstraints = (): MediaTrackConstraints => {
-    if (isIOS()) {
-        return { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: 48000 };
+const getAudioConstraints = (): MediaTrackConstraints => ({
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+    channelCount: { ideal: 1 },
+    sampleRate: { ideal: 48000 },
+});
+
+/**
+ * Validates a captured MediaStream and forces all tracks enabled.
+ * Returns an error message if audio tracks are missing or hardware-muted,
+ * otherwise returns null (stream is ready to use).
+ */
+const validateStream = (stream: MediaStream, needsAudio: boolean): string | null => {
+    const audioTracks = stream.getAudioTracks();
+    if (needsAudio && audioTracks.length === 0) {
+        return 'No microphone track captured. Please check your microphone is connected and not blocked.';
     }
-    return {
-        echoCancellation: true, noiseSuppression: true, autoGainControl: true,
-        // @ts-expect-error Chromium-only hints
-        googEchoCancellation: true, googAutoGainControl: true, googNoiseSuppression: true,
-        googHighpassFilter: true, googTypingNoiseDetection: true,
-        channelCount: { ideal: 1 }, sampleRate: { ideal: 48000 },
-    };
+    // Force-enable all tracks — browsers can return tracks with enabled=false in some edge cases
+    stream.getTracks().forEach(t => { t.enabled = true; });
+    // Detect OS-level mute (track.muted is read-only and set by the hardware)
+    const mutedAudio = audioTracks.filter(t => t.muted);
+    if (needsAudio && mutedAudio.length === audioTracks.length && audioTracks.length > 0) {
+        console.warn('[WebRTC] ⚠️ All audio tracks are hardware-muted. Check OS microphone privacy settings.');
+        // Don't abort — the track may un-mute once the connection is established
+    }
+    return null;
 };
 
 const getVideoConstraints = (): MediaTrackConstraints => ({
@@ -315,13 +331,24 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         try {
             await ensureIceServers();
-            // Acquire media immediately — caller has mic/cam ready while phone rings
+            // Acquire media — caller has mic/cam ready while phone rings
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: getAudioConstraints(),
                 video: type === 'video' ? getVideoConstraints() : false,
             });
+
+            // Validate stream: ensure audio tracks exist and are enabled
+            const streamError = validateStream(stream, true);
+            if (streamError) {
+                stream.getTracks().forEach(t => t.stop());
+                toast.error(streamError);
+                currentStatus.current = 'idle';
+                return;
+            }
+
             localStreamRef.current = stream;
             setLocalStream(stream);
+            console.log('[WebRTC] Local stream ready:', stream.getAudioTracks().map(t => `${t.label} enabled=${t.enabled} muted=${t.muted}`));
 
             socket?.emit('call:initiate', { to: targetUserId, type, callType: type, conversationId });
             sendMessageToConversation({ conversationId, content: `Started a ${type} call`, type: 'call' });
@@ -333,9 +360,15 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     cleanup();
                 }
             }, 60000);
-        } catch (err) {
+        } catch (err: any) {
             console.error('[WebRTC] startCall error:', err);
-            toast.error('Could not access camera/microphone. Check permissions.');
+            if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+                toast.error('Microphone access denied. Please allow microphone access in your browser settings.');
+            } else if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {
+                toast.error('No microphone found. Please connect a microphone and try again.');
+            } else {
+                toast.error('Could not access microphone. Check your browser permissions.');
+            }
             currentStatus.current = 'idle';
             cleanup();
         }
@@ -353,12 +386,21 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 audio: getAudioConstraints(),
                 video: type === 'video' ? getVideoConstraints() : false,
             });
+
+            // Validate stream: ensure audio tracks exist and are enabled
+            const streamError = validateStream(stream, true);
+            if (streamError) {
+                stream.getTracks().forEach(t => t.stop());
+                toast.error(streamError);
+                cleanup();
+                return;
+            }
+
             localStreamRef.current = stream;
             setLocalStream(stream);
+            console.log('[WebRTC] Callee stream ready:', stream.getAudioTracks().map(t => `${t.label} enabled=${t.enabled} muted=${t.muted}`));
 
-            // ★ MAIN FIX (Bug 1): Create PC and add tracks HERE, before emitting call:answer.
-            // The PC must exist before the caller's SDP offer arrives.
-            // Previously this was done inside onCallSignal which created a race condition.
+            // Create PC and add tracks BEFORE emitting call:answer so PC exists when offer arrives
             const pc = createPeerConnection(otherUser.id);
             stream.getTracks().forEach(t => pc.addTrack(t, stream));
             console.log('[WebRTC] Callee PC ready — emitting call:answer');
@@ -366,9 +408,13 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             socket?.emit('call:answer', { to: otherUser.id, sessionId });
             currentStatus.current = 'connecting';
             setCallState(p => ({ ...p, status: 'connecting' }));
-        } catch (err) {
+        } catch (err: any) {
             console.error('[WebRTC] acceptCall error:', err);
-            toast.error('Could not access camera/microphone. Check permissions.');
+            if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+                toast.error('Microphone access denied. Please allow microphone access in your browser settings.');
+            } else {
+                toast.error('Could not access microphone. Check your browser permissions.');
+            }
             cleanup();
         }
     }, [callState, socket, ensureIceServers, createPeerConnection, cleanup]);

@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import CallService, { CallData } from './CallService';
 import SignalingService from './SignalingService';
+import { AuthService } from './AuthService';
 import { Platform } from 'react-native';
 import EventEmitter from './EventEmitter';
 import VoipPushNotification from 'react-native-voip-push-notification';
@@ -77,9 +78,42 @@ export class PushHandler {
       }
     });
 
-    Notifications.addNotificationResponseReceivedListener(response => {
+    Notifications.addNotificationResponseReceivedListener(async response => {
       const { data } = response.notification.request.content;
-      console.log('[PushHandler] 👆 Interaction detected:', data);
+      console.log('[PushHandler] 👆 Notification tapped:', JSON.stringify(data));
+
+      try {
+        // ── Account switching ────────────────────────────────────────────────
+        // If the notification targets a different account, switch to it first.
+        // recipientId is injected by notificationService.js into every native push.
+        if (data?.recipientId) {
+          const currentUser = await AuthService.getUser();
+          if (currentUser?.id !== data.recipientId) {
+            console.log(`[PushHandler] 🔄 Switching account: ${currentUser?.id} → ${data.recipientId}`);
+            const switched = await AuthService.switchAccount(data.recipientId);
+            if (switched) {
+              console.log('[PushHandler] ✅ Account switched to:', data.recipientId);
+              // Allow React to re-render with the new user before navigating
+              await new Promise(resolve => setTimeout(resolve, 400));
+            } else {
+              console.warn('[PushHandler] ⚠️ Could not switch to account:', data.recipientId, '— account may not be stored locally.');
+            }
+          }
+        }
+
+        // ── Navigation ───────────────────────────────────────────────────────
+        const type = data?.type;
+        if ((type === 'message' || type === 'chat_message') && data?.conversationId) {
+          navigate('Chat', { conversationId: data.conversationId });
+        } else if (type === 'incoming_call') {
+          // Calls are handled by CallKeep/VoIP listeners — no navigation needed here
+        } else {
+          // Default: open the notifications tab
+          navigate('Notifications');
+        }
+      } catch (err) {
+        console.error('[PushHandler] ❌ Error handling notification tap:', err);
+      }
     });
 
     console.log('[PushHandler] ✅ Initialization finished.');

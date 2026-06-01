@@ -317,40 +317,48 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             };
 
             // 4. Merge Engine (Deterministic atomic state mutation)
-            setMessages(prev => {
-                const currentMsgs = prev[normalized.conversation_id] || [];
-                const { merged, newlyAddedCount } = mergeMessages(currentMsgs, [incomingMessage]);
-                
-                // Keep conversations state updated using the engine's deterministic delta
-                if (newlyAddedCount > 0 || incomingMessage.sequence_number !== undefined) {
-                    const isCurrentlyOpen = activeConversationIdRef.current === incomingMessage.conversation_id;
-                    setConversations(cPrev => cPrev.map(conv => {
-                        if (conv.id !== incomingMessage.conversation_id) return conv;
+            // Extract conversation update OUTSIDE setMessages to avoid nested-setState anti-pattern
+            const currentMsgs = messages[normalized.conversation_id] || [];
+            const { merged, newlyAddedCount } = mergeMessages(currentMsgs, [incomingMessage]);
 
-                        const existingLastMsgTime = new Date(conv.lastMessage?.created_at ?? 0).getTime();
-                        const newMsgTime = new Date(incomingMessage.created_at).getTime();
-                        const shouldUpdateLastMessage = newMsgTime >= existingLastMsgTime;
-                        
-                        const isLeaseOwner = isActiveWriter(conv.id);
-                        const shouldIncrementUnread = isLeaseOwner && newlyAddedCount > 0 && !incomingMessage.isOwn && !isCurrentlyOpen;
+            setMessages(prev => ({
+                ...prev,
+                [normalized.conversation_id]: mergeMessages(prev[normalized.conversation_id] || [], [incomingMessage]).merged
+            }));
 
-                        if (!shouldUpdateLastMessage && !shouldIncrementUnread) return conv;
+            // Keep conversations list updated with correct last_message (snake_case, matching API)
+            if (newlyAddedCount > 0 || incomingMessage.sequence_number !== undefined) {
+                const isCurrentlyOpen = activeConversationIdRef.current === incomingMessage.conversation_id;
+                setConversations(cPrev => cPrev.map(conv => {
+                    if (conv.id !== incomingMessage.conversation_id) return conv;
 
-                        return {
-                            ...conv,
-                            updated_at: shouldUpdateLastMessage ? incomingMessage.created_at : conv.updated_at,
-                            lastMessage: shouldUpdateLastMessage
-                                ? { id: incomingMessage.id, content: incomingMessage.content, sender_id: incomingMessage.sender_id, created_at: incomingMessage.created_at }
-                                : conv.lastMessage,
-                            unreadCount: shouldIncrementUnread
-                                ? (conv.unreadCount || 0) + newlyAddedCount
-                                : conv.unreadCount
-                        };
-                    }));
-                }
+                    // Support both snake_case (from API) and camelCase (legacy) last message fields
+                    const lastMsgAt = conv.last_message?.created_at ?? conv.lastMessage?.created_at ?? 0;
+                    const existingLastMsgTime = new Date(lastMsgAt).getTime();
+                    const newMsgTime = new Date(incomingMessage.created_at).getTime();
+                    const shouldUpdateLastMessage = newMsgTime >= existingLastMsgTime;
 
-                return { ...prev, [normalized.conversation_id]: merged };
-            });
+                    const isLeaseOwner = isActiveWriter(conv.id);
+                    const shouldIncrementUnread = isLeaseOwner && newlyAddedCount > 0 && !incomingMessage.isOwn && !isCurrentlyOpen;
+
+                    if (!shouldUpdateLastMessage && !shouldIncrementUnread) return conv;
+
+                    return {
+                        ...conv,
+                        updated_at: shouldUpdateLastMessage ? incomingMessage.created_at : conv.updated_at,
+                        // Write BOTH field names so FlatList always renders the new preview
+                        last_message: shouldUpdateLastMessage
+                            ? { id: incomingMessage.id, content: incomingMessage.content, sender_id: incomingMessage.sender_id, created_at: incomingMessage.created_at }
+                            : (conv.last_message ?? conv.lastMessage),
+                        lastMessage: shouldUpdateLastMessage
+                            ? { id: incomingMessage.id, content: incomingMessage.content, sender_id: incomingMessage.sender_id, created_at: incomingMessage.created_at }
+                            : (conv.lastMessage ?? conv.last_message),
+                        unreadCount: shouldIncrementUnread
+                            ? (conv.unreadCount || 0) + newlyAddedCount
+                            : conv.unreadCount
+                    };
+                }));
+            }
 
             // PHASE 3: REALTIME DELIVERY ACK ENGINE
             // If the message is not ours, send a delivery ACK back immediately
