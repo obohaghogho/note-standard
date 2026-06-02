@@ -1,4 +1,8 @@
-import React, { createContext, useContext, useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { PerfMonitor } from '../utils/PerfMonitor';
+import React, {
+    createContext, useContext, useEffect, useState,
+    useMemo, useCallback, useRef
+} from 'react';
 import { useAuth } from './AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../api/apiClient';
@@ -12,7 +16,7 @@ import { useSessionArbitration } from 'shared/hooks/useSessionArbitration';
 import { ReadReceiptEngine } from 'shared/readReceiptEngine';
 import { supabase } from '../lib/supabase';
 
-interface Message {
+export interface Message {
     id: string;
     event_id?: string;
     conversation_id: string;
@@ -26,43 +30,80 @@ interface Message {
     read_at?: string;
     delivered_at?: string;
     reply_to?: any;
+    _optimistic?: boolean;
 }
 
-interface ChatContextType {
+// ─────────────────────────────────────────────────────────────────────────────
+// CONTEXT 1: Conversations (Chat List) — stable, low-frequency updates
+// ─────────────────────────────────────────────────────────────────────────────
+interface ConversationsContextType {
     conversations: any[];
-    messages: Record<string, Message[]>;
-    sendMessage: (conversationId: string, text: string, attachmentId?: string, replyToId?: string) => Promise<void>;
-    editMessage: (conversationId: string, messageId: string, content: string) => Promise<void>;
-    deleteMessage: (conversationId: string, messageId: string) => Promise<void>;
     loadConversations: () => Promise<void>;
     activeConversationId: string | null;
     setActiveConversationId: (id: string | null) => void;
     isActiveWriter: (conversationId: string) => boolean;
     isClaimingLease: (conversationId: string) => boolean;
-    // Phase 6: optimistic local read + lease-gated server ACK
+}
+
+const ConversationsContext = createContext<ConversationsContextType>({
+    conversations: [],
+    loadConversations: async () => {},
+    activeConversationId: null,
+    setActiveConversationId: () => {},
+    isActiveWriter: () => true,
+    isClaimingLease: () => false,
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONTEXT 2: Messages (Chat Screen) — high-frequency updates, scoped per conv
+// ─────────────────────────────────────────────────────────────────────────────
+interface MessagesContextType {
+    messages: Record<string, Message[]>;
+    sendMessage: (conversationId: string, text: string, attachmentId?: string, replyToId?: string) => Promise<void>;
+    editMessage: (conversationId: string, messageId: string, content: string) => Promise<void>;
+    deleteMessage: (conversationId: string, messageId: string) => Promise<void>;
     onMessageVisible: (conversationId: string, messageId: string) => void;
 }
+
+const MessagesContext = createContext<MessagesContextType>({
+    messages: {},
+    sendMessage: async () => {},
+    editMessage: async () => {},
+    deleteMessage: async () => {},
+    onMessageVisible: () => {},
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LEGACY COMBINED CONTEXT — for backward compat with any old `useChat()` calls
+// ─────────────────────────────────────────────────────────────────────────────
+interface ChatContextType extends ConversationsContextType, MessagesContextType {}
 
 const ChatContext = createContext<ChatContextType>({
     conversations: [],
     messages: {},
-    sendMessage: async () => { },
-    editMessage: async () => { },
-    deleteMessage: async () => { },
-    loadConversations: async () => { },
+    sendMessage: async () => {},
+    editMessage: async () => {},
+    deleteMessage: async () => {},
+    loadConversations: async () => {},
     activeConversationId: null,
-    setActiveConversationId: () => { },
+    setActiveConversationId: () => {},
     isActiveWriter: () => true,
     isClaimingLease: () => false,
     onMessageVisible: () => {},
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PROVIDER
+// ─────────────────────────────────────────────────────────────────────────────
 export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const { user } = useAuth();
+
+    // ── State ──────────────────────────────────────────────────────────────────
     const [conversations, setConversations] = useState<any[]>([]);
     const [messages, setMessages] = useState<Record<string, Message[]>>({});
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
 
+    // ── Refs (zero-render access for hot paths) ────────────────────────────────
     const [deviceId, setDeviceId] = useState<string | null>(null);
     const [sessionId, setSessionId] = useState<string | null>(null);
     const deviceIdRef = useRef<string | null>(null);
@@ -70,18 +111,24 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const activeConversationIdRef = useRef<string | null>(null);
     const userRef = useRef(user);
     const messagesRef = useRef<Record<string, Message[]>>({});
+    const conversationsRef = useRef<any[]>([]);
 
-    // Event Deduplication Buffer
+    // Event deduplication buffer
     const processedEventsRef = useRef(new Set<string>());
 
-    // Keep refs in sync with state
+    // WebSocket event batching — prevents N messages = N renders
+    const socketBatchRef = useRef<{ conv: string; msg: Message }[]>([]);
+    const batchFlushScheduledRef = useRef(false);
+
+    // Keep refs in sync with state (non-blocking)
     useEffect(() => { userRef.current = user; }, [user]);
     useEffect(() => { deviceIdRef.current = deviceId; }, [deviceId]);
     useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
     useEffect(() => { activeConversationIdRef.current = activeConversationId; }, [activeConversationId]);
     useEffect(() => { messagesRef.current = messages; }, [messages]);
+    useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
 
-    // Initialize Device and Session — persisting deviceId across restarts
+    // ── Session init (AsyncStorage — never blocks render) ─────────────────────
     useEffect(() => {
         if (!user) return;
         const initSession = async () => {
@@ -90,8 +137,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 localDeviceId = `mobile-${Math.random().toString(36).substring(2, 9)}`;
                 await AsyncStorage.setItem('chat_device_id', localDeviceId);
             }
-            // Write to both state (for renders) AND ref (for immediate use in
-            // sendMessage without waiting for a render cycle to flush).
             setDeviceId(localDeviceId);
             deviceIdRef.current = localDeviceId;
 
@@ -104,17 +149,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 if (res.data?.session_id) {
                     setSessionId(res.data.session_id);
                     sessionIdRef.current = res.data.session_id;
-                    console.log('[ChatContext] ✓ Session registered:', res.data.session_id);
-                } else {
-                    console.warn('[ChatContext] Session registration returned no session_id — messages will send without session tracking');
                 }
             } catch (err) {
-                console.error('[ChatContext] Session registration failed', err);
+                console.warn('[ChatContext] Session registration failed', err);
             }
         };
         initSession();
     }, [user]);
 
+    // ── Lease Arbitration ──────────────────────────────────────────────────────
     const { isActiveWriter, isClaimingLease, markLeaseClaimStart } = useSessionArbitration({
         sessionId,
         deviceId,
@@ -122,13 +165,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         initialConversations: conversations as any
     });
 
-    // Phase 6: ReadReceiptEngine — AsyncStorage-backed, lease-gated, debounced read receipts
+    // ── ReadReceiptEngine ──────────────────────────────────────────────────────
     const readReceiptEngine = useMemo(() => new ReadReceiptEngine(
         apiClient,
         () => deviceId,
         () => sessionId,
         (cid: string) => isActiveWriter(cid),
-        // markLocalReadState: optimistic local update (blue ticks appear instantly on this device)
         (conversationId: string, lastMessageId: string) => {
             const nowStr = new Date().toISOString();
             setMessages(prev => {
@@ -148,249 +190,203 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     ), [deviceId, isActiveWriter]);
 
-    // Flush queued read intents when socket reconnects or lease changes
     useEffect(() => {
         readReceiptEngine.flushQueue();
     }, [isActiveWriter, readReceiptEngine]);
 
-    // Platform Parity Safeguard
-    if (__DEV__) {
-        console.assert(
-            typeof mergeMessages === "function",
-            "Mobile must use shared merge engine"
-        );
-    }
-
+    // ── Room management ────────────────────────────────────────────────────────
     const joinAllRooms = useCallback((convList: any[]) => {
         if (convList.length === 0) return;
         convList.forEach(conv => socketManager.joinRoom(conv.id));
     }, []);
 
-    // ── 1. REST HYDRATION (Conversations) ───────────────────────────────────
+    // ── Load Conversations ─────────────────────────────────────────────────────
     const loadConversations = useCallback(async () => {
         try {
             const res = await apiClient.get('/chat/conversations');
             const data = res.data || [];
             setConversations(data);
+            conversationsRef.current = data;
             joinAllRooms(data);
         } catch (err) {
             console.error('[ChatContext] Failed to load conversations', err);
         }
     }, [joinAllRooms]);
 
-    // ── 2. REST HYDRATION (Messages) ────────────────────────────────────────
+    // ── Load Messages ──────────────────────────────────────────────────────────
     const loadMessages = useCallback(async (conversationId: string) => {
         if (!user) return;
         try {
             const res = await apiClient.get(`/chat/conversations/${conversationId}/messages`);
             const rawData = res.data || [];
-            
-            // Decrypt payloads (if any are encrypted) and normalize
+
             const processedData = await Promise.all(rawData.map(async (rawMsg: any) => {
                 const plainContent = await mobileTransportAdapter.decodeIncomingMessage(rawMsg, user.id);
                 return { ...rawMsg, content: plainContent || '[Decryption Failed]' };
             }));
 
             const normalized = processedData.map(normalizeEvent);
-            const validated = (normalized as any[]).filter((msg: any) => validateMessagePayload(msg).valid).map((msg: any) => ({
-                ...msg,
-                isOwn: msg.sender_id === user.id
-            }));
+            const validated = (normalized as any[])
+                .filter((msg: any) => validateMessagePayload(msg).valid)
+                .map((msg: any) => ({ ...msg, isOwn: msg.sender_id === user.id }));
 
-            // Use the single source of truth merge engine
             setMessages(prev => ({
                 ...prev,
                 [conversationId]: mergeMessages(prev[conversationId] || [], validated).merged as Message[]
             }));
 
-            // PHASE 2: OFFLINE DELIVERY SYNC ENGINE
-            // Find messages from others that we haven't acknowledged as delivered yet
-            const unacknowledgedMessages = validated.filter(msg => 
-                !msg.isOwn && 
-                msg.status !== 'read' && 
-                !msg.delivered_at
-            );
-
-            if (unacknowledgedMessages.length > 0) {
-                // Acknowledge the latest one to mark the conversation up to that point
-                // Or loop through and ACK them (we'll just use the conversation level endpoint if available, 
-                // or the latest message id to avoid API spam)
-                const latestMsg = unacknowledgedMessages[unacknowledgedMessages.length - 1];
-                try {
-                    await apiClient.put(`/chat/conversations/${conversationId}/deliver`, {
-                        deviceId: deviceIdRef.current || deviceId,
-                        lastMessageId: latestMsg.id
-                    });
-
-                    // Broadcast via socket for instant sender update
-                    const socket = socketManager.instance;
-                    if (socket) {
-                        unacknowledgedMessages.forEach(msg => {
-                            socket.emit('chat:delivered', {
-                                conversationId,
-                                messageId: msg.id,
-                                deliveredAt: new Date().toISOString()
-                            });
+            // Offline delivery sync — deferred off the render critical path
+            const unacked = validated.filter(msg => !msg.isOwn && msg.status !== 'read' && !msg.delivered_at);
+            if (unacked.length > 0) {
+                const latestMsg = unacked[unacked.length - 1];
+                setTimeout(async () => {
+                    try {
+                        await apiClient.put(`/chat/conversations/${conversationId}/deliver`, {
+                            deviceId: deviceIdRef.current,
+                            lastMessageId: latestMsg.id
                         });
+                        const socket = socketManager.instance;
+                        if (socket) {
+                            unacked.forEach(msg => {
+                                socket.emit('chat:delivered', {
+                                    conversationId,
+                                    messageId: msg.id,
+                                    deliveredAt: new Date().toISOString()
+                                });
+                            });
+                        }
+                    } catch (err) {
+                        console.warn('[ChatContext] Offline delivery sync failed', err);
                     }
-                } catch (err) {
-                    console.error('[ChatContext] Offline delivery sync failed', err);
-                }
+                }, 0);
             }
-
         } catch (err) {
             console.error('[ChatContext] Failed to load messages', err);
         }
     }, [user]);
 
-    // ── 3. SOCKET PIPELINE ──────────────────────────────────────────────────
-    // FIXED: mobile AuthContext never exposes `session`, so we retrieve the
-    // token directly from AuthService (AsyncStorage) instead.
+    // ── BATCH FLUSH — Called via requestAnimationFrame ─────────────────────────
+    // Processes ALL queued socket messages in ONE setState call.
+    // This prevents N incoming messages from triggering N re-renders.
+    const flushSocketBatch = useCallback(() => {
+        const batch = socketBatchRef.current;
+        socketBatchRef.current = [];
+        batchFlushScheduledRef.current = false;
+
+        if (batch.length === 0) return;
+        PerfMonitor.start('flushBatchTime', 'flush', `batch:${batch.length}`);
+
+        // Group by conversation for a single pass
+        const byConv: Record<string, Message[]> = {};
+        batch.forEach(({ conv, msg }) => {
+            if (!byConv[conv]) byConv[conv] = [];
+            byConv[conv].push(msg);
+        });
+
+        // Single atomic setState for all messages
+        setMessages(prev => {
+            const next = { ...prev };
+            Object.entries(byConv).forEach(([convId, newMsgs]) => {
+                next[convId] = mergeMessages(prev[convId] || [], newMsgs).merged as Message[];
+            });
+            return next;
+        });
+
+        PerfMonitor.end('flushBatchTime', 'flush');
+
+        // Update conversations preview for each affected conversation
+        setConversations(cPrev => {
+            let updated = cPrev;
+            Object.entries(byConv).forEach(([convId, newMsgs]) => {
+                const newest = newMsgs[newMsgs.length - 1];
+                const isCurrentlyOpen = activeConversationIdRef.current === convId;
+                updated = updated.map(conv => {
+                    if (conv.id !== convId) return conv;
+                    const lastMsgAt = conv.last_message?.created_at ?? conv.lastMessage?.created_at ?? 0;
+                    if (new Date(newest.created_at).getTime() < new Date(lastMsgAt).getTime()) return conv;
+                    return {
+                        ...conv,
+                        updated_at: newest.created_at,
+                        last_message: { id: newest.id, content: newest.content, sender_id: newest.sender_id, created_at: newest.created_at },
+                        lastMessage: { id: newest.id, content: newest.content, sender_id: newest.sender_id, created_at: newest.created_at },
+                        unreadCount: !isCurrentlyOpen && !newest.isOwn
+                            ? (conv.unreadCount || 0) + newMsgs.filter(m => !m.isOwn).length
+                            : conv.unreadCount
+                    };
+                });
+            });
+            return updated;
+        });
+    }, []);
+
+    // ── Socket Pipeline ────────────────────────────────────────────────────────
     useEffect(() => {
         if (!user) return;
-
         let cancelled = false;
 
         const setupSocket = async () => {
             const token = await AuthService.getToken();
             if (!token || cancelled) return;
-
             socketManager.connect(token, user.id);
-
-            // Use joinRoom() — safe to call before the handshake completes.
-            // Rooms are tracked and auto re-joined on every connect/reconnect.
-            if (activeConversationId) {
-                socketManager.joinRoom(activeConversationId);
-            }
+            if (activeConversationId) socketManager.joinRoom(activeConversationId);
         };
-
         setupSocket();
 
-        // FIXED: gateway emits 'chat:message', NOT 'receive_message'
+        // INCOMING MESSAGE: Fast path — dedup, normalize, batch
         socketManager.on('chat:message', async (rawMsg: any) => {
-            // ── Own-message gateway echo guard ──────────────────────────────────
-            // The gateway dispatches via pg_notify which broadcasts to ALL room
-            // members including the sender. We pre-register sent messages in
-            // processedEventsRef so echoes are silently dropped here.
-            const isOwnIncoming = rawMsg.sender_id === user.id;
-
-            // Deduplication: use prefixed composite keys for precision
+            // ── Deduplication ──────────────────────────────────────────────────
             const dedupEventKey = rawMsg.event_id ? `evt:${rawMsg.event_id}` : null;
-            const dedupIdKey    = rawMsg.id && !String(rawMsg.id).startsWith('temp-') ? `id:${rawMsg.id}` : null;
+            const dedupIdKey = rawMsg.id && !String(rawMsg.id).startsWith('temp-') ? `id:${rawMsg.id}` : null;
 
-            if (dedupEventKey && processedEventsRef.current.has(dedupEventKey)) {
-                console.log('[DEDUP/mobile] Dropping duplicate by event_id:', rawMsg.event_id);
-                return;
-            }
-            if (dedupIdKey && processedEventsRef.current.has(dedupIdKey)) {
-                console.log('[DEDUP/mobile] Dropping duplicate by id:', rawMsg.id);
-                return;
-            }
+            if (dedupEventKey && processedEventsRef.current.has(dedupEventKey)) return;
+            if (dedupIdKey && processedEventsRef.current.has(dedupIdKey)) return;
 
-            // Register keys now so any subsequent delivery of this event is dropped
             if (dedupEventKey) processedEventsRef.current.add(dedupEventKey);
-            if (dedupIdKey)    processedEventsRef.current.add(dedupIdKey);
+            if (dedupIdKey) processedEventsRef.current.add(dedupIdKey);
 
-            // Bound the set size to avoid memory leaks
+            // Bound set size
             if (processedEventsRef.current.size > 2000) {
-                const firstItem = processedEventsRef.current.values().next().value;
-                if (firstItem !== undefined) processedEventsRef.current.delete(firstItem);
+                const first = processedEventsRef.current.values().next().value;
+                if (first !== undefined) processedEventsRef.current.delete(first);
             }
 
-            // If this is our own message being echoed back AND we already have it
-            // in state (from optimistic update + API confirmation), drop the echo.
-            // This covers the race where the dedup keys were registered by sendMessage
-            // after the echo already passed through the early guards above.
-            if (isOwnIncoming) {
-                // Keys were already present — echo was handled above. If we reach
-                // here, this is a fresh send from another device/tab of the same user.
-                // Allow it to proceed so multi-device sync works correctly.
-            }
-
-            // 1. Decrypt via Transport Adapter
+            // ── Decode + Normalize ─────────────────────────────────────────────
             const plainContent = await mobileTransportAdapter.decodeIncomingMessage(rawMsg, user.id);
-            const processedMsg = { ...rawMsg, content: plainContent || '[Decryption Failed]' };
-
-            // 2. Normalize
+            const processedMsg = { ...rawMsg, content: plainContent || rawMsg.content };
             const normalized = normalizeEvent(processedMsg) as any;
-            
-            // 3. Validate Schema
-            if (!validateMessagePayload(normalized).valid) {
-                console.warn('[ChatContext] Dropping invalid socket payload', normalized);
-                return;
-            }
+            if (!validateMessagePayload(normalized).valid) return;
 
             const incomingMessage: Message = {
                 ...normalized,
                 isOwn: normalized.sender_id === user.id
             };
 
-            // 4. Merge Engine (Deterministic atomic state mutation)
-            // Extract conversation update OUTSIDE setMessages to avoid nested-setState anti-pattern
-            const currentMsgs = messagesRef.current[normalized.conversation_id] || [];
-            const { merged, newlyAddedCount } = mergeMessages(currentMsgs, [incomingMessage]);
+            // ── Queue into batch buffer ────────────────────────────────────────
+            socketBatchRef.current.push({ conv: normalized.conversation_id, msg: incomingMessage });
 
-            setMessages(prev => ({
-                ...prev,
-                [normalized.conversation_id]: mergeMessages(prev[normalized.conversation_id] || [], [incomingMessage]).merged as Message[]
-            }));
-
-            // Keep conversations list updated with correct last_message (snake_case, matching API)
-            if (newlyAddedCount > 0 || incomingMessage.sequence_number !== undefined) {
-                const isCurrentlyOpen = activeConversationIdRef.current === incomingMessage.conversation_id;
-                setConversations(cPrev => cPrev.map(conv => {
-                    if (conv.id !== incomingMessage.conversation_id) return conv;
-
-                    // Support both snake_case (from API) and camelCase (legacy) last message fields
-                    const lastMsgAt = conv.last_message?.created_at ?? conv.lastMessage?.created_at ?? 0;
-                    const existingLastMsgTime = new Date(lastMsgAt).getTime();
-                    const newMsgTime = new Date(incomingMessage.created_at).getTime();
-                    const shouldUpdateLastMessage = newMsgTime >= existingLastMsgTime;
-
-                    const isLeaseOwner = isActiveWriter(conv.id);
-                    const shouldIncrementUnread = isLeaseOwner && newlyAddedCount > 0 && !incomingMessage.isOwn && !isCurrentlyOpen;
-
-                    if (!shouldUpdateLastMessage && !shouldIncrementUnread) return conv;
-
-                    return {
-                        ...conv,
-                        updated_at: shouldUpdateLastMessage ? incomingMessage.created_at : conv.updated_at,
-                        // Write BOTH field names so FlatList always renders the new preview
-                        last_message: shouldUpdateLastMessage
-                            ? { id: incomingMessage.id, content: incomingMessage.content, sender_id: incomingMessage.sender_id, created_at: incomingMessage.created_at }
-                            : (conv.last_message ?? conv.lastMessage),
-                        lastMessage: shouldUpdateLastMessage
-                            ? { id: incomingMessage.id, content: incomingMessage.content, sender_id: incomingMessage.sender_id, created_at: incomingMessage.created_at }
-                            : (conv.lastMessage ?? conv.last_message),
-                        unreadCount: shouldIncrementUnread
-                            ? (conv.unreadCount || 0) + newlyAddedCount
-                            : conv.unreadCount
-                    };
-                }));
+            // Schedule flush on next animation frame (batches rapid bursts)
+            if (!batchFlushScheduledRef.current) {
+                batchFlushScheduledRef.current = true;
+                requestAnimationFrame(flushSocketBatch);
             }
 
-            // PHASE 3: REALTIME DELIVERY ACK ENGINE
-            // If the message is not ours, send a delivery ACK back immediately
+            // ── Delivery ACK — DEFERRED off hot path ──────────────────────────
             if (!incomingMessage.isOwn) {
-                try {
-                    // Call API to persist delivery status
-                    await apiClient.put(`/chat/messages/${incomingMessage.id}/deliver`, {
-                        deviceId,
+                setTimeout(() => {
+                    apiClient.put(`/chat/messages/${incomingMessage.id}/deliver`, {
+                        deviceId: deviceIdRef.current,
                         conversationId: incomingMessage.conversation_id
-                    });
-                    
-                    // Also emit via socket for instant realtime update to sender
-                    const socket = socketManager.instance;
-                    if (socket) {
-                        socket.emit('chat:delivered', {
-                            conversationId: incomingMessage.conversation_id,
-                            messageId: incomingMessage.id,
-                            deliveredAt: new Date().toISOString()
-                        });
-                    }
-                } catch (err) {
-                    console.error('[ChatContext] Failed to send delivery ACK', err);
-                }
+                    }).then(() => {
+                        const socket = socketManager.instance;
+                        if (socket) {
+                            socket.emit('chat:delivered', {
+                                conversationId: incomingMessage.conversation_id,
+                                messageId: incomingMessage.id,
+                                deliveredAt: new Date().toISOString()
+                            });
+                        }
+                    }).catch(() => {});
+                }, 0);
             }
         });
 
@@ -398,12 +394,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             const { conversationId, messageId, deliveredAt } = data;
             setMessages(prev => {
                 const current = prev[conversationId] || [];
+                if (!current.some(m => m.id === messageId)) return prev;
                 return {
                     ...prev,
-                    [conversationId]: current.map(m => 
-                        m.id === messageId 
-                            ? { ...m, status: 'delivered', delivered_at: deliveredAt } 
-                            : m
+                    [conversationId]: current.map(m =>
+                        m.id === messageId ? { ...m, status: 'delivered', delivered_at: deliveredAt } : m
                     )
                 };
             });
@@ -415,10 +410,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const current = prev[conversationId] || [];
                 return {
                     ...prev,
-                    [conversationId]: current.map(m => 
-                        messageIds.includes(m.id)
-                            ? { ...m, status: 'read', read_at: readAt } 
-                            : m
+                    [conversationId]: current.map(m =>
+                        messageIds.includes(m.id) ? { ...m, status: 'read', read_at: readAt } : m
                     )
                 };
             });
@@ -430,7 +423,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const current = prev[editedMsg.conversation_id] || [];
                 return {
                     ...prev,
-                    [editedMsg.conversation_id]: current.map(m => m.id === editedMsg.id ? { ...m, ...editedMsg } : m)
+                    [editedMsg.conversation_id]: current.map(m =>
+                        m.id === editedMsg.id ? { ...m, ...editedMsg } : m
+                    )
                 };
             });
         });
@@ -438,13 +433,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         socketManager.on('chat:message_deleted', (data: any) => {
             const { messageId, conversationId } = data;
             if (!conversationId) return;
-            setMessages(prev => {
-                const current = prev[conversationId] || [];
-                return {
-                    ...prev,
-                    [conversationId]: current.filter(m => m.id !== messageId)
-                };
-            });
+            setMessages(prev => ({
+                ...prev,
+                [conversationId]: (prev[conversationId] || []).filter(m => m.id !== messageId)
+            }));
         });
 
         loadConversations();
@@ -457,9 +449,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             socketManager.offEvent('chat:message_edited');
             socketManager.offEvent('chat:message_deleted');
         };
-    }, [user]); // Removed activeConversationId so socket listeners are stable
+    }, [user]);
 
-    // Fetch messages and join room when active conversation changes
+    // Fetch messages when conversation opens
     useEffect(() => {
         if (activeConversationId) {
             loadMessages(activeConversationId);
@@ -467,47 +459,57 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }, [activeConversationId]);
 
-    // ── 4. OPTIMISTIC SEND PIPELINE ─────────────────────────────────────────
-    const sendMessage = useCallback(async (conversationId: string, text: string, attachmentId?: string, replyToId?: string) => {
-        if (!user) return;
+    // ── SEND MESSAGE — Zero-latency optimistic pipeline ────────────────────────
+    const sendMessage = useCallback(async (
+        conversationId: string, text: string, attachmentId?: string, replyToId?: string
+    ) => {
+        const currentUser = userRef.current;
+        if (!currentUser) return;
 
-        // Phase 5: Soft Override Claim
         if (!isActiveWriter(conversationId)) {
             markLeaseClaimStart(conversationId);
-            // Optionally dispatch a local event or UI toast
-            console.log('Switching chat control to this device...');
         }
 
-        // Step 1: Generate Client Event ID
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
         const clientEventId = `evt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
+        // STEP 1: Optimistic insert — happens BEFORE API call, UI is instant
         const optimisticMessage: Message = {
             id: tempId,
             event_id: clientEventId,
             conversation_id: conversationId,
-            sender_id: user.id,
+            sender_id: currentUser.id,
             content: text,
             created_at: new Date().toISOString(),
             type: 'text',
             isOwn: true,
-            status: 'sending'
+            status: 'sending',
+            _optimistic: true,
         };
 
-        // Step 2: Optimistic Merge
         setMessages(prev => ({
             ...prev,
             [conversationId]: mergeMessages(prev[conversationId] || [], [optimisticMessage]).merged as Message[]
         }));
 
-        try {
-            // Encode payload via Transport Adapter
-            const payload = await mobileTransportAdapter.encodeOutgoingPayload(conversationId, text, user.id);
+        // Also update chat list preview immediately
+        setConversations(cPrev => cPrev.map(conv => {
+            if (conv.id !== conversationId) return conv;
+            const lastMsgAt = conv.last_message?.created_at ?? conv.lastMessage?.created_at ?? 0;
+            if (new Date(optimisticMessage.created_at).getTime() < new Date(lastMsgAt).getTime()) return conv;
+            return {
+                ...conv,
+                last_message: { id: tempId, content: text, sender_id: currentUser.id, created_at: optimisticMessage.created_at },
+                lastMessage: { id: tempId, content: text, sender_id: currentUser.id, created_at: optimisticMessage.created_at },
+            };
+        }));
 
-            // Step 3: Send via API (include canonical eventId)
-            // Use refs to always get the latest IDs even if state hasn't re-rendered yet
+        // STEP 2: API call happens in background — user already sees the bubble
+        try {
+            const payload = await mobileTransportAdapter.encodeOutgoingPayload(conversationId, text, currentUser.id);
             const currentDeviceId = deviceIdRef.current;
             const currentSessionId = sessionIdRef.current;
+
             const res = await apiClient.post(`/chat/conversations/${conversationId}/messages`, {
                 ...payload,
                 attachmentId,
@@ -515,77 +517,49 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 eventId: clientEventId,
                 type: 'text',
                 ...(currentDeviceId ? { deviceId: currentDeviceId } : {}),
-                ...(currentSessionId ? { sessionId: currentSessionId } : {})
+                ...(currentSessionId ? { sessionId: currentSessionId } : {}),
             });
 
-            // Step 4: Backend Collapse via Merge Engine
-            const canonicalMessage = { ...res.data, isOwn: true, status: 'sent' };
+            // STEP 3: Canonical collapse — replace temp- with server UUID
+            const canonicalMessage: Message = { ...res.data, isOwn: true, status: 'sent' };
 
-            // Pre-register canonical IDs in the dedup buffer BEFORE merging state.
-            // This ensures the gateway echo (which arrives shortly after) is cleanly
-            // dropped by the socket listener above without reaching mergeMessages.
+            // Pre-register in dedup buffer to drop gateway echo
             const canonEventKey = canonicalMessage.event_id ? `evt:${canonicalMessage.event_id}` : null;
-            const canonIdKey    = canonicalMessage.id && !String(canonicalMessage.id).startsWith('temp-') ? `id:${canonicalMessage.id}` : null;
+            const canonIdKey = canonicalMessage.id && !String(canonicalMessage.id).startsWith('temp-')
+                ? `id:${canonicalMessage.id}` : null;
             if (canonEventKey) processedEventsRef.current.add(canonEventKey);
-            if (canonIdKey)    processedEventsRef.current.add(canonIdKey);
+            if (canonIdKey) processedEventsRef.current.add(canonIdKey);
             processedEventsRef.current.add(`evt:${clientEventId}`);
 
-            let newlyAddedCount = 0;
-            setMessages(prev => {
-                const current = prev[conversationId] || [];
-                const mergeResult = mergeMessages(current, [canonicalMessage]);
-                newlyAddedCount = mergeResult.newlyAddedCount;
+            setMessages(prev => ({
+                ...prev,
+                [conversationId]: mergeMessages(prev[conversationId] || [], [canonicalMessage]).merged as Message[]
+            }));
+
+            // Update chat list with confirmed message
+            setConversations(cPrev => cPrev.map(conv => {
+                if (conv.id !== conversationId) return conv;
                 return {
-                    ...prev,
-                    [conversationId]: mergeResult.merged as Message[]
+                    ...conv,
+                    updated_at: canonicalMessage.created_at,
+                    last_message: { id: canonicalMessage.id, content: canonicalMessage.content, sender_id: canonicalMessage.sender_id, created_at: canonicalMessage.created_at },
+                    lastMessage: { id: canonicalMessage.id, content: canonicalMessage.content, sender_id: canonicalMessage.sender_id, created_at: canonicalMessage.created_at },
                 };
-            });
-
-            // Phase 4: Explicit Local Sync
-            // Since the gateway purposefully excludes the sender from the broadcast
-            // to prevent echo duplication, we must manually update the chat preview here.
-            if (newlyAddedCount > 0 || canonicalMessage.sequence_number !== undefined) {
-                setConversations(cPrev => cPrev.map(conv => {
-                    if (conv.id !== conversationId) return conv;
-                    
-                    const lastMsgAt = conv.last_message?.created_at ?? conv.lastMessage?.created_at ?? 0;
-                    const existingLastMsgTime = new Date(lastMsgAt).getTime();
-                    const newMsgTime = new Date(canonicalMessage.created_at).getTime();
-                    const shouldUpdateLastMessage = newMsgTime >= existingLastMsgTime;
-
-                    if (!shouldUpdateLastMessage) return conv;
-
-                    return {
-                        ...conv,
-                        updated_at: canonicalMessage.created_at,
-                        last_message: { 
-                            id: canonicalMessage.id, 
-                            content: canonicalMessage.content, 
-                            sender_id: canonicalMessage.sender_id, 
-                            created_at: canonicalMessage.created_at 
-                        },
-                        lastMessage: { 
-                            id: canonicalMessage.id, 
-                            content: canonicalMessage.content, 
-                            sender_id: canonicalMessage.sender_id, 
-                            created_at: canonicalMessage.created_at 
-                        }
-                    };
-                }));
-            }
+            }));
 
         } catch (err) {
-            console.error('[ChatContext] Send failed:', err);
-            // Revert status to failed safely
+            // Mark as failed — bubble shows retry state
             setMessages(prev => {
                 const current = prev[conversationId] || [];
                 return {
                     ...prev,
-                    [conversationId]: current.map(m => m.id === tempId ? { ...m, status: 'failed' } : m)
+                    [conversationId]: current.map(m =>
+                        m.id === tempId ? { ...m, status: 'failed', _optimistic: false } : m
+                    )
                 };
             });
         }
-    }, [user, isActiveWriter]);
+    }, [user, isActiveWriter, markLeaseClaimStart]);
 
     const editMessage = useCallback(async (conversationId: string, messageId: string, content: string) => {
         try {
@@ -597,12 +571,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     const deleteMessage = useCallback(async (conversationId: string, messageId: string) => {
+        // Optimistic delete
+        setMessages(prev => ({
+            ...prev,
+            [conversationId]: (prev[conversationId] || []).filter(m => m.id !== messageId)
+        }));
         try {
             await apiClient.delete(`/chat/messages/${messageId}`);
-            setMessages(prev => ({
-                ...prev,
-                [conversationId]: (prev[conversationId] || []).filter(m => m.id !== messageId)
-            }));
         } catch (err) {
             console.error('[ChatContext] Delete failed:', err);
             throw err;
@@ -613,36 +588,57 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         readReceiptEngine.onMessageVisible(conversationId, messageId);
     }, [readReceiptEngine]);
 
-    const contextValue = useMemo(() => ({
+    // ── Context Values — isolated to minimize cross-context re-renders ──────────
+    const conversationsContextValue = useMemo<ConversationsContextType>(() => ({
         conversations,
-        messages,
-        sendMessage,
-        editMessage,
-        deleteMessage,
         loadConversations,
         activeConversationId,
         setActiveConversationId,
         isActiveWriter,
         isClaimingLease,
-        onMessageVisible
-    }), [
-        conversations,
+    }), [conversations, loadConversations, activeConversationId, isActiveWriter, isClaimingLease]);
+
+    const messagesContextValue = useMemo<MessagesContextType>(() => ({
         messages,
         sendMessage,
         editMessage,
         deleteMessage,
-        loadConversations,
-        activeConversationId,
-        isActiveWriter,
-        isClaimingLease,
-        onMessageVisible
-    ]);
+        onMessageVisible,
+    }), [messages, sendMessage, editMessage, deleteMessage, onMessageVisible]);
+
+    // Legacy combined context value — for any existing useChat() consumers
+    const legacyChatValue = useMemo<ChatContextType>(() => ({
+        ...conversationsContextValue,
+        ...messagesContextValue,
+    }), [conversationsContextValue, messagesContextValue]);
 
     return (
-        <ChatContext.Provider value={contextValue}>
-            {children}
+        <ChatContext.Provider value={legacyChatValue}>
+            <ConversationsContext.Provider value={conversationsContextValue}>
+                <MessagesContext.Provider value={messagesContextValue}>
+                    {children}
+                </MessagesContext.Provider>
+            </ConversationsContext.Provider>
         </ChatContext.Provider>
     );
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SELECTORS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Use ONLY in ChatListScreen — subscribes to conversation list changes only */
+export const useConversations = () => useContext(ConversationsContext);
+
+/** Use ONLY in ChatScreen — subscribes to messages for isolated rendering */
+export const useMessages = () => useContext(MessagesContext);
+
+/** Use ONLY in ChatScreen — returns messages for a single conversation */
+export const useConversationMessages = (conversationId: string): Message[] => {
+    const { messages } = useContext(MessagesContext);
+    return messages[conversationId] || EMPTY_MESSAGES;
+};
+const EMPTY_MESSAGES: Message[] = [];
+
+/** Legacy selector — still works but subscribes to BOTH contexts */
 export const useChat = () => useContext(ChatContext);

@@ -16,12 +16,14 @@ const ConversationItem = React.memo(({
     user, 
     isOnline, 
     isActive, 
+    typingUsers,
     onClick 
 }: { 
-    conv: Conversation & { typingUsers?: string[] }, 
+    conv: Conversation, 
     user: { id?: string } | null, 
     isOnline: boolean, 
     isActive: boolean, 
+    typingUsers: string[],
     onClick: (id: string) => void 
 }) => {
     let displayName = conv.name;
@@ -36,9 +38,9 @@ const ConversationItem = React.memo(({
         }
     }
 
-    const lastMsg = conv.lastMessage;
-    const unreadCount = conv.unreadCount || 0;
-    const typingUsersList = conv.typingUsers || [];
+    const lastMsg = conv.lastMessage ?? (conv as any).last_message;
+    const unreadCount = (conv as any).unreadCount || 0;
+    const typingUsersList = typingUsers;
 
     return (
         <div
@@ -138,15 +140,21 @@ const ConversationItem = React.memo(({
         </div>
     );
 }, (prevProps, nextProps) => {
-    // Custom memoization logic to only re-render if necessary
+    // Fast surgical equality — no JSON.stringify, no object creation
+    const prevTyping = prevProps.typingUsers;
+    const nextTyping = nextProps.typingUsers;
+    const typingEqual = prevTyping.length === nextTyping.length &&
+        prevTyping.every((u, i) => u === nextTyping[i]);
     return prevProps.isActive === nextProps.isActive &&
            prevProps.isOnline === nextProps.isOnline &&
+           prevProps.typingUsers === nextProps.typingUsers &&
+           typingEqual &&
            prevProps.conv.updated_at === nextProps.conv.updated_at &&
            prevProps.conv.lastMessage?.id === nextProps.conv.lastMessage?.id &&
+           (prevProps.conv as any).last_message?.id === (nextProps.conv as any).last_message?.id &&
            prevProps.conv.lastMessage?.delivered_at === nextProps.conv.lastMessage?.delivered_at &&
            prevProps.conv.lastMessage?.read_at === nextProps.conv.lastMessage?.read_at &&
-           prevProps.conv.unreadCount === nextProps.conv.unreadCount &&
-           JSON.stringify(prevProps.conv.typingUsers) === JSON.stringify(nextProps.conv.typingUsers);
+           (prevProps.conv as any).unreadCount === (nextProps.conv as any).unreadCount;
 });
 
 const ConversationList: React.FC = () => {
@@ -195,19 +203,17 @@ const ConversationList: React.FC = () => {
                     }
                 }
 
-                // Add typing users array into conv for memoization checks
-                const convWithTyping = {
-                    ...conv,
-                    typingUsers: typingUsers[conv.id] || []
-                };
-
+                // Pass typingUsers as a separate stable prop — avoids creating
+                // a new `conv` object on every render which defeats React.memo.
+                const convTypingUsers = typingUsers[conv.id] || EMPTY_TYPING;
                 return (
                     <ConversationItem
                         key={conv.id}
-                        conv={convWithTyping}
+                        conv={conv}
                         user={user}
                         isOnline={isOnline}
                         isActive={activeConversationId === conv.id}
+                        typingUsers={convTypingUsers}
                         onClick={handleConversationClick}
                     />
                 );
@@ -217,3 +223,7 @@ const ConversationList: React.FC = () => {
 };
 
 export default ConversationList;
+
+// Stable empty array reference — prevents new array creation on every render
+// for conversations with no active typing users.
+const EMPTY_TYPING: string[] = [];
