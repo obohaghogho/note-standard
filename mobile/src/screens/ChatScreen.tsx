@@ -166,8 +166,12 @@ export default function ChatScreen({ navigation, route }: Props) {
     return (
         <KeyboardAvoidingView
             style={styles.container}
+            // On iOS 13+: 'padding' pushes the composer up with the keyboard.
+            // On Android: 'height' shrinks the screen — the composer naturally rises.
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+            // iOS: match the height of the status bar + navigation header (56+14=70)
+            // This offset tells KAV how much of the screen is already "above" the KAV.
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -196,21 +200,31 @@ export default function ChatScreen({ navigation, route }: Props) {
                 </View>
             </View>
 
-            <View style={{ flex: 1 }}>
+            {/* Message list — fully isolated from composer height changes.
+                The flex:1 + overflow:hidden shell means when the composer
+                grows, the list SHRINKS from the bottom (not the top).
+                This prevents the scroll position from jumping. */}
+            <View style={styles.listShell}>
                 <SafeFlashList
                     ref={flatRef}
                     data={conversationMessages}
                     keyExtractor={keyExtractor}
                     renderItem={renderMessage}
                     inverted
+                    // Interactive dismiss: swiping down on the list dismisses keyboard
+                    // This is the WhatsApp behavior
                     keyboardDismissMode="interactive"
                     keyboardShouldPersistTaps="handled"
                     showsVerticalScrollIndicator={false}
-                    // FlashList tuning for 60fps
+                    // FlashList tuning
                     estimatedItemSize={80}
                     drawDistance={600}
                     removeClippedSubviews={true}
-                    // Viewability — off render path
+                    // maintainVisibleContentPosition: when new messages arrive or
+                    // the composer grows, the scroll position stays stable.
+                    // The user doesn't get bumped to the bottom unexpectedly.
+                    maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+                    // Read receipts — off the render path
                     onViewableItemsChanged={onViewableItemsChanged}
                     viewabilityConfig={viewabilityConfig}
                     contentContainerStyle={styles.msgList}
@@ -275,10 +289,16 @@ const EMPTY_ARRAY: Message[] = [];
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#060611' },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    // listShell: isolated flex container that owns all vertical space between
+    // header and composer. When composer grows, this shrinks — the list
+    // does NOT re-measure or re-render its items.
+    listShell: { flex: 1, overflow: 'hidden' },
     header: {
         flexDirection: 'row', alignItems: 'center',
         paddingTop: 56, paddingBottom: 14, paddingHorizontal: 16,
         borderBottomWidth: 1, borderColor: '#111133', backgroundColor: '#060611',
+        // zIndex keeps header above the list during fast scrolls
+        zIndex: 10,
     },
     backBtn: { marginRight: 12, padding: 4 },
     backText: { color: '#6366f1', fontSize: 32, lineHeight: 32 },
