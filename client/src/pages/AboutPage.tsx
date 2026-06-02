@@ -10,7 +10,7 @@ export const AboutPage = () => {
         <div className="h-full overflow-y-auto min-h-[100dvh] bg-[#0a0a0a] p-4 md:p-8 relative w-full max-w-full">
             <SEO 
                 title="About Us"
-                description="Learn about Aghogho Plyboard Enterprise and our commitment to providing simple and reliable software solutions for digital services."
+                description="Learn about Jossy Digital Technologies Ltd and our commitment to providing simple and reliable software solutions for digital services."
             />
             {/* Background gradients */}
             <div className="absolute top-0 right-1/4 w-full max-w-[1000px] h-[600px] bg-primary/10 rounded-full blur-[120px] -z-10" />
@@ -36,7 +36,7 @@ export const AboutPage = () => {
                     <div className="space-y-10 text-gray-300">
                         <section>
                             <p className="leading-relaxed text-lg mb-4">
-                                Aghogho Plyboard Enterprise develops mobile applications for public use, providing digital solutions that are accessible and user-friendly for businesses and consumers.
+                                Jossy Digital Technologies Ltd develops mobile applications for public use, providing digital solutions that are accessible and user-friendly for businesses and consumers.
                             </p>
                             <p className="leading-relaxed text-gray-400">
                                 Our team develops mobile apps for public use, focusing on utility, accessibility, and seamless user experience. We design applications that serve businesses and individuals globally.

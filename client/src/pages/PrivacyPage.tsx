@@ -28,7 +28,7 @@ export const PrivacyPage = () => {
                             </div>
                             <h1 className="text-4xl md:text-5xl font-bold text-white tracking-tight">Privacy Policy</h1>
                         </div>
-                        <p className="text-xl text-primary/80 font-medium ml-[68px]">Aghogho Plyboard Enterprise</p>
+                        <p className="text-xl text-primary/80 font-medium ml-[68px]">Jossy Digital Technologies Ltd</p>
                     </div>
 
                     <div className="space-y-12 text-gray-300">
