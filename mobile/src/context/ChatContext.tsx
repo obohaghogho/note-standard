@@ -218,7 +218,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const latestMsg = unacknowledgedMessages[unacknowledgedMessages.length - 1];
                 try {
                     await apiClient.put(`/chat/conversations/${conversationId}/deliver`, {
-                        deviceId,
+                        deviceId: deviceIdRef.current || deviceId,
                         lastMessageId: latestMsg.id
                     });
 
@@ -241,7 +241,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         } catch (err) {
             console.error('[ChatContext] Failed to load messages', err);
         }
-    }, [user, deviceId]);
+    }, [user]);
 
     // ── 3. SOCKET PIPELINE ──────────────────────────────────────────────────
     // FIXED: mobile AuthContext never exposes `session`, so we retrieve the
@@ -528,13 +528,51 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             const canonIdKey    = canonicalMessage.id && !String(canonicalMessage.id).startsWith('temp-') ? `id:${canonicalMessage.id}` : null;
             if (canonEventKey) processedEventsRef.current.add(canonEventKey);
             if (canonIdKey)    processedEventsRef.current.add(canonIdKey);
-            // Also register the client event ID as a fallback key
             processedEventsRef.current.add(`evt:${clientEventId}`);
 
-            setMessages(prev => ({
-                ...prev,
-                [conversationId]: mergeMessages(prev[conversationId] || [], [canonicalMessage]).merged as Message[]
-            }));
+            let newlyAddedCount = 0;
+            setMessages(prev => {
+                const current = prev[conversationId] || [];
+                const mergeResult = mergeMessages(current, [canonicalMessage]);
+                newlyAddedCount = mergeResult.newlyAddedCount;
+                return {
+                    ...prev,
+                    [conversationId]: mergeResult.merged as Message[]
+                };
+            });
+
+            // Phase 4: Explicit Local Sync
+            // Since the gateway purposefully excludes the sender from the broadcast
+            // to prevent echo duplication, we must manually update the chat preview here.
+            if (newlyAddedCount > 0 || canonicalMessage.sequence_number !== undefined) {
+                setConversations(cPrev => cPrev.map(conv => {
+                    if (conv.id !== conversationId) return conv;
+                    
+                    const lastMsgAt = conv.last_message?.created_at ?? conv.lastMessage?.created_at ?? 0;
+                    const existingLastMsgTime = new Date(lastMsgAt).getTime();
+                    const newMsgTime = new Date(canonicalMessage.created_at).getTime();
+                    const shouldUpdateLastMessage = newMsgTime >= existingLastMsgTime;
+
+                    if (!shouldUpdateLastMessage) return conv;
+
+                    return {
+                        ...conv,
+                        updated_at: canonicalMessage.created_at,
+                        last_message: { 
+                            id: canonicalMessage.id, 
+                            content: canonicalMessage.content, 
+                            sender_id: canonicalMessage.sender_id, 
+                            created_at: canonicalMessage.created_at 
+                        },
+                        lastMessage: { 
+                            id: canonicalMessage.id, 
+                            content: canonicalMessage.content, 
+                            sender_id: canonicalMessage.sender_id, 
+                            created_at: canonicalMessage.created_at 
+                        }
+                    };
+                }));
+            }
 
         } catch (err) {
             console.error('[ChatContext] Send failed:', err);

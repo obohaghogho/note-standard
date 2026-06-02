@@ -949,6 +949,38 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     return { ...prev, [intent.conversation_id]: merged };
                 });
 
+                // Phase 4: Explicit Local Sync
+                // Since the gateway purposefully excludes the sender from the broadcast
+                // to prevent echo duplication, we must manually update the chat preview here.
+                setConversations(cPrev => cPrev.map(conv => {
+                    if (conv.id !== intent.conversation_id) return conv;
+                    
+                    const existingLastMsgTime = new Date(conv.lastMessage?.created_at ?? 0).getTime();
+                    const newMsgTime = new Date(canonicalMessage.created_at).getTime();
+                    
+                    if (newMsgTime >= existingLastMsgTime) {
+                        return {
+                            ...conv,
+                            updated_at: canonicalMessage.created_at,
+                            last_message: { 
+                                id: canonicalMessage.id, 
+                                content: canonicalMessage.content, 
+                                sender_id: canonicalMessage.sender_id, 
+                                created_at: canonicalMessage.created_at,
+                                type: canonicalMessage.type
+                            },
+                            lastMessage: { 
+                                id: canonicalMessage.id, 
+                                content: canonicalMessage.content, 
+                                sender_id: canonicalMessage.sender_id, 
+                                created_at: canonicalMessage.created_at,
+                                type: canonicalMessage.type
+                            }
+                        };
+                    }
+                    return conv;
+                }));
+
                 await offlineQueue.removeIntent(intent.event_id);
             } catch (err) {
                 console.error('[ChatContext] Failed to flush intent', intent.event_id, err);
@@ -1247,6 +1279,36 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     const { merged } = mergeMessages(current, [canonicalMessage]);
                     return { ...prev, [conversationId]: merged };
                 });
+
+                // Explicit Local Sync for Media
+                setConversations(cPrev => cPrev.map(conv => {
+                    if (conv.id !== conversationId) return conv;
+                    
+                    const existingLastMsgTime = new Date(conv.lastMessage?.created_at ?? 0).getTime();
+                    const newMsgTime = new Date(canonicalMessage.created_at).getTime();
+                    
+                    if (newMsgTime >= existingLastMsgTime) {
+                        return {
+                            ...conv,
+                            updated_at: canonicalMessage.created_at,
+                            last_message: { 
+                                id: canonicalMessage.id, 
+                                content: canonicalMessage.content, 
+                                sender_id: canonicalMessage.sender_id, 
+                                created_at: canonicalMessage.created_at,
+                                type: canonicalMessage.type
+                            },
+                            lastMessage: { 
+                                id: canonicalMessage.id, 
+                                content: canonicalMessage.content, 
+                                sender_id: canonicalMessage.sender_id, 
+                                created_at: canonicalMessage.created_at,
+                                type: canonicalMessage.type
+                            }
+                        };
+                    }
+                    return conv;
+                }));
 
                 // Clean up local preview URL
                 URL.revokeObjectURL(localUrl);

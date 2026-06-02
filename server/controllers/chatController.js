@@ -1107,6 +1107,7 @@ exports.sendMessage = async (req, res) => {
           sentiment,
           detected_language: detectedLang,
           event_id: eventId,
+          sequence_number: null
         };
         if (attachmentId) insertPayload.attachment_id = attachmentId;
         if (replyToId)    insertPayload.reply_to_id   = replyToId;
@@ -1133,6 +1134,7 @@ exports.sendMessage = async (req, res) => {
               content: content || '',
               type: type || "text",
               event_id: eventId,
+              sequence_number: null
             };
             if (attachmentId) fallbackPayload.attachment_id = attachmentId;
             if (replyToId)    fallbackPayload.reply_to_id   = replyToId;
