@@ -64,7 +64,7 @@ export const TermsModal: React.FC<TermsModalProps> = ({
                             <div className="space-y-1 text-sm text-gray-300">
                                 <p><strong>Operated by:</strong> Aghogho Plyboard Enterprise</p>
                                 <p><strong>Email:</strong> admin@notestandard.com</p>
-                                <p><strong>Business Address:</strong> 12 Udu Road, Warri, Delta, Nigeria</p>
+                                <p><strong>Business Address:</strong> Global Digital Headquarters</p>
                             </div>
                         </div>
                     </div>

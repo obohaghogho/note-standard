@@ -35,7 +35,7 @@ interface PhoneInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElemen
 }
 
 export const PhoneInput: React.FC<PhoneInputProps> = ({ value, onChange, label, error, className, id, name, ...props }) => {
-    const [selectedCountry, setSelectedCountry] = React.useState(COUNTRIES[2]); // Default to Nigeria for Africa focus
+    const [selectedCountry, setSelectedCountry] = React.useState(COUNTRIES[0]); // Default to US for global focus
     const [isOpen, setIsOpen] = React.useState(false);
     const dropdownRef = React.useRef<HTMLDivElement>(null);
 

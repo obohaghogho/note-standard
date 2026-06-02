@@ -49,13 +49,13 @@ export const Hero = () => {
                     </div>
 
                     <h1 className="text-xl sm:text-4xl lg:text-5xl font-bold leading-tight mb-6">
-                        Creating Mobile Apps <br />
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400">for Public Use</span> <br />
-                        <span className="text-lg sm:text-2xl text-gray-300 font-medium mix-blend-plus-lighter">– Powered by Note Standard</span>
+                        Connect, Call & Transact <br />
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400">Globally in Real-Time</span> <br />
+                        <span className="text-lg sm:text-2xl text-gray-300 font-medium mix-blend-plus-lighter">– Note Standard Platform</span>
                     </h1>
 
                     <p className="text-base sm:text-xl text-gray-300/90 mb-8 max-w-lg leading-relaxed">
-                        Aghogho Plyboard Enterprise develops premium mobile applications for public use, providing digital solutions that are accessible, crystal-clear, and user-friendly.
+                        Experience the ultimate all-in-one platform featuring instant encrypted messaging, crystal-clear WebRTC voice and video calls, and a secure multi-currency digital wallet. Built for global collaboration.
                     </p>
 
                     <div className="flex flex-col sm:flex-row gap-4">

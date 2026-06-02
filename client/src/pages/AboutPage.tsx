@@ -39,7 +39,7 @@ export const AboutPage = () => {
                                 Aghogho Plyboard Enterprise develops mobile applications for public use, providing digital solutions that are accessible and user-friendly for businesses and consumers.
                             </p>
                             <p className="leading-relaxed text-gray-400">
-                                Our team develops mobile apps for public use, focusing on utility, accessibility, and seamless user experience. We design applications that serve businesses and individuals across Nigeria and beyond.
+                                Our team develops mobile apps for public use, focusing on utility, accessibility, and seamless user experience. We design applications that serve businesses and individuals globally.
                             </p>
                         </section>
 

@@ -42,7 +42,7 @@ export const Footer = () => {
                         <p>© 2026 Note Standard</p>
                         <p>NoteStandard is a technology platform operated by Aghogho Plyboard Enterprise.</p>
                         <div className="flex flex-col gap-1">
-                            <p>Address: 12 Udu Road, Warri, Delta, Nigeria</p>
+                            <p>Address: Global Digital Headquarters</p>
                             <p>Email: <a href="mailto:admin@notestandard.com" className="hover:text-white transition-colors">admin@notestandard.com</a></p>
                             <p>Alt Email: <a href="mailto:obohaghogho107@gmail.com" className="hover:text-white transition-colors">obohaghogho107@gmail.com</a></p>
                         </div>
