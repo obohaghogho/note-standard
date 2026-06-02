@@ -338,51 +338,35 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             // Keep conversations list updated with correct last_message (snake_case, matching API)
             if (newlyAddedCount > 0 || incomingMessage.sequence_number !== undefined) {
                 const isCurrentlyOpen = activeConversationIdRef.current === incomingMessage.conversation_id;
-                setConversations(cPrev => {
-                    const convExists = cPrev.some(conv => conv.id === incomingMessage.conversation_id);
-                    if (!convExists) {
-                        setTimeout(() => {
-                            loadConversations();
-                        }, 100);
-                        return cPrev;
-                    }
+                setConversations(cPrev => cPrev.map(conv => {
+                    if (conv.id !== incomingMessage.conversation_id) return conv;
 
-                    const updated = cPrev.map(conv => {
-                        if (conv.id !== incomingMessage.conversation_id) return conv;
+                    // Support both snake_case (from API) and camelCase (legacy) last message fields
+                    const lastMsgAt = conv.last_message?.created_at ?? conv.lastMessage?.created_at ?? 0;
+                    const existingLastMsgTime = new Date(lastMsgAt).getTime();
+                    const newMsgTime = new Date(incomingMessage.created_at).getTime();
+                    const shouldUpdateLastMessage = newMsgTime >= existingLastMsgTime;
 
-                        // Support both snake_case (from API) and camelCase (legacy) last message fields
-                        const lastMsgAt = conv.last_message?.created_at ?? conv.lastMessage?.created_at ?? 0;
-                        const existingLastMsgTime = new Date(lastMsgAt).getTime();
-                        const newMsgTime = new Date(incomingMessage.created_at).getTime();
-                        const shouldUpdateLastMessage = newMsgTime >= existingLastMsgTime;
+                    const isLeaseOwner = isActiveWriter(conv.id);
+                    const shouldIncrementUnread = isLeaseOwner && newlyAddedCount > 0 && !incomingMessage.isOwn && !isCurrentlyOpen;
 
-                        const shouldIncrementUnread = newlyAddedCount > 0 && !incomingMessage.isOwn && !isCurrentlyOpen;
+                    if (!shouldUpdateLastMessage && !shouldIncrementUnread) return conv;
 
-                        if (!shouldUpdateLastMessage && !shouldIncrementUnread) return conv;
-
-                        return {
-                            ...conv,
-                            updated_at: shouldUpdateLastMessage ? incomingMessage.created_at : conv.updated_at,
-                            // Write BOTH field names so FlatList always renders the new preview
-                            last_message: shouldUpdateLastMessage
-                                ? { id: incomingMessage.id, content: incomingMessage.content, sender_id: incomingMessage.sender_id, created_at: incomingMessage.created_at }
-                                : (conv.last_message ?? conv.lastMessage),
-                            lastMessage: shouldUpdateLastMessage
-                                ? { id: incomingMessage.id, content: incomingMessage.content, sender_id: incomingMessage.sender_id, created_at: incomingMessage.created_at }
-                                : (conv.lastMessage ?? conv.last_message),
-                            unreadCount: shouldIncrementUnread
-                                ? (conv.unreadCount || 0) + newlyAddedCount
-                                : conv.unreadCount
-                        };
-                    });
-
-                    // Sort conversations to place the most recently active conversation at the top of the list
-                    return [...updated].sort((a, b) => {
-                        const timeA = new Date(a.updated_at || a.created_at || 0).getTime();
-                        const timeB = new Date(b.updated_at || b.created_at || 0).getTime();
-                        return timeB - timeA;
-                    });
-                });
+                    return {
+                        ...conv,
+                        updated_at: shouldUpdateLastMessage ? incomingMessage.created_at : conv.updated_at,
+                        // Write BOTH field names so FlatList always renders the new preview
+                        last_message: shouldUpdateLastMessage
+                            ? { id: incomingMessage.id, content: incomingMessage.content, sender_id: incomingMessage.sender_id, created_at: incomingMessage.created_at }
+                            : (conv.last_message ?? conv.lastMessage),
+                        lastMessage: shouldUpdateLastMessage
+                            ? { id: incomingMessage.id, content: incomingMessage.content, sender_id: incomingMessage.sender_id, created_at: incomingMessage.created_at }
+                            : (conv.lastMessage ?? conv.last_message),
+                        unreadCount: shouldIncrementUnread
+                            ? (conv.unreadCount || 0) + newlyAddedCount
+                            : conv.unreadCount
+                    };
+                }));
             }
 
             // PHASE 3: REALTIME DELIVERY ACK ENGINE
