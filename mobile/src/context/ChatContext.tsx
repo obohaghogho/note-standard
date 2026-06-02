@@ -104,6 +104,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
 
     // ── Refs (zero-render access for hot paths) ────────────────────────────────
+    // deviceId and sessionId are refs-first — state is only for triggering
+    // downstream effects (readReceiptEngine deps). All hot paths use refs.
     const [deviceId, setDeviceId] = useState<string | null>(null);
     const [sessionId, setSessionId] = useState<string | null>(null);
     const deviceIdRef = useRef<string | null>(null);
@@ -113,6 +115,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const messagesRef = useRef<Record<string, Message[]>>({});
     const conversationsRef = useRef<any[]>([]);
 
+    // Stable refs for arbitration fns — updated each render synchronously.
+    // This breaks the dependency chain: sendMessage no longer needs to
+    // be recreated when isActiveWriter or markLeaseClaimStart change.
+    const isActiveWriterRef = useRef<(cid: string) => boolean>(() => true);
+    const markLeaseClaimStartRef = useRef<(cid: string) => void>(() => {});
+
     // Event deduplication buffer
     const processedEventsRef = useRef(new Set<string>());
 
@@ -120,13 +128,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const socketBatchRef = useRef<{ conv: string; msg: Message }[]>([]);
     const batchFlushScheduledRef = useRef(false);
 
-    // Keep refs in sync with state (non-blocking)
-    useEffect(() => { userRef.current = user; }, [user]);
-    useEffect(() => { deviceIdRef.current = deviceId; }, [deviceId]);
-    useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
-    useEffect(() => { activeConversationIdRef.current = activeConversationId; }, [activeConversationId]);
-    useEffect(() => { messagesRef.current = messages; }, [messages]);
-    useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
+    // Keep refs in sync — direct assignment, no useEffect overhead.
+    // This runs synchronously on every render but costs ~0ns vs useEffect scheduling.
+    userRef.current = user;
+    messagesRef.current = messages;
+    conversationsRef.current = conversations;
+    // deviceId, sessionId, activeConversationId refs are updated
+    // in their respective setters to avoid any lag.
 
     // ── Session init (AsyncStorage — never blocks render) ─────────────────────
     useEffect(() => {
@@ -164,6 +172,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         supabase,
         initialConversations: conversations as any
     });
+
+    // Keep arbitration refs current — no re-subscription needed
+    isActiveWriterRef.current = isActiveWriter;
+    markLeaseClaimStartRef.current = markLeaseClaimStart;
 
     // ── ReadReceiptEngine ──────────────────────────────────────────────────────
     const readReceiptEngine = useMemo(() => new ReadReceiptEngine(
@@ -460,14 +472,18 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, [activeConversationId]);
 
     // ── SEND MESSAGE — Zero-latency optimistic pipeline ────────────────────────
+    // STABLE: deps are all refs — this callback NEVER changes reference.
+    // This means handleSend in ChatScreen never changes, which means
+    // MessageComposer's onSend prop never changes — memo barrier holds.
     const sendMessage = useCallback(async (
         conversationId: string, text: string, attachmentId?: string, replyToId?: string
     ) => {
         const currentUser = userRef.current;
         if (!currentUser) return;
 
-        if (!isActiveWriter(conversationId)) {
-            markLeaseClaimStart(conversationId);
+        // Use refs — never stale, never triggers recreation
+        if (!isActiveWriterRef.current(conversationId)) {
+            markLeaseClaimStartRef.current(conversationId);
         }
 
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -559,7 +575,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 };
             });
         }
-    }, [user, isActiveWriter, markLeaseClaimStart]);
+    }, []); // ← Empty deps: sendMessage is now permanently stable
 
     const editMessage = useCallback(async (conversationId: string, messageId: string, content: string) => {
         try {

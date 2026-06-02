@@ -50,6 +50,14 @@ export const ChatMessageBubble = React.memo(({
   const swipeX = useRef(new Animated.Value(0)).current;
   const swipeFired = useRef(false);
 
+  // Stable callback refs — panResponder created once, callbacks always current
+  const onLongPressRef = useRef(onLongPress);
+  onLongPressRef.current = onLongPress;
+  const onSwipeRightRef = useRef(onSwipeRight);
+  onSwipeRightRef.current = onSwipeRight;
+  const itemRef = useRef(item);
+  itemRef.current = item;
+
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => false,
     onMoveShouldSetPanResponder: (_, gs) =>
@@ -59,9 +67,10 @@ export const ChatMessageBubble = React.memo(({
       if (gs.dx > 0) swipeX.setValue(Math.min(gs.dx, 75));
     },
     onPanResponderRelease: (_, gs) => {
-      if (gs.dx > 50 && !swipeFired.current && onSwipeRight) {
+      // Read from ref — always gets current item/callback without recreating panResponder
+      if (gs.dx > 50 && !swipeFired.current && onSwipeRightRef.current) {
         swipeFired.current = true;
-        onSwipeRight(item);
+        onSwipeRightRef.current(itemRef.current);
       }
       Animated.spring(swipeX, { toValue: 0, useNativeDriver: true, tension: 50, friction: 8 }).start();
     },
@@ -99,7 +108,8 @@ export const ChatMessageBubble = React.memo(({
       <Animated.View style={{ transform: [{ translateX: swipeX }] }}>
         <TouchableOpacity
           activeOpacity={0.85}
-          onLongPress={() => onLongPress(item)}
+          // Stable ref callback — no new function on every render
+          onLongPress={() => onLongPressRef.current(itemRef.current)}
           delayLongPress={400}
           style={[
             styles.bubble,
@@ -157,8 +167,12 @@ export const ChatMessageBubble = React.memo(({
     </View>
   );
 }, (prev, next) => {
+  // Surgical equality — only re-render when this bubble's own data changes.
+  // event_id check: needed for temp-ID → canonical-ID transition
+  // (optimistic bubble → confirmed bubble with real timestamp)
   return (
     prev.item.id === next.item.id &&
+    prev.item.event_id === next.item.event_id &&
     prev.item.content === next.item.content &&
     prev.item.status === next.item.status &&
     prev.item.read_at === next.item.read_at &&
@@ -166,6 +180,8 @@ export const ChatMessageBubble = React.memo(({
     prev.item.is_edited === next.item.is_edited &&
     prev.item._optimistic === next.item._optimistic &&
     prev.currentUserId === next.currentUserId
+    // recipientName intentionally excluded — read via ref in parent
+    // onLongPress/onSwipeRight intentionally excluded — read via ref
   );
 });
 

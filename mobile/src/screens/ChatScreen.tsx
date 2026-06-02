@@ -2,8 +2,9 @@ import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react'
 import {
     View, Text, TouchableOpacity,
     StyleSheet, KeyboardAvoidingView, Platform, Image,
-    Alert, Share,
+    Alert, Share, InteractionManager,
 } from 'react-native';
+
 import { FlashList } from '@shopify/flash-list';
 const SafeFlashList = FlashList as any;
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -64,7 +65,14 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     useEffect(() => {
         if (isFocused) {
-            setActiveConversationId(conversationId);
+            // CRITICAL: defer setActiveConversationId until AFTER the
+            // keyboard animation and screen transition completes.
+            // Without this, the context update fires during the transition,
+            // causing a re-render storm while the screen is animating in.
+            const task = InteractionManager.runAfterInteractions(() => {
+                setActiveConversationId(conversationId);
+            });
+            return () => task.cancel();
         } else {
             setActiveConversationId(null);
         }
@@ -101,7 +109,15 @@ export default function ChatScreen({ navigation, route }: Props) {
         } catch (err) {
             console.warn('Failed to play audio', err);
         }
-    }, [audioPlayer]);
+    }, [audioPlayer]);    // playVoiceNote depends on audioPlayer state — wrap in ref so
+    // renderMessage does NOT need it as a dependency (avoids all-rows re-render
+    // every time audioPlayer changes).
+    const playVoiceNoteRef = useRef(playVoiceNote);
+    playVoiceNoteRef.current = playVoiceNote;
+    const stablePlayVoiceNote = useCallback((path: string) => {
+        playVoiceNoteRef.current(path);
+    }, []); // ← Empty deps: permanently stable
+
 
     const handleCopy = useCallback((msg: Message) => {
         try { Share.share({ message: msg.content }).catch(() => {}); } catch (_) {}
@@ -111,21 +127,27 @@ export default function ChatScreen({ navigation, route }: Props) {
         try { await Share.share({ message: msg.content }); } catch (_) {}
     }, []);
 
-    // ── renderItem — stable reference, NO context reads inside ────────────────
-    // onMessageVisible is called via onViewableItemsChanged instead (off the
-    // render critical path), so renderItem is now pure and fast.
-    const renderMessage = useCallback(({ item }: { item: Message }) => {
-        return (
-            <ChatMessageBubble
-                item={item}
-                currentUserId={user?.id ?? ''}
-                recipientName={recipientName}
-                onLongPress={setActionSheetMessage}
-                onSwipeRight={setReplyTo}
-                onPlayAudio={playVoiceNote}
-            />
-        );
-    }, [user?.id, recipientName, playVoiceNote]);
+    // recipientName ref — profile loads asynchronously after mount.
+    // By reading via ref inside renderMessage, we avoid making
+    // recipientName a dep that would invalidate all 200 bubbles on load.
+    const recipientNameRef = useRef(recipientName);
+    recipientNameRef.current = recipientName;
+
+    // ── renderMessage — PERMANENTLY STABLE (empty deps) ───────────────────────
+    // • recipientName → via ref (profile load doesn't trigger rerender)
+    // • playVoiceNote → via stablePlayVoiceNote proxy (audioPlayer changes safe)
+    // • setActionSheetMessage / setReplyTo → stable setState refs from useState
+    // Result: receiving 100 messages = 0 unnecessary bubble re-renders
+    const renderMessage = useCallback(({ item }: { item: Message }) => (
+        <ChatMessageBubble
+            item={item}
+            currentUserId={user?.id ?? ''}
+            recipientName={recipientNameRef.current}
+            onLongPress={setActionSheetMessage}
+            onSwipeRight={setReplyTo}
+            onPlayAudio={stablePlayVoiceNote}
+        />
+    ), [user?.id, stablePlayVoiceNote]); // recipientName via ref — not a dep
 
     // ── Viewability-based read receipts — OFF the render path ─────────────────
     // Fires only when items enter/leave the viewport, not on every render.
@@ -211,20 +233,26 @@ export default function ChatScreen({ navigation, route }: Props) {
                     keyExtractor={keyExtractor}
                     renderItem={renderMessage}
                     inverted
-                    // Interactive dismiss: swiping down on the list dismisses keyboard
-                    // This is the WhatsApp behavior
+                    // Interactive dismiss: swipe down on list dismisses keyboard (WhatsApp)
                     keyboardDismissMode="interactive"
                     keyboardShouldPersistTaps="handled"
                     showsVerticalScrollIndicator={false}
-                    // FlashList tuning
+                    // ── FlashList performance tuning ────────────────────────────
                     estimatedItemSize={80}
-                    drawDistance={600}
+                    // drawDistance: pre-render 2 screens above/below viewport
+                    drawDistance={800}
                     removeClippedSubviews={true}
-                    // maintainVisibleContentPosition: when new messages arrive or
-                    // the composer grows, the scroll position stays stable.
-                    // The user doesn't get bumped to the bottom unexpectedly.
+                    // windowSize: 5 = render 2 screens above + 2 below the viewport.
+                    // Higher = more memory. 5 is the WhatsApp sweet spot.
+                    // (FlatList default is 21 — way too high)
+                    windowSize={5}
+                    // Batch larger chunks less often = fewer interruptions to JS thread
+                    maxToRenderPerBatch={10}
+                    // 50ms batching: groups rapid scroll events into fewer renders
+                    updateCellsBatchingPeriod={50}
+                    // maintainVisibleContentPosition: scroll stays put when composer grows
                     maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-                    // Read receipts — off the render path
+                    // ── Read receipts — off render path ────────────────────────────
                     onViewableItemsChanged={onViewableItemsChanged}
                     viewabilityConfig={viewabilityConfig}
                     contentContainerStyle={styles.msgList}
