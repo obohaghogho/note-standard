@@ -1,10 +1,9 @@
 import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import {
     View, Text, TouchableOpacity,
-    StyleSheet, Platform, Image,
+    StyleSheet, KeyboardAvoidingView, Platform, Image,
     Alert, Share, InteractionManager,
 } from 'react-native';
-import Animated, { useAnimatedKeyboard, useAnimatedStyle } from 'react-native-reanimated';
 
 import { FlashList } from '@shopify/flash-list';
 const SafeFlashList = FlashList as any;
@@ -186,26 +185,19 @@ export default function ChatScreen({ navigation, route }: Props) {
         return <View style={styles.center}><Text style={{ color: '#fff' }}>No conversation selected.</Text></View>;
     }
 
-    // ── NATIVE 60FPS KEYBOARD TRACKING ──────────────────────────────────────────
-    // Instead of relying on React Native's KAV which waits for the JS bridge and
-    // causes delayed "jumps" on Android, we use Reanimated to track the keyboard
-    // frame natively at 60 FPS. This exactly mimics WhatsApp's input tracking.
-    const keyboard = useAnimatedKeyboard();
-    const animatedKeyboardStyle = useAnimatedStyle(() => {
-        // The keyboard height includes the system's bottom safe area (e.g. iPhone home indicator).
-        // Since MessageComposer already applies `paddingBottom: insets.bottom`, we must
-        // subtract it here so the composer doesn't float above the keyboard.
-        const kbHeight = keyboard.height.value;
-        // Ensure we never return a negative padding if the keyboard is closed.
-        const offset = kbHeight > insets.bottom ? kbHeight - insets.bottom : 0;
-
-        return {
-            paddingBottom: offset,
-        };
-    });
-
     return (
-        <Animated.View style={[styles.container, animatedKeyboardStyle]}>
+        <KeyboardAvoidingView
+            style={styles.container}
+            // iOS natively needs KAV padding to push the layout up.
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            // CRITICAL FIX: Disable KAV entirely on Android!
+            // Android app.json uses "softwareKeyboardLayoutMode": "resize", which means
+            // the Android OS natively shrinks the entire app window instantly.
+            // Having KAV enabled on Android fights this native behavior, waiting for JS 
+            // events to trigger and causing the delayed jump/desync.
+            enabled={Platform.OS === 'ios'}
+            keyboardVerticalOffset={0}
+        >
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                     <Text style={styles.backText}>‹</Text>
@@ -318,7 +310,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 onSend={handleSend}
                 insets={insets}
             />
-        </Animated.View>
+        </KeyboardAvoidingView>
     );
 }
 
