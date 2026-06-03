@@ -142,17 +142,21 @@ console.log('🚀 NoteStandard Booting...');
 (() => {
   const applyViewportVars = () => {
     const vp = window.visualViewport;
+    
+    // If VirtualKeyboard API is handling the layout natively via CSS env(),
+    // we MUST NOT override --vv-height here, otherwise we destroy the 60fps sync.
+    if ('virtualKeyboard' in navigator && (navigator as any).virtualKeyboard.overlaysContent) {
+      return;
+    }
+
     if (vp) {
       document.documentElement.style.setProperty('--vv-height', `${vp.height}px`);
-      // If VirtualKeyboard API is active, it handles its own kb-height.
-      if (!navigator.virtualKeyboard || !navigator.virtualKeyboard.overlaysContent) {
-        const kbHeight = Math.max(0, window.innerHeight - vp.height);
-        document.documentElement.style.setProperty('--kb-height', `${kbHeight}px`);
-        if (kbHeight > 60) {
-          document.documentElement.classList.add('keyboard-open');
-        } else {
-          document.documentElement.classList.remove('keyboard-open');
-        }
+      const kbHeight = Math.max(0, window.innerHeight - vp.height);
+      document.documentElement.style.setProperty('--kb-height', `${kbHeight}px`);
+      if (kbHeight > 60) {
+        document.documentElement.classList.add('keyboard-open');
+      } else {
+        document.documentElement.classList.remove('keyboard-open');
       }
     } else {
       document.documentElement.style.setProperty('--vv-height', '100%');
@@ -189,12 +193,18 @@ console.log('🚀 NoteStandard Booting...');
   // window resize, and instead overlays the keyboard while providing exact geometry.
   if ('virtualKeyboard' in navigator) {
     (navigator as any).virtualKeyboard.overlaysContent = true;
+    
+    // NATIVE 60FPS FIX: By setting --vv-height to use env(keyboard-inset-bottom),
+    // the CSS engine mathematically shrinks the chat window in perfect sync with the
+    // keyboard animation. This completely bypasses JS event delays (which cause jumps).
+    document.documentElement.style.setProperty(
+      '--vv-height', 
+      'calc(100dvh - env(keyboard-inset-bottom, 0px))'
+    );
+    
+    // We still use geometrychange just to toggle the .keyboard-open class for compact UI.
     (navigator as any).virtualKeyboard.addEventListener('geometrychange', (event: any) => {
       const { height } = event.target.boundingRect;
-      document.documentElement.style.setProperty('--kb-height', `${height}px`);
-      // On Android Chrome with VirtualKeyboard API, vv-height should remain 100% since the window doesn't resize.
-      // The CSS will use --kb-height to push the input up via padding.
-      document.documentElement.style.setProperty('--vv-height', `calc(100% - ${height}px)`);
       if (height > 60) {
         document.documentElement.classList.add('keyboard-open');
       } else {
