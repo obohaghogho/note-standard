@@ -144,12 +144,15 @@ console.log('🚀 NoteStandard Booting...');
     const vp = window.visualViewport;
     if (vp) {
       document.documentElement.style.setProperty('--vv-height', `${vp.height}px`);
-      const kbHeight = Math.max(0, window.innerHeight - vp.height);
-      document.documentElement.style.setProperty('--kb-height', `${kbHeight}px`);
-      if (kbHeight > 60) {
-        document.documentElement.classList.add('keyboard-open');
-      } else {
-        document.documentElement.classList.remove('keyboard-open');
+      // If VirtualKeyboard API is active, it handles its own kb-height.
+      if (!navigator.virtualKeyboard || !navigator.virtualKeyboard.overlaysContent) {
+        const kbHeight = Math.max(0, window.innerHeight - vp.height);
+        document.documentElement.style.setProperty('--kb-height', `${kbHeight}px`);
+        if (kbHeight > 60) {
+          document.documentElement.classList.add('keyboard-open');
+        } else {
+          document.documentElement.classList.remove('keyboard-open');
+        }
       }
     } else {
       document.documentElement.style.setProperty('--vv-height', '100%');
@@ -180,6 +183,25 @@ console.log('🚀 NoteStandard Booting...');
 
   // Orientation/desktop resize — rAF is fine here
   window.addEventListener('resize', setViewportVarsRaf, { passive: true });
+
+  // Chrome 94+ Virtual Keyboard API
+  // This is critical for Android Chrome because it stops the browser from doing a delayed
+  // window resize, and instead overlays the keyboard while providing exact geometry.
+  if ('virtualKeyboard' in navigator) {
+    (navigator as any).virtualKeyboard.overlaysContent = true;
+    (navigator as any).virtualKeyboard.addEventListener('geometrychange', (event: any) => {
+      const { height } = event.target.boundingRect;
+      document.documentElement.style.setProperty('--kb-height', `${height}px`);
+      // On Android Chrome with VirtualKeyboard API, vv-height should remain 100% since the window doesn't resize.
+      // The CSS will use --kb-height to push the input up via padding.
+      document.documentElement.style.setProperty('--vv-height', `calc(100% - ${height}px)`);
+      if (height > 60) {
+        document.documentElement.classList.add('keyboard-open');
+      } else {
+        document.documentElement.classList.remove('keyboard-open');
+      }
+    });
+  }
 
   // Prevent ANY document-level scrolling on focus and generally lock document scroll to 0,0.
   const forceScrollReset = () => {
