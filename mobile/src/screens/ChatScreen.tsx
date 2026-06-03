@@ -188,13 +188,14 @@ export default function ChatScreen({ navigation, route }: Props) {
     return (
         <KeyboardAvoidingView
             style={styles.container}
-            // 'padding': KAV adds bottom padding equal to keyboard height.
-            // 'height': KAV shrinks the view height by keyboard height.
-            // iOS needs 'padding' — Android 'height' is more reliable.
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            // keyboardVerticalOffset: tells KAV how tall the non-KAV space above is.
-            // Our entire screen IS the KAV (no nav header outside it), so offset = 0.
-            // If this screen is inside a stack navigator header, set to header height.
+            // iOS natively needs KAV padding to push the layout up.
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            // CRITICAL FIX: Disable KAV entirely on Android!
+            // Android app.json uses "softwareKeyboardLayoutMode": "resize", which means
+            // the Android OS natively shrinks the entire app window instantly.
+            // Having KAV enabled on Android fights this native behavior, waiting for JS 
+            // events to trigger and causing the delayed jump/desync.
+            enabled={Platform.OS === 'ios'}
             keyboardVerticalOffset={0}
         >
             <View style={styles.header}>
