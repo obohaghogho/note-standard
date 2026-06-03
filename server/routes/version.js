@@ -7,12 +7,13 @@ const router = express.Router();
  * No auth required — must be accessible to all clients including outdated ones.
  */
 const APP_CONFIG = {
-  latest_version: '1.6.1',
-  minimum_version: '1.6.1',
+  latest_version: '1.6.2',
+  minimum_version: '1.6.2',
   force_update: true,
-  update_message: 'Critical UI Update: Completely overhauled web mobile keyboard synchronization to match native app speed.',
+  update_message: 'Critical Performance Update: Upgraded chat window to use GPU-accelerated hardware transforms for perfect 60fps keyboard tracking.',
   changelog: [
-    'Fixed: Web mobile keyboard delay by natively syncing layout to the Android VirtualKeyboard API at 60fps.'
+    'Fixed: Input bar detached from DOM layout to prevent layout thrashing on mobile CPUs.',
+    'Fixed: Keyboard sliding instantly synchronized via GPU translation.'
   ]
 };
 

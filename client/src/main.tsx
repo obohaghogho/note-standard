@@ -137,20 +137,18 @@ console.log('🚀 NoteStandard Booting...');
 
 // ── Production-grade cross-platform keyboard tracker ────────────────────────
 // Handles both iOS Safari and Android Chrome keyboard viewports.
-// Sets --vv-height to the visual viewport height, and locks the outer page
-// scroll position to 0,0 to prevent mobile browsers from shifting the page on focus.
+// We strictly emit --kb-height so the CSS can hardware-accelerate the translation.
 (() => {
   const applyViewportVars = () => {
     const vp = window.visualViewport;
     
     // If VirtualKeyboard API is handling the layout natively via CSS env(),
-    // we MUST NOT override --vv-height here, otherwise we destroy the 60fps sync.
+    // we do not need to calculate --kb-height here manually.
     if ('virtualKeyboard' in navigator && (navigator as any).virtualKeyboard.overlaysContent) {
       return;
     }
 
     if (vp) {
-      document.documentElement.style.setProperty('--vv-height', `${vp.height}px`);
       const kbHeight = Math.max(0, window.innerHeight - vp.height);
       document.documentElement.style.setProperty('--kb-height', `${kbHeight}px`);
       if (kbHeight > 60) {
@@ -159,7 +157,6 @@ console.log('🚀 NoteStandard Booting...');
         document.documentElement.classList.remove('keyboard-open');
       }
     } else {
-      document.documentElement.style.setProperty('--vv-height', '100%');
       document.documentElement.style.setProperty('--kb-height', '0px');
       document.documentElement.classList.remove('keyboard-open');
     }
@@ -189,20 +186,11 @@ console.log('🚀 NoteStandard Booting...');
   window.addEventListener('resize', setViewportVarsRaf, { passive: true });
 
   // Chrome 94+ Virtual Keyboard API
-  // This is critical for Android Chrome because it stops the browser from doing a delayed
-  // window resize, and instead overlays the keyboard while providing exact geometry.
+  // This prevents Chrome from resizing the window at all.
   if ('virtualKeyboard' in navigator) {
     (navigator as any).virtualKeyboard.overlaysContent = true;
     
-    // NATIVE 60FPS FIX: By setting --vv-height to use env(keyboard-inset-bottom),
-    // the CSS engine mathematically shrinks the chat window in perfect sync with the
-    // keyboard animation. This completely bypasses JS event delays (which cause jumps).
-    document.documentElement.style.setProperty(
-      '--vv-height', 
-      'calc(100dvh - env(keyboard-inset-bottom, 0px))'
-    );
-    
-    // We still use geometrychange just to toggle the .keyboard-open class for compact UI.
+    // We only need to toggle the keyboard-open class. The GPU handles the rest via env(keyboard-inset-bottom).
     (navigator as any).virtualKeyboard.addEventListener('geometrychange', (event: any) => {
       const { height } = event.target.boundingRect;
       if (height > 60) {

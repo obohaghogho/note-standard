@@ -898,7 +898,7 @@ const ChatWindow: React.FC = () => {
                 ref={scrollContainerRef}
             >
                 {/* VISUAL BOTTOM (DOM TOP) */}
-                <div ref={messagesEndRef} className="h-2 w-full flex-shrink-0" />
+                <div ref={messagesEndRef} className="chat-keyboard-spacer w-full flex-shrink-0" />
 
                 {isPending && (
                     <div className="flex flex-col items-center justify-center p-8 bg-gray-800/50 backdrop-blur rounded-2xl my-6 border border-gray-700 shadow-xl w-full">

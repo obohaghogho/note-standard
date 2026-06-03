@@ -333,11 +333,12 @@ input[type=number] {
   display: flex;
   flex-direction: column;
   width: 100%;
-  /* dvh = dynamic viewport height: shrinks automatically when keyboard opens.
-     This is the native solution for modern browsers (Chrome 108+, Safari 15.4+).
-     --vv-height is the JS fallback for older browsers via the visualViewport listener. */
-  height: 100dvh;
-  height: var(--vv-height, 100dvh);
+  /* Force a strict, non-resizing height. 
+     We do NOT want the browser's slow layout engine to resize this container.
+     100vh stays constant on mobile browsers even when the keyboard opens. */
+  height: 100vh;
+  /* Use 100svh as fallback to avoid address bar hiding issues on load */
+  height: 100svh;
   overflow: hidden;
   position: relative;
   overscroll-behavior: none;
@@ -363,25 +364,40 @@ input[type=number] {
   display: flex;
   flex-direction: column-reverse;
   flex: 1 1 0%;
-  min-height: 0; /* ← critical: allows flex child to shrink below content size */
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
-  scroll-behavior: auto; /* native jump behaves instantly */
-  /* Remove safe area bottom here, we add it to input bar */
+  scroll-behavior: auto;
+  /* Add padding to the bottom so messages aren't hidden behind the absolute input bar */
+  padding-bottom: 70px; /* Fallback height of input bar */
+  padding-bottom: var(--chat-input-height, 70px);
 }
 
-/* Input bar — always at bottom, no keyboard overlap */
 .chat-input-bar {
   flex-shrink: 0;
   flex-grow: 0;
-  position: relative;
-  z-index: 20;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
   width: 100%;
   background: inherit;
-  /* Safe area: home indicator on iPhone */
   padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* The Magic: GPU-accelerated translation matching the exact keyboard height.
+     This runs at 60fps natively, decoupled from DOM layout recalculations. */
+  transform: translateY(calc(-1 * env(keyboard-inset-bottom, var(--kb-height, 0px))));
+  will-change: transform;
+}
+
+/* Spacer injected at the bottom of the message list to absorb the keyboard height */
+.chat-keyboard-spacer {
+  height: calc(8px + env(keyboard-inset-bottom, var(--kb-height, 0px)));
+  width: 100%;
+  flex-shrink: 0;
+  pointer-events: none;
 }
 
 /* Scroll anchor — placed after last message, scrollIntoView targets this */
