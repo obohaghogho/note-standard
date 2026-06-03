@@ -333,7 +333,11 @@ input[type=number] {
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: var(--vv-height, 100%);
+  /* dvh = dynamic viewport height: shrinks automatically when keyboard opens.
+     This is the native solution for modern browsers (Chrome 108+, Safari 15.4+).
+     --vv-height is the JS fallback for older browsers via the visualViewport listener. */
+  height: 100dvh;
+  height: var(--vv-height, 100dvh);
   overflow: hidden;
   position: relative;
   overscroll-behavior: none;

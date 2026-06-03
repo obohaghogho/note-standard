@@ -140,15 +140,12 @@ console.log('🚀 NoteStandard Booting...');
 // Sets --vv-height to the visual viewport height, and locks the outer page
 // scroll position to 0,0 to prevent mobile browsers from shifting the page on focus.
 (() => {
-  let rafId: number | null = null;
-
   const applyViewportVars = () => {
     const vp = window.visualViewport;
     if (vp) {
       document.documentElement.style.setProperty('--vv-height', `${vp.height}px`);
       const kbHeight = Math.max(0, window.innerHeight - vp.height);
       document.documentElement.style.setProperty('--kb-height', `${kbHeight}px`);
-      
       if (kbHeight > 60) {
         document.documentElement.classList.add('keyboard-open');
       } else {
@@ -161,49 +158,45 @@ console.log('🚀 NoteStandard Booting...');
     }
   };
 
-  const setViewportVars = () => {
+  // Apply immediately (no rAF) so there is zero frame delay
+  const setViewportVarsSync = () => applyViewportVars();
+
+  // For non-keyboard resizes (rotation etc.) rAF is fine
+  let rafId: number | null = null;
+  const setViewportVarsRaf = () => {
     if (rafId !== null) cancelAnimationFrame(rafId);
-    rafId = requestAnimationFrame(() => {
-      applyViewportVars();
-      rafId = null;
-    });
+    rafId = requestAnimationFrame(() => { applyViewportVars(); rafId = null; });
   };
 
   // Run immediately on load.
   applyViewportVars();
 
-  // VisualViewport API — fires on keyboard open/close and Safari scroll.
+  // VisualViewport API — fires every frame during keyboard animation
   if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', setViewportVars, { passive: true });
-    window.visualViewport.addEventListener('scroll', setViewportVars, { passive: true });
+    // SYNC (no rAF): fires every pixel the keyboard moves, giving frame-perfect tracking
+    window.visualViewport.addEventListener('resize', setViewportVarsSync, { passive: true });
+    window.visualViewport.addEventListener('scroll', setViewportVarsSync, { passive: true });
   }
 
-  // Also catch orientation changes and desktop resize.
-  window.addEventListener('resize', setViewportVars, { passive: true });
+  // Orientation/desktop resize — rAF is fine here
+  window.addEventListener('resize', setViewportVarsRaf, { passive: true });
 
   // Prevent ANY document-level scrolling on focus and generally lock document scroll to 0,0.
-  // This is because all page scrolling in NoteStandard is handled by internal overflow divs.
-  // The layout viewport itself should always remain firmly anchored at 0,0.
   const forceScrollReset = () => {
     if (window.scrollY !== 0 || window.scrollX !== 0) {
       window.scrollTo(0, 0);
     }
   };
 
-  // Listen to focus changes
   document.addEventListener('focusin', (e) => {
     const tag = (e.target as HTMLElement)?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') {
       forceScrollReset();
-      // Run multiple checks as the keyboard animation triggers
-      setTimeout(forceScrollReset, 20);
-      setTimeout(forceScrollReset, 50);
-      setTimeout(forceScrollReset, 100);
-      setTimeout(forceScrollReset, 200);
+      // Apply viewport immediately on focus so the layout is ready before the keyboard animates
+      applyViewportVars();
     }
   }, { passive: true });
 
-  // Listen to any scroll events on the window and lock back to 0,0
   window.addEventListener('scroll', forceScrollReset, { passive: true });
 })();
 
