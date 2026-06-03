@@ -39,6 +39,20 @@ export default function ChatScreen({ navigation, route }: Props) {
     const isFocused = useIsFocused();
     const insets = initialWindowMetrics?.insets || { top: 0, bottom: 0, left: 0, right: 0 };
 
+    // ── NATIVE 60FPS KEYBOARD TRACKING ──────────────────────────────────────────
+    // With softwareKeyboardLayoutMode:'pan' in app.json, Android no longer resizes
+    // the root view when the keyboard opens. Reanimated tracks the exact keyboard
+    // height pixel-for-pixel on the native UI thread (no JS bridge, no delay).
+    // Result: composer sticks to keyboard top exactly like WhatsApp.
+    const keyboard = useAnimatedKeyboard();
+    const animatedKeyboardStyle = useAnimatedStyle(() => {
+        const kbHeight = keyboard.height.value;
+        // MessageComposer already pads its own safe area (insets.bottom).
+        // We subtract it so there's no double gap between composer and keyboard.
+        const offset = kbHeight > insets.bottom ? kbHeight - insets.bottom : 0;
+        return { paddingBottom: offset };
+    });
+
     const [audioPlayer, setAudioPlayer] = useState<Audio.Sound | null>(null);
     const [replyTo, setReplyTo] = useState<Message | null>(null);
     const [editingMessage, setEditingMessage] = useState<Message | null>(null);
@@ -185,24 +199,6 @@ export default function ChatScreen({ navigation, route }: Props) {
     if (!conversationId) {
         return <View style={styles.center}><Text style={{ color: '#fff' }}>No conversation selected.</Text></View>;
     }
-
-    // ── NATIVE 60FPS KEYBOARD TRACKING ──────────────────────────────────────────
-    // Instead of relying on React Native's KAV which waits for the JS bridge and
-    // causes delayed "jumps" on Android, we use Reanimated to track the keyboard
-    // frame natively at 60 FPS. This exactly mimics WhatsApp's input tracking.
-    const keyboard = useAnimatedKeyboard();
-    const animatedKeyboardStyle = useAnimatedStyle(() => {
-        // The keyboard height includes the system's bottom safe area (e.g. iPhone home indicator).
-        // Since MessageComposer already applies `paddingBottom: insets.bottom`, we must
-        // subtract it here so the composer doesn't float above the keyboard.
-        const kbHeight = keyboard.height.value;
-        // Ensure we never return a negative padding if the keyboard is closed.
-        const offset = kbHeight > insets.bottom ? kbHeight - insets.bottom : 0;
-
-        return {
-            paddingBottom: offset,
-        };
-    });
 
     return (
         <Animated.View style={[styles.container, animatedKeyboardStyle]}>
