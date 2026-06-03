@@ -403,7 +403,13 @@ const ChatWindow: React.FC = () => {
         setInputValue('');
         if (activeConversationId) setDraft(activeConversationId, '');
         setShowMentions(false);
-        
+
+        // Reset textarea height back to single-line (WhatsApp collapses on send)
+        const textarea = document.getElementById('chat-window-input') as HTMLTextAreaElement | null;
+        if (textarea) {
+            textarea.style.height = 'auto';
+        }
+
         const currentEditingId = editingMessageId;
         setEditingMessageId(null);
 
@@ -1242,18 +1248,45 @@ const ChatWindow: React.FC = () => {
                                                     <MentionSuggestions users={mentionParticipants} onSelect={handleSelectMention} />
                                                 </div>
                                             )}
-                                            <input 
-                                                id="chat-window-input" 
-                                                name="message" 
-                                                type="text" 
-                                                value={inputValue} 
-                                                onChange={handleInputChange} 
-                                                placeholder="Type a message..." 
-                                                autoComplete="off" 
+                                            {/* WhatsApp-grade textarea:
+                                                - Grows from 1 line to 5 lines naturally
+                                                - Internal scroll activates after 5 lines
+                                                - Enter sends, Shift+Enter = newline
+                                                - onInput auto-resizes height
+                                            */}
+                                            <textarea
+                                                id="chat-window-input"
+                                                name="message"
+                                                rows={1}
+                                                value={inputValue}
+                                                onChange={handleInputChange}
+                                                onKeyDown={(e) => {
+                                                    // Enter sends message (like WhatsApp Web)
+                                                    // Shift+Enter inserts newline
+                                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                                        e.preventDefault();
+                                                        handleSend(e as any);
+                                                    }
+                                                }}
+                                                onInput={(e) => {
+                                                    // Auto-grow: reset height then expand to scrollHeight
+                                                    // This is the correct grow-then-scroll technique
+                                                    const el = e.currentTarget;
+                                                    el.style.height = 'auto';
+                                                    // Cap at 5 lines (~130px), then scroll internally
+                                                    el.style.height = Math.min(el.scrollHeight, 130) + 'px';
+                                                }}
+                                                placeholder="Type a message..."
+                                                autoComplete="off"
                                                 spellCheck={true}
                                                 autoCapitalize="sentences"
-                                                autoCorrect="on"
-                                                className="w-full bg-transparent text-white py-2.5 md:py-3.5 px-1 md:px-2 focus:outline-none disabled:opacity-50 text-[16px] md:text-sm placeholder:text-gray-500 font-medium" 
+                                                className="w-full bg-transparent text-white py-2.5 md:py-3 px-1 md:px-2 focus:outline-none disabled:opacity-50 text-[16px] md:text-sm placeholder:text-gray-500 font-medium leading-[1.4] resize-none overflow-y-auto"
+                                                style={{
+                                                    minHeight: '24px',
+                                                    maxHeight: '130px', // ~5 lines
+                                                    overflowY: 'auto',
+                                                    scrollbarWidth: 'none', // Firefox: hide scrollbar
+                                                }}
                                             />
                                         </div>
 

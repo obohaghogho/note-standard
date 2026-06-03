@@ -497,3 +497,12 @@ input[type=number] {
     font-size: 14px !important;
   }
 }
+
+/* -- WhatsApp-grade textarea: hide scrollbar visually but keep scroll functional -- */
+#chat-window-input::-webkit-scrollbar {
+  display: none;
+}
+#chat-window-input {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

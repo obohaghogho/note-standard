@@ -188,12 +188,14 @@ export default function ChatScreen({ navigation, route }: Props) {
     return (
         <KeyboardAvoidingView
             style={styles.container}
-            // On iOS 13+: 'padding' pushes the composer up with the keyboard.
-            // On Android: 'height' shrinks the screen — the composer naturally rises.
+            // 'padding': KAV adds bottom padding equal to keyboard height.
+            // 'height': KAV shrinks the view height by keyboard height.
+            // iOS needs 'padding' — Android 'height' is more reliable.
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            // iOS: match the height of the status bar + navigation header (56+14=70)
-            // This offset tells KAV how much of the screen is already "above" the KAV.
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+            // keyboardVerticalOffset: tells KAV how tall the non-KAV space above is.
+            // Our entire screen IS the KAV (no nav header outside it), so offset = 0.
+            // If this screen is inside a stack navigator header, set to header height.
+            keyboardVerticalOffset={0}
         >
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
