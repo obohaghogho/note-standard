@@ -85,7 +85,9 @@ const createNotification = async ({
           conversationId: conversationId || null,
           messageId: messageId || null,
           url: link || '/dashboard/notifications',
-          recipientId: receiverId,   // ← allows mobile to auto-switch account on tap
+          recipientId: receiverId,        // legacy compat
+          targetUserId: receiverId,       // explicit
+          targetAccountId: receiverId,    // explicit (same as userId in this app)
         },
       }),
     }).catch(err => console.error('[NotificationService] Native push via gateway failed:', err.message));

@@ -2,7 +2,7 @@ import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react'
 import {
     View, Text, TouchableOpacity,
     StyleSheet, Platform, Image,
-    Alert, Share, InteractionManager,
+    Alert, Share, InteractionManager, ActivityIndicator
 } from 'react-native';
 import Animated, { useAnimatedKeyboard, useAnimatedStyle } from 'react-native-reanimated';
 
@@ -30,7 +30,7 @@ type Props = {
 
 export default function ChatScreen({ navigation, route }: Props) {
     const { conversationId, conversation } = route.params || {};
-    const { user } = useAuth();
+    const { user, accountReady } = useAuth();
 
     // Scoped selectors — each only subscribes to what it needs
     const { sendMessage, editMessage, deleteMessage, onMessageVisible, messages } = useMessages();
@@ -198,6 +198,14 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     if (!conversationId) {
         return <View style={styles.center}><Text style={{ color: '#fff' }}>No conversation selected.</Text></View>;
+    }
+
+    if (!accountReady) {
+        return (
+            <View style={styles.center}>
+                <ActivityIndicator size="large" color="#6366f1" />
+            </View>
+        );
     }
 
     return (

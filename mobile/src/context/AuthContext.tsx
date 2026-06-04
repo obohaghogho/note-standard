@@ -17,6 +17,7 @@ interface AuthContextType {
   switchAccount: (userId: string) => Promise<boolean>;
   removeAccount: (userId: string) => Promise<void>;
   addAccount: () => void;
+  accountReady: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -25,6 +26,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [accounts, setAccounts] = useState<StoredAccount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [accountReady, setAccountReady] = useState(false);
 
   const loadUser = useCallback(async () => {
     try {
@@ -37,6 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (token && u) {
         SignalingService.init(token, u.id);
+        setAccountReady(true);
       }
     } catch (err) {
       console.error('[AuthContext] Load error:', err);
@@ -60,12 +63,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       AuthService.getStoredAccounts().then(setAccounts);
     };
 
+    const handleNotificationSwitch = async ({ userId }: { userId: string }) => {
+      setAccountReady(false);
+      const success = await AuthService.switchAccount(userId);
+      if (success) {
+        const newUser = await AuthService.getUser();
+        const token = await AuthService.getToken();
+        if (newUser && token) {
+          SignalingService.disconnect();
+          SignalingService.init(token, newUser.id);
+          setUser(newUser);
+          const accs = await AuthService.getStoredAccounts();
+          setAccounts(accs);
+        }
+      }
+      setAccountReady(true);
+      // Let the NotificationRouter know the state is fully recovered
+      const { NotificationRouter } = require('../services/NotificationRouter');
+      NotificationRouter.signalAccountReady(userId);
+    };
+
     EventEmitter.on('auth:logout', handleLogout);
     EventEmitter.on('auth:switch', handleSwitch);
+    EventEmitter.on('notification:switch_account', handleNotificationSwitch);
     
     return () => {
       EventEmitter.off('auth:logout', handleLogout);
       EventEmitter.off('auth:switch', handleSwitch);
+      EventEmitter.off('notification:switch_account', handleNotificationSwitch);
     };
   }, [loadUser]);
 
@@ -89,6 +114,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Initialize signaling immediately after login
       SignalingService.init(token, userData.id);
+      setAccountReady(true);
       
       // Update accounts list
       const accs = await AuthService.getStoredAccounts();
@@ -112,6 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Initialize signaling immediately after registration
       SignalingService.init(token, userData.id);
+      setAccountReady(true);
       
       // Update accounts list
       const accs = await AuthService.getStoredAccounts();
@@ -153,7 +180,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <AuthContext.Provider value={{ 
       user, isLoading, isAuthenticated: !!user, accounts,
-      login, register, logout, switchAccount, removeAccount, addAccount 
+      login, register, logout, switchAccount, removeAccount, addAccount, accountReady 
     }}>
       {children}
     </AuthContext.Provider>
