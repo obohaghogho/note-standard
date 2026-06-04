@@ -336,6 +336,16 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         if (!user) return;
         let cancelled = false;
 
+        // ── CRITICAL: Flush stale data from previous account ──────────────────
+        // When switching accounts, old messages/conversations must be cleared
+        // immediately so the new account's data is never mixed with stale data.
+        setConversations([]);
+        setMessages({});
+        processedEventsRef.current.clear();
+        socketBatchRef.current = [];
+        batchFlushScheduledRef.current = false;
+        // ─────────────────────────────────────────────────────────────────────
+
         const setupSocket = async () => {
             const token = await AuthService.getToken();
             if (!token || cancelled) return;
@@ -462,6 +472,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             socketManager.offEvent('chat:message_deleted');
         };
     }, [user]);
+
 
     // Fetch messages when conversation opens
     useEffect(() => {

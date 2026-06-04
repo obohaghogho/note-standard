@@ -27,6 +27,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [accounts, setAccounts] = useState<StoredAccount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [accountReady, setAccountReady] = useState(false);
+  // Ref to hold the userId that needs to be signaled once React commits the new user.
+  // This ensures signalAccountReady() fires AFTER the setUser() render cycle completes.
+  const pendingSignalUserIdRef = React.useRef<string | null>(null);
 
   const loadUser = useCallback(async () => {
     try {
@@ -64,23 +67,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const handleNotificationSwitch = async ({ userId }: { userId: string }) => {
+      console.log(`[AuthContext] handleNotificationSwitch: switching to ${userId}`);
       setAccountReady(false);
+      
       const success = await AuthService.switchAccount(userId);
       if (success) {
         const newUser = await AuthService.getUser();
         const token = await AuthService.getToken();
         if (newUser && token) {
+          // Disconnect old socket BEFORE reconnecting
           SignalingService.disconnect();
           SignalingService.init(token, newUser.id);
+          // Register the signal BEFORE calling setUser so the
+          // post-render useEffect([user]) can fire it at the right time.
+          pendingSignalUserIdRef.current = userId;
           setUser(newUser);
           const accs = await AuthService.getStoredAccounts();
           setAccounts(accs);
+        } else {
+          // Switch failed — still signal to unblock NotificationRouter
+          console.warn('[AuthContext] Account switch succeeded but user/token missing');
+          setAccountReady(true);
+          const { NotificationRouter } = require('../services/NotificationRouter');
+          NotificationRouter.signalAccountReady(userId);
         }
+      } else {
+        // Switch failed — still signal to unblock NotificationRouter
+        console.error(`[AuthContext] AuthService.switchAccount failed for userId: ${userId}`);
+        setAccountReady(true);
+        const { NotificationRouter } = require('../services/NotificationRouter');
+        NotificationRouter.signalAccountReady(userId);
       }
-      setAccountReady(true);
-      // Let the NotificationRouter know the state is fully recovered
-      const { NotificationRouter } = require('../services/NotificationRouter');
-      NotificationRouter.signalAccountReady(userId);
     };
 
     EventEmitter.on('auth:logout', handleLogout);
@@ -93,6 +110,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       EventEmitter.off('notification:switch_account', handleNotificationSwitch);
     };
   }, [loadUser]);
+
+  // ── Post-render signal: fires AFTER React commits the new user to the tree ──
+  // This is the ONLY correct place to call signalAccountReady — it guarantees
+  // that when NotificationRouter navigates, ChatScreen will already see the
+  // correct user in its context.
+  useEffect(() => {
+    const pendingUserId = pendingSignalUserIdRef.current;
+    if (pendingUserId && user?.id === pendingUserId) {
+      console.log(`[AuthContext] Post-render: signaling account ready for ${pendingUserId}`);
+      pendingSignalUserIdRef.current = null;
+      setAccountReady(true);
+      const { NotificationRouter } = require('../services/NotificationRouter');
+      NotificationRouter.signalAccountReady(pendingUserId);
+    }
+  }, [user]);
+
 
   useEffect(() => {
     if (user) {

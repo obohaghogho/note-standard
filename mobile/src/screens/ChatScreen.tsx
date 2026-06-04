@@ -28,27 +28,47 @@ type Props = {
     route: RouteProp<ChatStackParamList, 'Chat'>;
 };
 
+
 export default function ChatScreen({ navigation, route }: Props) {
-    const { conversationId, conversation } = route.params || {};
+    const { conversationId, conversation: routeConversation } = route.params || {};
     const { user, accountReady } = useAuth();
 
     // Scoped selectors — each only subscribes to what it needs
     const { sendMessage, editMessage, deleteMessage, onMessageVisible, messages } = useMessages();
-    const { setActiveConversationId } = useConversations();
+    const { setActiveConversationId, conversations } = useConversations();
+
+    // Self-healing: if conversation object wasn’t passed (e.g. from notification tap),
+    // look it up from already-loaded conversations, or fetch from API.
+    const [resolvedConversation, setResolvedConversation] = useState<any>(routeConversation ?? null);
+
+    useEffect(() => {
+        if (resolvedConversation) return; // Already have it
+        if (!conversationId) return;
+
+        // 1. Try conversations already in ChatContext
+        const found = conversations.find((c: any) => c.id === conversationId);
+        if (found) {
+            setResolvedConversation(found);
+            return;
+        }
+
+        // 2. Fetch from API (notification cold-boot: context may still be loading)
+        apiClient.get('/chat/conversations')
+            .then(res => {
+                const list: any[] = res.data || [];
+                const match = list.find((c: any) => c.id === conversationId);
+                if (match) setResolvedConversation(match);
+            })
+            .catch(err => console.warn('[ChatScreen] Failed to self-heal conversation:', err));
+    }, [conversationId, resolvedConversation, conversations]);
 
     const isFocused = useIsFocused();
     const insets = initialWindowMetrics?.insets || { top: 0, bottom: 0, left: 0, right: 0 };
 
     // ── NATIVE 60FPS KEYBOARD TRACKING ──────────────────────────────────────────
-    // With softwareKeyboardLayoutMode:'pan' in app.json, Android no longer resizes
-    // the root view when the keyboard opens. Reanimated tracks the exact keyboard
-    // height pixel-for-pixel on the native UI thread (no JS bridge, no delay).
-    // Result: composer sticks to keyboard top exactly like WhatsApp.
     const keyboard = useAnimatedKeyboard();
     const animatedKeyboardStyle = useAnimatedStyle(() => {
         const kbHeight = keyboard.height.value;
-        // MessageComposer already pads its own safe area (insets.bottom).
-        // We subtract it so there's no double gap between composer and keyboard.
         const offset = kbHeight > insets.bottom ? kbHeight - insets.bottom : 0;
         return { paddingBottom: offset };
     });
@@ -72,7 +92,8 @@ export default function ChatScreen({ navigation, route }: Props) {
         [messages, conversationId]
     );
 
-    const members = conversation?.members ?? [];
+    // Derive member/profile from resolved conversation
+    const members = resolvedConversation?.members ?? [];
     const otherMember = members.find((m: any) => m.user_id !== user?.id);
     const profile = otherMember?.profile;
     const isOtherOnline = profile?.is_online || false;
@@ -82,8 +103,6 @@ export default function ChatScreen({ navigation, route }: Props) {
         if (isFocused) {
             // CRITICAL: defer setActiveConversationId until AFTER the
             // keyboard animation and screen transition completes.
-            // Without this, the context update fires during the transition,
-            // causing a re-render storm while the screen is animating in.
             const task = InteractionManager.runAfterInteractions(() => {
                 setActiveConversationId(conversationId);
             });
@@ -92,6 +111,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             setActiveConversationId(null);
         }
     }, [isFocused, conversationId, setActiveConversationId]);
+
 
     // handleSend is synchronous — matches the new fire-and-forget MessageComposer API
     const handleSend = useCallback((content: string, attachmentId?: string) => {
@@ -200,7 +220,10 @@ export default function ChatScreen({ navigation, route }: Props) {
         return <View style={styles.center}><Text style={{ color: '#fff' }}>No conversation selected.</Text></View>;
     }
 
-    if (!accountReady) {
+    // Show spinner while:
+    // 1. Account is switching (accountReady = false), OR
+    // 2. Conversation object not yet resolved (notification cold-boot)
+    if (!accountReady || !resolvedConversation) {
         return (
             <View style={styles.center}>
                 <ActivityIndicator size="large" color="#6366f1" />

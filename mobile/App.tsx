@@ -6,8 +6,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { NotificationProvider } from './src/context/NotificationContext';
+import { ChatProvider } from './src/context/ChatContext';
 import { PushHandler } from './src/services/PushHandler';
 import BatteryService from './src/services/BatteryService';
+
 
 // Suppress known dev-only warnings
 LogBox.ignoreLogs([
@@ -48,12 +50,14 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <NotificationProvider>
-          <AppNavigator />
-          {/* In-app VoIP incoming call modal – rendered globally so it works from any screen */}
-          <IncomingCallModal />
-          <StatusBar style="light" />
-        </NotificationProvider>
+        <ChatProvider>
+          <NotificationProvider>
+            <AppNavigator />
+            {/* In-app VoIP incoming call modal – rendered globally so it works from any screen */}
+            <IncomingCallModal />
+            <StatusBar style="light" />
+          </NotificationProvider>
+        </ChatProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );
