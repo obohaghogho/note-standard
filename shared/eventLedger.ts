@@ -25,9 +25,10 @@ export class EventLedger {
     public emit(payload: LedgerEventPayload) {
         // Fire and forget
         this.apiClient.post('/chat/events', payload).catch((err: any) => {
-            if (process.env.NODE_ENV !== 'production' && typeof process !== 'undefined') {
-                console.warn(`[EventLedger] Failed to emit ${payload.eventType} event:`, err.message);
-            } else if (typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV) {
+            const isDev = (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') || 
+                          // @ts-ignore: React Native global
+                          (typeof __DEV__ !== 'undefined' && __DEV__);
+            if (isDev) {
                 console.warn(`[EventLedger] Failed to emit ${payload.eventType} event:`, err.message);
             }
         });
