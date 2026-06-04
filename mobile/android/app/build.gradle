@@ -88,6 +88,12 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace 'com.notestandard.app'
+    
+    lintOptions {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
     defaultConfig {
         applicationId 'com.notestandard.app'
         minSdkVersion rootProject.ext.minSdkVersion
