@@ -19,6 +19,7 @@ import { ChatWidget } from './components/chat/ChatWidget';
 import { ErrorBoundary } from 'react-error-boundary';
 import { VersionGuard } from './components/common/VersionGuard';
 import { IOSInstallPrompt } from './components/common/IOSInstallPrompt';
+import { WebNotificationRouter } from './components/common/WebNotificationRouter';
 import DashboardHome from './pages/dashboard/DashboardHome';
 import Notes from './pages/dashboard/Notes';
 import Chat from './pages/dashboard/Chat';
@@ -129,6 +130,7 @@ function App() {
           </div>
         }>
           <AuthProvider>
+            <WebNotificationRouter />
             <VersionGuard>
             <SocketProvider>
               <PresenceProvider>

@@ -120,6 +120,7 @@ const sendPushNotification = async (userId, payload) => {
         type: payload.type,
         messageId: payload.messageId,
         conversationId: payload.conversationId || null,
+        targetAccountId: userId,
         apiUrl: process.env.BACKEND_URL || (process.env.NODE_ENV === 'production' ? 'https://note-standard-api.onrender.com' : 'http://127.0.0.1:5001')
       },
     });
