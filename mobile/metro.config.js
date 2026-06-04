@@ -11,4 +11,9 @@ config.resolver.extraNodeModules = {
   shared: path.resolve(__dirname, '../shared'),
 };
 
+// Ensure Metro resolves node_modules from the mobile directory when processing shared files
+config.resolver.nodeModulesPaths = [
+  path.resolve(__dirname, 'node_modules'),
+];
+
 module.exports = config;
