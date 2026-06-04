@@ -57,6 +57,33 @@ export class PushHandler {
       }
     });
 
+    // Background/Killed Tap listeners for Firebase (Android)
+    messaging().onNotificationOpenedApp(async remoteMessage => {
+      console.log('[PushHandler] 👆 Firebase Notification tapped (background):', JSON.stringify(remoteMessage.data));
+      if (remoteMessage.data) {
+        try {
+          const { NotificationRouter } = require('./NotificationRouter');
+          await NotificationRouter.handleNotificationTap(remoteMessage.data);
+        } catch (err) {
+          console.error('[PushHandler] ❌ Error handling Firebase background tap:', err);
+        }
+      }
+    });
+
+    messaging().getInitialNotification().then(async remoteMessage => {
+      if (remoteMessage) {
+        console.log('[PushHandler] 👆 Firebase Notification tapped (killed state):', JSON.stringify(remoteMessage.data));
+        if (remoteMessage.data) {
+          try {
+            const { NotificationRouter } = require('./NotificationRouter');
+            await NotificationRouter.handleNotificationTap(remoteMessage.data);
+          } catch (err) {
+            console.error('[PushHandler] ❌ Error handling Firebase cold boot tap:', err);
+          }
+        }
+      }
+    });
+
     Notifications.addNotificationReceivedListener(notification => {
       const { data, title, body } = notification.request.content;
       console.log('[PushHandler] 🔔 Standard Push Received:', JSON.stringify(data));
