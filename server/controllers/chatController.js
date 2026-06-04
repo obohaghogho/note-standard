@@ -291,6 +291,72 @@ exports.getConversations = async (req, res) => {
   }
 };
 
+exports.getConversationById = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user.id;
+
+    // Verify user is a member of this conversation
+    const { data: membership, error: memError } = await supabase
+      .from("conversation_members")
+      .select("role, status, cleared_at")
+      .eq("conversation_id", conversationId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (memError || !membership) {
+      return res.status(403).json({ error: "Access denied or conversation not found" });
+    }
+
+    // Fetch conversation details
+    const { data: conv, error: convError } = await supabase
+      .from("conversations")
+      .select("*")
+      .eq("id", conversationId)
+      .single();
+
+    if (convError) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
+
+    // Fetch members and profiles
+    const { data: members, error: membersError } = await supabase
+      .from("conversation_members")
+      .select(`
+        user_id,
+        role,
+        status,
+        profile:profiles (
+          id,
+          username,
+          full_name,
+          avatar_url,
+          is_verified,
+          plan_tier,
+          is_online,
+          show_online_status,
+          last_seen
+        )
+      `)
+      .eq("conversation_id", conversationId);
+
+    res.json({
+      ...conv,
+      members: members || [],
+      membership: {
+        role: membership.role || "member",
+        status: membership.status || "accepted",
+        cleared_at: membership.cleared_at || null,
+        joined_at: null
+      }
+    });
+
+  } catch (err) {
+    console.error("[Chat] getConversationById error:", err.message);
+    res.status(500).json({ error: "Server Error", details: err.message });
+  }
+};
+
 exports.createSupportChat = async (req, res) => {
   try {
     const userId = req.user.id;

@@ -21,6 +21,7 @@ router.post(
 
 // Conversations
 router.get("/conversations", chatController.getConversations);
+router.get("/conversations/:conversationId", chatController.getConversationById);
 router.post("/conversations", chatController.createConversation);
 router.post("/support", chatController.createSupportChat); // NEW: User creates support chat
 router.put(

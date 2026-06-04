@@ -388,6 +388,23 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }, [session, isSwitching, joinAllRooms, markConversationDelivered]);
 
+    const loadSingleConversation = useCallback(async (conversationId: string) => {
+        if (!session || isSwitching) return;
+        try {
+            const response = await api.get(`/chat/conversations/${conversationId}`);
+            if (isMounted.current && response.data) {
+                const conv = response.data;
+                setConversations(prev => {
+                    // Check if it already got loaded by loadConversations in the meantime
+                    if (prev.some(c => c.id === conversationId)) return prev;
+                    return [conv, ...prev];
+                });
+            }
+        } catch (e) {
+            console.error('[Chat] Failed to load single conversation:', e);
+        }
+    }, [session, isSwitching]);
+
     const loadMessages = useCallback(async (conversationId: string) => {
         if (!session) return;
         try {
@@ -443,10 +460,14 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => {
         activeConversationIdRef.current = activeConversationId;
         if (activeConversationId) {
+            // Check if we already have the conversation. If not, fetch it specifically for faster loading.
+            if (!conversations.some(c => c.id === activeConversationId)) {
+                loadSingleConversation(activeConversationId);
+            }
             loadMessages(activeConversationId);
             markConversationRead(activeConversationId);
         }
-    }, [activeConversationId, loadMessages, markConversationRead]);
+    }, [activeConversationId, loadMessages, markConversationRead, conversations, loadSingleConversation]);
 
     // Re-subscribe all conversations on socket reconnect
     useEffect(() => {
