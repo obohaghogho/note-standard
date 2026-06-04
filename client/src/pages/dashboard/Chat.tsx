@@ -22,11 +22,23 @@ function ChatContent() {
         const targetAccountId = searchParams.get('targetAccountId');
 
         // CRITICAL GUARD: If the notification is for a different account,
-        // block the chat from loading. WebNotificationRouter will handle
-        // the switch first, then clean the URL and re-trigger this effect.
+        // hold here. WebNotificationRouter will switch the account first.
+        // Once user.id commits to targetAccountId this guard releases.
         if (targetAccountId && authReady && user?.id !== targetAccountId) {
-            console.log('[Chat] Waiting for account switch — holding conversation load.', { targetAccountId, currentUser: user?.id });
+            console.log('[Chat] Holding conversation load — waiting for account switch.', {
+                targetAccountId,
+                currentUser: user?.id,
+            });
             return;
+        }
+
+        // Auth has committed to the correct account. Clean targetAccountId
+        // from URL so it does not interfere with future navigation.
+        if (targetAccountId && user?.id === targetAccountId) {
+            const cleaned = new URLSearchParams(searchParams);
+            cleaned.delete('targetAccountId');
+            setSearchParams(cleaned, { replace: true });
+            // Don't return — fall through to load the conversation below.
         }
 
         if (id) {
@@ -46,8 +58,6 @@ function ChatContent() {
             };
             initiateChat();
         } else if (activeConversationId) {
-            // URL has no id/username, but context has activeConversationId
-            // This happens on browser back button. Sync context to URL.
             setActiveConversationId(null);
         }
     }, [searchParams, activeConversationId, setActiveConversationId, startConversation, setSearchParams, user?.id, authReady]);

@@ -7,72 +7,71 @@ import { toast } from 'react-hot-toast';
 /**
  * WebNotificationRouter
  *
- * A headless component that sits at the root of the app and intercepts
- * URL parameters injected by the Service Worker after a push notification click.
+ * Headless component. Sits at the root of the app and intercepts URL parameters
+ * injected by the Service Worker after a push notification click.
  *
- * It implements the full Account-Resolution chain:
+ * Full account-resolution chain:
  *   Push Notification
  *   → Service Worker (injects ?targetAccountId=&conversationId=)
  *   → URL Parameters
- *   → WebNotificationRouter (this component)
- *   → Account Switch (via switchAccount())
- *   → Conversation Navigation
+ *   → WebNotificationRouter  ← handles switch + KEEPS targetAccountId in URL
+ *   → Chat.tsx guard          ← blocks conversation load until user.id commits
+ *   → Chat.tsx cleanup        ← removes targetAccountId from URL when safe
  *
- * Fallback: If switchAccount() fails, it redirects to /login?add_account=true
- * and NEVER silently falls back to the wrong account.
+ * This two-stage approach eliminates the stale-data flash:
+ *   - No fixed delay. The Chat page guard is the synchronisation point.
+ *   - handledRef is reset after every handled notification so future taps work.
+ *
+ * Fallback: If switchAccount() fails, redirects to /login — NEVER wrong account.
  */
 export const WebNotificationRouter: React.FC = () => {
   const { user, authReady, switchAccount } = useAuth();
   const { socket } = useSocket();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const [isSwitchingOverlay, setIsSwitchingOverlay] = useState(false);
-  // Guard to prevent double-firing on strict-mode double-render or param re-read
+  // Per-notification guard. Cleared after each handled notification so future
+  // taps of any notification are always processed.
   const handledRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // Step 1: Wait for auth layer to fully rehydrate (critical for cold-boot / app-closed scenario)
+    // Step 1: Wait for auth layer to fully rehydrate (critical for cold-boot scenario)
     if (!authReady) return;
 
-    // Step 2: Read params — derived inside the effect for correct closure
     const targetAccountId = searchParams.get('targetAccountId');
     const conversationId = searchParams.get('conversationId');
 
-    // No notification context present in the URL — nothing to do
+    // No notification context in URL
     if (!targetAccountId) return;
 
-    // Guard against duplicate handling for the same notification context
-    const handledKey = `${targetAccountId}:${conversationId}`;
+    // Guard: deduplicate within the same render cycle only.
+    // We use targetAccountId alone (not including conversationId) as the key so that
+    // switching to the same account twice in a row still works.
+    const handledKey = `${targetAccountId}`;
     if (handledRef.current === handledKey) return;
     handledRef.current = handledKey;
 
-    // Step 3: Clean params from URL immediately to prevent loops on reload
-    const cleanParams = () => {
-      const next = new URLSearchParams(searchParams);
-      next.delete('targetAccountId');
-      next.delete('conversationId');
-      setSearchParams(next, { replace: true });
-    };
-
     const handleNotificationNavigation = async () => {
-      // ── Forensic Log: Entry ─────────────────────────────────────────
+      // ── Forensic Logs: Entry ──────────────────────────────────────────
       console.log('[ACCOUNT_FORENSIC] Notification Account ID:', targetAccountId);
       console.log('[ACCOUNT_FORENSIC] Active Account ID:', user?.id ?? 'none');
-      // Read socket's auth token to confirm it belongs to the correct account
       const socketWithAuth = socket as (typeof socket & { auth?: { token?: string } }) | null;
       console.log('[ACCOUNT_FORENSIC] Socket connected:', !!socket?.connected);
       console.log('[ACCOUNT_FORENSIC] Socket has auth token:', !!socketWithAuth?.auth?.token);
 
       // ── Scenario 1: Already on the correct account ───────────────────
       if (user?.id === targetAccountId) {
-        console.log('[ACCOUNT_FORENSIC] Account IDs match — no switch needed.');
-        cleanParams();
-        if (conversationId) {
-          console.log('[ACCOUNT_FORENSIC] Conversation Navigation Started:', conversationId);
-          navigate(`/dashboard/chat?id=${conversationId}`, { replace: true });
-          console.log('[ACCOUNT_FORENSIC] Conversation Navigation Success');
-        }
+        console.log('[ACCOUNT_FORENSIC] Correct account already active — navigating directly.');
+
+        // Clean targetAccountId from URL immediately (no switch needed)
+        const destination = conversationId
+          ? `/dashboard/chat?id=${conversationId}`
+          : '/dashboard';
+        navigate(destination, { replace: true });
+
+        // Reset so future notifications are processed
+        handledRef.current = null;
         return;
       }
 
@@ -84,38 +83,39 @@ export const WebNotificationRouter: React.FC = () => {
         await switchAccount(targetAccountId);
         console.log('[ACCOUNT_FORENSIC] Account Switch Success');
 
-        // Give React one tick to commit the new user state to context before navigating
-        await new Promise<void>(resolve => setTimeout(resolve, 400));
-
-        // Post-switch forensic: confirm all three IDs align
-        console.log('[ACCOUNT_FORENSIC] Active User ID (post-switch):', targetAccountId);
-        console.log('[ACCOUNT_FORENSIC] Socket User ID (expected):', targetAccountId);
-        console.log('[ACCOUNT_FORENSIC] Notification User ID:', targetAccountId);
-
-        cleanParams();
-
+        // KEY DESIGN: Navigate WITH targetAccountId STILL IN THE URL.
+        // Chat.tsx reads this param and blocks the conversation load until
+        // user.id === targetAccountId (i.e. auth has fully committed).
+        // Chat.tsx then cleans the param itself when it's safe to load.
+        // This eliminates the stale-data flash without needing a fixed delay.
         if (conversationId) {
           console.log('[ACCOUNT_FORENSIC] Conversation Navigation Started:', conversationId);
-          navigate(`/dashboard/chat?id=${conversationId}`, { replace: true });
-          console.log('[ACCOUNT_FORENSIC] Conversation Navigation Success');
+          navigate(
+            `/dashboard/chat?id=${conversationId}&targetAccountId=${targetAccountId}`,
+            { replace: true }
+          );
         } else {
-          navigate('/dashboard', { replace: true });
+          navigate(`/dashboard?targetAccountId=${targetAccountId}`, { replace: true });
         }
+
+        // Hide the overlay — Chat.tsx guard takes over from here
+        setIsSwitchingOverlay(false);
+
+        // Reset guard so the NEXT notification tap always works
+        handledRef.current = null;
+
       } catch (err) {
-        // ── Fallback Path ─────────────────────────────────────────────
-        // NEVER silently drop into the wrong account.
-        // Redirect to login with re-auth hint.
+        // ── Fallback: NEVER silently open wrong account ───────────────
         console.error('[ACCOUNT_FORENSIC] Account Switch Failed:', err);
-        cleanParams();
         toast.error('Session expired for the target account. Please log in again.', { duration: 5000 });
-        navigate(`/login?add_account=true`, { replace: true });
-      } finally {
+        navigate('/login?add_account=true', { replace: true });
+        handledRef.current = null;
         setIsSwitchingOverlay(false);
       }
     };
 
     handleNotificationNavigation();
-  }, [authReady, searchParams, user?.id, switchAccount, navigate, setSearchParams, socket]);
+  }, [authReady, searchParams, user?.id, switchAccount, navigate, socket]);
 
   if (isSwitchingOverlay) {
     return (
