@@ -189,12 +189,15 @@ console.log('🚀 NoteStandard Booting...');
   // Orientation/desktop resize — rAF is fine here
   window.addEventListener('resize', setViewportVarsRaf, { passive: true });
 
-  // Chrome 94+ Virtual Keyboard API
-  // This prevents Chrome from resizing the window at all.
+  // Chrome 94+ Virtual Keyboard API.
+  // IMPORTANT: Do NOT set overlaysContent = true here.
+  // overlaysContent=true tells Chrome not to shrink the visual viewport when the keyboard opens.
+  // Our container strategy (.chat-root tracks --vv-height) REQUIRES the visual viewport to shrink.
+  // Without shrinking, --vv-height stays at full screen height and the composer lands behind the keyboard.
+  // The visualViewport 'resize' listener above already handles everything we need.
   if ('virtualKeyboard' in navigator) {
-    (navigator as any).virtualKeyboard.overlaysContent = true;
-    
-    // We only need to toggle the keyboard-open class. The GPU handles the rest via env(keyboard-inset-bottom).
+    // Fallback: also toggle keyboard-open class via geometrychange for browsers
+    // where visualViewport.resize doesn't fire reliably.
     (navigator as any).virtualKeyboard.addEventListener('geometrychange', (event: any) => {
       const { height } = event.target.boundingRect;
       if (height > 60) {
