@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, memo } from 'react';
+import React, { useEffect, useCallback, memo, useMemo } from 'react';
 import {
     View, Text, TouchableOpacity, StyleSheet,
     RefreshControl, Image,

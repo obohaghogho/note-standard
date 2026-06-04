@@ -266,6 +266,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         flexShrink: 0,
     },
+    sideBtnIcon: {
+        fontSize: 20,
+    },
     // ── The pill container ───────────────────────────────────────────────────
     // minHeight: expands from single-line height
     // maxHeight: caps growth at 5 lines (WhatsApp's exact cap)
