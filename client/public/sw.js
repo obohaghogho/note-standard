@@ -9,7 +9,7 @@ self.addEventListener('install', (event) => {
     // Force immediate update to bypass aggressive caching
     self.skipWaiting();
 });
-// Cache Bust Timestamp: 2026-06-04T20:52:00 — v2: account-switching notification router
+// Cache Bust Timestamp: 2026-06-04T21:08:00 — v3: fix targetAccountId missing from push options.data
 
 self.addEventListener('activate', (event) => {
     event.waitUntil(
@@ -71,6 +71,9 @@ self.addEventListener('push', (event) => {
             type: data.data?.type || data.type || 'general',
             messageId: data.data?.messageId,
             conversationId: notifConversationId,
+            // CRITICAL: persist targetAccountId so notificationclick can read it and
+            // pass it to the React app for account switching
+            targetAccountId: data.data?.targetAccountId || null,
             apiUrl: data.data?.apiUrl || 'https://note-standard-api.onrender.com'
         },
         actions: [
