@@ -9,7 +9,7 @@ self.addEventListener('install', (event) => {
     // Force immediate update to bypass aggressive caching
     self.skipWaiting();
 });
-// Cache Bust Timestamp: 2026-05-24T21:55:00
+// Cache Bust Timestamp: 2026-06-04T20:52:00 — v2: account-switching notification router
 
 self.addEventListener('activate', (event) => {
     event.waitUntil(

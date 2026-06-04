@@ -6,6 +6,7 @@ import NewChatModal from '../../components/chat/NewChatModal';
 import { Plus, MessageSquare, Menu } from 'lucide-react';
 import { useSearchParams, useOutletContext } from 'react-router-dom';
 import { useChat } from '../../context/ChatContext';
+import { useAuth } from '../../context/AuthContext';
 
 
 function ChatContent() {
@@ -13,10 +14,20 @@ function ChatContent() {
     const [searchParams, setSearchParams] = useSearchParams();
     const { activeConversationId, setActiveConversationId, startConversation } = useChat();
     const { openMobileMenu } = useOutletContext<{ openMobileMenu?: () => void }>() || {};
+    const { user, authReady } = useAuth();
 
     useEffect(() => {
         const id = searchParams.get('id');
         const username = searchParams.get('username');
+        const targetAccountId = searchParams.get('targetAccountId');
+
+        // CRITICAL GUARD: If the notification is for a different account,
+        // block the chat from loading. WebNotificationRouter will handle
+        // the switch first, then clean the URL and re-trigger this effect.
+        if (targetAccountId && authReady && user?.id !== targetAccountId) {
+            console.log('[Chat] Waiting for account switch — holding conversation load.', { targetAccountId, currentUser: user?.id });
+            return;
+        }
 
         if (id) {
             if (activeConversationId !== id) {
@@ -39,7 +50,7 @@ function ChatContent() {
             // This happens on browser back button. Sync context to URL.
             setActiveConversationId(null);
         }
-    }, [searchParams, activeConversationId, setActiveConversationId, startConversation, setSearchParams]);
+    }, [searchParams, activeConversationId, setActiveConversationId, startConversation, setSearchParams, user?.id, authReady]);
 
     return (
         <div className="flex h-full bg-gray-950 shadow-none rounded-none md:border md:border-gray-800 md:rounded-2xl overflow-hidden md:shadow-2xl relative">

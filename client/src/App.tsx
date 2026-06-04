@@ -130,7 +130,6 @@ function App() {
           </div>
         }>
           <AuthProvider>
-            <WebNotificationRouter />
             <VersionGuard>
             <SocketProvider>
               <PresenceProvider>
@@ -139,6 +138,7 @@ function App() {
                     <WebRTCProvider>
                       <WalletProvider>
                         <NotesProvider>
+                          <WebNotificationRouter />
                           <Routes>
                             <Route path="/" element={<LandingPage />} />
                             <Route path="/login" element={<Login />} />
