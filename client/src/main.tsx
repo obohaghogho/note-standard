@@ -142,11 +142,16 @@ console.log('🚀 NoteStandard Booting...');
   const applyViewportVars = () => {
     const vp = window.visualViewport;
     if (vp) {
-      // PWA Fix: If the OS forcefully resized the layout viewport (innerHeight shrank),
-      // innerHeight - vp.height will naturally evaluate to 0, preventing the double offset.
-      // If iOS Safari natively anchored bottom: 0 to the visual viewport, vp.offsetTop will increase,
-      // also evaluating to 0.
-      const kbHeight = Math.max(0, window.innerHeight - (vp.height + vp.offsetTop));
+      // --vv-top: how far the visual viewport top is from the layout viewport top
+      // (used for top-down absolute positioning of the composer)
+      const vvTop = vp.offsetTop;
+      const vvHeight = vp.height;
+      document.documentElement.style.setProperty('--vv-top', `${vvTop}px`);
+      document.documentElement.style.setProperty('--vv-height', `${vvHeight}px`);
+
+      // --kb-height: how much of the layout viewport is obscured by the keyboard
+      // If the OS shrank the layout viewport (PWA mode), this evaluates to 0, preventing double offset.
+      const kbHeight = Math.max(0, window.innerHeight - (vvHeight + vvTop));
       document.documentElement.style.setProperty('--kb-height', `${kbHeight}px`);
       if (kbHeight > 60) {
         document.documentElement.classList.add('keyboard-open');
@@ -154,6 +159,8 @@ console.log('🚀 NoteStandard Booting...');
         document.documentElement.classList.remove('keyboard-open');
       }
     } else {
+      document.documentElement.style.setProperty('--vv-top', '0px');
+      document.documentElement.style.setProperty('--vv-height', `${window.innerHeight}px`);
       document.documentElement.style.setProperty('--kb-height', '0px');
       document.documentElement.classList.remove('keyboard-open');
     }

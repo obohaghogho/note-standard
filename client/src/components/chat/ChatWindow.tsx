@@ -135,6 +135,21 @@ const ChatWindow: React.FC = () => {
     
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const composerRef = useRef<HTMLDivElement>(null);
+
+    // Track composer height dynamically via ResizeObserver.
+    // Exports --composer-height so the CSS spacer can reserve exact space
+    // and the chat-input-bar can position itself correctly relative to the visual viewport.
+    useLayoutEffect(() => {
+        const el = composerRef.current;
+        if (!el) return;
+        const observer = new ResizeObserver(() => {
+            const h = el.getBoundingClientRect().height;
+            document.documentElement.style.setProperty('--composer-height', `${h}px`);
+        });
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, []);
     const [translations, setTranslations] = useState<{ [key: string]: string }>({});
     const [showOriginal, setShowOriginal] = useState<{ [key: string]: boolean }>({});
     const [showScrollDown, setShowScrollDown] = useState(false);
@@ -1173,7 +1188,7 @@ const ChatWindow: React.FC = () => {
 
 
             {!isPending ? (
-                <div className="chat-input-bar bg-gray-950/40 backdrop-blur-2xl border-t border-white/10">
+                <div className="chat-input-bar bg-gray-950/40 backdrop-blur-2xl border-t border-white/10" ref={composerRef}>
                     <div className="max-w-[900px] mx-auto p-3 md:p-4">
                         {activeConversation?.isBlocked ? (
                             <div className="flex flex-col items-center justify-center p-4 bg-gray-800/80 rounded-2xl border border-gray-700/50">

@@ -376,23 +376,25 @@ input[type=number] {
 .chat-input-bar {
   flex-shrink: 0;
   flex-grow: 0;
-  position: absolute;
-  bottom: 0;
+  position: fixed;
+  /* Top-down visual viewport positioning:
+     composer top = vv-top + vv-height - composer-height
+     This permanently glues the composer's BOTTOM edge to the visual viewport BOTTOM,
+     regardless of Android PWA resize, Chrome focus scroll, or iOS Safari. */
+  top: calc(var(--vv-top, 0px) + var(--vv-height, 100%) - var(--composer-height, 70px));
   left: 0;
   right: 0;
   z-index: 40;
   width: 100%;
   background: inherit;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-  /* The Magic: GPU-accelerated translation matching the exact keyboard height.
-     This runs at 60fps natively, decoupled from DOM layout recalculations. */
-  transform: translateY(calc(-1 * var(--kb-height, 0px)));
-  will-change: transform;
+  will-change: top;
 }
 
-/* Spacer injected at the bottom of the message list to absorb the keyboard height */
+/* Spacer at the bottom of the message list (DOM top in column-reverse).
+   Must reserve exactly: composer height + keyboard height + small gap.
+   This prevents the last message from ever being hidden behind the composer. */
 .chat-keyboard-spacer {
-  height: calc(8px + var(--kb-height, 0px));
+  height: calc(var(--composer-height, 70px) + var(--kb-height, 0px) + 8px);
   width: 100%;
   flex-shrink: 0;
   pointer-events: none;
