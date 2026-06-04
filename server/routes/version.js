@@ -7,13 +7,12 @@ const router = express.Router();
  * No auth required — must be accessible to all clients including outdated ones.
  */
 const APP_CONFIG = {
-  latest_version: '1.6.2',
-  minimum_version: '1.6.2',
+  latest_version: '1.6.3',
+  minimum_version: '1.6.3',
   force_update: true,
-  update_message: 'Critical Performance Update: Upgraded chat window to use GPU-accelerated hardware transforms for perfect 60fps keyboard tracking.',
+  update_message: 'Critical UI Update: Fixed keyboard floating gap by removing dynamic viewport units that caused double offset.',
   changelog: [
-    'Fixed: Input bar detached from DOM layout to prevent layout thrashing on mobile CPUs.',
-    'Fixed: Keyboard sliding instantly synchronized via GPU translation.'
+    'Fixed: Input bar floating too high above the keyboard due to dvh/svh unit collision with GPU transforms.'
   ]
 };
 

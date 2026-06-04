@@ -333,12 +333,10 @@ input[type=number] {
   display: flex;
   flex-direction: column;
   width: 100%;
-  /* Force a strict, non-resizing height. 
-     We do NOT want the browser's slow layout engine to resize this container.
-     100vh stays constant on mobile browsers even when the keyboard opens. */
-  height: 100vh;
-  /* Use 100svh as fallback to avoid address bar hiding issues on load */
-  height: 100svh;
+  /* Force a strict, non-resizing height tied to the Layout Viewport. 
+     Do NOT use vh, svh, or dvh here, as they shrink natively when the keyboard opens,
+     which causes a double-offset gap when combined with our translateY transform. */
+  height: 100%;
   overflow: hidden;
   position: relative;
   overscroll-behavior: none;
