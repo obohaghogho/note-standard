@@ -653,6 +653,22 @@ const ChatWindow: React.FC = () => {
         );
     }
 
+    // Secondary guard: activeConversationId is set but not yet in the conversations
+    // list (happens immediately after an account switch while the new account's
+    // conversations are still loading). Show a spinner instead of the broken "?" header.
+    if (activeConversationId && !activeConversation) {
+        return (
+            <div className="flex-grow flex items-center justify-center h-full bg-crystal text-gray-400 relative">
+                <div className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-none z-0" />
+                <div className="relative z-10 flex flex-col items-center gap-3">
+                    <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+                    <p className="text-xs text-gray-500 uppercase tracking-widest font-bold">Loading conversation...</p>
+                </div>
+            </div>
+        );
+    }
+
+
     return (
         <div className="chat-root bg-crystal text-white w-full md:max-w-[1200px] md:mx-auto md:shadow-2xl md:border-x md:border-white/5">
             {/* Immersive glass layer overlay */}

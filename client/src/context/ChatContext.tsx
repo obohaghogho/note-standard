@@ -426,6 +426,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             if (user.id && lastUserIdRef.current && lastUserIdRef.current !== user.id) {
                 setConversations([]);
                 setMessages({});
+                setActiveConversationId(null); // Clear stale conversation — Chat.tsx will re-set from URL
                 setLoading(true);
             }
             lastUserIdRef.current = user.id;
