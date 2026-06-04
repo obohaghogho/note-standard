@@ -7,12 +7,12 @@ const router = express.Router();
  * No auth required — must be accessible to all clients including outdated ones.
  */
 const APP_CONFIG = {
-  latest_version: '1.6.3',
-  minimum_version: '1.6.3',
+  latest_version: '1.6.4',
+  minimum_version: '1.6.4',
   force_update: true,
-  update_message: 'Critical UI Update: Fixed keyboard floating gap by removing dynamic viewport units that caused double offset.',
+  update_message: 'Critical UI Update: Fixed PWA layout collision. Composer is now perfectly anchored to the keyboard across all devices.',
   changelog: [
-    'Fixed: Input bar floating too high above the keyboard due to dvh/svh unit collision with GPU transforms.'
+    'Fixed: Removed rigid CSS constants that conflicted with Android PWA Standalone auto-resize behavior.'
   ]
 };
 

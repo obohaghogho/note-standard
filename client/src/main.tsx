@@ -141,15 +141,12 @@ console.log('🚀 NoteStandard Booting...');
 (() => {
   const applyViewportVars = () => {
     const vp = window.visualViewport;
-    
-    // If VirtualKeyboard API is handling the layout natively via CSS env(),
-    // we do not need to calculate --kb-height here manually.
-    if ('virtualKeyboard' in navigator && (navigator as any).virtualKeyboard.overlaysContent) {
-      return;
-    }
-
     if (vp) {
-      const kbHeight = Math.max(0, window.innerHeight - vp.height);
+      // PWA Fix: If the OS forcefully resized the layout viewport (innerHeight shrank),
+      // innerHeight - vp.height will naturally evaluate to 0, preventing the double offset.
+      // If iOS Safari natively anchored bottom: 0 to the visual viewport, vp.offsetTop will increase,
+      // also evaluating to 0.
+      const kbHeight = Math.max(0, window.innerHeight - (vp.height + vp.offsetTop));
       document.documentElement.style.setProperty('--kb-height', `${kbHeight}px`);
       if (kbHeight > 60) {
         document.documentElement.classList.add('keyboard-open');
