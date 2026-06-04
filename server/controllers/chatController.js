@@ -1344,6 +1344,8 @@ exports.sendMessage = async (req, res) => {
             conversationId,
             messageId: msgId,
             url: `/dashboard/chat?id=${conversationId}`,
+            targetAccountId: memberId,
+            targetUserId: memberId
           },
         });
         const options = {
