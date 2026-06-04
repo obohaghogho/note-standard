@@ -7,13 +7,13 @@ const router = express.Router();
  * No auth required — must be accessible to all clients including outdated ones.
  */
 const APP_CONFIG = {
-  latest_version: '1.6.5',
-  minimum_version: '1.6.5',
+  latest_version: '1.6.6',
+  minimum_version: '1.6.6',
   force_update: true,
-  update_message: 'Critical Layout Fix: Composer is now permanently anchored to the keyboard. Messages no longer hide behind the composer.',
+  update_message: 'Critical Layout Fix: Composer now permanently visible above keyboard. Architecture rebuilt using Visual Viewport container strategy.',
   changelog: [
-    'Fixed: Composer now uses top-down VisualViewport coordinate positioning instead of bottom:0 + translateY.',
-    'Fixed: Chat spacer now reserves exact composer height + keyboard height, preventing last message from being hidden.'
+    'Fixed: Composer disappearing behind keyboard when tapped on Android PWA.',
+    'Rebuilt: chat-root now tracks visual viewport height directly — same architecture as WhatsApp Web.'
   ]
 };
 

@@ -333,13 +333,40 @@ input[type=number] {
   display: flex;
   flex-direction: column;
   width: 100%;
-  /* Force a strict, non-resizing height tied to the Layout Viewport. 
-     Do NOT use vh, svh, or dvh here, as they shrink natively when the keyboard opens,
-     which causes a double-offset gap when combined with our translateY transform. */
   height: 100%;
   overflow: hidden;
   position: relative;
   overscroll-behavior: none;
+}
+
+/*
+ * MOBILE OVERRIDE — Visual Viewport Container Strategy
+ *
+ * This is the same technique used by WhatsApp Web and Telegram Web.
+ *
+ * Problem: On Android PWA, the browser does NOT reliably resize the layout
+ * viewport when the soft keyboard opens. 'position:fixed' elements on the
+ * composer cannot be trusted to track the keyboard edge frame-by-frame.
+ *
+ * Solution: Make .chat-root itself track the visual viewport.
+ * JS in main.tsx fires on every visualViewport 'resize' event and updates
+ * --vv-height and --vv-top. We apply these to the chat-root container.
+ * The container then shrinks to exactly the visible screen area.
+ * The composer (a normal flex child) naturally lands at the bottom of
+ * the shrunken container — perfectly flush with the keyboard top. Gap = 0px.
+ */
+@media (max-width: 768px) {
+  .chat-root {
+    /* Take it out of the dashboard flex flow and pin it to the visual viewport */
+    position: fixed;
+    top: var(--vv-top, 0px);
+    left: 0;
+    right: 0;
+    /* This is the key: height tracks the visual viewport, shrinking when the keyboard opens */
+    height: var(--vv-height, 100dvh);
+    bottom: auto;
+    z-index: 10;
+  }
 }
 
 /* Header — flex child, remains at top */
@@ -353,11 +380,10 @@ input[type=number] {
   width: 100%;
 }
 
-/* 
-  Message list — fills the space between header and input.
-  overflow-y: auto enables internal scrolling.
-  overscroll-behavior: contain prevents scroll chaining to the outer page.
-*/
+/*
+ * .chat-messages — fills all space between header and composer.
+ * padding-bottom reserved only for non-mobile (where composer is still absolute).
+ */
 .chat-messages {
   display: flex;
   flex-direction: column-reverse;
@@ -368,33 +394,54 @@ input[type=number] {
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: auto;
-  /* Add padding to the bottom so messages aren't hidden behind the absolute input bar */
-  padding-bottom: 70px; /* Fallback height of input bar */
-  padding-bottom: var(--chat-input-height, 70px);
 }
 
+/* Desktop only: pad-bottom to clear the absolute-positioned composer */
+@media (min-width: 769px) {
+  .chat-messages {
+    padding-bottom: 70px;
+    padding-bottom: var(--chat-input-height, 70px);
+  }
+}
+
+/*
+ * .chat-input-bar — MOBILE: normal flex child, no positioning tricks.
+ * DESKTOP: absolute positioned to sit at bottom of chat-root.
+ */
 .chat-input-bar {
   flex-shrink: 0;
   flex-grow: 0;
-  position: fixed;
-  /* Top-down visual viewport positioning:
-     composer top = vv-top + vv-height - composer-height
-     This permanently glues the composer's BOTTOM edge to the visual viewport BOTTOM,
-     regardless of Android PWA resize, Chrome focus scroll, or iOS Safari. */
-  top: calc(var(--vv-top, 0px) + var(--vv-height, 100%) - var(--composer-height, 70px));
-  left: 0;
-  right: 0;
   z-index: 40;
   width: 100%;
   background: inherit;
-  will-change: top;
 }
 
-/* Spacer at the bottom of the message list (DOM top in column-reverse).
-   Must reserve exactly: composer height + keyboard height + small gap.
-   This prevents the last message from ever being hidden behind the composer. */
+@media (min-width: 769px) {
+  /* Desktop: absolute positioning is safe because keyboard never pops up */
+  .chat-input-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Mobile: normal flex child — the container (.chat-root) tracks the visual
+     viewport, so the composer naturally sits at the bottom of the visible area. */
+  .chat-input-bar {
+    position: relative;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/*
+ * .chat-keyboard-spacer — top of message list (DOM bottom in column-reverse).
+ * Mobile: just 8px breathing room (container already shrank for keyboard).
+ * Desktop: needs no space as keyboard doesn't apply.
+ */
 .chat-keyboard-spacer {
-  height: calc(var(--composer-height, 70px) + var(--kb-height, 0px) + 8px);
+  height: 8px;
   width: 100%;
   flex-shrink: 0;
   pointer-events: none;
