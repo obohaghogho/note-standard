@@ -288,6 +288,8 @@ async function sendGenericPush(params) {
             messageId: String(payload.messageId || ''),
             url: String(payload.url || '/dashboard/notifications'),
             recipientId: String(payload.recipientId || ''),
+            targetUserId: String(payload.targetUserId || payload.recipientId || ''),
+            targetAccountId: String(payload.targetAccountId || payload.recipientId || ''),
           },
           android: {
             priority: 'high',
@@ -330,6 +332,8 @@ async function sendGenericPush(params) {
           messageId: payload.messageId,
           url: payload.url || '/dashboard/notifications',
           recipientId: payload.recipientId || null,
+          targetUserId: payload.targetUserId || payload.recipientId || null,
+          targetAccountId: payload.targetAccountId || payload.recipientId || null,
         };
 
         console.log(`[PushService] 📤 Initiating APNs alert (iOS) to topic: ${notification.topic}`);

@@ -4,8 +4,25 @@ import { AuthService } from './AuthService';
 
 class NotificationRouterService {
   private resolveReadyQueue: Record<string, ((value: void) => void)[]> = {};
+  private isAppReady = false;
+  private pendingTapData: any = null;
+
+  setAppReady() {
+    this.isAppReady = true;
+    if (this.pendingTapData) {
+      const data = this.pendingTapData;
+      this.pendingTapData = null;
+      this.handleNotificationTap(data);
+    }
+  }
 
   async handleNotificationTap(data: any) {
+    if (!this.isAppReady) {
+      console.log('[ACCOUNT_FORENSIC] App not ready yet. Queuing notification tap.');
+      this.pendingTapData = data;
+      return;
+    }
+
     console.log('[ACCOUNT_FORENSIC] Handling Notification Tap', JSON.stringify(data));
     
     try {
