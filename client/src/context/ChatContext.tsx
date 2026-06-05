@@ -155,7 +155,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const [messages, setMessages] = useState<Record<string, Message[]>>({});
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-    const [hasMore] = useState<Record<string, boolean>>({});
+    const [hasMore, setHasMore] = useState<Record<string, boolean>>({});
     const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
     const [drafts, setDrafts] = useState<Record<string, string>>({});
 
