@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { toast } from 'react-hot-toast';
+import { accountManager } from '../../utils/accountManager';
 
 /**
  * WebNotificationRouter
@@ -81,28 +82,40 @@ export const WebNotificationRouter: React.FC = () => {
 
       try {
         await switchAccount(targetAccountId);
-        console.log('[ACCOUNT_FORENSIC] Account Switch Success');
-
-        // KEY DESIGN: Navigate WITH targetAccountId STILL IN THE URL.
-        // Chat.tsx reads this param and blocks the conversation load until
-        // user.id === targetAccountId (i.e. auth has fully committed).
-        // Chat.tsx then cleans the param itself when it's safe to load.
-        // This eliminates the stale-data flash without needing a fixed delay.
-        if (conversationId) {
-          console.log('[ACCOUNT_FORENSIC] Conversation Navigation Started:', conversationId);
-          navigate(
-            `/dashboard/chat?id=${conversationId}&targetAccountId=${targetAccountId}`,
-            { replace: true }
-          );
-        } else {
-          navigate(`/dashboard?targetAccountId=${targetAccountId}`, { replace: true });
+        
+        // ── Safeguard: Verify the account switch actually persisted ──
+        // Note: accountManager saves synchronously to localStorage.
+        const active = accountManager.getActiveAccountId();
+        if (active !== targetAccountId) {
+           throw new Error("Account switch verification failed");
         }
 
-        // Hide the overlay — Chat.tsx guard takes over from here
-        setIsSwitchingOverlay(false);
+        console.log('[ACCOUNT_FORENSIC] Account Switch Success & Verified');
 
-        // Reset guard so the NEXT notification tap always works
-        handledRef.current = null;
+        // ── Clear account-scoped caches before reload ──
+        // Clear sessionStorage to ensure no stale UI state survives the reload.
+        // The hard reload natively destroys all in-memory React caches (conversations, messages, realtime, presence).
+        // Stored accounts and refresh tokens remain safely in localStorage.
+        try {
+            sessionStorage.clear();
+        } catch (e) {
+            console.warn("[ACCOUNT_FORENSIC] Failed to clear session storage", e);
+        }
+
+        // KEY DESIGN: HARD RELOAD
+        // Using window.location.href forces the browser to discard the entire React tree,
+        // socket connections, and in-memory caches, and perform a full cold boot into Account B.
+        // This guarantees 100% correct hydration.
+        if (conversationId) {
+          console.log('[ACCOUNT_FORENSIC] Hard Reload Navigation Started:', conversationId);
+          window.location.href = `/dashboard/chat?id=${conversationId}`;
+        } else {
+          console.log('[ACCOUNT_FORENSIC] Hard Reload Navigation Started (Dashboard)');
+          window.location.href = `/dashboard`;
+        }
+
+        // We do not reset handledRef or hide the overlay here because the page is immediately reloading.
+
 
       } catch (err) {
         // ── Fallback: NEVER silently open wrong account ───────────────
