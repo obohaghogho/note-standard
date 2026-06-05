@@ -123,6 +123,8 @@ export interface ChatContextValue {
     isClaimingLease: (conversationId: string) => boolean;
     // Phase 6: optimistic local read + lease-gated server ACK
     onMessageVisible: (conversationId: string, messageId: string) => void;
+    clearState: () => void;
+    initialize: () => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -373,7 +375,16 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     ...conv,
                     lastMessage: conv.last_message 
                 }));
-                setConversations(mappedData);
+                
+                // Requirement 9: Prevent conversation overwrite race. Merge-by-id logic.
+                setConversations(prev => {
+                    const existingMap = new Map(prev.map(c => [c.id, c]));
+                    mappedData.forEach((c: Conversation) => existingMap.set(c.id, c));
+                    return Array.from(existingMap.values()).sort((a, b) => 
+                        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+                    );
+                });
+                
                 setLoading(false);
                 joinAllRooms(mappedData);
                 mappedData.forEach((conv: Conversation) => {
@@ -436,26 +447,38 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }, [session]);
 
+    const clearState = useCallback(() => {
+        console.log(`[ACCOUNT_FORENSIC] CHAT_CLEAR_STATE - Dropping chat caches at ${Date.now()}`);
+        setConversations([]);
+        setMessages({});
+        setActiveConversationId(null);
+        setLoading(true);
+        setTypingUsers({});
+        setHasMore({});
+        lastUserIdRef.current = null;
+    }, []);
+
+    const initialize = useCallback(async () => {
+        console.log(`[ACCOUNT_FORENSIC] CHAT_INITIALIZE - Fetching chat data at ${Date.now()}`);
+        await loadConversations();
+        console.log(`[ACCOUNT_FORENSIC] CONVERSATIONS_READY - Chat data ready at ${Date.now()}`);
+    }, [loadConversations]);
+
     useEffect(() => {
         if (!authReady) return;
         isMounted.current = true;
         if (session && user) {
             if (user.id && lastUserIdRef.current && lastUserIdRef.current !== user.id) {
-                setConversations([]);
-                setMessages({});
-                setActiveConversationId(null); // Clear stale conversation — Chat.tsx will re-set from URL
-                setLoading(true);
+                clearState();
             }
             lastUserIdRef.current = user.id;
             loadConversations();
         } else if (!session) {
-            setConversations([]);
-            setMessages({});
+            clearState();
             setLoading(false);
-            lastUserIdRef.current = null;
         }
         return () => { isMounted.current = false; };
-    }, [authReady, session, user, loadConversations]);
+    }, [authReady, session, user, loadConversations, clearState]);
 
     useEffect(() => {
         activeConversationIdRef.current = activeConversationId;
@@ -1500,7 +1523,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         hasMore, sendMessageToConversation,
         markConversationRead, markConversationDelivered,
         isActiveWriter, isClaimingLease,
-        onMessageVisible: (conversationId: string, messageId: string) => readReceiptEngine.onMessageVisible(conversationId, messageId)
+        onMessageVisible: (conversationId: string, messageId: string) => readReceiptEngine.onMessageVisible(conversationId, messageId),
+        clearState,
+        initialize
     };
 
     return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

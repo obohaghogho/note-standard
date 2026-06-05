@@ -32,6 +32,8 @@ export interface NotificationContextValue {
     markAllAsRead: () => Promise<void>;
     deleteNotification: (id: string) => Promise<void>;
     clearAllNotifications: () => Promise<void>;
+    clearState: () => void;
+    reinitialize: () => Promise<void>;
 }
 
 export const NotificationContext = createContext<NotificationContextValue | null>(null);
@@ -378,6 +380,28 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         }
     }, [session]);
 
+    const clearState = useCallback(() => {
+        console.log(`[ACCOUNT_FORENSIC] NOTIFICATION_CLEAR_STATE - Dropping notifications cache at ${Date.now()}`);
+        setNotifications([]);
+        setLoading(true);
+        setCurrentToast(null);
+        setQueue([]);
+        if (dismissTimerRef.current) {
+            clearTimeout(dismissTimerRef.current);
+            dismissTimerRef.current = null;
+        }
+    }, []);
+
+    const reinitialize = useCallback(async () => {
+        console.log(`[ACCOUNT_FORENSIC] NOTIFICATIONS_REINITIALIZE - Fetching for new account at ${Date.now()}`);
+        clearState();
+        await Promise.all([
+            fetchNotifications(),
+            subscribeToPush()
+        ]);
+        console.log(`[ACCOUNT_FORENSIC] NOTIFICATIONS_READY - Notifications ready at ${Date.now()}`);
+    }, [clearState, fetchNotifications, subscribeToPush]);
+
     return (
         <NotificationContext.Provider value={{ 
             notifications, 
@@ -386,7 +410,9 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             markAllAsRead, 
             deleteNotification,
             clearAllNotifications,
-            loading 
+            loading,
+            clearState,
+            reinitialize
         }}>
             {children}
             <AnimatePresence>

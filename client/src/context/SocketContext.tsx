@@ -18,6 +18,8 @@ interface SocketContextValue {
     socket: Socket | null;
     connected: boolean;
     error: string | null;
+    teardown: () => void;
+    initialize: (token: string) => Promise<void>;
 }
 
 export interface RealtimeNotification {
@@ -33,6 +35,8 @@ const SocketContext = createContext<SocketContextValue>({
     socket: null,
     connected: false,
     error: null,
+    teardown: () => {},
+    initialize: async () => {},
 });
 
 export const useSocket = () => useContext(SocketContext);
@@ -128,8 +132,91 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         // Requirement 7.
     }, [authReady, session, user]); // Re-evaluates when session refreshes, but guarded against disconnect.
 
+    const teardown = useCallback(() => {
+        if (globalSocket) {
+            console.log(`[ACCOUNT_FORENSIC] SOCKET_TEARDOWN - Disconnecting socket at ${Date.now()}`);
+            globalSocket.removeAllListeners();
+            globalSocket.disconnect();
+            globalSocket = null;
+            setConnected(false);
+            setError(null);
+        }
+    }, []);
+
+    const initialize = useCallback((token: string): Promise<void> => {
+        return new Promise((resolve, reject) => {
+            if (globalSocket && connected) {
+                const socketWithAuth = globalSocket as Socket & { auth?: { token?: string } };
+                if (socketWithAuth.auth?.token === token) {
+                    resolve();
+                    return;
+                }
+            }
+            
+            // Clean up any stale socket
+            teardown();
+
+            console.log(`[ACCOUNT_FORENSIC] SOCKET_INITIALIZE - Creating fresh socket at ${Date.now()}`);
+            
+            const socket = io(SOCKET_URL, {
+                auth: { token },
+                withCredentials: true,
+                transports: ['polling', 'websocket'],
+                reconnection: true,
+                reconnectionAttempts: MAX_RETRIES,
+                reconnectionDelay: 2000,
+                timeout: 60000,
+            });
+
+            globalSocket = socket;
+
+            // Timeout if connection takes too long
+            const timeoutId = setTimeout(() => {
+                socket.off('connect');
+                socket.off('connect_error');
+                reject(new Error("Socket connection timed out during initialization"));
+            }, 10000);
+
+            socket.on('connect', () => {
+                clearTimeout(timeoutId);
+                console.log(`[ACCOUNT_FORENSIC] SOCKET_CONNECTED - Connected via ${socket.io.engine.transport.name} at ${Date.now()}`);
+                setConnected(true);
+                setError(null);
+                retryCount.current = 0;
+                resolve();
+
+                socket.io.engine.on('upgrade', (t: { name: string }) => {
+                    console.log(`[Socket Forensic] ↑ Upgraded to ${t.name} at ${Date.now()}`);
+                });
+            });
+
+            socket.on('disconnect', (reason) => {
+                console.log(`[Socket Forensic] Disconnected at ${Date.now()}. Reason: ${reason}`);
+                setConnected(false);
+                if (reason === 'io server disconnect') {
+                    socket.connect(); // Server kicked us, manually reconnect
+                }
+            });
+
+            socket.on('connect_error', (err) => {
+                console.error(`[Socket Forensic] Connection error at ${Date.now()}:`, err.message);
+                setError(err.message);
+                setConnected(false);
+
+                if (retryCount.current < MAX_RETRIES) {
+                    retryCount.current++;
+                    console.log(`[Socket Forensic] Retrying (${retryCount.current}/${MAX_RETRIES})…`);
+                } else {
+                    toast.error('Real-time connection failed. Please refresh.');
+                    clearTimeout(timeoutId);
+                    reject(new Error("Socket connection failed"));
+                }
+            });
+        });
+    }, [connected, teardown]);
+
     return (
-        <SocketContext.Provider value={{ socket: globalSocket, connected, error }}>
+        <SocketContext.Provider value={{ socket: globalSocket, connected, error, teardown, initialize }}>
             {children}
         </SocketContext.Provider>
     );

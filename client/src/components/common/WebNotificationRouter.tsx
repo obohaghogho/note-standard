@@ -1,124 +1,112 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useContext } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
+import { useChat } from '../../context/ChatContext';
+import { NotificationContext } from '../../context/NotificationContext';
 import { toast } from 'react-hot-toast';
 import { accountManager } from '../../utils/accountManager';
 
 /**
  * WebNotificationRouter
  *
- * Headless component. Sits at the root of the app and intercepts URL parameters
- * injected by the Service Worker after a push notification click.
- *
- * Full account-resolution chain:
- *   Push Notification
- *   → Service Worker (injects ?targetAccountId=&conversationId=)
- *   → URL Parameters
- *   → WebNotificationRouter  ← handles switch + KEEPS targetAccountId in URL
- *   → Chat.tsx guard          ← blocks conversation load until user.id commits
- *   → Chat.tsx cleanup        ← removes targetAccountId from URL when safe
- *
- * This two-stage approach eliminates the stale-data flash:
- *   - No fixed delay. The Chat page guard is the synchronisation point.
- *   - handledRef is reset after every handled notification so future taps work.
- *
- * Fallback: If switchAccount() fails, redirects to /login — NEVER wrong account.
+ * Implements Soft-Navigation Account Switch Architecture (WhatsApp Web style).
+ * It tears down the previous account's realtime and caches, switches auth, 
+ * and cleanly initializes the new account's realtime and caches BEFORE navigation.
  */
 export const WebNotificationRouter: React.FC = () => {
   const { user, authReady, switchAccount } = useAuth();
-  const { socket } = useSocket();
+  const { socket, teardown: socketTeardown, initialize: socketInitialize } = useSocket();
+  const { clearState: chatClearState, initialize: chatInitialize } = useChat();
+  const notificationContext = useContext(NotificationContext);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const [isSwitchingOverlay, setIsSwitchingOverlay] = useState(false);
-  // Per-notification guard. Cleared after each handled notification so future
-  // taps of any notification are always processed.
   const handledRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // Step 1: Wait for auth layer to fully rehydrate (critical for cold-boot scenario)
-    if (!authReady) return;
+    if (!authReady || !notificationContext) return;
 
     const targetAccountId = searchParams.get('targetAccountId');
     const conversationId = searchParams.get('conversationId');
 
-    // No notification context in URL
     if (!targetAccountId) return;
 
-    // Guard: deduplicate within the same render cycle only.
-    // We use targetAccountId alone (not including conversationId) as the key so that
-    // switching to the same account twice in a row still works.
     const handledKey = `${targetAccountId}`;
     if (handledRef.current === handledKey) return;
     handledRef.current = handledKey;
 
     const handleNotificationNavigation = async () => {
-      // ── Forensic Logs: Entry ──────────────────────────────────────────
       console.log('[ACCOUNT_FORENSIC] Notification Account ID:', targetAccountId);
       console.log('[ACCOUNT_FORENSIC] Active Account ID:', user?.id ?? 'none');
-      const socketWithAuth = socket as (typeof socket & { auth?: { token?: string } }) | null;
-      console.log('[ACCOUNT_FORENSIC] Socket connected:', !!socket?.connected);
-      console.log('[ACCOUNT_FORENSIC] Socket has auth token:', !!socketWithAuth?.auth?.token);
 
-      // ── Scenario 1: Already on the correct account ───────────────────
+      // Scenario 1: Already on the correct account
       if (user?.id === targetAccountId) {
         console.log('[ACCOUNT_FORENSIC] Correct account already active — navigating directly.');
-
-        // Clean targetAccountId from URL immediately (no switch needed)
-        const destination = conversationId
-          ? `/dashboard/chat?id=${conversationId}`
-          : '/dashboard';
+        const destination = conversationId ? `/dashboard/chat?id=${conversationId}` : '/dashboard';
         navigate(destination, { replace: true });
-
-        // Reset so future notifications are processed
         handledRef.current = null;
         return;
       }
 
-      // ── Scenario 2: Need to switch accounts ──────────────────────────
+      // Scenario 2: Switch accounts
       console.log('[ACCOUNT_FORENSIC] Account Switch Started → target:', targetAccountId);
+      
+      // Step 1: Freeze navigation
       setIsSwitchingOverlay(true);
 
       try {
+        // Step 2: Clear Caches Synchronously
+        console.log('[ACCOUNT_FORENSIC] CLEAR_STATE');
+        chatClearState();
+        notificationContext.clearState();
+
+        // Step 3: Realtime teardown
+        console.log('[ACCOUNT_FORENSIC] SOCKET_TEARDOWN');
+        socketTeardown();
+
+        // Step 4: Perform account switch
         await switchAccount(targetAccountId);
         
-        // ── Safeguard: Verify the account switch actually persisted ──
-        // Note: accountManager saves synchronously to localStorage.
         const active = accountManager.getActiveAccountId();
         if (active !== targetAccountId) {
            throw new Error("Account switch verification failed");
         }
+        console.log('[ACCOUNT_FORENSIC] ACCOUNT_SWITCH_SUCCESS');
 
-        console.log('[ACCOUNT_FORENSIC] Account Switch Success & Verified');
-
-        // ── Clear account-scoped caches before reload ──
-        // Clear sessionStorage to ensure no stale UI state survives the reload.
-        // The hard reload natively destroys all in-memory React caches (conversations, messages, realtime, presence).
-        // Stored accounts and refresh tokens remain safely in localStorage.
-        try {
-            sessionStorage.clear();
-        } catch (e) {
-            console.warn("[ACCOUNT_FORENSIC] Failed to clear session storage", e);
+        // Fetch the active account to get the tokens needed for sockets
+        const activeAccount = accountManager.getAccount(active);
+        if (!activeAccount || !activeAccount.tokens.access_token) {
+            throw new Error("Account tokens missing");
         }
 
-        // KEY DESIGN: HARD RELOAD
-        // Using window.location.href forces the browser to discard the entire React tree,
-        // socket connections, and in-memory caches, and perform a full cold boot into Account B.
-        // This guarantees 100% correct hydration.
-        if (conversationId) {
-          console.log('[ACCOUNT_FORENSIC] Hard Reload Navigation Started:', conversationId);
-          window.location.href = `/dashboard/chat?id=${conversationId}`;
-        } else {
-          console.log('[ACCOUNT_FORENSIC] Hard Reload Navigation Started (Dashboard)');
-          window.location.href = `/dashboard`;
-        }
+        // Step 5: Realtime initialization
+        console.log('[ACCOUNT_FORENSIC] SOCKET_CONNECTING');
+        await socketInitialize(activeAccount.tokens.access_token);
+        console.log('[ACCOUNT_FORENSIC] SOCKET_CONNECTED');
 
-        // We do not reset handledRef or hide the overlay here because the page is immediately reloading.
+        // Step 6: Notification initialization
+        console.log('[ACCOUNT_FORENSIC] NOTIFICATIONS_INITIALIZING');
+        await notificationContext.reinitialize();
+        console.log('[ACCOUNT_FORENSIC] NOTIFICATIONS_READY');
 
+        // Step 7: Conversation hydration
+        console.log('[ACCOUNT_FORENSIC] CONVERSATIONS_INITIALIZING');
+        await chatInitialize();
+        console.log('[ACCOUNT_FORENSIC] CONVERSATIONS_READY');
+
+        // Step 8: Navigate
+        const destination = conversationId ? `/dashboard/chat?id=${conversationId}` : '/dashboard';
+        console.log('[ACCOUNT_FORENSIC] NAVIGATION_COMPLETE - Navigating to:', destination);
+        
+        navigate(destination, { replace: true });
+
+        // Clean up
+        setIsSwitchingOverlay(false);
+        handledRef.current = null;
 
       } catch (err) {
-        // ── Fallback: NEVER silently open wrong account ───────────────
         console.error('[ACCOUNT_FORENSIC] Account Switch Failed:', err);
         toast.error('Session expired for the target account. Please log in again.', { duration: 5000 });
         navigate('/login?add_account=true', { replace: true });
@@ -128,7 +116,7 @@ export const WebNotificationRouter: React.FC = () => {
     };
 
     handleNotificationNavigation();
-  }, [authReady, searchParams, user?.id, switchAccount, navigate, socket]);
+  }, [authReady, searchParams, user?.id, switchAccount, navigate, socket, chatClearState, chatInitialize, notificationContext, socketInitialize, socketTeardown]);
 
   if (isSwitchingOverlay) {
     return (
