@@ -165,13 +165,23 @@ const ConversationList: React.FC = () => {
     // Debounce guard: prevents double-navigation from rapid taps on Android.
     const lastClickTimeRef = useRef(0);
 
+    // Phase 3 Optimization: Stable sort that only re-runs when the sort key changes.
+    // The sort key is lastMessage.created_at (or updated_at), NOT read_at/delivered_at.
+    // Previously, every `chat:message_read` or `chat:message_delivered` event replaced the
+    // conversations array and re-triggered this sort — 10+ times/second in active chats.
+    // Now the sort is only re-triggered when conversation ORDER actually changes.
+    const sortKeys = conversations.map(c =>
+        `${c.id}:${c.lastMessage?.created_at ?? c.updated_at ?? ''}`
+    ).join(',');
+
     const sortedConversations = useMemo(() => {
         return [...conversations].sort((a, b) => {
             const timeA = new Date(a.lastMessage?.created_at || a.updated_at || 0).getTime();
             const timeB = new Date(b.lastMessage?.created_at || b.updated_at || 0).getTime();
             return timeB - timeA;
         });
-    }, [conversations]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sortKeys]);
 
     const handleConversationClick = useCallback((convId: string) => {
         const now = Date.now();

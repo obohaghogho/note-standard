@@ -285,6 +285,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     // gateway echo (pg_notify broadcasts to ALL room members including sender) from
     // triggering duplicate merge operations. Bounded at 2000 entries to prevent memory leak.
     const processedEventIdsRef = useRef<Set<string>>(new Set());
+    // Phase 2 Optimization: tracks when each conversation's messages were last loaded.
+    // Prevents redundant API round-trips when a user re-opens a warm conversation (<30s).
+    const messagesCachedAtRef = useRef<Record<string, number>>({});
 
     const sendTypingStatus = useCallback((isTyping: boolean) => {
         if (!socket || !connected || !activeConversationIdRef.current) return;
@@ -416,11 +419,28 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }, [session, isSwitching]);
 
-    const loadMessages = useCallback(async (conversationId: string) => {
+    const loadMessages = useCallback(async (conversationId: string, force = false) => {
         if (!session) return;
+
+        // Phase 2 Optimization: Staleness gate.
+        // Skip the API call if we loaded this conversation's messages within the last 30 seconds
+        // AND the caller didn't explicitly force a refresh. The socket handler updates messages
+        // directly via setMessages, so the local state stays fresh without a round-trip.
+        const STALE_MS = 30_000;
+        const lastLoaded = messagesCachedAtRef.current[conversationId] ?? 0;
+        if (!force && Date.now() - lastLoaded < STALE_MS) {
+            if (import.meta.env.DEV) {
+                console.log(`[Chat] loadMessages: cache hit for ${conversationId} (${Date.now() - lastLoaded}ms old) — skipping refetch`);
+            }
+            return;
+        }
+
         try {
             const res = await api.get(`/chat/conversations/${conversationId}/messages`);
             if (isMounted.current) {
+                // Record cache timestamp before setting state
+                messagesCachedAtRef.current[conversationId] = Date.now();
+
                 // Hard-filter: remove any message that is in the tombstone (optimistically deleted
                 // this session) or that the server already marked as soft-deleted.
                 const filtered = (res.data as (Message & { is_deleted?: boolean })[]).filter(
@@ -432,12 +452,14 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     const current = prev[conversationId] || [];
                     const { merged } = mergeMessages(current, filtered);
 
-                    console.log('[SYNC_FORENSICS]', {
-                        stage: 'loadMessages',
-                        event: 'rest_sync',
-                        conversationId,
-                        incomingPayloadCount: filtered.length,
-                    });
+                    if (import.meta.env.DEV) {
+                        console.log('[SYNC_FORENSICS]', {
+                            stage: 'loadMessages',
+                            event: 'rest_sync',
+                            conversationId,
+                            incomingPayloadCount: filtered.length,
+                        });
+                    }
 
                     return { ...prev, [conversationId]: merged };
                 });
@@ -456,6 +478,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         setTypingUsers({});
         setHasMore({});
         lastUserIdRef.current = null;
+        // Clear message cache timestamps so next account gets a fresh load
+        messagesCachedAtRef.current = {};
     }, []);
 
     const initialize = useCallback(async () => {
@@ -575,13 +599,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
             const newMessage: Message = { ...msg, isOwn: isOwnMessage };
             
-            console.log('[SYNC_FORENSICS]', {
-                stage: 'receive_message',
-                event: 'websocket_sync',
-                messageId: newMessage.id,
-                incomingReplyTo: newMessage.reply_to,
-                payload: newMessage,
-            });
+            if (import.meta.env.DEV) {
+                console.log('[SYNC_FORENSICS]', {
+                    stage: 'receive_message',
+                    event: 'websocket_sync',
+                    messageId: newMessage.id,
+                    incomingReplyTo: newMessage.reply_to,
+                    payload: newMessage,
+                });
+            }
 
             // Mark as read immediately if this conversation is active
             if (activeConversationIdRef.current === msg.conversation_id && !isOwnMessage) {
@@ -978,15 +1004,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 // Also register the intent's client event_id for composite coverage
                 processedEventIdsRef.current.add(`evt:${intent.event_id}`);
 
-                console.log('[SYNC_FORENSICS]', {
-                    stage: 'flushQueue',
-                    event: 'offline_queue_sync',
-                    messageId: canonicalMessage.id,
-                    eventId: intent.event_id,
-                    incomingReplyTo: canonicalMessage.reply_to,
-                    intentReplyTo: intent.payload.replyTo,
-                    payload: canonicalMessage,
-                });
+                if (import.meta.env.DEV) {
+                    console.log('[SYNC_FORENSICS]', {
+                        stage: 'flushQueue',
+                        event: 'offline_queue_sync',
+                        messageId: canonicalMessage.id,
+                        eventId: intent.event_id,
+                        incomingReplyTo: canonicalMessage.reply_to,
+                        intentReplyTo: intent.payload.replyTo,
+                        payload: canonicalMessage,
+                    });
+                }
 
                 setMessages(prev => {
                     const current = prev[intent.conversation_id] || [];

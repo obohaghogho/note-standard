@@ -75,64 +75,61 @@ function getNotificationPreview(type, content) {
 exports.getConversations = async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log(`[Chat PERSISTENCE] Fetching for user: ${userId}`);
-    
-    // Safety: Log headers to ensure no auth mismatch during build deployments
-    console.log(`[Chat AUTH] Client Type: ${req.headers['x-client-type'] || 'web'}`);
 
-    // 1. Fetch memberships with basic conversation data
+    // ─── FAST PATH: rpc_get_conversations ─────────────────────────────────────
+    // Single SQL function replacing 61+ serial queries.
+    // Falls back to N+1 only if migration 207 is not yet deployed.
+    // ─────────────────────────────────────────────────────────────────────────
+    try {
+      const t0 = Date.now();
+      const { data: rpcData, error: rpcError } = await supabase
+        .rpc('rpc_get_conversations', { p_user_id: userId });
+
+      if (rpcError) {
+        // PGRST202 = function does not exist yet (migration pending)
+        if (rpcError.code === 'PGRST202' || (rpcError.message && rpcError.message.includes('rpc_get_conversations'))) {
+          console.warn('[Chat] rpc_get_conversations not available — using N+1 fallback');
+          throw new Error('RPC_NOT_FOUND');
+        }
+        throw rpcError;
+      }
+
+      const conversations = Array.isArray(rpcData) ? rpcData : [];
+      console.log(`[Chat RPC] getConversations: ${conversations.length} convs in ${Date.now() - t0}ms`);
+      return res.json(conversations);
+    } catch (rpcErr) {
+      if (rpcErr.message !== 'RPC_NOT_FOUND') {
+        console.error('[Chat] rpc_get_conversations failed, using N+1 fallback:', rpcErr.message);
+      }
+    }
+
+    // ─── FALLBACK: N+1 path (preserved for backward compat) ──────────────────
+    // 1. Fetch memberships
     let memberships = [];
     try {
-      const { data, error } = await supabase
+      const { data: mData, error: mError } = await supabase
         .from("conversation_members")
         .select("conversation_id, role, status, cleared_at")
         .eq("user_id", userId);
-      
-      if (error) {
-        // Fallback for missing 'role' or 'status' or 'cleared_at' columns
-        if (error.code === '42703') {
-           console.warn(`[Chat] role/status/cleared_at missing in conversation_members, falling back`);
-           const { data: fallbackData, error: fallbackError } = await supabase
-             .from("conversation_members")
-             .select("conversation_id")
-             .eq("user_id", userId);
-           
-           if (fallbackError) throw fallbackError;
-           memberships = fallbackData || [];
-        } else {
-           throw error;
-        }
-      } else {
-        memberships = data || [];
-      }
+      if (mError) throw mError;
+      memberships = mData || [];
     } catch (e) {
-      console.error(`[Chat] Membership fetch error for ${userId}:`, e.message);
-      return res.status(500).json({ 
-        error: "Failed to load chat memberships", 
-        details: e.message
-      });
+      return res.status(500).json({ error: "Failed to load chat memberships", details: e.message });
     }
 
-    console.log(`[Chat] User ${userId} has ${memberships.length} memberships`);
-
-    if (memberships.length === 0) {
-      return res.json([]);
-    }
+    if (memberships.length === 0) return res.json([]);
 
     const conversationIds = memberships.map(m => m.conversation_id);
 
-    // 2. Fetch conversations data in batch
+    // 2. Fetch conversations in batch
     const { data: conversations, error: convError } = await supabase
       .from("conversations")
       .select("*")
       .in("id", conversationIds);
 
-    if (convError) {
-      console.error("[Chat] Conversations fetch error:", convError.message);
-      return res.status(500).json({ error: "Failed to load conversation details" });
-    }
+    if (convError) return res.status(500).json({ error: "Failed to load conversation details" });
 
-    // Fetch user blocks for the current user
+    // Fetch blocks once for the whole batch
     let userBlocks = [];
     try {
       const { data: blocks } = await supabase
@@ -140,100 +137,46 @@ exports.getConversations = async (req, res) => {
         .select("blocker_id, blocked_id")
         .or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`);
       userBlocks = blocks || [];
-    } catch (e) {
-      console.warn("[Chat getConversations] Failed to load user blocks:", e.message);
-    }
+    } catch (e) { /* non-fatal */ }
 
-    // 3. Enrich conversations with members and last message
+    // 3. Enrich: N+1 per conversation (only used when RPC unavailable)
     const enriched = await Promise.all(conversations.map(async (conv) => {
       try {
         const membership = memberships.find(m => m.conversation_id === conv.id);
-        
-        // Fetch all members for this conversation
-        let members = [];
-        try {
-          const { data, error } = await supabase
-            .from("conversation_members")
-            .select(`
-              user_id,
-              role,
-              status,
-              profile:profiles (
-                id,
-                username,
-                full_name,
-                avatar_url,
-                is_verified,
-                plan_tier,
-                is_online,
-                show_online_status,
-                last_seen
-              )
-            `)
-            .eq("conversation_id", conv.id);
-          
-          if (error) {
-            // Fallback for missing profile columns or status/role
-            const { data: fallbackData } = await supabase
-              .from("conversation_members")
-              .select(`
-                user_id,
-                profile:profiles (
-                  id,
-                  username,
-                  full_name,
-                  avatar_url,
-                  is_online,
-                  last_seen
-                )
-              `)
-              .eq("conversation_id", conv.id);
-            members = fallbackData || [];
-          } else {
-            members = data || [];
-          }
-        } catch (e) {
-          console.warn(`[Chat] Member enrichment failed for ${conv.id}:`, e.message);
-        }
 
-        // Fetch last message
-        const { data: lastMsgs, error: msgError } = await supabase
+        const { data: members } = await supabase
+          .from("conversation_members")
+          .select(`user_id, role, status, profile:profiles (
+            id, username, full_name, avatar_url, is_verified,
+            plan_tier, is_online, show_online_status, last_seen
+          )`)
+          .eq("conversation_id", conv.id);
+
+        const { data: lastMsgs } = await supabase
           .from("messages")
           .select("id, content, sender_id, created_at, type, read_at, delivered_at")
           .eq("conversation_id", conv.id)
           .order("created_at", { ascending: false })
           .limit(1);
 
-        if (msgError) {
-          console.warn(`[Chat] Last msg fetch error for ${conv.id}:`, msgError.message);
-        }
-
-        // Fetch unread count for the user in this conversation
         let unreadCount = 0;
         try {
-          const { count, error: countError } = await supabase
+          const { count } = await supabase
             .from("messages")
             .select("*", { count: 'exact', head: true })
             .eq("conversation_id", conv.id)
             .neq("sender_id", userId)
             .is("read_at", null);
-          
-          if (!countError) unreadCount = count || 0;
-        } catch (e) {
-          console.warn(`[Chat] Unread count query failed for ${conv.id}:`, e.message);
-        }
+          unreadCount = count || 0;
+        } catch (e) { /* non-fatal */ }
 
-        // Check if blocked in direct chat
-        let isBlocked = false;
-        let blockedByMe = false;
-        let blockedByThem = false;
-        
+        let isBlocked = false, blockedByMe = false, blockedByThem = false;
         if (conv.type === "direct") {
           const otherMember = (members || []).find(m => m.user_id !== userId);
           if (otherMember) {
             const otherId = otherMember.user_id;
-            const blockRelation = userBlocks.find(b => 
-              (b.blocker_id === userId && b.blocked_id === otherId) || 
+            const blockRelation = userBlocks.find(b =>
+              (b.blocker_id === userId && b.blocked_id === otherId) ||
               (b.blocker_id === otherId && b.blocked_id === userId)
             );
             if (blockRelation) {
@@ -265,29 +208,18 @@ exports.getConversations = async (req, res) => {
       }
     }));
 
-    // Sort by updated_at or created_at
-    const sorted = enriched.sort((a, b) => {
-      const timeA = new Date(a.last_message?.created_at || a.updated_at || a.created_at).getTime();
-      const timeB = new Date(b.last_message?.created_at || b.updated_at || b.created_at).getTime();
-      return timeB - timeA;
-    }).filter(c => {
-      // Hide support chats
-      if (c.chat_type === "support" || c.name === "Support Chat" || (c.name && c.name.toLowerCase().includes("support team"))) return false;
-      
-      // PHASE 2.5: Message Recovery Protection.
-      // Conversations must NEVER disappear structurally because of cleared_at.
-      // We explicitly removed the logic that hid conversations here.
-      // Only messages within the conversation will become hidden on the frontend.
-      return true;
-    });
+    const sorted = enriched
+      .filter(c => c.chat_type !== "support" && c.name !== "Support Chat" &&
+        !(c.name && c.name.toLowerCase().includes("support team")))
+      .sort((a, b) =>
+        new Date(b.last_message?.created_at || b.updated_at || b.created_at) -
+        new Date(a.last_message?.created_at || a.updated_at || a.created_at)
+      );
 
     res.json(sorted);
   } catch (err) {
     console.error("[Chat] getConversations Critical Error:", err.message, err.stack);
-    res.status(500).json({ 
-      error: "Internal Server Error", 
-      details: err.message
-    });
+    res.status(500).json({ error: "Internal Server Error", details: err.message });
   }
 };
 

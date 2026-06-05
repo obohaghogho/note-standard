@@ -1,5 +1,27 @@
 export const LEASE_WAIT_TIMEOUT = 2000;
 
+// ── In-memory lease ownership cache ────────────────────────────────────────
+// After a successful takeover, we cache the result for 30 seconds so that
+// rapid message sends don't each trigger a separate RPC call.
+// Key: conversationId | Value: expiry timestamp (ms)
+const _leaseCache = new Map<string, number>();
+const LEASE_CACHE_TTL_MS = 30_000;
+
+function _isCacheValid(conversationId: string): boolean {
+    const expiry = _leaseCache.get(conversationId);
+    if (!expiry) return false;
+    if (Date.now() > expiry) {
+        _leaseCache.delete(conversationId);
+        return false;
+    }
+    return true;
+}
+
+export function invalidateLeaseCache(conversationId: string): void {
+    _leaseCache.delete(conversationId);
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 export async function ensureLeaseOwnership(
     conversationId: string, 
     sessionId: string, 
@@ -10,8 +32,16 @@ export async function ensureLeaseOwnership(
 ): Promise<boolean> {
     const lease = getLocalLease(conversationId);
 
-    // Case 1: already active
+    // Case 1: already active (local state confirms ownership)
     if (lease?.active_device_id === deviceId) {
+        // Refresh cache to extend TTL on confirmed ownership
+        _leaseCache.set(conversationId, Date.now() + LEASE_CACHE_TTL_MS);
+        return true;
+    }
+
+    // Case 1b: local state not yet synced but we have a fresh cache entry
+    // (e.g. takeover just happened, heartbeat hasn't propagated yet)
+    if (_isCacheValid(conversationId)) {
         return true;
     }
 
@@ -23,6 +53,9 @@ export async function ensureLeaseOwnership(
             sessionId,
             deviceId,
         });
+
+        // Cache the successful takeover
+        _leaseCache.set(conversationId, Date.now() + LEASE_CACHE_TTL_MS);
     } catch (e) {
         console.error('[LeaseBarrier] RPC takeover failed:', e);
         throw new Error("Lease takeover failed");

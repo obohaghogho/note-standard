@@ -87,7 +87,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const socket = io(SOCKET_URL, {
             auth: { token },
             withCredentials: true,
-            transports: ['polling', 'websocket'],
+            transports: ['websocket', 'polling'], // websocket-first: avoids polling→upgrade latency
             reconnection: true,
             reconnectionAttempts: MAX_RETRIES,
             reconnectionDelay: 2000,
@@ -161,7 +161,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const socket = io(SOCKET_URL, {
                 auth: { token },
                 withCredentials: true,
-                transports: ['polling', 'websocket'],
+                transports: ['websocket', 'polling'], // websocket-first: avoids polling→upgrade latency
                 reconnection: true,
                 reconnectionAttempts: MAX_RETRIES,
                 reconnectionDelay: 2000,
