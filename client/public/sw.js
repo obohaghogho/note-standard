@@ -115,7 +115,11 @@ self.addEventListener('push', (event) => {
                     });
 
                     if (isUserAlreadyViewing) {
-                        console.log('[SW] Suppressing push — user is already viewing conversation:', notifConversationId);
+                        console.log('[SW] Suppressing push', {
+                            conversationId: notifConversationId,
+                            visibilityState: 'visible', // Since the client passed visibilityState !== 'hidden'
+                            reason: 'already_viewing_conversation'
+                        });
                         // Still fire the delivery receipt but skip showing the notification
                         return fetch(`${targetApiUrl}/api/chat/messages/${options.data.messageId}/webhook-deliver`, { method: 'POST' })
                             .catch(err => console.error('[SW] Delivery receipt failed:', err));
