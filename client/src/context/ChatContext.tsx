@@ -408,6 +408,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         } finally {
             conversationsFetchRef.current = false;
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [session, isSwitching, joinAllRooms, markConversationDelivered]);
 
     const loadSingleConversation = useCallback(async (conversationId: string) => {

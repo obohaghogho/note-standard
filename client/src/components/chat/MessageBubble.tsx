@@ -4,6 +4,7 @@ import type { Message } from '../../context/ChatContext';
 import ImageWithSignedUrl from '../common/ImageWithSignedUrl';
 import VideoWithSignedUrl from '../common/VideoWithSignedUrl';
 import { AudioPlayer } from './AudioPlayer';
+import { useChatGesture } from '../../hooks/useChatGesture';
 
 interface MessageBubbleProps {
     msg: Message;
@@ -13,14 +14,14 @@ interface MessageBubbleProps {
     currentUserId?: string;
     translations: { [key: string]: string };
     showOriginal: { [key: string]: boolean };
-    gesture: any; // Using any for gesture as it's complex, can be typed better later
+    gesture: ReturnType<typeof useChatGesture>;
     getSenderName: (senderId: string) => string;
     toggleMessageSelection: (id: string) => void;
     setShowOriginal: React.Dispatch<React.SetStateAction<{ [key: string]: boolean }>>;
     handleReport: (id: string, content: string, translation?: string) => void;
     handleManualTranslate: (id: string, content: string, original_language?: string) => void;
     fetchSignedUrl: (path: string) => Promise<string>;
-    setPreviewMedia: (data: any) => void;
+    setPreviewMedia: (data: { url: string; type: 'image' | 'video'; fileName?: string; isSender?: boolean }) => void;
 }
 
 const MessageBubble = memo(({
