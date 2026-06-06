@@ -137,19 +137,46 @@ const ChatWindow: React.FC = () => {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const composerRef = useRef<HTMLDivElement>(null);
 
+    const stabilizeScroll = useCallback(() => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+
+        // In column-reverse, scrollTop near 0 means we are at the bottom.
+        // If scrollTop > 10, the user has scrolled up, so we shouldn't fight them.
+        const isNearBottom = container.scrollTop < 10 || !showScrollDown;
+        
+        if (!isNearBottom) return;
+
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                scrollToBottom('instant');
+            });
+        });
+    }, [showScrollDown, scrollToBottom]);
+
     // Track composer height dynamically via ResizeObserver.
-    // Exports --composer-height so the CSS spacer can reserve exact space
-    // and the chat-input-bar can position itself correctly relative to the visual viewport.
     useLayoutEffect(() => {
         const el = composerRef.current;
         if (!el) return;
         const observer = new ResizeObserver(() => {
             const h = el.getBoundingClientRect().height;
             document.documentElement.style.setProperty('--composer-height', `${h}px`);
+            stabilizeScroll();
         });
         observer.observe(el);
         return () => observer.disconnect();
-    }, []);
+    }, [stabilizeScroll]);
+
+    // Hook visualViewport resize to stabilize scroll
+    useEffect(() => {
+        const handleViewportResize = () => {
+            stabilizeScroll();
+        };
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', handleViewportResize);
+            return () => window.visualViewport?.removeEventListener('resize', handleViewportResize);
+        }
+    }, [stabilizeScroll]);
     const [translations, setTranslations] = useState<{ [key: string]: string }>({});
     const [showOriginal, setShowOriginal] = useState<{ [key: string]: boolean }>({});
     const [showScrollDown, setShowScrollDown] = useState(false);

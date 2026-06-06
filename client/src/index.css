@@ -394,6 +394,7 @@ input[type=number] {
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: auto;
+  overflow-anchor: none;
 }
 
 /* Desktop padding removed — composer is a standard flex item now, so it will never overlap messages */
