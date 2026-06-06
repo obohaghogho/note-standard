@@ -8,6 +8,8 @@ import { usePresence } from '../../context/PresenceContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../common/SecureImage';
+import ImageWithSignedUrl from '../common/ImageWithSignedUrl';
+import VideoWithSignedUrl from '../common/VideoWithSignedUrl';
 import { Send, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Maximize, Trash2, Share2, X, Copy, Menu, Pencil, MessageCircle, Reply } from 'lucide-react';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { MediaUpload } from './MediaUpload';
@@ -1374,45 +1376,6 @@ const ChatWindow: React.FC = () => {
                     }
                 }}
             />
-        </div>
-    );
-};
-
-// --- Helper Components ---
-
-
-
-const ImageWithSignedUrl = ({ path, fetchUrl, onPreview }: { path: string, fetchUrl: (p: string) => Promise<string | null>, onPreview?: (url: string) => void }) => {
-    const [url, setUrl] = useState<string | null>(null);
-    useEffect(() => {
-        if (path.startsWith('blob:') || path.startsWith('data:')) {
-            setUrl(path);
-            return;
-        }
-        fetchUrl(path).then(setUrl);
-    }, [path, fetchUrl]);
-    return <SecureImage src={url || undefined} alt="Attached" className="max-w-full h-auto cursor-pointer hover:opacity-95 transition-opacity" onClick={() => { if (url) { if (onPreview) onPreview(url); else window.open(url, '_blank'); } }} />;
-};
-
-const VideoWithSignedUrl = ({ path, fetchUrl, onPreview }: { path: string, fetchUrl: (p: string) => Promise<string | null>, onPreview?: (url: string) => void }) => {
-    const [url, setUrl] = useState<string | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    useEffect(() => {
-        if (path.startsWith('blob:') || path.startsWith('data:')) {
-            setUrl(path);
-            setIsLoading(false);
-            return;
-        }
-        fetchUrl(path).then(u => { setUrl(u); if (u) setIsLoading(false); });
-    }, [path, fetchUrl]);
-    if (isLoading) return <div className="aspect-video bg-gray-700 animate-pulse flex items-center justify-center"><Loader2 className="animate-spin text-gray-500" /></div>;
-    if (!url) return <div className="p-4 text-center text-xs text-gray-500">Video failed to load</div>;
-    return (
-        <div className="relative group cursor-pointer" onClick={() => onPreview && onPreview(url)}>
-            <video src={url} className="max-w-full rounded-lg" />
-            <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-all">
-                <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white border border-white/30"><Maximize size={20} /></div>
-            </div>
         </div>
     );
 };
