@@ -162,6 +162,7 @@ const ChatWindow: React.FC = () => {
     const [isSearching, setIsSearching] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [isAccepting, setIsAccepting] = useState(false);
+    const [unreadCountWhileScrolled, setUnreadCountWhileScrolled] = useState(0);
     
     // Mentions state
     const [showMentions, setShowMentions] = useState(false);
@@ -197,6 +198,7 @@ const ChatWindow: React.FC = () => {
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior, block: 'end' });
             setShowScrollDown(false);
+            setUnreadCountWhileScrolled(0);
         }
     }, []);
 
@@ -213,6 +215,9 @@ const ChatWindow: React.FC = () => {
         const observer = new IntersectionObserver(([entry]) => {
             const isVisible = entry.isIntersecting;
             setShowScrollDown(!isVisible);
+            if (isVisible) {
+                setUnreadCountWhileScrolled(0);
+            }
         }, {
             root: scrollContainerRef.current,
             threshold: 0.1
@@ -229,6 +234,20 @@ const ChatWindow: React.FC = () => {
             scrollToBottom('instant');
         }
     }, [activeConversationId, scrollToBottom]);
+
+    // Auto-scroll on new message if already at bottom
+    const prevMessagesLengthRef = useRef(currentMessages.length);
+    useLayoutEffect(() => {
+        if (currentMessages.length > prevMessagesLengthRef.current) {
+            // New message arrived
+            if (!showScrollDown) {
+                scrollToBottom('smooth');
+            } else {
+                setUnreadCountWhileScrolled(prev => prev + 1);
+            }
+        }
+        prevMessagesLengthRef.current = currentMessages.length;
+    }, [currentMessages.length, showScrollDown, scrollToBottom]);
 
     // Initialize input from draft
     useEffect(() => {
@@ -1189,9 +1208,15 @@ const ChatWindow: React.FC = () => {
             {showScrollDown && (
                 <button 
                     onClick={() => scrollToBottom()} 
-                    className="absolute bottom-[5.5rem] right-5 md:bottom-24 md:right-6 bg-blue-600 text-white p-3 rounded-full shadow-2xl hover:bg-blue-700 transition-all animate-in zoom-in-0 duration-200 z-30 hover:scale-110 active:scale-95 border border-white/10"
+                    className="absolute right-5 md:right-6 bg-blue-600 text-white p-3 rounded-full shadow-2xl hover:bg-blue-700 transition-all animate-in zoom-in-0 duration-200 z-30 hover:scale-110 active:scale-95 border border-white/10"
+                    style={{ bottom: 'calc(var(--composer-height, 80px) + 1rem)' }}
                 >
                     <ArrowDown size={20} />
+                    {unreadCountWhileScrolled > 0 && (
+                        <span className="absolute -top-1 -right-1 bg-green-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-gray-900 animate-in zoom-in-50">
+                            {unreadCountWhileScrolled}
+                        </span>
+                    )}
                 </button>
             )}
 

@@ -396,13 +396,7 @@ input[type=number] {
   scroll-behavior: auto;
 }
 
-/* Desktop only: pad-bottom to clear the absolute-positioned composer */
-@media (min-width: 769px) {
-  .chat-messages {
-    padding-bottom: 70px;
-    padding-bottom: var(--chat-input-height, 70px);
-  }
-}
+/* Desktop padding removed — composer is a standard flex item now, so it will never overlap messages */
 
 /*
  * .chat-input-bar — MOBILE: normal flex child, no positioning tricks.
@@ -416,19 +410,19 @@ input[type=number] {
   background: inherit;
 }
 
-@media (min-width: 769px) {
-  /* Desktop: absolute positioning is safe because keyboard never pops up */
-  .chat-input-bar {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-  }
-}
+/* Absolute positioning removed. The composer is now a normal flex child on both mobile and desktop. This guarantees it will never obscure the last message. */
 
 @media (max-width: 768px) {
   /* Mobile: normal flex child — the container (.chat-root) tracks the visual
      viewport, so the composer naturally sits at the bottom of the visible area. */
+  .chat-input-bar {
+    position: relative;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* Ensure desktop also respects safe-areas if installed as PWA or on Notch devices */
+@media (min-width: 769px) {
   .chat-input-bar {
     position: relative;
     padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -565,11 +559,23 @@ input[type=number] {
   }
 }
 
-/* -- WhatsApp-grade textarea: hide scrollbar visually but keep scroll functional -- */
+/* -- WhatsApp-grade textarea: show custom scrollbars -- */
 #chat-window-input::-webkit-scrollbar {
-  display: none;
+  width: 6px;
+  height: 6px;
+}
+#chat-window-input::-webkit-scrollbar-track {
+  background: transparent;
+}
+#chat-window-input::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+#chat-window-input::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
 #chat-window-input {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
