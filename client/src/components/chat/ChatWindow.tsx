@@ -195,9 +195,9 @@ const ChatWindow: React.FC = () => {
         const container = scrollContainerRef.current;
         if (!container) return;
 
-        // In column-reverse, scrollTop near 0 means we are at the bottom.
-        // If scrollTop > 10, the user has scrolled up, so we shouldn't fight them.
-        const isNearBottom = container.scrollTop < 10 || !showScrollDown;
+        // We can rely on the atBottomStateChange from Virtuoso which sets showScrollDown.
+        // !showScrollDown means we are at the bottom.
+        const isNearBottom = !showScrollDown;
         
         if (!isNearBottom) return;
 
