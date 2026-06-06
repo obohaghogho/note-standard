@@ -8,11 +8,10 @@ import { usePresence } from '../../context/PresenceContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../common/SecureImage';
-import { Send, Languages, Flag, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, Check, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Maximize, Trash2, Share2, X, Copy, Menu, Pencil, MessageCircle, Reply } from 'lucide-react';
+import { Send, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Maximize, Trash2, Share2, X, Copy, Menu, Pencil, MessageCircle, Reply } from 'lucide-react';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { MediaUpload } from './MediaUpload';
 import { VoiceRecorder } from './VoiceRecorder';
-import { AudioPlayer } from './AudioPlayer';
 import { API_URL } from '../../lib/api';
 import toast from 'react-hot-toast';
 import { MediaPreviewModal } from './MediaPreviewModal';
@@ -22,6 +21,8 @@ import { ForwardMessageModal } from './ForwardMessageModal';
 import { ConfirmationModal } from '../common/ConfirmationModal';
 import { applyAutoCorrect } from '../../utils/textUtils';
 import { UserBadge } from '../common/UserBadge';
+import MessageBubble from './MessageBubble';
+import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 
 const ChatWindow: React.FC = () => {
     const { 
@@ -136,6 +137,7 @@ const ChatWindow: React.FC = () => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const composerRef = useRef<HTMLDivElement>(null);
+    const virtuosoRef = useRef<VirtuosoHandle>(null);
 
 
     const [translations, setTranslations] = useState<{ [key: string]: string }>({});
@@ -177,10 +179,7 @@ const ChatWindow: React.FC = () => {
 
     const isWaitingForOthers = myMember?.status === 'accepted' && otherMember?.status === 'pending';
 
-    // ── Scroll & Layout helpers ───────────────────────────────────────────
-    const reversedMessages = useMemo(() => {
-        return [...currentMessages].reverse();
-    }, [currentMessages]);
+
 
     const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
         if (messagesEndRef.current) {
@@ -387,7 +386,7 @@ const ChatWindow: React.FC = () => {
         }
     };
 
-    const handleReport = async (msgId: string, original: string, translated: string) => {
+    const handleReport = async (msgId: string, original: string, translated?: string) => {
         try {
             await fetch(`${API_URL}/api/chat/report-translation`, {
                 method: 'POST',
@@ -600,7 +599,7 @@ const ChatWindow: React.FC = () => {
     // Typing Status Debounce
     const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement> | string) => {
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | string) => {
         const value = typeof e === 'string' ? e : e.target.value;
         const val = applyAutoCorrect(value);
         setInputValue(val);
@@ -640,7 +639,7 @@ const ChatWindow: React.FC = () => {
                             p.username.toLowerCase().includes(query.toLowerCase()) || 
                             p.full_name?.toLowerCase().includes(query.toLowerCase())
                         );
-                    setMentionParticipants(filtered);
+                                            setMentionParticipants(filtered as any[]);
                 }
             } else {
                 setShowMentions(false);
@@ -659,16 +658,7 @@ const ChatWindow: React.FC = () => {
         sendTypingStatus(true); // Re-trigger typing
     };
 
-    // Message Grouping Helper for reversed array structure
-    const isSameSender = (index: number) => {
-        if (index === reversedMessages.length - 1) return false; // oldest message has no previous
-        const current = reversedMessages[index];
-        const chronologicallyPrevious = reversedMessages[index + 1];
-        if (!current || !chronologicallyPrevious) return false;
-        
-        const timeDiff = new Date(current.created_at).getTime() - new Date(chronologicallyPrevious.created_at).getTime();
-        return current.sender_id === chronologicallyPrevious.sender_id && timeDiff >= 0 && timeDiff < 60000; // Group if within 1 minute
-    };
+    // isSameSender is inlined into Virtuoso itemContent for chronological array
 
     const getSenderName = (senderId: string) => {
         if (senderId === user?.id) return 'You';
@@ -969,270 +959,117 @@ const ChatWindow: React.FC = () => {
             </div>
             )}
 
-            <div 
-                className="chat-messages custom-scrollbar p-3 md:p-6 gap-1 md:gap-2"
-                style={{ 
-                    touchAction: 'pan-y',
-                }}
-                ref={scrollContainerRef}
-            >
-                {/* VISUAL BOTTOM (DOM TOP) */}
-                <div ref={messagesEndRef} className="chat-keyboard-spacer w-full flex-shrink-0" />
-
-                {isPending && (
-                    <div className="flex flex-col items-center justify-center p-8 bg-gray-800/50 backdrop-blur rounded-2xl my-6 border border-gray-700 shadow-xl w-full">
-                        <div className="w-16 h-16 rounded-full bg-blue-600/20 flex items-center justify-center mb-4 text-blue-400"><MoreHorizontal size={32} /></div>
-                        <p className="text-gray-200 mb-6 text-center font-medium">{otherMember ? `${otherMember.profile?.full_name || otherMember.profile?.username} wants to start a conversation with you.` : 'You have been invited to this chat.'}</p>
-                        <div className="flex gap-4">
-                            <button onClick={handleAccept} disabled={isAccepting} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg shadow-blue-900/40 disabled:opacity-50 active:scale-95">{isAccepting ? 'Accepting...' : 'Accept Chat Request'}</button>
-                            <button className="px-6 py-3 text-gray-400 hover:text-white hover:bg-white/5 rounded-xl transition-all font-medium">Decline</button>
-                        </div>
-                    </div>
-                )}
-                {isWaitingForOthers && (
-                    <div className="text-center p-6 bg-gray-800/30 rounded-xl my-4 w-full">
-                        <Loader2 className="animate-spin text-blue-500 mx-auto mb-2" size={20} />
-                        <p className="text-sm text-gray-400 italic font-medium">Waiting for acceptance...</p>
-                    </div>
-                )}
-                {activeConversationId && typingUsers[activeConversationId] && typingUsers[activeConversationId].length > 0 && (
-                    <div className="flex justify-start items-center gap-2 mt-2 animate-in fade-in slide-in-from-left-2 w-full">
-                        <div className="bg-gray-800 rounded-2xl p-3 flex gap-1 border border-gray-700 shadow-lg">
-                            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></div>
-                        </div>
-                        <span className="text-[10px] text-gray-500 font-medium italic">
-                            {typingUsers[activeConversationId]?.join(', ')} {typingUsers[activeConversationId]?.length > 1 ? 'are' : 'is'} typing...
-                        </span>
-                    </div>
-                )}
-
                 {isSearchOpen && searchQuery.trim() !== '' ? (
-                    <div className="space-y-4 flex flex-col w-full">
-                        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-4">
-                            {isSearching ? 'Searching...' : `Search Results (${searchResults.length})`}
-                        </p>
-                        {searchResults.length === 0 && !isSearching && (
-                            <p className="text-center text-gray-500 py-10 text-sm">No messages found matching "{searchQuery}"</p>
-                        )}
-                        {searchResults.map((msg) => (
-                            <SearchMessageItem 
-                                key={msg.id} 
-                                msg={msg} 
-                                isOwn={msg.sender_id === user?.id} 
-                                query={searchQuery} 
-                                fetchUrl={fetchSignedUrl} 
-                                onPreviewMedia={(data) => setPreviewMedia({ isOpen: true, ...data })}
-                            />
-                        ))}
+                    <div className="chat-messages custom-scrollbar p-3 md:p-6 gap-1 md:gap-2" style={{ touchAction: 'pan-y' }}>
+                        <div className="space-y-4 flex flex-col w-full">
+                            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-4">
+                                {isSearching ? 'Searching...' : `Search Results (${searchResults.length})`}
+                            </p>
+                            {searchResults.length === 0 && !isSearching && (
+                                <p className="text-center text-gray-500 py-10 text-sm">No messages found matching "{searchQuery}"</p>
+                            )}
+                            {searchResults.map((msg) => (
+                                <SearchMessageItem 
+                                    key={msg.id} 
+                                    msg={msg} 
+                                    isOwn={msg.sender_id === user?.id} 
+                                    query={searchQuery} 
+                                    fetchUrl={fetchSignedUrl} 
+                                    onPreviewMedia={(data) => setPreviewMedia({ isOpen: true, ...data })}
+                                />
+                            ))}
+                        </div>
                     </div>
                 ) : (
-                    <>
-                        {reversedMessages.map((msg, index) => {
-                            const isGrouped = isSameSender(index);
-                            const isSelected = selectedMessages.has(msg.id);
-                            return (
-                                <div 
-                                    key={msg.id} 
-                                    id={`msg-${msg.id}`}
-                                    className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'} ${isGrouped ? '' : 'mt-3'} msg-bubble`}
-                                    onTouchStart={(e) => gesture.onTouchStart(e, msg.id)}
-                                    onTouchMove={gesture.onTouchMove}
-                                    onTouchEnd={gesture.onTouchEnd}
-                                    onTouchCancel={gesture.onTouchCancel}
-                                    onMouseDown={(e) => gesture.onMouseDown(e, msg.id)}
-                                    onMouseUp={gesture.onMouseUp}
-                                    onMouseLeave={gesture.onMouseLeave}
-                                    onClick={(e) => gesture.onClick(e, msg.id, isSelectionMode, toggleMessageSelection)}
-                                    style={gesture.dragStartStyle}
-                                >
-                                    {/* Selection checkbox indicator */}
-                                    {isSelectionMode && (
-                                        <div className={`flex items-center mr-2 flex-shrink-0 self-center transition-all duration-200 ${msg.sender_id === user?.id ? 'order-2 ml-2 mr-0' : ''}`}>
-                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
-                                                isSelected 
-                                                    ? 'bg-blue-500 border-blue-500 scale-110' 
-                                                    : 'border-gray-500 bg-transparent hover:border-gray-400'
-                                            }`}>
-                                                {isSelected && (
-                                                    <Check size={12} className="text-white animate-in zoom-in-0 duration-150" />
-                                                )}
+                    <Virtuoso
+                        ref={virtuosoRef}
+                        scrollerRef={(ref) => {
+                            if (ref) scrollContainerRef.current = ref as HTMLDivElement;
+                        }}
+                        className="chat-messages custom-scrollbar p-3 md:p-6"
+                        data={currentMessages}
+                        initialTopMostItemIndex={currentMessages.length > 0 ? currentMessages.length - 1 : 0}
+                        alignToBottom
+                        followOutput="smooth"
+                        atBottomStateChange={(atBottom) => {
+                            setShowScrollDown(!atBottom);
+                            if (atBottom) {
+                                setUnreadCountWhileScrolled(0);
+                            }
+                        }}
+                        components={{
+                            Header: () => (
+                                <div className="flex flex-col gap-1 md:gap-2">
+                                    {activeConversationId && hasMore[activeConversationId] && (
+                                        <div className="flex justify-center py-4 bg-transparent relative z-10 w-full flex-shrink-0">
+                                            <button onClick={handleLoadMore} className="text-xs font-medium text-blue-400 hover:text-blue-300 hover:underline">Load older messages</button>
+                                        </div>
+                                    )}
+                                    {isPending && (
+                                        <div className="flex flex-col items-center justify-center p-8 bg-gray-800/50 backdrop-blur rounded-2xl my-6 border border-gray-700 shadow-xl w-full">
+                                            <div className="w-16 h-16 rounded-full bg-blue-600/20 flex items-center justify-center mb-4 text-blue-400"><MoreHorizontal size={32} /></div>
+                                            <p className="text-gray-200 mb-6 text-center font-medium">{otherMember ? `${otherMember.profile?.full_name || otherMember.profile?.username} wants to start a conversation with you.` : 'You have been invited to this chat.'}</p>
+                                            <div className="flex gap-4">
+                                                <button onClick={handleAccept} disabled={isAccepting} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg shadow-blue-900/40 disabled:opacity-50 active:scale-95">{isAccepting ? 'Accepting...' : 'Accept Chat Request'}</button>
+                                                <button className="px-6 py-3 text-gray-400 hover:text-white hover:bg-white/5 rounded-xl transition-all font-medium">Decline</button>
                                             </div>
                                         </div>
                                     )}
-                                    <div className={`max-w-[92%] md:max-w-[75%] ${isGrouped ? 'rounded-[20px]' : (msg.sender_id === user?.id ? 'rounded-[20px] rounded-br-md' : 'rounded-[20px] rounded-bl-md')} p-3.5 md:p-4 shadow-lg border ${
-                                        isSelected
-                                            ? 'bg-blue-600/40 border-blue-400/50 ring-1 ring-blue-500/30'
-                                            : (msg.sender_id === user?.id ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-blue-500/50' : 'bg-gray-800/90 text-gray-200 border-gray-700/50')
-                                    } relative group transition-all duration-200 ${isSelectionMode ? 'cursor-pointer' : ''}`}>
-                                        {msg.reply_to?.id && (
-                                            <div 
-                                                className={`mb-2 p-2.5 rounded-xl border-l-[3.5px] text-xs transition-all backdrop-blur-md cursor-pointer hover:bg-black/5 ${
-                                                    msg.sender_id === user?.id 
-                                                        ? 'bg-black/20 border-l-blue-400 text-blue-100' 
-                                                        : 'bg-white/5 border-l-blue-500 text-gray-300'
-                                                }`}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    const element = document.getElementById(`msg-${msg.reply_to?.id}`);
-                                                    if (element) {
-                                                        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                                        element.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2', 'ring-offset-transparent');
-                                                        setTimeout(() => element.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2', 'ring-offset-transparent'), 2000);
-                                                    }
-                                                }}
-                                            >
-                                                <p className={`font-bold mb-0.5 ${msg.sender_id === user?.id ? 'text-blue-300' : 'text-blue-400'}`}>
-                                                    {getSenderName(msg.reply_to.sender_id)}
-                                                </p>
-                                                <p className="truncate opacity-80 leading-relaxed italic">
-                                                    {msg.reply_to.content || (msg.reply_to.type && msg.reply_to.type !== 'text' ? `Shared a ${msg.reply_to.type}` : 'Message')}
-                                                </p>
-                                            </div>
-                                        )}
-
-                                        {msg.attachment && msg.type !== 'audio' && (
-                                            <div className="mb-2 rounded-lg overflow-hidden border border-black/20 bg-black/10">
-                                                {msg.type === 'image' ? (
-                                                    <ImageWithSignedUrl 
-                                                        path={msg.attachment.storage_path} 
-                                                        fetchUrl={fetchSignedUrl} 
-                                                        onPreview={(url) => setPreviewMedia({ isOpen: true, url, type: 'image', fileName: msg.attachment?.file_name, isSender: msg.sender_id === user?.id })}
-                                                    />
-                                                ) : msg.type === 'video' ? (
-                                                    <VideoWithSignedUrl 
-                                                        path={msg.attachment.storage_path} 
-                                                        fetchUrl={fetchSignedUrl} 
-                                                        onPreview={(url) => setPreviewMedia({ isOpen: true, url, type: 'video', fileName: msg.attachment?.file_name, isSender: msg.sender_id === user?.id })}
-                                                    />
-                                                ) : (
-                                                    <div className="p-3 flex items-center gap-3">
-                                                        <Paperclip size={20} className="text-blue-400" />
-                                                        <div className="min-w-0">
-                                                            <p className="text-sm font-medium truncate">{msg.attachment.file_name}</p>
-                                                            <p className="text-[10px] opacity-60">{(msg.attachment.file_size / 1024).toFixed(1)} KB</p>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-                                        
-                                        {msg.type === 'call' && (
-                                            <div className="flex items-center gap-2 py-1 px-1 opacity-90">
-                                                <div className={`p-1.5 rounded-full ${msg.content.includes('Missed') ? 'bg-red-500/20 text-red-100' : 'bg-green-500/20 text-green-100'}`}>
-                                                    {msg.content.includes('video') ? <Video size={14} /> : <Phone size={14} />}
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <span className="text-xs font-medium">{msg.content}</span>
-                                                    {!isGrouped && (
-                                                        <span className="text-[10px] opacity-70">
-                                                            {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {msg.type === 'audio' && (
-                                            <div className="flex flex-col gap-2 min-w-[200px]">
-                                                <AudioPlayer 
-                                                    path={msg.attachment?.storage_path || ''} 
-                                                    fetchUrl={fetchSignedUrl} 
-                                                />
-                                                <div className="flex items-center justify-end gap-1 opacity-70">
-                                                    {!isGrouped && (
-                                                        <span className="text-[10px]">
-                                                            {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}
-                                                        </span>
-                                                    )}
-                                                    {msg.sender_id === user?.id && (
-                                                        <div className="text-white/80 scale-75 origin-right relative flex items-center justify-center">
-                                                            {msg.read_at ? (
-                                                                <CheckCheck size={14} className="text-cyan-400 drop-shadow-[0_0_3px_rgba(34,211,238,0.8)] animate-in zoom-in-50 duration-300 transition-all font-extrabold" />
-                                                            ) : msg.delivered_at ? (
-                                                                <CheckCheck size={14} className="text-gray-300 animate-in fade-in duration-300 opacity-80" />
-                                                            ) : (
-                                                                <Check size={14} className="animate-in fade-in duration-300 opacity-60" />
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {!['call', 'audio'].includes(msg.type) && (
-                                            <>
-                                                {!msg.isOwn && translations[msg.id] && translations[msg.id] !== 'translating...' && !showOriginal[msg.id] ? (
-                                                    <div>
-                                                        <div className="flex items-center justify-between mb-1">
-                                                            <div className="flex items-center gap-1.5 text-[10px] text-blue-300">
-                                                                <Languages size={10} />
-                                                                <span>Translated • {msg.original_language || 'detected'}</span>
-                                                                <button onClick={() => setShowOriginal(prev => ({ ...prev, [msg.id]: true }))} className="underline hover:text-blue-200 ml-1">Original</button>
-                                                            </div>
-                                                            <button onClick={() => handleReport(msg.id, msg.content, translations[msg.id])} className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-gray-500 hover:text-red-400 flex items-center gap-1"><Flag size={8} /> Report</button>
-                                                        </div>
-                                                        <p className="break-words text-sm leading-relaxed">{translations[msg.id]}</p>
-                                                    </div>
-                                                ) : (
-                                                    <div>
-                                                        {!isGrouped && msg.sender_id !== user?.id && (
-                                                            <div className="flex items-center justify-between mb-1">
-                                                                <button 
-                                                                    onClick={() => handleManualTranslate(msg.id, msg.content, msg.original_language)}
-                                                                    className="text-[10px] text-blue-300 hover:text-blue-200 transition-colors flex items-center gap-1"
-                                                                >
-                                                                    <Languages size={10} />
-                                                                    {translations[msg.id] ? (showOriginal[msg.id] ? "Show Translation" : "Show Original") : "Translate"}
-                                                                </button>
-                                                                {msg.original_language && (
-                                                                    <span className="text-[8px] text-gray-500 lowercase opacity-50">Detected: {msg.original_language}</span>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                        <p className="break-words text-sm leading-relaxed">
-                                                            {translations[msg.id] && !showOriginal[msg.id] && translations[msg.id] !== 'translating...' 
-                                                                ? translations[msg.id] 
-                                                                : msg.content}
-                                                        </p>
-                                                    </div>
-                                                )}
-                                                <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
-                                                    {!isGrouped && (
-                                                        <span className="text-[10px] flex items-center gap-1">
-                                                            {msg.is_edited && <span className="italic opacity-70">(edited)</span>}
-                                                            {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}
-                                                        </span>
-                                                    )}
-                                                    {msg.sender_id === user?.id && (
-                                                        <div className="text-white/80 scale-75 origin-right relative flex items-center justify-center">
-                                                            {msg.read_at ? (
-                                                                <CheckCheck size={14} className="text-cyan-400 drop-shadow-[0_0_3px_rgba(34,211,238,0.8)] animate-in zoom-in-50 duration-300 transition-all font-extrabold" />
-                                                            ) : msg.delivered_at ? (
-                                                                <CheckCheck size={14} className="text-gray-300 animate-in fade-in duration-300 opacity-80" />
-                                                            ) : (
-                                                                <Check size={14} className="animate-in fade-in duration-300 opacity-60" />
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
+                                    {isWaitingForOthers && (
+                                        <div className="text-center p-6 bg-gray-800/30 rounded-xl my-4 w-full">
+                                            <Loader2 className="animate-spin text-blue-500 mx-auto mb-2" size={20} />
+                                            <p className="text-sm text-gray-400 italic font-medium">Waiting for acceptance...</p>
+                                        </div>
+                                    )}
                                 </div>
+                            ),
+                            Footer: () => (
+                                <div className="flex flex-col gap-1 md:gap-2">
+                                    {activeConversationId && typingUsers[activeConversationId] && typingUsers[activeConversationId].length > 0 && (
+                                        <div className="flex justify-start items-center gap-2 mt-2 animate-in fade-in slide-in-from-left-2 w-full">
+                                            <div className="bg-gray-800 rounded-2xl p-3 flex gap-1 border border-gray-700 shadow-lg">
+                                                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                                                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                                                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></div>
+                                            </div>
+                                            <span className="text-[10px] text-gray-500 font-medium italic">
+                                                {typingUsers[activeConversationId]?.join(', ')} {typingUsers[activeConversationId]?.length > 1 ? 'are' : 'is'} typing...
+                                            </span>
+                                        </div>
+                                    )}
+                                    <div ref={messagesEndRef} className="chat-keyboard-spacer w-full flex-shrink-0" />
+                                </div>
+                            )
+                        }}
+                        itemContent={(index, msg) => {
+                            const isGrouped = index > 0 && 
+                                currentMessages[index].sender_id === currentMessages[index - 1].sender_id && 
+                                (new Date(currentMessages[index].created_at).getTime() - new Date(currentMessages[index - 1].created_at).getTime() < 60000);
+                            const isSelected = selectedMessages.has(msg.id);
+                            
+                            return (
+                                <MessageBubble 
+                                    key={msg.id}
+                                    msg={msg}
+                                    isGrouped={isGrouped}
+                                    isSelected={isSelected}
+                                    isSelectionMode={isSelectionMode}
+                                    currentUserId={user?.id}
+                                    translations={translations}
+                                    showOriginal={showOriginal}
+                                    gesture={gesture}
+                                    getSenderName={getSenderName}
+                                    toggleMessageSelection={toggleMessageSelection}
+                                    setShowOriginal={setShowOriginal}
+                                    handleReport={handleReport}
+                                    handleManualTranslate={handleManualTranslate}
+                                    fetchSignedUrl={fetchSignedUrl}
+                                    setPreviewMedia={(data) => setPreviewMedia(data)}
+                                />
                             );
-                        })}
-                    </>
+                        }}
+                    />
                 )}
-
-                {/* VISUAL TOP (DOM BOTTOM) */}
-                {activeConversationId && hasMore[activeConversationId] && (
-                    <div className="flex justify-center py-4 bg-transparent relative z-10 w-full flex-shrink-0">
-                        <button onClick={handleLoadMore} className="text-xs font-medium text-blue-400 hover:text-blue-300 hover:underline">Load older messages</button>
-                    </div>
-                )}
-            </div>
 
             {showScrollDown && (
                 <button 
@@ -1528,7 +1365,7 @@ const ChatWindow: React.FC = () => {
                     try {
                         for (const msg of forwardModal.messages) {
                             const prefix = '↪️ Forwarded: ';
-                            await sendMessageToConversation(targetConversationId, prefix + msg.content);
+                            await sendMessageToConversation({ conversationId: targetConversationId, content: prefix + msg.content, type: 'text' });
                         }
                         toast.success(`Message${forwardModal.messages.length > 1 ? 's' : ''} forwarded`);
                         clearSelection();

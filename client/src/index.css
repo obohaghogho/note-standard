@@ -386,7 +386,7 @@ input[type=number] {
  */
 .chat-messages {
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
   flex: 1 1 0%;
   min-height: 0;
   overflow-y: auto;

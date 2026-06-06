@@ -393,6 +393,14 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 mappedData.forEach((conv: Conversation) => {
                     if (conv.unreadCount && conv.unreadCount > 0) markConversationDelivered(conv.id);
                 });
+
+                // Phase 4: Conversation Preloading
+                // Silently preload the 5 most recent conversations into the memory cache
+                // so that opening them is completely instant (no network round trip needed).
+                mappedData.slice(0, 5).forEach((conv: Conversation) => {
+                    // Pass force=false to respect STALE_MS gate
+                    loadMessages(conv.id, false);
+                });
             }
         } catch (e) {
             console.error('[Chat] Failed to load conversations:', e);
@@ -461,7 +469,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         });
                     }
 
-                    return { ...prev, [conversationId]: merged };
+                    return { ...prev, [conversationId]: merged as Message[] };
                 });
             }
         } catch (err) {
@@ -682,7 +690,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     });
                 }
 
-                return { ...prev, [msg.conversation_id]: merged };
+                return { ...prev, [msg.conversation_id]: merged as Message[] };
             });
         };
 
@@ -777,7 +785,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 if (c.id === conversationId && c.lastMessage && messageIds.includes(c.lastMessage.id)) {
                     return {
                         ...c,
-                        lastMessage: mergeMessageStatus(c.lastMessage, { read_at: nowStr, delivered_at: nowStr })
+                        lastMessage: mergeMessageStatus(c.lastMessage as Message, { read_at: nowStr, delivered_at: nowStr }) as Conversation['lastMessage']
                     };
                 }
                 return c;
@@ -800,7 +808,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 if (c.id === conversationId && c.lastMessage && c.lastMessage.id === messageId) {
                     return {
                         ...c,
-                        lastMessage: mergeMessageStatus(c.lastMessage, { delivered_at: nowStr })
+                        lastMessage: mergeMessageStatus(c.lastMessage as Message, { delivered_at: nowStr }) as Conversation['lastMessage']
                     };
                 }
                 return c;
@@ -836,7 +844,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     if (c.id === conversationId && c.lastMessage && c.lastMessage.sender_id === user?.id) {
                         return {
                             ...c,
-                        lastMessage: mergeMessageStatus(c.lastMessage, { read_at: readAt, delivered_at: readAt })
+                        lastMessage: mergeMessageStatus(c.lastMessage as Message, { read_at: readAt, delivered_at: readAt }) as Conversation['lastMessage']
                         };
                     }
                     return c;
@@ -872,7 +880,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     if (c.id === conversationId && c.lastMessage && c.lastMessage.sender_id === user?.id && !c.lastMessage.read_at) {
                         return {
                             ...c,
-                        lastMessage: mergeMessageStatus(c.lastMessage, { delivered_at: delivered_at })
+                        lastMessage: mergeMessageStatus(c.lastMessage as Message, { delivered_at: delivered_at }) as Conversation['lastMessage']
                         };
                     }
                     return c;
@@ -988,7 +996,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 // replyTo snapshot, fall back to the reply_to we already stored.
                 // This prevents the reply bubble from disappearing on confirmation.
                 if (intent.payload.replyTo && !canonicalMessage.reply_to) {
-                    canonicalMessage = { ...canonicalMessage, reply_to: intent.payload.replyTo };
+                    canonicalMessage = { ...canonicalMessage, reply_to: { ...intent.payload.replyTo, type: intent.payload.replyTo.type ?? 'text' } };
                 }
 
                 // Pre-register in dedup buffer BEFORE setMessages so that when the
@@ -1019,7 +1027,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 setMessages(prev => {
                     const current = prev[intent.conversation_id] || [];
                     const { merged } = mergeMessages(current, [canonicalMessage]);
-                    return { ...prev, [intent.conversation_id]: merged };
+                    return { ...prev, [intent.conversation_id]: merged as Message[] };
                 });
 
                 // Phase 4: Explicit Local Sync
@@ -1159,13 +1167,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             type: (type || 'text') as Message['type'],
             isOwn: true,
             status: 'sending',
-            reply_to: replyTo
+            reply_to: replyTo ? { ...replyTo, type: replyTo.type ?? 'text' } : undefined
         };
         
         setMessages(prev => {
             const current = prev[conversationId] || [];
             const { merged } = mergeMessages(current, [optimisticMessage]);
-            return { ...prev, [conversationId]: merged };
+            return { ...prev, [conversationId]: merged as Message[] };
         });
 
         // 1. Push Intent to Offline Queue
@@ -1234,7 +1242,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         setMessages(prev => {
             const current = prev[conversationId] || [];
             const { merged } = mergeMessages(current, [optimisticMessage]);
-            return { ...prev, [conversationId]: merged };
+            return { ...prev, [conversationId]: merged as Message[] };
         });
 
         // 3. Trigger asynchronous background upload
@@ -1350,7 +1358,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 setMessages(prev => {
                     const current = prev[conversationId] || [];
                     const { merged } = mergeMessages(current, [canonicalMessage]);
-                    return { ...prev, [conversationId]: merged };
+                    return { ...prev, [conversationId]: merged as Message[] };
                 });
 
                 // Explicit Local Sync for Media
