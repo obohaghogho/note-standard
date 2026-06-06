@@ -3,7 +3,7 @@ import { Check, CheckCheck, Video, Phone, Paperclip, Languages, Flag } from 'luc
 import type { Message } from '../../context/ChatContext';
 import ImageWithSignedUrl from '../common/ImageWithSignedUrl';
 import VideoWithSignedUrl from '../common/VideoWithSignedUrl';
-import AudioPlayer from './AudioPlayer';
+import { AudioPlayer } from './AudioPlayer';
 
 interface MessageBubbleProps {
     msg: Message;
