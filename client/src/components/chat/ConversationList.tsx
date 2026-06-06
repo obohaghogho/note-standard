@@ -38,8 +38,8 @@ const ConversationItem = React.memo(({
         }
     }
 
-    const lastMsg = conv.lastMessage ?? (conv as any).last_message;
-    const unreadCount = (conv as any).unreadCount || 0;
+    const lastMsg = conv.lastMessage ?? (conv as unknown as { last_message?: typeof conv.lastMessage }).last_message;
+    const unreadCount = (conv as unknown as { unreadCount?: number }).unreadCount || 0;
     const typingUsersList = typingUsers;
 
     return (
@@ -151,10 +151,10 @@ const ConversationItem = React.memo(({
            typingEqual &&
            prevProps.conv.updated_at === nextProps.conv.updated_at &&
            prevProps.conv.lastMessage?.id === nextProps.conv.lastMessage?.id &&
-           (prevProps.conv as any).last_message?.id === (nextProps.conv as any).last_message?.id &&
+           (prevProps.conv as unknown as { last_message?: typeof prevProps.conv.lastMessage }).last_message?.id === (nextProps.conv as unknown as { last_message?: typeof nextProps.conv.lastMessage }).last_message?.id &&
            prevProps.conv.lastMessage?.delivered_at === nextProps.conv.lastMessage?.delivered_at &&
            prevProps.conv.lastMessage?.read_at === nextProps.conv.lastMessage?.read_at &&
-           (prevProps.conv as any).unreadCount === (nextProps.conv as any).unreadCount;
+           (prevProps.conv as unknown as { unreadCount?: number }).unreadCount === (nextProps.conv as unknown as { unreadCount?: number }).unreadCount;
 });
 
 const ConversationList: React.FC = () => {

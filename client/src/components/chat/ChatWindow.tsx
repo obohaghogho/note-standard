@@ -1296,7 +1296,7 @@ const ChatWindow: React.FC = () => {
                                                     // Shift+Enter inserts newline
                                                     if (e.key === 'Enter' && !e.shiftKey) {
                                                         e.preventDefault();
-                                                        handleSend(e as any);
+                                                        handleSend(e as unknown as React.FormEvent);
                                                     }
                                                 }}
                                                 onInput={(e) => {

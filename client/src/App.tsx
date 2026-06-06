@@ -110,7 +110,7 @@ function App() {
   return (
     <Router>
       <ErrorBoundary 
-        fallbackRender={({ error, resetErrorBoundary }) => (
+        fallbackRender={({ error }) => (
           <div style={{ padding: '2rem', textAlign: 'center', color: '#ef4444' }}>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Something went wrong</h2>
             <p style={{ marginTop: '0.5rem', color: '#9ca3af' }}>{error?.message || 'Unknown error'}</p>

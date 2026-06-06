@@ -198,7 +198,7 @@ console.log('🚀 NoteStandard Booting...');
   if ('virtualKeyboard' in navigator) {
     // Fallback: also toggle keyboard-open class via geometrychange for browsers
     // where visualViewport.resize doesn't fire reliably.
-    (navigator as any).virtualKeyboard.addEventListener('geometrychange', (event: any) => {
+    (navigator as unknown as { virtualKeyboard: { addEventListener: (type: string, listener: (e: { target: { boundingRect: { height: number } } }) => void) => void } }).virtualKeyboard.addEventListener('geometrychange', (event: { target: { boundingRect: { height: number } } }) => {
       const { height } = event.target.boundingRect;
       if (height > 60) {
         document.documentElement.classList.add('keyboard-open');
