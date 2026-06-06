@@ -195,11 +195,14 @@ const ChatWindow: React.FC = () => {
         const container = scrollContainerRef.current;
         if (!container) return;
 
+        const isInputFocused = document.activeElement?.id === 'chat-window-input';
+
         // We can rely on the atBottomStateChange from Virtuoso which sets showScrollDown.
         // !showScrollDown means we are at the bottom.
         const isNearBottom = !showScrollDown;
         
-        if (!isNearBottom) return;
+        // Pin to bottom if already there, OR if the input is focused (keyboard opening / composer growing)
+        if (!isNearBottom && !isInputFocused) return;
 
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
@@ -1191,6 +1194,10 @@ const ChatWindow: React.FC = () => {
                                                         e.preventDefault();
                                                         handleSend(e as unknown as React.FormEvent);
                                                     }
+                                                }}
+                                                onFocus={() => {
+                                                    // Ensure we snap to bottom immediately when user intends to type
+                                                    scrollToBottom('instant');
                                                 }}
                                                 onInput={(e) => {
                                                     // Auto-grow: reset height then expand to scrollHeight
