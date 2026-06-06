@@ -1066,7 +1066,7 @@ const ChatWindow: React.FC = () => {
                                     handleReport={handleReport}
                                     handleManualTranslate={handleManualTranslate}
                                     fetchSignedUrl={fetchSignedUrl}
-                                    setPreviewMedia={(data) => setPreviewMedia(data)}
+                                    setPreviewMedia={(data) => setPreviewMedia({ ...data, isOpen: true })}
                                 />
                             );
                         }}

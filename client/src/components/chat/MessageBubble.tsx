@@ -106,13 +106,13 @@ const MessageBubble = memo(({
                             <ImageWithSignedUrl 
                                 path={msg.attachment.storage_path} 
                                 fetchUrl={fetchSignedUrl} 
-                                onPreview={(url) => setPreviewMedia({ isOpen: true, url, type: 'image', fileName: msg.attachment?.file_name, isSender: msg.sender_id === currentUserId })}
+                                onPreview={(url) => setPreviewMedia({ url, type: 'image', fileName: msg.attachment?.file_name, isSender: msg.sender_id === currentUserId })}
                             />
                         ) : msg.type === 'video' ? (
                             <VideoWithSignedUrl 
                                 path={msg.attachment.storage_path} 
                                 fetchUrl={fetchSignedUrl} 
-                                onPreview={(url) => setPreviewMedia({ isOpen: true, url, type: 'video', fileName: msg.attachment?.file_name, isSender: msg.sender_id === currentUserId })}
+                                onPreview={(url) => setPreviewMedia({ url, type: 'video', fileName: msg.attachment?.file_name, isSender: msg.sender_id === currentUserId })}
                             />
                         ) : (
                             <div className="p-3 flex items-center gap-3">
