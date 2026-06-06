@@ -996,7 +996,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 // replyTo snapshot, fall back to the reply_to we already stored.
                 // This prevents the reply bubble from disappearing on confirmation.
                 if (intent.payload.replyTo && !canonicalMessage.reply_to) {
-                    canonicalMessage = { ...canonicalMessage, reply_to: { ...intent.payload.replyTo, type: intent.payload.replyTo.type ?? 'text' } };
+                    canonicalMessage = { ...canonicalMessage, reply_to: { 
+                        id: intent.payload.replyTo.id,
+                        content: intent.payload.replyTo.content ?? '',
+                        sender_id: intent.payload.replyTo.sender_id ?? '',
+                        type: intent.payload.replyTo.type ?? 'text'
+                    } };
                 }
 
                 // Pre-register in dedup buffer BEFORE setMessages so that when the

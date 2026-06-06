@@ -157,7 +157,7 @@ const ChatWindow: React.FC = () => {
     // Mentions state
     const [showMentions, setShowMentions] = useState(false);
     const [mentionSearch, setMentionSearch] = useState('');
-    const [mentionParticipants, setMentionParticipants] = useState<Record<string, unknown>[]>([]);
+    const [mentionParticipants, setMentionParticipants] = useState<{ id: string; username: string; full_name?: string; avatar_url?: string }[]>([]);
     
     // Ref to prevent translation loops
     const translatingRef = useRef<Set<string>>(new Set());
