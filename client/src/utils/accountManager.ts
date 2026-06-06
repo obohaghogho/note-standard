@@ -18,6 +18,8 @@ export interface StoredAccount {
   session?: MinimalSession; // Legacy support
   profile: Profile;
   lastActive: number;
+  sessionId?: string;  // Our user_sessions.session_id
+  deviceId?: string;   // Persistent hardware device ID
 }
 
 /**
@@ -105,7 +107,9 @@ export const accountManager = {
         expires_at: session.expires_at || 0
       },
       profile,
-      lastActive: Date.now()
+      lastActive: Date.now(),
+      sessionId: (session as { sessionId?: string }).sessionId,
+      deviceId: (session as { deviceId?: string }).deviceId,
     };
 
     if (index !== -1) {
@@ -155,6 +159,19 @@ export const accountManager = {
   },
 
   /**
+   * Update the sessionId and deviceId for an account
+   */
+  updateSessionMeta(userId: string, sessionId: string, deviceId: string) {
+    const accounts = this.getAllAccounts();
+    const index = accounts.findIndex(a => a.id === userId);
+    if (index !== -1) {
+      accounts[index].sessionId = sessionId;
+      accounts[index].deviceId = deviceId;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+    }
+  },
+
+  /**
    * Remove an account from the list
    */
   removeAccount(userId: string) {
@@ -199,3 +216,4 @@ export const clearAccountStale = accountManager.clearAccountStale.bind(accountMa
 export const getAllAccounts = accountManager.getAllAccounts.bind(accountManager);
 // Compatibility aliases
 export const updateAccountSession = updateAccountTokens;
+export const updateSessionMeta = accountManager.updateSessionMeta.bind(accountManager);

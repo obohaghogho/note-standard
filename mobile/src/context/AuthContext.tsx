@@ -41,9 +41,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setAccounts(accs);
 
       if (token && u) {
-        SignalingService.init(token, u.id);
+        const acc = accs.find(a => a.id === u.id);
+        SignalingService.init(token, u.id, acc?.sessionId, acc?.deviceId);
         setAccountReady(true);
       }
+
+      // Layer 2: Hydrate Active Session
+      AuthService.hydrateActiveSession();
+      
+      // Layer 3: Background Validation
+      AuthService.validateInactiveSessionsInBackground();
     } catch (err) {
       console.error('[AuthContext] Load error:', err);
     } finally {
@@ -57,8 +64,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Listen for global logout events (e.g. from 401 interceptor)
     const handleLogout = () => {
       setUser(null);
-      setAccounts([]);
       SignalingService.disconnect();
+      AuthService.getStoredAccounts().then(setAccounts);
     };
 
     const handleSwitch = (newUser: User) => {
@@ -75,9 +82,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const newUser = await AuthService.getUser();
         const token = await AuthService.getToken();
         if (newUser && token) {
+          const accs = await AuthService.getStoredAccounts();
+          const acc = accs.find(a => a.id === newUser.id);
           // Disconnect old socket BEFORE reconnecting
           SignalingService.disconnect();
-          SignalingService.init(token, newUser.id);
+          SignalingService.init(token, newUser.id, acc?.sessionId, acc?.deviceId);
           // Register the signal BEFORE calling setUser so the
           // post-render useEffect([user]) can fire it at the right time.
           pendingSignalUserIdRef.current = userId;
@@ -138,15 +147,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     try {
-      const res = await apiClient.post(`/auth/login`, { email, password });
-      const { token, refresh_token, user: userData } = res.data;
+      const { DeviceManager } = require('../utils/DeviceManager');
+      const device_id = await DeviceManager.getDeviceId();
+      const platform = require('react-native').Platform.OS;
+      
+      const res = await apiClient.post(`/auth/login`, { email, password, device_id, platform });
+      const { token, refresh_token, user: userData, session_id } = res.data;
       await AuthService.setToken(token);
       if (refresh_token) await AuthService.setRefreshToken(refresh_token);
-      await AuthService.setUser(userData);
+      await AuthService.setUser(userData, session_id, device_id);
       setUser(userData);
       
       // Initialize signaling immediately after login
-      SignalingService.init(token, userData.id);
+      SignalingService.init(token, userData.id, session_id, device_id);
       setAccountReady(true);
       
       // Update accounts list
@@ -163,14 +176,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const register = async (fullName: string, email: string, password: string) => {
     try {
-      const res = await apiClient.post(`/auth/register`, { full_name: fullName, email, password });
-      const { token, user: userData } = res.data;
+      const { DeviceManager } = require('../utils/DeviceManager');
+      const device_id = await DeviceManager.getDeviceId();
+      const platform = require('react-native').Platform.OS;
+
+      const res = await apiClient.post(`/auth/register`, { full_name: fullName, email, password, device_id, platform });
+      const { token, user: userData, session_id } = res.data;
       await AuthService.setToken(token);
-      await AuthService.setUser(userData);
+      await AuthService.setUser(userData, session_id, device_id);
       setUser(userData);
       
       // Initialize signaling immediately after registration
-      SignalingService.init(token, userData.id);
+      SignalingService.init(token, userData.id, session_id, device_id);
       setAccountReady(true);
       
       // Update accounts list

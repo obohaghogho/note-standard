@@ -214,10 +214,28 @@ const walletHandlers = require('./events/wallet');
 const notificationHandlers = require('./events/notifications');
 const presenceHandlers = require('./events/presence');
 
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
   const userId = socket.userId;
-  console.log(`[Socket.IO] ✓ ${socket.id} connected (user: ${userId})`);
+  const sessionId = socket.sessionId;
+  const deviceId = socket.deviceId;
+
+  // Soft Socket Replacement
+  const sessionRoom = `session:${sessionId}`;
+  const existingSockets = await io.in(sessionRoom).fetchSockets();
+  if (existingSockets.length > 0) {
+    console.log(`[Socket.IO] ♻️ Soft replacing existing socket for session ${sessionId}`);
+    existingSockets.forEach(s => {
+      if (s.id !== socket.id) {
+        s.emit('session:replaced');
+        s.disconnect(true);
+      }
+    });
+  }
+
+  console.log(`[Socket.IO] ✓ ${socket.id} connected (user: ${userId}, session: ${sessionId})`);
   socket.join(`user:${userId}`);
+  socket.join(`session:${sessionId}`);
+  socket.join(`device:${deviceId}`);
   
   presenceHandlers(io, socket);
   chatHandlers(io, socket);
@@ -253,10 +271,23 @@ async function initPgListener() {
     }
   });
 
-  pgClient.on('notification', (msg) => {
+  pgClient.on('notification', async (msg) => {
     if (msg.channel === 'realtime_events') {
       try {
         const envelope = JSON.parse(msg.payload);
+        
+        // Handle session revocation gracefully
+        if (envelope.event === 'session:revoked') {
+          console.log(`[Gateway] 🛑 Session revoked: ${envelope.sessionId}`);
+          const sessionRoom = `session:${envelope.sessionId}`;
+          const sockets = await io.in(sessionRoom).fetchSockets();
+          sockets.forEach(s => {
+            s.emit('auth:revoked');
+            s.disconnect(true);
+          });
+          return;
+        }
+
         dispatchSocketEvent(envelope);
       } catch (err) {
         console.error('[Gateway] 🐘 Failed to parse notification payload:', err.message);

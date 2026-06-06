@@ -39,13 +39,13 @@ class SocketLifecycleManager {
   private isConnecting = false;
   private currentToken: string | null = null;
   private currentUserId: string | null = null;
+  private currentSessionId: string | null = null;
+  private currentDeviceId: string | null = null;
+  private onRevokedCallback: (() => void) | null = null;
 
   /** Connect with a valid auth token. Idempotent — safe to call multiple times. */
-  connect(token: string, userId: string): Socket {
+  connect(token: string, userId: string, sessionId?: string, deviceId?: string): Socket {
     // ── HARD SINGLETON LOCK ──────────────────────────────────────────────────
-    // Under React Strict Mode, useEffect runs twice in dev. This timestamp lock
-    // prevents a second socket from being instantiated within a 500ms window,
-    // which is the typical Strict Mode double-invocation timing.
     const now = Date.now();
     const self = this as unknown as { _lastConnectAttemptAt?: number };
     if (self._lastConnectAttemptAt && now - self._lastConnectAttemptAt < 500) {
@@ -54,8 +54,8 @@ class SocketLifecycleManager {
     }
     self._lastConnectAttemptAt = now;
 
-    // Singleton enforcement: reuse connected socket for same user
-    if (this.socket?.connected && this.currentUserId === userId) {
+    // Singleton enforcement: reuse connected socket for same session
+    if (this.socket?.connected && this.currentUserId === userId && this.currentSessionId === sessionId) {
       return this.socket;
     }
 
@@ -74,12 +74,14 @@ class SocketLifecycleManager {
 
     this.currentToken = token;
     this.currentUserId = userId;
+    this.currentSessionId = sessionId ?? null;
+    this.currentDeviceId = deviceId ?? null;
     this.isConnecting = true;
 
-    console.log(`[SocketLifecycle:Web] Creating socket for user ${userId}`);
+    console.log(`[SocketLifecycle:Web] Creating socket for user ${userId} session ${sessionId}`);
 
     const socket = io(SOCKET_URL, {
-      auth: { token },
+      auth: { token, sessionId, deviceId },
       transports: ['polling', 'websocket'], // polling first — ensures auth token validated in HTTP handshake
       reconnection: false, // We manage reconnects ourselves for backoff control
       timeout: 60000,
@@ -115,6 +117,20 @@ class SocketLifecycleManager {
       this._scheduleReconnect();
     });
 
+    // Session revocation — gateway tells us this socket's session has been killed
+    socket.on('auth:revoked', () => {
+      console.warn('[SocketLifecycle:Web] 🛑 Session revoked by server — disconnecting');
+      this.disconnect();
+      if (this.onRevokedCallback) this.onRevokedCallback();
+    });
+
+    // Soft replacement — a newer socket took over this session on another tab
+    socket.on('session:replaced', () => {
+      console.warn('[SocketLifecycle:Web] ♻️ Session replaced by newer connection — disconnecting');
+      this.disconnect();
+      if (this.onRevokedCallback) this.onRevokedCallback();
+    });
+
     this.socket = socket;
     return socket;
   }
@@ -126,6 +142,13 @@ class SocketLifecycleManager {
     this._cleanup(true);
     this.currentToken = null;
     this.currentUserId = null;
+    this.currentSessionId = null;
+    this.currentDeviceId = null;
+  }
+
+  /** Register a callback to be called when the session is server-revoked. */
+  onRevoked(callback: () => void) {
+    this.onRevokedCallback = callback;
   }
 
   /**
@@ -186,7 +209,7 @@ class SocketLifecycleManager {
     console.log(`[SocketLifecycle:Web] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
     this.reconnectTimer = setTimeout(() => {
       if (this.currentToken && this.currentUserId) {
-        this.connect(this.currentToken, this.currentUserId);
+        this.connect(this.currentToken, this.currentUserId, this.currentSessionId ?? undefined, this.currentDeviceId ?? undefined);
       }
     }, delay);
   }

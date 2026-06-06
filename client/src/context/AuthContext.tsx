@@ -4,6 +4,7 @@ import { safeProfile, safeSubscription, supabase, resetRateLimiters, ensureProfi
 import type { Profile, Subscription } from "../types/auth";
 import toast from "react-hot-toast";
 import * as accountManager from "../utils/accountManager";
+import { updateSessionMeta } from "../utils/accountManager";
 import { refreshSessionIsolated } from "../utils/authUtils";
 
 interface AuthContextValue {
@@ -366,6 +367,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Sync tokens to multi-account storage
           accountManager.updateAccountTokens(currentUser.id, newSession);
           accountManager.setActiveAccountId(currentUser.id);
+
+          // Register device+session with backend (background, non-blocking)
+          if (event === 'SIGNED_IN') {
+            const WEB_DEVICE_KEY = 'notestandard_web_device_id';
+            let deviceId = localStorage.getItem(WEB_DEVICE_KEY);
+            if (!deviceId) {
+              deviceId = crypto.randomUUID();
+              localStorage.setItem(WEB_DEVICE_KEY, deviceId);
+            }
+            const apiBase = import.meta.env.VITE_API_URL || '';
+            fetch(`${apiBase}/api/auth/register-session`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                email: currentUser.email,
+                // We can't send plaintext password here — use a special header approach
+                // Instead call a dedicated /api/auth/register-session endpoint
+                device_id: deviceId,
+                platform: 'web',
+                _supabase_access_token: newSession.access_token,
+              })
+            }).then(r => r.json()).then(data => {
+              if (data.session_id) {
+                updateSessionMeta(currentUser.id, data.session_id, deviceId!);
+              }
+            }).catch(err => {
+              console.warn('[Auth] Background device registration failed:', err.message);
+            });
+          }
 
           setupSubscriptions(currentUser.id);
           syncUserData(currentUser.id, currentUser, currentId);

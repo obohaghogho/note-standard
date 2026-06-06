@@ -24,7 +24,7 @@ class SignalingService {
   public  activeCallType:       'audio' | 'video' = 'audio';
   public  activeSessionId:      string | null = null;
 
-  async init(userToken: string, userId: string) {
+  async init(userToken: string, userId: string, sessionId?: string, deviceId?: string) {
     if (this.socket?.connected) {
       console.log('[Signaling] Reusing existing connection');
       return;
@@ -32,7 +32,7 @@ class SignalingService {
     this.userId = userId;
 
     this.socket = io(GATEWAY_URL, {
-      auth: { token: userToken },
+      auth: { token: userToken, sessionId, deviceId },
       transports: ['websocket'],
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -41,6 +41,23 @@ class SignalingService {
 
     this.socket.on('connect',    () => console.log('[Signaling] ✅ Connected'));
     this.socket.on('disconnect', (r) => console.warn('[Signaling] ⚠️ Disconnected:', r));
+
+    // ── Session lifecycle events from gateway ────────────────────────────────
+    this.socket.on('auth:revoked', () => {
+      console.warn('[Signaling] 🛑 Session revoked by gateway. Forcing logout...');
+      this.disconnect();
+      const EventEmitter = require('./EventEmitter').default;
+      EventEmitter.emit('auth:logout', null);
+    });
+
+    this.socket.on('session:replaced', () => {
+      console.warn('[Signaling] ♻️ Session replaced by a newer connection on this device.');
+      this.disconnect();
+      // Note: do NOT force full logout on replacement — just drop connection.
+      // The new socket will take over. Emit a gentle refresh event instead.
+      const EventEmitter = require('./EventEmitter').default;
+      EventEmitter.emit('socket:replaced', null);
+    });
 
     // ── 1. Incoming call ───────────────────────────────────────────────────
     this.socket.on('call:incoming', async (data) => {

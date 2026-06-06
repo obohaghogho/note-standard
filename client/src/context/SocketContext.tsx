@@ -2,6 +2,8 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { io, Socket } from 'socket.io-client';
 import toast from 'react-hot-toast';
 import { useAuth } from './AuthContext';
+import * as accountManager from '../utils/accountManager';
+import { supabase } from '../lib/supabaseSafe';
 
 // ─── Config ──────────────────────────────────────────────────────
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
@@ -83,11 +85,16 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         // 3. Initial Boot Creation
         console.log(`[Socket Forensic] Initializing persistent socket singleton at ${Date.now()}`);
+
+        // Read session/device meta for this user to pass to gateway auth
+        const storedAccount = user?.id ? accountManager.getAccount(user.id) : null;
+        const sessionId = storedAccount?.sessionId;
+        const deviceId = storedAccount?.deviceId;
         
         const socket = io(SOCKET_URL, {
-            auth: { token },
+            auth: { token, sessionId, deviceId },
             withCredentials: true,
-            transports: ['websocket', 'polling'], // websocket-first: avoids polling→upgrade latency
+            transports: ['websocket', 'polling'],
             reconnection: true,
             reconnectionAttempts: MAX_RETRIES,
             reconnectionDelay: 2000,
@@ -128,6 +135,26 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
         });
 
+        // Handle server-side session revocation
+        socket.on('auth:revoked', async () => {
+            console.warn('[Socket Forensic] 🛑 Session revoked by server. Signing out...');
+            globalSocket?.removeAllListeners();
+            globalSocket?.disconnect();
+            globalSocket = null;
+            setConnected(false);
+            await supabase.auth.signOut();
+            toast.error('Your session was revoked. Please sign in again.');
+        });
+
+        // Handle soft replacement (newer tab/window took over this session)
+        socket.on('session:replaced', () => {
+            console.warn('[Socket Forensic] ♻️ Session replaced by newer connection. Dropping this socket.');
+            globalSocket?.removeAllListeners();
+            globalSocket?.disconnect();
+            globalSocket = null;
+            setConnected(false);
+        });
+
         // We intentionally DO NOT return a cleanup function that calls socket.disconnect().
         // Requirement 7.
     }, [authReady, session, user]); // Re-evaluates when session refreshes, but guarded against disconnect.
@@ -157,11 +184,18 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             teardown();
 
             console.log(`[ACCOUNT_FORENSIC] SOCKET_INITIALIZE - Creating fresh socket at ${Date.now()}`);
+
+            // Read session/device meta for the connecting user
+            const storedAccount = accountManager.getActiveAccountId() 
+                ? accountManager.getAccount(accountManager.getActiveAccountId()!) 
+                : null;
+            const sessionId = storedAccount?.sessionId;
+            const deviceId = storedAccount?.deviceId;
             
             const socket = io(SOCKET_URL, {
-                auth: { token },
+                auth: { token, sessionId, deviceId },
                 withCredentials: true,
-                transports: ['websocket', 'polling'], // websocket-first: avoids polling→upgrade latency
+                transports: ['websocket', 'polling'],
                 reconnection: true,
                 reconnectionAttempts: MAX_RETRIES,
                 reconnectionDelay: 2000,

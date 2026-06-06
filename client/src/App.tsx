@@ -110,10 +110,11 @@ function App() {
   return (
     <Router>
       <ErrorBoundary 
-        fallback={
+        fallbackRender={({ error, resetErrorBoundary }) => (
           <div style={{ padding: '2rem', textAlign: 'center', color: '#ef4444' }}>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Something went wrong</h2>
-            <p style={{ marginTop: '0.5rem', color: '#9ca3af' }}>Please refresh the page to continue.</p>
+            <p style={{ marginTop: '0.5rem', color: '#9ca3af' }}>{error?.message || 'Unknown error'}</p>
+            <p style={{ marginTop: '0.5rem', color: '#ef4444', fontSize: '0.8rem', textAlign: 'left', whiteSpace: 'pre-wrap' }}>{error?.stack}</p>
             <button 
               onClick={() => window.location.reload()}
               style={{ marginTop: '1rem', padding: '0.5rem 1rem', background: '#3b82f6', color: 'white', borderRadius: '0.5rem', border: 'none', cursor: 'pointer' }}
@@ -121,7 +122,7 @@ function App() {
               Reload Page
             </button>
           </div>
-        }
+        )}
       >
         <Suspense fallback={
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#0a0a0a' }}>

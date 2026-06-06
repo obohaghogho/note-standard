@@ -1,5 +1,6 @@
 const bcrypt = require("bcryptjs");
 const axios = require("axios");
+const crypto = require("crypto");
 const supabase = require("../config/database");
 const env = require("../config/env");
 const mailService = require("../services/mailService");
@@ -18,6 +19,8 @@ const register = async (req, res) => {
       password,
       captchaToken,
       referrerId,
+      device_id,
+      platform,
     } = req.body;
 
     // Support both naming conventions
@@ -92,6 +95,42 @@ const register = async (req, res) => {
       )
     ));
 
+    // Create initial device + session record (same as login flow)
+    const deviceId = device_id || crypto.randomUUID();
+    const sessionId = crypto.randomUUID();
+
+    // Sign in immediately to get a real Supabase session token
+    const { data: sessionData } = await supabase.auth.signInWithPassword({ email, password });
+    
+    let sessionId_out = sessionId;
+    let token_out = null;
+    let refresh_token_out = null;
+
+    if (sessionData?.session) {
+      token_out = sessionData.session.access_token;
+      refresh_token_out = sessionData.session.refresh_token;
+
+      await supabase.from('user_devices').upsert({
+        device_id: deviceId,
+        user_id: authData.user.id,
+        platform: platform || 'unknown',
+        last_seen: new Date(),
+        updated_at: new Date()
+      }, { onConflict: 'device_id' });
+
+      const refreshHash = crypto.createHash('sha256').update(refresh_token_out).digest('hex');
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+      await supabase.from('user_sessions').insert({
+        session_id: sessionId,
+        user_id: authData.user.id,
+        device_id: deviceId,
+        refresh_token_hash: refreshHash,
+        token_state: 'valid',
+        expires_at: expiresAt
+      });
+    }
+
     // 4. Send Welcome Email (Confirmation)
     // We send this as a background task to not block the response
     mailService.sendWelcomeEmail(email, fullName).catch(err => {
@@ -101,6 +140,10 @@ const register = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Registration successful! You can now log in.",
+      token: token_out,
+      refresh_token: refresh_token_out,
+      session_id: sessionId,
+      device_id: deviceId,
       user: {
         id: authData.user.id,
         email: authData.user.email,
@@ -120,7 +163,7 @@ const register = async (req, res) => {
  */
 const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, device_id, platform } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password are required." });
@@ -147,10 +190,38 @@ const login = async (req, res) => {
       console.warn("[Auth] Profile enrichment failed, using metadata:", pError.message);
     }
 
+    // Multi-Device Session Logic
+    const deviceId = device_id || crypto.randomUUID();
+    const sessionId = crypto.randomUUID();
+    
+    // Upsert device
+    await supabase.from('user_devices').upsert({
+      device_id: deviceId,
+      user_id: data.user.id,
+      platform: platform || 'unknown',
+      last_seen: new Date(),
+      updated_at: new Date()
+    }, { onConflict: 'device_id' });
+
+    // Hash refresh token
+    const refreshHash = crypto.createHash('sha256').update(data.session.refresh_token).digest('hex');
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+
+    await supabase.from('user_sessions').insert({
+      session_id: sessionId,
+      user_id: data.user.id,
+      device_id: deviceId,
+      refresh_token_hash: refreshHash,
+      token_state: 'valid',
+      expires_at: expiresAt
+    });
+
     res.status(200).json({
       success: true,
       token: data.session.access_token,
       refresh_token: data.session.refresh_token,
+      session_id: sessionId,
+      device_id: deviceId,
       user: {
         id: data.user.id,
         email: data.user.email,
@@ -171,9 +242,29 @@ const login = async (req, res) => {
  */
 const refreshToken = async (req, res) => {
   try {
-    const { refresh_token } = req.body;
-    if (!refresh_token) {
-      return res.status(400).json({ error: "Refresh token is required." });
+    const { refresh_token, session_id, device_id } = req.body;
+    if (!refresh_token || !session_id) {
+      return res.status(400).json({ error: "Refresh token and session ID are required." });
+    }
+
+    // Verify Session Ownership
+    const { data: sessionData } = await supabase
+      .from('user_sessions')
+      .select('*')
+      .eq('session_id', session_id)
+      .single();
+
+    if (!sessionData || sessionData.token_state !== 'valid') {
+      return res.status(401).json({ error: "Session is invalid or revoked." });
+    }
+    
+    if (device_id && sessionData.device_id !== device_id) {
+      return res.status(401).json({ error: "Device mismatch for session." });
+    }
+
+    const providedHash = crypto.createHash('sha256').update(refresh_token).digest('hex');
+    if (providedHash !== sessionData.refresh_token_hash) {
+      return res.status(401).json({ error: "Invalid refresh token." });
     }
 
     const { data, error } = await supabase.auth.refreshSession({
@@ -182,13 +273,24 @@ const refreshToken = async (req, res) => {
 
     if (error) {
       console.error("[AUTH-ERROR] Token refresh failed:", error.message);
+      // Mark as invalid if it fails permanently
+      if (error.message.includes("invalid") || error.message.includes("expired")) {
+         await supabase.from('user_sessions').update({ token_state: 'invalid' }).eq('session_id', session_id);
+      }
       return res.status(401).json({ error: error.message });
     }
+
+    const newHash = crypto.createHash('sha256').update(data.session.refresh_token).digest('hex');
+    await supabase.from('user_sessions').update({
+      refresh_token_hash: newHash,
+      last_active: new Date()
+    }).eq('session_id', session_id);
 
     res.status(200).json({
       success: true,
       token: data.session.access_token,
       refresh_token: data.session.refresh_token,
+      session_id: session_id,
       user: {
         id: data.user.id,
         email: data.user.email,
@@ -319,6 +421,75 @@ const changePassword = async (req, res) => {
   }
 };
 
+const registerSession = async (req, res) => {
+  try {
+    const { device_id, platform, _supabase_access_token } = req.body;
+
+    if (!_supabase_access_token) {
+      return res.status(400).json({ error: 'Access token required.' });
+    }
+
+    // Validate the Supabase token to get the user — no password needed
+    const { data: { user }, error: authError } = await supabase.auth.getUser(_supabase_access_token);
+    if (authError || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token.' });
+    }
+
+    // Also get a fresh session to get refresh token for hashing
+    const { data: sessionData } = await supabase.auth.admin.getUserById(user.id);
+    
+    const deviceId = device_id || crypto.randomUUID();
+    const sessionId = crypto.randomUUID();
+
+    await supabase.from('user_devices').upsert({
+      device_id: deviceId,
+      user_id: user.id,
+      platform: platform || 'web',
+      last_seen: new Date(),
+      updated_at: new Date()
+    }, { onConflict: 'device_id' });
+
+    // Use access token hash as a stand-in (web flow; refresh token not exposed)
+    const tokenHash = crypto.createHash('sha256').update(_supabase_access_token).digest('hex');
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    await supabase.from('user_sessions').insert({
+      session_id: sessionId,
+      user_id: user.id,
+      device_id: deviceId,
+      refresh_token_hash: tokenHash,
+      token_state: 'valid',
+      expires_at: expiresAt
+    });
+
+    res.status(200).json({ success: true, session_id: sessionId, device_id: deviceId });
+  } catch (err) {
+    console.error('[RegisterSession Error]:', err.message);
+    res.status(500).json({ error: 'Failed to register session.' });
+  }
+};
+
+const logout = async (req, res) => {
+  try {
+    const { session_id } = req.body;
+    
+    if (session_id) {
+      await supabase.from('user_sessions').update({ 
+        token_state: 'revoked', 
+        revoked_at: new Date() 
+      }).eq('session_id', session_id);
+    }
+
+    // Hybrid logout: Also clear supabase token context if possible
+    // Note: client side will also clear its tokens
+    
+    res.json({ success: true, message: "Logged out successfully" });
+  } catch (err) {
+    console.error("[Logout Error]:", err.message);
+    res.status(500).json({ error: "Failed to logout" });
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -328,4 +499,6 @@ module.exports = {
   resendOtp,
   forgotPassword,
   refreshToken,
+  logout,
+  registerSession,
 };
