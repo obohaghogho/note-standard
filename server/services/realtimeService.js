@@ -11,8 +11,14 @@ const replayGuard = require('../utils/replayGuard');
 let pgPool;
 
 if (process.env.DATABASE_URL) {
+    let notifyUrl = process.env.DATABASE_URL;
+    if (notifyUrl.includes(':6543')) {
+        console.warn('[RealtimeService] ⚠ DATABASE_URL uses port 6543. NOTIFY requires session mode. Auto-switching to port 5432...');
+        notifyUrl = notifyUrl.replace(':6543', ':5432');
+    }
+
     pgPool = new Pool({
-        connectionString: process.env.DATABASE_URL,
+        connectionString: notifyUrl,
         ssl: { rejectUnauthorized: false },
         max: 10,
         idleTimeoutMillis: 30000,
