@@ -312,9 +312,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         conversationsRef.current = conversations;
     }, [conversations]);
 
-    useEffect(() => {
-        socketRef.current = socket;
-    }, [socket]);
+    // Keep socketRef always current — same zero-cost pattern as messagesRef/conversationsRef.
+    // MUST be a direct assignment (not useEffect) so joinAllRooms never reads a stale ref
+    // on the render cycle immediately following a socket connect or reconnect event.
+    socketRef.current = socket;
 
 
     const markMessageRead = useCallback(async (messageId: string, conversationId: string) => {
@@ -947,6 +948,24 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         socket.on('chat:conversation_read', onConversationRead);
         socket.on('chat:conversation_delivered', onConversationDelivered);
         socket.on('chat:typing', onTyping);
+
+        // Re-join ALL conversation rooms on every socket reconnect.
+        // Socket.IO drops all rooms when the transport disconnects and reconnects
+        // with a new socket.id. Without this, the receiver's socket is no longer
+        // in the conversation room and never receives incoming chat:message events.
+        // This handler fires on both initial connect AND every subsequent reconnect.
+        const onSocketReconnect = () => {
+            const currentConvs = conversationsRef.current;
+            if (currentConvs.length > 0) {
+                console.log(`[ChatContext] 🔄 Socket reconnected — re-joining ${currentConvs.length} rooms`);
+                currentConvs.forEach(conv => socket.emit('join_room', conv.id));
+            }
+            // Also rejoin the active conversation room explicitly
+            if (activeConversationIdRef.current) {
+                socket.emit('join_room', activeConversationIdRef.current);
+            }
+        };
+        socket.on('connect', onSocketReconnect);
         
         return () => { 
             socket.off('chat:message', processIncomingMessage); 
@@ -960,6 +979,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             socket.off('chat:conversation_read', onConversationRead);
             socket.off('chat:conversation_delivered', onConversationDelivered);
             socket.off('chat:typing', onTyping);
+            socket.off('connect', onSocketReconnect);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [socket, connected, user?.id]);

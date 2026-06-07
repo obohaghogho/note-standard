@@ -1310,10 +1310,32 @@ exports.sendMessage = async (req, res) => {
 
       // 2. Broadcast to other members immediately if it's not a duplicate
       if (!isDuplicate) {
-          // Pass excludeUserId so the gateway excludes the sender's socket(s) from
-          // the pg_notify broadcast. This prevents the sender receiving an echo of
-          // their own message which would trigger a duplicate merge on the client.
+          // PRIMARY PATH: emit to the conversation room (requires clients to have joined via join_room).
+          // Pass excludeUserId so the gateway excludes the sender's socket(s) from the broadcast.
           await realtime.emitToConversation(conversationId, "chat:message", safePayload, { excludeUserId: userId });
+
+          // GUARANTEED FALLBACK PATH: also emit directly to each participant's user:<id> room.
+          // The user:<id> room is automatically joined on every socket connection (server.js:236),
+          // so this path is resilient to reconnect races where the client hasn't yet re-joined
+          // the conversation room. Clients handle deduplication via processedEventIdsRef.
+          // We fire this asynchronously (no await) so it never blocks the response.
+          try {
+              const { data: convMembers } = await supabase
+                  .from("conversation_members")
+                  .select("user_id")
+                  .eq("conversation_id", conversationId)
+                  .neq("user_id", userId); // exclude sender
+
+              if (convMembers && convMembers.length > 0) {
+                  for (const member of convMembers) {
+                      // Fire-and-forget — delivery failures are non-fatal
+                      realtime.emitToUser(member.user_id, "chat:message", safePayload).catch(() => {});
+                  }
+              }
+          } catch (memberFetchErr) {
+              // Non-fatal — primary room broadcast already fired above
+              console.warn("[Chat Controller] Fallback per-user emit: could not fetch members:", memberFetchErr.message);
+          }
       }
 
       // 3. Background tasks (non-blocking)
