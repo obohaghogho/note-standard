@@ -758,7 +758,7 @@ const ChatWindow: React.FC = () => {
 
 
     return (
-        <div className="chat-root bg-crystal text-white w-full md:max-w-[1200px] md:mx-auto md:shadow-2xl md:border-x md:border-white/5">
+        <div className="chat-root bg-crystal text-white w-full h-full flex flex-col relative overflow-hidden md:max-w-[1200px] md:mx-auto md:shadow-2xl md:border-x md:border-white/5">
             {/* Immersive glass layer overlay */}
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-none z-0" />
             {/* ── Selection Action Bar (WhatsApp-style) ── */}
@@ -906,13 +906,15 @@ const ChatWindow: React.FC = () => {
                                         )}
                                     </div>
                                     <div className="min-w-0">
-                                        <h2 className="font-semibold truncate max-w-[130px] xs:max-w-[160px] sm:max-w-[200px] md:max-w-[300px] text-sm md:text-base flex items-center gap-1">
-                                            {displayName || 'Chat'}
+                                        <h2 className="font-semibold flex items-center gap-1 min-w-0 max-w-[150px] xs:max-w-[180px] sm:max-w-[240px] md:max-w-[320px]">
+                                            <span className="truncate text-sm md:text-base">{displayName || 'Chat'}</span>
                                             {activeConversation?.type === 'direct' && otherM && otherM.profile && (
-                                                <UserBadge 
-                                                    planTier={otherM.profile.plan_tier}
-                                                    isVerified={otherM.profile.is_verified}
-                                                />
+                                                <div className="flex-shrink-0">
+                                                    <UserBadge 
+                                                        planTier={otherM.profile.plan_tier}
+                                                        isVerified={otherM.profile.is_verified}
+                                                    />
+                                                </div>
                                             )}
                                         </h2>
                                         {activeConversationId && typingUsers[activeConversationId]?.length > 0 ? (
@@ -1124,7 +1126,7 @@ const ChatWindow: React.FC = () => {
             {showScrollDown && (
                 <button 
                     onClick={() => scrollToBottom()} 
-                    className="absolute right-5 md:right-6 bg-blue-600 text-white p-3 rounded-full shadow-2xl hover:bg-blue-700 transition-all animate-in zoom-in-0 duration-200 z-30 hover:scale-110 active:scale-95 border border-white/10"
+                    className="absolute right-3 md:right-6 bg-blue-600 text-white p-2.5 md:p-3 rounded-full shadow-[0_4px_20px_rgba(37,99,235,0.6)] hover:bg-blue-700 transition-all animate-in zoom-in-0 duration-200 z-30 hover:scale-110 active:scale-95 border border-blue-400/30"
                     style={{ bottom: 'calc(var(--composer-height, 80px) + 1rem)' }}
                 >
                     <ArrowDown size={20} />
@@ -1145,8 +1147,8 @@ const ChatWindow: React.FC = () => {
 
 
             {!isPending ? (
-                <div className="chat-input-bar bg-gray-950/40 backdrop-blur-2xl border-t border-white/10" ref={composerRef}>
-                    <div className="max-w-[900px] mx-auto p-3 md:p-4">
+                <div className="chat-input-bar bg-gray-950/80 backdrop-blur-2xl border-t border-white/10" ref={composerRef}>
+                    <div className="max-w-[900px] mx-auto px-3 py-2 md:p-4 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
                         {activeConversation?.isBlocked ? (
                             <div className="flex flex-col items-center justify-center p-4 bg-gray-800/80 rounded-2xl border border-gray-700/50">
                                 <p className="text-sm font-medium text-gray-300 text-center">

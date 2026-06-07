@@ -44,7 +44,7 @@ const MessageBubble = memo(({
     return (
         <div 
             id={`msg-${msg.id}`}
-            className={`flex ${msg.sender_id === currentUserId ? 'justify-end' : 'justify-start'} ${isGrouped ? '' : 'mt-3'} msg-bubble`}
+            className={`flex px-3 md:px-4 w-full ${msg.sender_id === currentUserId ? 'justify-end' : 'justify-start'} ${isGrouped ? '' : 'mt-3'} msg-bubble`}
             onTouchStart={(e) => gesture.onTouchStart(e, msg.id)}
             onTouchMove={gesture.onTouchMove}
             onTouchEnd={gesture.onTouchEnd}
@@ -174,12 +174,12 @@ const MessageBubble = memo(({
                         {!msg.isOwn && translations[msg.id] && translations[msg.id] !== 'translating...' && !showOriginal[msg.id] ? (
                             <div>
                                 <div className="flex items-center justify-between mb-1">
-                                    <div className="flex items-center gap-1.5 text-[10px] text-blue-300">
-                                        <Languages size={10} />
-                                        <span>Translated • {msg.original_language || 'detected'}</span>
-                                        <button onClick={() => setShowOriginal(prev => ({ ...prev, [msg.id]: true }))} className="underline hover:text-blue-200 ml-1">Original</button>
+                                    <div className="flex items-center gap-1 text-[10px] text-blue-300 bg-blue-500/10 px-2 py-1 rounded-md mb-2 w-fit">
+                                        <Languages size={12} />
+                                        <span className="font-medium">Translated from {msg.original_language || 'detected'}</span>
+                                        <button onClick={() => setShowOriginal(prev => ({ ...prev, [msg.id]: true }))} className="underline hover:text-blue-200 ml-2 font-semibold">View Original</button>
                                     </div>
-                                    <button onClick={() => handleReport(msg.id, msg.content, translations[msg.id])} className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-gray-500 hover:text-red-400 flex items-center gap-1"><Flag size={8} /> Report</button>
+                                    <button onClick={() => handleReport(msg.id, msg.content, translations[msg.id])} className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-gray-500 hover:text-red-400 flex items-center gap-1 absolute top-3 right-3"><Flag size={10} /> Report</button>
                                 </div>
                                 <p className="break-words text-sm leading-relaxed">{translations[msg.id]}</p>
                             </div>
