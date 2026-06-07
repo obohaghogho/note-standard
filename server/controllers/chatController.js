@@ -1310,31 +1310,23 @@ exports.sendMessage = async (req, res) => {
 
       // 2. Broadcast to other members immediately if it's not a duplicate
       if (!isDuplicate) {
-          // PRIMARY PATH: emit to the conversation room (requires clients to have joined via join_room).
-          // Pass excludeUserId so the gateway excludes the sender's socket(s) from the broadcast.
-          await realtime.emitToConversation(conversationId, "chat:message", safePayload, { excludeUserId: userId });
-
-          // GUARANTEED FALLBACK PATH: also emit directly to each participant's user:<id> room.
-          // The user:<id> room is automatically joined on every socket connection (server.js:236),
-          // so this path is resilient to reconnect races where the client hasn't yet re-joined
-          // the conversation room. Clients handle deduplication via processedEventIdsRef.
-          // We fire this asynchronously (no await) so it never blocks the response.
+          // PRIMARY PATH: Emit strictly to each participant's user:<id> room.
+          // The user:<id> room is automatically joined on every socket connection (server.js:236).
+          // Emitting directly to users (rather than the conversation room) completely eliminates
+          // race conditions where a client reconnects and hasn't yet re-joined the conversation room.
           try {
               const { data: convMembers } = await supabase
                   .from("conversation_members")
                   .select("user_id")
-                  .eq("conversation_id", conversationId)
-                  .neq("user_id", userId); // exclude sender
+                  .eq("conversation_id", conversationId); // include sender for multi-device sync
 
               if (convMembers && convMembers.length > 0) {
                   for (const member of convMembers) {
-                      // Fire-and-forget — delivery failures are non-fatal
-                      realtime.emitToUser(member.user_id, "chat:message", safePayload).catch(() => {});
+                      await realtime.emitToUser(member.user_id, "chat:message", safePayload);
                   }
               }
           } catch (memberFetchErr) {
-              // Non-fatal — primary room broadcast already fired above
-              console.warn("[Chat Controller] Fallback per-user emit: could not fetch members:", memberFetchErr.message);
+              console.warn("[Chat Controller] Broadcast per-user emit: could not fetch members:", memberFetchErr.message);
           }
       }
 
