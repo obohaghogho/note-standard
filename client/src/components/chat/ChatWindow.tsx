@@ -199,6 +199,16 @@ const ChatWindow: React.FC = () => {
                 align: 'end',
                 behavior: behavior === 'instant' ? 'auto' : behavior as any
             });
+            // Virtuoso's align: 'end' stops at the last message, hiding the footer.
+            // We must explicitly scroll to the absolute bottom to reveal the composer spacer.
+            requestAnimationFrame(() => {
+                if (scrollContainerRef.current) {
+                    scrollContainerRef.current.scrollTo({
+                        top: scrollContainerRef.current.scrollHeight,
+                        behavior: behavior === 'instant' ? 'auto' : behavior as any
+                    });
+                }
+            });
             setShowScrollDown(false);
             setUnreadCountWhileScrolled(0);
         } else if (messagesEndRef.current) {
@@ -259,6 +269,14 @@ const ChatWindow: React.FC = () => {
                                 index: currentMessages.length - 1,
                                 align: 'end',
                                 behavior: 'auto'
+                            });
+                            requestAnimationFrame(() => {
+                                if (scrollContainerRef.current) {
+                                    scrollContainerRef.current.scrollTo({
+                                        top: scrollContainerRef.current.scrollHeight,
+                                        behavior: 'auto'
+                                    });
+                                }
                             });
                             setShowScrollDown(false);
                             setUnreadCountWhileScrolled(0);
