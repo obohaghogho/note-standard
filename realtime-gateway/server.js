@@ -266,8 +266,16 @@ async function initPgListener() {
     return;
   }
 
+  // CRITICAL FIX: Supabase PgBouncer transaction mode (port 6543) breaks LISTEN/NOTIFY silently.
+  // We MUST use session mode (port 5432) for the gateway to receive real-time events.
+  let listenUrl = DATABASE_URL;
+  if (listenUrl.includes(':6543')) {
+    console.warn('[Gateway] ⚠ DATABASE_URL uses port 6543 (transaction pooler). LISTEN requires session mode. Auto-switching to port 5432...');
+    listenUrl = listenUrl.replace(':6543', ':5432');
+  }
+
   const pgClient = new Client({
-    connectionString: DATABASE_URL,
+    connectionString: listenUrl,
     ssl: { rejectUnauthorized: false },
     keepAlive: true,
   });
