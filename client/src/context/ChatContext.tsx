@@ -737,7 +737,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                                 ? (conv.unreadCount || 0) + newlyAddedCount
                                 : conv.unreadCount
                         };
-                    });
+                    }).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
                 });
             }
         };
@@ -1132,7 +1132,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         };
                     }
                     return conv;
-                }));
+                }).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));
 
                 await offlineQueue.removeIntent(intent.event_id);
             } catch (err) {
