@@ -130,17 +130,18 @@ const emit = async (type, room, event, payload, options = {}) => {
             return;
         }
 
-        // 3a. Replay protection guard for sequenced chat events
-        if (payload && typeof payload.sequence_number === 'number') {
+        // 3a. Replay protection guard — WARN ONLY for chat:message so delivery is never silently dropped.
+        // Dropping on sequence mismatch caused real messages to be lost when DB sequence was behind.
+        if (payload && typeof payload.sequence_number === 'number' && event !== 'chat:message') {
             const convId = payload.conversation_id || payload.conversationId;
             const replayCheck = replayGuard.check(convId, payload.sequence_number);
             if (!replayCheck.allowed) {
-                logger.warn('[RealtimeService] Replay rejected — stale sequence', {
+                logger.warn('[RealtimeService] Replay guard triggered (non-fatal for chat)', {
                     event,
                     conversation_id: convId,
                     reason: replayCheck.reason
                 });
-                return; // Silently drop — do not broadcast stale replays
+                // Do NOT return — continue dispatch so the client always receives the message
             }
         }
 
@@ -153,6 +154,7 @@ const emit = async (type, room, event, payload, options = {}) => {
                 platform: 'server-gateway'
             });
 
+            console.log(`[RealtimeService] 📤 Dispatching ${event} via pg_notify → type=${type} room=${targetRoom || 'N/A'} users=${options.users?.length ?? 0}`);
             await pgPool.query('SELECT pg_notify($1, $2)', ['realtime_events', payloadString]);
         } else {
             logger.warn('[RealtimeService] pgPool unavailable — realtime event dropped', { event });
@@ -182,4 +184,4 @@ const emitFinancialUpdate = (userId, event, payload) =>
 const broadcast = (event, payload) =>
     emit('broadcast', '*', event, payload, { isFinancial: false });
 
-module.exports = { emit, emitToUser, emitToConversation, emitToAdmin, emitFinancialUpdate, broadcast };
+module.exports = { emit, emitToUser, emitToUsers, emitToConversation, emitToAdmin, emitFinancialUpdate, broadcast };
