@@ -84,7 +84,8 @@ export const ChatMessageBubble = React.memo(({
 
   const renderTicks = () => {
     if (!isMe) return null;
-    if (item._optimistic || item.status === 'sending') return <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>{'  ✓'}</Text>;
+    if (item.status === 'failed') return <Text style={{ color: '#ef4444', fontSize: 10 }}>{'  ❗'}</Text>;
+    if (item._optimistic || item.status === 'sending') return <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10 }}>{'  🕒'}</Text>;
     if (item.read_at || item.status === 'read') return <Text style={{ color: '#60a5fa', fontSize: 10 }}>{'  ✓✓'}</Text>;
     if (item.delivered_at || item.status === 'delivered') return <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10 }}>{'  ✓✓'}</Text>;
     return <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>{'  ✓'}</Text>;

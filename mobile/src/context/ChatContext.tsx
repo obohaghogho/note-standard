@@ -522,8 +522,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         // Also update chat list preview immediately
         setConversations(cPrev => cPrev.map(conv => {
             if (conv.id !== conversationId) return conv;
-            const lastMsgAt = conv.last_message?.created_at ?? conv.lastMessage?.created_at ?? 0;
-            if (new Date(optimisticMessage.created_at).getTime() < new Date(lastMsgAt).getTime()) return conv;
+            // Removed clock skew check to guarantee instant update for sent message
             return {
                 ...conv,
                 last_message: { id: tempId, content: text, sender_id: currentUser.id, created_at: optimisticMessage.created_at },
@@ -533,7 +532,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         // STEP 2: API call happens in background — user already sees the bubble
         try {
-            const payload = await mobileTransportAdapter.encodeOutgoingPayload(conversationId, text, currentUser.id);
+            // Extract receiver public key instantly from in-memory state
+            const targetConv = conversationsRef.current.find(c => c.id === conversationId);
+            const otherMember = targetConv?.members?.find((m: any) => m.user_id !== currentUser.id);
+            const receiverPublicKey = otherMember?.profile?.public_key;
+
+            const payload = await mobileTransportAdapter.encodeOutgoingPayload(conversationId, text, currentUser.id, receiverPublicKey);
             const currentDeviceId = deviceIdRef.current;
             const currentSessionId = sessionIdRef.current;
 

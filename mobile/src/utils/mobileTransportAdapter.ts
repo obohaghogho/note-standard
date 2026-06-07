@@ -32,17 +32,8 @@ export const mobileTransportAdapter = {
         }
     },
 
-    async encodeOutgoingPayload(conversationId: string, text: string, userId: string) {
+    async encodeOutgoingPayload(conversationId: string, text: string, userId: string, receiverPublicKey?: string) {
         try {
-            // Get other participant to encrypt for them
-            const { data: members } = await supabase
-                .from('conversation_members')
-                .select('user_id, profiles(public_key)')
-                .eq('conversation_id', conversationId)
-                .neq('user_id', userId)
-                .single();
-
-            const receiverPublicKey = (members?.profiles as any)?.public_key;
             const privateKey = await storage.getPrivateKey();
 
             if (receiverPublicKey && privateKey) {
