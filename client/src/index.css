@@ -400,8 +400,7 @@ input[type=number] {
 /* Desktop padding removed — composer is a standard flex item now, so it will never overlap messages */
 
 /*
- * .chat-input-bar — MOBILE: normal flex child, no positioning tricks.
- * DESKTOP: absolute positioned to sit at bottom of chat-root.
+ * .chat-input-bar — Absolute positioning handled by Tailwind classes in ChatWindow.tsx
  */
 .chat-input-bar {
   flex-shrink: 0;
@@ -411,13 +410,8 @@ input[type=number] {
   background: inherit;
 }
 
-/* Absolute positioning removed. The composer is now a normal flex child on both mobile and desktop. This guarantees it will never obscure the last message. */
-
 @media (max-width: 768px) {
-  /* Mobile: normal flex child — the container (.chat-root) tracks the visual
-     viewport, so the composer naturally sits at the bottom of the visible area. */
   .chat-input-bar {
-    position: relative;
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
@@ -425,7 +419,6 @@ input[type=number] {
 /* Ensure desktop also respects safe-areas if installed as PWA or on Notch devices */
 @media (min-width: 769px) {
   .chat-input-bar {
-    position: relative;
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
