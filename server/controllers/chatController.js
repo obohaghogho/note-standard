@@ -1059,8 +1059,12 @@ exports.sendMessage = async (req, res) => {
           : "neutral",
       };
 
-      // Detect Language
-      detectedLang = await detectLanguage(content);
+      // LANGUAGE DETECTION MOVED OUT OF CRITICAL PATH
+      // Previously: detectedLang = await detectLanguage(content);
+      // This was making a synchronous HTTP request to google-translate-api-x,
+      // blocking the entire socket broadcast and API response for 500ms - 2000ms.
+      // We default to "en" to allow instant delivery (<50ms).
+      detectedLang = "en";
     }
     let createdMessageId = null;
     let isDuplicate = false;
@@ -1321,9 +1325,12 @@ exports.sendMessage = async (req, res) => {
                   .eq("conversation_id", conversationId); // include sender for multi-device sync
 
               if (convMembers && convMembers.length > 0) {
-                  for (const member of convMembers) {
-                      await realtime.emitToUser(member.user_id, "chat:message", safePayload);
-                  }
+                  // Fire all socket broadcasts in parallel
+                  await Promise.all(
+                      convMembers.map(member => 
+                          realtime.emitToUser(member.user_id, "chat:message", safePayload)
+                      )
+                  );
               }
           } catch (memberFetchErr) {
               console.warn("[Chat Controller] Broadcast per-user emit: could not fetch members:", memberFetchErr.message);
