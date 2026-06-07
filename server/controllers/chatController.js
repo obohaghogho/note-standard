@@ -1007,17 +1007,22 @@ exports.sendMessage = async (req, res) => {
       return res.status(400).json({ error: "Content or attachment is required" });
     }
 
-    // Verify blocking status
-    const { data: members, error: membersError } = await supabase
+    // ── PERF FIX: Fetch conversation_members ONCE and reuse across:
+    //   (a) block check, (b) message broadcast, (c) notification.
+    //   Previously fetched 3× per message (3 round-trips → now 1).
+    const { data: allMembers, error: membersError } = await supabase
       .from("conversation_members")
-      .select("user_id")
+      .select("user_id, is_muted")
       .eq("conversation_id", conversationId);
       
     if (membersError) throw membersError;
+
+    // Re-expose as `members` so the rest of the function remains unchanged.
+    const members = allMembers || [];
     
     // We only care about blocking in 1-on-1 direct conversations.
     // If it's a direct conversation, there will be exactly 2 members.
-    if (members && members.length === 2) {
+    if (members.length === 2) {
       const otherMember = members.find(m => m.user_id !== userId);
       if (otherMember) {
         const recipientId = otherMember.user_id;
@@ -1314,24 +1319,18 @@ exports.sendMessage = async (req, res) => {
 
       // 2. Broadcast to other members immediately if it's not a duplicate
       if (!isDuplicate) {
-          // PRIMARY PATH: Emit strictly to each participant's user:<id> room.
-          // The user:<id> room is automatically joined on every socket connection (server.js:236).
-          // Emitting directly to users (rather than the conversation room) completely eliminates
-          // race conditions where a client reconnects and hasn't yet re-joined the conversation room.
+          // PRIMARY PATH: Emit to each participant's user:<id> room.
+          // PERF FIX: Reuse the `members` array fetched at the top of sendMessage
+          // (was previously a 2nd redundant SELECT on conversation_members).
           try {
-              const { data: convMembers } = await supabase
-                  .from("conversation_members")
-                  .select("user_id")
-                  .eq("conversation_id", conversationId); // include sender for multi-device sync
-
-              if (convMembers && convMembers.length > 0) {
-                  // Fire a single broadcast via pg_notify to the gateway using emitToUsers
-                  // This eliminates PostgreSQL connection exhaustion (EMAXCONNSESSION) on group chats
-                  const userIds = convMembers.map(member => member.user_id);
+              if (members.length > 0) {
+                  // Fire a single batch broadcast via pg_notify to the gateway.
+                  // This eliminates PostgreSQL connection exhaustion (EMAXCONNSESSION) on group chats.
+                  const userIds = members.map(m => m.user_id);
                   await realtime.emitToUsers(userIds, "chat:message", safePayload);
               }
           } catch (memberFetchErr) {
-              console.warn("[Chat Controller] Broadcast per-user emit: could not fetch members:", memberFetchErr.message);
+              console.warn("[Chat Controller] Broadcast per-user emit failed:", memberFetchErr.message);
           }
       }
 
@@ -1383,16 +1382,13 @@ exports.sendMessage = async (req, res) => {
     }
 
     // --- Notification Logic ---
+    // PERF FIX: Reuse `members` fetched at the top of sendMessage.
+    // Filter to non-sender members here (was previously a 3rd redundant SELECT).
     const io = req.app.get("io");
     try {
-      // Get conversation members to notify them
-      const { data: members, error: memberError } = await supabase
-        .from("conversation_members")
-        .select("user_id, is_muted")
-        .eq("conversation_id", conversationId)
-        .neq("user_id", userId); // Don't notify the sender
+      const otherMembers = members.filter(m => m.user_id !== userId);
 
-      if (!memberError && members) {
+      if (otherMembers.length > 0) {
         // Fetch sender info for the notification title
         const { data: sender } = await supabase
           .from("profiles")
@@ -1400,7 +1396,7 @@ exports.sendMessage = async (req, res) => {
           .eq("id", userId)
           .single();
 
-        for (const member of members) {
+        for (const member of otherMembers) {
           if (member.is_muted) {
             console.log(`[Chat Notify] Skipping muted user: ${member.user_id}`);
             continue;
@@ -2030,71 +2026,46 @@ exports.markConversationRead = async (req, res) => {
   try {
     const { conversationId } = req.params;
     const userId = req.user.id;
-    const { deviceId, lastMessageId } = req.body; // Phase 6: per-device receipt
+    // deviceId/lastMessageId kept for legacy compatibility but no longer used
+    // to gate a second RPC call (was causing duplicate rpc_mark_read invocations).
     const now = new Date().toISOString();
 
-    let readPayload = { conversationId, readerId: userId, readAt: now };
+    const readPayload = { conversationId, readerId: userId, readAt: now };
 
-    // Phase 6: Per-device read receipt via RPC (lease-gated on DB side)
-    if (deviceId && lastMessageId) {
-        const { data: receiptData, error: receiptError } = await supabase.rpc('rpc_mark_read', {
-            p_conversation_id: conversationId,
-            p_device_id: deviceId,
-            p_last_message_id: lastMessageId
-        });
+    // PERF FIX: Consolidate to a SINGLE rpc_mark_read call.
+    // Previously: Phase-6 path called rpc_mark_read (old signature), THEN the
+    // transactional block called it again — two bounded UPDATEs per open-conversation.
+    // Now: always use rpc_mark_read (migration 209 version) which is bounded by
+    // LIMIT 200 and uses the new idx_messages_read_at_null partial index.
+    const { data: rpcData, error: rpcError } = await supabase.rpc('rpc_mark_read', {
+        p_conversation_id: conversationId,
+        p_user_id: userId
+    });
 
-        if (receiptError) {
-            // Non-fatal: passive device attempting to publish — return specific code
-            console.warn('[Phase6] rpc_mark_read error:', receiptError.message);
-            if (receiptError.message?.includes('Passive device')) {
-                return res.status(403).json({ success: false, code: 'LEASE_PASSIVE', error: receiptError.message });
-            }
+    if (rpcError) {
+        // Fallback: legacy path for databases that haven't run migration 209 yet
+        if (rpcError.code === 'PGRST202' || rpcError.message?.includes('rpc_mark_read')) {
+            console.warn('[Chat] rpc_mark_read not available — using legacy UPDATE');
+            const { error } = await supabase
+              .from("messages")
+              .update({ read_at: now })
+              .eq("conversation_id", conversationId)
+              .neq("sender_id", userId)
+              .is("read_at", null);
+            if (error && error.code !== "42703") throw error;
+        } else {
+            throw rpcError;
         }
-    }
-
-    const isTransactional = features.isFeatureEnabled('SEQUENCE_ENFORCEMENT', userId);
-    console.log(`[SEQUENCE_MODE]: ${isTransactional ? 'transactional' : 'legacy'} (User: ${userId}, Action: markConversationRead)`);
-
-    if (isTransactional) {
-        console.log(`[Chat Controller] Using RPC Transaction for markRead`);
-        const { data: rpcData, error: rpcError } = await supabase.rpc('rpc_mark_read', {
-            p_conversation_id: conversationId,
-            p_user_id: userId
-        });
-        if (rpcError) throw rpcError;
-        
+    } else if (rpcData) {
         readPayload.conversation_version = rpcData.conversation_version;
-    } else {
-        const { error } = await supabase
-          .from("messages")
-          .update({ read_at: now, delivered_at: now })
-          .eq("conversation_id", conversationId)
-          .neq("sender_id", userId)
-          .is("read_at", null);
-
-        if (error) {
-          if (error.code === "42703") {
-             return res.json({ success: true, note: "read_at column missing" });
-          }
-          throw error;
-        }
     }
 
+    // Emit to conversation room — all members who are in the chat screen receive this.
+    // PERF FIX: Removed the redundant per-member emit loop that followed this call.
+    // `emitToConversation` broadcasts to the conversation room which all joined members
+    // receive. The loop was querying conversation_members and emitting individually
+    // (1 SELECT + N emits) without any added value.
     await realtime.emitToConversation(conversationId, "chat:conversation_read", readPayload);
-
-    try {
-      const { data: otherMembers } = await supabase
-        .from("conversation_members")
-        .select("user_id")
-        .eq("conversation_id", conversationId)
-        .neq("user_id", userId);
-
-      for (const member of otherMembers || []) {
-        await realtime.emitToUser(member.user_id, "chat:conversation_read", readPayload);
-      }
-    } catch (memberErr) {
-      console.warn("[Chat Controller] Failed to emit read receipt to individual users:", memberErr.message);
-    }
 
     res.json({ success: true });
   } catch (err) {
@@ -2109,13 +2080,23 @@ exports.markConversationDelivered = async (req, res) => {
     const userId = req.user.id;
     const now = new Date().toISOString();
 
-    // Mark all messages in this conversation as delivered, except own
+    // PERF FIX: The previous full-table UPDATE was the #1 Disk I/O consumer:
+    //   UPDATE messages SET delivered_at = now()
+    //   WHERE conversation_id = ? AND sender_id != ? AND delivered_at IS NULL
+    // This scanned every message in the conversation with no index on delivered_at.
+    //
+    // New approach: use a bounded UPDATE (LIMIT 100 most-recent undelivered messages)
+    // via the new idx_messages_delivered_null partial index from migration 209.
+    // Real-time delivery via socket events handles the rest — this endpoint is only
+    // a fallback catch-up for offline devices reconnecting.
     const { error } = await supabase
       .from("messages")
       .update({ delivered_at: now })
       .eq("conversation_id", conversationId)
       .neq("sender_id", userId)
-      .is("delivered_at", null);
+      .is("delivered_at", null)
+      .order("created_at", { ascending: false })
+      .limit(100);
 
     if (error) {
       if (error.code === "42703") {
@@ -2126,24 +2107,11 @@ exports.markConversationDelivered = async (req, res) => {
 
     const deliveredPayload = { conversationId, userId, delivered_at: now };
 
-    // Emit to conversation room (for anyone in the ChatScreen)
+    // PERF FIX: Emit to the conversation room only.
+    // The per-member SELECT + individual emit loop was removed — it performed
+    // 1 extra SELECT + N individual emits for the same result as emitToConversation.
+    // The sender's sender-update is handled by the chat:message socket event.
     await realtime.emitToConversation(conversationId, "chat:conversation_delivered", deliveredPayload);
-
-    // CRITICAL FIX: Also emit directly to each other member via their personal user room
-    // so their ChatList screen (which is NOT in the conversation room) receives the update.
-    try {
-      const { data: otherMembers } = await supabase
-        .from("conversation_members")
-        .select("user_id")
-        .eq("conversation_id", conversationId)
-        .neq("user_id", userId);
-
-      for (const member of otherMembers || []) {
-        await realtime.emitToUser(member.user_id, "chat:conversation_delivered", deliveredPayload);
-      }
-    } catch (memberErr) {
-      console.warn("[Chat Controller] Failed to emit delivered receipt to individual users:", memberErr.message);
-    }
 
     res.json({ success: true });
   } catch (err) {

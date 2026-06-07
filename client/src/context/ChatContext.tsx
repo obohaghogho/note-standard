@@ -290,6 +290,26 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     // Prevents redundant API round-trips when a user re-opens a warm conversation (<30s).
     const messagesCachedAtRef = useRef<Record<string, number>>({});
 
+    // PERF FIX: Debounced conversation-level mark-read.
+    // Replaces per-message markMessageRead + markMessageDelivered HTTP calls.
+    // Fires markConversationRead at most once per 1.5s per conversation, regardless
+    // of how many messages arrive in a burst. Uses a per-conversation timer map.
+    const debouncedMarkReadTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+    const debouncedMarkReadRef = useRef((conversationId: string) => {
+        if (debouncedMarkReadTimers.current[conversationId]) {
+            clearTimeout(debouncedMarkReadTimers.current[conversationId]);
+        }
+        debouncedMarkReadTimers.current[conversationId] = setTimeout(() => {
+            // Only fire for the active conversation to avoid marking background chats as read
+            if (activeConversationIdRef.current === conversationId) {
+                markConversationRead(conversationId);
+            } else {
+                // For background conversations, just fire the server-side delivered mark
+                markConversationDelivered(conversationId);
+            }
+        }, 1500);
+    });
+
     const sendTypingStatus = useCallback((isTyping: boolean) => {
         if (!socket || !connected || !activeConversationIdRef.current) return;
         
@@ -392,17 +412,22 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 
                 setLoading(false);
                 joinAllRooms(mappedData);
-                mappedData.forEach((conv: Conversation) => {
-                    if (conv.unreadCount && conv.unreadCount > 0) markConversationDelivered(conv.id);
-                });
+                // PERF FIX: Removed markConversationDelivered call per unread conversation.
+                // Previously this fired N full-table UPDATE writes on every page load
+                // (one per unread conversation). Delivery status is now maintained
+                // exclusively via real-time socket events (chat:message_delivered)
+                // which are emitted by the server immediately when a message is received.
 
-                // Phase 4: Conversation Preloading
-                // Silently preload the 5 most recent conversations into the memory cache
-                // so that opening them is completely instant (no network round trip needed).
-                mappedData.slice(0, 5).forEach((conv: Conversation) => {
-                    // Pass force=false to respect STALE_MS gate
-                    loadMessages(conv.id, false);
-                });
+                // Phase 4: Conversation Preloading (PERF FIX: reduced from 5 → 2)
+                // Preload only the 2 most recent conversations to reduce cold-start I/O.
+                // Delayed 2 seconds so preloads don't compete with the initial render.
+                setTimeout(() => {
+                    if (!isMounted.current) return;
+                    mappedData.slice(0, 2).forEach((conv: Conversation) => {
+                        // Pass force=false to respect STALE_MS gate
+                        loadMessages(conv.id, false);
+                    });
+                }, 2000);
             }
         } catch (e) {
             console.error('[Chat] Failed to load conversations:', e);
@@ -411,7 +436,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             conversationsFetchRef.current = false;
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [session, isSwitching, joinAllRooms, markConversationDelivered]);
+    }, [session, isSwitching, joinAllRooms]);
 
     const loadSingleConversation = useCallback(async (conversationId: string) => {
         if (!session || isSwitching) return;
@@ -624,14 +649,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 });
             }
 
-            // Mark as read immediately if this conversation is active
-            if (activeConversationIdRef.current === msg.conversation_id && !isOwnMessage) {
-                markMessageRead(msg.id, msg.conversation_id);
-            }
-
-            // Mark as delivered immediately if received from another user
+            // PERF FIX: Replace per-message HTTP calls with debounced conversation-level read.
+            // Previously: every received message fired markMessageRead() + markMessageDelivered()
+            // as separate HTTP PUT requests (2 DB writes per message × message volume).
+            // Now: use a 1.5s debounced conversation-level read which is O(1) regardless
+            // of how many messages arrive in a burst. The per-message socket events
+            // (chat:delivered, chat:read) handle real-time tick updates on the UI.
             if (!isOwnMessage) {
-                markMessageDelivered(msg.id, msg.conversation_id);
+                // Debounced: fires at most once per 1.5s per conversation
+                debouncedMarkReadRef.current(msg.conversation_id);
             }
 
             // Pre-injection guard
