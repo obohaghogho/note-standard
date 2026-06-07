@@ -1037,6 +1037,8 @@ const ChatWindow: React.FC = () => {
                                     onPreviewMedia={(data) => setPreviewMedia({ isOpen: true, ...data })}
                                 />
                             ))}
+                            {/* Spacer to prevent search results from hiding behind absolute input bar */}
+                            <div className="w-full flex-shrink-0" style={{ height: 'calc(var(--composer-height, 80px) + 16px)' }} />
                         </div>
                     </div>
                 ) : (
@@ -1097,7 +1099,8 @@ const ChatWindow: React.FC = () => {
                                             </span>
                                         </div>
                                     )}
-                                    <div ref={messagesEndRef} className="chat-keyboard-spacer w-full flex-shrink-0" />
+                                    {/* Dedicated bottom spacer matching composer height to prevent overlap */}
+                                    <div ref={messagesEndRef} className="w-full flex-shrink-0" style={{ height: 'calc(var(--composer-height, 80px) + 12px)' }} />
                                 </div>
                             )
                         }}
@@ -1155,7 +1158,7 @@ const ChatWindow: React.FC = () => {
 
 
             {!isPending ? (
-                <div className="chat-input-bar bg-gray-950/80 backdrop-blur-2xl border-t border-white/10" ref={composerRef}>
+                <div className="chat-input-bar absolute bottom-0 inset-x-0 bg-gray-950/80 backdrop-blur-2xl border-t border-white/10 z-40" ref={composerRef}>
                     <div className="max-w-[900px] mx-auto px-3 py-2 md:p-4 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
                         {activeConversation?.isBlocked ? (
                             <div className="flex flex-col items-center justify-center p-4 bg-gray-800/80 rounded-2xl border border-gray-700/50">
