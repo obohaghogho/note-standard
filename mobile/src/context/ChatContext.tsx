@@ -350,7 +350,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             const token = await AuthService.getToken();
             if (!token || cancelled) return;
             socketManager.connect(token, user.id);
-            if (activeConversationId) socketManager.joinRoom(activeConversationId);
+            if (activeConversationIdRef.current) socketManager.joinRoom(activeConversationIdRef.current);
         };
         setupSocket();
 

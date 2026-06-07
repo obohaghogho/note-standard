@@ -54,7 +54,7 @@ const ConversationItem = React.memo(({
                 userSelect: 'none',
                 WebkitUserSelect: 'none',
                 // Suppress iOS callout (share/copy popup on long press)
-                WebkitTouchCallout: 'none' as React.CSSProperties['WebkitUserSelect'],
+                WebkitTouchCallout: 'none' as React.CSSProperties['WebkitTouchCallout'],
             }}
         >
             {/* Avatar Container */}
@@ -152,6 +152,7 @@ const ConversationItem = React.memo(({
            prevProps.conv.updated_at === nextProps.conv.updated_at &&
            prevProps.conv.lastMessage?.id === nextProps.conv.lastMessage?.id &&
            (prevProps.conv as unknown as { last_message?: typeof prevProps.conv.lastMessage }).last_message?.id === (nextProps.conv as unknown as { last_message?: typeof nextProps.conv.lastMessage }).last_message?.id &&
+           prevProps.conv.lastMessage?.status === nextProps.conv.lastMessage?.status &&
            prevProps.conv.lastMessage?.delivered_at === nextProps.conv.lastMessage?.delivered_at &&
            prevProps.conv.lastMessage?.read_at === nextProps.conv.lastMessage?.read_at &&
            (prevProps.conv as unknown as { unreadCount?: number }).unreadCount === (nextProps.conv as unknown as { unreadCount?: number }).unreadCount;
@@ -170,8 +171,11 @@ const ConversationList: React.FC = () => {
     // Previously, every `chat:message_read` or `chat:message_delivered` event replaced the
     // conversations array and re-triggered this sort — 10+ times/second in active chats.
     // Now the sort is only re-triggered when conversation ORDER actually changes.
+    // Sort key includes: lastMessage timestamp (for ordering) + unreadCount (to force re-sort
+    // when a badge changes, bubbling the conversation to the top) + lastMessage.id (for dedup
+    // guard — catches canonical-message-replaces-optimistic swaps that have the same timestamp).
     const sortKeys = conversations.map(c =>
-        `${c.id}:${c.lastMessage?.created_at ?? c.updated_at ?? ''}`
+        `${c.id}:${c.lastMessage?.created_at ?? c.updated_at ?? ''}:${c.lastMessage?.id ?? ''}:${(c as unknown as { unreadCount?: number }).unreadCount ?? 0}`
     ).join(',');
 
     const sortedConversations = useMemo(() => {

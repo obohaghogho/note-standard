@@ -67,6 +67,7 @@ export interface Conversation {
         is_edited?: boolean;
         read_at?: string;
         delivered_at?: string;
+        status?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
     };
     unreadCount?: number;
     is_muted?: boolean;
@@ -489,6 +490,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         lastUserIdRef.current = null;
         // Clear message cache timestamps so next account gets a fresh load
         messagesCachedAtRef.current = {};
+        // Clear deduplication caches on account switch
+        deletedMessageIdsRef.current = new Set();
+        processedEventIdsRef.current = new Set();
+        lastSeenSequenceRef.current = {};
     }, []);
 
     const initialize = useCallback(async () => {
@@ -628,71 +633,86 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 markMessageDelivered(msg.id, msg.conversation_id);
             }
 
+            // Pre-injection guard
+            let safeNewMessage = newMessage;
+            if (!newMessage.reply_to?.id) {
+                const currentMsgs = messagesRef.current[msg.conversation_id] || [];
+                const existingInState = currentMsgs.find(
+                    m => (msg.event_id && m.event_id === msg.event_id) || m.id === msg.id
+                );
+                if (existingInState?.reply_to?.id) {
+                    safeNewMessage = { ...newMessage, reply_to: existingInState.reply_to };
+                }
+            }
+
+            // Determine if this is actually a new message to drive Conversation updates
+            // (If we already have it in messagesRef, newlyAddedCount would be 0 in the merge)
+            const currentMsgs = messagesRef.current[msg.conversation_id] || [];
+            const isExisting = currentMsgs.some(m => m.id === msg.id || (msg.event_id && m.event_id === msg.event_id));
+            const newlyAddedCount = isExisting ? 0 : 1;
+
             // Phase 3.2: Atomic State Mutation using Merge Engine
-            // By wrapping setConversations inside setMessages, we guarantee that newlyAddedCount
-            // is calculated against the absolutely latest 'prev' array, eliminating race conditions
-            // without needing mutable refs.
+            // Execute state updates strictly side-by-side (NO NESTED UPDATES)
             setMessages(prev => {
                 const current = prev[msg.conversation_id] || [];
-
-                // ── Pre-injection guard ───────────────────────────────────────────────────
-                // If the incoming WebSocket message is missing reply_to (or has an empty
-                // one without a valid id), look up whether the existing state already has
-                // a valid reply_to for this message (by event_id or id). If so, inject it
-                // BEFORE mergeMessages runs. The merge engine has its own guard too, but
-                // having two independent layers makes this bulletproof.
-                let safeNewMessage = newMessage;
-                if (!newMessage.reply_to?.id) {
-                    const existingInState = current.find(
-                        m => (msg.event_id && m.event_id === msg.event_id) || m.id === msg.id
-                    );
-                    if (existingInState?.reply_to?.id) {
-                        safeNewMessage = { ...newMessage, reply_to: existingInState.reply_to };
-                    }
-                }
-
-                const { merged, newlyAddedCount } = mergeMessages(current, [safeNewMessage]);
-
-                // Only update conversations if something materially changed (new message, or sequence update)
-                if (newlyAddedCount > 0 || msg.sequence_number !== undefined) {
-                    const isCurrentlyOpen = activeConversationIdRef.current === msg.conversation_id;
-
-                    setConversations(cPrev => {
-                        const convExists = cPrev.some(c => c.id === msg.conversation_id);
-                        if (!convExists) {
-                            setTimeout(() => loadConversations(), 100);
-                            return cPrev;
-                        }
-
-                        return cPrev.map(conv => {
-                            if (conv.id !== msg.conversation_id) return conv;
-
-                            // Timestamp-ordered lastMessage fallback
-                            const existingLastMsgTime = new Date(conv.lastMessage?.created_at ?? 0).getTime();
-                            const newMsgTime = new Date(msg.created_at).getTime();
-                            const shouldUpdateLastMessage = newMsgTime >= existingLastMsgTime;
-
-                            // Deterministic Unread Delta (only increments by the exact number of NEW unread messages)
-                            const shouldIncrementUnread = !isCurrentlyOpen && !isOwnMessage && newlyAddedCount > 0;
-
-                            if (!shouldUpdateLastMessage && !shouldIncrementUnread) return conv;
-
-                            return {
-                                ...conv,
-                                updated_at: shouldUpdateLastMessage ? msg.created_at : conv.updated_at,
-                                lastMessage: shouldUpdateLastMessage
-                                    ? { id: msg.id, content: msg.content, sender_id: msg.sender_id, created_at: msg.created_at }
-                                    : conv.lastMessage,
-                                unreadCount: shouldIncrementUnread
-                                    ? (conv.unreadCount || 0) + newlyAddedCount
-                                    : conv.unreadCount
-                            };
-                        });
-                    });
-                }
-
+                const { merged } = mergeMessages(current, [safeNewMessage]);
                 return { ...prev, [msg.conversation_id]: merged as Message[] };
             });
+
+            // Only update conversations if something materially changed (new message, or sequence update)
+            if (newlyAddedCount > 0 || msg.sequence_number !== undefined) {
+                const isCurrentlyOpen = activeConversationIdRef.current === msg.conversation_id;
+
+                setConversations(cPrev => {
+                    const convExists = cPrev.some(c => c.id === msg.conversation_id);
+                    if (!convExists) {
+                        setTimeout(() => loadConversations(), 100);
+                        return cPrev;
+                    }
+
+                    return cPrev.map(conv => {
+                        if (conv.id !== msg.conversation_id) return conv;
+
+                        // Timestamp-ordered lastMessage update.
+                        // Guard: conv.lastMessage?.created_at may be undefined (first message
+                        // ever in the conversation). new Date(undefined) → NaN, and NaN >= X
+                        // is always false — silently blocking the update. Use 0 as the epoch
+                        // sentinel so the first message always wins the comparison.
+                        const existingTs = conv.lastMessage?.created_at;
+                        const existingLastMsgTime = existingTs ? new Date(existingTs).getTime() : 0;
+                        const newMsgTime = new Date(msg.created_at).getTime();
+                        const shouldUpdateLastMessage = newMsgTime >= existingLastMsgTime;
+
+                        // Deterministic Unread Delta
+                        const shouldIncrementUnread = !isCurrentlyOpen && !isOwnMessage && newlyAddedCount > 0;
+
+                        // IMPORTANT: If neither condition is true, return the SAME reference
+                        // intentionally — React.memo on ConversationItem correctly skips
+                        // re-render for this conversation. Do NOT spread a new object here.
+                        if (!shouldUpdateLastMessage && !shouldIncrementUnread) return conv;
+
+                        return {
+                            ...conv,
+                            updated_at: shouldUpdateLastMessage ? msg.created_at : conv.updated_at,
+                            // Always create a NEW lastMessage object so React.memo detects the change.
+                            // The status field is now typed on Conversation.lastMessage and checked
+                            // by the ConversationItem memo equality function.
+                            lastMessage: shouldUpdateLastMessage
+                                ? {
+                                    id: msg.id,
+                                    content: msg.content,
+                                    sender_id: msg.sender_id,
+                                    created_at: msg.created_at,
+                                    status: (msg.status ?? 'sent') as NonNullable<Conversation['lastMessage']>['status']
+                                  }
+                                : conv.lastMessage,
+                            unreadCount: shouldIncrementUnread
+                                ? (conv.unreadCount || 0) + newlyAddedCount
+                                : conv.unreadCount
+                        };
+                    });
+                });
+            }
         };
 
         const onMessageDeleted = ({ messageId, conversationId }: { messageId: string, conversationId: string }) => {
