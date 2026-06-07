@@ -252,23 +252,30 @@ const ChatWindow: React.FC = () => {
             
             // Wait for the keyboard animation to settle completely
             resizeTimeout = setTimeout(() => {
-                if (wasAtBottomBeforeKeyboard.current) {
-                    if (virtuosoRef.current && currentMessages.length > 0) {
-                        virtuosoRef.current.scrollToIndex({
-                            index: currentMessages.length - 1,
-                            align: 'end',
-                            behavior: 'auto'
-                        });
-                        setShowScrollDown(false);
-                        setUnreadCountWhileScrolled(0);
+                const reconcile = () => {
+                    if (wasAtBottomBeforeKeyboard.current) {
+                        if (virtuosoRef.current && currentMessages.length > 0) {
+                            virtuosoRef.current.scrollToIndex({
+                                index: currentMessages.length - 1,
+                                align: 'end',
+                                behavior: 'auto'
+                            });
+                            setShowScrollDown(false);
+                            setUnreadCountWhileScrolled(0);
+                        }
                     }
-                }
 
-                // 1-frame cooldown after reconciliation to prevent delayed event leakage on low-end Androids
+                    // 1-frame cooldown after reconciliation to prevent delayed event leakage on low-end Androids
+                    requestAnimationFrame(() => {
+                        isKeyboardTransitioning.current = false;
+                    });
+                };
+                
+                // Double rAF ensures Virtuoso's ResizeObserver has fully processed the new container height
                 requestAnimationFrame(() => {
-                    isKeyboardTransitioning.current = false;
+                    requestAnimationFrame(reconcile);
                 });
-            }, 150);
+            }, 250); // Increased timeout to 250ms for slower Android keyboard animations
         };
         
         if (window.visualViewport) {
@@ -1043,6 +1050,7 @@ const ChatWindow: React.FC = () => {
                         initialTopMostItemIndex={currentMessages.length > 0 ? currentMessages.length - 1 : 0}
                         alignToBottom
                         followOutput="smooth"
+                        atBottomThreshold={150} // High threshold ensures fractional pixels or small bounces don't break the "atBottom" state
                         atBottomStateChange={(atBottom) => {
                             setShowScrollDown(!atBottom);
                             if (atBottom) {
