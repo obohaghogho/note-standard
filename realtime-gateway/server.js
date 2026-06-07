@@ -120,7 +120,7 @@ app.post('/internal/push/broadcast', async (req, res) => {
 function dispatchSocketEvent(envelope) {
   const { type, room, event, payload, exclude_user_id } = envelope;
 
-  if (!type || !room || !event) {
+  if (!type || !event) {
     console.warn('[Gateway] ⚠ Received malformed event envelope:', JSON.stringify(envelope).substring(0, 100));
     return;
   }
@@ -128,7 +128,15 @@ function dispatchSocketEvent(envelope) {
   // Consistent Room Resolver
   const targetRoom = type === 'to_user' ? `user:${room}` : room;
 
-  console.log(`[Gateway] 📡 [${type}] room:${targetRoom} event:${event}${exclude_user_id ? ` (excluding user:${exclude_user_id})` : ''}`);
+  console.log(`[Gateway] 📡 [${type}] room:${targetRoom || 'N/A'} event:${event}${exclude_user_id ? ` (excluding user:${exclude_user_id})` : ''}`);
+
+  if (type === 'to_users' && Array.isArray(envelope.users)) {
+    envelope.users.forEach(uid => {
+      if (exclude_user_id && uid === exclude_user_id) return;
+      io.to(`user:${uid}`).emit(event, payload);
+    });
+    return;
+  }
 
   if (type === 'broadcast') {
     io.emit(event, payload);

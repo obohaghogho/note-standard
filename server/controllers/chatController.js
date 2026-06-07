@@ -1325,12 +1325,10 @@ exports.sendMessage = async (req, res) => {
                   .eq("conversation_id", conversationId); // include sender for multi-device sync
 
               if (convMembers && convMembers.length > 0) {
-                  // Fire all socket broadcasts in parallel
-                  await Promise.all(
-                      convMembers.map(member => 
-                          realtime.emitToUser(member.user_id, "chat:message", safePayload)
-                      )
-                  );
+                  // Fire a single broadcast via pg_notify to the gateway using emitToUsers
+                  // This eliminates PostgreSQL connection exhaustion (EMAXCONNSESSION) on group chats
+                  const userIds = convMembers.map(member => member.user_id);
+                  await realtime.emitToUsers(userIds, "chat:message", safePayload);
               }
           } catch (memberFetchErr) {
               console.warn("[Chat Controller] Broadcast per-user emit: could not fetch members:", memberFetchErr.message);

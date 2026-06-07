@@ -119,6 +119,9 @@ const emit = async (type, room, event, payload, options = {}) => {
         if (excludeUserId) {
             envelope.exclude_user_id = excludeUserId;
         }
+        if (options.users) {
+            envelope.users = options.users;
+        }
         const payloadString = JSON.stringify(envelope);
 
         // 3. Size guard — prevent oversized payloads
@@ -162,6 +165,9 @@ const emit = async (type, room, event, payload, options = {}) => {
 
 const emitToUser = (userId, event, payload, options = {}) =>
     emit('to_user', userId, event, payload, options);
+
+const emitToUsers = (userIds, event, payload, options = {}) =>
+    emit('to_users', null, event, payload, { ...options, users: userIds });
 
 const emitToConversation = (conversationId, event, payload, options = {}) =>
     emit('to_room', conversationId, event, payload, options);
