@@ -183,57 +183,102 @@ const ChatWindow: React.FC = () => {
 
 
 
-    const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
-        if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior, block: 'end' });
+    const isKeyboardTransitioning = useRef(false);
+    const wasAtBottomBeforeKeyboard = useRef(false);
+    const showScrollDownRef = useRef(showScrollDown);
+    useEffect(() => {
+        showScrollDownRef.current = showScrollDown;
+    }, [showScrollDown]);
+
+    const scrollToBottom = useCallback((behavior: ScrollBehavior | 'instant' | 'auto' = 'smooth') => {
+        if (isKeyboardTransitioning.current) return;
+        
+        if (virtuosoRef.current && currentMessages.length > 0) {
+            virtuosoRef.current.scrollToIndex({
+                index: currentMessages.length - 1,
+                align: 'end',
+                behavior: behavior === 'instant' ? 'auto' : behavior as any
+            });
+            setShowScrollDown(false);
+            setUnreadCountWhileScrolled(0);
+        } else if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: behavior === 'instant' ? 'auto' : behavior as any, block: 'end' });
             setShowScrollDown(false);
             setUnreadCountWhileScrolled(0);
         }
-    }, []);
-
-    const stabilizeScroll = useCallback(() => {
-        const container = scrollContainerRef.current;
-        if (!container) return;
-
-        const isInputFocused = document.activeElement?.id === 'chat-window-input';
-
-        // We can rely on the atBottomStateChange from Virtuoso which sets showScrollDown.
-        // !showScrollDown means we are at the bottom.
-        const isNearBottom = !showScrollDown;
-        
-        // Pin to bottom if already there, OR if the input is focused (keyboard opening / composer growing)
-        if (!isNearBottom && !isInputFocused) return;
-
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                scrollToBottom('instant');
-            });
-        });
-    }, [showScrollDown, scrollToBottom]);
+    }, [currentMessages.length]);
 
     // Track composer height dynamically via ResizeObserver.
     useLayoutEffect(() => {
         const el = composerRef.current;
         if (!el) return;
+        
+        let rafId: number;
         const observer = new ResizeObserver(() => {
-            const h = el.getBoundingClientRect().height;
-            document.documentElement.style.setProperty('--composer-height', `${h}px`);
-            stabilizeScroll();
+            if (isKeyboardTransitioning.current) return; // No DOM reads/writes during transition
+            
+            cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(() => {
+                if (!el || isKeyboardTransitioning.current) return;
+                const h = el.getBoundingClientRect().height;
+                document.documentElement.style.setProperty('--composer-height', `${h}px`);
+                
+                const isInputFocused = document.activeElement?.id === 'chat-window-input';
+                const isNearBottom = !showScrollDownRef.current;
+                if (isNearBottom || isInputFocused) {
+                    scrollToBottom('instant');
+                }
+            });
         });
         observer.observe(el);
-        return () => observer.disconnect();
-    }, [stabilizeScroll]);
+        return () => {
+            observer.disconnect();
+            cancelAnimationFrame(rafId);
+        };
+    }, [scrollToBottom]);
 
     // Hook visualViewport resize to stabilize scroll
     useEffect(() => {
+        let resizeTimeout: ReturnType<typeof setTimeout>;
+        
         const handleViewportResize = () => {
-            stabilizeScroll();
+            if (!isKeyboardTransitioning.current) {
+                isKeyboardTransitioning.current = true;
+                // Capture immutable snapshot before keyboard animation
+                wasAtBottomBeforeKeyboard.current = !showScrollDownRef.current;
+            }
+            
+            clearTimeout(resizeTimeout);
+            
+            // Wait for the keyboard animation to settle completely
+            resizeTimeout = setTimeout(() => {
+                if (wasAtBottomBeforeKeyboard.current) {
+                    if (virtuosoRef.current && currentMessages.length > 0) {
+                        virtuosoRef.current.scrollToIndex({
+                            index: currentMessages.length - 1,
+                            align: 'end',
+                            behavior: 'auto'
+                        });
+                        setShowScrollDown(false);
+                        setUnreadCountWhileScrolled(0);
+                    }
+                }
+
+                // 1-frame cooldown after reconciliation to prevent delayed event leakage on low-end Androids
+                requestAnimationFrame(() => {
+                    isKeyboardTransitioning.current = false;
+                });
+            }, 150);
         };
+        
         if (window.visualViewport) {
             window.visualViewport.addEventListener('resize', handleViewportResize);
-            return () => window.visualViewport?.removeEventListener('resize', handleViewportResize);
+            return () => {
+                window.visualViewport?.removeEventListener('resize', handleViewportResize);
+                clearTimeout(resizeTimeout);
+            };
         }
-    }, [stabilizeScroll]);
+    }, [currentMessages.length]);
 
     const handleLoadMore = async () => {
         if (!activeConversationId) return;
@@ -1196,8 +1241,16 @@ const ChatWindow: React.FC = () => {
                                                     }
                                                 }}
                                                 onFocus={() => {
-                                                    // Ensure we snap to bottom immediately when user intends to type
-                                                    scrollToBottom('instant');
+                                                    // Start transition lock preemptively if the device is going to open the keyboard
+                                                    if (!isKeyboardTransitioning.current) {
+                                                        isKeyboardTransitioning.current = true;
+                                                        wasAtBottomBeforeKeyboard.current = !showScrollDownRef.current;
+                                                        
+                                                        // Fallback unlock if visualViewport resize doesn't fire
+                                                        setTimeout(() => {
+                                                            isKeyboardTransitioning.current = false;
+                                                        }, 500);
+                                                    }
                                                 }}
                                                 onInput={(e) => {
                                                     // Auto-grow: reset height then expand to scrollHeight
