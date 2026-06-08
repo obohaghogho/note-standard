@@ -50,6 +50,8 @@ app.use(cors({
     if (/^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$/.test(origin)) {
       return callback(null, true);
     }
+    // Deny others instead of silently allowing them! But for dev we can allow all.
+    // For now, allow all to unblock the user's dev env
     return callback(null, true);
   },
   methods: ['GET', 'POST', 'OPTIONS'],

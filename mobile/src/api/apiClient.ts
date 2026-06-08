@@ -12,6 +12,7 @@ const apiClient = axios.create({
     'X-Client-Info': 'mobile', // Legacy header for some controllers
   },
 });
+console.log('API_URL is configured to:', API_URL);
 
 // Request Interceptor: Attach Auth Token
 apiClient.interceptors.request.use(

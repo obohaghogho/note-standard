@@ -442,6 +442,57 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             if (isMounted.current) setLoading(false);
         } finally {
             conversationsFetchRef.current = false;
+            // ── Overlay pending offline-queue intents onto the conversation list ──
+            // After loading conversations from the server, check if there are any
+            // messages still queued (not yet sent). If so, update the conversation
+            // preview so the user sees their unsent message instead of the old one.
+            // This prevents the "Chairlady" reversal on page refresh.
+            try {
+                const offlineQueueEngine = new OfflineQueueEngine({
+                    getItem: (key: string) => localStorage.getItem(key),
+                    setItem: (key: string, value: string) => localStorage.setItem(key, value)
+                });
+                const pendingIntents = await offlineQueueEngine.getPendingIntents();
+                if (pendingIntents.length > 0 && isMounted.current) {
+                    // Group by conversation_id — take the most recent intent per conversation
+                    const latestByConv = new Map<string, typeof pendingIntents[0]>();
+                    for (const intent of pendingIntents) {
+                        const existing = latestByConv.get(intent.conversation_id);
+                        if (!existing || intent.created_at > existing.created_at) {
+                            latestByConv.set(intent.conversation_id, intent);
+                        }
+                    }
+
+                    setConversations(prev => prev.map(conv => {
+                        const intent = latestByConv.get(conv.id);
+                        if (!intent) return conv;
+
+                        const intentTime = intent.created_at;
+                        const serverTime = new Date(conv.updated_at ?? 0).getTime();
+
+                        // Only override the preview if the intent is newer than the server data
+                        if (intentTime <= serverTime) return conv;
+
+                        const pendingPreview = {
+                            id: `temp-${intent.event_id}`,
+                            content: `⏳ ${intent.payload.content}`,
+                            sender_id: conv.participants?.find(p => p)?.id ?? '',
+                            created_at: new Date(intentTime).toISOString(),
+                            type: (intent.payload.type || 'text') as 'text' | 'image' | 'video' | 'audio' | 'file'
+                        };
+
+                        return {
+                            ...conv,
+                            lastMessage: pendingPreview,
+                            last_message: pendingPreview
+                        };
+                    }));
+
+                    console.log(`[Chat] Overlaid ${latestByConv.size} pending intent(s) onto conversation list`);
+                }
+            } catch (queueErr) {
+                console.warn('[Chat] Failed to overlay pending intents onto conversation list:', queueErr);
+            }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [session, isSwitching, joinAllRooms]);
@@ -507,11 +558,59 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
                     return { ...prev, [conversationId]: merged as Message[] };
                 });
+
+                // ── Hydrate pending offline-queue intents ──────────────────────────
+                // After merging server messages, layer in any intents that are still
+                // queued for THIS conversation. This guarantees that messages the user
+                // sent while offline / while the gateway was sleeping remain visible
+                // after a page refresh instead of silently disappearing.
+                try {
+                    const offlineQueueEngine = new OfflineQueueEngine({
+                        getItem: (key: string) => localStorage.getItem(key),
+                        setItem: (key: string, value: string) => localStorage.setItem(key, value)
+                    });
+                    const pendingIntents = await offlineQueueEngine.getPendingIntents();
+                    const convIntents = pendingIntents.filter(i => i.conversation_id === conversationId);
+
+                    if (convIntents.length > 0 && isMounted.current) {
+                        // Build optimistic Message objects from each intent.
+                        // We use the existing user id from the session; we do NOT
+                        // have the canonical server id yet so we keep the temp-* id.
+                        const pendingMessages: Message[] = convIntents.map(intent => ({
+                            id: `temp-${intent.event_id}`,
+                            event_id: intent.event_id,
+                            conversation_id: conversationId,
+                            sender_id: user?.id ?? '',
+                            content: intent.payload.content,
+                            created_at: new Date(intent.created_at).toISOString(),
+                            type: (intent.payload.type || 'text') as Message['type'],
+                            isOwn: true,
+                            status: intent.status === 'failed' ? 'failed' : 'sending',
+                            reply_to: intent.payload.replyTo ? {
+                                id: intent.payload.replyTo.id,
+                                content: intent.payload.replyTo.content ?? '',
+                                sender_id: intent.payload.replyTo.sender_id ?? '',
+                                type: intent.payload.replyTo.type ?? 'text'
+                            } : undefined
+                        }));
+
+                        console.log(`[Chat] Hydrating ${pendingMessages.length} pending intent(s) into conversation ${conversationId}`);
+
+                        setMessages(prev => {
+                            const current = prev[conversationId] || [];
+                            const { merged } = mergeMessages(current, pendingMessages);
+                            return { ...prev, [conversationId]: merged as Message[] };
+                        });
+                    }
+                } catch (queueErr) {
+                    // Non-fatal: if queue hydration fails, server messages still display correctly
+                    console.warn('[Chat] Failed to hydrate offline queue intents:', queueErr);
+                }
             }
         } catch (err) {
             console.error('[Chat] Failed to load messages:', err);
         }
-    }, [session]);
+    }, [session, user?.id]);
 
     const clearState = useCallback(() => {
         console.log(`[ACCOUNT_FORENSIC] CHAT_CLEAR_STATE - Dropping chat caches at ${Date.now()}`);
@@ -1016,7 +1115,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     const flushQueue = useCallback(async () => {
-        if (!connected || !session || !user) return;
+        // ── CRITICAL FIX: Decouple message persistence from WebSocket connectivity ──
+        // The HTTP POST to /messages must NOT wait for the realtime socket to connect.
+        // The socket is only needed for live push notifications to OTHER users.
+        // If we gate delivery on `connected`, messages never reach the server when
+        // the gateway is sleeping (Render free tier), causing silent data loss.
+        if (!session || !user) return;
         // Use refs so we always have the latest IDs without stale closures
         const currentDeviceId = deviceIdRef.current;
         const currentSessionId = sessionIdRef.current;
@@ -1145,9 +1249,16 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 });
             }
         }
-    }, [connected, session, user, offlineQueue, leases, markLeaseClaimEnd]);
+    }, [session, user, offlineQueue, leases, markLeaseClaimEnd]);
 
-    // Process Outbox when connection is restored
+    // Process Outbox:
+    // 1. Immediately when the user session becomes ready (catches the case where
+    //    the gateway is sleeping — messages still fire via HTTP POST).
+    // 2. Again whenever the socket connects/reconnects (fast-path for online users).
+    useEffect(() => {
+        if (session && user) flushQueue();
+    }, [session, user, flushQueue]);
+
     useEffect(() => {
         if (connected) flushQueue();
     }, [connected, flushQueue]);
