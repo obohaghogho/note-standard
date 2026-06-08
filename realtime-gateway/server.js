@@ -131,9 +131,15 @@ function dispatchSocketEvent(envelope) {
   console.log(`[Gateway] 📡 [${type}] room:${targetRoom || 'N/A'} event:${event}${exclude_user_id ? ` (excluding user:${exclude_user_id})` : ''}`);
 
   if (type === 'to_users' && Array.isArray(envelope.users)) {
-    envelope.users.forEach(uid => {
+    envelope.users.forEach(async (uid) => {
       if (exclude_user_id && uid === exclude_user_id) return;
-      io.to(`user:${uid}`).emit(event, payload);
+      const roomName = `user:${uid}`;
+      const sockets = await io.in(roomName).fetchSockets();
+      console.log(`[Gateway Diagnostic] Executing io.to('${roomName}').emit('${event}'). Sockets in room: ${sockets.length}`);
+      if (sockets.length > 0) {
+        console.log(`[Gateway Diagnostic] Socket IDs in room: ${sockets.map(s => s.id).join(', ')}`);
+      }
+      io.to(roomName).emit(event, payload);
     });
     return;
   }

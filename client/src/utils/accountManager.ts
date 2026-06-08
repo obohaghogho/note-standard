@@ -108,8 +108,8 @@ export const accountManager = {
       },
       profile,
       lastActive: Date.now(),
-      sessionId: (session as { sessionId?: string }).sessionId,
-      deviceId: (session as { deviceId?: string }).deviceId,
+      sessionId: (session as { sessionId?: string }).sessionId || (index !== -1 ? accounts[index].sessionId : undefined),
+      deviceId: (session as { deviceId?: string }).deviceId || (index !== -1 ? accounts[index].deviceId : undefined),
     };
 
     if (index !== -1) {

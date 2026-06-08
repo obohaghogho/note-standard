@@ -375,12 +375,20 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     const markConversationRead = useCallback(async (conversationId: string) => {
         if (!session || !deviceId) return;
-        try {
-            await api.put(`/chat/conversations/${conversationId}/read`, { deviceId });
-            setConversations(prev => prev.map(conv => conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv));
-        } catch (err) {
-            console.error('[Chat] Failed to mark conversation read:', err);
-        }
+        
+        // Find the conversation to check if it actually has unread messages
+        // This prevents infinite loops if this is called in a useEffect that depends on `conversations`
+        setConversations(prev => {
+            const conv = prev.find(c => c.id === conversationId);
+            if (!conv || conv.unreadCount === 0) return prev; // No-op, preserves array reference
+            
+            // Fire API asynchronously since we know it needs update
+            api.put(`/chat/conversations/${conversationId}/read`, { deviceId }).catch(err => {
+                console.error('[Chat] Failed to mark conversation read:', err);
+            });
+            
+            return prev.map(c => c.id === conversationId ? { ...c, unreadCount: 0 } : c);
+        });
     }, [session, deviceId]);
 
     const joinAllRooms = useCallback((convList: Conversation[]) => {
@@ -548,13 +556,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         activeConversationIdRef.current = activeConversationId;
         if (activeConversationId) {
             // Check if we already have the conversation. If not, fetch it specifically for faster loading.
-            if (!conversations.some(c => c.id === activeConversationId)) {
+            if (!conversationsRef.current.some(c => c.id === activeConversationId)) {
                 loadSingleConversation(activeConversationId);
             }
             loadMessages(activeConversationId);
             markConversationRead(activeConversationId);
         }
-    }, [activeConversationId, loadMessages, markConversationRead, conversations, loadSingleConversation]);
+    }, [activeConversationId, loadMessages, markConversationRead, loadSingleConversation]);
 
     // Re-subscribe all conversations on socket reconnect
     useEffect(() => {
@@ -564,26 +572,32 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, [connected, conversations, joinAllRooms]);
 
     useEffect(() => {
+        console.log(`[SYNC_FORENSICS] ChatContext socket effect evaluated | socket exists: ${!!socket} | connected: ${connected}`);
         if (!socket || !connected) return;
 
         const processIncomingMessage = (raw: unknown) => {
             if (!isMounted.current) return;
 
-            // ── Phase 3: Schema validation gate ───────────────────────────────
             const validation = validateMessagePayload(raw);
             if (!validation.valid) {
-                if (import.meta.env.DEV) {
-                    console.warn('[Chat] Dropping invalid socket payload:', validation.reason, raw);
-                }
+                console.log(`[SYNC_FORENSICS] [CLIENT_TRACE] schema validation: FAIL | reason: ${validation.reason}`);
                 return;
             }
             const msg = validation.data as Message & { is_deleted?: boolean };
 
+            console.log(`[SYNC_FORENSICS] [CLIENT_TRACE] [${Date.now()}] chat:message received | id: ${msg.id} | convId: ${msg.conversation_id} | activeConvId: ${activeConversationIdRef.current}`);
+
             // ── Tombstone guard: reject replays of deleted messages ────────────
-            if (deletedMessageIdsRef.current.has(msg.id) || msg.is_deleted) return;
+            if (deletedMessageIdsRef.current.has(msg.id) || msg.is_deleted) {
+                console.log(`[CLIENT_TRACE] tombstone guard: FAIL (dropped) | id: ${msg.id}`);
+                return;
+            }
 
             // ── Phase 3: User guard — ensure user is hydrated before unread logic
-            if (!user?.id) return;
+            if (!user?.id) {
+                console.log(`[CLIENT_TRACE] user guard: FAIL (dropped — user not hydrated) | id: ${msg.id}`);
+                return;
+            }
 
             // ── Own-message echo guard ────────────────────────────────────────
             // The gateway uses pg_notify which broadcasts to ALL room members
@@ -591,6 +605,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             // from the API response (flushQueue → setMessages). We must drop
             // this echo before it reaches mergeMessages to prevent duplication.
             const isOwnMessage = msg.sender_id === user.id;
+            console.log(`[CLIENT_TRACE] isOwnMessage: ${isOwnMessage} | sender: ${msg.sender_id} | viewer: ${user.id}`);
             if (isOwnMessage) {
                 // Check by event_id first (most reliable — set at send time)
                 const dedupEventKey = msg.event_id;
@@ -599,8 +614,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const alreadyTrackedById = dedupIdKey && !dedupIdKey.startsWith('temp-') ? processedEventIdsRef.current.has(`id:${dedupIdKey}`) : false;
 
                 if (alreadyTrackedByEvent || alreadyTrackedById) {
-                    // This is a gateway echo of a message we already committed to state — drop it
-                    console.log('[DEDUP] Dropping own-message gateway echo:', { event_id: msg.event_id, id: msg.id });
+                    console.log(`[CLIENT_TRACE] own-message echo guard: FAIL (dropped) | event_id: ${msg.event_id} | id: ${msg.id}`);
                     return;
                 }
                 // Track this canonical server ID going forward so re-deliveries are also dropped
@@ -621,33 +635,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             const seq = normalizeSequenceNumber(msg.sequence_number);
 
             if (seq !== undefined) {
-                // Sentinel -1 = not yet seen any sequenced message
                 const lastSeen = lastSeenSequenceRef.current[msg.conversation_id] ?? -1;
 
                 if (seq <= lastSeen && !isOwnMessage) {
-                    // Stale replay — drop silently
-                    if (import.meta.env.DEV) {
-                        console.warn(`[Chat] Dropped stale sequence replay: seq ${seq} <= lastSeen ${lastSeen} for conv ${msg.conversation_id}`);
-                    }
+                    console.log(`[CLIENT_TRACE] sequence dedup: FAIL (dropped stale replay) | seq: ${seq} lastSeen: ${lastSeen} | id: ${msg.id}`);
                     return;
                 }
-                // Advance high-water mark only for sequenced messages
                 lastSeenSequenceRef.current[msg.conversation_id] = Math.max(lastSeen, seq);
             }
-            // NOTE: If seq === undefined (legacy message), bypass sequence check
-            // and DO NOT update lastSeenSequenceRef (preserves watermark integrity).
 
             const newMessage: Message = { ...msg, isOwn: isOwnMessage };
-            
-            if (import.meta.env.DEV) {
-                console.log('[SYNC_FORENSICS]', {
-                    stage: 'receive_message',
-                    event: 'websocket_sync',
-                    messageId: newMessage.id,
-                    incomingReplyTo: newMessage.reply_to,
-                    payload: newMessage,
-                });
-            }
+            console.log(`[CLIENT_TRACE] [${Date.now()}] processIncomingMessage: PASS (all gates cleared) | id: ${msg.id} | convId: ${msg.conversation_id}`);
 
             // PERF FIX: Replace per-message HTTP calls with debounced conversation-level read.
             // Previously: every received message fired markMessageRead() + markMessageDelivered()
@@ -673,16 +671,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }
 
             // Determine if this is actually a new message to drive Conversation updates
-            // (If we already have it in messagesRef, newlyAddedCount would be 0 in the merge)
             const currentMsgs = messagesRef.current[msg.conversation_id] || [];
             const isExisting = currentMsgs.some(m => m.id === msg.id || (msg.event_id && m.event_id === msg.event_id));
             const newlyAddedCount = isExisting ? 0 : 1;
+            console.log(`[CLIENT_TRACE] [${Date.now()}] newlyAddedCount=${newlyAddedCount} | isExisting: ${isExisting} | messages before=${currentMsgs.length}`);
 
             // Phase 3.2: Atomic State Mutation using Merge Engine
-            // Execute state updates strictly side-by-side (NO NESTED UPDATES)
+            console.log(`[CLIENT_TRACE] [${Date.now()}] setMessages called`);
             setMessages(prev => {
                 const current = prev[msg.conversation_id] || [];
                 const { merged } = mergeMessages(current, [safeNewMessage]);
+                console.log(`[CLIENT_TRACE] [${Date.now()}] messages state updated: PASS | next state size: ${merged.length}`);
                 return { ...prev, [msg.conversation_id]: merged as Message[] };
             });
 
@@ -690,40 +689,33 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             if (newlyAddedCount > 0 || msg.sequence_number !== undefined) {
                 const isCurrentlyOpen = activeConversationIdRef.current === msg.conversation_id;
 
+                console.log(`[CLIENT_TRACE] [${Date.now()}] setConversations called: PASS`);
                 setConversations(cPrev => {
                     const convExists = cPrev.some(c => c.id === msg.conversation_id);
                     if (!convExists) {
+                        console.log(`[CLIENT_TRACE] [${Date.now()}] conversation filtering: FAIL (conversation not in state, triggering fetch)`);
                         setTimeout(() => loadConversations(), 100);
                         return cPrev;
                     }
 
-                    return cPrev.map(conv => {
+                    const nextConvs = cPrev.map(conv => {
                         if (conv.id !== msg.conversation_id) return conv;
 
-                        // Timestamp-ordered lastMessage update.
-                        // Guard: conv.lastMessage?.created_at may be undefined (first message
-                        // ever in the conversation). new Date(undefined) → NaN, and NaN >= X
-                        // is always false — silently blocking the update. Use 0 as the epoch
-                        // sentinel so the first message always wins the comparison.
                         const existingTs = conv.lastMessage?.created_at;
                         const existingLastMsgTime = existingTs ? new Date(existingTs).getTime() : 0;
                         const newMsgTime = new Date(msg.created_at).getTime();
                         const shouldUpdateLastMessage = newMsgTime >= existingLastMsgTime;
 
-                        // Deterministic Unread Delta
                         const shouldIncrementUnread = !isCurrentlyOpen && !isOwnMessage && newlyAddedCount > 0;
 
-                        // IMPORTANT: If neither condition is true, return the SAME reference
-                        // intentionally — React.memo on ConversationItem correctly skips
-                        // re-render for this conversation. Do NOT spread a new object here.
-                        if (!shouldUpdateLastMessage && !shouldIncrementUnread) return conv;
+                        if (!shouldUpdateLastMessage && !shouldIncrementUnread) {
+                            console.log(`[CLIENT_TRACE] [${Date.now()}] React memoization preventing rerender: PASS (No material change to conv)`);
+                            return conv;
+                        }
 
                         return {
                             ...conv,
                             updated_at: shouldUpdateLastMessage ? msg.created_at : conv.updated_at,
-                            // Always create a NEW lastMessage object so React.memo detects the change.
-                            // The status field is now typed on Conversation.lastMessage and checked
-                            // by the ConversationItem memo equality function.
                             lastMessage: shouldUpdateLastMessage
                                 ? {
                                     id: msg.id,
@@ -738,7 +730,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                                 : conv.unreadCount
                         };
                     }).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+                    
+                    console.log(`[CLIENT_TRACE] [${Date.now()}] conversations state updated: PASS | next state size: ${nextConvs.length}`);
+                    return nextConvs;
                 });
+            } else {
+                 console.log(`[CLIENT_TRACE] [${Date.now()}] duplicate message filtering: PASS (newlyAddedCount=0, seq=undefined)`);
             }
         };
 
