@@ -4,9 +4,11 @@ import toast from 'react-hot-toast';
 import { useAuth } from './AuthContext';
 import * as accountManager from '../utils/accountManager';
 import { supabase } from '../lib/supabaseSafe';
+import { resolveLocalUrl } from '../lib/networkUtils';
 
 // ─── Config ──────────────────────────────────────────────────────
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
+const rawSocketUrl = import.meta.env.VITE_SOCKET_URL;
+const SOCKET_URL = resolveLocalUrl(rawSocketUrl, 'http://localhost:5000');
 
 if (!SOCKET_URL && import.meta.env.PROD) {
     console.error('❌ CRITICAL: VITE_SOCKET_URL is not defined in production environment!');

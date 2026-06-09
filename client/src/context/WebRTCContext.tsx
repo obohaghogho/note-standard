@@ -4,11 +4,13 @@ import { useChat } from './ChatContext';
 import toast from 'react-hot-toast';
 import { CallOverlay } from '../components/chat/CallOverlay';
 import api from '../api/axiosInstance';
+import { resolveLocalUrl } from '../lib/networkUtils';
 
 // Fix #3: ICE servers are served by the gateway, not the API server.
 // VITE_API_URL  → Node.js API  (port 5001) — does NOT have /webrtc routes
 // VITE_SOCKET_URL → Gateway    (port 5000) — serves /webrtc/ice-servers
-const GATEWAY_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+const rawGatewayUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+const GATEWAY_URL = resolveLocalUrl(rawGatewayUrl, 'http://localhost:5000');
 
 // ── Structured call-trace logger ──────────────────────────────────────────────
 // Emits structured [CALL_TRACE] lines so the signaling lifecycle can be
