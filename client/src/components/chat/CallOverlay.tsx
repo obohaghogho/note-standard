@@ -119,7 +119,9 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
                     ref={remoteVideoRef}
                     autoPlay
                     playsInline
-                    className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${showRemoteVideo ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                    className={showRemoteVideo 
+                        ? "absolute inset-0 w-full h-full object-cover transition-opacity duration-500 opacity-100" 
+                        : "absolute -left-[9999px] w-px h-px opacity-100"}
                 />
 
                 {/* Overlay gradient on top of remote video */}
@@ -219,7 +221,12 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
                                 <div className="flex flex-col items-center gap-3">
                                     <button
                                         id="call-accept-btn"
-                                        onClick={acceptCall}
+                                        onClick={() => {
+                                            // FIX: Prime media synchronously inside the tap handler so Safari doesn't block it later
+                                            if (remoteVideoRef.current) remoteVideoRef.current.play().catch(() => {});
+                                            if (localVideoRef.current) localVideoRef.current.play().catch(() => {});
+                                            acceptCall();
+                                        }}
                                         className="w-20 h-20 rounded-full flex items-center justify-center transition-all active:scale-90 hover:scale-105"
                                         style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', boxShadow: '0 8px 32px rgba(34,197,94,0.5)' }}
                                     >

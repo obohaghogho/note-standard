@@ -561,10 +561,14 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 const pc = createPeerConnection(data.from);
                 stream.getTracks().forEach(t => pc.addTrack(t, stream));
 
-                const offer = await pc.createOffer({
-                    offerToReceiveAudio: true,
-                    offerToReceiveVideo: callTypeRef.current === 'video',
+                // FIX: Use modern transceivers instead of deprecated offerToReceiveX options
+                // Ensure all implicitly created transceivers (via addTrack) are explicitly set to 'sendrecv'.
+                // This guarantees Safari correctly parses the SDP and opens the return channels.
+                pc.getTransceivers().forEach(transceiver => {
+                    transceiver.direction = 'sendrecv';
                 });
+
+                const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
                 callTrace('Offer created and set — emitting call:signal');
                 socket.emit('call:signal', { to: data.from, signal: { type: offer.type, sdp: offer.sdp }, sessionId: sessionIdRef.current });
