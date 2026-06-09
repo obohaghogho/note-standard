@@ -31,7 +31,9 @@ process.on('unhandledRejection', (reason, promise) => {
 const ALLOWED_ORIGINS = [
   'https://notestandard.com',
   'https://www.notestandard.com',
+  'https://www.notestandard.com/',
   'https://realtime-gateway-gsb5.onrender.com',
+  'https://note-standard-api.onrender.com',
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:3000',
@@ -40,20 +42,26 @@ const ALLOWED_ORIGINS = [
   'http://127.0.0.1.nip.io:5173',
 ];
 
+// ✅ SHARED CORS ORIGIN FUNCTION
+// CRITICAL FIX: This function is shared between Express middleware and the
+// Socket.IO server constructor. Previously Socket.IO used the hardcoded static
+// array, which silently blocked call:initiate / call:answered / ICE candidate
+// events from production PWA origins that weren't an exact match in the list.
+const allowedOriginFn = (origin, callback) => {
+  if (!origin) return callback(null, true);
+  if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+  if (/^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$/.test(origin)) {
+    return callback(null, true);
+  }
+  console.warn(`[CORS] Allowing unrecognized origin: ${origin}`);
+  return callback(null, true);
+};
+
 const app = express();
 
-// ✅ 2. CORS FIX (STRICT & GLOBAL)
+// ✅ 2. CORS (shared allowedOriginFn)
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true); 
-    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-    if (/^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$/.test(origin)) {
-      return callback(null, true);
-    }
-    // Deny others instead of silently allowing them! But for dev we can allow all.
-    // For now, allow all to unblock the user's dev env
-    return callback(null, true);
-  },
+  origin: allowedOriginFn,
   methods: ['GET', 'POST', 'OPTIONS'],
   credentials: true,
 }));
@@ -182,7 +190,12 @@ app.use('/webrtc', webrtcRoutes);
 // ✅ 7. SOCKET.IO SETUP
 const io = new Server(httpServer, {
   cors: {
-    origin: ALLOWED_ORIGINS,
+    // FIX: Use the shared allowedOriginFn instead of the hardcoded array.
+    // Socket.IO performs its own internal CORS check independently of Express.
+    // Without this fix, call signaling is CORS-blocked in production even
+    // though the page loads normally (Express uses the permissive function,
+    // but Socket.IO was checking the static array).
+    origin: allowedOriginFn,
     methods: ['GET', 'POST'],
     credentials: true,
   },

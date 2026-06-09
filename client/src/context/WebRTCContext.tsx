@@ -5,6 +5,20 @@ import toast from 'react-hot-toast';
 import { CallOverlay } from '../components/chat/CallOverlay';
 import api from '../api/axiosInstance';
 
+// Fix #3: ICE servers are served by the gateway, not the API server.
+// VITE_API_URL  → Node.js API  (port 5001) — does NOT have /webrtc routes
+// VITE_SOCKET_URL → Gateway    (port 5000) — serves /webrtc/ice-servers
+const GATEWAY_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+
+// ── Structured call-trace logger ──────────────────────────────────────────────
+// Emits structured [CALL_TRACE] lines so the signaling lifecycle can be
+// audited step-by-step in the browser DevTools console.
+let _callTraceStep = 0;
+const callTrace = (step: string, detail?: Record<string, unknown>) => {
+    _callTraceStep++;
+    console.log(`[CALL_TRACE #${_callTraceStep}] ${step}`, detail ?? '');
+};
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface CallState {
     type: 'voice' | 'video' | null;
@@ -151,15 +165,31 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }, [callState.status, stopAllAudio]);
 
     // ── ICE server fetch ──────────────────────────────────────────────────────
+    // Fix #3: /webrtc/ice-servers is served by the realtime-gateway (GATEWAY_URL / VITE_SOCKET_URL),
+    // NOT by the Node.js API server (VITE_API_URL). Using the wrong endpoint caused
+    // silent 404s and fallback to Google STUN-only, breaking calls on LTE and NAT.
     const ensureIceServers = useCallback(async (): Promise<RTCIceServer[]> => {
         if (fetchedIceServers.current) return fetchedIceServers.current;
         try {
-            const res = await api.get('/webrtc/ice-servers');
-            if (res.data?.iceServers) {
-                fetchedIceServers.current = res.data.iceServers;
-                return res.data.iceServers;
+            callTrace('Fetching ICE servers from gateway', { url: `${GATEWAY_URL}/webrtc/ice-servers` });
+            const authHeader = api.defaults.headers.common?.['Authorization'];
+            const res = await fetch(`${GATEWAY_URL}/webrtc/ice-servers`, {
+                headers: authHeader ? { Authorization: String(authHeader) } : {},
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data?.iceServers) {
+                    const hasTurn = (data.iceServers as RTCIceServer[]).some(s => String(s.urls).startsWith('turn'));
+                    callTrace('ICE servers ready', { count: data.iceServers.length, hasTurn });
+                    fetchedIceServers.current = data.iceServers;
+                    return data.iceServers;
+                }
             }
-        } catch { /* fall through */ }
+            console.warn('[WebRTC] ICE server endpoint returned unexpected status:', res.status);
+        } catch (e) {
+            console.warn('[WebRTC] ICE server fetch failed — using STUN-only fallback:', e);
+        }
+        callTrace('ICE server fetch failed — falling back to Google STUN only');
         fetchedIceServers.current = FALLBACK_ICE;
         return FALLBACK_ICE;
     }, []);
@@ -224,16 +254,6 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             pcRef.current = null;
         }
 
-        // NOTE: Do NOT wipe iceCandidateQueue here.
-        // The caller creates the PC AFTER the callee answers, so ICE candidates
-        // from the callee may have already arrived and been queued during that gap.
-        // Clearing them here loses them permanently and breaks ICE negotiation.
-        // The queue is only cleared in cleanup() when the call actually ends.
-
-        // FIX: Create ONE persistent MediaStream object per call.
-        // Tracks are added to it as they arrive. We never recreate the stream —
-        // we just update React state with a new MediaStream wrapping the same tracks.
-        // This eliminates the "black video" bug from stale stream references.
         const remoteMs = new MediaStream();
         persistentRemote.current = remoteMs;
 
@@ -254,17 +274,15 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         pc.ontrack = (event) => {
             console.log('[WebRTC] ontrack:', event.track.kind, event.track.id);
-            // Add to persistent stream if not already there
             if (!remoteMs.getTracks().find(t => t.id === event.track.id)) {
                 remoteMs.addTrack(event.track);
             }
-            // Force React re-render by spreading current tracks into a new object
             setRemoteStream(new MediaStream(remoteMs.getTracks()));
         };
 
         pc.onconnectionstatechange = () => {
             const state = pc.connectionState;
-            console.log(`[WebRTC] Connection: ${state} | ICE: ${pc.iceConnectionState}`);
+            callTrace(`RTCPeerConnection state changed`, { connectionState: state, iceState: pc.iceConnectionState });
 
             if (state === 'connected') {
                 if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; }
@@ -302,7 +320,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         };
 
         pc.oniceconnectionstatechange = () => {
-            console.log(`[WebRTC] ICE connection: ${pc.iceConnectionState}`);
+            callTrace('ICE connection state changed', { iceConnectionState: pc.iceConnectionState });
         };
 
         pcRef.current = pc;
@@ -313,8 +331,18 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const startCall = useCallback(async (
         targetUserId: string, conversationId: string, type: 'voice' | 'video', otherUser: CallState['otherUser'],
     ) => {
+        // CALL_TRACE Step 1
+        callTrace('User clicked call', { targetUserId, type, conversationId, socketConnected });
+
         if (currentStatus.current !== 'idle') {
             console.warn('[WebRTC] startCall ignored — current status:', currentStatus.current);
+            return;
+        }
+
+        // Fix #2: Guard against silent socket?.emit() drops.
+        if (!socket || !socketConnected) {
+            callTrace('Call blocked — socket not connected', { socketExists: !!socket, socketConnected });
+            toast.error('Connection not ready. Please wait a moment and try again.');
             return;
         }
 
@@ -327,6 +355,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         try {
             await ensureIceServers();
             // Acquire media — caller has mic/cam ready while phone rings
+            callTrace('Requesting user media', { audio: true, video: type === 'video' });
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: getAudioConstraints(),
                 video: type === 'video' ? getVideoConstraints() : false,
@@ -343,9 +372,11 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             localStreamRef.current = stream;
             setLocalStream(stream);
-            console.log('[WebRTC] Local stream ready:', stream.getAudioTracks().map(t => `${t.label} enabled=${t.enabled} muted=${t.muted}`));
+            callTrace('Local stream acquired', { audioTracks: stream.getAudioTracks().length, videoTracks: stream.getVideoTracks().length });
 
-            socket?.emit('call:initiate', { to: targetUserId, type, callType: type, conversationId });
+            // CALL_TRACE Step 3
+            callTrace('Emitting call:initiate to gateway', { to: targetUserId, type, conversationId });
+            socket.emit('call:initiate', { to: targetUserId, type, callType: type, conversationId });
             sendMessageToConversation({ conversationId, content: `Started a ${type} call`, type: 'call' });
 
             callTimeoutRef.current = setTimeout(() => {
@@ -368,13 +399,16 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             currentStatus.current = 'idle';
             cleanup();
         }
-    }, [socket, ensureIceServers, sendMessageToConversation, cleanup]);
+    }, [socket, socketConnected, ensureIceServers, sendMessageToConversation, cleanup]);
 
     // ── acceptCall (CALLEE) ───────────────────────────────────────────────────
     const acceptCall = useCallback(async () => {
         const { otherUser, type, sessionId } = callState;
         if (!otherUser?.id) { cleanup(); return; }
         targetUserIdRef.current = otherUser.id;
+
+        // CALL_TRACE Step 6
+        callTrace('Callee accepted call', { from: otherUser.id, type, sessionId });
 
         try {
             await ensureIceServers();
@@ -394,7 +428,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             localStreamRef.current = stream;
             setLocalStream(stream);
-            console.log('[WebRTC] Callee stream ready:', stream.getAudioTracks().map(t => `${t.label} enabled=${t.enabled} muted=${t.muted}`));
+            callTrace('Callee stream ready', { audioTracks: stream.getAudioTracks().length, videoTracks: stream.getVideoTracks().length });
 
             // Create PC and add tracks BEFORE emitting call:answer so PC exists when offer arrives
             const pc = createPeerConnection(otherUser.id);
@@ -453,25 +487,20 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             conversationId: string; sessionId?: string;
             isSync?: boolean;
         }) => {
-            console.log('[WebRTC] call:incoming', data, 'currentStatus:', currentStatus.current);
+            // CALL_TRACE Step 4/5: Callee received incoming call
+            callTrace('call:incoming received', { from: data.from, type: data.type || data.callType, sessionId: data.sessionId, isSync: data.isSync, currentStatus: currentStatus.current });
 
             // If we are already in an active call, reject this incoming signal.
-            // This also correctly rejects late-joiner replays from the gateway on reconnect
-            // when we are already mid-call, preventing sessionIdRef from being overwritten.
             if (currentStatus.current !== 'idle') {
-                // Only auto-reject if it's a fresh call, not a sync replay
                 if (!data.isSync) {
                     socket.emit('call:reject', { to: data.from, sessionId: data.sessionId });
                 }
-                console.warn('[WebRTC] Ignoring call:incoming — already in state:', currentStatus.current);
+                callTrace('call:incoming ignored — not idle', { currentStatus: currentStatus.current });
                 return;
             }
 
             const resolvedType = data.type || data.callType || 'voice';
             targetUserIdRef.current = data.from;
-            // BUG FIX: Only set sessionIdRef if we have no active session.
-            // Gateway replays on reconnect could otherwise overwrite the sessionId
-            // for a call already in progress, causing subsequent session guards to block it.
             if (!sessionIdRef.current) {
                 sessionIdRef.current = data.sessionId || null;
             }
@@ -482,10 +511,12 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 conversationId: data.conversationId, connectedAt: null, sessionId: data.sessionId || null,
             });
             socket.emit('call:ringing', { to: data.from });
+            callTrace('call:ringing emitted to caller', { to: data.from });
         };
 
         // ── Caller: callee's device is ringing ───────────────────────────────
         const onCallRinging = () => {
+            callTrace('call:ringing received — callee device is ringing', { currentStatus: currentStatus.current });
             if (currentStatus.current === 'calling') {
                 currentStatus.current = 'ringing';
                 setCallState(p => ({ ...p, status: 'ringing' }));
@@ -496,7 +527,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const onCallAnswered = async (data: { from: string; sessionId?: string }) => {
             if (currentStatus.current !== 'calling' && currentStatus.current !== 'ringing') return;
             const { from, sessionId } = data;
-            console.log('[WebRTC] call:answered by', from, '— session:', sessionId);
+            callTrace('call:answered received', { from, sessionId });
 
             if (sessionId && sessionIdRef.current && sessionId !== sessionIdRef.current) {
                 console.warn('[WebRTC] Ignoring stray call:answered for session:', sessionId);
@@ -525,7 +556,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     offerToReceiveVideo: callTypeRef.current === 'video',
                 });
                 await pc.setLocalDescription(offer);
-                console.log('[WebRTC] Offer created and set — emitting call:signal');
+                callTrace('Offer created and set — emitting call:signal');
                 socket.emit('call:signal', { to: data.from, signal: { type: offer.type, sdp: offer.sdp }, sessionId: sessionIdRef.current });
                 currentStatus.current = 'connecting';
                 setCallState(p => ({ ...p, status: 'connecting' }));
@@ -539,7 +570,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         // ── SDP offer / answer relay ─────────────────────────────────────────
         const onCallSignal = async (data: { from: string; signal: RTCSessionDescriptionInit; sessionId?: string }) => {
             const { signal, from, sessionId } = data;
-            console.log('[WebRTC] call:signal type:', signal.type, 'from:', from, 'session:', sessionId);
+            callTrace('call:signal received', { sdpType: signal.type, from, sessionId });
 
             if (sessionId && sessionIdRef.current && sessionId !== sessionIdRef.current) {
                 console.warn('[WebRTC] Ignoring stray SDP signal for session:', sessionId, '(active:', sessionIdRef.current, ')');
