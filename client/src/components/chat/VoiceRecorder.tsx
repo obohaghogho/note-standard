@@ -21,11 +21,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
     const startRecording = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true
-                }
+                audio: true // Relaxed constraints to prevent Windows silent audio driver bugs
             });
             
             // Prioritize mp4 for robust Safari iOS compatibility, followed by WebM for Chrome/Android

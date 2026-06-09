@@ -61,11 +61,11 @@ const FALLBACK_ICE: RTCIceServer[] = [
 ];
 
 
-const getAudioConstraints = (): MediaTrackConstraints => ({
-    echoCancellation: true,
-    noiseSuppression: true,
-    autoGainControl: true,
-});
+const getAudioConstraints = (): boolean | MediaTrackConstraints => {
+    // Relaxed constraints to prevent Windows audio driver bugs that output silence
+    // when explicit hardware echo cancellation is requested on standard microphones.
+    return true;
+};
 
 /**
  * Validates a captured MediaStream and forces all tracks enabled.
