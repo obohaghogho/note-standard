@@ -276,10 +276,18 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         pc.ontrack = (event) => {
             console.log('[WebRTC] ontrack:', event.track.kind, event.track.id);
-            if (!remoteMs.getTracks().find(t => t.id === event.track.id)) {
-                remoteMs.addTrack(event.track);
+            // FIX: Safari iOS relies on the exact MediaStream reference for Acoustic Echo Cancellation
+            // and reliable video playback. DO NOT create new MediaStream objects if the browser provides one!
+            if (event.streams && event.streams.length > 0) {
+                setRemoteStream(event.streams[0]);
+            } else {
+                // Fallback for older browsers
+                if (!remoteMs.getTracks().find(t => t.id === event.track.id)) {
+                    remoteMs.addTrack(event.track);
+                }
+                // Only trigger a re-render if we actually need to
+                setRemoteStream(prev => prev === remoteMs ? prev : remoteMs);
             }
-            setRemoteStream(new MediaStream(remoteMs.getTracks()));
         };
 
         pc.onconnectionstatechange = () => {

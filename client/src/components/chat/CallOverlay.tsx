@@ -28,7 +28,6 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
 }) => {
     const [timer, setTimer] = useState('00:00');
     const remoteVideoRef = useRef<HTMLVideoElement>(null);
-    const remoteAudioRef = useRef<HTMLAudioElement>(null);
     const localVideoRef  = useRef<HTMLVideoElement>(null);
 
     // ── Call timer ────────────────────────────────────────────────────────────
@@ -48,38 +47,27 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
     const isVideoCall = callState.type === 'video';
 
     // ── Attach remote stream to media elements ────────────────────────────────
-    // FIX: Separate audio and video tracks into dedicated elements.
-    // Also handle late-arriving tracks via onaddtrack — this fixes the black video bug
-    // where the video track arrives after the audio track and the video element already
-    // has its srcObject set to an audio-only stream.
+    // FIX: Safari iOS breaks Acoustic Echo Cancellation and routes audio incorrectly
+    // if streams are split or recreated. We use a single <video> element for ALL media
+    // (both audio and video). If it's an audio call, the video element remains visually hidden
+    // but its audio will still play perfectly over the loudspeaker.
     const applyRemoteStream = useCallback(() => {
         if (!remoteStream) {
             if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-            if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
             return;
         }
 
-        // Audio: always use dedicated <audio> element
-        if (remoteAudioRef.current) {
-            const audioTracks = remoteStream.getAudioTracks();
-            if (audioTracks.length > 0) {
-                remoteAudioRef.current.srcObject = new MediaStream(audioTracks);
-                remoteAudioRef.current.play().catch(() => {
-                    const retry = () => { remoteAudioRef.current?.play().catch(() => {}); window.removeEventListener('click', retry); };
-                    window.addEventListener('click', retry, { once: true });
-                });
+        if (remoteVideoRef.current) {
+            // Prevent replacing the stream if it's the exact same reference to avoid playback stutter
+            if (remoteVideoRef.current.srcObject !== remoteStream) {
+                remoteVideoRef.current.srcObject = remoteStream;
             }
+            remoteVideoRef.current.play().catch(() => {
+                const retry = () => { remoteVideoRef.current?.play().catch(() => {}); window.removeEventListener('click', retry); };
+                window.addEventListener('click', retry, { once: true });
+            });
         }
-
-        // Video: only for video calls
-        if (isVideoCall && remoteVideoRef.current) {
-            const videoTracks = remoteStream.getVideoTracks();
-            if (videoTracks.length > 0) {
-                remoteVideoRef.current.srcObject = new MediaStream(videoTracks);
-                remoteVideoRef.current.play().catch(() => {});
-            }
-        }
-    }, [remoteStream, isVideoCall]);
+    }, [remoteStream]);
 
     useEffect(() => {
         applyRemoteStream();
@@ -125,15 +113,12 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
                 className="relative w-full h-full md:w-[420px] md:h-auto md:max-h-[90vh] md:rounded-3xl overflow-hidden shadow-2xl flex flex-col"
                 style={{ background: 'linear-gradient(135deg, #0f0c29 0%, #1a1040 50%, #0d0d2b 100%)' }}
             >
-                {/* Hidden audio: always present, receives all remote audio */}
-                <audio ref={remoteAudioRef} autoPlay playsInline className="sr-only" />
-
-                {/* Remote video — always in DOM so ref is always valid */}
+                {/* Remote media — always in DOM so ref is always valid */}
+                {/* Plays BOTH audio and video. Muted MUST be removed for audio calls to work! */}
                 <video
                     ref={remoteVideoRef}
                     autoPlay
                     playsInline
-                    muted
                     className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${showRemoteVideo ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
                 />
 
