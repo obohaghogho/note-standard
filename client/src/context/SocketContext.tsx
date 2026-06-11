@@ -110,6 +110,23 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // Sync HMR / remount state with global socket
     useEffect(() => {
+        // Foreground Wake-up Listeners for iOS
+        const handleWakeup = () => {
+            if (globalSocket && !globalSocket.connected) {
+                console.log(`[FORENSIC][CLIENT] Socket Reconnected via wakeup event (visibility/focus)`);
+                globalSocket.connect();
+            }
+        };
+        
+        if (typeof document !== 'undefined') {
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') handleWakeup();
+            });
+        }
+        if (typeof window !== 'undefined') {
+            window.addEventListener('focus', handleWakeup);
+        }
+
         if (!globalSocket) return;
         
         const onConnect = () => setConnected(true);
@@ -123,6 +140,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return () => {
             globalSocket?.off('connect', onConnect);
             globalSocket?.off('disconnect', onDisconnect);
+            // We intentionally do not remove the handleWakeup listeners here because this effect
+            // only mounts once globally, and we want iOS wake-up logic to persist across session switches.
         };
     }, []);
     const teardown = useCallback(() => {
@@ -220,23 +239,6 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 socket.io.engine.on('upgrade', (t: { name: string }) => {
                     console.log(`[Socket Forensic] ↑ Upgraded to ${t.name} at ${Date.now()}`);
                 });
-
-                // Foreground Wake-up Listeners for iOS
-                const handleWakeup = () => {
-                    if (globalSocket && !globalSocket.connected) {
-                        console.log(`[FORENSIC][CLIENT] Socket Reconnected via wakeup event (visibility/focus)`);
-                        globalSocket.connect();
-                    }
-                };
-                
-                if (typeof document !== 'undefined') {
-                    document.addEventListener('visibilitychange', () => {
-                        if (document.visibilityState === 'visible') handleWakeup();
-                    });
-                }
-                if (typeof window !== 'undefined') {
-                    window.addEventListener('focus', handleWakeup);
-                }
             });
 
             socket.on('disconnect', (reason) => {

@@ -1399,6 +1399,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             socket.off('chat:conversation_delivered', onConversationDelivered);
             socket.off('chat:typing', onTyping);
             socket.off('connect', onSocketReconnect);
+            socket.off('disconnect', onSocketDisconnect);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [socket, user?.id]);
