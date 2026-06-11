@@ -1455,7 +1455,52 @@ exports.sendMessage = async (req, res) => {
         "id",
         conversationId,
       ).then();
+
+      // 4. Server-side ACK Timeout Recheck (Self-Healing Delivery)
+      // After 30s, check if the message was confirmed delivered.
+      // If not (delivered_at still null), re-emit to all recipients.
+      // Handles: iOS backgrounding, network switch (LTE↔WiFi), cold gateway routing.
+      // Fire-and-forget — does NOT block the response, does NOT double-write to DB.
+      if (!isDuplicate && safePayload.id && members.length > 0) {
+        const recheckMessageId = safePayload.id;
+        const recheckMembers = [...members]; // snapshot at send time
+        const recheckCorrelationId = req.correlationId;
+
+        setTimeout(async () => {
+          try {
+            const { data: msgCheck } = await supabase
+              .from('messages')
+              .select('id, delivered_at')
+              .eq('id', recheckMessageId)
+              .single();
+
+            if (!msgCheck) {
+              console.log(`[FORENSIC][API] ACK Recheck | messageId:${recheckMessageId} | result: NOT_FOUND (deleted or cleaned up)`);
+              return;
+            }
+
+            if (msgCheck.delivered_at) {
+              console.log(`[FORENSIC][API] ACK Recheck | messageId:${recheckMessageId} | result: DELIVERED_OK | delivered_at:${msgCheck.delivered_at}`);
+              return;
+            }
+
+            // Delivery not confirmed — re-emit the message payload to all recipients
+            console.warn(`[FORENSIC][API] ACK Recheck | messageId:${recheckMessageId} | result: NOT_DELIVERED — re-emitting to ${recheckMembers.length} recipients | cid:${recheckCorrelationId}`);
+
+            const userIds = recheckMembers.map(m => m.user_id);
+            await realtime.emitToUsers(userIds, "chat:message", safePayload, {
+              correlationId: recheckCorrelationId,
+              recheck: true
+            });
+
+            console.log(`[FORENSIC][API] ACK Recheck Re-emit Done | messageId:${recheckMessageId} | recipientCount:${userIds.length}`);
+          } catch (recheckErr) {
+            console.warn(`[FORENSIC][API] ACK Recheck Failed | messageId:${recheckMessageId} | error:${recheckErr.message}`);
+          }
+        }, 30000); // 30 second window — enough for reconnect backoff (max 10s) + handshake
+      }
     }
+
 
     /**
      * Fire-and-forget native push via gateway /internal/push.
