@@ -115,12 +115,6 @@ self.addEventListener('push', (event) => {
                     });
 
                     if (isUserAlreadyViewing) {
-                        console.log('[SW] Suppressing push', {
-                            conversationId: notifConversationId,
-                            visibilityState: 'visible',
-                            reason: 'already_viewing_conversation'
-                        });
-
                         // CRITICAL: Post message to the active React tab so it calls
                         // markConversationRead immediately. This ensures blue ticks fire
                         // even if the receiver's unread count was already 0.

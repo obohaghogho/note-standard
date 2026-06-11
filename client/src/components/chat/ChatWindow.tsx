@@ -171,6 +171,15 @@ const ChatWindow: React.FC = () => {
     const currentMessages = useMemo(() => activeConversationId ? messages[activeConversationId] || [] : [], [messages, activeConversationId]);
     const activeConversation = useMemo(() => conversations.find(c => c.id === activeConversationId), [conversations, activeConversationId]);
 
+    // Stable message count ref — avoids recreating scrollToBottom and layout effects on every tick update.
+    // scrollToBottom only needs to know WHEN the length changes, not the full array.
+    const currentMessagesLengthRef = useRef(currentMessages.length);
+    useEffect(() => { currentMessagesLengthRef.current = currentMessages.length; }, [currentMessages.length]);
+
+    // Stable message ID list — used by translation effect to detect truly new messages
+    // without re-running on every tick/status update. A message's ID never changes.
+    const messageIdsKey = useMemo(() => currentMessages.map(m => m.id).join(','), [currentMessages]);
+
     const myMember = activeConversation?.members.find((m: { user_id: string; status: string }) => m.user_id === user?.id);
     const isPending = myMember?.status === 'pending';
 
@@ -192,10 +201,11 @@ const ChatWindow: React.FC = () => {
 
     const scrollToBottom = useCallback((behavior: ScrollBehavior | 'instant' | 'auto' = 'smooth') => {
         if (isKeyboardTransitioning.current) return;
-        
-        if (virtuosoRef.current && currentMessages.length > 0) {
+        // Use the ref so this callback is never recreated on every message — only when scroll logic itself changes.
+        const len = currentMessagesLengthRef.current;
+        if (virtuosoRef.current && len > 0) {
             virtuosoRef.current.scrollToIndex({
-                index: currentMessages.length - 1,
+                index: len - 1,
                 align: 'end',
                 behavior: behavior === 'instant' ? 'auto' : behavior as 'auto' | 'smooth'
             });
@@ -216,7 +226,8 @@ const ChatWindow: React.FC = () => {
             setShowScrollDown(false);
             setUnreadCountWhileScrolled(0);
         }
-    }, [currentMessages.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Stable forever — reads currentMessagesLengthRef.current at call time
 
     // Track composer height dynamically via ResizeObserver.
     useLayoutEffect(() => {
@@ -384,7 +395,10 @@ const ChatWindow: React.FC = () => {
         const translateNewMessages = async () => {
             if (!activeConversationId || !preferredLanguage || !session?.access_token) return;
 
-            const messagesToTranslate = currentMessages.filter(msg => {
+            // Use current messages from ref to avoid stale closure, but filter by the
+            // stable ID key so this only runs when NEW messages arrive, not on status/tick updates.
+            const msgs = currentMessages;
+            const messagesToTranslate = msgs.filter(msg => {
                 const sourceLang = msg.original_language || 'en';
                 const isDifferent = sourceLang !== preferredLanguage;
                 const notOwn = msg.sender_id !== user?.id;
@@ -429,7 +443,11 @@ const ChatWindow: React.FC = () => {
         };
 
         translateNewMessages();
-    }, [currentMessages, activeConversationId, preferredLanguage, user?.id, session?.access_token]);
+    // CRITICAL: depend on messageIdsKey (stable ID list), NOT currentMessages.
+    // Tick updates change currentMessages reference but NOT messageIdsKey.
+    // This prevents a translation API call on every delivered/read status update.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [messageIdsKey, activeConversationId, preferredLanguage, user?.id, session?.access_token]);
 
     const handleManualTranslate = async (msgId: string, content: string, sourceLang?: string) => {
         if (!preferredLanguage || !session?.access_token) return;
