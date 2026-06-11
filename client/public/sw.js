@@ -117,10 +117,30 @@ self.addEventListener('push', (event) => {
                     if (isUserAlreadyViewing) {
                         console.log('[SW] Suppressing push', {
                             conversationId: notifConversationId,
-                            visibilityState: 'visible', // Since the client passed visibilityState !== 'hidden'
+                            visibilityState: 'visible',
                             reason: 'already_viewing_conversation'
                         });
-                        // Still fire the delivery receipt but skip showing the notification
+
+                        // CRITICAL: Post message to the active React tab so it calls
+                        // markConversationRead immediately. This ensures blue ticks fire
+                        // even if the receiver's unread count was already 0.
+                        const activeClient = windowClients.find(c => {
+                            try {
+                                const u = new URL(c.url);
+                                return u.pathname.includes('/chat') &&
+                                    u.searchParams.get('id') === notifConversationId &&
+                                    c.visibilityState !== 'hidden';
+                            } catch (_) { return false; }
+                        });
+                        if (activeClient) {
+                            activeClient.postMessage({
+                                type: 'CHAT_MESSAGE_RECEIVED',
+                                conversationId: notifConversationId,
+                                messageId: options.data.messageId
+                            });
+                        }
+
+                        // Still fire the delivery receipt via the API
                         return fetch(`${targetApiUrl}/api/chat/messages/${options.data.messageId}/webhook-deliver`, { method: 'POST' })
                             .catch(err => console.error('[SW] Delivery receipt failed:', err));
                     }

@@ -514,18 +514,21 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     const markConversationRead = useCallback(async (conversationId: string) => {
         if (!session || !deviceId) return;
-        
-        // Find the conversation to check if it actually has unread messages
-        // This prevents infinite loops if this is called in a useEffect that depends on `conversations`
+
+        // CRITICAL: Always fire the API so the server emits chat:conversation_read to the sender.
+        // This is what triggers the blue double-tick on the sender's screen.
+        // Previously this was gated behind unreadCount > 0 which meant:
+        //   - If receiver opened chat with 0 unread (first visit), no API call was made
+        //   - Server never knew the message was read → no chat:conversation_read event → no blue ticks
+        // The API call is fire-and-forget — it's cheap (the server deduplicates via read_at IS NULL).
+        api.put(`/chat/conversations/${conversationId}/read`, { deviceId }).catch(err => {
+            console.error('[Chat] Failed to mark conversation read:', err);
+        });
+
+        // Only update local unread count if it's actually > 0 to avoid unnecessary re-renders
         setConversations(prev => {
             const conv = prev.find(c => c.id === conversationId);
             if (!conv || conv.unreadCount === 0) return prev; // No-op, preserves array reference
-            
-            // Fire API asynchronously since we know it needs update
-            api.put(`/chat/conversations/${conversationId}/read`, { deviceId }).catch(err => {
-                console.error('[Chat] Failed to mark conversation read:', err);
-            });
-            
             return prev.map(c => c.id === conversationId ? { ...c, unreadCount: 0 } : c);
         });
     }, [session, deviceId]);
@@ -830,6 +833,28 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     // Maintain refs to latest dependencies to avoid stale closures in socket handlers
     const sessionRef = useRef(session);
     useEffect(() => { sessionRef.current = session; }, [session]);
+
+    // Listen for Service Worker push relay: when a push arrives while the user is in the
+    // chat room, the SW suppresses the visible notification but posts CHAT_MESSAGE_RECEIVED
+    // here so we immediately call markConversationRead → blue tick fires for the sender.
+    const markConversationReadRef = useRef(markConversationRead);
+    useEffect(() => { markConversationReadRef.current = markConversationRead; }, [markConversationRead]);
+
+    useEffect(() => {
+        const handleSWMessage = (event: MessageEvent) => {
+            if (event.data?.type === 'CHAT_MESSAGE_RECEIVED') {
+                const { conversationId } = event.data;
+                if (conversationId) {
+                    console.log(`[SW→Chat] CHAT_MESSAGE_RECEIVED | conv:${conversationId} → firing markConversationRead`);
+                    markConversationReadRef.current(conversationId);
+                }
+            }
+        };
+        navigator.serviceWorker?.addEventListener('message', handleSWMessage);
+        return () => {
+            navigator.serviceWorker?.removeEventListener('message', handleSWMessage);
+        };
+    }, []);
 
     useEffect(() => {
         console.log(`[SYNC_FORENSICS] ChatContext socket effect evaluated | socket exists: ${!!socket} | connected: ${connected}`);
