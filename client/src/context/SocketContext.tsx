@@ -186,9 +186,11 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 },
                 withCredentials: true,
                 transports: ['websocket', 'polling'],
-                reconnection: false,  // Boot Contract: NO auto-reconnect. ChatContext re-calls initialize() when needed.
+                reconnection: true,  // Fix: Enable auto-reconnect for iOS background suspends
+                reconnectionDelay: 1000,
+                reconnectionDelayMax: 10000,
                 autoConnect: true,
-                timeout: 60000,
+                timeout: 20000,
             });
 
             globalSocket = socket;
@@ -218,6 +220,23 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 socket.io.engine.on('upgrade', (t: { name: string }) => {
                     console.log(`[Socket Forensic] ↑ Upgraded to ${t.name} at ${Date.now()}`);
                 });
+
+                // Foreground Wake-up Listeners for iOS
+                const handleWakeup = () => {
+                    if (globalSocket && !globalSocket.connected) {
+                        console.log(`[FORENSIC][CLIENT] Socket Reconnected via wakeup event (visibility/focus)`);
+                        globalSocket.connect();
+                    }
+                };
+                
+                if (typeof document !== 'undefined') {
+                    document.addEventListener('visibilitychange', () => {
+                        if (document.visibilityState === 'visible') handleWakeup();
+                    });
+                }
+                if (typeof window !== 'undefined') {
+                    window.addEventListener('focus', handleWakeup);
+                }
             });
 
             socket.on('disconnect', (reason) => {
@@ -228,9 +247,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     Date.now()
                 );
                 setConnected(false);
-                // Only reconnect on genuine server kicks.
-                // If this socket was session:replaced, reconnecting would create an infinite churn loop
-                // because the gateway would just soft-replace the new connection again.
+                // Socket.IO auto-reconnects on network drops. 
+                // Only manually reconnect on server disconnect if not intentionally replaced.
                 if (reason === 'io server disconnect' && !replacedByNewerSession) {
                     socket.connect();
                 }

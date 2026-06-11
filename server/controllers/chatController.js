@@ -863,11 +863,13 @@ exports.markMessageRead = async (req, res) => {
       if (!msgRow) return res.json({ success: true, note: "no-op" });
 
       const receiptPayload = { messageId, conversationId: msgRow.conversation_id, userId, readAt };
+      console.log(`[FORENSIC][API] Read ACK Processing | messageId:${messageId} | conversationId:${msgRow.conversation_id} | userId:${userId} | ts:${Date.now()}`);
 
       // Emit to conversation room (for ChatScreen listeners)
       await realtime.emitToConversation(msgRow.conversation_id, "chat:message_read", receiptPayload);
       // ALSO emit directly to the original sender so their ChatList updates too
       await realtime.emitToUser(msgRow.sender_id, "chat:message_read", receiptPayload);
+      console.log(`[FORENSIC][API] Read ACK Broadcast Done | messageId:${messageId} | senderId:${msgRow.sender_id} | ts:${Date.now()}`);
 
       res.json({ success: true });
     } catch (updateErr) {
@@ -951,11 +953,13 @@ exports.markMessageDelivered = async (req, res) => {
       }
 
       const receiptPayload = { messageId, conversationId: msgRow.conversation_id, userId, delivered_at: deliveredAt };
+      console.log(`[FORENSIC][API] Delivery ACK Processing | messageId:${messageId} | conversationId:${msgRow.conversation_id} | userId:${userId} | ts:${Date.now()}`);
 
       // Emit to conversation room (for ChatScreen listeners)
       await realtime.emitToConversation(msgRow.conversation_id, "chat:message_delivered", receiptPayload);
       // ALSO emit directly to the original sender so their ChatList updates too
       await realtime.emitToUser(msgRow.sender_id, "chat:message_delivered", receiptPayload);
+      console.log(`[FORENSIC][API] Delivery ACK Broadcast Done | messageId:${messageId} | senderId:${msgRow.sender_id} | ts:${Date.now()}`);
 
       res.json({ success: true });
     } catch (updateErr) {
@@ -1241,6 +1245,14 @@ exports.sendMessage = async (req, res) => {
 
       createdMessageId = insertedMessage.id;
 
+      logger.info("[FORENSIC][API] Message Saved | Stage 3", {
+        correlationId: req.correlationId,
+        messageId: createdMessageId,
+        conversationId,
+        senderId: userId,
+        eventId,
+        durationMs: Date.now() - startTimeMs
+      });
       logger.info("Database insert completed [Stage 3]", {
         correlationId: req.correlationId,
         userId,

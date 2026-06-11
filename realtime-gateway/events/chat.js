@@ -108,6 +108,8 @@ module.exports = (io, socket) => {
     const { conversationId, messageIds, readAt } = data || {};
     if (!conversationId || !Array.isArray(messageIds) || messageIds.length === 0) return;
 
+    console.log(`[FORENSIC][GW] Read ACK Received | userId:${userId} | conversationId:${conversationId} | messageIds:[${messageIds.join(',')}] | ts:${Date.now()}`);
+
     // Relay to everyone else in the conversation room
     socket.to(conversationId).emit('chat:read_receipt', {
       userId,
@@ -124,6 +126,8 @@ module.exports = (io, socket) => {
   socket.on('chat:delivered', (data) => {
     const { conversationId, messageId, deliveredAt } = data || {};
     if (!conversationId || !messageId) return;
+
+    console.log(`[FORENSIC][GW] Delivery ACK Received | userId:${userId} | conversationId:${conversationId} | messageId:${messageId} | ts:${Date.now()}`);
 
     socket.to(conversationId).emit('chat:delivery_receipt', {
       userId,

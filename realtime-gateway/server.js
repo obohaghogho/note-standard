@@ -157,6 +157,7 @@ function dispatchSocketEvent(envelope) {
   // Consistent Room Resolver
   const targetRoom = type === 'to_user' ? `user:${room}` : room;
   const cidLog = correlation_id ? `[cid:${correlation_id}] ` : '';
+  const msgId = payload?.id || payload?.messageId || 'N/A';
 
   console.log(`[Gateway] 📡 ${cidLog}[${type}] room:${targetRoom || 'N/A'} event:${event}${exclude_user_id ? ` (excluding user:${exclude_user_id})` : ''}`);
 
@@ -165,10 +166,7 @@ function dispatchSocketEvent(envelope) {
       if (exclude_user_id && uid === exclude_user_id) return;
       const roomName = `user:${uid}`;
       const sockets = await io.in(roomName).fetchSockets();
-      console.log(`[Gateway Diagnostic] Executing io.to('${roomName}').emit('${event}'). Sockets in room: ${sockets.length}`);
-      if (sockets.length > 0) {
-        console.log(`[Gateway Diagnostic] Socket IDs in room: ${sockets.map(s => s.id).join(', ')}`);
-      }
+      console.log(`[FORENSIC][GW] Message Emitted | event:${event} | messageId:${msgId} | room:${roomName} | socketCount:${sockets.length} | cid:${correlation_id || 'N/A'} | ts:${Date.now()}`);
       io.to(roomName).emit(event, payload);
     });
     return;
@@ -226,32 +224,12 @@ const io = new Server(httpServer, {
   allowEIO3: true,
 });
 
-// Production Hardening: Configure Redis adapter if REDIS_URL is provided for multi-instance horizontal scaling
-const REDIS_URL = process.env.REDIS_URL;
-if (REDIS_URL) {
-  try {
-    const { createAdapter } = require('@socket.io/redis-adapter');
-    const { createClient } = require('redis');
-    
-    const pubClient = createClient({ url: REDIS_URL });
-    const subClient = pubClient.duplicate();
-    
-    Promise.all([pubClient.connect(), subClient.connect()]).then(() => {
-      io.adapter(createAdapter(pubClient, subClient));
-      console.log('[Socket.IO] 🔴 Redis Adapter integrated successfully for multi-instance scaling.');
-    }).catch(err => {
-      console.error('[Socket.IO] 🔴 Redis Connection failed:', err.message);
-    });
-  } catch (err) {
-    try {
-      const redisAdapter = require('socket.io-redis');
-      io.adapter(redisAdapter(REDIS_URL));
-      console.log('[Socket.IO] 🔴 socket.io-redis Adapter integrated successfully.');
-    } catch (e) {
-      console.error('[Socket.IO] 🔴 Failed to initialize Redis Adapter:', err.message);
-    }
-  }
-}
+// NOTE: Redis Adapter intentionally removed.
+// PostgreSQL LISTEN/NOTIFY already delivers events to ALL gateway instances natively via
+// the database connection. Adding a Redis Adapter on top creates an exponential broadcast
+// storm: each pg_notify fires io.emit() on every node, and Redis then re-broadcasts
+// those emits to every other node, resulting in N² delivery events per message.
+// PostgreSQL is our cluster bus. Redis is redundant and harmful here.
 
 // Socket.IO handles WebSocket upgrades natively — no custom upgrade listener needed.
 
@@ -343,6 +321,8 @@ async function initPgListener() {
     if (msg.channel === 'realtime_events') {
       try {
         const envelope = JSON.parse(msg.payload);
+        const msgId = envelope.payload?.id || envelope.payload?.messageId || 'N/A';
+        console.log(`[FORENSIC][GW] PG_NOTIFY Received | event:${envelope.event} | messageId:${msgId} | cid:${envelope.correlation_id || 'N/A'} | ts:${Date.now()}`);
         
         // Handle session revocation gracefully
         if (envelope.event === 'session:revoked') {

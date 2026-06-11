@@ -139,12 +139,30 @@ export const useChat = () => {
     return context;
 };
 
+const STATUS_PRIORITY: Record<string, number> = {
+    'sending': 0,
+    'failed': 0,
+    'sent': 1,
+    'delivered': 2,
+    'read': 3
+};
+
 // Helper: Enforce precedence so a message never downgrades its delivery status
-// Priority: read_at > delivered_at > sent
+// Priority: read > delivered > sent
 const mergeMessageStatus = (oldMsg: Message, newMsg: Partial<Message>): Message => {
+    let finalStatus = newMsg.status || oldMsg.status;
+    
+    // Explicit string status priority
+    if (oldMsg.status && newMsg.status) {
+        if ((STATUS_PRIORITY[oldMsg.status] || 0) > (STATUS_PRIORITY[newMsg.status] || 0)) {
+            finalStatus = oldMsg.status;
+        }
+    }
+
     return {
         ...oldMsg,
         ...newMsg,
+        status: finalStatus,
         // If old message had read_at, preserve it unless new message also has it
         read_at: newMsg.read_at || oldMsg.read_at,
         // If old message had delivered_at, preserve it unless new message also has it
@@ -457,6 +475,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         if (!session || !deviceId) return;
         const now = new Date().toISOString();
         if (socketRef.current?.connected) {
+            console.log(`[FORENSIC][CLIENT] Read ACK Sent | messageId: ${messageId} | conversationId: ${conversationId} | timestamp: ${now}`);
             socketRef.current.emit('chat:read', { conversationId, messageIds: [messageId], readAt: now, deviceId });
         }
         try {
@@ -470,6 +489,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         if (!session || !deviceId) return;
         const now = new Date().toISOString();
         if (socketRef.current?.connected) {
+            console.log(`[FORENSIC][CLIENT] Delivery ACK Sent | messageId: ${messageId} | conversationId: ${conversationId} | timestamp: ${now}`);
             socketRef.current.emit('chat:delivered', { conversationId, messageId, deliveredAt: now, deviceId });
         }
         try {
@@ -827,7 +847,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }
             const msg = validation.data as Message & { is_deleted?: boolean };
 
-
+            console.log(`[FORENSIC][CLIENT] Message Received | messageId: ${msg.id} | conversationId: ${msg.conversation_id} | senderId: ${msg.sender_id} | timestamp: ${Date.now()}`);
             console.log(`[SYNC_FORENSICS] [CLIENT_TRACE] [${Date.now()}] chat:message received | id: ${msg.id} | convId: ${msg.conversation_id} | activeConvId: ${activeConversationIdRef.current}`);
 
             // ── Tombstone guard: reject replays of deleted messages ────────────
