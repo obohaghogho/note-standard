@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import tailwindxml from '@tailwindcss/vite'
 import path from 'path'
 import prerender from '@prerenderer/rollup-plugin'
-import PuppeteerRenderer from '@prerenderer/renderer-puppeteer'
+import JSDOMRenderer from '@prerenderer/renderer-jsdom'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -12,11 +12,7 @@ export default defineConfig({
     tailwindxml(),
     prerender({
       routes: ['/', '/about', '/contact'],
-      renderer: new PuppeteerRenderer({
-        launchOptions: {
-          args: ['--no-sandbox', '--disable-setuid-sandbox']
-        }
-      }),
+      renderer: new JSDOMRenderer(),
       server: {
         port: 3000,
         host: 'localhost',
