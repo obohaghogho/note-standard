@@ -12,7 +12,11 @@ export default defineConfig({
     tailwindxml(),
     prerender({
       routes: ['/', '/about', '/contact'],
-      renderer: new PuppeteerRenderer(),
+      renderer: new PuppeteerRenderer({
+        launchOptions: {
+          args: ['--no-sandbox', '--disable-setuid-sandbox']
+        }
+      }),
       server: {
         port: 3000,
         host: 'localhost',

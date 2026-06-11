@@ -320,7 +320,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         }
                         return sid;
                     }
-                } catch (err: any) {
+                } catch (err: unknown) {
                     console.error(`[ChatContext] Session registration attempt ${attempt}/3 failed`, err);
                 }
                 if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 500));
