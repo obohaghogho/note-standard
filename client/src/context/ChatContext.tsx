@@ -827,6 +827,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }, [connected, conversations, joinAllRooms]);
 
+    // Maintain refs to latest dependencies to avoid stale closures in socket handlers
+    const sessionRef = useRef(session);
+    useEffect(() => { sessionRef.current = session; }, [session]);
+
     useEffect(() => {
         console.log(`[SYNC_FORENSICS] ChatContext socket effect evaluated | socket exists: ${!!socket} | connected: ${connected}`);
         if (!socket || !connected) return;
@@ -842,7 +846,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 }
                 return;
             }
-            if (!isMounted.current || !session) return;
+            if (!isMounted.current || !sessionRef.current) {
+                console.log(`[CLIENT_TRACE] processIncomingMessage DROPPED (Not mounted or session=null in ref)`);
+                return;
+            }
             // Stamp last server event time for silent-drift detection
             lastServerAckRef.current = Date.now();
 
@@ -873,8 +880,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             // including the sender. The sender already has the canonical message
             // from the API response (flushQueue → setMessages). We must drop
             // this echo before it reaches mergeMessages to prevent duplication.
-            const isOwnMessage = msg.sender_id === user.id;
-            console.log(`[CLIENT_TRACE] isOwnMessage: ${isOwnMessage} | sender: ${msg.sender_id} | viewer: ${user.id}`);
+            const isOwnMessage = msg.sender_id === user?.id;
+            console.log(`[CLIENT_TRACE] isOwnMessage: ${isOwnMessage} | sender: ${msg.sender_id} | viewer: ${user?.id}`);
             if (isOwnMessage) {
                 // Check by event_id first (most reliable — set at send time)
                 const dedupEventKey = msg.event_id;
