@@ -179,14 +179,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     const isMounted = useRef(true);
 
-    // Guards against re-running session registration when only the token refreshes.
-    // The session should only be registered ONCE per user per device. A new token
-    const sessionRegisteredForUser = useRef<string | null>(null);
 
     const pendingDeliveryAcksRef = useRef<Set<string>>(new Set());
     const sentBatchAckIdsRef = useRef<Set<string>>(new Set()); // Dedup window for batch ACKs
     const isReconnectingRef = useRef<boolean>(false);
-    const reconnectBufferRef = useRef<any[]>([]);
+    const reconnectBufferRef = useRef<unknown[]>([]);
     const reconcilingRef = useRef<boolean>(false); // Overlap lock for reconciliation
     const lastServerAckRef = useRef<number>(Date.now()); // Tracks last real event from server
     // Stable ref to loadMessages — avoids TDZ when the reconciliation useEffect is declared

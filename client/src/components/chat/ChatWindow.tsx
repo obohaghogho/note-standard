@@ -197,7 +197,7 @@ const ChatWindow: React.FC = () => {
             virtuosoRef.current.scrollToIndex({
                 index: currentMessages.length - 1,
                 align: 'end',
-                behavior: behavior === 'instant' ? 'auto' : behavior as any
+                behavior: behavior === 'instant' ? 'auto' : behavior as 'auto' | 'smooth'
             });
             // Virtuoso's align: 'end' stops at the last message, hiding the footer.
             // We must explicitly scroll to the absolute bottom to reveal the composer spacer.
@@ -205,14 +205,14 @@ const ChatWindow: React.FC = () => {
                 if (scrollContainerRef.current) {
                     scrollContainerRef.current.scrollTo({
                         top: scrollContainerRef.current.scrollHeight,
-                        behavior: behavior === 'instant' ? 'auto' : behavior as any
+                        behavior: behavior === 'instant' ? 'auto' : behavior as ScrollBehavior
                     });
                 }
             });
             setShowScrollDown(false);
             setUnreadCountWhileScrolled(0);
         } else if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: behavior === 'instant' ? 'auto' : behavior as any, block: 'end' });
+            messagesEndRef.current.scrollIntoView({ behavior: behavior === 'instant' ? 'auto' : behavior as ScrollBehavior, block: 'end' });
             setShowScrollDown(false);
             setUnreadCountWhileScrolled(0);
         }
@@ -714,7 +714,7 @@ const ChatWindow: React.FC = () => {
                             p.username.toLowerCase().includes(query.toLowerCase()) || 
                             p.full_name?.toLowerCase().includes(query.toLowerCase())
                         );
-                                            setMentionParticipants(filtered as any[]);
+                        setMentionParticipants(filtered as { id: string; username: string; full_name?: string; avatar_url?: string }[]);
                 }
             } else {
                 setShowMentions(false);

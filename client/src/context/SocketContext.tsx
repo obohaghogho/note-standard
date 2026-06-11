@@ -3,7 +3,6 @@ import { io, Socket } from 'socket.io-client';
 import toast from 'react-hot-toast';
 import { useAuth } from './AuthContext';
 import * as accountManager from '../utils/accountManager';
-import { supabase } from '../lib/supabaseSafe';
 import { resolveLocalUrl } from '../lib/networkUtils';
 
 // ─── Config ──────────────────────────────────────────────────────
@@ -19,7 +18,7 @@ declare global {
     interface Window {
         __realtimeDebug: {
             sockets: number;
-            authEvents: any[];
+            authEvents: unknown[];
             listeners: Record<string, number>;
         };
     }
@@ -261,7 +260,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 }
             });
         });
-    }, [connected, teardown]);
+    }, [connected, teardown, user?.id]);
 
     return (
         <SocketContext.Provider value={{ socket: globalSocket, connected, error, teardown, initialize }}>
