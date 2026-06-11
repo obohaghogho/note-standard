@@ -68,6 +68,24 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
             // If the local message was optimistic, clear it so it doesn't stay stuck.
             delete updatedMsg._optimistic;
 
+            // Chaos audit fix: Server always wins for delivery/read status.
+            // A confirmed 'delivered_at' or 'read_at' must NEVER be reverted by a 
+            // later optimistic state that doesn't have it (e.g., a stale reconnect echo).
+            const STATUS_HIERARCHY = ['sending', 'sent', 'delivered', 'read'];
+            const existingStatusRank = STATUS_HIERARCHY.indexOf(existingMsg.status ?? 'sending');
+            const incomingStatusRank = STATUS_HIERARCHY.indexOf(msg.status ?? 'sending');
+            // Preserve the highest-rank status seen
+            if (existingStatusRank > incomingStatusRank) {
+                updatedMsg.status = existingMsg.status;
+            }
+            // Also preserve the most advanced timestamps (they cannot go backwards)
+            if (existingMsg.delivered_at && !msg.delivered_at) {
+                updatedMsg.delivered_at = existingMsg.delivered_at;
+            }
+            if (existingMsg.read_at && !msg.read_at) {
+                updatedMsg.read_at = existingMsg.read_at;
+            }
+
             // Guard: Prevent a null/absent/empty reply_to from the server from wiping an
             // existing optimistic reply context. This handles:
             //   - PostgREST FK join returning null (schema cache miss / migration not applied)

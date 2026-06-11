@@ -1,4 +1,5 @@
 const express = require("express");
+global.__BOOT_READY__ = false;
 const logger = require("./utils/logger");
 const path = require("path");
 const cors = require("cors");
@@ -56,6 +57,9 @@ app.use((req, res, next) => {
   next();
 });
 
+const correlationId = require("./middleware/correlationId");
+app.use(correlationId);
+
 // ─── Webhook Pre-Parser Interceptor ──────────────────────────
 app.use((req, res, next) => {
   if (req.originalUrl && req.originalUrl.includes('webhook')) {
@@ -87,7 +91,18 @@ const { requireAuth, requireAdmin } = require("./middleware/authMiddleware");
 const ApiError = require("./utils/apiError");
 const paymentController = require("./controllers/payment/paymentController");
 
-// ─── Routes ──────────────────────────────────────────────────
+
+// ─── Deterministic Boot Architecture Gate ──────────────────
+// SINGLE admission authority for ALL HTTP traffic.
+// The BootManager must mark every service ready before any request passes.
+const bootGate = require('./middleware/bootGate');
+app.use(bootGate);
+
+// Boot Status Endpoint (public, always available)
+app.get("/api/boot/status", (req, res) => {
+  res.json(global.BOOT_STATE || { phase: "STARTING", ready: false });
+});
+
 // Health check (with Supabase ping)
 app.get("/api/health", async (req, res) => {
   try {

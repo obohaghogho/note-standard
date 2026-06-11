@@ -161,6 +161,7 @@ async function sendApnsWithFallback(notification, token, label) {
  * @param {Object} params - { userId, title, body, payload }
  */
 async function sendCallPush(params) {
+  if (process.env.PUSH_ENABLED !== 'true') return;
   const { userId, title, body, payload } = params;
   
   try {
@@ -260,6 +261,7 @@ async function sendCallPush(params) {
  * @param {Object} params - { userId, title, body, payload }
  */
 async function sendGenericPush(params) {
+  if (process.env.PUSH_ENABLED !== 'true') return;
   const { userId, title, body, payload } = params;
 
   try {
@@ -355,6 +357,7 @@ async function sendGenericPush(params) {
  * @param {Object} params - { title, body, payload }
  */
 async function sendBroadcastPush(params) {
+  if (process.env.PUSH_ENABLED !== 'true') return;
   const { title, body, payload } = params;
   try {
     const { data: tokens, error } = await supabase

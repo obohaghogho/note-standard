@@ -14,6 +14,18 @@ if (!SOCKET_URL && import.meta.env.PROD) {
     console.error('❌ CRITICAL: VITE_SOCKET_URL is not defined in production environment!');
 }
 
+// Global debug guard for real-time forensics
+declare global {
+    interface Window {
+        __realtimeDebug: {
+            sockets: number;
+            authEvents: any[];
+            listeners: Record<string, number>;
+        };
+    }
+}
+window.__realtimeDebug = window.__realtimeDebug || { sockets: 0, authEvents: [], listeners: {} };
+
 // Requirement 3: Stable module singleton strategy
 let globalSocket: Socket | null = null;
 
@@ -51,6 +63,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [connected, setConnected] = useState(globalSocket?.connected || false);
     const [error, setError] = useState<string | null>(null);
     const retryCount = useRef(0);
+    const initializedUserId = useRef<string | null>(null);
     const MAX_RETRIES = 10;
 
     // We no longer rely on effect cleanup to manage socket lifecycle.
@@ -66,9 +79,15 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (!isValidToken || !user) {
             if (globalSocket) {
                 console.log(`[Socket Forensic] Explicit Sign-Out — disconnecting socket at ${Date.now()}`);
+                console.log(
+                    "[SOCKET_DISCONNECT]",
+                    "explicit sign-out",
+                    Date.now()
+                );
                 globalSocket.disconnect();
                 globalSocket = null;
                 setConnected(false);
+                initializedUserId.current = null;
             }
             return;
         }
@@ -85,83 +104,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             return;
         }
 
-        // 3. Initial Boot Creation
-        console.log(`[Socket Forensic] Initializing persistent socket singleton at ${Date.now()}`);
-
-        const socket = io(SOCKET_URL, {
-            auth: (cb) => {
-                const storedAccount = user?.id ? accountManager.getAccount(user.id) : null;
-                cb({
-                    token: session?.access_token,
-                    sessionId: storedAccount?.sessionId,
-                    deviceId: storedAccount?.deviceId
-                });
-            },
-            withCredentials: true,
-            transports: ['websocket', 'polling'],
-            reconnection: true,
-            reconnectionAttempts: MAX_RETRIES,
-            reconnectionDelay: 2000,
-            timeout: 60000,
-        });
-
-        globalSocket = socket;
-
-        socket.on('connect', () => {
-            console.log(`[Socket Forensic] ✓ Connected via ${socket.io.engine.transport.name} at ${Date.now()}`);
-            setConnected(true);
-            setError(null);
-            retryCount.current = 0;
-
-            socket.io.engine.on('upgrade', (t: { name: string }) => {
-                console.log(`[Socket Forensic] ↑ Upgraded to ${t.name} at ${Date.now()}`);
-            });
-        });
-
-        socket.on('disconnect', (reason) => {
-            console.log(`[Socket Forensic] Disconnected at ${Date.now()}. Reason: ${reason}`);
-            setConnected(false);
-            if (reason === 'io server disconnect') {
-                socket.connect(); // Server kicked us, manually reconnect
-            }
-        });
-
-        socket.on('connect_error', (err) => {
-            console.error(`[Socket Forensic] Connection error at ${Date.now()}:`, err.message);
-            setError(err.message);
-            setConnected(false);
-
-            if (retryCount.current < MAX_RETRIES) {
-                retryCount.current++;
-                console.log(`[Socket Forensic] Retrying (${retryCount.current}/${MAX_RETRIES})…`);
-            } else {
-                toast.error('Real-time connection failed. Please refresh.');
-            }
-        });
-
-        // Handle server-side session revocation
-        socket.on('auth:revoked', async () => {
-            console.warn('[Socket Forensic] 🛑 Session revoked by server. Signing out...');
-            globalSocket?.removeAllListeners();
-            globalSocket?.disconnect();
-            globalSocket = null;
-            setConnected(false);
-            await supabase.auth.signOut();
-            toast.error('Your session was revoked. Please sign in again.');
-        });
-
-        // Handle soft replacement (newer tab/window took over this session)
-        socket.on('session:replaced', () => {
-            console.warn('[Socket Forensic] ♻️ Session replaced by newer connection. Dropping this socket.');
-            globalSocket?.removeAllListeners();
-            globalSocket?.disconnect();
-            globalSocket = null;
-            setConnected(false);
-        });
-
-        // We intentionally DO NOT return a cleanup function that calls socket.off()
-        // because the early return on session refresh would prevent them from being rebound,
-        // leaving the socket completely silent.
+        // 3. Removed auto-connect boot creation to enforce strict Boot Contract ordering.
+        // The socket is now exclusively instantiated via the explicit initialize() method
+        // called by ChatContext *after* the session is successfully registered.
     }, [authReady, session, user]); // Re-evaluates when session refreshes
 
     // Sync HMR / remount state with global socket
@@ -184,6 +129,11 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const teardown = useCallback(() => {
         if (globalSocket) {
             console.log(`[ACCOUNT_FORENSIC] SOCKET_TEARDOWN - Disconnecting socket at ${Date.now()}`);
+            console.log(
+                "[SOCKET_DISCONNECT]",
+                "teardown",
+                Date.now()
+            );
             globalSocket.removeAllListeners();
             globalSocket.disconnect();
             globalSocket = null;
@@ -196,7 +146,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return new Promise((resolve, reject) => {
             if (globalSocket && connected) {
                 const socketWithAuth = globalSocket as Socket & { auth?: { token?: string } };
-                if (socketWithAuth.auth?.token === token) {
+                if (socketWithAuth.auth?.token === token && initializedUserId.current === user?.id) {
                     resolve();
                     return;
                 }
@@ -205,28 +155,51 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             // Clean up any stale socket
             teardown();
 
+            const storedAccount = accountManager.getActiveAccountId() 
+                ? accountManager.getAccount(accountManager.getActiveAccountId()!) 
+                : null;
+            const sessionId = storedAccount?.sessionId || localStorage.getItem('chat_session_id');
+            const deviceId = storedAccount?.deviceId || localStorage.getItem('chat_device_id');
+
+            if (!sessionId || !deviceId) {
+                console.warn('[ACCOUNT_FORENSIC] SOCKET_INITIALIZE_REJECTED - Missing sessionId or deviceId at ' + Date.now());
+                reject(new Error("Socket connection rejected: sessionId or deviceId missing"));
+                return;
+            }
+
             console.log(`[ACCOUNT_FORENSIC] SOCKET_INITIALIZE - Creating fresh socket at ${Date.now()}`);
+            console.log(
+                "[SOCKET_CONNECT]",
+                sessionId,
+                deviceId,
+                Date.now()
+            );
+
+            initializedUserId.current = user?.id || null;
 
             const socket = io(SOCKET_URL, {
                 auth: (cb) => {
-                    const storedAccount = accountManager.getActiveAccountId() 
-                        ? accountManager.getAccount(accountManager.getActiveAccountId()!) 
-                        : null;
                     cb({
                         token,
-                        sessionId: storedAccount?.sessionId,
-                        deviceId: storedAccount?.deviceId
+                        sessionId,
+                        deviceId
                     });
                 },
                 withCredentials: true,
                 transports: ['websocket', 'polling'],
-                reconnection: true,
-                reconnectionAttempts: MAX_RETRIES,
-                reconnectionDelay: 2000,
+                reconnection: false,  // Boot Contract: NO auto-reconnect. ChatContext re-calls initialize() when needed.
+                autoConnect: true,
                 timeout: 60000,
             });
 
             globalSocket = socket;
+            // Track whether this socket was intentionally replaced by a newer session.
+            // If so, it must NOT attempt to reconnect — doing so would cause infinite churn.
+            let replacedByNewerSession = false;
+            socket.on('session:replaced', () => {
+                console.log('[Socket Forensic] session:replaced received — this socket is superseded, will not reconnect.');
+                replacedByNewerSession = true;
+            });
 
             // Instead of unbinding listeners on timeout, just reject the promise 
             // so the caller isn't blocked forever, but keep the listeners active
@@ -250,9 +223,17 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             socket.on('disconnect', (reason) => {
                 console.log(`[Socket Forensic] Disconnected at ${Date.now()}. Reason: ${reason}`);
+                console.log(
+                    "[SOCKET_DISCONNECT]",
+                    reason,
+                    Date.now()
+                );
                 setConnected(false);
-                if (reason === 'io server disconnect') {
-                    socket.connect(); // Server kicked us, manually reconnect
+                // Only reconnect on genuine server kicks.
+                // If this socket was session:replaced, reconnecting would create an infinite churn loop
+                // because the gateway would just soft-replace the new connection again.
+                if (reason === 'io server disconnect' && !replacedByNewerSession) {
+                    socket.connect();
                 }
             });
 
@@ -261,7 +242,17 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 setError(err.message);
                 setConnected(false);
 
-                if (retryCount.current < MAX_RETRIES) {
+                const isFatal =
+                    err.message.includes('BOOT_NOT_READY') ||
+                    err.message.includes('Session ID and Device ID required') ||
+                    err.message.includes('Authentication error');
+
+                if (isFatal) {
+                    console.warn(`[Socket Forensic] Fatal error (${err.message}). Halting retries permanently.`);
+                    socket.io.reconnection(false);
+                    socket.disconnect();
+                    reject(new Error(err.message));
+                } else if (retryCount.current < MAX_RETRIES) {
                     retryCount.current++;
                     console.log(`[Socket Forensic] Retrying (${retryCount.current}/${MAX_RETRIES})…`);
                 } else {

@@ -16,6 +16,7 @@ export type PendingMessageIntent = {
             type?: string;
             attachment?: unknown;
         };
+        correlationId?: string;
     };
     status: "queued" | "sending" | "failed";
     leaseSnapshot: {

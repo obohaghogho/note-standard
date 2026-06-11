@@ -12,6 +12,9 @@ import { ReadReceiptEngine } from 'shared/readReceiptEngine';
 import api from '../api/axiosInstance';
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
+import { generateCorrelationId, trackCorrelation, completeCorrelation } from '../lib/correlationId';
+import { logger } from '../lib/logger';
+import { ChatBootKernel } from './ChatBootKernel';
 
 export interface Message {
     id: string;
@@ -151,7 +154,7 @@ const mergeMessageStatus = (oldMsg: Message, newMsg: Partial<Message>): Message 
 
 export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const { user, session, authReady, isSwitching } = useAuth();
-    const { socket, connected } = useSocket();
+    const { socket, connected, initialize: connectSocket } = useSocket();
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [messages, setMessages] = useState<Record<string, Message[]>>({});
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -176,38 +179,125 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     const isMounted = useRef(true);
 
-    // Initialize Device and Session
+    // Guards against re-running session registration when only the token refreshes.
+    // The session should only be registered ONCE per user per device. A new token
+    const sessionRegisteredForUser = useRef<string | null>(null);
+
+    const pendingDeliveryAcksRef = useRef<Set<string>>(new Set());
+    const sentBatchAckIdsRef = useRef<Set<string>>(new Set()); // Dedup window for batch ACKs
+    const isReconnectingRef = useRef<boolean>(false);
+    const reconnectBufferRef = useRef<any[]>([]);
+    const reconcilingRef = useRef<boolean>(false); // Overlap lock for reconciliation
+    const lastServerAckRef = useRef<number>(Date.now()); // Tracks last real event from server
+    // Stable ref to loadMessages — avoids TDZ when the reconciliation useEffect is declared
+    // above the loadMessages useCallback. Synced after loadMessages is initialized.
+    const loadMessagesRef = useRef<(conversationId: string, force?: boolean) => Promise<void>>(() => Promise.resolve());
+
+    // Tab-primary singleton: Only one tab runs ACK batching, reconciliation and heartbeat.
+    // Uses a localStorage lease refreshed every 4s. Other tabs detect staleness (>6s).
+    const TAB_ID = useRef<string>(crypto.randomUUID());
+    const isPrimaryTabRef = useRef<boolean>(false);
     useEffect(() => {
-        // Wait for auth to be fully ready and session token to be available.
-        // This prevents the Axios interceptor's safeAuth() from being throttled
-        // on page load, which caused 401s and "Could not obtain sessionId" warnings.
-        if (!user || !session?.access_token || !authReady) return;
-
-        const doRegister = async (localDeviceId: string, token: string): Promise<string | null> => {
-            // Pass the token directly in the per-request headers.
-            // The Axios interceptor now skips safeAuth() when Authorization is already set,
-            // so this bypasses the throttle while keeping all other Axios behaviour.
-            for (let attempt = 1; attempt <= 3; attempt++) {
+        const TAB_LEASE_KEY = 'chat_primary_tab_lease';
+        const TAB_LEASE_TTL = 6000;
+        const claimLease = () => {
+            const stored = localStorage.getItem(TAB_LEASE_KEY);
+            if (stored) {
                 try {
-                    const res = await api.post('/session/register', {
-                        userId: user.id,
-                        deviceId: localDeviceId,
-                        userAgent: navigator.userAgent
-                    }, {
-                        headers: { Authorization: `Bearer ${token}` }
-                    });
-                    if (res.data?.session_id) return res.data.session_id;
-                    console.warn(`[ChatContext] Session registration attempt ${attempt}/3 — no session_id in response`, res.data);
-                } catch (err: unknown) {
-                    const status = (err as {response?: {status?: number}})?.response?.status;
-                    console.error(`[ChatContext] Session registration attempt ${attempt}/3 failed (HTTP ${status ?? 'network'})`, err);
-                }
-                if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 500));
+                    const { id, ts } = JSON.parse(stored);
+                    const isStale = Date.now() - ts > TAB_LEASE_TTL;
+                    if (!isStale && id !== TAB_ID.current) {
+                        isPrimaryTabRef.current = false;
+                        return;
+                    }
+                } catch { /* corrupt entry — take over */ }
             }
-            return null;
+            localStorage.setItem(TAB_LEASE_KEY, JSON.stringify({ id: TAB_ID.current, ts: Date.now() }));
+            isPrimaryTabRef.current = true;
         };
+        claimLease();
+        const leaseInterval = setInterval(claimLease, 4000);
+        return () => clearInterval(leaseInterval);
+    }, []);
 
-        const initSession = async () => {
+    // Layer 3: Batch ACK Engine — primary tab only, with dedup window
+    useEffect(() => {
+        if (!user || !session) return;
+        const interval = setInterval(() => {
+            if (!isPrimaryTabRef.current) return; // Only primary tab flushes to DB
+            const currentAcks = pendingDeliveryAcksRef.current;
+            if (currentAcks.size > 0) {
+                // Deduplicate: remove any IDs already sent in a recent batch
+                const newIds = Array.from(currentAcks).filter(id => !sentBatchAckIdsRef.current.has(id));
+                pendingDeliveryAcksRef.current = new Set();
+                if (newIds.length > 0) {
+                    newIds.forEach(id => sentBatchAckIdsRef.current.add(id));
+                    // Bound the sent-set so it doesn't grow indefinitely
+                    if (sentBatchAckIdsRef.current.size > 2000) sentBatchAckIdsRef.current.clear();
+                    api.patch('/chat/messages/ack:batch', { messageIds: newIds })
+                       .catch(err => console.error('[ACK Engine] Failed to batch ACK', err));
+                }
+            }
+        }, 5000);
+        return () => clearInterval(interval);
+    }, [user, session]);
+
+    // Layer 5: Silent Drift Reconciliation Safety Net — with overlap lock + drift detection
+    useEffect(() => {
+        if (!user || !session) return;
+        const interval = setInterval(async () => {
+            if (!isPrimaryTabRef.current) return;
+            if (reconcilingRef.current) {
+                console.log('[Reconciliation Engine] Skipping — previous sync still in-flight');
+                return;
+            }
+            const convId = activeConversationIdRef.current;
+            if (!convId || !isMounted.current) return;
+
+            const socketAge = Date.now() - lastServerAckRef.current;
+            const reason = socketAge > 30000 ? 'silent-drift' : 'periodic-safety-net';
+            console.log(`[Reconciliation Engine] [${reason}] syncing ${convId}`);
+
+            reconcilingRef.current = true;
+            try {
+                // Use ref to avoid TDZ (loadMessages is declared after this effect)
+                await loadMessagesRef.current(convId, true);
+            } catch (err) {
+                console.warn('[Reconciliation Engine] Periodic sync failed', err);
+            } finally {
+                reconcilingRef.current = false;
+            }
+        }, 60000);
+        return () => clearInterval(interval);
+    // loadMessages intentionally omitted — accessed via loadMessagesRef to avoid TDZ
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user, session]);
+
+    // Flight Recorder
+    useEffect(() => {
+        if (!user || !session || !import.meta.env.DEV) return;
+        const interval = setInterval(() => {
+            const activeConvId = activeConversationIdRef.current;
+            console.log(`[RELIABILITY_STATE]`, {
+                socketStatus: connected ? 'CONNECTED' : (isReconnectingRef.current ? 'RECONNECTING' : 'DISCONNECTED'),
+                bufferSize: reconnectBufferRef.current.length,
+                pendingAcks: pendingDeliveryAcksRef.current.size,
+                lastServerAckMs: Date.now() - lastServerAckRef.current,
+                isPrimaryTab: isPrimaryTabRef.current,
+                isReconciling: reconcilingRef.current,
+                lastReconciliation: activeConvId ? (messagesCachedAtRef.current[activeConvId] || null) : null
+            });
+        }, 10000);
+        return () => clearInterval(interval);
+    }, [user, session, connected]);
+
+    // Chat Boot Kernel: Deterministic State Machine Orchestrator
+    useEffect(() => {
+        if (!authReady || !user?.id || !session?.access_token) return;
+
+        const kernel = ChatBootKernel.getInstance();
+
+        const registerSession = async (): Promise<string | null> => {
             let localDeviceId = localStorage.getItem('chat_device_id');
             if (!localDeviceId) {
                 localDeviceId = `web-${Math.random().toString(36).substring(2, 9)}`;
@@ -216,20 +306,48 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             setDeviceId(localDeviceId);
             deviceIdRef.current = localDeviceId;
 
-            const sid = await doRegister(localDeviceId, session.access_token);
-            if (sid && isMounted.current) {
-                setSessionId(sid);
-                sessionIdRef.current = sid;
-            } else if (!sid) {
-                console.warn('[ChatContext] Could not obtain sessionId after 3 attempts — messages will queue until session is ready');
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    const res = await api.post('/session/register', {
+                        userId: user.id,
+                        deviceId: localDeviceId,
+                        userAgent: navigator.userAgent
+                    }, {
+                        headers: { Authorization: `Bearer ${session.access_token}` }
+                    });
+                    if (res.data?.session_id) {
+                        const sid = res.data.session_id;
+                        if (isMounted.current) {
+                            setSessionId(sid);
+                            sessionIdRef.current = sid;
+                        }
+                        return sid;
+                    }
+                } catch (err: any) {
+                    console.error(`[ChatContext] Session registration attempt ${attempt}/3 failed`, err);
+                }
+                if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 500));
             }
-            return sid;
+            return null;
         };
 
-        sessionInitPromiseRef.current = initSession();
-    // Re-run when session token refreshes (Supabase auto-refreshes every ~55 min)
+        kernel.boot(user.id, {
+            registerSession,
+            connectSocket: async () => {
+                await connectSocket(session.access_token);
+            },
+            loadConversations,
+            hydrateIntents: async () => {
+                // Pending intents are currently hydrated automatically at the end 
+                // of loadConversations and loadMessages. This fulfills the contract.
+                return Promise.resolve();
+            }
+        });
+
+    // NOTE: Intentionally keying boot ONLY on user.id to prevent object identity 
+    // drift from triggering StrictMode re-mount chaos.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user?.id, session?.access_token, authReady]);
+    }, [authReady, user?.id]);
 
 
     const { isActiveWriter, isClaimingLease, markLeaseClaimStart, markLeaseClaimEnd, leases } = useSessionArbitration({
@@ -398,11 +516,16 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     const loadConversations = useCallback(async () => {
-        if (!session || isSwitching || conversationsFetchRef.current) return;
+        console.log('[CHAT] loadConversations started');
+        if (!session || isSwitching || conversationsFetchRef.current) {
+            console.log(`[CHAT] loadConversations aborted: session=${!!session}, isSwitching=${isSwitching}, fetching=${conversationsFetchRef.current}`);
+            return;
+        }
         conversationsFetchRef.current = true;
         try {
             const response = await api.get('/chat/conversations');
             const data = response.data;
+            console.log('[CHAT] conversations loaded', data?.length);
             if (isMounted.current && Array.isArray(data)) {
                 const mappedData = data.map((conv: Conversation & { last_message?: Conversation['lastMessage'] }) => ({
                     ...conv,
@@ -438,7 +561,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 }, 2000);
             }
         } catch (e) {
-            console.error('[Chat] Failed to load conversations:', e);
+            console.error('[CHAT] loadConversations failed', e);
             if (isMounted.current) setLoading(false);
         } finally {
             conversationsFetchRef.current = false;
@@ -452,7 +575,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     getItem: (key: string) => localStorage.getItem(key),
                     setItem: (key: string, value: string) => localStorage.setItem(key, value)
                 });
-                const pendingIntents = await offlineQueueEngine.getPendingIntents();
+                const rawIntents = await offlineQueueEngine.getPendingIntents();
+                // Deduplicate by event_id to prevent intent re-hydration duplication risk
+                const pendingIntents = Array.from(new Map(rawIntents.map(i => [i.event_id, i])).values());
                 if (pendingIntents.length > 0 && isMounted.current) {
                     // Group by conversation_id — take the most recent intent per conversation
                     const latestByConv = new Map<string, typeof pendingIntents[0]>();
@@ -569,7 +694,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         getItem: (key: string) => localStorage.getItem(key),
                         setItem: (key: string, value: string) => localStorage.setItem(key, value)
                     });
-                    const pendingIntents = await offlineQueueEngine.getPendingIntents();
+                    const rawIntents = await offlineQueueEngine.getPendingIntents();
+                    // Deduplicate by event_id to prevent intent re-hydration duplication risk
+                    const pendingIntents = Array.from(new Map(rawIntents.map(i => [i.event_id, i])).values());
                     const convIntents = pendingIntents.filter(i => i.conversation_id === conversationId);
 
                     if (convIntents.length > 0 && isMounted.current) {
@@ -612,6 +739,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }, [session, user?.id]);
 
+    // Keep the ref synced so periodic reconciliation doesn't hit a TDZ
+    useEffect(() => {
+        loadMessagesRef.current = loadMessages;
+    }, [loadMessages]);
+
     const clearState = useCallback(() => {
         console.log(`[ACCOUNT_FORENSIC] CHAT_CLEAR_STATE - Dropping chat caches at ${Date.now()}`);
         setConversations([]);
@@ -649,7 +781,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             setLoading(false);
         }
         return () => { isMounted.current = false; };
-    }, [authReady, session, user, loadConversations, clearState]);
+    // NOTE: loadConversations is excluded so it doesn't trigger on session refresh
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [authReady, user?.id, clearState]);
 
     useEffect(() => {
         activeConversationIdRef.current = activeConversationId;
@@ -675,7 +809,19 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         if (!socket || !connected) return;
 
         const processIncomingMessage = (raw: unknown) => {
-            if (!isMounted.current) return;
+            // Narrow to Message-shape for reconnect buffer (safe — validated below)
+            const rawMsg = raw as { id?: string };
+            if (isReconnectingRef.current) {
+                console.log(`[CLIENT_TRACE] Reconnection buffer active. Queuing incoming message: ${rawMsg?.id}`);
+                reconnectBufferRef.current.push(raw);
+                if (reconnectBufferRef.current.length > 500) {
+                    reconnectBufferRef.current.shift();
+                }
+                return;
+            }
+            if (!isMounted.current || !session) return;
+            // Stamp last server event time for silent-drift detection
+            lastServerAckRef.current = Date.now();
 
             const validation = validateMessagePayload(raw);
             if (!validation.valid) {
@@ -683,6 +829,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 return;
             }
             const msg = validation.data as Message & { is_deleted?: boolean };
+
 
             console.log(`[SYNC_FORENSICS] [CLIENT_TRACE] [${Date.now()}] chat:message received | id: ${msg.id} | convId: ${msg.conversation_id} | activeConvId: ${activeConversationIdRef.current}`);
 
@@ -753,7 +900,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             // of how many messages arrive in a burst. The per-message socket events
             // (chat:delivered, chat:read) handle real-time tick updates on the UI.
             if (!isOwnMessage) {
-                // Debounced: fires at most once per 1.5s per conversation
+                // 1. Immediate ACK (Layer 3 - UX correctness)
+                socket.emit('chat:delivered', {
+                    conversationId: msg.conversation_id,
+                    messageId: msg.id,
+                    deliveredAt: new Date().toISOString()
+                });
+
+                // 2. Queue for Batch ACK (Layer 3 - Network efficiency)
+                pendingDeliveryAcksRef.current.add(msg.id);
+
+                // Debounced: fires at most once per 1.5s per conversation for read status
                 debouncedMarkReadRef.current(msg.conversation_id);
             }
 
@@ -1058,17 +1215,50 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 }, 3000);
             }
         };
+        
+        // Layer 5: Reconciliation Engine Trigger (Tab Visibility)
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible' && activeConversationIdRef.current) {
+                console.log(`[Reconciliation Engine] Tab visible, syncing ${activeConversationIdRef.current}`);
+                loadMessages(activeConversationIdRef.current, true).catch(err => 
+                    console.warn('[Reconciliation Engine] Failed to reconcile on visibility change', err)
+                );
+            }
+        };
 
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        socket.off('chat:message', processIncomingMessage);
         socket.on('chat:message', processIncomingMessage);
+
+        socket.off('chat:message_deleted', onMessageDeleted);
         socket.on('chat:message_deleted', onMessageDeleted);
+
+        socket.off('chat:message_edited', onMessageEdited);
         socket.on('chat:message_edited', onMessageEdited);
+
+        socket.off('chat:message_read', onMessageRead);
         socket.on('chat:message_read', onMessageRead);
+
+        socket.off('chat:message_delivered', onMessageDelivered);
         socket.on('chat:message_delivered', onMessageDelivered);
+
+        socket.off('chat:read_receipt', onReadReceipt);
         socket.on('chat:read_receipt', onReadReceipt);
+
+        socket.off('chat:delivery_receipt', onDeliveryReceipt);
         socket.on('chat:delivery_receipt', onDeliveryReceipt);
+
+        socket.off('chat:conversation_updated', onConversationUpdated);
         socket.on('chat:conversation_updated', onConversationUpdated);
+
+        socket.off('chat:conversation_read', onConversationRead);
         socket.on('chat:conversation_read', onConversationRead);
+
+        socket.off('chat:conversation_delivered', onConversationDelivered);
         socket.on('chat:conversation_delivered', onConversationDelivered);
+
+        socket.off('chat:typing', onTyping);
         socket.on('chat:typing', onTyping);
 
         // Re-join ALL conversation rooms on every socket reconnect.
@@ -1077,6 +1267,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         // in the conversation room and never receives incoming chat:message events.
         // This handler fires on both initial connect AND every subsequent reconnect.
         const onSocketReconnect = () => {
+            isReconnectingRef.current = false;
+            
+            // Flush reconnection buffer
+            if (reconnectBufferRef.current.length > 0) {
+                console.log(`[ChatContext] Flushing ${reconnectBufferRef.current.length} buffered messages after reconnect`);
+                reconnectBufferRef.current.forEach(msg => processIncomingMessage(msg));
+                reconnectBufferRef.current = [];
+            }
+
             const currentConvs = conversationsRef.current;
             if (currentConvs.length > 0) {
                 console.log(`[ChatContext] 🔄 Socket reconnected — re-joining ${currentConvs.length} rooms`);
@@ -1085,9 +1284,26 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             // Also rejoin the active conversation room explicitly
             if (activeConversationIdRef.current) {
                 socket.emit('join_room', activeConversationIdRef.current);
+                
+                // Layer 5: Reconciliation Engine Trigger (Socket Reconnect)
+                // Force sync the active chat to catch any messages missed during the drop
+                loadMessages(activeConversationIdRef.current, true).catch(err => 
+                    console.warn('[Reconciliation Engine] Failed to reconcile on reconnect', err)
+                );
             }
         };
+        
+        // Layer 3 Reconnection buffer: 
+        // When transport drops, block new messages briefly until re-synchronized
+        const onSocketDisconnect = () => {
+            isReconnectingRef.current = true;
+        };
+
+        socket.off('connect', onSocketReconnect);
         socket.on('connect', onSocketReconnect);
+        
+        socket.off('disconnect', onSocketDisconnect);
+        socket.on('disconnect', onSocketDisconnect);
         
         return () => { 
             socket.off('chat:message', processIncomingMessage); 
@@ -1104,7 +1320,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             socket.off('connect', onSocketReconnect);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [socket, connected, user?.id]);
+    }, [socket, user?.id]);
 
     // Phase 5.5: Lease-Aware Offline Queue Engine
     const offlineQueue = useMemo(() => {
@@ -1126,8 +1342,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         const currentSessionId = sessionIdRef.current;
         if (!currentDeviceId || !currentSessionId) return;
         
-        const intents = await offlineQueue.getPendingIntents();
-        if (intents.length === 0) return;
+        const rawIntents = await offlineQueue.getPendingIntents();
+        if (rawIntents.length === 0) return;
+        // FIFO guarantee: always flush oldest intent first to preserve message ordering
+        const intents = [...rawIntents].sort((a, b) => a.created_at - b.created_at);
 
         for (const intent of intents) {
             if (intent.status === 'sending' || intent.attempts >= 3) continue;
@@ -1145,6 +1363,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     markLeaseClaimEnd // Optional UI sync
                 );
 
+                if (intent.payload.correlationId) {
+                    logger.debug('API', 'Flushing message intent', { correlationId: intent.payload.correlationId, eventId: intent.event_id });
+                }
                 const res = await api.post(`/chat/conversations/${intent.conversation_id}/messages`, {
                     content: intent.payload.content,
                     type: intent.payload.type,
@@ -1153,7 +1374,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     eventId: intent.event_id,
                     deviceId: currentDeviceId,
                     sessionId: currentSessionId
+                }, {
+                    headers: intent.payload.correlationId ? { 'X-Correlation-ID': intent.payload.correlationId } : undefined
                 });
+                
+                if (intent.payload.correlationId) {
+                    completeCorrelation(intent.payload.correlationId);
+                }
 
                 // Canonical backend collapse
                 const backendMsg = res.data.message || res.data;
@@ -1278,50 +1505,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 resolvedDeviceId = deviceIdRef.current;
             }
 
-            // Final fallback: re-register on demand if still missing
+            // If still missing after awaiting init promise, reject strictly.
+            // Do NOT re-register here — that creates new session IDs and causes
+            // the session churn bug (multiple IDs for the same tab/user).
             if (!resolvedDeviceId || !resolvedSessionId) {
-                let localDeviceId = localStorage.getItem('chat_device_id');
-                if (!localDeviceId) {
-                    localDeviceId = `web-${Math.random().toString(36).substring(2, 9)}`;
-                    localStorage.setItem('chat_device_id', localDeviceId);
-                    setDeviceId(localDeviceId);
-                    deviceIdRef.current = localDeviceId;
-                }
-                resolvedDeviceId = localDeviceId;
-
-                try {
-                    const res = await api.post('/session/register', {
-                        userId: user.id,
-                        deviceId: localDeviceId,
-                        userAgent: navigator.userAgent
-                    }, {
-                        headers: { Authorization: `Bearer ${session.access_token}` }
-                    });
-                    if (res.data?.session_id) {
-                        resolvedSessionId = res.data.session_id;
-                        setSessionId(resolvedSessionId!);
-                        sessionIdRef.current = resolvedSessionId;
-                    }
-                } catch (err) {
-                    console.error('[ChatContext] On-demand session registration failed', err);
-                }
-            }
-
-            if (!resolvedDeviceId || !resolvedSessionId) {
-                // Do NOT throw — that blocks the message entirely on iOS Safari after
-                // a cold-start or network flap. Instead, degrade gracefully:
-                // generate ephemeral IDs so the message still queues and sends.
-                // Lease arbitration runs in degraded (non-arbitrated) mode but the
-                // content always reaches the server.
-                console.warn('[ChatContext] Session not ready — proceeding with ephemeral session (degraded mode)');
-                if (!resolvedDeviceId) {
-                    resolvedDeviceId = `web-${Math.random().toString(36).substring(2, 9)}`;
-                    localStorage.setItem('chat_device_id', resolvedDeviceId);
-                    deviceIdRef.current = resolvedDeviceId;
-                }
-                if (!resolvedSessionId) {
-                    resolvedSessionId = `eph-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-                }
+                console.error('[ChatContext] Session not ready — rejecting message send to maintain strict consistency.');
+                throw new Error('Message send failed: Authentication session is not ready.');
             }
         }
         
@@ -1336,6 +1525,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         // Generate Canonical Event ID
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
         const clientEventId = crypto.randomUUID();
+
+        // ── Phase 1: Observability (Generate Correlation ID) ──
+        const cid = generateCorrelationId();
+        trackCorrelation(cid, 'sendMessage');
+        logger.info('CHAT', 'Initiating send message', { correlationId: cid, conversationId, type });
 
         const optimisticMessage: Message = {
             id: tempId,
@@ -1360,7 +1554,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         await offlineQueue.pushIntent({
             event_id: clientEventId,
             conversation_id: conversationId,
-            payload: { content, type, attachmentId, replyTo },
+            payload: { content, type, attachmentId, replyTo, correlationId: cid },
             leaseSnapshot: { device_id: resolvedDeviceId, session_id: resolvedSessionId },
             created_at: Date.now()
         });

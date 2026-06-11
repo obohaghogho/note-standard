@@ -128,6 +128,9 @@ const emit = async (type, room, event, payload, options = {}) => {
         if (options.users) {
             envelope.users = options.users;
         }
+        if (options.correlationId) {
+            envelope.correlation_id = options.correlationId;
+        }
         const payloadString = JSON.stringify(envelope);
 
         // 3. Size guard — prevent oversized payloads

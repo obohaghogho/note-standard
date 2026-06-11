@@ -9,17 +9,15 @@ const supabase = require("./config/database");
 const fxService = require("./services/fxService");
 const realtime = require("./services/realtimeService");
 
-const server = http.createServer(app);
+// ─── Deterministic Boot Architecture ───────────────────────────
+// MUST be required before anything else to initialise global.BOOT_STATE
+const bootManager = require("./bootstrap/bootManager");
 
-// ─── Realtime Gateway Transition ──────────────────────────────
-// This service now delegates all socket handling to the 
-// realtime-gateway service. Communication happens via Redis.
-// ──────────────────────────────────────────────────────────────
+const server = http.createServer(app);
 
 // Global Error Handlers for Process Stability
 process.on("uncaughtException", (err) => {
   logger.error("[Process] Uncaught Exception:", err);
-  // Give logger time to write before potentially failing
   setTimeout(() => process.exit(1), 1000);
 });
 
@@ -38,11 +36,6 @@ const reconciliationWorker = require("./workers/reconciliationWorker");
 const payoutWorker = require("./workers/payoutWorker");
 const WorkerManager = require("./workers/WorkerManager");
 
-/**
- * 🚀 START SERVER IMMEDIATELY
- * We bind to the port as early as possible to satisfy Render's port detection.
- * All heavy initialization and background workers start AFTER the server is live.
- */
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
     logger.error(`Port ${PORT} is already in use. Please run 'npm run dev:safe' to clear it.`);
@@ -52,8 +45,10 @@ server.on('error', (err) => {
   }
 });
 
-server.listen(PORT, "0.0.0.0", async () => {
+server.listen(PORT, async () => {
   logger.info(`Server running on port ${PORT}`);
+  // ✅ HTTP server is bound — API layer is accepting connections
+  bootManager.setService("api", true);
 
   // 1. Log Public IP (Async, non-blocking)
   https.get("https://api.ipify.org", (res) => {
@@ -67,11 +62,24 @@ server.listen(PORT, "0.0.0.0", async () => {
   reconciliationWorker.start();
   payoutWorker.start();
   WorkerManager.start();
-  // paymentWorker is usually managed separately but included here if needed
+  // ✅ Workers are launched — mark workers ready
+  bootManager.setService("workers", true);
   
-  // 3. Initial Market Data & Trends Aggregation (Backgrounded)
+  // 3. Full async boot sequence
   setImmediate(async () => {
     try {
+      // ── A: Verify DB ──────────────────────────────────────────
+      logger.info("[Boot] Verifying DB connectivity...");
+      const { error: dbErr } = await supabase.from("profiles").select("id").limit(1);
+      if (dbErr) {
+        logger.error("[Boot] DB connectivity check failed:", dbErr.message);
+        // Don't register db — system stays in SEEDING
+      } else {
+        logger.info("[Boot] DB connectivity verified.");
+        bootManager.setService("db", true);
+      }
+
+      // ── B: Seed Market Data ────────────────────────────────────
       logger.info("[Trends] Starting initial aggregation in background...");
       await analyticsService.aggregateDailyStats();
       
@@ -87,18 +95,12 @@ server.listen(PORT, "0.0.0.0", async () => {
         await realtime.broadcast("stats_updated", stats);
       }
 
-      // ── Startup SAFE_MODE Auto-Recovery ──────────────────────────
-      // On a fresh boot, the FX feed may not have live prices yet,
-      // causing enterSafeMode("Pricing INVALID state...") to fire
-      // before seeds are loaded. Now that seeds + live rates are ready,
-      // auto-recover if the system is still in SAFE_MODE.
+      // ── C: SAFE_MODE Auto-Recovery ─────────────────────────────
       const SystemState = require("./config/SystemState");
       if (SystemState.isSafe()) {
         logger.warn("[Startup] System is in SAFE_MODE after initialization. Attempting auto-recovery...");
-        // Force the dwell floor to 0 so canExitSafeMode() can pass immediately
         SystemState.enterSafeTime = Date.now() - (SystemState.minSafeModeDuration * 1000 + 1000);
-        SystemState.stableSince = Date.now() - 121000; // Satisfy 120s stability window
-        // Reset metrics to healthy baseline so the health check passes
+        SystemState.stableSince = Date.now() - 121000;
         SystemState.updateMetrics({ queueLag: 0, growthRate: 0, drift: 0, hasDrift: false, priceHealth: 1.0 });
         if (!SystemState.isSafe()) {
           logger.info("[Startup] SAFE_MODE auto-recovery successful. System returned to NORMAL.");
@@ -107,16 +109,38 @@ server.listen(PORT, "0.0.0.0", async () => {
         }
       }
 
-      logger.info("[Startup] Background initialization complete.");
+      // ── D: Poll Gateway until alive ────────────────────────────
+      logger.info("[Boot] Polling Gateway for readiness...");
+      const GATEWAY_URL = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
+      let gatewayAlive = false;
+      for (let attempt = 1; attempt <= 10; attempt++) {
+        try {
+          const healthRes = await fetch(`${GATEWAY_URL}/health`);
+          if (healthRes.ok) {
+            gatewayAlive = true;
+            logger.info(`[Boot] Gateway is alive (attempt ${attempt}).`);
+            break;
+          }
+        } catch {
+          // Not yet alive
+        }
+        logger.info(`[Boot] Gateway not ready yet (attempt ${attempt}/10). Waiting 2s...`);
+        await new Promise(r => setTimeout(r, 2000));
+      }
+
+      // Register gateway as ready (soft-allow even if unreachable in dev)
+      if (!gatewayAlive) {
+        logger.error("[Boot] Gateway did not respond after 10 attempts. Marking ready anyway (dev mode).");
+      }
+      bootManager.setService("gateway", true);
+      // BootManager.evaluate() automatically fires → _signalGateway() → pushQueue.flush()
+
     } catch (err) {
       logger.error(`[Startup] Background initialization failed: ${err.message}`);
     }
   });
 
-
-  // 4. Register Recurring Jobs
-  
-  // DFOS v6.0 Market Snapshot Builder (Every 60s)
+  // 4. Recurring Jobs
   setInterval(async () => {
     try {
       const SnapshotService = require("./services/SnapshotService");
@@ -126,19 +150,15 @@ server.listen(PORT, "0.0.0.0", async () => {
     }
   }, 60000);
 
-  // Real-time Trends Broadcast (Every 60s)
   setInterval(async () => {
     try {
       const stats = await analyticsService.getRealtimeStats();
-      if (stats) {
-        await realtime.broadcast("stats_updated", stats);
-      }
+      if (stats) await realtime.broadcast("stats_updated", stats);
     } catch (err) {
       console.error("[Trends] Interval broadcast failed:", err.message);
     }
   }, 60000);
 
-  // Periodic Trends Persistence (Every 6 hours)
   setInterval(async () => {
     try {
       console.log("[Trends] Running scheduled persistence...");
@@ -148,7 +168,6 @@ server.listen(PORT, "0.0.0.0", async () => {
     }
   }, 6 * 1000 * 60 * 60);
 
-  // Exchange Rate Broadcasting (Every 30s)
   setInterval(async () => {
     try {
       const rates = await fxService.getAllRates();
@@ -160,12 +179,10 @@ server.listen(PORT, "0.0.0.0", async () => {
 
   // 5. Initialize Adversarial Chaos Session (If Enabled)
   if (require("./services/chaos/ChaosService").enabled) {
-      const chaosToken = require("./services/chaos/ChaosService").createSession();
-      logger.warn(`[CHAOS_READY] Session Token for Stage 10 Resilience Testing: ${chaosToken}`);
+    const chaosToken = require("./services/chaos/ChaosService").createSession();
+    logger.warn(`[CHAOS_READY] Session Token for Stage 10 Resilience Testing: ${chaosToken}`);
   }
 
   // 6. Finalize Invariant Registration
   require("./services/payment/InvariantRegistry");
 });
-
-

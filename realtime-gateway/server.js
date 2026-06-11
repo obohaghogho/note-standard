@@ -57,20 +57,39 @@ const allowedOriginFn = (origin, callback) => {
   return callback(null, true);
 };
 
+global.__GATEWAY_BOOT_READY__ = false;
+
+// ✅ 1. SETUP EXPRESS APP & LOGGING
 const app = express();
 
 // ✅ 2. CORS (shared allowedOriginFn)
-app.use(cors({
+const corsOptions = {
   origin: allowedOriginFn,
   methods: ['GET', 'POST', 'OPTIONS'],
   credentials: true,
-}));
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Correlation-ID', 'X-Requested-With', 'Accept'],
+  exposedHeaders: ['X-Correlation-ID']
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 app.use(express.json());
 
 // ✅ 3. HEALTH CHECK
 app.get('/health', (req, res) => {
   res.status(200).send('OK');
+});
+
+// ✅ 3b. BOOT-READY SIGNAL ENDPOINT
+// Called by the API BootManager when ALL services are ready.
+// This is the ONLY event that unlocks socket acceptance.
+app.post('/internal/boot-ready', (req, res) => {
+  const { ready } = req.body || {};
+  if (ready === true) {
+    global.__GATEWAY_BOOT_READY__ = true;
+    console.log('[Boot] 🟢 Gateway received BOOT_READY signal from API. Accepting socket connections.');
+  }
+  res.json({ ok: true, gatewayReady: global.__GATEWAY_BOOT_READY__ });
 });
 
 // ✅ 4. CREATE HTTP SERVER (SHARED)
@@ -128,7 +147,7 @@ app.post('/internal/push/broadcast', async (req, res) => {
  * the broadcast so they do not receive an echo of their own message.
  */
 function dispatchSocketEvent(envelope) {
-  const { type, room, event, payload, exclude_user_id } = envelope;
+  const { type, room, event, payload, exclude_user_id, correlation_id } = envelope;
 
   if (!type || !event) {
     console.warn('[Gateway] ⚠ Received malformed event envelope:', JSON.stringify(envelope).substring(0, 100));
@@ -137,8 +156,9 @@ function dispatchSocketEvent(envelope) {
 
   // Consistent Room Resolver
   const targetRoom = type === 'to_user' ? `user:${room}` : room;
+  const cidLog = correlation_id ? `[cid:${correlation_id}] ` : '';
 
-  console.log(`[Gateway] 📡 [${type}] room:${targetRoom || 'N/A'} event:${event}${exclude_user_id ? ` (excluding user:${exclude_user_id})` : ''}`);
+  console.log(`[Gateway] 📡 ${cidLog}[${type}] room:${targetRoom || 'N/A'} event:${event}${exclude_user_id ? ` (excluding user:${exclude_user_id})` : ''}`);
 
   if (type === 'to_users' && Array.isArray(envelope.users)) {
     envelope.users.forEach(async (uid) => {
@@ -234,6 +254,17 @@ if (REDIS_URL) {
 }
 
 // Socket.IO handles WebSocket upgrades natively — no custom upgrade listener needed.
+
+// ─── Deterministic Boot Gate (HARD WALL) ─────────────────────
+// This is the absolute admission controller. No socket handshake
+// is processed until the API BootManager sends /internal/boot-ready.
+io.use((socket, next) => {
+  if (!global.__GATEWAY_BOOT_READY__) {
+    console.warn(`[Boot] Socket rejected — Gateway not yet boot-ready. (${socket.handshake.address})`);
+    return next(new Error('BOOT_NOT_READY'));
+  }
+  next();
+});
 
 io.use(authMiddleware);
 
@@ -375,6 +406,7 @@ initPgListener();
 
 // ✅ 9. START SERVER
 const PORT = process.env.PORT || 5000;
-httpServer.listen(PORT, '0.0.0.0', () => {
+httpServer.listen(PORT, () => {
   console.log(`🚀 Gateway Server active on port ${PORT}`);
+  global.__GATEWAY_BOOT_READY__ = true;
 });

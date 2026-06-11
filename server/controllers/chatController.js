@@ -7,6 +7,7 @@ const { normalizeOutboundMessage } = require("../utils/payloadNormalizer");
 const replayGuard = require("../utils/replayGuard");
 const crypto = require("crypto");
 const { emitMessageEvent } = require("../rpc/eventLedger");
+const logger = require("../utils/logger");
 
 /**
  * _hydrateReplyTo — batch-resolve reply_to nested objects in place.
@@ -967,6 +968,57 @@ exports.markMessageDelivered = async (req, res) => {
   }
 };
 
+exports.markMessagesDeliveredBatch = async (req, res) => {
+  try {
+    const { messageIds } = req.body;
+    const userId = req.user.id;
+    const now = new Date().toISOString();
+
+    if (!Array.isArray(messageIds) || messageIds.length === 0) {
+      return res.status(400).json({ error: "messageIds must be a non-empty array" });
+    }
+
+    const { data, error } = await supabase
+      .from("messages")
+      .update({ delivered_at: now })
+      .in("id", messageIds)
+      .neq("sender_id", userId)
+      .select("id, conversation_id, sender_id");
+
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      // Group by conversation to minimize socket emits
+      const byConversation = {};
+      data.forEach(msg => {
+        if (!byConversation[msg.conversation_id]) {
+          byConversation[msg.conversation_id] = { messageIds: [], senderIds: new Set() };
+        }
+        byConversation[msg.conversation_id].messageIds.push(msg.id);
+        byConversation[msg.conversation_id].senderIds.add(msg.sender_id);
+      });
+
+      for (const [convId, group] of Object.entries(byConversation)) {
+        const payload = { 
+          conversationId: convId, 
+          messageIds: group.messageIds, 
+          userId, 
+          delivered_at: now 
+        };
+        await realtime.emitToConversation(convId, "chat:messages_delivered_batch", payload);
+        for (const senderId of group.senderIds) {
+          await realtime.emitToUser(senderId, "chat:messages_delivered_batch", payload);
+        }
+      }
+    }
+
+    res.json({ success: true, updatedCount: data?.length || 0 });
+  } catch (err) {
+    console.error("Error batch marking messages delivered:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
 exports.webhookDeliver = async (req, res) => {
   try {
     const { messageId } = req.params;
@@ -997,10 +1049,28 @@ exports.webhookDeliver = async (req, res) => {
 
 exports.sendMessage = async (req, res) => {
   try {
+    if (!req.params || !req.params.conversationId) {
+      return res.status(400).json({ error: "Conversation ID is required" });
+    }
+    if (!req.body) {
+      return res.status(400).json({ error: "Request body is required" });
+    }
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
     const { conversationId } = req.params;
-    // FIX: Also read attachmentId and replyToId from body
     const { content, type, attachmentId, replyToId, deviceId, sessionId } = req.body;
     const userId = req.user.id;
+
+    const startTimeMs = Date.now();
+    logger.info("Message request received [Stage 1]", {
+      correlationId: req.correlationId,
+      userId,
+      conversationId,
+      eventId: req.body.eventId,
+      type
+    });
 
     // Allow empty content when an attachment is present
     if (!content && !attachmentId) {
@@ -1045,6 +1115,13 @@ exports.sendMessage = async (req, res) => {
         }
       }
     }
+
+    logger.debug("Validation passed [Stage 2]", {
+      correlationId: req.correlationId,
+      userId,
+      conversationId,
+      durationMs: Date.now() - startTimeMs
+    });
 
     // Analysis: Sentiment (if text)
     let sentiment = null;
@@ -1163,6 +1240,15 @@ exports.sendMessage = async (req, res) => {
       }
 
       createdMessageId = insertedMessage.id;
+
+      logger.info("Database insert completed [Stage 3]", {
+        correlationId: req.correlationId,
+        userId,
+        conversationId,
+        messageId: createdMessageId,
+        eventId,
+        durationMs: Date.now() - startTimeMs
+      });
 
       // ==========================================
       // EVENT LEDGER: Emit SENT
@@ -1315,6 +1401,14 @@ exports.sendMessage = async (req, res) => {
       // 1. Respond to sender immediately
       if (!res.headersSent) {
           res.json(safePayload);
+          logger.info("Response returned [Stage 5]", {
+            correlationId: req.correlationId,
+            userId,
+            conversationId,
+            messageId: msgToSend.id,
+            eventId: msgToSend.event_id,
+            durationMs: Date.now() - startTimeMs
+          });
       }
 
       // 2. Broadcast to other members immediately if it's not a duplicate
@@ -1327,7 +1421,17 @@ exports.sendMessage = async (req, res) => {
                   // Fire a single batch broadcast via pg_notify to the gateway.
                   // This eliminates PostgreSQL connection exhaustion (EMAXCONNSESSION) on group chats.
                   const userIds = members.map(m => m.user_id);
-                  await realtime.emitToUsers(userIds, "chat:message", safePayload);
+                  await realtime.emitToUsers(userIds, "chat:message", safePayload, { correlationId: req.correlationId });
+                  
+                  logger.info("Realtime event dispatched [Stage 4]", {
+                    correlationId: req.correlationId,
+                    userId,
+                    conversationId,
+                    messageId: safePayload.id,
+                    eventId: safePayload.event_id,
+                    recipientCount: userIds.length,
+                    durationMs: Date.now() - startTimeMs
+                  });
               }
           } catch (memberFetchErr) {
               console.warn("[Chat Controller] Broadcast per-user emit failed:", memberFetchErr.message);
@@ -1419,12 +1523,14 @@ exports.sendMessage = async (req, res) => {
           // ── Native Push (iOS APNs / Android FCM) ──────────────────────────
           // Fire-and-forget: sends to offline devices via the gateway push service.
           // This is the ONLY path that triggers sendChatPush for new messages.
-          sendNativePush({
-            memberId: member.user_id,
-            senderName: senderName,
-            msgContent: previewContent,
-            msgId: createdMessageId,
-          });
+          if (process.env.PUSH_ENABLED === 'true') {
+            sendNativePush({
+              memberId: member.user_id,
+              senderName: senderName,
+              msgContent: previewContent,
+              msgId: createdMessageId,
+            });
+          }
         }
       }
 
@@ -1634,10 +1740,15 @@ exports.sendMessage = async (req, res) => {
     } catch (autoReplyErr) {
       console.error("Auto-reply logic failed:", autoReplyErr);
     }
-  } catch (err) {
-    console.error("Error sending message:", err.message);
+  } catch (error) {
+    console.error("🔥 SEND MESSAGE FAILED");
+    console.error("Correlation ID:", req.correlationId);
+    console.error(error);
     if (!res.headersSent) {
-      res.status(500).json({ error: "Server Error" });
+      return res.status(500).json({
+        error: "Internal Server Error",
+        correlationId: req.correlationId
+      });
     }
   }
 };

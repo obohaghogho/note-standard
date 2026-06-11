@@ -28,7 +28,7 @@ export function PresenceProvider({ children }: { children: React.ReactNode }) {
 
     // Initial load and heartbeat
     useEffect(() => {
-        if (!connected || !socket || !user) {
+        if (!connected || !socket || !user?.id) {
             if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
             return;
         }
@@ -63,7 +63,7 @@ export function PresenceProvider({ children }: { children: React.ReactNode }) {
             window.removeEventListener('beforeunload', handleBeforeUnload);
             window.removeEventListener('presence:settings_changed', handleSettingsChange);
         };
-    }, [connected, socket, user]);
+    }, [connected, socket, user?.id]);
 
     // Listen for presence updates from server
     useEffect(() => {
@@ -87,7 +87,10 @@ export function PresenceProvider({ children }: { children: React.ReactNode }) {
             }));
         };
 
+        socket.off('presence:initial', handleInitialPresence);
         socket.on('presence:initial', handleInitialPresence);
+        
+        socket.off('user_online', handleUserOnline);
         socket.on('user_online', handleUserOnline);
 
         return () => {

@@ -64,8 +64,14 @@ const createNotification = async ({
       is_read: false,
     });
 
-    // 3. Web Push (PWA — VAPID — works for installed PWA on iOS 16.4+ and all desktop browsers)
-    await sendPushNotification(receiverId, { title, message, link, type, messageId, conversationId });
+    // 3. Web Push (PWA — VAPID) — deferred through PushQueue if system is booting
+    const pushQueue = require('./pushQueue');
+    const pushTask = () => sendPushNotification(receiverId, { title, message, link, type, messageId, conversationId });
+    if (!global.BOOT_STATE?.ready) {
+      pushQueue.push(pushTask);
+    } else {
+      await pushTask();
+    }
 
     // 4. Native Push (FCM for Android, APNs for iOS) via the realtime-gateway.
     //    The gateway already holds Firebase Admin and APNs credentials (used for call push).
@@ -103,6 +109,7 @@ const createNotification = async ({
  * Sends a push notification to all subscribed devices of a user
  */
 const sendPushNotification = async (userId, payload) => {
+  if (process.env.PUSH_ENABLED !== 'true') return;
   try {
     const { data: subscriptions, error } = await supabase
       .from("push_subscriptions")
@@ -206,39 +213,41 @@ const broadcastNotification = async ({
     });
 
     // 4. Send Push Notifications to everyone in safe chunks
-    const pushPayload = JSON.stringify({
-      title,
-      body: message,
-      icon: "/logo192.png",
-      data: { url: link, type },
-    });
+    if (process.env.PUSH_ENABLED === 'true') {
+      const pushPayload = JSON.stringify({
+        title,
+        body: message,
+        icon: "/logo192.png",
+        data: { url: link, type },
+      });
 
-    // Fetch ALL subscriptions
-    const { data: allSubscriptions } = await supabase
-      .from("push_subscriptions")
-      .select("endpoint, p256dh, auth, user_id");
+      // Fetch ALL subscriptions
+      const { data: allSubscriptions } = await supabase
+        .from("push_subscriptions")
+        .select("endpoint, p256dh, auth, user_id");
 
-    if (allSubscriptions && allSubscriptions.length > 0) {
-      for (let i = 0; i < allSubscriptions.length; i += chunkSize) {
-        const subChunk = allSubscriptions.slice(i, i + chunkSize);
-        await Promise.all(
-          subChunk.map((sub) => {
-            const pushSubscription = {
-              endpoint: sub.endpoint,
-              keys: {
-                p256dh: sub.p256dh,
-                auth: sub.auth,
-              },
-            };
-            return webpush.sendNotification(pushSubscription, pushPayload).catch((err) => {
-              if (err.statusCode === 410 || err.statusCode === 404) {
-                return supabase.from("push_subscriptions")
-                  .delete()
-                  .match({ user_id: sub.user_id, endpoint: sub.endpoint });
-              }
-            });
-          })
-        );
+      if (allSubscriptions && allSubscriptions.length > 0) {
+        for (let i = 0; i < allSubscriptions.length; i += chunkSize) {
+          const subChunk = allSubscriptions.slice(i, i + chunkSize);
+          await Promise.all(
+            subChunk.map((sub) => {
+              const pushSubscription = {
+                endpoint: sub.endpoint,
+                keys: {
+                  p256dh: sub.p256dh,
+                  auth: sub.auth,
+                },
+              };
+              return webpush.sendNotification(pushSubscription, pushPayload).catch((err) => {
+                if (err.statusCode === 410 || err.statusCode === 404) {
+                  return supabase.from("push_subscriptions")
+                    .delete()
+                    .match({ user_id: sub.user_id, endpoint: sub.endpoint });
+                }
+              });
+            })
+          );
+        }
       }
     }
 

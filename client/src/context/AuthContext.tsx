@@ -295,8 +295,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     let profileChannel: RealtimeChannel | null = null;
     let subscriptionChannel: RealtimeChannel | null = null;
+    let activeSubscriptionUserId: string | null = null;
 
     const setupSubscriptions = (userId: string) => {
+      // Guard against duplicate initialization for the same user
+      if (activeSubscriptionUserId === userId && profileChannel && subscriptionChannel) {
+        return;
+      }
+      activeSubscriptionUserId = userId;
+
       // 1. Aggressively clean up ALL previous profile/subscription channels to prevent leaks and race conditions
       supabase.getChannels().forEach(c => {
         if (c.topic.startsWith('public:profiles:') || c.topic.startsWith('public:subscriptions:')) {
@@ -348,12 +355,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
         const currentUser = newSession?.user ?? null;
         
         console.log(`[Auth Forensic] State update triggering for ${event} at ${Date.now()}`);
         setSession(newSession);
-        setUser(currentUser);
+        setUser(prev => (prev?.id === currentUser?.id ? prev : currentUser));
 
         // Rule 4: Switch complete - Disable lock immediately to allow syncUserData to fetch
         if (switchInProgress.current) {
@@ -397,8 +404,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
           }
 
-          setupSubscriptions(currentUser.id);
-          syncUserData(currentUser.id, currentUser, currentId);
+          if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+             setupSubscriptions(currentUser.id);
+             syncUserData(currentUser.id, currentUser, currentId);
+          }
         }
       }
     });

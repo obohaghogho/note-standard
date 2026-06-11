@@ -67,6 +67,7 @@ router.delete(
 );
 router.put("/messages/:messageId/read", chatController.markMessageRead);
 router.put("/messages/:messageId/deliver", chatController.markMessageDelivered);
+router.patch("/messages/ack:batch", chatController.markMessagesDeliveredBatch);
 router.delete("/messages/:messageId", chatController.deleteMessage);
 router.patch("/messages/:messageId", chatController.editMessage);
 

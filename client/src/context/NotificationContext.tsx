@@ -216,7 +216,9 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         return () => { 
             isMounted.current = false; 
         };
-    }, [authReady, session, user, fetchNotifications, subscribeToPush]);
+    // NOTE: Intentionally excluded `session` and callbacks to prevent token-refresh loops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [authReady, user?.id]);
 
     const markAsRead = useCallback(async (id: string) => {
         if (!session) return;
@@ -355,6 +357,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             setQueue(prev => [...prev, toastData]);
         };
 
+        socket.off('notification', onNotification);
         socket.on('notification', onNotification);
         return () => {
             socket.off('notification', onNotification);
