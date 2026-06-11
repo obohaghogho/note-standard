@@ -1557,15 +1557,18 @@ exports.sendMessage = async (req, res) => {
           .eq("id", userId)
           .single();
 
-        for (const member of otherMembers) {
+        // Fire notifications asynchronously so slow push endpoints (60s timeouts)
+        // do not block the Node event loop or delay subsequent operations.
+        const notificationPromises = otherMembers.map(async (member) => {
           if (member.is_muted) {
             console.log(`[Chat Notify] Skipping muted user: ${member.user_id}`);
-            continue;
+            return;
           }
 
           const senderName = sender?.username || "Someone";
           const previewContent = getNotificationPreview(type || 'text', content);
 
+          // This internal await is fine because it runs in parallel for each member
           await createNotification({
             receiverId: member.user_id,
             senderId: userId,
@@ -1579,8 +1582,7 @@ exports.sendMessage = async (req, res) => {
 
           // ── Native Push (iOS APNs / Android FCM) ──────────────────────────
           // Fire-and-forget: sends to offline devices via the gateway push service.
-          // This is the ONLY path that triggers sendChatPush for new messages.
-          if (process.env.PUSH_ENABLED === 'true') {
+          if (process.env.PUSH_ENABLED !== 'false') {
             sendNativePush({
               memberId: member.user_id,
               senderName: senderName,
@@ -1588,7 +1590,12 @@ exports.sendMessage = async (req, res) => {
               msgId: createdMessageId,
             });
           }
-        }
+        });
+
+        // DO NOT AWAIT notificationPromises here! Let them run in the background.
+        // We already sent res.json() to the sender, and we don't want to block
+        // the rest of the function or the event loop.
+        Promise.all(notificationPromises).catch(err => console.error('[Chat Notify] Batch error:', err));
       }
 
       // --- Mention Logic ---

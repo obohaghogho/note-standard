@@ -109,7 +109,7 @@ const createNotification = async ({
  * Sends a push notification to all subscribed devices of a user
  */
 const sendPushNotification = async (userId, payload) => {
-  if (process.env.PUSH_ENABLED !== 'true') return;
+  if (process.env.PUSH_ENABLED === 'false') return;
   try {
     const { data: subscriptions, error } = await supabase
       .from("push_subscriptions")
@@ -213,7 +213,7 @@ const broadcastNotification = async ({
     });
 
     // 4. Send Push Notifications to everyone in safe chunks
-    if (process.env.PUSH_ENABLED === 'true') {
+    if (process.env.PUSH_ENABLED !== 'false') {
       const pushPayload = JSON.stringify({
         title,
         body: message,
