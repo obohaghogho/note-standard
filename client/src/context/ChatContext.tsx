@@ -1164,26 +1164,70 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }));
         };
 
-        // OBSERVER ONLY — Conversation Delivered
-        // Updates conversation list summary ONLY. Does NOT mutate per-message array.
-        // Prevents the batch overwrite of all sender messages from triggering full list re-render.
+        // GATED WRITER — Conversation Delivered
+        // The batch ACK path (5s interval) fires chat:conversation_delivered.
+        // This is the PRIMARY delivery path for many messages. Must update per-message state.
+        // The dedup gate prevents collision with the immediate socket relay (chat:delivery_receipt).
         const onConversationDelivered = ({ conversationId, userId, delivered_at }: { conversationId: string; userId: string; delivered_at: string }) => {
             if (!isMounted.current || userId === user?.id) return;
-            // Summary update only
+            const nowStr = delivered_at || new Date().toISOString();
+
+            setMessages(prev => {
+                const current = prev[conversationId] || [];
+                if (current.length === 0) return prev;
+                let changed = false;
+                const updated = current.map(m => {
+                    if (m.sender_id !== user?.id) return m;
+                    if (m.read_at) return m; // already at higher state — skip
+                    // Dedup gate per-message
+                    const tickSet = appliedTicksRef.current.get(m.id);
+                    if (tickSet?.has('delivered') || tickSet?.has('read')) return m;
+                    const nextSet = tickSet || new Set<string>();
+                    nextSet.add('delivered');
+                    appliedTicksRef.current.set(m.id, nextSet);
+                    changed = true;
+                    return mergeMessageStatus(m, { delivered_at: nowStr, status: 'delivered' });
+                });
+                return changed ? { ...prev, [conversationId]: updated } : prev;
+            });
+            // Also update lastMessage summary
             setConversations(prev => prev.map(c => {
                 if (c.id === conversationId && c.lastMessage?.sender_id === user?.id && !c.lastMessage?.read_at) {
-                    return { ...c, lastMessage: mergeMessageStatus(c.lastMessage as Message, { delivered_at, status: 'delivered' }) as Conversation['lastMessage'] };
+                    return { ...c, lastMessage: mergeMessageStatus(c.lastMessage as Message, { delivered_at: nowStr, status: 'delivered' }) as Conversation['lastMessage'] };
                 }
                 return c;
             }));
         };
 
-        // OBSERVER ONLY — Conversation Read
-        // Updates conversation list summary + unread count ONLY. Does NOT mutate per-message array.
+        // GATED WRITER — Conversation Read
+        // chat:conversation_read is the PRIMARY path for blue ticks.
+        // markConversationRead() → API → server emits chat:conversation_read (not per-message events).
+        // MUST update per-message state or blue ticks never appear.
+        // The dedup gate prevents collision with individual chat:message_read events.
         const onConversationRead = ({ conversationId, readerId, readAt }: { conversationId: string; readerId: string; readAt: string }) => {
             if (!isMounted.current) return;
             if (readerId !== user?.id) {
-                // Other user read our messages — update summary only
+                const nowStr = readAt || new Date().toISOString();
+                // Update all of the current user's sent messages to 'read' via gate
+                setMessages(prev => {
+                    const current = prev[conversationId] || [];
+                    if (current.length === 0) return prev;
+                    let changed = false;
+                    const updated = current.map(m => {
+                        if (m.sender_id !== user?.id) return m;
+                        // Dedup gate — skip if already at 'read'
+                        const tickSet = appliedTicksRef.current.get(m.id);
+                        if (tickSet?.has('read')) return m;
+                        const nextSet = tickSet || new Set<string>();
+                        nextSet.add('read');
+                        nextSet.add('delivered');
+                        appliedTicksRef.current.set(m.id, nextSet);
+                        changed = true;
+                        return mergeMessageStatus(m, { read_at: nowStr, delivered_at: nowStr, status: 'read' });
+                    });
+                    return changed ? { ...prev, [conversationId]: updated } : prev;
+                });
+                // Update lastMessage summary
                 setConversations(prev => prev.map(c => {
                     if (c.id === conversationId && c.lastMessage?.sender_id === user?.id) {
                         return { ...c, lastMessage: mergeMessageStatus(c.lastMessage as Message, { read_at: readAt, delivered_at: readAt, status: 'read' }) as Conversation['lastMessage'] };
@@ -1206,6 +1250,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 }));
             }
         };
+
 
         // Non-tick observer: member status/presence updates within a conversation
         const onConversationUpdated = ({ conversationId, userId, status }: { conversationId: string; userId: string; status: string }) => {
