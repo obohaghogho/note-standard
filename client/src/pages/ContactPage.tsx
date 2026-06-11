@@ -10,7 +10,7 @@ export const ContactPage = () => {
         <div className="h-full overflow-y-auto min-h-[100dvh] bg-[#0a0a0a] p-4 md:p-8 relative w-full max-w-full">
             <SEO 
                 title="Contact Us"
-                description="Get in touch with the NoteStandard team for support, feedback, or partnership enquiries."
+                description="Get in touch with the NoteStandard team for support, feedback, or partnership enquiries regarding our real-time messaging platform."
             />
             {/* Background gradients */}
             <div className="absolute top-0 right-1/4 w-full max-w-[1000px] h-[600px] bg-primary/10 rounded-full blur-[120px] -z-10" />

@@ -53,6 +53,8 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
+    "@prerenderer/renderer-puppeteer": "^1.2.4",
+    "@prerenderer/rollup-plugin": "^0.3.12",
     "@tailwindcss/vite": "^4.2.1",
     "@types/uuid": "^10.0.0",
     "terser": "^5.46.1",

@@ -2,10 +2,23 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindxml from '@tailwindcss/vite'
 import path from 'path'
+import prerender from '@prerenderer/rollup-plugin'
+import PuppeteerRenderer from '@prerenderer/renderer-puppeteer'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindxml()],
+  plugins: [
+    react(), 
+    tailwindxml(),
+    prerender({
+      routes: ['/', '/about', '/contact'],
+      renderer: new PuppeteerRenderer(),
+      server: {
+        port: 3000,
+        host: 'localhost',
+      },
+    })
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

@@ -21,9 +21,9 @@ export const LandingPage = () => {
     return (
         <div className="h-full overflow-y-auto min-h-[100dvh] bg-crystal text-foreground selection:bg-primary/30 w-full">
             <SEO 
-                title="Professional Digital Solutions & Asset Management"
-                description="NoteStandard by Jossy Digital Technologies Ltd provides user-friendly digital solutions for businesses and consumers. Securely manage notes, financial assets, and team collaboration."
-                keywords="digital solutions, asset management, secure notes, business collaboration"
+                title="Real-Time Messaging & Social Communication"
+                description="NoteStandard by Jossy Digital Technologies Ltd provides secure messaging, voice notes, media sharing, real-time conversations, and social communication."
+                keywords="secure messaging, voice notes, media sharing, real-time conversations, social communication"
             />
             <Navbar />
             <Hero />

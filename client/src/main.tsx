@@ -1,5 +1,5 @@
 import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot, hydrateRoot } from 'react-dom/client'
 import { Toaster, toast } from 'react-hot-toast'
 import App from './App.tsx'
 import './index.css'
@@ -230,8 +230,7 @@ console.log('🚀 NoteStandard Booting...');
 
 const container = document.getElementById('root');
 if (container) {
-  const root = createRoot(container);
-  root.render(
+  const appElement = (
     <StrictMode>
       <App />
       <Toaster
@@ -247,6 +246,14 @@ if (container) {
       />
     </StrictMode>
   );
+
+  if (container.hasChildNodes()) {
+    hydrateRoot(container, appElement);
+  } else {
+    const root = createRoot(container);
+    root.render(appElement);
+  }
 } else {
   console.error('❌ Root container not found!');
 }
+

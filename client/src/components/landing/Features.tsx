@@ -4,33 +4,33 @@ import { Lock, Cloud, Users, Zap, Search, Layout } from 'lucide-react';
 const features = [
     {
         icon: Lock,
-        title: 'Modern Data Protection',
-        description: 'Your notes are protected with industry-standard encryption. Private means private.'
+        title: 'Secure Messaging',
+        description: 'End-to-end encryption ensures your conversations remain private and secure.'
     },
     {
         icon: Cloud,
-        title: 'Real-time Sync',
-        description: 'Switch devices instantly. Your content is always up to date.'
+        title: 'Voice Notes & Media',
+        description: 'Share voice notes, images, and files instantly with your contacts.'
     },
     {
         icon: Users,
-        title: 'Team Collaboration',
-        description: 'Share notes with username handles. Granular permissions.'
+        title: 'Social Communication',
+        description: 'Connect with friends and colleagues globally through user handles.'
     },
     {
         icon: Zap,
-        title: 'Instant Fast',
-        description: 'Zero lag. Optimized for speed and performance.'
+        title: 'Audio/Video Calling',
+        description: 'Crystal-clear WebRTC voice and video calls built for reliability.'
     },
     {
         icon: Search,
         title: 'Smart Search',
-        description: 'Find any note in milliseconds with our fuzzy search engine.'
+        description: 'Find any conversation or shared media in milliseconds.'
     },
     {
         icon: Layout,
-        title: 'Clean Dashboard',
-        description: 'Distraction-free writing environment with markdown support.'
+        title: 'Clean Interface',
+        description: 'Distraction-free chat environment designed for modern communication.'
     }
 ];
 
