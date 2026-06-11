@@ -1153,7 +1153,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     const current = prev[conversationId] || [];
                     return {
                         ...prev,
-                        [conversationId]: current.map(m => m.sender_id === user?.id ? mergeMessageStatus(m, { read_at: readAt, delivered_at: readAt }) : m)
+                        [conversationId]: current.map(m => m.sender_id === user?.id ? mergeMessageStatus(m, { read_at: readAt, delivered_at: readAt, status: 'read' }) : m)
                     };
                 });
 
@@ -1162,7 +1162,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     if (c.id === conversationId && c.lastMessage && c.lastMessage.sender_id === user?.id) {
                         return {
                             ...c,
-                        lastMessage: mergeMessageStatus(c.lastMessage as Message, { read_at: readAt, delivered_at: readAt }) as Conversation['lastMessage']
+                        lastMessage: mergeMessageStatus(c.lastMessage as Message, { read_at: readAt, delivered_at: readAt, status: 'read' }) as Conversation['lastMessage']
                         };
                     }
                     return c;
@@ -1189,7 +1189,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     const current = prev[conversationId] || [];
                     return {
                         ...prev,
-                        [conversationId]: current.map(m => m.sender_id === user?.id && !m.read_at ? mergeMessageStatus(m, { delivered_at: delivered_at }) : m)
+                        [conversationId]: current.map(m => m.sender_id === user?.id && !m.read_at ? mergeMessageStatus(m, { delivered_at: delivered_at, status: 'delivered' }) : m)
                     };
                 });
 
@@ -1198,7 +1198,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     if (c.id === conversationId && c.lastMessage && c.lastMessage.sender_id === user?.id && !c.lastMessage.read_at) {
                         return {
                             ...c,
-                        lastMessage: mergeMessageStatus(c.lastMessage as Message, { delivered_at: delivered_at }) as Conversation['lastMessage']
+                        lastMessage: mergeMessageStatus(c.lastMessage as Message, { delivered_at: delivered_at, status: 'delivered' }) as Conversation['lastMessage']
                         };
                     }
                     return c;
