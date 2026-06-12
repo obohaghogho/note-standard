@@ -1074,7 +1074,6 @@ const ChatWindow: React.FC = () => {
                             if (ref) scrollContainerRef.current = ref as HTMLDivElement;
                         }}
                         className="chat-messages custom-scrollbar p-3 md:p-6"
-                        style={{ paddingBottom: 'calc(var(--composer-height, 80px) + 24px)' }}
                         data={currentMessages}
                         initialTopMostItemIndex={currentMessages.length > 0 ? currentMessages.length - 1 : 0}
                         alignToBottom
@@ -1126,8 +1125,8 @@ const ChatWindow: React.FC = () => {
                                             </span>
                                         </div>
                                     )}
-                                    {/* Dedicated bottom spacer to serve as a ref anchor */}
-                                    <div ref={messagesEndRef} className="w-full flex-shrink-0" />
+                                    {/* Dedicated bottom spacer to serve as a ref anchor and clear the absolute composer */}
+                                    <div ref={messagesEndRef} className="w-full flex-shrink-0" style={{ height: 'calc(var(--composer-height, 80px) + 24px)' }} />
                                 </div>
                             )
                         }}
