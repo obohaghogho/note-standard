@@ -359,11 +359,11 @@ input[type=number] {
   .chat-root {
     /* Take it out of the dashboard flex flow and pin it to the visual viewport */
     position: fixed;
-    top: var(--vv-top, 0px);
+    top: 0;
     left: 0;
     right: 0;
-    /* This is the key: height tracks the visual viewport, shrinking when the keyboard opens */
-    height: var(--vv-height, 100dvh);
+    /* Temporarily testing pure 100dvh to see if the browser inherently handles keyboard geometry */
+    height: 100dvh;
     bottom: auto;
     z-index: 10;
   }

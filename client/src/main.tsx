@@ -179,12 +179,7 @@ console.log('🚀 NoteStandard Booting...');
   // Run immediately on load.
   applyViewportVars();
 
-  // VisualViewport API — fires every frame during keyboard animation
-  if (window.visualViewport) {
-    // SYNC (no rAF): fires every pixel the keyboard moves, giving frame-perfect tracking
-    window.visualViewport.addEventListener('resize', setViewportVarsSync, { passive: true });
-    window.visualViewport.addEventListener('scroll', setViewportVarsSync, { passive: true });
-  }
+  // VisualViewport API hooks temporarily removed for diagnostic testing
 
   // Orientation/desktop resize — rAF is fine here
   window.addEventListener('resize', setViewportVarsRaf, { passive: true });
