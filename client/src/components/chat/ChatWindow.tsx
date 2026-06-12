@@ -256,11 +256,9 @@ const ChatWindow: React.FC = () => {
         
         let rafId: number;
         const observer = new ResizeObserver(() => {
-            if (isKeyboardTransitioning.current) return; // No DOM reads/writes during transition
-            
             cancelAnimationFrame(rafId);
             rafId = requestAnimationFrame(() => {
-                if (!el || isKeyboardTransitioning.current) return;
+                if (!el) return;
                 const h = el.getBoundingClientRect().height;
                 document.documentElement.style.setProperty('--composer-height', `${h}px`);
                 
@@ -278,70 +276,8 @@ const ChatWindow: React.FC = () => {
         };
     }, [scrollToBottom]);
 
-    // Hook visualViewport resize to stabilize scroll
-    useEffect(() => {
-        let resizeTimeout: ReturnType<typeof setTimeout>;
-        
-        const handleViewportResize = () => {
-            if (!isKeyboardTransitioning.current) {
-                isKeyboardTransitioning.current = true;
-                // Capture immutable snapshot before keyboard animation
-                wasAtBottomBeforeKeyboard.current = !showScrollDownRef.current;
-            }
-            
-            clearTimeout(resizeTimeout);
-            
-            // Wait for the keyboard animation to settle completely
-            resizeTimeout = setTimeout(() => {
-                const reconcile = () => {
-                    if (wasAtBottomBeforeKeyboard.current) {
-                        if (virtuosoRef.current && currentMessages.length > 0) {
-                            virtuosoRef.current.scrollToIndex({
-                                index: currentMessages.length - 1,
-                                align: 'end',
-                                behavior: 'auto'
-                            });
-                            requestAnimationFrame(() => {
-                                if (scrollContainerRef.current) {
-                                    scrollContainerRef.current.scrollTo({
-                                        top: scrollContainerRef.current.scrollHeight,
-                                        behavior: 'auto'
-                                    });
-                                }
-                            });
-                            setShowScrollDown(false);
-                            setUnreadCountWhileScrolled(0);
-                        } else if (scrollContainerRef.current) {
-                            scrollContainerRef.current.scrollTo({
-                                top: scrollContainerRef.current.scrollHeight,
-                                behavior: 'auto'
-                            });
-                            setShowScrollDown(false);
-                            setUnreadCountWhileScrolled(0);
-                        }
-                    }
-
-                    // 1-frame cooldown after reconciliation to prevent delayed event leakage on low-end Androids
-                    requestAnimationFrame(() => {
-                        isKeyboardTransitioning.current = false;
-                    });
-                };
-                
-                // Double rAF ensures Virtuoso's ResizeObserver has fully processed the new container height
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(reconcile);
-                });
-            }, 250); // Increased timeout to 250ms for slower Android keyboard animations
-        };
-        
-        if (window.visualViewport) {
-            window.visualViewport.addEventListener('resize', handleViewportResize);
-            return () => {
-                window.visualViewport?.removeEventListener('resize', handleViewportResize);
-                clearTimeout(resizeTimeout);
-            };
-        }
-    }, [currentMessages.length]);
+    // visualViewport resize hook for scroll stabilization has been temporarily removed
+    // to test pure native layout behavior without JS intervention.
 
     const handleLoadMore = async () => {
         if (!activeConversationId) return;
