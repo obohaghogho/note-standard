@@ -22,6 +22,7 @@
     margin: 0;
     padding: 0;
     overflow: hidden;
+    position: fixed;
     overscroll-behavior-y: none;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
@@ -33,6 +34,7 @@
     margin: 0;
     padding: 0;
     overflow: hidden;
+    position: fixed;
     overscroll-behavior-y: none;
     background-color: #0a0a0a;
     @apply bg-background text-foreground antialiased;
@@ -359,11 +361,11 @@ input[type=number] {
   .chat-root {
     /* Take it out of the dashboard flex flow and pin it to the visual viewport */
     position: fixed;
-    top: 0;
+    top: var(--vv-top, 0px);
     left: 0;
     right: 0;
-    /* Temporarily testing pure 100dvh to see if the browser inherently handles keyboard geometry */
-    height: 100dvh;
+    /* This is the key: height tracks the visual viewport, shrinking when the keyboard opens */
+    height: var(--vv-height, 100dvh);
     bottom: auto;
     z-index: 10;
   }
@@ -394,7 +396,8 @@ input[type=number] {
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: auto;
-  overflow-anchor: none;
+  /* WhatsApp/Telegram technique: allow browser to natively pin newest message when container shrinks */
+  overflow-anchor: auto;
   /* Add padding-bottom equal to the composer height so messages never hide behind it */
   padding-bottom: calc(var(--composer-height, 80px) + 24px);
 }

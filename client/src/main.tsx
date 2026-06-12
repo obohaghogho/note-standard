@@ -167,7 +167,7 @@ console.log('🚀 NoteStandard Booting...');
   };
 
   // Apply immediately (no rAF) so there is zero frame delay
-  // const setViewportVarsSync = () => applyViewportVars();
+  const setViewportVarsSync = () => applyViewportVars();
 
   // For non-keyboard resizes (rotation etc.) rAF is fine
   let rafId: number | null = null;
@@ -179,7 +179,10 @@ console.log('🚀 NoteStandard Booting...');
   // Run immediately on load.
   applyViewportVars();
 
-  // VisualViewport API hooks temporarily removed for diagnostic testing
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', setViewportVarsSync, { passive: true });
+    window.visualViewport.addEventListener('scroll', setViewportVarsSync, { passive: true });
+  }
 
   // Orientation/desktop resize — rAF is fine here
   window.addEventListener('resize', setViewportVarsRaf, { passive: true });
