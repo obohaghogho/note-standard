@@ -167,7 +167,7 @@ console.log('🚀 NoteStandard Booting...');
   };
 
   // Apply immediately (no rAF) so there is zero frame delay
-  const setViewportVarsSync = () => applyViewportVars();
+  // const setViewportVarsSync = () => applyViewportVars();
 
   // For non-keyboard resizes (rotation etc.) rAF is fine
   let rafId: number | null = null;
