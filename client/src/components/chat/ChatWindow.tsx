@@ -24,7 +24,7 @@ import { ConfirmationModal } from '../common/ConfirmationModal';
 import { applyAutoCorrect } from '../../utils/textUtils';
 import { UserBadge } from '../common/UserBadge';
 import MessageBubble from './MessageBubble';
-import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
+import { type VirtuosoHandle } from 'react-virtuoso';
 
 const ChatWindow: React.FC = () => {
     const { 
