@@ -95,7 +95,18 @@ exports.getConversations = async (req, res) => {
         throw rpcError;
       }
 
-      const conversations = Array.isArray(rpcData) ? rpcData : [];
+      let conversations = Array.isArray(rpcData) ? rpcData : [];
+      
+      // Filter out direct conversations that were deleted (cleared_at) and have no new messages since
+      conversations = conversations.filter(c => {
+        if (c.type === "direct" && c.membership?.cleared_at) {
+          const clearedAt = new Date(c.membership.cleared_at).getTime();
+          const lastMsgAt = new Date(c.last_message?.created_at || c.updated_at || c.created_at || 0).getTime();
+          if (lastMsgAt <= clearedAt) return false;
+        }
+        return true;
+      });
+
       console.log(`[Chat RPC] getConversations: ${conversations.length} convs in ${Date.now() - t0}ms`);
       return res.json(conversations);
     } catch (rpcErr) {
@@ -219,7 +230,18 @@ exports.getConversations = async (req, res) => {
         new Date(a.last_message_at || a.last_message?.created_at || a.updated_at || a.created_at)
       );
 
-    res.json(sorted);
+    // Filter out direct conversations that were deleted (cleared_at) and have no new messages since
+    const visible = sorted.filter(c => {
+      if (c.type === "direct" && c.membership?.cleared_at) {
+        const clearedAt = new Date(c.membership.cleared_at).getTime();
+        const lastMsgAt = new Date(c.last_message_at || c.last_message?.created_at || 0).getTime();
+        // If there is no message, or the last message was before/at the time of clearing, hide it.
+        if (lastMsgAt <= clearedAt) return false;
+      }
+      return true;
+    });
+
+    res.json(visible);
   } catch (err) {
     console.error("[Chat] getConversations Critical Error:", err.message, err.stack);
     res.status(500).json({ error: "Internal Server Error", details: err.message });

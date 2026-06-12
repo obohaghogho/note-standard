@@ -174,7 +174,7 @@ const ChatWindow: React.FC = () => {
     // Stable message count ref — avoids recreating scrollToBottom and layout effects on every tick update.
     // scrollToBottom only needs to know WHEN the length changes, not the full array.
     const currentMessagesLengthRef = useRef(currentMessages.length);
-    useEffect(() => { currentMessagesLengthRef.current = currentMessages.length; }, [currentMessages.length]);
+    currentMessagesLengthRef.current = currentMessages.length;
 
     // Stable message ID list — used by translation effect to detect truly new messages
     // without re-running on every tick/status update. A message's ID never changes.
@@ -548,6 +548,7 @@ const ChatWindow: React.FC = () => {
         setInputValue('');
         if (activeConversationId) setDraft(activeConversationId, '');
         setShowMentions(false);
+        setShowScrollDown(false); // Force scroll lock to bottom so the new message is fully visible
 
         // Reset textarea height back to single-line (WhatsApp collapses on send)
         const textarea = document.getElementById('chat-window-input') as HTMLTextAreaElement | null;
