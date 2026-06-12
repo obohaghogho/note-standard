@@ -5,10 +5,6 @@ export type PendingMessageIntent = {
         content: string;
         type: string;
         attachmentId?: string;
-        // Full snapshot of the reply-to context stored at send time.
-        // We store the complete object (not just the ID) so flushQueue can
-        // restore reply_to on the canonical message even if the server-side
-        // FK join fails due to a schema cache miss or missing migration.
         replyTo?: {
             id: string;
             content?: string;
@@ -19,69 +15,30 @@ export type PendingMessageIntent = {
         correlationId?: string;
     };
     status: "queued" | "sending" | "failed";
-    leaseSnapshot: {
-        device_id: string;
-        session_id: string;
-    };
     created_at: number;
     attempts: number;
 };
 
-// Simple storage adapter to abstract localStorage/AsyncStorage differences
-interface StorageAdapter {
-    getItem: (key: string) => string | null | Promise<string | null>;
-    setItem: (key: string, value: string) => void | Promise<void>;
-}
-
+// Simplified to a purely in-memory retry layer (WhatsApp-style transient resilience)
 export class OfflineQueueEngine {
-    private queueKey = 'chat_offline_intents';
-    private storage: StorageAdapter;
     private queue: PendingMessageIntent[] = [];
-    private loaded = false;
 
-    constructor(storageAdapter: StorageAdapter) {
-        this.storage = storageAdapter;
-    }
-
-    async loadQueue(): Promise<PendingMessageIntent[]> {
-        if (this.loaded) return this.queue;
-        
-        try {
-            const data = await this.storage.getItem(this.queueKey);
-            if (data) {
-                this.queue = JSON.parse(data);
-                // Reset any 'sending' status back to 'queued' on load
-                this.queue = this.queue.map(q => q.status === 'sending' ? { ...q, status: 'queued' } : q);
-            }
-        } catch (e) {
-            console.error('[OfflineQueue] Failed to load queue', e);
-        }
-        this.loaded = true;
-        return this.queue;
-    }
-
-    private async saveQueue() {
-        try {
-            await this.storage.setItem(this.queueKey, JSON.stringify(this.queue));
-        } catch (e) {
-            console.error('[OfflineQueue] Failed to save queue', e);
-        }
+    // Storage adapter is kept in constructor for backward compatibility, but not used for persistence.
+    constructor(storageAdapter?: any) {
+        // No-op
     }
 
     async pushIntent(intent: Omit<PendingMessageIntent, 'status' | 'attempts'>) {
-        await this.loadQueue();
         const fullIntent: PendingMessageIntent = {
             ...intent,
             status: 'queued',
             attempts: 0
         };
         this.queue.push(fullIntent);
-        await this.saveQueue();
         return fullIntent;
     }
 
     async updateIntentStatus(eventId: string, status: PendingMessageIntent['status']) {
-        await this.loadQueue();
         this.queue = this.queue.map(q => {
             if (q.event_id === eventId) {
                 return { 
@@ -92,17 +49,13 @@ export class OfflineQueueEngine {
             }
             return q;
         });
-        await this.saveQueue();
     }
 
     async removeIntent(eventId: string) {
-        await this.loadQueue();
         this.queue = this.queue.filter(q => q.event_id !== eventId);
-        await this.saveQueue();
     }
 
     async getPendingIntents(): Promise<PendingMessageIntent[]> {
-        await this.loadQueue();
         // Sort strictly by creation order
         return [...this.queue].sort((a, b) => a.created_at - b.created_at);
     }

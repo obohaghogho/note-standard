@@ -212,15 +212,81 @@ exports.getConversations = async (req, res) => {
     const sorted = enriched
       .filter(c => c.chat_type !== "support" && c.name !== "Support Chat" &&
         !(c.name && c.name.toLowerCase().includes("support team")))
+      // CHATLIST FIX: Sort by authoritative last_message_at pointer instead of
+      // messages.created_at — immune to clock drift and delayed inserts.
       .sort((a, b) =>
-        new Date(b.last_message?.created_at || b.updated_at || b.created_at) -
-        new Date(a.last_message?.created_at || a.updated_at || a.created_at)
+        new Date(b.last_message_at || b.last_message?.created_at || b.updated_at || b.created_at) -
+        new Date(a.last_message_at || a.last_message?.created_at || a.updated_at || a.created_at)
       );
 
     res.json(sorted);
   } catch (err) {
     console.error("[Chat] getConversations Critical Error:", err.message, err.stack);
     res.status(500).json({ error: "Internal Server Error", details: err.message });
+  }
+};
+
+// ── Reconnect Sync Endpoint ────────────────────────────────────────────────
+// GET /chat/messages/sync?since=<ISO timestamp>&conversationId=<id>
+// Called by the client on socket reconnect to catch any messages missed during
+// a network drop. Returns all non-deleted messages after `since`, scoped to
+// the caller's conversations (or a specific conversation if provided).
+exports.syncMessages = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { since, conversationId } = req.query;
+
+    if (!since) {
+      return res.status(400).json({ error: "'since' query param is required (ISO timestamp)" });
+    }
+
+    let query = supabase
+      .from("messages")
+      .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url)")
+      .eq("is_deleted", false)
+      .gte("created_at", since)
+      .order("created_at", { ascending: true })
+      .limit(200);
+
+    if (conversationId) {
+      // Verify membership before scoping
+      const { data: mem } = await supabase
+        .from("conversation_members")
+        .select("conversation_id")
+        .eq("conversation_id", conversationId)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (!mem) return res.status(403).json({ error: "Access denied" });
+      query = query.eq("conversation_id", conversationId);
+    } else {
+      // Scope to all conversations the user belongs to
+      const { data: memberships } = await supabase
+        .from("conversation_members")
+        .select("conversation_id")
+        .eq("user_id", userId);
+      const convIds = (memberships || []).map(m => m.conversation_id);
+      if (convIds.length === 0) return res.json([]);
+      query = query.in("conversation_id", convIds);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      // Fallback: plain select without joins
+      const { data: plain, error: plainErr } = await supabase
+        .from("messages")
+        .select("*")
+        .eq("is_deleted", false)
+        .gte("created_at", since)
+        .order("created_at", { ascending: true })
+        .limit(200);
+      if (plainErr) throw plainErr;
+      return res.json(plain || []);
+    }
+
+    res.json(data || []);
+  } catch (err) {
+    console.error("[Chat] syncMessages error:", err.message);
+    res.status(500).json({ error: "Server Error" });
   }
 };
 
@@ -1244,6 +1310,20 @@ exports.sendMessage = async (req, res) => {
       }
 
       createdMessageId = insertedMessage.id;
+
+      // ── CHATLIST FIX: Stamp authoritative last-message pointer ──────────────
+      // Avoids chatlist depending on ORDER BY created_at (vulnerable to clock drift).
+      // Fire-and-forget — does not block the response.
+      supabase
+        .from("conversations")
+        .update({
+          last_message_id: createdMessageId,
+          last_message_at: insertedMessage.created_at || new Date().toISOString()
+        })
+        .eq("id", conversationId)
+        .then(({ error: lmErr }) => {
+          if (lmErr) console.warn("[Chat] last_message_at stamp failed:", lmErr.message);
+        });
 
       logger.info("[FORENSIC][API] Message Saved | Stage 3", {
         correlationId: req.correlationId,

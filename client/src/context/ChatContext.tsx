@@ -94,6 +94,25 @@ export interface Conversation {
     }[];
 }
 
+// ── SINGLE CANONICAL DEDUPE RULE: event_id OR id ───────────────────────────
+// This is the ONE merge system used everywhere in the app.
+// Rule: A message is unique if event_id OR id matches — never both independently.
+function dedupeMessages(messages: Message[]): Message[] {
+    const map = new Map<string, Message>();
+    for (const m of messages) {
+        const key = m.event_id || m.id;
+        // Later entries for the same key win (preserves status upgrades)
+        map.set(key, m);
+    }
+    return Array.from(map.values())
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+}
+
+// Alias for merge-and-dedupe of two arrays (replaces stableMerge calls)
+function stableMerge(prev: Message[], incoming: Message[]): Message[] {
+    return dedupeMessages([...prev, ...incoming]);
+}
+
 export interface ChatContextValue {
     conversations: Conversation[];
     messages: Record<string, Message[]>;
@@ -423,6 +442,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     // gateway echo (pg_notify broadcasts to ALL room members including sender) from
     // triggering duplicate merge operations. Bounded at 2000 entries to prevent memory leak.
     const processedEventIdsRef = useRef<Set<string>>(new Set());
+    // ── GLOBAL SOCKET DEDUP GUARD ──────────────────────────────────────────────
+    // A single global Set keyed by (event_id || id) that gates every incoming
+    // socket message BEFORE it reaches setMessages. Prevents flicker from duplicate
+    // socket delivers (re-emits, recheck, multi-device broadcasts of the same message).
+    const seenMessagesRef = useRef<Set<string>>(new Set());
+    // ── RECONNECT SYNC TIMESTAMP ───────────────────────────────────────────────
+    // Tracks the created_at of the last message we successfully received.
+    // Used as the `since` cursor in the reconnect sync API call.
+    const lastSyncTimestampRef = useRef<string>(new Date(Date.now() - 30000).toISOString());
     // Phase 2 Optimization: tracks when each conversation's messages were last loaded.
     // Prevents redundant API round-trips when a user re-opens a warm conversation (<30s).
     const messagesCachedAtRef = useRef<Record<string, number>>({});
@@ -888,6 +916,21 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             console.log(`[FORENSIC][CLIENT] Message Received | messageId: ${msg.id} | conversationId: ${msg.conversation_id} | senderId: ${msg.sender_id} | timestamp: ${Date.now()}`);
             console.log(`[SYNC_FORENSICS] [CLIENT_TRACE] [${Date.now()}] chat:message received | id: ${msg.id} | convId: ${msg.conversation_id} | activeConvId: ${activeConversationIdRef.current}`);
 
+            // ── GLOBAL SEEN CACHE GUARD ──────────────────────────────────────
+            // Single-pass gate using dedupeMessages canonical key (event_id || id).
+            // Must run BEFORE any state updates to prevent socket double-inserts.
+            const seenKey = msg.event_id || msg.id;
+            if (seenMessagesRef.current.has(seenKey)) {
+                console.log(`[CLIENT_TRACE] seenMessages guard: DROPPED | key: ${seenKey}`);
+                return;
+            }
+            seenMessagesRef.current.add(seenKey);
+            // Bound the set to prevent memory leaks (cap at 3000 entries)
+            if (seenMessagesRef.current.size > 3000) {
+                const first = seenMessagesRef.current.values().next().value;
+                if (first !== undefined) seenMessagesRef.current.delete(first);
+            }
+
             // ── Tombstone guard: reject replays of deleted messages ────────────
             if (deletedMessageIdsRef.current.has(msg.id) || msg.is_deleted) {
                 console.log(`[CLIENT_TRACE] tombstone guard: FAIL (dropped) | id: ${msg.id}`);
@@ -901,35 +944,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }
 
             // ── Own-message echo guard ────────────────────────────────────────
-            // The gateway uses pg_notify which broadcasts to ALL room members
-            // including the sender. The sender already has the canonical message
-            // from the API response (flushQueue → setMessages). We must drop
-            // this echo before it reaches mergeMessages to prevent duplication.
             const isOwnMessage = msg.sender_id === user?.id;
-            console.log(`[CLIENT_TRACE] isOwnMessage: ${isOwnMessage} | sender: ${msg.sender_id} | viewer: ${user?.id}`);
             if (isOwnMessage) {
-                // Check by event_id first (most reliable — set at send time)
-                const dedupEventKey = msg.event_id;
-                const dedupIdKey = msg.id;
-                const alreadyTrackedByEvent = dedupEventKey ? processedEventIdsRef.current.has(`evt:${dedupEventKey}`) : false;
-                const alreadyTrackedById = dedupIdKey && !dedupIdKey.startsWith('temp-') ? processedEventIdsRef.current.has(`id:${dedupIdKey}`) : false;
-
-                if (alreadyTrackedByEvent || alreadyTrackedById) {
-                    console.log(`[CLIENT_TRACE] own-message echo guard: FAIL (dropped) | event_id: ${msg.event_id} | id: ${msg.id}`);
-                    return;
-                }
-                // Track this canonical server ID going forward so re-deliveries are also dropped
-                if (dedupIdKey && !dedupIdKey.startsWith('temp-')) {
-                    processedEventIdsRef.current.add(`id:${dedupIdKey}`);
-                }
-                if (dedupEventKey) {
-                    processedEventIdsRef.current.add(`evt:${dedupEventKey}`);
-                }
-                // Bound the set to prevent memory leaks
-                if (processedEventIdsRef.current.size > 2000) {
-                    const firstKey = processedEventIdsRef.current.values().next().value;
-                    if (firstKey !== undefined) processedEventIdsRef.current.delete(firstKey);
-                }
+                // Drop echo completely to prevent double updates.
+                return;
             }
 
             // ── Phase 3: Type-safe sequence deduplication ─────────────────────
@@ -948,12 +966,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             const newMessage: Message = { ...msg, isOwn: isOwnMessage };
             console.log(`[CLIENT_TRACE] [${Date.now()}] processIncomingMessage: PASS (all gates cleared) | id: ${msg.id} | convId: ${msg.conversation_id}`);
 
+            // ── Update lastSyncTimestamp to the newest message we've processed
+            if (msg.created_at > lastSyncTimestampRef.current) {
+                lastSyncTimestampRef.current = msg.created_at;
+            }
+
             // PERF FIX: Replace per-message HTTP calls with debounced conversation-level read.
-            // Previously: every received message fired markMessageRead() + markMessageDelivered()
-            // as separate HTTP PUT requests (2 DB writes per message × message volume).
-            // Now: use a 1.5s debounced conversation-level read which is O(1) regardless
-            // of how many messages arrive in a burst. The per-message socket events
-            // (chat:delivered, chat:read) handle real-time tick updates on the UI.
             if (!isOwnMessage) {
                 // 1. Immediate ACK (Layer 3 - UX correctness)
                 socket.emit('chat:delivered', {
@@ -992,9 +1010,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             console.log(`[CLIENT_TRACE] [${Date.now()}] setMessages called`);
             setMessages(prev => {
                 const current = prev[msg.conversation_id] || [];
-                const { merged } = mergeMessages(current, [safeNewMessage]);
+                const merged = dedupeMessages([...current, safeNewMessage]);
                 console.log(`[CLIENT_TRACE] [${Date.now()}] messages state updated: PASS | next state size: ${merged.length}`);
-                return { ...prev, [msg.conversation_id]: merged as Message[] };
+                return { ...prev, [msg.conversation_id]: merged };
             });
 
             // Only update conversations if something materially changed (new message, or sequence update)
@@ -1080,20 +1098,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             });
         };
 
-        // ─────────────────────────────────────────────────────────────────────
-        // SINGLE WRITER RULE — Tick State Mutation
-        // ─────────────────────────────────────────────────────────────────────
-        // Only TWO functions are authoritative writers of per-message tick state:
-        //   onDeliveryEvent  → delivered_at (primary: chat:message_delivered / relay: chat:delivery_receipt)
-        //   onReadEvent      → read_at      (primary: chat:message_read / relay: chat:read_receipt batch)
-        //
-        // conversation_delivered and conversation_read are OBSERVERS ONLY.
-        // They update the conversation list summary but NEVER mutate per-message state.
-        // This eliminates 6-path collision storms, redundant React diffing, and forced reflow warnings.
-        // ─────────────────────────────────────────────────────────────────────
-
         // PRIMARY WRITER — Delivery
-        // Handles: chat:message_delivered (API-emitted) + chat:delivery_receipt (GW relay)
         const onDeliveryEvent = ({ messageId, eventId, conversationId }: { messageId: string; eventId?: string; conversationId: string }) => {
             if (!isMounted.current || (!messageId && !eventId) || !conversationId) return;
 
@@ -1134,7 +1139,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         };
 
         // PRIMARY WRITER — Read (single message)
-        // Handles: chat:message_read (API-emitted)
         const onReadEvent = ({ messageId, conversationId }: { messageId: string; conversationId: string }) => {
             if (!isMounted.current || !messageId || !conversationId) return;
 
@@ -1166,7 +1170,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         };
 
         // PRIMARY WRITER — Read (batch, from GW relay)
-        // Handles: chat:read_receipt (batch messageIds from gateway)
         const onBatchReadEvent = ({ conversationId, messageIds }: { conversationId: string; messageIds: string[] }) => {
             if (!isMounted.current || !Array.isArray(messageIds) || messageIds.length === 0) return;
 
@@ -1203,9 +1206,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         };
 
         // GATED WRITER — Conversation Delivered
-        // The batch ACK path (5s interval) fires chat:conversation_delivered.
-        // This is the PRIMARY delivery path for many messages. Must update per-message state.
-        // The dedup gate prevents collision with the immediate socket relay (chat:delivery_receipt).
         const onConversationDelivered = ({ conversationId, userId, delivered_at }: { conversationId: string; userId: string; delivered_at: string }) => {
             if (!isMounted.current || userId === user?.id) return;
             const nowStr = delivered_at || new Date().toISOString();
@@ -1238,10 +1238,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         };
 
         // GATED WRITER — Conversation Read
-        // chat:conversation_read is the PRIMARY path for blue ticks.
-        // markConversationRead() → API → server emits chat:conversation_read (not per-message events).
-        // MUST update per-message state or blue ticks never appear.
-        // The dedup gate prevents collision with individual chat:message_read events.
         const onConversationRead = ({ conversationId, readerId, readAt }: { conversationId: string; readerId: string; readAt: string }) => {
             if (!isMounted.current) return;
             if (readerId !== user?.id) {
@@ -1374,11 +1370,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         socket.on('chat:typing', onTyping);
 
         // Re-join ALL conversation rooms on every socket reconnect.
-        // Socket.IO drops all rooms when the transport disconnects and reconnects
-        // with a new socket.id. Without this, the receiver's socket is no longer
-        // in the conversation room and never receives incoming chat:message events.
-        // This handler fires on both initial connect AND every subsequent reconnect.
-        const onSocketReconnect = () => {
+        const onSocketReconnect = async () => {
             isReconnectingRef.current = false;
             
             // Flush reconnection buffer
@@ -1540,7 +1532,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
                 setMessages(prev => {
                     const current = prev[intent.conversation_id] || [];
-                    const { merged } = mergeMessages(current, [canonicalMessage]);
+                    const merged = stableMerge(current, [canonicalMessage]);
                     return { ...prev, [intent.conversation_id]: merged as Message[] };
                 });
 
@@ -1660,7 +1652,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         
         setMessages(prev => {
             const current = prev[conversationId] || [];
-            const { merged } = mergeMessages(current, [optimisticMessage]);
+            const merged = stableMerge(current, [optimisticMessage]);
             return { ...prev, [conversationId]: merged as Message[] };
         });
 
@@ -1729,7 +1721,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         setMessages(prev => {
             const current = prev[conversationId] || [];
-            const { merged } = mergeMessages(current, [optimisticMessage]);
+            const merged = stableMerge(current, [optimisticMessage]);
             return { ...prev, [conversationId]: merged as Message[] };
         });
 
@@ -1845,7 +1837,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const canonicalMessage = { ...msgRes.data, isOwn: true, status: 'sent' };
                 setMessages(prev => {
                     const current = prev[conversationId] || [];
-                    const { merged } = mergeMessages(current, [canonicalMessage]);
+                    const merged = stableMerge(current, [canonicalMessage]);
                     return { ...prev, [conversationId]: merged as Message[] };
                 });
 

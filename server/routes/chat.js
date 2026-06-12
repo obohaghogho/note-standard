@@ -44,6 +44,7 @@ router.put(
 );
 
 // Messages
+router.get("/messages/sync", chatController.syncMessages); // Reconnect recovery
 router.get(
   "/conversations/:conversationId/messages",
   chatController.getMessages,
