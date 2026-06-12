@@ -122,17 +122,18 @@ module.exports = (io, socket) => {
   // ── Delivery Receipts ────────────────────────────────────────────────────
 
   // Emitted by client when a message is received (device received it).
-  // Payload: { conversationId, messageId, deliveredAt: ISO string }
+  // Payload: { conversationId, messageId, eventId, deliveredAt: ISO string }
   socket.on('chat:delivered', (data) => {
-    const { conversationId, messageId, deliveredAt } = data || {};
-    if (!conversationId || !messageId) return;
+    const { conversationId, messageId, eventId, deliveredAt } = data || {};
+    if (!conversationId || (!messageId && !eventId)) return;
 
-    console.log(`[FORENSIC][GW] Delivery ACK Received | userId:${userId} | conversationId:${conversationId} | messageId:${messageId} | ts:${Date.now()}`);
+    console.log(`[FORENSIC][GW] Delivery ACK Received | userId:${userId} | conversationId:${conversationId} | messageId:${messageId} | eventId:${eventId} | ts:${Date.now()}`);
 
     socket.to(conversationId).emit('chat:delivery_receipt', {
       userId,
       conversationId,
       messageId,
+      eventId,
       deliveredAt: deliveredAt || new Date().toISOString(),
     });
   });

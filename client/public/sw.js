@@ -9,7 +9,7 @@ self.addEventListener('install', (event) => {
     // Force immediate update to bypass aggressive caching
     self.skipWaiting();
 });
-// Cache Bust Timestamp: 2026-06-04T21:08:00 — v3: fix targetAccountId missing from push options.data
+// Cache Bust Timestamp: 2026-06-12T09:00:00 — v4: clear cache for CSS loading issue
 
 self.addEventListener('activate', (event) => {
     event.waitUntil(

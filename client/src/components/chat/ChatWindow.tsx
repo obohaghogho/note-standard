@@ -209,16 +209,6 @@ const ChatWindow: React.FC = () => {
                 align: 'end',
                 behavior: behavior === 'instant' ? 'auto' : behavior as 'auto' | 'smooth'
             });
-            // Virtuoso's align: 'end' stops at the last message, hiding the footer.
-            // We must explicitly scroll to the absolute bottom to reveal the composer spacer.
-            requestAnimationFrame(() => {
-                if (scrollContainerRef.current) {
-                    scrollContainerRef.current.scrollTo({
-                        top: scrollContainerRef.current.scrollHeight,
-                        behavior: behavior === 'instant' ? 'auto' : behavior as ScrollBehavior
-                    });
-                }
-            });
             setShowScrollDown(false);
             setUnreadCountWhileScrolled(0);
         } else if (messagesEndRef.current) {
@@ -1084,6 +1074,7 @@ const ChatWindow: React.FC = () => {
                             if (ref) scrollContainerRef.current = ref as HTMLDivElement;
                         }}
                         className="chat-messages custom-scrollbar p-3 md:p-6"
+                        style={{ paddingBottom: 'calc(var(--composer-height, 80px) + 24px)' }}
                         data={currentMessages}
                         initialTopMostItemIndex={currentMessages.length > 0 ? currentMessages.length - 1 : 0}
                         alignToBottom
@@ -1135,8 +1126,8 @@ const ChatWindow: React.FC = () => {
                                             </span>
                                         </div>
                                     )}
-                                    {/* Dedicated bottom spacer matching composer height to prevent overlap */}
-                                    <div ref={messagesEndRef} className="w-full flex-shrink-0" style={{ height: 'calc(var(--composer-height, 80px) + 12px)' }} />
+                                    {/* Dedicated bottom spacer to serve as a ref anchor */}
+                                    <div ref={messagesEndRef} className="w-full flex-shrink-0" />
                                 </div>
                             )
                         }}

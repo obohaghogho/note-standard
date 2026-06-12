@@ -204,7 +204,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     });
                 },
                 withCredentials: true,
-                transports: ['websocket', 'polling'],
+                transports: ['polling', 'websocket'],
                 reconnection: true,  // Fix: Enable auto-reconnect for iOS background suspends
                 reconnectionDelay: 1000,
                 reconnectionDelayMax: 10000,

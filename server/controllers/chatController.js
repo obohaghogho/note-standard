@@ -1595,7 +1595,13 @@ exports.sendMessage = async (req, res) => {
         // DO NOT AWAIT notificationPromises here! Let them run in the background.
         // We already sent res.json() to the sender, and we don't want to block
         // the rest of the function or the event loop.
-        Promise.all(notificationPromises).catch(err => console.error('[Chat Notify] Batch error:', err));
+        Promise.allSettled(notificationPromises).then(results => {
+          results.forEach((result, idx) => {
+             if (result.status === 'rejected') {
+                console.error(`[Chat Notify] Batch error for member ${otherMembers[idx].user_id}:`, result.reason);
+             }
+          });
+        });
       }
 
       // --- Mention Logic ---

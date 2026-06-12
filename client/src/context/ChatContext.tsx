@@ -959,6 +959,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 socket.emit('chat:delivered', {
                     conversationId: msg.conversation_id,
                     messageId: msg.id,
+                    eventId: msg.event_id,
                     deliveredAt: new Date().toISOString()
                 });
 
@@ -1093,15 +1094,21 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         // PRIMARY WRITER — Delivery
         // Handles: chat:message_delivered (API-emitted) + chat:delivery_receipt (GW relay)
-        const onDeliveryEvent = ({ messageId, conversationId }: { messageId: string; conversationId: string }) => {
-            if (!isMounted.current || !messageId || !conversationId) return;
+        const onDeliveryEvent = ({ messageId, eventId, conversationId }: { messageId: string; eventId?: string; conversationId: string }) => {
+            if (!isMounted.current || (!messageId && !eventId) || !conversationId) return;
+
+            const currentMsgs = messagesRef.current[conversationId] || [];
+            const targetMsg = currentMsgs.find(m => (messageId && m.id === messageId) || (eventId && m.event_id === eventId));
+            if (!targetMsg) return;
+
+            const trackId = targetMsg.id;
 
             // Dedup gate: skip if this message is already at 'delivered' or 'read'
-            const tickSet = appliedTicksRef.current.get(messageId);
+            const tickSet = appliedTicksRef.current.get(trackId);
             if (tickSet && (tickSet.has('delivered') || tickSet.has('read'))) return;
             const nextSet = tickSet || new Set<string>();
             nextSet.add('delivered');
-            appliedTicksRef.current.set(messageId, nextSet);
+            appliedTicksRef.current.set(trackId, nextSet);
             // Bound map size to prevent memory leak in long-lived sessions
             if (appliedTicksRef.current.size > 5000) {
                 const firstKey = appliedTicksRef.current.keys().next().value;
@@ -1111,16 +1118,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             const nowStr = new Date().toISOString();
             setMessages(prev => {
                 const current = prev[conversationId] || [];
-                if (!current.some(m => m.id === messageId)) return prev; // message not in cache — skip
                 return {
                     ...prev,
                     [conversationId]: current.map(m =>
-                        m.id === messageId ? mergeMessageStatus(m, { delivered_at: nowStr, status: 'delivered' }) : m
+                        m.id === trackId ? mergeMessageStatus(m, { delivered_at: nowStr, status: 'delivered' }) : m
                     )
                 };
             });
             setConversations(prev => prev.map(c => {
-                if (c.id === conversationId && c.lastMessage?.id === messageId) {
+                if (c.id === conversationId && c.lastMessage?.id === trackId) {
                     return { ...c, lastMessage: mergeMessageStatus(c.lastMessage as Message, { delivered_at: nowStr, status: 'delivered' }) as Conversation['lastMessage'] };
                 }
                 return c;
