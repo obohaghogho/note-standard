@@ -384,7 +384,14 @@ input[type=number] {
 
 /*
  * .chat-messages — fills all space between header and composer.
- * padding-bottom reserved only for non-mobile (where composer is still absolute).
+ *
+ * CRITICAL: We use flex-direction: column-reverse. This geometrically inverts
+ * the CSS box model directions:
+ *   - padding-bottom → renders at the VISUAL TOP of the list
+ *   - padding-top    → renders at the VISUAL BOTTOM of the list
+ *
+ * Therefore, to clear space between the last (newest) message and the absolute
+ * composer bar, we must use padding-TOP, not padding-bottom.
  */
 .chat-messages {
   display: flex;
@@ -398,12 +405,15 @@ input[type=number] {
   scroll-behavior: auto;
   /* WhatsApp/Telegram technique: allow browser to natively pin newest message when container shrinks */
   overflow-anchor: auto;
-  /* Add padding-bottom equal to the composer height so messages never hide behind it */
-  padding-bottom: calc(var(--composer-height, 80px) + 24px);
+  /* padding-TOP clears space at the VISUAL BOTTOM (between newest msg and composer) */
+  padding-top: calc(var(--composer-height, 80px) + 16px);
+  padding-bottom: 8px;
 }
 @media (min-width: 768px) {
   .chat-messages {
-    padding-bottom: 24px;
+    /* On desktop, composer is a flex item (not absolute), so no top-padding clearance needed */
+    padding-top: 8px;
+    padding-bottom: 8px;
   }
 }
 
