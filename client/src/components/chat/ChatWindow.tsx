@@ -201,8 +201,26 @@ const ChatWindow: React.FC = () => {
 
     const scrollToBottom = useCallback((behavior: ScrollBehavior | 'instant' | 'auto' = 'smooth') => {
         if (isKeyboardTransitioning.current) return;
-        // Use the ref so this callback is never recreated on every message — only when scroll logic itself changes.
         const len = currentMessagesLengthRef.current;
+        const isNearBottom = !showScrollDownRef.current;
+
+        // Fast path: If already near the bottom, Virtuoso doesn't need to jump indexes.
+        // Natively scroll the container to the absolute bottom to ensure the footer spacer is visible.
+        if (isNearBottom && scrollContainerRef.current) {
+            requestAnimationFrame(() => {
+                if (scrollContainerRef.current) {
+                    scrollContainerRef.current.scrollTo({
+                        top: scrollContainerRef.current.scrollHeight,
+                        behavior: behavior === 'instant' ? 'auto' : behavior as 'auto' | 'smooth'
+                    });
+                }
+            });
+            setShowScrollDown(false);
+            setUnreadCountWhileScrolled(0);
+            return;
+        }
+
+        // If user scrolled far up, force Virtuoso to jump to the last item so it renders.
         if (virtuosoRef.current && len > 0) {
             virtuosoRef.current.scrollToIndex({
                 index: len - 1,
@@ -552,9 +570,6 @@ const ChatWindow: React.FC = () => {
         if (e) e.preventDefault();
         const textToSend = inputValue.trim();
         if (!textToSend || !activeConversationId) return;
-
-        // Force scroll to bottom on every send so user always sees what they sent
-        scrollToBottom('instant');
 
         // Clear UI state synchronously for instant feedback
         setInputValue('');
@@ -1090,7 +1105,6 @@ const ChatWindow: React.FC = () => {
                         data={currentMessages}
                         initialTopMostItemIndex={currentMessages.length > 0 ? currentMessages.length - 1 : 0}
                         alignToBottom
-                        followOutput="smooth"
                         atBottomThreshold={150} // High threshold ensures fractional pixels or small bounces don't break the "atBottom" state
                         atBottomStateChange={(atBottom) => {
                             setShowScrollDown(!atBottom);
