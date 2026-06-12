@@ -200,54 +200,15 @@ const ChatWindow: React.FC = () => {
     }, [showScrollDown]);
 
     const scrollToBottom = useCallback((behavior: ScrollBehavior | 'instant' | 'auto' = 'smooth') => {
-        if (isKeyboardTransitioning.current) return;
-        const len = currentMessagesLengthRef.current;
-        const isNearBottom = !showScrollDownRef.current;
-
-        // Fast path: If already near the bottom, Virtuoso doesn't need to jump indexes.
-        // Natively scroll the container to the absolute bottom to ensure the footer spacer is visible.
-        if (isNearBottom && scrollContainerRef.current) {
-            requestAnimationFrame(() => {
-                if (scrollContainerRef.current) {
-                    scrollContainerRef.current.scrollTo({
-                        top: scrollContainerRef.current.scrollHeight,
-                        behavior: behavior === 'instant' ? 'auto' : behavior as 'auto' | 'smooth'
-                    });
-                }
-            });
-            setShowScrollDown(false);
-            setUnreadCountWhileScrolled(0);
-            return;
-        }
-
-        // If user scrolled far up, force Virtuoso to jump to the last item so it renders.
-        if (virtuosoRef.current && len > 0) {
-            virtuosoRef.current.scrollToIndex({
-                index: len - 1,
-                align: 'end',
+        if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTo({
+                top: 0,
                 behavior: behavior === 'instant' ? 'auto' : behavior as 'auto' | 'smooth'
             });
-
-            // After Virtuoso renders the last item, ensure we scroll all the way down
-            // to reveal the footer spacer, pushing the last message above the composer.
-            requestAnimationFrame(() => {
-                if (scrollContainerRef.current) {
-                    scrollContainerRef.current.scrollTo({
-                        top: scrollContainerRef.current.scrollHeight,
-                        behavior: behavior === 'instant' ? 'auto' : behavior as 'auto' | 'smooth'
-                    });
-                }
-            });
-
-            setShowScrollDown(false);
-            setUnreadCountWhileScrolled(0);
-        } else if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: behavior === 'instant' ? 'auto' : behavior as ScrollBehavior, block: 'end' });
             setShowScrollDown(false);
             setUnreadCountWhileScrolled(0);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // Stable forever — reads currentMessagesLengthRef.current at call time
+    }, []);
 
     // Track composer height dynamically via ResizeObserver.
     useLayoutEffect(() => {
@@ -276,64 +237,9 @@ const ChatWindow: React.FC = () => {
         };
     }, [scrollToBottom]);
 
-    // Diagnostic logging and native scroll anchor
-    useEffect(() => {
-        let resizeTimeout: ReturnType<typeof setTimeout>;
-
-        const captureStats = (label: string) => {
-            const container = scrollContainerRef.current;
-            const composer = composerRef.current;
-            const spacer = messagesEndRef.current;
-            if (!container || !composer) return;
-
-            const containerHeight = container.getBoundingClientRect().height;
-            const composerHeight = composer.getBoundingClientRect().height;
-            const spacerHeight = spacer ? spacer.getBoundingClientRect().height : 0;
-            const { scrollTop, scrollHeight, clientHeight } = container;
-            const hiddenPixels = scrollHeight - clientHeight - scrollTop;
-
-            console.log(`[Keyboard Sync] ${label}:`, {
-                containerHeight,
-                composerHeight,
-                spacerHeight,
-                scrollTop,
-                scrollHeight,
-                clientHeight,
-                hiddenPixels,
-                visualViewportHeight: window.visualViewport?.height
-            });
-        };
-
-        const handleViewportResize = () => {
-            if (!isKeyboardTransitioning.current) {
-                isKeyboardTransitioning.current = true;
-                captureStats("BEFORE Keyboard Transition");
-            }
-            
-            // Keep the scroll anchored to the bottom during the resize
-            // so the user has a reference point to judge lag.
-            if (scrollContainerRef.current) {
-                scrollContainerRef.current.scrollTo({
-                    top: scrollContainerRef.current.scrollHeight,
-                    behavior: 'auto'
-                });
-            }
-
-            clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(() => {
-                captureStats("AFTER Keyboard Transition");
-                isKeyboardTransitioning.current = false;
-            }, 250);
-        };
-
-        if (window.visualViewport) {
-            window.visualViewport.addEventListener('resize', handleViewportResize);
-            return () => {
-                window.visualViewport?.removeEventListener('resize', handleViewportResize);
-                clearTimeout(resizeTimeout);
-            };
-        }
-    }, []);
+    // visualViewport event listeners and JS stabilization are intentionally removed.
+    // The native flex-direction: column-reverse architecture ensures the browser
+    // natively anchors the scroll bottom to the top of the composer at 60fps.
     const handleLoadMore = async () => {
         if (!activeConversationId) return;
         await loadMoreMessages(activeConversationId);
@@ -1101,41 +1007,36 @@ const ChatWindow: React.FC = () => {
                         }}
                         onScroll={(e) => {
                             const target = e.target as HTMLDivElement;
-                            const isAtBottom = Math.abs(target.scrollHeight - target.clientHeight - target.scrollTop) < 150;
+                            // In column-reverse, scrollTop === 0 is the visual bottom
+                            const isAtBottom = Math.abs(target.scrollTop) < 150;
                             setShowScrollDown(!isAtBottom);
                             if (isAtBottom) {
                                 setUnreadCountWhileScrolled(0);
                             }
                         }}
                     >
-                        <div className="flex flex-col gap-1 md:gap-2">
-                            {activeConversationId && hasMore[activeConversationId] && (
-                                <div className="flex justify-center py-4 bg-transparent relative z-10 w-full flex-shrink-0">
-                                    <button onClick={handleLoadMore} className="text-xs font-medium text-blue-400 hover:text-blue-300 hover:underline">Load older messages</button>
-                                </div>
-                            )}
-                            {isPending && (
-                                <div className="flex flex-col items-center justify-center p-8 bg-gray-800/50 backdrop-blur rounded-2xl my-6 border border-gray-700 shadow-xl w-full">
-                                    <div className="w-16 h-16 rounded-full bg-blue-600/20 flex items-center justify-center mb-4 text-blue-400"><MoreHorizontal size={32} /></div>
-                                    <p className="text-gray-200 mb-6 text-center font-medium">{otherMember ? `${otherMember.profile?.full_name || otherMember.profile?.username} wants to start a conversation with you.` : 'You have been invited to this chat.'}</p>
-                                    <div className="flex gap-4">
-                                        <button onClick={handleAccept} disabled={isAccepting} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg shadow-blue-900/40 disabled:opacity-50 active:scale-95">{isAccepting ? 'Accepting...' : 'Accept Chat Request'}</button>
-                                        <button className="px-6 py-3 text-gray-400 hover:text-white hover:bg-white/5 rounded-xl transition-all font-medium">Decline</button>
+                        <div className="flex flex-col gap-1 md:gap-2 mt-auto">
+                            {/* Invisible anchor for IntersectionObserver - Placed at visual bottom (DOM top) */}
+                            <div ref={messagesEndRef} style={{ height: '1px', visibility: 'hidden' }} />
+                            
+                            {activeConversationId && typingUsers[activeConversationId] && typingUsers[activeConversationId].length > 0 && (
+                                <div className="flex justify-start items-center gap-2 mt-2 animate-in fade-in slide-in-from-left-2 w-full">
+                                    <div className="bg-gray-800 rounded-2xl p-3 flex gap-1 border border-gray-700 shadow-lg">
+                                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></div>
                                     </div>
-                                </div>
-                            )}
-                            {isWaitingForOthers && (
-                                <div className="text-center p-6 bg-gray-800/30 rounded-xl my-4 w-full">
-                                    <Loader2 className="animate-spin text-blue-500 mx-auto mb-2" size={20} />
-                                    <p className="text-sm text-gray-400 italic font-medium">Waiting for acceptance...</p>
+                                    <span className="text-[10px] text-gray-500 font-medium italic">
+                                        {typingUsers[activeConversationId]?.join(', ')} {typingUsers[activeConversationId]?.length > 1 ? 'are' : 'is'} typing...
+                                    </span>
                                 </div>
                             )}
                         </div>
 
-                        {currentMessages.slice(-100).map((msg, index, array) => {
-                            const isGrouped = index > 0 && 
-                                array[index].sender_id === array[index - 1].sender_id && 
-                                (new Date(array[index].created_at).getTime() - new Date(array[index - 1].created_at).getTime() < 60000);
+                        {[...currentMessages.slice(-100)].reverse().map((msg, index, array) => {
+                            const isGrouped = index < array.length - 1 && 
+                                array[index].sender_id === array[index + 1].sender_id && 
+                                (new Date(array[index].created_at).getTime() - new Date(array[index + 1].created_at).getTime() < 60000);
                             const isSelected = selectedMessages.has(msg.id);
                             
                             return (
@@ -1160,21 +1061,28 @@ const ChatWindow: React.FC = () => {
                             );
                         })}
 
-                        <div className="flex flex-col gap-1 md:gap-2">
-                            {activeConversationId && typingUsers[activeConversationId] && typingUsers[activeConversationId].length > 0 && (
-                                <div className="flex justify-start items-center gap-2 mt-2 animate-in fade-in slide-in-from-left-2 w-full">
-                                    <div className="bg-gray-800 rounded-2xl p-3 flex gap-1 border border-gray-700 shadow-lg">
-                                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></div>
-                                    </div>
-                                    <span className="text-[10px] text-gray-500 font-medium italic">
-                                        {typingUsers[activeConversationId]?.join(', ')} {typingUsers[activeConversationId]?.length > 1 ? 'are' : 'is'} typing...
-                                    </span>
+                        <div className="flex flex-col gap-1 md:gap-2 mb-4">
+                            {activeConversationId && hasMore[activeConversationId] && (
+                                <div className="flex justify-center py-4 bg-transparent relative z-10 w-full flex-shrink-0">
+                                    <button onClick={handleLoadMore} className="text-xs font-medium text-blue-400 hover:text-blue-300 hover:underline">Load older messages</button>
                                 </div>
                             )}
-                            {/* Invisible anchor for IntersectionObserver */}
-                            <div ref={messagesEndRef} style={{ height: '1px', visibility: 'hidden' }} />
+                            {isPending && (
+                                <div className="flex flex-col items-center justify-center p-8 bg-gray-800/50 backdrop-blur rounded-2xl my-6 border border-gray-700 shadow-xl w-full">
+                                    <div className="w-16 h-16 rounded-full bg-blue-600/20 flex items-center justify-center mb-4 text-blue-400"><MoreHorizontal size={32} /></div>
+                                    <p className="text-gray-200 mb-6 text-center font-medium">{otherMember ? `${otherMember.profile?.full_name || otherMember.profile?.username} wants to start a conversation with you.` : 'You have been invited to this chat.'}</p>
+                                    <div className="flex gap-4">
+                                        <button onClick={handleAccept} disabled={isAccepting} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg shadow-blue-900/40 disabled:opacity-50 active:scale-95">{isAccepting ? 'Accepting...' : 'Accept Chat Request'}</button>
+                                        <button className="px-6 py-3 text-gray-400 hover:text-white hover:bg-white/5 rounded-xl transition-all font-medium">Decline</button>
+                                    </div>
+                                </div>
+                            )}
+                            {isWaitingForOthers && (
+                                <div className="text-center p-6 bg-gray-800/30 rounded-xl my-4 w-full">
+                                    <Loader2 className="animate-spin text-blue-500 mx-auto mb-2" size={20} />
+                                    <p className="text-sm text-gray-400 italic font-medium">Waiting for acceptance...</p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
