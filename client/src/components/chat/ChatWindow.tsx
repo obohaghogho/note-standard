@@ -283,16 +283,19 @@ const ChatWindow: React.FC = () => {
         const captureStats = (label: string) => {
             const container = scrollContainerRef.current;
             const composer = composerRef.current;
+            const spacer = messagesEndRef.current;
             if (!container || !composer) return;
 
             const containerHeight = container.getBoundingClientRect().height;
             const composerHeight = composer.getBoundingClientRect().height;
+            const spacerHeight = spacer ? spacer.getBoundingClientRect().height : 0;
             const { scrollTop, scrollHeight, clientHeight } = container;
             const hiddenPixels = scrollHeight - clientHeight - scrollTop;
 
             console.log(`[Keyboard Sync] ${label}:`, {
                 containerHeight,
                 composerHeight,
+                spacerHeight,
                 scrollTop,
                 scrollHeight,
                 clientHeight,
