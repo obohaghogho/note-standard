@@ -1034,7 +1034,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         const existingTs = conv.lastMessage?.created_at;
                         const existingLastMsgTime = existingTs ? new Date(existingTs).getTime() : 0;
                         const newMsgTime = new Date(msg.created_at).getTime();
-                        const shouldUpdateLastMessage = newMsgTime >= existingLastMsgTime;
+                        const shouldUpdateLastMessage = newlyAddedCount > 0 || newMsgTime >= (existingLastMsgTime - 300000);
 
                         const shouldIncrementUnread = !isCurrentlyOpen && !isOwnMessage && newlyAddedCount > 0;
 
@@ -1545,7 +1545,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     const existingLastMsgTime = new Date(conv.lastMessage?.created_at ?? 0).getTime();
                     const newMsgTime = new Date(canonicalMessage.created_at).getTime();
                     
-                    if (newMsgTime >= existingLastMsgTime) {
+                    if (newMsgTime >= (existingLastMsgTime - 300000)) {
                         return {
                             ...conv,
                             updated_at: canonicalMessage.created_at,

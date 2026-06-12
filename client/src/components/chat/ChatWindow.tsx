@@ -209,6 +209,18 @@ const ChatWindow: React.FC = () => {
                 align: 'end',
                 behavior: behavior === 'instant' ? 'auto' : behavior as 'auto' | 'smooth'
             });
+
+            // After Virtuoso renders the last item, ensure we scroll all the way down
+            // to reveal the footer spacer, pushing the last message above the composer.
+            requestAnimationFrame(() => {
+                if (scrollContainerRef.current) {
+                    scrollContainerRef.current.scrollTo({
+                        top: scrollContainerRef.current.scrollHeight,
+                        behavior: behavior === 'instant' ? 'auto' : behavior as 'auto' | 'smooth'
+                    });
+                }
+            });
+
             setShowScrollDown(false);
             setUnreadCountWhileScrolled(0);
         } else if (messagesEndRef.current) {
