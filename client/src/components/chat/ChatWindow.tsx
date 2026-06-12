@@ -1173,8 +1173,8 @@ const ChatWindow: React.FC = () => {
                                     </span>
                                 </div>
                             )}
-                            {/* Dedicated bottom spacer to serve as a ref anchor and clear the absolute composer on mobile */}
-                            <div ref={messagesEndRef} className="chat-footer-spacer" />
+                            {/* Invisible anchor for IntersectionObserver */}
+                            <div ref={messagesEndRef} style={{ height: '1px', visibility: 'hidden' }} />
                         </div>
                     </div>
                 )}

@@ -395,6 +395,13 @@ input[type=number] {
   -webkit-overflow-scrolling: touch;
   scroll-behavior: auto;
   overflow-anchor: none;
+  /* Add padding-bottom equal to the composer height so messages never hide behind it */
+  padding-bottom: calc(var(--composer-height, 80px) + 24px);
+}
+@media (min-width: 768px) {
+  .chat-messages {
+    padding-bottom: 24px;
+  }
 }
 
 /* Desktop padding removed — composer is a standard flex item now, so it will never overlap messages */
@@ -444,18 +451,7 @@ input[type=number] {
   visibility: hidden;
 }
 
-/* Responsive spacer for the virtualized list footer */
-.chat-footer-spacer {
-  height: calc(var(--composer-height, 80px) + 24px);
-  width: 100%;
-  flex-shrink: 0;
-  pointer-events: none;
-}
-@media (min-width: 768px) {
-  .chat-footer-spacer {
-    height: 24px;
-  }
-}
+/* Spacer replaced by padding-bottom on .chat-messages */
 
 /* Typing indicator fade-in */
 @keyframes typing-dot {
