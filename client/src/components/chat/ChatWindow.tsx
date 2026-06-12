@@ -24,7 +24,7 @@ import { ConfirmationModal } from '../common/ConfirmationModal';
 import { applyAutoCorrect } from '../../utils/textUtils';
 import { UserBadge } from '../common/UserBadge';
 import MessageBubble from './MessageBubble';
-import { type VirtuosoHandle } from 'react-virtuoso';
+// Removed react-virtuoso import
 
 const ChatWindow: React.FC = () => {
     const { 
@@ -139,7 +139,7 @@ const ChatWindow: React.FC = () => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const composerRef = useRef<HTMLDivElement>(null);
-    const virtuosoRef = useRef<VirtuosoHandle>(null);
+    // virtuosoRef removed
 
 
     const [translations, setTranslations] = useState<{ [key: string]: string }>({});
