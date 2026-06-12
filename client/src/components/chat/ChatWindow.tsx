@@ -276,9 +276,61 @@ const ChatWindow: React.FC = () => {
         };
     }, [scrollToBottom]);
 
-    // visualViewport resize hook for scroll stabilization has been temporarily removed
-    // to test pure native layout behavior without JS intervention.
+    // Diagnostic logging and native scroll anchor
+    useEffect(() => {
+        let resizeTimeout: ReturnType<typeof setTimeout>;
 
+        const captureStats = (label: string) => {
+            const container = scrollContainerRef.current;
+            const composer = composerRef.current;
+            if (!container || !composer) return;
+
+            const containerHeight = container.getBoundingClientRect().height;
+            const composerHeight = composer.getBoundingClientRect().height;
+            const { scrollTop, scrollHeight, clientHeight } = container;
+            const hiddenPixels = scrollHeight - clientHeight - scrollTop;
+
+            console.log(`[Keyboard Sync] ${label}:`, {
+                containerHeight,
+                composerHeight,
+                scrollTop,
+                scrollHeight,
+                clientHeight,
+                hiddenPixels,
+                visualViewportHeight: window.visualViewport?.height
+            });
+        };
+
+        const handleViewportResize = () => {
+            if (!isKeyboardTransitioning.current) {
+                isKeyboardTransitioning.current = true;
+                captureStats("BEFORE Keyboard Transition");
+            }
+            
+            // Keep the scroll anchored to the bottom during the resize
+            // so the user has a reference point to judge lag.
+            if (scrollContainerRef.current) {
+                scrollContainerRef.current.scrollTo({
+                    top: scrollContainerRef.current.scrollHeight,
+                    behavior: 'auto'
+                });
+            }
+
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                captureStats("AFTER Keyboard Transition");
+                isKeyboardTransitioning.current = false;
+            }, 250);
+        };
+
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', handleViewportResize);
+            return () => {
+                window.visualViewport?.removeEventListener('resize', handleViewportResize);
+                clearTimeout(resizeTimeout);
+            };
+        }
+    }, []);
     const handleLoadMore = async () => {
         if (!activeConversationId) return;
         await loadMoreMessages(activeConversationId);
