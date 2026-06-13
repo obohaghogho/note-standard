@@ -838,13 +838,7 @@ const ChatWindow: React.FC = () => {
                         >
                             <ArrowLeft size={24} />
                         </button>
-                        <button 
-                            onClick={openMobileMenu}
-                            className="p-1.5 text-gray-400 hover:text-white md:hidden"
-                            aria-label="Open sidebar"
-                        >
-                            <Menu size={22} />
-                        </button>
+
                         {(() => {
                             let displayName = activeConversation?.name;
                             let displayAvatar = null;
@@ -1033,33 +1027,65 @@ const ChatWindow: React.FC = () => {
                             )}
                         </div>
 
-                        {[...currentMessages.slice(-100)].reverse().map((msg, index, array) => {
-                            const isGrouped = index < array.length - 1 && 
-                                array[index].sender_id === array[index + 1].sender_id && 
-                                (new Date(array[index].created_at).getTime() - new Date(array[index + 1].created_at).getTime() < 60000);
-                            const isSelected = selectedMessages.has(msg.id);
-                            
-                            return (
-                                <MessageBubble 
-                                    key={msg.id}
-                                    msg={msg}
-                                    isGrouped={isGrouped}
-                                    isSelected={isSelected}
-                                    isSelectionMode={isSelectionMode}
-                                    currentUserId={user?.id}
-                                    translations={translations}
-                                    showOriginal={showOriginal}
-                                    gesture={gesture}
-                                    getSenderName={getSenderName}
-                                    toggleMessageSelection={toggleMessageSelection}
-                                    setShowOriginal={setShowOriginal}
-                                    handleReport={handleReport}
-                                    handleManualTranslate={handleManualTranslate}
-                                    fetchSignedUrl={fetchSignedUrl}
-                                    setPreviewMedia={(data) => setPreviewMedia({ ...data, isOpen: true })}
-                                />
-                            );
-                        })}
+                        {(() => {
+                            const reversed = [...currentMessages.slice(-100)].reverse();
+                            const getDateLabel = (dateStr: string): string => {
+                                const d = new Date(dateStr);
+                                const today = new Date();
+                                const yesterday = new Date();
+                                yesterday.setDate(today.getDate() - 1);
+                                const toMidnight = (dt: Date) => new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
+                                if (toMidnight(d) === toMidnight(today)) return 'Today';
+                                if (toMidnight(d) === toMidnight(yesterday)) return 'Yesterday';
+                                return d.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                            };
+                            const isSameDay = (a: string, b: string) => {
+                                const da = new Date(a), db = new Date(b);
+                                return da.getFullYear() === db.getFullYear() && da.getMonth() === db.getMonth() && da.getDate() === db.getDate();
+                            };
+                            const items: React.ReactNode[] = [];
+                            reversed.forEach((msg, index, array) => {
+                                const isGrouped = index < array.length - 1 &&
+                                    array[index].sender_id === array[index + 1].sender_id &&
+                                    isSameDay(array[index].created_at, array[index + 1].created_at) &&
+                                    (new Date(array[index].created_at).getTime() - new Date(array[index + 1].created_at).getTime() < 60000);
+                                const isSelected = selectedMessages.has(msg.id);
+                                // Show date separator when this message is the first of a new day (compared to previous message in the visual list)
+                                const showDateSep = index === 0 || !isSameDay(msg.created_at, array[index - 1].created_at);
+                                if (showDateSep && msg.created_at) {
+                                    items.push(
+                                        <div key={`date-${msg.id}`} className="flex items-center gap-3 my-3 px-2">
+                                            <div className="flex-1 h-px bg-white/10" />
+                                            <span className="text-[10px] font-semibold text-gray-400 bg-gray-800/70 backdrop-blur px-3 py-1 rounded-full border border-white/10 flex-shrink-0 select-none">
+                                                {getDateLabel(msg.created_at)}
+                                            </span>
+                                            <div className="flex-1 h-px bg-white/10" />
+                                        </div>
+                                    );
+                                }
+                                items.push(
+                                    <MessageBubble
+                                        key={msg.id}
+                                        msg={msg}
+                                        isGrouped={isGrouped}
+                                        isSelected={isSelected}
+                                        isSelectionMode={isSelectionMode}
+                                        currentUserId={user?.id}
+                                        translations={translations}
+                                        showOriginal={showOriginal}
+                                        gesture={gesture}
+                                        getSenderName={getSenderName}
+                                        toggleMessageSelection={toggleMessageSelection}
+                                        setShowOriginal={setShowOriginal}
+                                        handleReport={handleReport}
+                                        handleManualTranslate={handleManualTranslate}
+                                        fetchSignedUrl={fetchSignedUrl}
+                                        setPreviewMedia={(data) => setPreviewMedia({ ...data, isOpen: true })}
+                                    />
+                                );
+                            });
+                            return items;
+                        })()}
 
                         <div className="flex flex-col gap-1 md:gap-2 mb-4">
                             {activeConversationId && hasMore[activeConversationId] && (
