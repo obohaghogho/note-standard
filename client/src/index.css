@@ -405,9 +405,9 @@ input[type=number] {
   scroll-behavior: auto;
   /* WhatsApp/Telegram technique: allow browser to natively pin newest message when container shrinks */
   overflow-anchor: auto;
-  /* padding-TOP clears space at the VISUAL BOTTOM (between newest msg and composer) */
-  padding-top: calc(var(--composer-height, 80px) + 16px);
-  padding-bottom: 8px;
+  /* padding-bottom clears space at the VISUAL BOTTOM (between newest msg and absolute composer) */
+  padding-top: 8px;
+  padding-bottom: calc(var(--composer-height, 80px) + 16px);
 }
 @media (min-width: 768px) {
   .chat-messages {
@@ -533,7 +533,8 @@ input[type=number] {
   .keyboard-open .chat-messages {
     padding-left: 10px !important;
     padding-right: 10px !important;
-    padding-bottom: 6px !important;
+    padding-top: 6px !important;
+    padding-bottom: calc(var(--composer-height, 80px) + 16px) !important;
   }
 
   .keyboard-open .msg-bubble {
