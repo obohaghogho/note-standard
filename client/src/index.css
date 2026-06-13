@@ -531,7 +531,9 @@ input[type=number] {
   }
 
   .keyboard-open .chat-messages {
-    padding: 6px 10px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    padding-bottom: 6px !important;
   }
 
   .keyboard-open .msg-bubble {
