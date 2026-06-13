@@ -977,7 +977,7 @@ const ChatWindow: React.FC = () => {
             )}
 
                 {isSearchOpen && searchQuery.trim() !== '' ? (
-                    <div className="chat-messages custom-scrollbar p-3 md:p-6 gap-1 md:gap-2" style={{ touchAction: 'pan-y' }}>
+                    <div className="overflow-y-auto flex flex-col flex-1 min-h-0 custom-scrollbar px-3 md:px-6 gap-1 md:gap-2" style={{ touchAction: 'pan-y' }}>
                         <div className="space-y-4 flex flex-col w-full">
                             <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-4">
                                 {isSearching ? 'Searching...' : `Search Results (${searchResults.length})`}
@@ -1001,7 +1001,7 @@ const ChatWindow: React.FC = () => {
                     </div>
                 ) : (
                     <div 
-                        className="chat-messages custom-scrollbar p-3 md:p-6"
+                        className="chat-messages custom-scrollbar px-3 md:px-6"
                         ref={(ref) => {
                             if (ref) scrollContainerRef.current = ref as HTMLDivElement;
                         }}
