@@ -10,7 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../common/SecureImage';
 import ImageWithSignedUrl from '../common/ImageWithSignedUrl';
 import VideoWithSignedUrl from '../common/VideoWithSignedUrl';
-import { Send, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Trash2, Share2, X, Copy, Menu, Pencil, MessageCircle, Reply } from 'lucide-react';
+import { Send, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Trash2, Share2, X, Copy, Pencil, MessageCircle, Reply } from 'lucide-react';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { MediaUpload } from './MediaUpload';
 import { VoiceRecorder } from './VoiceRecorder';
@@ -39,7 +39,7 @@ const ChatWindow: React.FC = () => {
     const { isUserOnline, getUserLastSeen } = usePresence();
     const { user, profile, session, isAdmin } = useAuth();
     const { startCall } = useWebRTC();
-    const { openMobileMenu } = useOutletContext<{ openMobileMenu: () => void }>() || {};
+    useOutletContext<{ openMobileMenu: () => void }>() || {};
 
     // ── WhatsApp-Style Selection System ──────────────────────
     const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
