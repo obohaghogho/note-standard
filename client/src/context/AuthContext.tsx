@@ -186,18 +186,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const currentSwitchId = switchIdRef.current;
       console.log(`[Auth] Switch #${currentSwitchId}: refreshing ${target.email}...`);
 
-      // Rule 13: refresh if needed before setSession
-      let freshSession = await refreshSessionIsolated(target);
-      
-      if (!freshSession) {
-        // Retry if something changed in storage
-        const latestFromStorage = accountManager.getAccount(userId);
-        const latestToken = latestFromStorage?.tokens?.refresh_token || latestFromStorage?.session?.refresh_token;
-        const targetToken = target.tokens?.refresh_token || target.session?.refresh_token;
+      // Rule 13: Try to use the stored access token first via setSession.
+      // CRITICAL: Do NOT call refreshSessionIsolated() eagerly. Supabase enforces single-use
+      // refresh tokens. If the mobile app already consumed this refresh token, calling
+      // refreshSessionIsolated() here will get a 400 'invalid_grant' error.
+      // Strategy: Try setSession with the stored token first. If it succeeds (even with a stale
+      // access token), Supabase's SDK will auto-refresh it. Only fall back to manual refresh
+      // if we have no access token at all.
 
-        if (latestFromStorage && latestToken && latestToken !== targetToken) {
-          console.log(`[Auth] Token rotated in another tab while switching. Retrying...`);
-          freshSession = await refreshSessionIsolated(latestFromStorage);
+      const storedAccess = target.tokens?.access_token || target.session?.access_token;
+      const storedRefresh = target.tokens?.refresh_token || target.session?.refresh_token;
+
+      if (!storedRefresh) {
+        toast.dismiss(toastId);
+        toast.error(`No credentials found for ${target.email}. Please log in again.`);
+        setIsSwitching(false);
+        switchInProgress.current = false;
+        window.location.href = `/login?add_account=true&hint=${encodeURIComponent(target.email)}`;
+        return;
+      }
+
+      // Attempt setSession with whatever tokens we have.
+      // Supabase SDK will silently auto-refresh the access token if it's expired.
+      let freshSession: { access_token: string; refresh_token: string } | null = null;
+
+      try {
+        const { data: setResult, error: setError } = await supabase.auth.setSession({
+          access_token: storedAccess || '',
+          refresh_token: storedRefresh,
+        });
+        
+        if (!setError && setResult.session) {
+          // setSession succeeded — save any newly rotated tokens
+          freshSession = {
+            access_token: setResult.session.access_token,
+            refresh_token: setResult.session.refresh_token,
+          };
+          accountManager.updateAccountTokens(userId, setResult.session);
+          console.log('[Auth] setSession succeeded for', target.email);
+        } else {
+          console.warn('[Auth] setSession failed:', setError?.message, '— trying isolated refresh as last resort');
+          // Only now try refreshSessionIsolated as last resort
+          const latestAccount = accountManager.getAccount(userId);
+          if (latestAccount) {
+            const isolated = await refreshSessionIsolated(latestAccount);
+            if (isolated) freshSession = isolated;
+          }
+        }
+      } catch (sessionErr) {
+        console.warn('[Auth] setSession threw:', sessionErr, '— trying isolated refresh as last resort');
+        const latestAccount = accountManager.getAccount(userId);
+        if (latestAccount) {
+          const isolated = await refreshSessionIsolated(latestAccount).catch(() => null);
+          if (isolated) freshSession = isolated;
         }
       }
 
@@ -205,6 +246,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (currentSwitchId !== switchIdRef.current) return;
 
       if (!freshSession) {
+        toast.dismiss(toastId);
         toast.error(`Session for ${target.email} has expired. Please re-authenticate.`);
         setIsSwitching(false);
         switchInProgress.current = false;
@@ -215,13 +257,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Rule 3: Update active account ID FIRST
       accountManager.setActiveAccountId(userId);
 
-      // Rule 4: Atomic setSession
-      const { error } = await supabase.auth.setSession({
-        access_token: freshSession.access_token,
-        refresh_token: freshSession.refresh_token
-      });
-
-      if (error) throw error;
+      // NOTE: We do NOT call supabase.auth.setSession() again here.
+      // The session was already established in the try block above.
+      // Calling setSession again would burn the newly rotated refresh token (Supabase single-use policy).
 
       // Note: Logic continues in onAuthStateChange listener.
       // We don't need syncUserData here as listener will trigger it.
