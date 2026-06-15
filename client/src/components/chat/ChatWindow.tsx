@@ -39,7 +39,6 @@ const ChatWindow: React.FC = () => {
     const { isUserOnline, getUserLastSeen } = usePresence();
     const { user, profile, session, isAdmin } = useAuth();
     const { startCall } = useWebRTC();
-    useOutletContext<{ openMobileMenu: () => void }>() || {};
 
     // ── WhatsApp-Style Selection System ──────────────────────
     const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
