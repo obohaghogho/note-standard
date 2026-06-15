@@ -3,6 +3,14 @@ import { API_URL } from '../Config';
 import { AuthService } from '../services/AuthService';
 import { Alert } from 'react-native';
 
+/**
+ * Global flag — set to true by AuthContext while a notification-driven account
+ * switch is in progress. The 401 interceptor reads this to decide whether to
+ * show the 'Session Expired' alert or stay silent so navigation can complete.
+ */
+export let isSwitchingAccount = false;
+export const setSwitchingAccount = (v: boolean) => { isSwitchingAccount = v; };
+
 const apiClient = axios.create({
   baseURL: `${API_URL}/api`,
   timeout: 15000, // 15 seconds
@@ -151,11 +159,18 @@ apiClient.interceptors.response.use(
 
           if (isAuthError) {
             console.warn('[apiClient] Refresh token invalid. Expiring session...');
-            if (currentUser) {
-                await AuthService.expireSession(currentUser.id, true);
-                Alert.alert('Session Expired', 'Your session has expired. Please log in again.');
+            // NEVER show 'Session Expired' alert during an account switch.
+            // The switch is optimistic — the token may be stale but still refreshable.
+            // The alert would race with the deepNavigateToChat call and confuse the user.
+            if (!isSwitchingAccount) {
+              if (currentUser) {
+                  await AuthService.expireSession(currentUser.id, true);
+                  Alert.alert('Session Expired', 'Your session has expired. Please log in again.');
+              } else {
+                  await AuthService.logout(); // Fallback
+              }
             } else {
-                await AuthService.logout(); // Fallback
+              console.warn('[apiClient] Session expired during account switch — suppressing alert, letting background refresh handle it.');
             }
           }
           

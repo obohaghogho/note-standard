@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import apiClient from '../api/apiClient';
+import apiClient, { setSwitchingAccount } from '../api/apiClient';
 import { AuthService, User } from '../services/AuthService';
 import { StoredAccount } from '../utils/AccountManager';
 import EventEmitter from '../services/EventEmitter';
@@ -76,38 +76,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const handleNotificationSwitch = async ({ userId }: { userId: string }) => {
       console.log(`[AuthContext] handleNotificationSwitch: switching to ${userId}`);
       setAccountReady(false);
+      setSwitchingAccount(true); // Suppress 'Session Expired' alert during switch
       
-      const success = await AuthService.switchAccount(userId);
-      if (success) {
-        const newUser = await AuthService.getUser();
-        const token = await AuthService.getToken();
-        if (newUser && token) {
-          const accs = await AuthService.getStoredAccounts();
-          const acc = accs.find(a => a.id === newUser.id);
-          // Disconnect old socket BEFORE reconnecting
-          SignalingService.disconnect();
-          SignalingService.init(token, newUser.id, acc?.sessionId, acc?.deviceId);
-          // Register the signal BEFORE calling setUser so the
-          // post-render useEffect([user]) can fire it at the right time.
-          pendingSignalUserIdRef.current = userId;
-          setUser(newUser);
-          const updatedAccs = await AuthService.getStoredAccounts();
-          setAccounts(updatedAccs);
-          // Switch partially failed — still signal to unblock NotificationRouter
-          console.warn('[AuthContext] Account switch succeeded but user/token missing');
+      try {
+        const success = await AuthService.switchAccount(userId);
+        if (success) {
+          const newUser = await AuthService.getUser();
+          const token = await AuthService.getToken();
+          if (newUser && token) {
+            const accs = await AuthService.getStoredAccounts();
+            const acc = accs.find(a => a.id === newUser.id);
+            // Disconnect old socket BEFORE reconnecting
+            SignalingService.disconnect();
+            SignalingService.init(token, newUser.id, acc?.sessionId, acc?.deviceId);
+            // Register the signal BEFORE calling setUser so the
+            // post-render useEffect([user]) can fire it at the right time.
+            // The ACTUAL signalAccountReady(true) fires from the post-render
+            // useEffect([user]) below — guaranteeing React has committed the new
+            // user to the tree before navigation runs.
+            pendingSignalUserIdRef.current = userId;
+            setUser(newUser);
+            const updatedAccs = await AuthService.getStoredAccounts();
+            setAccounts(updatedAccs);
+          } else {
+            // switchAccount returned true but user/token are somehow missing from storage
+            console.warn('[AuthContext] Account switch succeeded but user/token missing in storage');
+            setSwitchingAccount(false);
+            setAccountReady(true);
+            const { NotificationRouter } = require('../services/NotificationRouter');
+            NotificationRouter.signalAccountReady(userId, false);
+          }
+        } else {
+          // switchAccount returned false — account not found in local storage
+          console.error(`[AuthContext] AuthService.switchAccount failed for userId: ${userId}`);
+          setSwitchingAccount(false);
           setAccountReady(true);
           const { NotificationRouter } = require('../services/NotificationRouter');
           NotificationRouter.signalAccountReady(userId, false);
         }
-      } else {
-        // Switch completely failed (e.g., token expired and refresh failed)
-        console.error(`[AuthContext] AuthService.switchAccount failed for userId: ${userId}`);
+      } catch (err) {
+        console.error('[AuthContext] Unexpected error in handleNotificationSwitch:', err);
+        setSwitchingAccount(false);
         setAccountReady(true);
         const { NotificationRouter } = require('../services/NotificationRouter');
-        NotificationRouter.signalAccountReady(userId, false); // Pass false to indicate failure
-        
-        const { Alert } = require('react-native');
-        Alert.alert('Account Switch Failed', 'The target account session has expired. Please log in again from the profile menu.');
+        NotificationRouter.signalAccountReady(userId, false);
       }
     };
 
@@ -134,6 +146,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setAccountReady(true);
       const { NotificationRouter } = require('../services/NotificationRouter');
       NotificationRouter.signalAccountReady(pendingUserId, true);
+      // Allow a short window for deepNavigateToChat's API call to complete,
+      // then clear the flag so normal 401 handling resumes.
+      setTimeout(() => setSwitchingAccount(false), 3000);
     }
   }, [user]);
 
