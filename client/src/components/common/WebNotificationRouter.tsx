@@ -56,63 +56,59 @@ export const WebNotificationRouter: React.FC = () => {
       // Step 1: Freeze navigation
       setIsSwitchingOverlay(true);
 
+      // Step 2: Clear Caches Synchronously (non-fatal)
+      try { chatClearState(); } catch (e) { console.warn('[ACCOUNT_FORENSIC] chatClearState error (non-fatal):', e); }
+      try { notificationContext.clearState(); } catch (e) { console.warn('[ACCOUNT_FORENSIC] notificationContext.clearState error (non-fatal):', e); }
+
+      // Step 3: Realtime teardown (non-fatal)
+      try { socketTeardown(); } catch (e) { console.warn('[ACCOUNT_FORENSIC] socketTeardown error (non-fatal):', e); }
+
+      // Step 4: Perform account switch — this is the ONLY fatal step
       try {
-        // Step 2: Clear Caches Synchronously
-        console.log('[ACCOUNT_FORENSIC] CLEAR_STATE');
-        chatClearState();
-        notificationContext.clearState();
-
-        // Step 3: Realtime teardown
-        console.log('[ACCOUNT_FORENSIC] SOCKET_TEARDOWN');
-        socketTeardown();
-
-        // Step 4: Perform account switch
         await switchAccount(targetAccountId);
-        
-        const active = accountManager.getActiveAccountId();
-        if (active !== targetAccountId) {
-           throw new Error("Account switch verification failed");
-        }
-        console.log('[ACCOUNT_FORENSIC] ACCOUNT_SWITCH_SUCCESS');
-
-        // Fetch the active account to get the tokens needed for sockets
-        const activeAccount = accountManager.getAccount(active);
-        if (!activeAccount || !activeAccount.tokens.access_token) {
-            throw new Error("Account tokens missing");
-        }
-
-        // Step 5: Realtime initialization
-        console.log('[ACCOUNT_FORENSIC] SOCKET_CONNECTING');
-        await socketInitialize(activeAccount.tokens.access_token);
-        console.log('[ACCOUNT_FORENSIC] SOCKET_CONNECTED');
-
-        // Step 6: Notification initialization
-        console.log('[ACCOUNT_FORENSIC] NOTIFICATIONS_INITIALIZING');
-        await notificationContext.reinitialize();
-        console.log('[ACCOUNT_FORENSIC] NOTIFICATIONS_READY');
-
-        // Step 7: Conversation hydration
-        console.log('[ACCOUNT_FORENSIC] CONVERSATIONS_INITIALIZING');
-        await chatInitialize();
-        console.log('[ACCOUNT_FORENSIC] CONVERSATIONS_READY');
-
-        // Step 8: Navigate
-        const destination = conversationId ? `/dashboard/chat?id=${conversationId}` : '/dashboard';
-        console.log('[ACCOUNT_FORENSIC] NAVIGATION_COMPLETE - Navigating to:', destination);
-        
-        navigate(destination, { replace: true });
-
-        // Clean up
-        setIsSwitchingOverlay(false);
-        handledRef.current = null;
-
-      } catch (err) {
-        console.error('[ACCOUNT_FORENSIC] Account Switch Failed:', err);
-        toast.error('Session expired for the target account. Please log in again.', { duration: 5000 });
-        navigate('/login?add_account=true', { replace: true });
+      } catch (switchErr) {
+        console.error('[ACCOUNT_FORENSIC] Account Switch Fatal Error:', switchErr);
+        toast.error(`Could not switch account. Please try again.`);
         handledRef.current = null;
         setIsSwitchingOverlay(false);
+        return;
       }
+      
+      const active = accountManager.getActiveAccountId();
+      if (active !== targetAccountId) {
+        console.error('[ACCOUNT_FORENSIC] Verification failed — active:', active, 'target:', targetAccountId);
+        toast.error('Account switch did not complete. Please tap the notification again.');
+        handledRef.current = null;
+        setIsSwitchingOverlay(false);
+        return;
+      }
+      console.log('[ACCOUNT_FORENSIC] ACCOUNT_SWITCH_SUCCESS');
+
+      const activeAccount = accountManager.getAccount(active);
+
+      // Step 5: Navigate FIRST — WhatsApp/Messenger style: show UI immediately, sync in background.
+      // Do NOT block navigation on socket/chat initialization.
+      const destination = conversationId ? `/dashboard/chat?id=${conversationId}` : '/dashboard';
+      console.log('[ACCOUNT_FORENSIC] NAVIGATION_COMPLETE - Navigating to:', destination);
+      navigate(destination, { replace: true });
+      setIsSwitchingOverlay(false);
+      handledRef.current = null;
+
+      // Step 6: Background re-initialization — failures here are non-fatal and logged only.
+      // React's SocketContext useEffect will reconnect automatically when the session updates.
+      if (activeAccount?.tokens?.access_token) {
+        socketInitialize(activeAccount.tokens.access_token)
+          .then(() => console.log('[ACCOUNT_FORENSIC] SOCKET_CONNECTED (background)'))
+          .catch(e => console.warn('[ACCOUNT_FORENSIC] Socket init non-fatal (will auto-retry):', e.message));
+      }
+
+      notificationContext.reinitialize()
+        .then(() => console.log('[ACCOUNT_FORENSIC] NOTIFICATIONS_READY (background)'))
+        .catch(e => console.warn('[ACCOUNT_FORENSIC] Notification reinit non-fatal:', e.message));
+
+      chatInitialize()
+        .then(() => console.log('[ACCOUNT_FORENSIC] CONVERSATIONS_READY (background)'))
+        .catch(e => console.warn('[ACCOUNT_FORENSIC] Chat init non-fatal:', e.message));
     };
 
     handleNotificationNavigation();
