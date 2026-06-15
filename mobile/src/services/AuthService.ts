@@ -180,60 +180,19 @@ export class AuthService {
         const account = await AccountManager.getAccount(userId);
         if (!account) return false;
 
-        let isExpired = false;
-        try {
-            // Parse JWT safely to check expiration (mobile environment safe)
-            const parts = account.token.split('.');
-            if (parts.length === 3) {
-                // React Native polyfill-safe base64 decode (Expo provides atob)
-                // Need to pad the base64 string
-                let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-                while (base64.length % 4) { base64 += '='; }
-                const payloadStr = atob(base64);
-                const payload = JSON.parse(payloadStr);
-                // Check if expired (or expiring within 60 seconds)
-                if (payload.exp && payload.exp * 1000 < (Date.now() + 60000)) {
-                    isExpired = true;
-                }
-            }
-        } catch (e) {
-            console.warn('[AuthService] Token parse failed, assuming expired', e);
-            isExpired = true;
-        }
-
-        // Lazy Hydration
-        if ((account.tokenState !== "valid" || isExpired) && account.refresh_token) {
-            try {
-                await AccountManager.setTokenState(userId, "refreshing");
-                
-                const { API_URL } = require('../Config');
-                const axios = require('axios').default;
-                const res = await axios.post(`${API_URL}/api/auth/refresh-token`, { 
-                    refresh_token: account.refresh_token,
-                    session_id: account.sessionId,
-                    device_id: account.deviceId
-                }, { 
-                    timeout: 15000,
-                    headers: { 'Content-Type': 'application/json', 'x-client-type': 'mobile' }
-                });
-
-                if (res.data.token) {
-                    account.token = res.data.token;
-                    if (res.data.refresh_token) {
-                        account.refresh_token = res.data.refresh_token;
-                    }
-                    await AccountManager.updateTokens(userId, account.token, account.refresh_token, account.sessionId);
-                }
-            } catch (e: any) {
-                console.warn('[AuthService] switchAccount refresh failed:', e.message);
-                const isPermanent = e.response?.status === 401 || e.response?.data?.error?.includes('invalid');
-                await AccountManager.setTokenState(userId, isPermanent ? "invalid" : "stale");
-                await AccountManager.clearTokens(userId);
-                return false; // Force user to login
-            }
-        } else if (account.tokenState === "invalid") {
+        // WhatsApp/Instagram-Style Instant Switch Architecture:
+        // We do NOT block the UI transition to validate the network token.
+        // We optimistically swap the local database context and return true instantly.
+        // If the token is expired, `apiClient.ts` will catch the 401 when the UI tries to fetch data,
+        // and it will perform the refresh token rotation in the background transparently.
+        
+        if (account.tokenState === "invalid") {
+            // Only block the switch if the session is definitively permanently revoked.
             return false; // Needs re-login
         }
+
+        // Flag as stale so apiClient aggressively refreshes if needed, but don't block.
+        // Actually, we don't even need to flag it. apiClient will figure it out via 401s.
 
         const userData: User = {
             id: account.id,
