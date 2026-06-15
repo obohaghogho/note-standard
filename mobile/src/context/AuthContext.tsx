@@ -91,21 +91,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // post-render useEffect([user]) can fire it at the right time.
           pendingSignalUserIdRef.current = userId;
           setUser(newUser);
-          const accs = await AuthService.getStoredAccounts();
-          setAccounts(accs);
-        } else {
-          // Switch failed — still signal to unblock NotificationRouter
+          const updatedAccs = await AuthService.getStoredAccounts();
+          setAccounts(updatedAccs);
+          // Switch partially failed — still signal to unblock NotificationRouter
           console.warn('[AuthContext] Account switch succeeded but user/token missing');
           setAccountReady(true);
           const { NotificationRouter } = require('../services/NotificationRouter');
-          NotificationRouter.signalAccountReady(userId);
+          NotificationRouter.signalAccountReady(userId, false);
         }
       } else {
-        // Switch failed — still signal to unblock NotificationRouter
+        // Switch completely failed (e.g., token expired and refresh failed)
         console.error(`[AuthContext] AuthService.switchAccount failed for userId: ${userId}`);
         setAccountReady(true);
         const { NotificationRouter } = require('../services/NotificationRouter');
-        NotificationRouter.signalAccountReady(userId);
+        NotificationRouter.signalAccountReady(userId, false); // Pass false to indicate failure
+        
+        const { Alert } = require('react-native');
+        Alert.alert('Account Switch Failed', 'The target account session has expired. Please log in again from the profile menu.');
       }
     };
 
@@ -131,7 +133,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       pendingSignalUserIdRef.current = null;
       setAccountReady(true);
       const { NotificationRouter } = require('../services/NotificationRouter');
-      NotificationRouter.signalAccountReady(pendingUserId);
+      NotificationRouter.signalAccountReady(pendingUserId, true);
     }
   }, [user]);
 

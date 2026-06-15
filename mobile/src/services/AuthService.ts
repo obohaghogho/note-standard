@@ -180,8 +180,29 @@ export class AuthService {
         const account = await AccountManager.getAccount(userId);
         if (!account) return false;
 
+        let isExpired = false;
+        try {
+            // Parse JWT safely to check expiration (mobile environment safe)
+            const parts = account.token.split('.');
+            if (parts.length === 3) {
+                // React Native polyfill-safe base64 decode (Expo provides atob)
+                // Need to pad the base64 string
+                let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+                while (base64.length % 4) { base64 += '='; }
+                const payloadStr = atob(base64);
+                const payload = JSON.parse(payloadStr);
+                // Check if expired (or expiring within 60 seconds)
+                if (payload.exp && payload.exp * 1000 < (Date.now() + 60000)) {
+                    isExpired = true;
+                }
+            }
+        } catch (e) {
+            console.warn('[AuthService] Token parse failed, assuming expired', e);
+            isExpired = true;
+        }
+
         // Lazy Hydration
-        if (account.tokenState !== "valid" && account.refresh_token) {
+        if ((account.tokenState !== "valid" || isExpired) && account.refresh_token) {
             try {
                 await AccountManager.setTokenState(userId, "refreshing");
                 

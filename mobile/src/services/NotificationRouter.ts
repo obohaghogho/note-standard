@@ -49,7 +49,7 @@ async function deepNavigateToChat(conversationId: string) {
 }
 
 class NotificationRouterService {
-  private resolveReadyQueue: Record<string, ((value: void) => void)[]> = {};
+  private resolveReadyQueue: Record<string, ((value: boolean | PromiseLike<boolean>) => void)[]> = {};
   private isAppReady = false;
   private pendingTapData: any = null;
 
@@ -109,11 +109,15 @@ class NotificationRouterService {
         EventEmitter.emit('notification:switch_account', { userId: targetAccountId });
 
         try {
-          await readyPromise;
+          const success = await readyPromise;
+          if (!success) {
+            console.warn(`[ACCOUNT_FORENSIC] ❌ Account switch failed. Aborting navigation to prevent Session Expired redirect.`);
+            return;
+          }
           console.log(`[ACCOUNT_FORENSIC] ✅ Account ${targetAccountId} is fully ready.`);
         } catch (switchErr) {
           console.error('[ACCOUNT_FORENSIC] ❌ Account switch timed out or failed:', switchErr);
-          // Don't abort — try navigation anyway with fresh token
+          // Don't abort on unknown timeout, try navigation anyway with fresh token
         }
 
         // Give React one extra tick to commit the setUser() state update
@@ -134,7 +138,7 @@ class NotificationRouterService {
     }
   }
 
-  waitForReady(userId: string): Promise<void> {
+  waitForReady(userId: string): Promise<boolean> {
     return new Promise((resolve, reject) => {
       if (!this.resolveReadyQueue[userId]) {
         this.resolveReadyQueue[userId] = [];
@@ -151,23 +155,23 @@ class NotificationRouterService {
           }
         }
         console.warn(`[ACCOUNT_FORENSIC] ⏰ Timeout waiting for account ready signal: ${userId}`);
-        reject(new Error('Account switch timeout'));
+        resolve(false); // Resolve false instead of rejecting to avoid unhandled promise rejections
       }, 8000);
 
       // Override resolve to clear timeout
       const originalResolve = resolve;
-      this.resolveReadyQueue[userId][this.resolveReadyQueue[userId].length - 1] = () => {
+      this.resolveReadyQueue[userId][this.resolveReadyQueue[userId].length - 1] = (success: boolean | PromiseLike<boolean>) => {
         clearTimeout(timeout);
-        originalResolve();
+        originalResolve(success);
       };
     });
   }
 
-  signalAccountReady(userId: string) {
-    console.log(`[ACCOUNT_FORENSIC] signalAccountReady called for: ${userId}`);
+  signalAccountReady(userId: string, success: boolean = true) {
+    console.log(`[ACCOUNT_FORENSIC] signalAccountReady called for: ${userId} with success=${success}`);
     const queue = this.resolveReadyQueue[userId];
     if (queue && queue.length > 0) {
-      queue.forEach(resolve => resolve());
+      queue.forEach(resolve => resolve(success));
       this.resolveReadyQueue[userId] = [];
     } else {
       console.warn(`[ACCOUNT_FORENSIC] signalAccountReady called but no listeners for: ${userId}`);

@@ -88,19 +88,21 @@ export class PushHandler {
       const { data, title, body } = notification.request.content;
       console.log('[PushHandler] 🔔 Standard Push Received:', JSON.stringify(data));
       
-      if (data.type === 'incoming_call' && Platform.OS === 'android') {
-        this.handleIncomingCall(data as unknown as CallData);
-      } else if (data.type === 'message' || data.type === 'chat_message') {
-        if (data.messageId) {
-          apiClient.post(`/chat/messages/${data.messageId}/webhook-deliver`).catch(e => {
+      const payload = data?.data ?? data;
+
+      if (payload.type === 'incoming_call' && Platform.OS === 'android') {
+        this.handleIncomingCall(payload as unknown as CallData);
+      } else if (payload.type === 'message' || payload.type === 'chat_message') {
+        if (payload.messageId) {
+          apiClient.post(`/chat/messages/${payload.messageId}/webhook-deliver`).catch(e => {
             console.error('[PushHandler] Delivery receipt failed:', e);
           });
         }
         
         EventEmitter.emit('notification', {
-          title: title || data.title || 'New Message',
-          message: body || data.message || '',
-          type: data.type
+          title: title || payload.title || 'New Message',
+          message: body || payload.message || '',
+          type: payload.type
         });
       }
     });
