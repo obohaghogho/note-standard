@@ -100,7 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (isMounted.current) {
-        if (profileResult && profileResult !== 'ERROR') {
+        if (profileResult) {
           const prof = profileResult as Profile;
           setProfile(prof);
           
@@ -111,7 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
         
-        if (subResult && subResult !== 'ERROR') {
+        if (subResult) {
           setSubscription(subResult as Subscription | null);
         }
       }
