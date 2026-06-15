@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallba
 import { useChatGesture } from '../../hooks/useChatGesture';
 import { AnimatePresence } from 'framer-motion';
 import { useChat } from '../../context/ChatContext';
-import { useOutletContext, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import type { Message } from '../../context/ChatContext';
 import { usePresence } from '../../context/PresenceContext';
 import { formatDistanceToNow } from 'date-fns';
