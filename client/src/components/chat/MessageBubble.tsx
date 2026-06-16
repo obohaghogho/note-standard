@@ -20,7 +20,7 @@ interface MessageBubbleProps {
     setShowOriginal: React.Dispatch<React.SetStateAction<{ [key: string]: boolean }>>;
     handleReport: (id: string, content: string, translation?: string) => void;
     handleManualTranslate: (id: string, content: string, original_language?: string) => void;
-    fetchSignedUrl: (path: string) => Promise<string>;
+    fetchSignedUrl: (path: string) => Promise<string | null>;
     setPreviewMedia: (data: { url: string; type: 'image' | 'video'; fileName?: string; isSender?: boolean }) => void;
 }
 
