@@ -29,7 +29,7 @@ export interface Message {
     delivered_at?: string;
     is_edited?: boolean;
     updated_at?: string;
-    status?: 'sending' | 'sent' | 'failed';
+    status?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
     // Phase 3: sequence integrity fields (optional for legacy compat)
     sequence_number?: number;
     conversation_version?: number;
@@ -653,7 +653,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         const pendingPreview = {
                             id: `temp-${intent.event_id}`,
                             content: `⏳ ${intent.payload.content}`,
-                            sender_id: conv.participants?.find(p => p)?.id ?? '',
+                            sender_id: conv.members?.find((m: any) => m)?.user_id ?? '',
                             created_at: new Date(intentTime).toISOString(),
                             type: (intent.payload.type || 'text') as 'text' | 'image' | 'video' | 'audio' | 'file'
                         };
@@ -1635,7 +1635,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         // ── Phase 1: Observability (Generate Correlation ID) ──
         const cid = generateCorrelationId();
         trackCorrelation(cid, 'sendMessage');
-        logger.info('CHAT', 'Initiating send message', { correlationId: cid, conversationId, type });
+        logger.info('CHAT', 'Initiating send message', { correlationId: cid, conversationId, data: { type } });
 
         const optimisticMessage: Message = {
             id: tempId,
@@ -1661,7 +1661,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             event_id: clientEventId,
             conversation_id: conversationId,
             payload: { content, type, attachmentId, replyTo, correlationId: cid },
-            leaseSnapshot: { device_id: resolvedDeviceId, session_id: resolvedSessionId },
             created_at: Date.now()
         });
 
@@ -1775,10 +1774,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         // Use the actual file type for images/videos/audio. For documents (type === 'file'),
                 // use application/octet-stream as a safe fallback because Supabase Storage 
                 // rejects specific document MIME types (e.g. application/json) with a 415 error.
-                'Content-Type': (type === 'image' || type === 'video') 
-                    ? (fileType ? fileType.split(';')[0] : 'application/octet-stream')
-                    : type === 'audio' ? 'audio/webm' 
-                    : 'application/octet-stream',
+                'Content-Type': type === 'audio' 
+                    ? 'audio/webm' 
+                    : (fileType ? fileType.split(';')[0] : 'application/octet-stream'),
                         'x-upsert': 'false'
                     },
                     body: file, // Works with File or Blob natively in browser

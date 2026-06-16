@@ -317,6 +317,7 @@ input[type=number] {
 /* Emoji Picker Custom UI */
 .emoji-picker-container {
     width: 320px;
+    max-width: calc(100vw - 24px);
     background: #111116;
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
@@ -337,7 +338,7 @@ input[type=number] {
 
 .emoji-picker-grid {
     display: grid;
-    grid-template-columns: repeat(8, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
     gap: 6px;
     padding: 12px;
     max-height: 220px;
