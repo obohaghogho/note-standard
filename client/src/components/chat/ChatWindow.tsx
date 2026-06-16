@@ -1252,7 +1252,7 @@ const ChatWindow: React.FC = () => {
                                                 rows={1}
                                                 value={inputValue}
                                                 onChange={handleInputChange}
-                                                onKeyDown={(e) => {
+                                                onKeyDown={() => {
                                                     // By product requirement, Enter inserts a newline instead of sending.
                                                     // Sending is done exclusively via the explicit Send button.
                                                 }}
