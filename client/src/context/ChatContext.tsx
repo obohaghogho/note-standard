@@ -1772,7 +1772,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${session?.access_token}`,
-                        'Content-Type': (fileType ? fileType.split(';')[0] : (type === 'audio' ? 'audio/webm' : 'application/octet-stream')),
+                        // Use the actual file type for images/videos/audio. For documents (type === 'file'),
+                // use application/octet-stream as a safe fallback because Supabase Storage 
+                // rejects specific document MIME types (e.g. application/json) with a 415 error.
+                'Content-Type': (type === 'image' || type === 'video') 
+                    ? (fileType ? fileType.split(';')[0] : 'application/octet-stream')
+                    : type === 'audio' ? 'audio/webm' 
+                    : 'application/octet-stream',
                         'x-upsert': 'false'
                     },
                     body: file, // Works with File or Blob natively in browser

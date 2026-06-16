@@ -10,9 +10,9 @@ import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../common/SecureImage';
 import ImageWithSignedUrl from '../common/ImageWithSignedUrl';
 import VideoWithSignedUrl from '../common/VideoWithSignedUrl';
-import { Send, Phone, Video, Plus, Paperclip, Smile, Search, MoreHorizontal, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Trash2, Share2, X, Copy, Pencil, MessageCircle, Reply } from 'lucide-react';
+import { Send, Phone, Video, Paperclip, Smile, Search, MoreHorizontal, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Trash2, Share2, X, Copy, Pencil, MessageCircle, Reply } from 'lucide-react';
 import { useWebRTC } from '../../context/WebRTCContext';
-import { MediaUpload } from './MediaUpload';
+import { WhatsAppMediaPicker } from './WhatsAppMediaPicker';
 import { VoiceRecorder } from './VoiceRecorder';
 import { API_URL } from '../../lib/api';
 import toast from 'react-hot-toast';
@@ -106,7 +106,7 @@ const ChatWindow: React.FC = () => {
     // (No manual timer cleanup needed — useChatGesture manages its own cleanup)
     
     const [inputValue, setInputValue] = useState('');
-    const [showMediaUpload, setShowMediaUpload] = useState(false);
+    const [showAttachMenu, setShowAttachMenu] = useState(false);
     const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
     const signedUrlsRef = useRef<Record<string, string>>({});
     useEffect(() => {
@@ -163,7 +163,15 @@ const ChatWindow: React.FC = () => {
     // Ref to prevent translation loops
     const translatingRef = useRef<Set<string>>(new Set());
     
-    const emojis = ['😀', '😂', '😍', '🙌', '🔥', '👍', '🙏', '💯', '✨', '❤️', '🎉', '😊', '✅', '🚀', '👀', '💡'];
+    const emojis = [
+        '😀','😃','😄','😁','😆','😅','😂','🤣','🥲','😊','😇','🙂','🙃','😉','😌',
+        '😍','🥰','😘','😗','😙','😚','😋','😛','😝','😜','🤪','🤨','🧐','🤓','😎','🥸',
+        '🤩','🥳','😏','😒','😞','😔','😟','😕','🙁','☹️','😣','😖','😫','😩','🥺','😢',
+        '😭','😤','😠','😡','🤬','🤯','😳','🥵','🥶','😱','😨','😰','😥','😓',
+        '🤗','🤔','🤭','🥱','🤫','🤥','😶','😐','😑','😬','🙄',
+        '👍','👎','✌️','🤞','🫶','🤌','🤏','👇','☝️','✋','🤚','🖐','🖖','👋','🤙',
+        '💪','🦾','🖕','✍️','🙏','🤝','👏','🙌','👐','🤲','❤️','🔥','✨','💯','🎉'
+    ];
 
     const preferredLanguage = profile?.preferred_language || 'en';
 
@@ -451,7 +459,10 @@ const ChatWindow: React.FC = () => {
         return () => clearTimeout(delayDebounce);
     }, [searchQuery, isSearchOpen, activeConversationId, session?.access_token]);
 
-    const fetchSignedUrl = useCallback(async (path: string) => {
+    const fetchSignedUrl = useCallback(async (path: string): Promise<string | null> => {
+        // Short-circuit for local blob/data URLs - these are optimistic previews
+        // and don't need a server-signed URL. Sending them to the server causes 500.
+        if (!path || path.startsWith('blob:') || path.startsWith('data:')) return path;
         if (signedUrlsRef.current[path]) return signedUrlsRef.current[path];
         try {
             const res = await fetch(`${API_URL}/api/media/signed-url?path=${encodeURIComponent(path)}`, {
@@ -510,10 +521,19 @@ const ChatWindow: React.FC = () => {
         }
     };
 
-    const handleMediaUploadComplete = async (file: File, type: 'image' | 'video') => {
-        setShowMediaUpload(false);
+    const handleMediaUploadComplete = async (file: File, type: 'image' | 'video' | 'file', caption?: string) => {
+        setShowAttachMenu(false);
         try {
+            // First upload the media
             await sendMediaMessage(file, type);
+            // If there's a caption, send it as a follow-up text message 
+            // (or if sendMediaMessage supported captions directly we'd pass it there)
+            if (caption && caption.trim().length > 0) {
+                await sendMessage({
+                    content: caption.trim(),
+                    type: 'text'
+                });
+            }
         } catch {
             toast.error('Failed to send media message');
         }
@@ -1128,9 +1148,7 @@ const ChatWindow: React.FC = () => {
             )}
 
             <AnimatePresence>
-                {showMediaUpload && activeConversationId && (
-                    <MediaUpload onUploadComplete={handleMediaUploadComplete} onCancel={() => setShowMediaUpload(false)} />
-                )}
+                {/* MediaPicker has been moved to be anchored to the paperclip button */}
             </AnimatePresence>
 
 
@@ -1163,13 +1181,24 @@ const ChatWindow: React.FC = () => {
                             ) : (
                                 <div className="flex items-center gap-2 md:gap-3">
                                     <div className="flex-1 min-w-0 flex items-center gap-1 md:gap-2 bg-white/[0.05] hover:bg-white/[0.08] border border-white/[0.1] focus-within:border-blue-500/60 focus-within:bg-white/[0.1] rounded-[24px] p-2 px-4 md:px-5 transition-all duration-300 shadow-xl group/input">
-                                        <button 
-                                            type="button" 
-                                            onClick={() => setShowMediaUpload(!showMediaUpload)} 
-                                            className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-full transition-all flex-shrink-0 active:scale-90"
-                                        >
-                                            <Plus size={22} className={`transition-transform duration-300 ${showMediaUpload ? 'rotate-45 text-blue-400' : ''}`} />
-                                        </button>
+                                        <div className="relative">
+                                            <button 
+                                                type="button" 
+                                                onClick={() => setShowAttachMenu(!showAttachMenu)} 
+                                                className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-full transition-all flex-shrink-0 active:scale-90"
+                                            >
+                                                <Paperclip size={22} className={`transition-transform duration-300 ${showAttachMenu ? 'rotate-45 text-blue-400' : ''}`} />
+                                            </button>
+                                            <AnimatePresence>
+                                                {showAttachMenu && activeConversationId && (
+                                                    <WhatsAppMediaPicker 
+                                                        initialMode="menu"
+                                                        onUploadComplete={handleMediaUploadComplete} 
+                                                        onCancel={() => setShowAttachMenu(false)} 
+                                                    />
+                                                )}
+                                            </AnimatePresence>
+                                        </div>
                                         
                                         <div className="flex-1 relative min-w-0 flex flex-col justify-end">
                                             {editingMessageId && (
@@ -1224,12 +1253,8 @@ const ChatWindow: React.FC = () => {
                                                 value={inputValue}
                                                 onChange={handleInputChange}
                                                 onKeyDown={(e) => {
-                                                    // Enter sends message (like WhatsApp Web)
-                                                    // Shift+Enter inserts newline
-                                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                                        e.preventDefault();
-                                                        handleSend(e as unknown as React.FormEvent);
-                                                    }
+                                                    // By product requirement, Enter inserts a newline instead of sending.
+                                                    // Sending is done exclusively via the explicit Send button.
                                                 }}
                                                 onFocus={() => {
                                                     // Start transition lock preemptively if the device is going to open the keyboard
@@ -1275,7 +1300,7 @@ const ChatWindow: React.FC = () => {
                                                 <Mic size={20} />
                                             </button>
                                             
-                                            <div className="relative md:block hidden">
+                                            <div className="relative md:block">
                                                 <button 
                                                     type="button" 
                                                     onClick={() => setShowEmojiPicker(!showEmojiPicker)} 
@@ -1284,18 +1309,24 @@ const ChatWindow: React.FC = () => {
                                                     <Smile size={20} />
                                                 </button>
                                                 {showEmojiPicker && (
-                                                    <div className="absolute bottom-full right-0 mb-4 p-3 bg-gray-800/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-30 grid grid-cols-4 gap-2 animate-in zoom-in-95 duration-200 origin-bottom-right">
-                                                        {emojis.map(emoji => (
-                                                            <button 
-                                                                key={emoji} 
-                                                                type="button" 
-                                                                onClick={() => { const newValue = inputValue + emoji; setInputValue(newValue); setShowEmojiPicker(false); handleInputChange(newValue); }} 
-                                                                className="text-xl hover:bg-white/10 p-2 rounded-xl transition-all hover:scale-110 active:scale-90"
-                                                            >
-                                                                {emoji}
-                                                            </button>
-                                                        ))}
-                                                    </div>
+                                                    <>
+                                                        <div className="fixed inset-0 z-20 md:hidden" onClick={() => setShowEmojiPicker(false)} />
+                                                        <div className="absolute bottom-full right-0 mb-4 z-30 emoji-picker-container animate-in zoom-in-95 duration-200 origin-bottom-right">
+                                                            <div className="emoji-picker-header">Smileys & People</div>
+                                                            <div className="emoji-picker-grid">
+                                                                {emojis.map(emoji => (
+                                                                    <button 
+                                                                        key={emoji} 
+                                                                        type="button" 
+                                                                        onClick={() => { const newValue = inputValue + emoji; setInputValue(newValue); setShowEmojiPicker(false); handleInputChange(newValue); }} 
+                                                                        className="emoji-btn"
+                                                                    >
+                                                                        {emoji}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    </>
                                                 )}
                                             </div>
                                         </div>

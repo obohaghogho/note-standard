@@ -115,13 +115,21 @@ const MessageBubble = memo(({
                                 onPreview={(url) => setPreviewMedia({ url, type: 'video', fileName: msg.attachment?.file_name, isSender: msg.sender_id === currentUserId })}
                             />
                         ) : (
-                            <div className="p-3 flex items-center gap-3">
-                                <Paperclip size={20} className="text-blue-400" />
-                                <div className="min-w-0">
-                                    <p className="text-sm font-medium truncate">{msg.attachment.file_name}</p>
+                            <button 
+                                type="button"
+                                onClick={async (e) => {
+                                    e.stopPropagation();
+                                    const url = await fetchSignedUrl(msg.attachment!.storage_path);
+                                    if (url) window.open(url, '_blank');
+                                }}
+                                className="p-3 flex items-center gap-3 w-full text-left hover:bg-white/5 transition-colors cursor-pointer"
+                            >
+                                <Paperclip size={20} className="text-blue-400 flex-shrink-0" />
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-medium truncate hover:underline text-blue-100">{msg.attachment.file_name}</p>
                                     <p className="text-[10px] opacity-60">{(msg.attachment.file_size / 1024).toFixed(1)} KB</p>
                                 </div>
-                            </div>
+                            </button>
                         )}
                     </div>
                 )}

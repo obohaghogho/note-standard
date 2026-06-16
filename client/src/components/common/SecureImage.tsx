@@ -1,6 +1,6 @@
 import React, { useState, useEffect, type ImgHTMLAttributes } from 'react';
 import { getFallbackImage, isValidImageSrc } from '../../utils/imageUtils';
-import { ImageOff, Loader2 } from 'lucide-react'; // Assuming lucide-react is available given previous files used it
+import { ImageOff, Loader2 } from 'lucide-react';
 
 interface SecureImageProps extends ImgHTMLAttributes<HTMLImageElement> {
     fallbackSrc?: string;
@@ -15,6 +15,7 @@ const SecureImage: React.FC<SecureImageProps> = ({
     fallbackType = 'default', 
     className, 
     showSkeleton = true,
+    onLoad: onLoadProp,   // ← destructured separately so it is NOT part of ...props spread
     onError,
     ...props 
 }) => {
@@ -41,19 +42,22 @@ const SecureImage: React.FC<SecureImageProps> = ({
             setIsLoading(true);
             setHasError(false);
         } else {
-             // Invalid src immediately goes to fallback
+            // Invalid src immediately goes to fallback
             setImgSrc(fallbackSrc || getFallbackImage(fallbackType));
             setIsLoading(false);
             setHasError(true);
         }
     }, [src, fallbackSrc, fallbackType]);
 
-    const handleLoad = () => {
+    const handleLoad = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+        // CRITICAL: set internal loading state to false so image becomes visible (opacity-100)
         setIsLoading(false);
+        // Forward event to parent if they passed an onLoad prop
+        if (onLoadProp) onLoadProp(e);
     };
 
     const handleError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-        // Prevent infinite loops
+        // Prevent infinite loop if fallback also fails
         if (hasError) return;
 
         console.warn(`[SecureImage] Failed to load image: ${src}`);
@@ -65,26 +69,31 @@ const SecureImage: React.FC<SecureImageProps> = ({
     };
 
     return (
-        <div className={`relative overflow-hidden ${className || ''} ${isLoading && showSkeleton ? 'bg-gray-200 dark:bg-gray-800 animate-pulse' : ''}`}>
+        <div className={`relative overflow-hidden ${className || ''} ${isLoading && showSkeleton ? 'bg-gray-800 animate-pulse' : ''}`}>
             {isLoading && showSkeleton && (
                 <div className="absolute inset-0 flex items-center justify-center text-gray-400">
                     <Loader2 className="w-6 h-6 animate-spin" />
                 </div>
             )}
             
+            {/*
+              IMPORTANT: {...props} is spread FIRST, then src/alt/onLoad/onError are
+              declared explicitly AFTER. This guarantees our internal handlers are
+              NEVER overridden by a parent's onLoad prop leaking through the spread.
+            */}
             <img
+                {...props}
                 src={imgSrc}
                 alt={alt}
                 className={`w-full h-full object-cover transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'}`}
                 onLoad={handleLoad}
                 onError={handleError}
-                {...props}
             />
             
             {hasError && !isLoading && !imgSrc && (
-                 <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800 text-gray-400">
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800 text-gray-400">
                     <ImageOff className="w-1/3 h-1/3 opacity-20" />
-                 </div>
+                </div>
             )}
         </div>
     );

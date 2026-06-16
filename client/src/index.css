@@ -314,6 +314,64 @@ input[type=number] {
    WHATSAPP-STYLE CHAT LAYOUT
    ====================================================== */
 
+/* Emoji Picker Custom UI */
+.emoji-picker-container {
+    width: 320px;
+    background: #111116;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.emoji-picker-header {
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #9ca3af;
+    background: #181820;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.emoji-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 6px;
+    padding: 12px;
+    max-height: 220px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+.emoji-picker-grid::-webkit-scrollbar {
+    width: 6px;
+}
+.emoji-picker-grid::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+}
+
+.emoji-btn {
+    font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+    font-size: 22px;
+    line-height: 1;
+    padding: 6px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.15s, transform 0.1s;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+}
+.emoji-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    transform: scale(1.15);
+}
+
 /* 
   The chat root takes exactly the visible viewport height.
   100dvh = dynamic viewport height (shrinks when keyboard opens on modern browsers).
