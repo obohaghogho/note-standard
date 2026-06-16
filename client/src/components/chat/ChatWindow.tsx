@@ -1300,7 +1300,7 @@ const ChatWindow: React.FC = () => {
                                                 <Mic size={20} />
                                             </button>
                                             
-                                            <div className="relative md:block">
+                                            <div className="md:block">
                                                 <button 
                                                     type="button" 
                                                     onClick={() => setShowEmojiPicker(!showEmojiPicker)} 
@@ -1311,7 +1311,7 @@ const ChatWindow: React.FC = () => {
                                                 {showEmojiPicker && (
                                                     <>
                                                         <div className="fixed inset-0 z-20 md:hidden" onClick={() => setShowEmojiPicker(false)} />
-                                                        <div className="absolute bottom-full right-0 mb-4 z-30 emoji-picker-container animate-in zoom-in-95 duration-200 origin-bottom-right">
+                                                        <div className="absolute bottom-[calc(100%+8px)] right-[52px] md:right-[60px] z-30 emoji-picker-container animate-in zoom-in-95 duration-200 origin-bottom-right">
                                                             <div className="emoji-picker-header">Smileys & People</div>
                                                             <div className="emoji-picker-grid">
                                                                 {emojis.map(emoji => (
