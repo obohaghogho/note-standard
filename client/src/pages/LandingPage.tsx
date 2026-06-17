@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { Features } from '../components/landing/Features';
 import { Pricing } from '../components/landing/Pricing';
+import { FounderSection } from '../components/landing/FounderSection';
 import { Footer } from '../components/landing/Footer';
 
 export const LandingPage = () => {
@@ -29,6 +30,7 @@ export const LandingPage = () => {
             <Hero />
             <Features />
             <Pricing />
+            <FounderSection />
             <Footer />
         </div>
     );
