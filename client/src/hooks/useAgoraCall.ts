@@ -90,7 +90,8 @@ export const useAgoraCall = () => {
             setJoinState('joining');
             
             // Fetch token from backend
-            const response = await api.get(`/api/agora/token?channel=${encodeURIComponent(channelName)}&uid=${encodeURIComponent(uid)}`);
+            // The axios instance already prefixes /api automatically
+            const response = await api.get(`/agora/token?channel=${encodeURIComponent(channelName)}&uid=${encodeURIComponent(uid)}`);
             const { token, uid: numericUid } = response.data;
             const appId = import.meta.env.VITE_AGORA_APP_ID;
 
