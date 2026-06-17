@@ -62,8 +62,28 @@ const FALLBACK_ICE: RTCIceServer[] = [
 
 
 const getAudioConstraints = (): boolean | MediaTrackConstraints => {
-    // Relaxed constraints to prevent Windows audio driver bugs that output silence
-    // when explicit hardware echo cancellation is requested on standard microphones.
+    // iOS Safari REQUIRES explicit echoCancellation/noiseSuppression/autoGainControl
+    // constraints to activate the hardware AEC/NS/AGC processing pipeline.
+    // Without these, the microphone captures the caller's voice from the iPhone
+    // speaker and sends it straight back as background noise — especially audible
+    // on Metered TURN relay because the audio path is very clean and low-latency.
+    //
+    // Detection: check userAgent for iOS devices (iPhone/iPad/iPod).
+    // MSStream guard prevents false-positive on IE11.
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) &&
+        !(window as Window & { MSStream?: unknown }).MSStream;
+
+    if (isIOS) {
+        return {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl:  true,
+        };
+    }
+
+    // Non-iOS (Windows/Android/Desktop): return true (existing behaviour).
+    // Avoids Windows audio driver bugs that produce silence when explicit
+    // hardware echo cancellation is requested on standard microphones.
     return true;
 };
 
@@ -422,6 +442,18 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         try {
             await ensureIceServers();
+
+            // iOS RINGTONE BLEED FIX:
+            // Stop the ringtone BEFORE opening the microphone. If getUserMedia()
+            // runs while the iOS speaker is still playing the ringtone, the AEC
+            // calibration period captures ring audio as its reference signal,
+            // causing a burst of noise at the start of every accepted call.
+            // The 80ms yield gives iOS's audio session manager time to fully
+            // switch from "speaker/ringtone" mode to "voice call" mode before
+            // the mic track is opened. This is invisible to the user.
+            stopAllAudio();
+            await new Promise<void>(resolve => setTimeout(resolve, 80));
+
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: getAudioConstraints(),
                 video: type === 'video' ? getVideoConstraints() : false,
