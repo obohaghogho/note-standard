@@ -2,12 +2,25 @@ const admin = require('firebase-admin');
 const apn = require('apn');
 const { createClient } = require('@supabase/supabase-js');
 const path = require('path');
+const webpush = require('web-push');
 
 // Initialize Supabase for fetching tokens
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+
+// Initialize Web Push (PWA)
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(
+    `mailto:${process.env.EMAIL_FROM || "noreply@notestandard.com"}`,
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  );
+  console.log('[PushService] Web Push (VAPID) initialized.');
+} else {
+  console.warn('[PushService] VAPID keys missing. Web Push notifications for PWA calls will be disabled.');
+}
 
 // Initialize Firebase Admin (Android FCM)
 let firebaseApp = null;
@@ -171,16 +184,27 @@ async function sendCallPush(params) {
       .select('token, platform, type')
       .eq('user_id', userId);
 
-    if (error) throw error;
-    if (!tokens || tokens.length === 0) {
-      console.log(`[PushService] No native tokens found for user ${userId}`);
+    // 1.5. Fetch web push subscriptions for PWA users
+    const { data: webSubscriptions, error: webError } = await supabase
+      .from('push_subscriptions')
+      .select('endpoint, p256dh, auth')
+      .eq('user_id', userId);
+
+    if (error && webError) throw error || webError;
+
+    if ((!tokens || tokens.length === 0) && (!webSubscriptions || webSubscriptions.length === 0)) {
+      console.log(`[PushService] No native tokens or web subscriptions found for user ${userId}`);
       return;
     }
 
     console.log(`[PushService] 📡 [DUAL-DELIVERY] Signaling user ${userId}`);
-    console.log(`[PushService] 📦 Native Payload:`, JSON.stringify(payload, null, 2));
+    console.log(`[PushService] 📦 Payload:`, JSON.stringify(payload, null, 2));
 
-    const pushPromises = tokens.map(async (t) => {
+    const pushPromises = [];
+
+    // --- Native Push (FCM / APNs) ---
+    if (tokens && tokens.length > 0) {
+      const nativePromises = tokens.map(async (t) => {
       // Android FCM - Dual-payload high-priority for native wake-up and system tray display fallback
       if (t.platform === 'android' && t.type === 'fcm' && firebaseApp) {
         // Sanitize all values to strings to prevent FCM crashing
@@ -245,6 +269,48 @@ async function sendCallPush(params) {
         return sendApnsWithFallback(notification, t.token, 'VoIP');
       }
     });
+    pushPromises.push(...nativePromises);
+    } // End of Native Push
+
+    // --- Web Push (PWA) ---
+    if (webSubscriptions && webSubscriptions.length > 0 && process.env.VAPID_PUBLIC_KEY) {
+      const webPushPayload = JSON.stringify({
+        title: title,
+        body: body,
+        icon: "/icon-192.png",
+        data: {
+          url: payload.url || '/chat',
+          type: 'call_incoming', // MUST match client/public/sw.js
+          callerId: payload.callerId,
+          callerName: payload.callerName,
+          callType: payload.callType,
+          conversationId: payload.conversationId,
+          sessionId: payload.sessionId || payload.callId || payload.peerId,
+          targetAccountId: userId,
+          apiUrl: process.env.BACKEND_URL || (process.env.NODE_ENV === 'production' ? 'https://note-standard-api.onrender.com' : 'http://127.0.0.1:5001')
+        }
+      });
+
+      const webPushPromises = webSubscriptions.map(sub => {
+        const pushSubscription = {
+          endpoint: sub.endpoint,
+          keys: { p256dh: sub.p256dh, auth: sub.auth }
+        };
+
+        console.log(`[PushService] 📤 Sending Web Push (PWA) to: ${sub.endpoint.substring(0, 30)}...`);
+        return webpush.sendNotification(pushSubscription, webPushPayload)
+          .catch(err => {
+            if (err.statusCode === 410 || err.statusCode === 404) {
+              console.log(`[PushService] 🗑 Removed invalid web push sub: ${sub.endpoint.substring(0, 30)}...`);
+              return supabase.from("push_subscriptions")
+                .delete()
+                .match({ user_id: userId, endpoint: sub.endpoint });
+            }
+            console.error(`[PushService] ❌ Web Push call push fail for ${sub.endpoint.substring(0, 30)}...:`, err.message);
+          });
+      });
+      pushPromises.push(...webPushPromises);
+    }
 
     await Promise.all(pushPromises);
     console.log(`[PushService] ✅ Signaling sequence completed.`);
