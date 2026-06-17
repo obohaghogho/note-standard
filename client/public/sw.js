@@ -9,7 +9,7 @@ self.addEventListener('install', (event) => {
     // Force immediate update to bypass aggressive caching
     self.skipWaiting();
 });
-// Cache Bust Timestamp: 2026-06-12T09:00:00 — v4: clear cache for CSS loading issue
+// Cache Bust Timestamp: 2026-06-17T13:07:00 — v5: iOS parallel push fix
 
 self.addEventListener('activate', (event) => {
     event.waitUntil(
@@ -97,52 +97,68 @@ self.addEventListener('push', (event) => {
     if (options.data.type === 'chat_message' && options.data.messageId) {
         const targetApiUrl = options.data.apiUrl || 'https://note-standard-api.onrender.com';
 
+        // iOS CRITICAL FIX:
+        // iOS 16.4+ Web Push has a strict "silent push" policy. If the Service Worker
+        // does not call showNotification() within a very short window, iOS treats the
+        // push as a silent/background notification. After too many silent pushes,
+        // iOS silently REVOKES push permission for the PWA — causing notifications to
+        // completely stop working until the user re-installs.
+        //
+        // ROOT CAUSE OF THE BUG: The old code awaited the webhook fetch() BEFORE
+        // calling showNotification(). If the server was slow, the SW would time out
+        // before the notification was shown, accumulating silent push penalties.
+        //
+        // THE FIX: We now run showNotification() and the webhook fetch() in PARALLEL
+        // using Promise.all(). This guarantees the notification shows immediately while
+        // the delivery receipt is still sent to the server.
         event.waitUntil(
-            // First check if the user is already viewing this exact conversation
             clients.matchAll({ type: 'window', includeUncontrolled: true })
                 .then(windowClients => {
                     // Check if any open window is already on this conversation
-                    const isUserAlreadyViewing = notifConversationId && windowClients.some(client => {
+                    const activeClient = windowClients.find(client => {
                         try {
                             const clientUrl = new URL(client.url);
                             const clientConvId = clientUrl.searchParams.get('id');
                             const isOnChatPage = clientUrl.pathname.includes('/chat');
-                            // Consider "viewing" if tab is focused/visible, on the chat page, and has matching conversation
                             return isOnChatPage && clientConvId === notifConversationId && client.visibilityState !== 'hidden';
                         } catch (_) {
                             return false;
                         }
                     });
 
-                    if (isUserAlreadyViewing) {
-                        // CRITICAL: Post message to the active React tab so it calls
-                        // markConversationRead immediately. This ensures blue ticks fire
-                        // even if the receiver's unread count was already 0.
-                        const activeClient = windowClients.find(c => {
-                            try {
-                                const u = new URL(c.url);
-                                return u.pathname.includes('/chat') &&
-                                    u.searchParams.get('id') === notifConversationId &&
-                                    c.visibilityState !== 'hidden';
-                            } catch (_) { return false; }
-                        });
-                        if (activeClient) {
-                            activeClient.postMessage({
-                                type: 'CHAT_MESSAGE_RECEIVED',
-                                conversationId: notifConversationId,
-                                messageId: options.data.messageId
-                            });
-                        }
+                    const isUserAlreadyViewing = !!activeClient;
 
-                        // Still fire the delivery receipt via the API
-                        return fetch(`${targetApiUrl}/api/chat/messages/${options.data.messageId}/webhook-deliver`, { method: 'POST' })
-                            .catch(err => console.error('[SW] Delivery receipt failed:', err));
+                    if (isUserAlreadyViewing) {
+                        // User is actively viewing this conversation.
+                        // 1. Post a message to the React tab to trigger read-receipt logic (blue ticks).
+                        activeClient.postMessage({
+                            type: 'CHAT_MESSAGE_RECEIVED',
+                            conversationId: notifConversationId,
+                            messageId: options.data.messageId
+                        });
+                        // 2. Fire delivery receipt silently. No notification shown (user is looking at it).
+                        //    This is NOT a silent push penalty because the user has the app open.
+                        return fetch(
+                            `${targetApiUrl}/api/chat/messages/${options.data.messageId}/webhook-deliver`,
+                            { method: 'POST' }
+                        ).catch(err => console.error('[SW] Delivery receipt failed (foreground):', err));
                     }
 
-                    // User is NOT in this conversation → fire delivery receipt AND show notification
-                    return fetch(`${targetApiUrl}/api/chat/messages/${options.data.messageId}/webhook-deliver`, { method: 'POST' })
-                        .catch(err => console.error('[SW] Delivery receipt failed:', err))
-                        .then(() => self.registration.showNotification(title, options));
+                    // User is NOT in this conversation → show notification AND fire delivery receipt IN PARALLEL.
+                    // This is the critical iOS fix: showNotification is called immediately.
+                    return Promise.all([
+                        self.registration.showNotification(title, options),
+                        fetch(
+                            `${targetApiUrl}/api/chat/messages/${options.data.messageId}/webhook-deliver`,
+                            { method: 'POST' }
+                        ).catch(err => console.error('[SW] Delivery receipt failed (background):', err))
+                    ]);
+                })
+                .catch(err => {
+                    // Safety net: if anything above throws, we MUST still show the notification.
+                    // Swallowing this would be a silent push and trigger the iOS penalty.
+                    console.error('[SW] Push handler error, falling back to show notification:', err);
+                    return self.registration.showNotification(title, options);
                 })
         );
     } else {
