@@ -98,9 +98,9 @@ export const TeamCallOverlay: React.FC<TeamCallOverlayProps> = ({
                 <div className={`w-full max-w-[1400px] max-h-full grid ${gridCols} gap-4 md:gap-6`}>
                     
                     {/* Local User */}
-                    <div className="relative rounded-2xl overflow-hidden bg-gray-900 border border-gray-800 shadow-2xl aspect-video md:aspect-auto">
+                    <div className="relative w-full rounded-2xl overflow-hidden bg-gray-900 border border-gray-800 shadow-2xl aspect-video">
                         <VideoPlayer track={localVideoTrack} fallbackInitial="Y" />
-                        <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-sm font-medium text-white flex items-center gap-2 border border-white/10">
+                        <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-sm font-medium text-white flex items-center gap-2 border border-white/10 z-10">
                             You
                             {isMuted && <MicOff size={14} className="text-red-400" />}
                         </div>
@@ -108,9 +108,9 @@ export const TeamCallOverlay: React.FC<TeamCallOverlayProps> = ({
 
                     {/* Remote Users */}
                     {remoteUsers.map((user) => (
-                        <div key={user.uid} className="relative rounded-2xl overflow-hidden bg-gray-900 border border-gray-800 shadow-2xl aspect-video md:aspect-auto">
+                        <div key={user.uid} className="relative w-full rounded-2xl overflow-hidden bg-gray-900 border border-gray-800 shadow-2xl aspect-video">
                             <VideoPlayer track={user.videoTrack || null} fallbackInitial={String(user.uid).charAt(0).toUpperCase()} />
-                            <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-sm font-medium text-white flex items-center gap-2 border border-white/10">
+                            <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-sm font-medium text-white flex items-center gap-2 border border-white/10 z-10">
                                 {String(user.uid)}
                                 {!user.hasAudio && <MicOff size={14} className="text-red-400" />}
                             </div>
