@@ -179,6 +179,10 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
       setInput('');
       sendTypingStatus(false);
       inputRef.current?.focus();
+      const textarea = document.getElementById('team-chat-input') as HTMLTextAreaElement | null;
+      if (textarea) {
+          textarea.style.height = 'auto';
+      }
     } catch (err: unknown) {
         const error = err as { response?: { data?: { error?: string } }; message?: string };
         setInput(input); // or restore original text if you prefer
@@ -203,12 +207,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
     }, 3000);
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
+
 
   // ====================================
   // IMAGE UPLOAD HANDLER
@@ -746,7 +745,15 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
               ref={inputRef}
               value={input}
               onChange={handleInputChange}
-              onKeyPress={handleKeyPress}
+              onKeyDown={() => {
+                  // By product requirement, Enter inserts a newline instead of sending.
+                  // Sending is done exclusively via the explicit Send button.
+              }}
+              onInput={(e) => {
+                  const el = e.currentTarget;
+                  el.style.height = 'auto';
+                  el.style.height = Math.min(el.scrollHeight, 130) + 'px';
+              }}
               placeholder="Type a message..."
               className="team-chat__input"
               rows={1}
@@ -755,6 +762,12 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
               autoCapitalize="sentences"
               autoCorrect="on"
               autoComplete="on"
+              style={{
+                  minHeight: '44px',
+                  maxHeight: '130px',
+                  overflowY: 'auto',
+                  scrollbarWidth: 'none',
+              }}
             />
         )}
         <div className="team-chat__input-actions">

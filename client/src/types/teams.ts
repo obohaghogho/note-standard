@@ -66,6 +66,18 @@ export interface TeamMessage {
     avatar_url?: string;
   };
   
+  // Joined reply message
+  reply_to?: {
+    id: string;
+    sender_id: string;
+    content?: string;
+    message_type?: string;
+    sender?: {
+      full_name?: string;
+      username?: string;
+    };
+  };
+  
   // For note_share messages
   shared_note?: SharedNote;
   

@@ -149,6 +149,7 @@ const manualDepositRoutes = require("./routes/manualDepositRoutes");
 const bankAccountRoutes = require("./routes/bankAccountRoutes");
 const teamRoutes = require("./routes/teamRoutes");
 const sessionRoutes = require("./routes/session");
+const agoraRoutes = require("./routes/agora");
 
 // API Mounts
 app.use("/api/auth", authRoutes);
@@ -171,6 +172,7 @@ app.use("/api/bank-account", bankAccountRoutes);
 app.use("/api/limit-requests", requireAuth, require("./routes/limitRequests"));
 app.use("/api/webrtc", require("./routes/webrtc"));
 app.use("/api/teams", teamRoutes);
+app.use("/api/agora", requireAuth, agoraRoutes);
 app.use("/api/system", require("./routes/system"));
 app.use("/api/session", sessionRoutes);
 

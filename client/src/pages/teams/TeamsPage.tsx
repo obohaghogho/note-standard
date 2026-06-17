@@ -29,6 +29,7 @@ import {
   ArrowLeft,
   Camera,
   Trash2,
+  Video
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import SecureImage from '../../components/common/SecureImage';
@@ -36,6 +37,8 @@ import { ConfirmationModal } from '../../components/common/ConfirmationModal';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '../../utils/cn';
+import { useAgoraCall } from '../../hooks/useAgoraCall';
+import { TeamCallOverlay } from '../../components/teams/TeamCallOverlay';
 import './TeamsPage.css';
 
 // ====================================
@@ -49,7 +52,8 @@ const TeamHeader: React.FC<{
   isInfoOpen: boolean;
   onToggleInfo: () => void;
   onInvite: () => void;
-}> = ({ team, myRole, onBack, isInfoOpen, onToggleInfo, onInvite }) => {
+  onJoinCall: () => void;
+}> = ({ team, myRole, onBack, isInfoOpen, onToggleInfo, onInvite, onJoinCall }) => {
   return (
     <div className="teams-page__header flex items-center justify-between p-3 md:p-5 bg-gray-900/50 backdrop-blur-3xl border-b border-white/5 z-20">
       <div className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer group" onClick={onToggleInfo}>
@@ -76,6 +80,13 @@ const TeamHeader: React.FC<{
       </div>
 
       <div className="flex items-center gap-1 md:gap-3">
+         <button 
+          onClick={(e) => { e.stopPropagation(); onJoinCall(); }}
+          className="p-2.5 text-gray-400 hover:text-green-400 hover:bg-green-400/10 transition-all rounded-2xl active:scale-95"
+          title="Join Conference Call"
+         >
+            <Video size={20} />
+         </button>
          <button 
           onClick={onToggleInfo}
           className={cn(
@@ -241,8 +252,10 @@ const TeamInfoSidebar: React.FC<{
 // ====================================
 
 export function TeamsPage() {
-  const { isBusiness } = useAuth();
+  const { user, isBusiness } = useAuth();
   const navigate = useNavigate();
+  
+  const agoraCall = useAgoraCall();
   
   // State
   const [teams, setTeams] = useState<TeamWithUnreadCount[]>([]);
@@ -492,6 +505,7 @@ export function TeamsPage() {
                isInfoOpen={isInfoOpen}
                onToggleInfo={() => setIsInfoOpen(!isInfoOpen)}
                onInvite={handleInviteClick}
+               onJoinCall={() => agoraCall.joinCall(`team_${selectedTeamId}`, user?.id || '0')}
              />
 
              <div className="flex-1 overflow-hidden">
@@ -629,6 +643,21 @@ export function TeamsPage() {
               </Button>
            </div>
         </div>
+      )}
+
+      {/* Agora Call Overlay */}
+      {selectedTeam && (
+        <TeamCallOverlay
+            joinState={agoraCall.joinState}
+            localVideoTrack={agoraCall.localVideoTrack}
+            remoteUsers={agoraCall.remoteUsers}
+            isMuted={agoraCall.isMuted}
+            isVideoOff={agoraCall.isVideoOff}
+            onLeave={agoraCall.leaveCall}
+            onToggleMute={agoraCall.toggleMute}
+            onToggleVideo={agoraCall.toggleVideo}
+            teamName={selectedTeam.name}
+        />
       )}
     </div>
   );
