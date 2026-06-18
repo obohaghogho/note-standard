@@ -258,7 +258,10 @@ export function TeamsPage() {
   const { socket } = useSocket();
   
   const agoraCall = useAgoraCall();
-  
+
+  // Active team call banner state
+  const [activeCall, setActiveCall] = useState<{ teamId: string; teamName: string; callerName: string } | null>(null);
+
   // State
   const [teams, setTeams] = useState<TeamWithUnreadCount[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
@@ -307,6 +310,24 @@ export function TeamsPage() {
   useEffect(() => {
     loadTeams();
   }, [loadTeams]);
+
+  // Listen for team call start/end notifications on the socket
+  useEffect(() => {
+    if (!socket) return;
+    const onNotification = (n: { type: string; title: string; message?: string; sender?: { username: string }; link?: string }) => {
+      if (n.type === 'team_call') {
+        // Extract teamId from the notification link e.g. /dashboard/teams?teamId=xxx
+        const match = n.link?.match(/teamId=([^&]+)/);
+        const teamId = match?.[1] || '';
+        setActiveCall({ teamId, teamName: n.title.replace('Conference Call: ', ''), callerName: n.sender?.username || 'A member' });
+      }
+      if (n.type === 'team_call_ended') {
+        setActiveCall(null);
+      }
+    };
+    socket.on('notification', onNotification);
+    return () => { socket.off('notification', onNotification); };
+  }, [socket]);
 
   const handleNewTeamClick = () => {
     if (!isBusiness) {
@@ -509,15 +530,19 @@ export function TeamsPage() {
                onInvite={handleInviteClick}
                onJoinCall={() => {
                  agoraCall.joinCall(`team_${selectedTeamId}`, user?.id || '0');
-                 socket?.emit('team:call_started', { 
-                   teamId: selectedTeamId, 
-                   teamName: selectedTeam.name 
+                 socket?.emit('team:call_started', {
+                   teamId: selectedTeamId,
+                   teamName: selectedTeam.name
                  });
                }}
              />
 
              <div className="flex-1 overflow-hidden">
-                <TeamChat teamId={selectedTeamId} />
+                <TeamChat
+                  teamId={selectedTeamId}
+                  activeCall={activeCall?.teamId === selectedTeamId ? activeCall : null}
+                  onJoinCall={() => agoraCall.joinCall(`team_${selectedTeamId}`, user?.id || '0')}
+                />
              </div>
           </div>
 
@@ -661,7 +686,13 @@ export function TeamsPage() {
             remoteUsers={agoraCall.remoteUsers}
             isMuted={agoraCall.isMuted}
             isVideoOff={agoraCall.isVideoOff}
-            onLeave={agoraCall.leaveCall}
+            onLeave={() => {
+              agoraCall.leaveCall();
+              socket?.emit('team:call_ended', {
+                teamId: selectedTeamId,
+                teamName: selectedTeam.name
+              });
+            }}
             onToggleMute={agoraCall.toggleMute}
             onToggleVideo={agoraCall.toggleVideo}
             teamName={selectedTeam.name}

@@ -29,6 +29,8 @@ import {
   Share2,
   Check,
   Menu,
+  Video,
+  PhoneCall,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { uploadTeamImage, uploadTeamAudio } from '../../lib/teamsApi';
@@ -44,9 +46,11 @@ import './TeamChat.css';
 interface TeamChatProps {
   teamId: string;
   className?: string;
+  activeCall?: { teamId: string; teamName: string; callerName: string } | null;
+  onJoinCall?: () => void;
 }
 
-export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) => {
+export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', activeCall, onJoinCall }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { 
@@ -632,6 +636,31 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '' }) =>
                 <Trash2 size={16} />
               </Button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Active Call Banner */}
+      {activeCall && (
+        <div className="flex-shrink-0 relative mx-3 mt-2 mb-1 rounded-2xl overflow-hidden border border-green-500/30 bg-gradient-to-r from-green-950/80 via-emerald-950/80 to-green-950/80 backdrop-blur-sm shadow-lg shadow-green-500/10 animate-in slide-in-from-top-2 duration-300">
+          {/* Animated glow pulse */}
+          <div className="absolute inset-0 bg-gradient-to-r from-green-500/5 via-emerald-400/10 to-green-500/5 animate-pulse" />
+          <div className="relative flex items-center gap-3 px-4 py-3">
+            <div className="flex-shrink-0 w-8 h-8 rounded-xl bg-green-500/20 flex items-center justify-center">
+              <PhoneCall size={16} className="text-green-400 animate-pulse" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-black text-green-300 uppercase tracking-widest">Call in Progress</p>
+              <p className="text-xs text-gray-300 truncate">{activeCall.callerName} started a conference call</p>
+            </div>
+            <button
+              id="team-chat-join-call-banner-btn"
+              onClick={onJoinCall}
+              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-green-500 hover:bg-green-400 text-white text-xs font-black uppercase tracking-wider transition-all active:scale-95 shadow-lg shadow-green-500/30"
+            >
+              <Video size={12} />
+              Join
+            </button>
           </div>
         </div>
       )}

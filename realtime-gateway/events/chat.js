@@ -204,6 +204,41 @@ module.exports = (io, socket) => {
     }
   });
 
+  // ── Team Call Ended Notification ──────────────────────────────────────────
+  socket.on('team:call_ended', async (data) => {
+    const { teamId, teamName } = data || {};
+    if (!teamId) return;
+
+    const callerName = socket.userName || 'A member';
+
+    if (!supabase) return;
+    try {
+      const { data: members } = await supabase
+        .from('team_members')
+        .select('user_id')
+        .eq('team_id', teamId);
+
+      if (members && members.length > 0) {
+        for (const m of members) {
+          if (String(m.user_id) === String(userId)) continue;
+          // Notify all online members to dismiss the active call banner
+          io.to(`user:${m.user_id}`).emit('notification', {
+            id: `team_call_ended_${teamId}_${Date.now()}`,
+            type: 'team_call_ended',
+            title: `Call Ended: ${teamName || 'Team'}`,
+            message: `${callerName} ended the conference call.`,
+            link: `/dashboard/teams?teamId=${teamId}`,
+            is_read: false,
+            created_at: new Date().toISOString(),
+            sender: { username: callerName, avatar_url: socket.userAvatar || null },
+          });
+        }
+      }
+    } catch (err) {
+      console.error('[Chat] Failed to process team call ended notifications:', err);
+    }
+  });
+
   // ── Message Relay (new messages sent via API, echoed here) ──────────────
   // The API server calls pg_notify → gateway receives → relays to room.
   // Clients may also emit this for optimistic UI, but the DB write
