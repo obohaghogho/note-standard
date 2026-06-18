@@ -89,7 +89,25 @@ export const useAgoraCall = () => {
         try {
             setJoinState('joining');
             
-            // Fetch token from backend
+            // 1. Grab media tracks IMMEDIATELY to preserve the user gesture on mobile browsers
+            try {
+                [audioTrack, videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks(
+                    { AEC: true, ANS: true },
+                    { encoderConfig: "480p_1" } // Lower resolution for mobile stability
+                );
+            } catch (mediaErr) {
+                console.warn('[Agora] Failed to get both tracks, trying audio only', mediaErr);
+                // Fallback: If camera is denied or unavailable, try to get audio only
+                audioTrack = await AgoraRTC.createMicrophoneAudioTrack({ AEC: true, ANS: true });
+            }
+
+            // Store in refs immediately so error-path cleanup can access them
+            audioTrackRef.current = audioTrack;
+            videoTrackRef.current = videoTrack;
+            setLocalAudioTrack(audioTrack);
+            setLocalVideoTrack(videoTrack);
+
+            // 2. Fetch token from backend
             // The axios instance already prefixes /api automatically
             const response = await api.get(`/agora/token?channel=${encodeURIComponent(channelName)}&uid=${encodeURIComponent(uid)}`);
             const { token, uid: numericUid } = response.data;
@@ -99,20 +117,17 @@ export const useAgoraCall = () => {
                 throw new Error('Missing VITE_AGORA_APP_ID in environment variables. Add it to client/.env');
             }
 
-            // Join the channel
+            // 3. Join the channel
             await client.join(appId, channelName, token, numericUid);
 
-            // Create local tracks AFTER joining so any failure cleans up properly
-            [audioTrack, videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks();
-
-            // Store in refs immediately so error-path cleanup can access them
-            audioTrackRef.current = audioTrack;
-            videoTrackRef.current = videoTrack;
-
-            setLocalAudioTrack(audioTrack);
-            setLocalVideoTrack(videoTrack);
-
-            await client.publish([audioTrack, videoTrack]);
+            // 4. Publish only the tracks we successfully acquired
+            const tracksToPublish = [];
+            if (audioTrack) tracksToPublish.push(audioTrack);
+            if (videoTrack) tracksToPublish.push(videoTrack);
+            
+            if (tracksToPublish.length > 0) {
+                await client.publish(tracksToPublish);
+            }
             
             setJoinState('connected');
         } catch (error) {
