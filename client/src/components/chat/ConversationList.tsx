@@ -175,7 +175,7 @@ const ConversationList: React.FC = () => {
     // when a badge changes, bubbling the conversation to the top) + lastMessage.id (for dedup
     // guard — catches canonical-message-replaces-optimistic swaps that have the same timestamp).
     const sortKeys = conversations.map(c =>
-        `${c.id}:${c.lastMessage?.created_at ?? c.updated_at ?? ''}:${c.lastMessage?.id ?? ''}:${(c as unknown as { unreadCount?: number }).unreadCount ?? 0}`
+        `${c.id}:${c.lastMessage?.created_at ?? c.updated_at ?? ''}:${c.lastMessage?.id ?? ''}:${(c as unknown as { unreadCount?: number }).unreadCount ?? 0}:${c.lastMessage?.status ?? ''}:${c.lastMessage?.read_at ?? ''}`
     ).join(',');
 
     const sortedConversations = useMemo(() => {

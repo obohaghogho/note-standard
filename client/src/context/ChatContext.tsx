@@ -1518,6 +1518,20 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const backendMsg = res.data.message || res.data;
                 let canonicalMessage: Message = { ...backendMsg, isOwn: true, status: 'sent' };
 
+                // HIERARCHICAL STATUS VALIDATION (Fixes the status downgrade race condition)
+                // If a lightning-fast delivery ACK arrived via Socket while the HTTP POST was in-flight,
+                // do not let this HTTP 'sent' response downgrade the state.
+                const tickSetById = appliedTicksRef.current.get(canonicalMessage.id);
+                const tickSetByEventId = appliedTicksRef.current.get(intent.event_id);
+                if (tickSetById?.has('read') || tickSetByEventId?.has('read')) {
+                    canonicalMessage.status = 'read';
+                    canonicalMessage.read_at = canonicalMessage.read_at || new Date().toISOString();
+                    canonicalMessage.delivered_at = canonicalMessage.delivered_at || canonicalMessage.read_at;
+                } else if (tickSetById?.has('delivered') || tickSetByEventId?.has('delivered')) {
+                    canonicalMessage.status = 'delivered';
+                    canonicalMessage.delivered_at = canonicalMessage.delivered_at || new Date().toISOString();
+                }
+
                 // Guard: if the server didn't return a populated reply_to (FK join failed,
                 // schema cache miss, or non-transactional path) but this intent had a
                 // replyTo snapshot, fall back to the reply_to we already stored.
@@ -1580,14 +1594,20 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                                 content: canonicalMessage.content, 
                                 sender_id: canonicalMessage.sender_id, 
                                 created_at: canonicalMessage.created_at,
-                                type: canonicalMessage.type
+                                type: canonicalMessage.type,
+                                status: canonicalMessage.status,
+                                delivered_at: canonicalMessage.delivered_at,
+                                read_at: canonicalMessage.read_at
                             },
                             lastMessage: { 
                                 id: canonicalMessage.id, 
                                 content: canonicalMessage.content, 
                                 sender_id: canonicalMessage.sender_id, 
                                 created_at: canonicalMessage.created_at,
-                                type: canonicalMessage.type
+                                type: canonicalMessage.type,
+                                status: canonicalMessage.status,
+                                delivered_at: canonicalMessage.delivered_at,
+                                read_at: canonicalMessage.read_at
                             }
                         };
                     }
@@ -1864,7 +1884,20 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 });
 
                 // Phase 3.2: Use merge engine to replace optimistic message
-                const canonicalMessage = { ...msgRes.data, isOwn: true, status: 'sent' };
+                let canonicalMessage = { ...msgRes.data, isOwn: true, status: 'sent' };
+
+                // HIERARCHICAL STATUS VALIDATION
+                const tickSetById = appliedTicksRef.current.get(canonicalMessage.id);
+                const tickSetByEventId = appliedTicksRef.current.get(clientEventId);
+                if (tickSetById?.has('read') || tickSetByEventId?.has('read')) {
+                    canonicalMessage.status = 'read';
+                    canonicalMessage.read_at = canonicalMessage.read_at || new Date().toISOString();
+                    canonicalMessage.delivered_at = canonicalMessage.delivered_at || canonicalMessage.read_at;
+                } else if (tickSetById?.has('delivered') || tickSetByEventId?.has('delivered')) {
+                    canonicalMessage.status = 'delivered';
+                    canonicalMessage.delivered_at = canonicalMessage.delivered_at || new Date().toISOString();
+                }
+
                 setMessages(prev => {
                     const current = prev[conversationId] || [];
                     const merged = stableMerge(current, [canonicalMessage]);
@@ -1887,14 +1920,20 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                                 content: canonicalMessage.content, 
                                 sender_id: canonicalMessage.sender_id, 
                                 created_at: canonicalMessage.created_at,
-                                type: canonicalMessage.type
+                                type: canonicalMessage.type,
+                                status: canonicalMessage.status,
+                                delivered_at: canonicalMessage.delivered_at,
+                                read_at: canonicalMessage.read_at
                             },
                             lastMessage: { 
                                 id: canonicalMessage.id, 
                                 content: canonicalMessage.content, 
                                 sender_id: canonicalMessage.sender_id, 
                                 created_at: canonicalMessage.created_at,
-                                type: canonicalMessage.type
+                                type: canonicalMessage.type,
+                                status: canonicalMessage.status,
+                                delivered_at: canonicalMessage.delivered_at,
+                                read_at: canonicalMessage.read_at
                             }
                         };
                     }
