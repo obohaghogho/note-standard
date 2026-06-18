@@ -17,6 +17,17 @@
  *  chat:pin                            — pin/unpin relay
  */
 
+const { createClient } = require('@supabase/supabase-js');
+const pushService = require('../services/pushService');
+
+let supabase = null;
+if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+}
+
 // ── Production Hardening: Sliding-Window Rate Limiter Shield ─────────────────
 const rateLimits = new Map();
 
@@ -136,6 +147,61 @@ module.exports = (io, socket) => {
       eventId,
       deliveredAt: deliveredAt || new Date().toISOString(),
     });
+  });
+
+  // ── Team Call Notifications ────────────────────────────────────────────────
+  socket.on('team:call_started', async (data) => {
+    const { teamId, teamName } = data || {};
+    if (!teamId) return;
+
+    const callerName = socket.userName || 'A member';
+
+    if (!supabase) return;
+    try {
+      const { data: members } = await supabase
+        .from('team_members')
+        .select('user_id')
+        .eq('team_id', teamId);
+
+      if (members && members.length > 0) {
+        const pushPromises = [];
+        
+        for (const m of members) {
+          if (String(m.user_id) === String(userId)) continue;
+          
+          // 1. Emit in-app notification to online user
+          io.to(`user:${m.user_id}`).emit('notification', {
+            id: `team_call_${teamId}_${Date.now()}`,
+            type: 'team_call',
+            title: `Conference Call: ${teamName || 'Team'}`,
+            message: `${callerName} started a team call. Tap to join!`,
+            link: `/dashboard/teams?teamId=${teamId}`,
+            is_read: false,
+            created_at: new Date().toISOString(),
+            sender: {
+              username: callerName,
+              avatar_url: socket.userAvatar || null,
+            }
+          });
+
+          // 2. Send push notification to offline device
+          pushPromises.push(pushService.sendGenericPush({
+            userId: m.user_id,
+            title: `Conference Call: ${teamName || 'Team'}`,
+            body: `${callerName} started a team call. Tap to join!`,
+            payload: {
+              type: 'team_call',
+              teamId,
+              callerName,
+              url: `/dashboard/teams?teamId=${teamId}`,
+            }
+          }));
+        }
+        await Promise.allSettled(pushPromises);
+      }
+    } catch (err) {
+      console.error('[Chat] Failed to process team call notifications:', err);
+    }
   });
 
   // ── Message Relay (new messages sent via API, echoed here) ──────────────

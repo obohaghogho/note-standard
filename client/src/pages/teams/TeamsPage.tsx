@@ -38,6 +38,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '../../utils/cn';
 import { useAgoraCall } from '../../hooks/useAgoraCall';
+import { useSocket } from '../../context/SocketContext';
 import { TeamCallOverlay } from '../../components/teams/TeamCallOverlay';
 import './TeamsPage.css';
 
@@ -254,6 +255,7 @@ const TeamInfoSidebar: React.FC<{
 export function TeamsPage() {
   const { user, isBusiness } = useAuth();
   const navigate = useNavigate();
+  const { socket } = useSocket();
   
   const agoraCall = useAgoraCall();
   
@@ -505,7 +507,13 @@ export function TeamsPage() {
                isInfoOpen={isInfoOpen}
                onToggleInfo={() => setIsInfoOpen(!isInfoOpen)}
                onInvite={handleInviteClick}
-               onJoinCall={() => agoraCall.joinCall(`team_${selectedTeamId}`, user?.id || '0')}
+               onJoinCall={() => {
+                 agoraCall.joinCall(`team_${selectedTeamId}`, user?.id || '0');
+                 socket?.emit('team:call_started', { 
+                   teamId: selectedTeamId, 
+                   teamName: selectedTeam.name 
+                 });
+               }}
              />
 
              <div className="flex-1 overflow-hidden">
