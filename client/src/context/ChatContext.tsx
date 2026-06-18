@@ -422,7 +422,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     ), [deviceId, sessionId, isActiveWriter]);
 
-    // Flush any queued read intents when device becomes active writer
+
+    // readReceiptEngine.flushQueue() is now a no-op (the engine fires directly in onMessageVisible).
+    // This effect is kept as a no-op call site to avoid removing a hook slot mid-array.
     useEffect(() => {
         if (connected) readReceiptEngine.flushQueue();
     }, [connected, isActiveWriter, readReceiptEngine]);
@@ -560,6 +562,18 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             return prev.map(c => c.id === conversationId ? { ...c, unreadCount: 0 } : c);
         });
     }, [session, deviceId]);
+
+    // Industry pattern (WhatsApp / Telegram): mark ALL messages in a conversation
+    // as read the instant the user opens it — one unconditional API call, no lease gate.
+    // This is the primary read-marking trigger. The visibility-based onMessageVisible
+    // path (ReadReceiptEngine) is a secondary best-effort supplement.
+    const prevActiveConversationIdRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (!activeConversationId || activeConversationId === prevActiveConversationIdRef.current) return;
+        prevActiveConversationIdRef.current = activeConversationId;
+        // markConversationRead guards internally (returns early if !session || !deviceId)
+        markConversationRead(activeConversationId);
+    }, [activeConversationId, markConversationRead]);
 
     const joinAllRooms = useCallback((convList: Conversation[]) => {
         const s = socketRef.current;
@@ -971,9 +985,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 lastSyncTimestampRef.current = msg.created_at;
             }
 
-            // PERF FIX: Replace per-message HTTP calls with debounced conversation-level read.
+            // Industry pattern (WhatsApp / Messenger): fire delivery ACK unconditionally.
             if (!isOwnMessage) {
-                // 1. Immediate ACK (Layer 3 - UX correctness)
+                // 1. Socket emit — instant real-time notification to sender
                 socket.emit('chat:delivered', {
                     conversationId: msg.conversation_id,
                     messageId: msg.id,
@@ -981,10 +995,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     deliveredAt: new Date().toISOString()
                 });
 
-                // 2. Queue for Batch ACK (Layer 3 - Network efficiency)
-                pendingDeliveryAcksRef.current.add(msg.id);
+                // 2. HTTP PUT — persists delivered_at to DB immediately.
+                //    This ensures the sender sees the double tick even if they were
+                //    offline during the socket emit above (self-healing on reload).
+                //    Previously this was batched after 5 seconds, causing the
+                //    single→double tick delay when the sender reconnected quickly.
+                api.put(`/chat/messages/${msg.id}/deliver`, {
+                    deviceId: deviceIdRef.current
+                }).catch(() => {}); // fire-and-forget, non-fatal
 
-                // Debounced: fires at most once per 1.5s per conversation for read status
+                // 3. Debounced read mark — fires 1.5s after the last message arrives
+                //    (secondary path; the conversation-open useEffect is the primary).
                 debouncedMarkReadRef.current(msg.conversation_id);
             }
 
@@ -1372,7 +1393,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         // Re-join ALL conversation rooms on every socket reconnect.
         const onSocketReconnect = async () => {
             isReconnectingRef.current = false;
-            
+
+            // Clear the per-message dedup gate so status updates that arrive
+            // right after a reconnect are processed fresh instead of silently
+            // dropped by a stale 'delivered'/'read' entry. (Bug #4 fix)
+            appliedTicksRef.current.clear();
+
             // Flush reconnection buffer
             if (reconnectBufferRef.current.length > 0) {
                 console.log(`[ChatContext] Flushing ${reconnectBufferRef.current.length} buffered messages after reconnect`);

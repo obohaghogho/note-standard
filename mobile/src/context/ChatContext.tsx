@@ -177,12 +177,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     isActiveWriterRef.current = isActiveWriter;
     markLeaseClaimStartRef.current = markLeaseClaimStart;
 
-    // ── ReadReceiptEngine ──────────────────────────────────────────────────────
+    // ReadReceiptEngine — simplified per industry pattern.
+    // No lease gate, no session guard: just a direct PUT when a message becomes visible.
     const readReceiptEngine = useMemo(() => new ReadReceiptEngine(
         apiClient,
-        () => deviceId,
-        () => sessionId,
-        (cid: string) => isActiveWriter(cid),
+        () => deviceIdRef.current,
+        () => sessionIdRef.current,
+        (_cid: string) => true, // lease gate removed from read path
         (conversationId: string, lastMessageId: string) => {
             const nowStr = new Date().toISOString();
             setMessages(prev => {
@@ -200,11 +201,23 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 c.id === conversationId ? { ...c, unreadCount: 0 } : c
             ));
         }
-    ), [deviceId, isActiveWriter]);
+    ), []); // empty deps: the engine uses refs internally, no recreation needed
 
     useEffect(() => {
-        readReceiptEngine.flushQueue();
+        readReceiptEngine.flushQueue(); // no-op, kept for compatibility
     }, [isActiveWriter, readReceiptEngine]);
+
+    // Industry pattern (WhatsApp / Telegram): mark conversation read the instant
+    // the user opens it — one unconditional API call.
+    const prevActiveConvIdRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (!activeConversationId || activeConversationId === prevActiveConvIdRef.current) return;
+        prevActiveConvIdRef.current = activeConversationId;
+        const deviceId = deviceIdRef.current;
+        if (!deviceId) return;
+        apiClient.put(`/chat/conversations/${activeConversationId}/read`, { deviceId })
+            .catch(() => {});
+    }, [activeConversationId]);
 
     // ── Room management ────────────────────────────────────────────────────────
     const joinAllRooms = useCallback((convList: any[]) => {
@@ -392,23 +405,25 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 requestAnimationFrame(flushSocketBatch);
             }
 
-            // ── Delivery ACK — DEFERRED off hot path ──────────────────────────
+            // Delivery ACK — industry pattern:
+            //   1. Socket emit FIRST (instant real-time notification to sender).
+            //   2. HTTP PUT SECOND (persist delivered_at to DB for self-healing).
+            // No setTimeout wrapper — the whole handler is already async / off render path.
             if (!incomingMessage.isOwn) {
-                setTimeout(() => {
-                    apiClient.put(`/chat/messages/${incomingMessage.id}/deliver`, {
-                        deviceId: deviceIdRef.current,
-                        conversationId: incomingMessage.conversation_id
-                    }).then(() => {
-                        const socket = socketManager.instance;
-                        if (socket) {
-                            socket.emit('chat:delivered', {
-                                conversationId: incomingMessage.conversation_id,
-                                messageId: incomingMessage.id,
-                                deliveredAt: new Date().toISOString()
-                            });
-                        }
-                    }).catch(() => {});
-                }, 0);
+                const socket = socketManager.instance;
+                if (socket) {
+                    socket.emit('chat:delivered', {
+                        conversationId: incomingMessage.conversation_id,
+                        messageId: incomingMessage.id,
+                        deliveredAt: new Date().toISOString()
+                    });
+                }
+                // Persist to DB — ensures sender sees double tick on next load
+                // even if they were offline when the socket emit above fired.
+                apiClient.put(`/chat/messages/${incomingMessage.id}/deliver`, {
+                    deviceId: deviceIdRef.current,
+                    conversationId: incomingMessage.conversation_id
+                }).catch(() => {});
             }
         });
 

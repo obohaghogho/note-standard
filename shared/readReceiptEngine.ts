@@ -1,15 +1,32 @@
 import { EventLedger } from './eventLedger';
 
+/**
+ * ReadReceiptEngine — Industry-aligned implementation
+ *
+ * Pattern adopted from WhatsApp / Telegram / Facebook Messenger:
+ *
+ *   1. NEVER gate read receipts behind a lease, session ID, or debounce.
+ *      The moment the user sees a message, the receipt fires — unconditionally.
+ *
+ *   2. The server is the single source of truth. `rpc_mark_read` is idempotent
+ *      (only marks rows WHERE read_at IS NULL), so calling it multiple times is safe.
+ *
+ *   3. Local UI (blue tick on the receiver's own screen) updates optimistically
+ *      via markLocalReadState — exactly like WhatsApp shows the blue ticks to you
+ *      as soon as you scroll over a message.
+ *
+ * The previous implementation used navigator.locks, localStorage, a 1-second
+ * debounce, and a lease barrier — all of which caused the receipt to silently
+ * fail when sessionId was null (always true during the first seconds of app load).
+ */
 export class ReadReceiptEngine {
-    private debounceTimeout: ReturnType<typeof setTimeout> | null = null;
-    private readIntentQueue: { conversationId: string, lastMessageId: string, correlationId: string }[] = [];
-    private pendingFlush = false;
     private ledger: EventLedger;
 
     constructor(
         private apiClient: any,
         private getDeviceId: () => string | null,
         private getSessionId: () => string | null,
+        // Kept for API compatibility — no longer used to gate receipts.
         private getIsActiveWriter: (conversationId: string) => boolean,
         private markLocalReadState: (conversationId: string, lastMessageId: string) => void
     ) {
@@ -17,123 +34,68 @@ export class ReadReceiptEngine {
     }
 
     /**
-     * Called by the UI (e.g., IntersectionObserver or ScrollView onEndReached)
-     * when a message becomes fully visible.
+     * Called by the UI when a message becomes visible on screen.
+     *
+     * Fires unconditionally — no lease check, no debounce, no session guard.
+     * This is the exact behaviour of WhatsApp and Telegram.
      */
-    public onMessageVisible(conversationId: string, messageId: string, correlationId: string = messageId) {
-        // Immediately update local UI (optimistic local read state)
+    public onMessageVisible(
+        conversationId: string,
+        messageId: string,
+        correlationId: string = messageId
+    ) {
+        // Step 1: Optimistic local update — receiver sees blue tick instantly.
         this.markLocalReadState(conversationId, messageId);
 
-        // Queue the server read receipt intent
-        this.queueReadIntent(conversationId, messageId, correlationId);
-        
-        // Debounce actual server emission
-        this.scheduleFlush(conversationId);
-    }
-
-    private queueReadIntent(conversationId: string, messageId: string, correlationId: string) {
-        // Keep only the latest messageId per conversation
-        const existing = this.readIntentQueue.find(q => q.conversationId === conversationId);
-        if (existing) {
-            existing.lastMessageId = messageId;
-            existing.correlationId = correlationId;
-        } else {
-            this.readIntentQueue.push({ conversationId, lastMessageId: messageId, correlationId });
+        const deviceId = this.getDeviceId();
+        if (!deviceId) {
+            // deviceId not yet available (first ~500ms of app load) — skip.
+            // The conversation-open useEffect in ChatContext will catch this.
+            return;
         }
-    }
 
-    private scheduleFlush(conversationId: string) {
-        if (this.debounceTimeout) {
-            clearTimeout(this.debounceTimeout);
-        }
-        
-        this.debounceTimeout = setTimeout(async () => {
-            this.debounceTimeout = null;
-            await this.flushQueue();
-        }, 1000); // 1000ms debounce
-    }
-
-    public async flushQueue() {
-        if (this.pendingFlush || this.readIntentQueue.length === 0) return;
-        this.pendingFlush = true;
-
-        const executeFlush = async () => {
-            const deviceId = this.getDeviceId();
-            if (!deviceId) {
-                this.pendingFlush = false;
-                return;
-            }
-
-            const remainingQueue: { conversationId: string, lastMessageId: string, correlationId: string }[] = [];
-
-            for (const intent of this.readIntentQueue) {
-                const { conversationId, lastMessageId, correlationId } = intent;
-
-                // LEASE BARRIER: Only emit read receipt if this device is the active writer
-                if (!this.getIsActiveWriter(conversationId)) {
-                    // Device is passive. Keep the intent queued.
-                    remainingQueue.push(intent);
-                    continue;
-                }
-
-                try {
-                    await this.apiClient.post(`/chat/conversations/${conversationId}/read`, {
-                        deviceId,
-                        lastMessageId
-                    });
-                    
-                    // Emit to Event Ledger (Phase 6.2)
-                    this.ledger.emit({
-                        messageId: lastMessageId,
-                        conversationId,
-                        deviceId,
-                        sessionId: this.getSessionId(),
-                        eventType: 'READ',
-                        correlationId
-                    });
-                } catch (err) {
-                    console.error('[ReadReceiptEngine] Failed to emit read receipt', err);
-                    remainingQueue.push(intent);
-                }
-            }
-
-            this.readIntentQueue = remainingQueue;
-            this.pendingFlush = false;
-        };
-
-        // Fallback for environments without Web Locks API (older browsers)
-        const acquireFallbackLock = (): boolean => {
-            if (typeof localStorage === 'undefined') return true; // React Native
-            const now = Date.now();
-            const lockKey = 'chat-read-sync-lock';
-            const existingLock = localStorage.getItem(lockKey);
-            
-            if (existingLock) {
-                const lockTime = parseInt(existingLock, 10);
-                if (now - lockTime < 2500) { // Lock considered active for 2.5 seconds
-                    return false;
-                }
-            }
-            
-            localStorage.setItem(lockKey, now.toString());
-            return true;
-        };
-
-        // Attempt to acquire cross-tab lock
-        if (typeof navigator !== 'undefined' && navigator.locks) {
-            await navigator.locks.request('chat-read-sync', { mode: 'exclusive', ifAvailable: true }, async (lock) => {
-                if (lock) {
-                    // Provide enough time for the flush to complete before lock releases
-                    await executeFlush();
-                } else {
-                    // Lock held by another tab, we stay passive
-                    this.pendingFlush = false;
+        // Step 2: Persist to server — direct PUT, fire-and-forget.
+        // The server's rpc_mark_read is idempotent (WHERE read_at IS NULL),
+        // so duplicate calls are harmless.
+        this.apiClient
+            .put(`/chat/conversations/${conversationId}/read`, {
+                deviceId,
+                lastMessageId: messageId,
+            })
+            .then(() => {
+                // Emit to Event Ledger for distributed tracing (non-blocking).
+                this.ledger.emit({
+                    messageId,
+                    conversationId,
+                    deviceId,
+                    sessionId: this.getSessionId(),
+                    eventType: 'READ',
+                    correlationId,
+                });
+            })
+            .catch((err: any) => {
+                // Non-fatal: the conversation-open path in ChatContext is the
+                // primary read-marking trigger. This is a secondary best-effort call.
+                const isDev =
+                    (typeof process !== 'undefined' &&
+                        process.env?.NODE_ENV !== 'production') ||
+                    // @ts-ignore: React Native global
+                    (typeof __DEV__ !== 'undefined' && __DEV__);
+                if (isDev) {
+                    console.warn(
+                        '[ReadReceiptEngine] Failed to emit read receipt:',
+                        err?.message
+                    );
                 }
             });
-        } else if (acquireFallbackLock()) {
-            await executeFlush();
-        } else {
-            this.pendingFlush = false;
-        }
+    }
+
+    /**
+     * @deprecated No-op — kept for backward compatibility only.
+     * Previously flushed a lease-gated queue. The new implementation fires
+     * receipts directly in onMessageVisible, so no queue is needed.
+     */
+    public async flushQueue(): Promise<void> {
+        // No-op.
     }
 }
