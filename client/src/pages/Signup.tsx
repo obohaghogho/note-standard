@@ -34,6 +34,7 @@ export const Signup = () => {
     const [showTermsModal, setShowTermsModal] = React.useState(false);
     const [showVerificationModal, setShowVerificationModal] = React.useState(false);
     const [captchaToken, setCaptchaToken] = React.useState<string | null>(null);
+    const [captchaLoadError, setCaptchaLoadError] = React.useState(false);
     const recaptchaRef = React.useRef<ReCAPTCHA>(null);
 
     React.useEffect(() => {
@@ -311,13 +312,36 @@ export const Signup = () => {
 
                                     {/* reCAPTCHA Integration */}
                                     {import.meta.env.PROD && import.meta.env.VITE_RECAPTCHA_SITE_KEY && (
-                                        <div className="flex justify-center pt-2 overflow-hidden rounded-xl">
-                                            <ReCAPTCHA
-                                                ref={recaptchaRef}
-                                                theme="dark"
-                                                sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
-                                                onChange={(token) => setCaptchaToken(token)}
-                                            />
+                                        <div className="pt-2 space-y-2">
+                                            {captchaLoadError ? (
+                                                <div className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 px-4 py-3 rounded-xl text-xs leading-relaxed">
+                                                    <p className="font-semibold mb-1">Verification could not load</p>
+                                                    <p>This may be caused by an ad blocker or network issue. Please disable any content blockers for this site and refresh the page, then try again.</p>
+                                                </div>
+                                            ) : (
+                                                <div className="flex justify-center overflow-hidden rounded-xl">
+                                                    <ReCAPTCHA
+                                                        ref={recaptchaRef}
+                                                        theme="dark"
+                                                        sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
+                                                        onChange={(token) => {
+                                                            setCaptchaToken(token);
+                                                            setCaptchaLoadError(false);
+                                                        }}
+                                                        onExpired={() => {
+                                                            // Token expired (>2 min) — reset so user must re-verify
+                                                            setCaptchaToken(null);
+                                                            recaptchaRef.current?.reset();
+                                                            toast.error('Verification expired. Please complete the check again.');
+                                                        }}
+                                                        onErrored={() => {
+                                                            // Widget failed to load (ad blocker, network issue, etc.)
+                                                            setCaptchaToken(null);
+                                                            setCaptchaLoadError(true);
+                                                        }}
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>

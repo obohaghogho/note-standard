@@ -30,23 +30,32 @@ const register = async (req, res) => {
       username = email.split('@')[0] + Math.floor(Math.random() * 1000);
     }
 
-    // 1. reCAPTCHA check (Bypass for mobile apps which don't send origin or send specific app headers)
-    const isMobile = !req.headers.origin || 
-      req.headers['x-client-info']?.includes('mobile') || 
-      req.headers['x-client-type']?.includes('mobile');
-    
-    if (
-      env.RECAPTCHA_SECRET_KEY && env.NODE_ENV === "production" && !isMobile
-    ) {
+    // 1. reCAPTCHA check
+    // Mobile apps are exempt via an explicit header they send on every request.
+    // We intentionally do NOT use !req.headers.origin as a bypass — that would
+    // allow any curl/Postman call with no origin header to skip verification.
+    const isMobileClient =
+      req.headers['x-client-type'] === 'mobile' ||
+      req.headers['x-client-info']?.includes('mobile');
+
+    if (env.RECAPTCHA_SECRET_KEY && env.NODE_ENV === "production" && !isMobileClient) {
       if (!captchaToken) {
-        return res.status(400).json({ error: "Please verify you are human." });
+        return res.status(400).json({ error: "Please complete the robot verification." });
       }
       const verify = await axios.post(
         `https://www.google.com/recaptcha/api/siteverify?secret=${env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`,
       );
       if (!verify.data.success) {
-        console.warn(`[AUTH-WARN] reCAPTCHA failed for ${email}`);
-        return res.status(400).json({ error: "reCAPTCHA failed." });
+        const errorCodes = verify.data['error-codes'] || [];
+        console.warn(`[AUTH-WARN] reCAPTCHA failed for ${email}`, errorCodes);
+        // timeout-or-duplicate is specifically a token expiry error
+        const isExpired = errorCodes.includes('timeout-or-duplicate');
+        return res.status(400).json({
+          error: isExpired
+            ? "Verification expired. Please complete the check again."
+            : "Robot verification failed. Please try again.",
+          code: "RECAPTCHA_FAILED",
+        });
       }
     }
 
