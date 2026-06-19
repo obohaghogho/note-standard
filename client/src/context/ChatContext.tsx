@@ -609,11 +609,24 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 
                 setLoading(false);
                 joinAllRooms(mappedData);
-                // PERF FIX: Removed markConversationDelivered call per unread conversation.
-                // Previously this fired N full-table UPDATE writes on every page load
-                // (one per unread conversation). Delivery status is now maintained
-                // exclusively via real-time socket events (chat:message_delivered)
-                // which are emitted by the server immediately when a message is received.
+
+                // WhatsApp-Style Connection Bulk ACKs
+                // If a user was offline when messages were sent, their device never emitted
+                // the `chat:delivered` socket event. When they load the app, we scan for any
+                // unread conversations where they are the receiver, and immediately blast out
+                // delivery ACKs. This makes the sender's UI instantly jump to double-ticks.
+                const nowStr = new Date().toISOString();
+                const s = socketRef.current;
+                mappedData.forEach((conv: any) => {
+                    // Check if there are unread messages, and the last message is from someone else
+                    if (conv.unreadCount > 0 && conv.lastMessage && conv.lastMessage.sender_id !== user?.id) {
+                        const msgId = conv.lastMessage.id;
+                        if (msgId && s && s.connected) {
+                            s.emit('chat:delivered', { conversationId: conv.id, messageId: msgId, deliveredAt: nowStr, deviceId: deviceIdRef.current });
+                            pendingDeliveryAcksRef.current.add(msgId);
+                        }
+                    }
+                });
 
                 // Phase 4: Conversation Preloading (PERF FIX: reduced from 5 → 2)
                 // Preload only the 2 most recent conversations to reduce cold-start I/O.
@@ -1702,6 +1715,33 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             return { ...prev, [conversationId]: merged as Message[] };
         });
 
+        // Instant Chat List Optimistic Sync
+        // Pushes the 'sending' state to the list immediately so delivery ACKs
+        // that arrive before the HTTP POST finishes can link to this tempId.
+        setConversations(cPrev => cPrev.map(conv => {
+            if (conv.id !== conversationId) return conv;
+            return {
+                ...conv,
+                updated_at: optimisticMessage.created_at,
+                lastMessage: {
+                    id: optimisticMessage.id,
+                    content: optimisticMessage.content,
+                    sender_id: optimisticMessage.sender_id,
+                    created_at: optimisticMessage.created_at,
+                    type: optimisticMessage.type,
+                    status: optimisticMessage.status
+                } as Conversation['lastMessage'],
+                last_message: {
+                    id: optimisticMessage.id,
+                    content: optimisticMessage.content,
+                    sender_id: optimisticMessage.sender_id,
+                    created_at: optimisticMessage.created_at,
+                    type: optimisticMessage.type,
+                    status: optimisticMessage.status
+                } as Conversation['lastMessage']
+            };
+        }));
+
         // 1. Push Intent to Offline Queue
         await offlineQueue.pushIntent({
             event_id: clientEventId,
@@ -1769,6 +1809,31 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             const merged = stableMerge(current, [optimisticMessage]);
             return { ...prev, [conversationId]: merged as Message[] };
         });
+
+        // Instant Chat List Optimistic Sync
+        setConversations(cPrev => cPrev.map(conv => {
+            if (conv.id !== conversationId) return conv;
+            return {
+                ...conv,
+                updated_at: optimisticMessage.created_at,
+                lastMessage: {
+                    id: optimisticMessage.id,
+                    content: optimisticMessage.content,
+                    sender_id: optimisticMessage.sender_id,
+                    created_at: optimisticMessage.created_at,
+                    type: optimisticMessage.type,
+                    status: optimisticMessage.status
+                } as Conversation['lastMessage'],
+                last_message: {
+                    id: optimisticMessage.id,
+                    content: optimisticMessage.content,
+                    sender_id: optimisticMessage.sender_id,
+                    created_at: optimisticMessage.created_at,
+                    type: optimisticMessage.type,
+                    status: optimisticMessage.status
+                } as Conversation['lastMessage']
+            };
+        }));
 
         // 3. Trigger asynchronous background upload
         const runBackgroundUpload = async () => {
