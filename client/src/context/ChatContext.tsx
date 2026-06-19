@@ -617,7 +617,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 // delivery ACKs. This makes the sender's UI instantly jump to double-ticks.
                 const nowStr = new Date().toISOString();
                 const s = socketRef.current;
-                mappedData.forEach((conv: any) => {
+                mappedData.forEach((conv: Conversation) => {
                     // Check if there are unread messages, and the last message is from someone else
                     if (conv.unreadCount > 0 && conv.lastMessage && conv.lastMessage.sender_id !== user?.id) {
                         const msgId = conv.lastMessage.id;
@@ -1949,7 +1949,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 });
 
                 // Phase 3.2: Use merge engine to replace optimistic message
-                let canonicalMessage = { ...msgRes.data, isOwn: true, status: 'sent' };
+                const canonicalMessage = { ...msgRes.data, isOwn: true, status: 'sent' };
 
                 // HIERARCHICAL STATUS VALIDATION
                 const tickSetById = appliedTicksRef.current.get(canonicalMessage.id);

@@ -490,7 +490,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
             cleanup();
         }
-    }, [callState, socket, ensureIceServers, createPeerConnection, cleanup]);
+    }, [callState, socket, ensureIceServers, createPeerConnection, cleanup, stopAllAudio]);
 
     const rejectCall = useCallback(() => {
         socket?.emit('call:reject', { to: callState.otherUser?.id, sessionId: callState.sessionId });
