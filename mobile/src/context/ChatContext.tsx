@@ -332,8 +332,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     return {
                         ...conv,
                         updated_at: newest.created_at,
-                        last_message: { id: newest.id, content: newest.content, sender_id: newest.sender_id, created_at: newest.created_at },
-                        lastMessage: { id: newest.id, content: newest.content, sender_id: newest.sender_id, created_at: newest.created_at },
+                        last_message: { id: newest.id, content: newest.content, sender_id: newest.sender_id, created_at: newest.created_at, status: newest.status, delivered_at: newest.delivered_at, read_at: newest.read_at },
+                        lastMessage: { id: newest.id, content: newest.content, sender_id: newest.sender_id, created_at: newest.created_at, status: newest.status, delivered_at: newest.delivered_at, read_at: newest.read_at },
                         unreadCount: !isCurrentlyOpen && !newest.isOwn
                             ? (conv.unreadCount || 0) + newMsgs.filter(m => !m.isOwn).length
                             : conv.unreadCount
@@ -439,6 +439,45 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     )
                 };
             });
+            setConversations(prev => prev.map(c => {
+                if (c.id === conversationId) {
+                    const lastMsg = (c as any).last_message ?? (c as any).lastMessage;
+                    if (lastMsg && lastMsg.id === messageId && !lastMsg.read_at) {
+                        return {
+                            ...c,
+                            last_message: { ...lastMsg, status: 'delivered', delivered_at: deliveredAt },
+                            lastMessage: { ...lastMsg, status: 'delivered', delivered_at: deliveredAt }
+                        };
+                    }
+                }
+                return c;
+            }));
+        });
+
+        socketManager.on('chat:conversation_delivered', (data: any) => {
+            const { conversationId, userId: readerId, delivered_at } = data;
+            setMessages(prev => {
+                const current = prev[conversationId] || [];
+                return {
+                    ...prev,
+                    [conversationId]: current.map(m =>
+                        (m.sender_id !== readerId && !m.delivered_at && !m.read_at) ? { ...m, status: 'delivered', delivered_at: delivered_at } : m
+                    )
+                };
+            });
+            setConversations(prev => prev.map(c => {
+                if (c.id === conversationId) {
+                    const lastMsg = (c as any).last_message ?? (c as any).lastMessage;
+                    if (lastMsg && lastMsg.sender_id !== readerId && !lastMsg.delivered_at && !lastMsg.read_at) {
+                        return {
+                            ...c,
+                            last_message: { ...lastMsg, status: 'delivered', delivered_at: delivered_at },
+                            lastMessage: { ...lastMsg, status: 'delivered', delivered_at: delivered_at }
+                        };
+                    }
+                }
+                return c;
+            }));
         });
 
         socketManager.on('chat:read_receipt', (data: any) => {
@@ -452,6 +491,45 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     )
                 };
             });
+            setConversations(prev => prev.map(c => {
+                if (c.id === conversationId) {
+                    const lastMsg = (c as any).last_message ?? (c as any).lastMessage;
+                    if (lastMsg && messageIds.includes(lastMsg.id)) {
+                        return {
+                            ...c,
+                            last_message: { ...lastMsg, status: 'read', read_at: readAt },
+                            lastMessage: { ...lastMsg, status: 'read', read_at: readAt }
+                        };
+                    }
+                }
+                return c;
+            }));
+        });
+
+        socketManager.on('chat:conversation_read', (data: any) => {
+            const { conversationId, readerId, readAt } = data;
+            setMessages(prev => {
+                const current = prev[conversationId] || [];
+                return {
+                    ...prev,
+                    [conversationId]: current.map(m =>
+                        (m.sender_id !== readerId && !m.read_at) ? { ...m, status: 'read', read_at: readAt } : m
+                    )
+                };
+            });
+            setConversations(prev => prev.map(c => {
+                if (c.id === conversationId) {
+                    const lastMsg = (c as any).last_message ?? (c as any).lastMessage;
+                    if (lastMsg && lastMsg.sender_id !== readerId && !lastMsg.read_at) {
+                        return {
+                            ...c,
+                            last_message: { ...lastMsg, status: 'read', read_at: readAt },
+                            lastMessage: { ...lastMsg, status: 'read', read_at: readAt }
+                        };
+                    }
+                }
+                return c;
+            }));
         });
 
         socketManager.on('chat:message_edited', (editedMsg: any) => {
@@ -485,6 +563,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             socketManager.offEvent('chat:read_receipt');
             socketManager.offEvent('chat:message_edited');
             socketManager.offEvent('chat:message_deleted');
+            socketManager.offEvent('chat:conversation_delivered');
+            socketManager.offEvent('chat:conversation_read');
         };
     }, [user]);
 
@@ -540,8 +620,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             // Removed clock skew check to guarantee instant update for sent message
             return {
                 ...conv,
-                last_message: { id: tempId, content: text, sender_id: currentUser.id, created_at: optimisticMessage.created_at },
-                lastMessage: { id: tempId, content: text, sender_id: currentUser.id, created_at: optimisticMessage.created_at },
+                last_message: { id: tempId, content: text, sender_id: currentUser.id, created_at: optimisticMessage.created_at, status: 'sending' },
+                lastMessage: { id: tempId, content: text, sender_id: currentUser.id, created_at: optimisticMessage.created_at, status: 'sending' },
             };
         }));
 
@@ -588,8 +668,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 return {
                     ...conv,
                     updated_at: canonicalMessage.created_at,
-                    last_message: { id: canonicalMessage.id, content: canonicalMessage.content, sender_id: canonicalMessage.sender_id, created_at: canonicalMessage.created_at },
-                    lastMessage: { id: canonicalMessage.id, content: canonicalMessage.content, sender_id: canonicalMessage.sender_id, created_at: canonicalMessage.created_at },
+                    last_message: { id: canonicalMessage.id, content: canonicalMessage.content, sender_id: canonicalMessage.sender_id, created_at: canonicalMessage.created_at, status: 'sent' },
+                    lastMessage: { id: canonicalMessage.id, content: canonicalMessage.content, sender_id: canonicalMessage.sender_id, created_at: canonicalMessage.created_at, status: 'sent' },
                 };
             }));
 
