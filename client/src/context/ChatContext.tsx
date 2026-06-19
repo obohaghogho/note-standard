@@ -619,7 +619,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const s = socketRef.current;
                 mappedData.forEach((conv: Conversation) => {
                     // Check if there are unread messages, and the last message is from someone else
-                    if (conv.unreadCount > 0 && conv.lastMessage && conv.lastMessage.sender_id !== user?.id) {
+                    if ((conv.unreadCount ?? 0) > 0 && conv.lastMessage && conv.lastMessage.sender_id !== user?.id) {
                         const msgId = conv.lastMessage.id;
                         if (msgId && s && s.connected) {
                             s.emit('chat:delivered', { conversationId: conv.id, messageId: msgId, deliveredAt: nowStr, deviceId: deviceIdRef.current });
