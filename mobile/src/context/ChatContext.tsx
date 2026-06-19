@@ -415,6 +415,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     socket.emit('chat:delivered', {
                         conversationId: incomingMessage.conversation_id,
                         messageId: incomingMessage.id,
+                        senderId: incomingMessage.sender_id,
                         deliveredAt: new Date().toISOString()
                     });
                 }

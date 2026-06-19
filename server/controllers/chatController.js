@@ -2343,12 +2343,18 @@ exports.markConversationRead = async (req, res) => {
         readPayload.conversation_version = rpcData.conversation_version;
     }
 
-    // Emit to conversation room — all members who are in the chat screen receive this.
-    // PERF FIX: Removed the redundant per-member emit loop that followed this call.
-    // `emitToConversation` broadcasts to the conversation room which all joined members
-    // receive. The loop was querying conversation_members and emitting individually
-    // (1 SELECT + N emits) without any added value.
-    await realtime.emitToConversation(conversationId, "chat:conversation_read", readPayload);
+    // Emit to ALL members of the conversation globally.
+    // By using emitToUsers, this broadcasts to user:${userId} rooms,
+    // guaranteeing delivery even if the sender is on a different screen.
+    const { data: members } = await supabase
+      .from('conversation_members')
+      .select('user_id')
+      .eq('conversation_id', conversationId);
+      
+    if (members && members.length > 0) {
+      const memberIds = members.map(m => m.user_id);
+      await realtime.emitToUsers(memberIds, "chat:conversation_read", readPayload);
+    }
 
     res.json({ success: true });
   } catch (err) {
@@ -2390,11 +2396,16 @@ exports.markConversationDelivered = async (req, res) => {
 
     const deliveredPayload = { conversationId, userId, delivered_at: now };
 
-    // PERF FIX: Emit to the conversation room only.
-    // The per-member SELECT + individual emit loop was removed — it performed
-    // 1 extra SELECT + N individual emits for the same result as emitToConversation.
-    // The sender's sender-update is handled by the chat:message socket event.
-    await realtime.emitToConversation(conversationId, "chat:conversation_delivered", deliveredPayload);
+    // Emit to ALL members of the conversation globally.
+    const { data: members } = await supabase
+      .from('conversation_members')
+      .select('user_id')
+      .eq('conversation_id', conversationId);
+      
+    if (members && members.length > 0) {
+      const memberIds = members.map(m => m.user_id);
+      await realtime.emitToUsers(memberIds, "chat:conversation_delivered", deliveredPayload);
+    }
 
     res.json({ success: true });
   } catch (err) {

@@ -114,39 +114,54 @@ module.exports = (io, socket) => {
   // ── Read Receipts ────────────────────────────────────────────────────────
 
   // Emitted by client when messages are seen.
-  // Payload: { conversationId, messageIds: string[], readAt: ISO string }
+  // Payload: { conversationId, messageIds: string[], readAt: ISO string, senderId?: string }
   socket.on('chat:read', (data) => {
-    const { conversationId, messageIds, readAt } = data || {};
+    const { conversationId, messageIds, readAt, senderId } = data || {};
     if (!conversationId || !Array.isArray(messageIds) || messageIds.length === 0) return;
 
     console.log(`[FORENSIC][GW] Read ACK Received | userId:${userId} | conversationId:${conversationId} | messageIds:[${messageIds.join(',')}] | ts:${Date.now()}`);
 
-    // Relay to everyone else in the conversation room
-    socket.to(conversationId).emit('chat:read_receipt', {
+    const payload = {
       userId,
       conversationId,
       messageIds,
       readAt: readAt || new Date().toISOString(),
-    });
+    };
+
+    // Route globally to the sender's user room if provided
+    if (senderId) {
+      socket.to(`user:${senderId}`).emit('chat:read_receipt', payload);
+    }
+
+    // Relay to everyone else in the conversation room
+    socket.to(conversationId).emit('chat:read_receipt', payload);
   });
 
   // ── Delivery Receipts ────────────────────────────────────────────────────
 
   // Emitted by client when a message is received (device received it).
-  // Payload: { conversationId, messageId, eventId, deliveredAt: ISO string }
+  // Payload: { conversationId, messageId, eventId, deliveredAt: ISO string, senderId?: string }
   socket.on('chat:delivered', (data) => {
-    const { conversationId, messageId, eventId, deliveredAt } = data || {};
+    const { conversationId, messageId, eventId, deliveredAt, senderId } = data || {};
     if (!conversationId || (!messageId && !eventId)) return;
 
     console.log(`[FORENSIC][GW] Delivery ACK Received | userId:${userId} | conversationId:${conversationId} | messageId:${messageId} | eventId:${eventId} | ts:${Date.now()}`);
 
-    socket.to(conversationId).emit('chat:delivery_receipt', {
+    const payload = {
       userId,
       conversationId,
       messageId,
       eventId,
       deliveredAt: deliveredAt || new Date().toISOString(),
-    });
+    };
+
+    // Route globally to the sender's user room if provided
+    if (senderId) {
+      socket.to(`user:${senderId}`).emit('chat:delivery_receipt', payload);
+    }
+
+    // Still emit to the conversation room for active participants
+    socket.to(conversationId).emit('chat:delivery_receipt', payload);
   });
 
   // ── Team Call Notifications ────────────────────────────────────────────────
