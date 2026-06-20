@@ -1602,49 +1602,7 @@ exports.sendMessage = async (req, res) => {
         }, 30000); // 30 second window — enough for reconnect backoff (max 10s) + handshake
       }
     }
-
-
-    /**
-     * Fire-and-forget native push via gateway /internal/push.
-     * Called for each recipient so iOS/Android get APNs/FCM when offline.
-     */
-    function sendNativePush({ memberId, senderName, msgContent, msgId }) {
-      try {
-        const http = require('http');
-        const https = require('https');
-        const rawUrl = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
-        const targetUrl = new URL('/internal/push', rawUrl);
-        const body = JSON.stringify({
-          userId: memberId,
-          title: senderName || 'New Message',
-          body: (msgContent || '').substring(0, 100),
-          payload: {
-            type: 'chat_message',
-            conversationId,
-            messageId: msgId,
-            url: `/dashboard/chat?id=${conversationId}`,
-            targetAccountId: memberId,
-            targetUserId: memberId
-          },
-        });
-        const options = {
-          hostname: targetUrl.hostname,
-          port: targetUrl.port || (targetUrl.protocol === 'https:' ? 443 : 80),
-          path: targetUrl.pathname,
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
-        };
-        const lib = targetUrl.protocol === 'https:' ? https : http;
-        const req2 = lib.request(options, (r) => r.resume());
-        req2.on('error', (err) => console.warn('[Chat] sendNativePush error:', err.message));
-        req2.write(body);
-        req2.end();
-      } catch (e) {
-        console.warn('[Chat] sendNativePush setup error:', e.message);
-      }
-    }
-
-    // --- Notification Logic ---
+// --- Notification Logic ---
     // PERF FIX: Reuse `members` fetched at the top of sendMessage.
     // Filter to non-sender members here (was previously a 3rd redundant SELECT).
     const io = req.app.get("io");
@@ -1682,16 +1640,6 @@ exports.sendMessage = async (req, res) => {
             conversationId: conversationId,
           });
 
-          // ── Native Push (iOS APNs / Android FCM) ──────────────────────────
-          // Fire-and-forget: sends to offline devices via the gateway push service.
-          if (process.env.PUSH_ENABLED !== 'false') {
-            sendNativePush({
-              memberId: member.user_id,
-              senderName: senderName,
-              msgContent: previewContent,
-              msgId: createdMessageId,
-            });
-          }
         });
 
         // DO NOT AWAIT notificationPromises here! Let them run in the background.

@@ -77,26 +77,52 @@ const createNotification = async ({
     //    The gateway already holds Firebase Admin and APNs credentials (used for call push).
     //    We route through the gateway's /internal/push endpoint for all notifications.
     //    This ensures iOS users receive push notifications even when the PWA is closed.
-    const gatewayUrl = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
-    const body = message || title;
-    fetch(`${gatewayUrl}/internal/push`, {
+    const gatewayUrlStr = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
+    const bodyStr = message || title;
+    
+    // Lazy-initialize KeepAlive agents to prevent TCP Ephemeral Port Exhaustion
+    if (!global.__pushHttpAgent) {
+      const http = require('http');
+      const https = require('https');
+      global.__pushHttpAgent = new http.Agent({ keepAlive: true, maxSockets: 100 });
+      global.__pushHttpsAgent = new https.Agent({ keepAlive: true, maxSockets: 100 });
+    }
+    
+    const targetUrl = new URL('/internal/push', gatewayUrlStr);
+    const payloadBody = JSON.stringify({
+      userId: receiverId,
+      title,
+      body: bodyStr,
+      payload: {
+        type,
+        conversationId: conversationId || null,
+        messageId: messageId || null,
+        url: link || '/dashboard/notifications',
+        recipientId: receiverId,        // legacy compat
+        targetUserId: receiverId,       // explicit
+        targetAccountId: receiverId,    // explicit (same as userId in this app)
+      },
+    });
+
+    const lib = targetUrl.protocol === 'https:' ? require('https') : require('http');
+    const agent = targetUrl.protocol === 'https:' ? global.__pushHttpsAgent : global.__pushHttpAgent;
+
+    const req = lib.request({
+      hostname: targetUrl.hostname,
+      port: targetUrl.port || (targetUrl.protocol === 'https:' ? 443 : 80),
+      path: targetUrl.pathname,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: receiverId,
-        title,
-        body,
-        payload: {
-          type,
-          conversationId: conversationId || null,
-          messageId: messageId || null,
-          url: link || '/dashboard/notifications',
-          recipientId: receiverId,        // legacy compat
-          targetUserId: receiverId,       // explicit
-          targetAccountId: receiverId,    // explicit (same as userId in this app)
-        },
-      }),
-    }).catch(err => console.error('[NotificationService] Native push via gateway failed:', err.message));
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payloadBody) },
+      agent: agent
+    }, (res) => {
+      // Must consume the response to return the socket to the pool
+      res.on('data', () => {});
+      res.on('end', () => {});
+    });
+
+    req.on('error', (err) => console.error('[NotificationService] Native push via gateway failed:', err.message));
+    req.write(payloadBody);
+    req.end();
 
     return true;
   } catch (err) {
