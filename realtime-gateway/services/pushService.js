@@ -331,90 +331,139 @@ async function sendGenericPush(params) {
   const { userId, title, body, payload } = params;
 
   try {
+    // --- 1. Native tokens (FCM / APNs) ---
     const { data: tokens, error } = await supabase
       .from('native_device_tokens')
       .select('token, platform, type')
       .eq('user_id', userId);
 
-    if (error || !tokens || tokens.length === 0) {
+    const nativePromises = [];
+
+    if (!error && tokens && tokens.length > 0) {
+      tokens.forEach((t) => {
+        // Android FCM — notification + data message shows in system tray when app is closed
+        if (t.platform === 'android' && t.type === 'fcm' && firebaseApp) {
+          const message = {
+            token: t.token,
+            notification: {
+              title: title,
+              body: body,
+            },
+            data: {
+              type: String(payload.type || 'notification'),
+              conversationId: String(payload.conversationId || ''),
+              messageId: String(payload.messageId || ''),
+              url: String(payload.url || '/dashboard/notifications'),
+              recipientId: String(payload.recipientId || ''),
+              targetUserId: String(payload.targetUserId || payload.recipientId || ''),
+              targetAccountId: String(payload.targetAccountId || payload.recipientId || ''),
+            },
+            android: {
+              priority: 'high',
+              notification: {
+                sound: 'default',
+                tag: payload.conversationId ? `chat-${payload.conversationId}` : `type-${payload.type || 'notification'}`,
+              },
+            },
+          };
+          console.log(`[PushService] 📤 Sending FCM notification (Android) to: ${t.token.substring(0, 10)}...`);
+          nativePromises.push(
+            admin.messaging().send(message).catch(err => {
+              console.error(`[PushService] ❌ FCM chat fail:`, err.message);
+              if (err.code === 'messaging/registration-token-not-registered' || err.code === 'messaging/invalid-registration-token') {
+                removeInvalidToken(t.token);
+              }
+            })
+          );
+        }
+
+        // iOS APNs — alert push (NOT voip) for regular chat notifications
+        if (t.platform === 'ios' && t.type === 'apns') {
+          if (!apnProviderProd && !apnProviderSandbox) {
+            console.warn('[PushService] ⚠️ iOS APNs provider not initialised — skipping for user:', userId);
+            return;
+          }
+          const notification = new apn.Notification();
+          notification.topic = process.env.APNS_BUNDLE_ID || 'com.notestandard.app';
+          notification.priority = 10;
+          notification.pushType = 'alert';
+          notification.alert = { title, body };
+          notification.sound = 'default';
+          notification.badge = 1;
+          notification.contentAvailable = true;
+          notification.mutableContent = true;
+          notification.threadId = payload.conversationId || payload.type || 'default';
+          notification.payload = {
+            type: payload.type || 'notification',
+            conversationId: payload.conversationId,
+            messageId: payload.messageId,
+            url: payload.url || '/dashboard/notifications',
+            recipientId: payload.recipientId || null,
+            targetUserId: payload.targetUserId || payload.recipientId || null,
+            targetAccountId: payload.targetAccountId || payload.recipientId || null,
+          };
+          console.log(`[PushService] 📤 Initiating APNs alert (iOS) to topic: ${notification.topic}`);
+          nativePromises.push(sendApnsWithFallback(notification, t.token, 'Chat'));
+        }
+      });
+    } else {
       console.log(`[PushService] No native tokens found for user ${userId} (chat push)`);
-      return;
     }
 
-    const pushPromises = tokens.map(async (t) => {
-      // Android FCM — notification + data message shows in system tray when app is closed
-      if (t.platform === 'android' && t.type === 'fcm' && firebaseApp) {
-        const message = {
-          token: t.token,
-          notification: {
-            title: title,
-            body: body,
-          },
+    // --- 2. Web Push (PWA / Browser — VAPID) ---
+    // CRITICAL FIX: sendGenericPush previously skipped web push entirely, causing
+    // browsers (PWA) to never receive chat message notifications.
+    if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+      const { data: webSubs, error: webErr } = await supabase
+        .from('push_subscriptions')
+        .select('endpoint, p256dh, auth')
+        .eq('user_id', userId);
+
+      if (!webErr && webSubs && webSubs.length > 0) {
+        const webPayload = JSON.stringify({
+          title,
+          body,
+          icon: '/icon-192.png',
           data: {
-            type: String(payload.type || 'notification'),
-            conversationId: String(payload.conversationId || ''),
-            messageId: String(payload.messageId || ''),
-            url: String(payload.url || '/dashboard/notifications'),
-            recipientId: String(payload.recipientId || ''),
-            targetUserId: String(payload.targetUserId || payload.recipientId || ''),
-            targetAccountId: String(payload.targetAccountId || payload.recipientId || ''),
+            url: payload.url || '/dashboard/notifications',
+            type: payload.type || 'chat_message',
+            messageId: payload.messageId || null,
+            conversationId: payload.conversationId || null,
+            targetAccountId: userId,
+            apiUrl: process.env.BACKEND_URL || 'https://note-standard-api.onrender.com',
           },
-          android: {
-            priority: 'high',
-            notification: {
-              sound: 'default',
-              tag: payload.conversationId ? `chat-${payload.conversationId}` : `type-${payload.type || 'notification'}`,
-            },
-          },
-        };
-        console.log(`[PushService] 📤 Sending FCM notification (Android) to: ${t.token.substring(0, 10)}...`);
-        return admin.messaging().send(message)
-          .catch(err => {
-            console.error(`[PushService] ❌ FCM chat fail:`, err.message);
-            if (err.code === 'messaging/registration-token-not-registered' || err.code === 'messaging/invalid-registration-token') {
-              removeInvalidToken(t.token);
+        });
+
+        const webPromises = webSubs.map(sub =>
+          webpush.sendNotification(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+            webPayload
+          ).catch(err => {
+            if (err.statusCode === 410 || err.statusCode === 404) {
+              // Subscription expired — clean it up
+              supabase.from('push_subscriptions').delete()
+                .match({ user_id: userId, endpoint: sub.endpoint })
+                .then(() => console.log(`[PushService] 🗑 Removed expired web push sub for user ${userId}`));
+            } else {
+              console.error(`[PushService] ❌ Web push failed for user ${userId}:`, err.message);
             }
-          });
-      }
- 
-      // iOS APNs — alert push (NOT voip) for regular chat notifications
-      // voip push is reserved for calls only (PushKit)
-      if (t.platform === 'ios' && t.type === 'apns') {
-        if (!apnProviderProd && !apnProviderSandbox) {
-          console.warn('[PushService] ⚠️ iOS APNs provider not initialised — APNS_KEY/APNS_KEY_ID/APNS_TEAM_ID env vars likely missing. Notification skipped for user:', userId);
-          return;
-        }
-        const notification = new apn.Notification();
-        notification.topic = process.env.APNS_BUNDLE_ID || 'com.notestandard.app'; // Standard bundle, NOT .voip
-        notification.priority = 10;
-        notification.pushType = 'alert'; // Required iOS 13+ header
-        notification.alert = { title, body };
-        notification.sound = 'default';
-        notification.badge = 1;
-        notification.contentAvailable = true;
-        notification.mutableContent = true;
-        notification.threadId = payload.conversationId || payload.type || 'default';
-        notification.payload = {
-          type: payload.type || 'notification',
-          conversationId: payload.conversationId,
-          messageId: payload.messageId,
-          url: payload.url || '/dashboard/notifications',
-          recipientId: payload.recipientId || null,
-          targetUserId: payload.targetUserId || payload.recipientId || null,
-          targetAccountId: payload.targetAccountId || payload.recipientId || null,
-        };
+          })
+        );
 
-        console.log(`[PushService] 📤 Initiating APNs alert (iOS) to topic: ${notification.topic}`);
-        return sendApnsWithFallback(notification, t.token, 'Chat');
+        nativePromises.push(...webPromises);
+        console.log(`[PushService] 📤 Web push dispatched to ${webSubs.length} subscription(s) for user ${userId}`);
+      } else {
+        console.log(`[PushService] No web push subscriptions found for user ${userId}`);
       }
-    });
+    }
 
-    await Promise.all(pushPromises.filter(Boolean));
+    await Promise.all(nativePromises.filter(Boolean));
     console.log(`[PushService] ✅ Push completed for user ${userId}.`);
   } catch (err) {
     console.error('[PushService] sendGenericPush error:', err.message);
   }
 }
+
 
 /**
  * Sends a broadcast push notification to all native devices.
