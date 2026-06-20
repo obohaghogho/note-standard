@@ -12,8 +12,34 @@ if (!supabaseUrl || !supabaseServiceKey) {
   }
 }
 
+// FIX: TCP Ephemeral Port Exhaustion
+// We must inject an HTTP keep-alive agent into Supabase's cross-fetch.
+// Without this, every single DB query opens a new connection, exhausting local ports
+// after a few hours of uptime, which causes severe request queuing and latency.
+const http = require('http');
+const https = require('https');
+const nodeFetch = require('node-fetch');
+
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 100 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 100 });
+
+const customFetch = (url, options) => {
+  return nodeFetch(url, {
+    ...options,
+    agent: (parsedUrl) => parsedUrl.protocol === 'http:' ? httpAgent : httpsAgent
+  });
+};
+
 const supabase = (supabaseUrl && supabaseServiceKey) 
-  ? createClient(supabaseUrl, supabaseServiceKey)
+  ? createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      },
+      global: {
+        fetch: customFetch
+      }
+    })
   : { 
       from: () => ({ 
         select: () => ({ 
