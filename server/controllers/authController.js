@@ -467,25 +467,24 @@ const registerSession = async (req, res) => {
 
     const finalIpString = isProxy && clientIp ? `${clientIp} (Proxy)` : clientIp;
 
-    // Fetch old profile data to detect IP changes
+    // Fetch old profile data to detect unusual locations
     const { data: profile } = await supabase
       .from('profiles')
-      .select('last_ip')
+      .select('last_ip, country_code')
       .eq('id', user.id)
       .single();
 
-    if (profile && profile.last_ip && clientIp) {
-      const oldIpBase = profile.last_ip.split(' ')[0]; // Remove (Proxy) suffix if present
-      if (oldIpBase !== clientIp) {
-        // IP Changed! Trigger Security Alert via Notification Service
+    if (profile && profile.country_code && countryCode) {
+      if (profile.country_code !== countryCode) {
+        // Country Changed! Trigger Security Alert via Notification Service
         const { createNotification } = require('../services/notificationService');
         await createNotification({
           receiverId: user.id,
           type: 'security_alert',
-          title: 'New Login Detected',
-          message: `We detected a login from a new IP Address (${clientIp}, ${countryCode || 'Unknown Country'}). If this was not you, please secure your account.`,
+          title: 'Unusual Login Location',
+          message: `We detected a login from a new country/region (${countryCode}). If this was not you, please secure your account immediately.`,
           link: '/settings/security'
-        }).catch(err => console.error("[Security] Failed to send IP change notification:", err.message));
+        }).catch(err => console.error("[Security] Failed to send location change notification:", err.message));
       }
     }
 
