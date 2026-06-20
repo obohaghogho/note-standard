@@ -71,6 +71,7 @@ export interface Conversation {
         read_at?: string;
         delivered_at?: string;
         status?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
+        event_id?: string;
     };
     unreadCount?: number;
     is_muted?: boolean;
@@ -622,7 +623,19 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     if ((conv.unreadCount ?? 0) > 0 && conv.lastMessage && conv.lastMessage.sender_id !== user?.id) {
                         const msgId = conv.lastMessage.id;
                         if (msgId && s && s.connected) {
-                            s.emit('chat:delivered', { conversationId: conv.id, messageId: msgId, deliveredAt: nowStr, deviceId: deviceIdRef.current });
+                            // Ensure the entire conversation backlog is marked delivered via API
+                            // This ensures the sender gets double ticks for ALL older messages
+                            markConversationDelivered(conv.id);
+                            
+                            // Emit the real-time event for the last message as a fast-path
+                            s.emit('chat:delivered', { 
+                                conversationId: conv.id, 
+                                messageId: msgId, 
+                                eventId: conv.lastMessage.event_id, 
+                                senderId: conv.lastMessage.sender_id, // ADDED: Required for Gateway to route to sender
+                                deliveredAt: nowStr, 
+                                deviceId: deviceIdRef.current 
+                            });
                             pendingDeliveryAcksRef.current.add(msgId);
                         }
                     }
@@ -1005,6 +1018,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     conversationId: msg.conversation_id,
                     messageId: msg.id,
                     eventId: msg.event_id,
+                    senderId: msg.sender_id,
                     deliveredAt: new Date().toISOString()
                 });
 
@@ -1144,10 +1158,18 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
             // Dedup gate: skip if this message is already at 'delivered' or 'read'
             const tickSet = appliedTicksRef.current.get(trackId);
-            if (tickSet && (tickSet.has('delivered') || tickSet.has('read'))) return;
+            const eventTickSet = eventId ? appliedTicksRef.current.get(eventId) : undefined;
+            
+            if ((tickSet && (tickSet.has('delivered') || tickSet.has('read'))) ||
+                (eventTickSet && (eventTickSet.has('delivered') || eventTickSet.has('read')))) return;
+                
             const nextSet = tickSet || new Set<string>();
             nextSet.add('delivered');
             appliedTicksRef.current.set(trackId, nextSet);
+            if (eventId) {
+                appliedTicksRef.current.set(eventId, nextSet);
+            }
+            
             // Bound map size to prevent memory leak in long-lived sessions
             if (appliedTicksRef.current.size > 5000) {
                 const firstKey = appliedTicksRef.current.keys().next().value;
@@ -1183,6 +1205,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             nextSet.add('read');
             nextSet.add('delivered'); // read implies delivered
             appliedTicksRef.current.set(messageId, nextSet);
+            
+            // Also register against eventId if available in the existing message
+            const currentMsgs = messagesRef.current[conversationId] || [];
+            const targetMsg = currentMsgs.find(m => m.id === messageId);
+            if (targetMsg?.event_id) {
+                appliedTicksRef.current.set(targetMsg.event_id, nextSet);
+            }
 
             const nowStr = new Date().toISOString();
             setMessages(prev => {
