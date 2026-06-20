@@ -401,6 +401,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(prev => (prev?.id === currentUser?.id ? prev : currentUser));
 
         // Rule 4: Switch complete - Disable lock immediately to allow syncUserData to fetch
+        // Capture wasSwitching BEFORE clearing it so session-registration logic can use it.
+        const wasSwitching = switchInProgress.current;
         if (switchInProgress.current) {
           switchInProgress.current = false;
           setIsSwitching(false);
@@ -413,8 +415,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           accountManager.updateAccountTokens(currentUser.id, newSession);
           accountManager.setActiveAccountId(currentUser.id);
 
-          // Register device+session with backend (background, non-blocking)
-          if (event === 'SIGNED_IN') {
+          // Register device+session with backend (background, non-blocking).
+          // BUG FIX: Previously only ran on SIGNED_IN. Account switches fire TOKEN_REFRESHED
+          // or USER_UPDATED instead, so the switched-to account never got a session_id,
+          // causing the socket to connect with a stale/missing session.
+          // Now we also register on any switch (wasSwitching) or initial sign-in.
+          const shouldRegisterSession = event === 'SIGNED_IN' || wasSwitching;
+          if (shouldRegisterSession) {
             const WEB_DEVICE_KEY = 'notestandard_web_device_id';
             let deviceId = localStorage.getItem(WEB_DEVICE_KEY);
             if (!deviceId) {
@@ -427,8 +434,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 email: currentUser.email,
-                // We can't send plaintext password here — use a special header approach
-                // Instead call a dedicated /api/auth/register-session endpoint
                 device_id: deviceId,
                 platform: 'web',
                 _supabase_access_token: newSession.access_token,
@@ -442,7 +447,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
           }
 
-          if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+          if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || wasSwitching) {
              setupSubscriptions(currentUser.id);
              syncUserData(currentUser.id, currentUser, currentId);
           }

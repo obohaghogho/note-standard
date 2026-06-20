@@ -95,20 +95,57 @@ export const WebNotificationRouter: React.FC = () => {
       handledRef.current = null;
 
       // Step 6: Background re-initialization — failures here are non-fatal and logged only.
-      // React's SocketContext useEffect will reconnect automatically when the session updates.
+      // FIX: Chain chatInitialize AFTER socketInitialize resolves so the socket is
+      // connected and has joined conversation rooms before delivery ACKs are emitted.
+      // Previously both ran in parallel, causing ACKs to be dropped on a disconnected socket.
       if (activeAccount?.tokens?.access_token) {
         socketInitialize(activeAccount.tokens.access_token)
-          .then(() => console.log('[ACCOUNT_FORENSIC] SOCKET_CONNECTED (background)'))
-          .catch(e => console.warn('[ACCOUNT_FORENSIC] Socket init non-fatal (will auto-retry):', e.message));
+          .then(() => {
+            console.log('[ACCOUNT_FORENSIC] SOCKET_CONNECTED (background)');
+            // Only initialize chat AFTER socket is up so joinAllRooms works correctly
+            return chatInitialize();
+          })
+          .then(() => console.log('[ACCOUNT_FORENSIC] CONVERSATIONS_READY (background)'))
+          .catch(e => console.warn('[ACCOUNT_FORENSIC] Socket/Chat init non-fatal (will auto-retry):', e.message));
+      } else {
+        // No token — just init chat without socket dependency
+        chatInitialize()
+          .then(() => console.log('[ACCOUNT_FORENSIC] CONVERSATIONS_READY (no-socket path)'))
+          .catch(e => console.warn('[ACCOUNT_FORENSIC] Chat init non-fatal:', e.message));
       }
 
       notificationContext.reinitialize()
         .then(() => console.log('[ACCOUNT_FORENSIC] NOTIFICATIONS_READY (background)'))
         .catch(e => console.warn('[ACCOUNT_FORENSIC] Notification reinit non-fatal:', e.message));
 
-      chatInitialize()
-        .then(() => console.log('[ACCOUNT_FORENSIC] CONVERSATIONS_READY (background)'))
-        .catch(e => console.warn('[ACCOUNT_FORENSIC] Chat init non-fatal:', e.message));
+      // FIX (Bug 2): Re-register the existing browser push subscription under the new account.
+      // Push subscriptions are browser-level (one per browser, not per account). After an
+      // account switch, the subscription must be re-saved with the new account's bearer token
+      // so the backend maps the endpoint to the correct user_id in push_subscriptions.
+      if (
+        typeof navigator !== 'undefined' &&
+        'serviceWorker' in navigator &&
+        typeof Notification !== 'undefined' &&
+        Notification.permission === 'granted' &&
+        activeAccount?.tokens?.access_token
+      ) {
+        navigator.serviceWorker.ready
+          .then(async (reg) => {
+            const sub = await reg.pushManager.getSubscription();
+            if (!sub) return;
+            const apiBase = import.meta.env.VITE_API_URL || '';
+            return fetch(`${apiBase}/api/notifications/subscribe`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${activeAccount.tokens.access_token}`
+              },
+              body: JSON.stringify({ subscription: sub })
+            });
+          })
+          .then(() => console.log('[ACCOUNT_FORENSIC] PUSH_RE_REGISTERED for new account'))
+          .catch(e => console.warn('[ACCOUNT_FORENSIC] Push re-registration non-fatal:', e.message));
+      }
     };
 
     handleNotificationNavigation();
