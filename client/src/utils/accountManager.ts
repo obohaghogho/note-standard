@@ -57,6 +57,29 @@ export const accountManager = {
     } else {
       localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
     }
+
+    try {
+      const request = indexedDB.open('NoteStandardDB', 1);
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('sw_state')) {
+          db.createObjectStore('sw_state');
+        }
+      };
+      request.onsuccess = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('sw_state')) return;
+        const tx = db.transaction('sw_state', 'readwrite');
+        const store = tx.objectStore('sw_state');
+        if (id) {
+          store.put(id, 'activeAccountId');
+        } else {
+          store.delete('activeAccountId');
+        }
+      };
+    } catch (err) {
+      console.warn('[AccountManager] Failed to sync activeAccountId to IndexedDB', err);
+    }
   },
 
   /**
