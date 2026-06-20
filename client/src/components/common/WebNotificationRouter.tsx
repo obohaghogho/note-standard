@@ -94,21 +94,51 @@ export const WebNotificationRouter: React.FC = () => {
       setIsSwitchingOverlay(false);
       handledRef.current = null;
 
-      // Step 6: Background re-initialization — failures here are non-fatal and logged only.
-      // FIX: Chain chatInitialize AFTER socketInitialize resolves so the socket is
-      // connected and has joined conversation rooms before delivery ACKs are emitted.
-      // Previously both ran in parallel, causing ACKs to be dropped on a disconnected socket.
+      // Step 6: Background re-initialization.
+      // CRITICAL FIX: registerSession must be AWAITED before socketInitialize.
+      // socketInitialize reads sessionId/deviceId from accountManager at call time.
+      // If registerSession is still in-flight (fire-and-forget in AuthContext), the socket
+      // connects with stale/missing sessionId, causing the Gateway to reject or misroute it.
+      const WEB_DEVICE_KEY = 'notestandard_web_device_id';
+      let webDeviceId = localStorage.getItem(WEB_DEVICE_KEY);
+      if (!webDeviceId) {
+        webDeviceId = crypto.randomUUID();
+        localStorage.setItem(WEB_DEVICE_KEY, webDeviceId);
+      }
+
       if (activeAccount?.tokens?.access_token) {
+        try {
+          // Step 6a: Register fresh session for the new account and get new sessionId
+          const apiBase = import.meta.env.VITE_API_URL || '';
+          const sessionResp = await fetch(`${apiBase}/api/auth/register-session`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              device_id: webDeviceId,
+              platform: 'web',
+              _supabase_access_token: activeAccount.tokens.access_token,
+            })
+          });
+          const sessionData = await sessionResp.json();
+          if (sessionData.session_id) {
+            // Write fresh sessionId/deviceId into accountManager BEFORE socket connects
+            const { updateSessionMeta } = await import('../../utils/accountManager');
+            updateSessionMeta(active, sessionData.session_id, webDeviceId);
+            console.log('[ACCOUNT_FORENSIC] SESSION_REGISTERED session_id:', sessionData.session_id);
+          }
+        } catch (sessionErr) {
+          console.warn('[ACCOUNT_FORENSIC] registerSession non-fatal:', sessionErr);
+        }
+
+        // Step 6b: Only NOW connect socket — accountManager has fresh sessionId
         socketInitialize(activeAccount.tokens.access_token)
           .then(() => {
             console.log('[ACCOUNT_FORENSIC] SOCKET_CONNECTED (background)');
-            // Only initialize chat AFTER socket is up so joinAllRooms works correctly
             return chatInitialize();
           })
           .then(() => console.log('[ACCOUNT_FORENSIC] CONVERSATIONS_READY (background)'))
           .catch(e => console.warn('[ACCOUNT_FORENSIC] Socket/Chat init non-fatal (will auto-retry):', e.message));
       } else {
-        // No token — just init chat without socket dependency
         chatInitialize()
           .then(() => console.log('[ACCOUNT_FORENSIC] CONVERSATIONS_READY (no-socket path)'))
           .catch(e => console.warn('[ACCOUNT_FORENSIC] Chat init non-fatal:', e.message));
@@ -118,7 +148,7 @@ export const WebNotificationRouter: React.FC = () => {
         .then(() => console.log('[ACCOUNT_FORENSIC] NOTIFICATIONS_READY (background)'))
         .catch(e => console.warn('[ACCOUNT_FORENSIC] Notification reinit non-fatal:', e.message));
 
-      // FIX (Bug 2): Re-register the existing browser push subscription under the new account.
+      // Re-register the browser push subscription under the new account.
       // Push subscriptions are browser-level (one per browser, not per account). After an
       // account switch, the subscription must be re-saved with the new account's bearer token
       // so the backend maps the endpoint to the correct user_id in push_subscriptions.
