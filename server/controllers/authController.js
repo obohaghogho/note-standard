@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const supabase = require("../config/database");
 const env = require("../config/env");
 const mailService = require("../services/mailService");
+const geoip = require("geoip-lite");
 
 /**
  * Handles the initial registration request
@@ -443,6 +444,59 @@ const registerSession = async (req, res) => {
     if (authError || !user) {
       return res.status(401).json({ error: 'Invalid or expired token.' });
     }
+
+    // --- IP & COUNTRY TRACKING (SECURITY UPGRADE) ---
+    const ipRaw = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '';
+    const ipList = ipRaw.split(',');
+    const clientIp = ipList[0].trim();
+
+    // Proxy / VPN Detection Heuristic
+    let isProxy = false;
+    if (
+      ipList.length > 1 || 
+      req.headers['via'] || 
+      req.headers['x-forwarded-host'] || 
+      req.headers['proxy-connection']
+    ) {
+      isProxy = true;
+    }
+
+    // GeoResolve IP
+    const geo = geoip.lookup(clientIp);
+    const countryCode = geo ? geo.country : null;
+
+    const finalIpString = isProxy && clientIp ? `${clientIp} (Proxy)` : clientIp;
+
+    // Fetch old profile data to detect IP changes
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('last_ip')
+      .eq('id', user.id)
+      .single();
+
+    if (profile && profile.last_ip && clientIp) {
+      const oldIpBase = profile.last_ip.split(' ')[0]; // Remove (Proxy) suffix if present
+      if (oldIpBase !== clientIp) {
+        // IP Changed! Trigger Security Alert via Notification Service
+        const { createNotification } = require('../services/notificationService');
+        await createNotification({
+          receiverId: user.id,
+          type: 'security_alert',
+          title: 'New Login Detected',
+          message: `We detected a login from a new IP Address (${clientIp}, ${countryCode || 'Unknown Country'}). If this was not you, please secure your account.`,
+          link: '/settings/security'
+        }).catch(err => console.error("[Security] Failed to send IP change notification:", err.message));
+      }
+    }
+
+    // Persist new IP and Country
+    if (clientIp) {
+      await supabase.from('profiles').update({
+        last_ip: finalIpString,
+        country_code: countryCode
+      }).eq('id', user.id).catch(e => console.error("Failed to update profile IP:", e.message));
+    }
+    // --- END SECURITY UPGRADE ---
 
     // Also get a fresh session to get refresh token for hashing
     const { data: sessionData } = await supabase.auth.admin.getUserById(user.id);

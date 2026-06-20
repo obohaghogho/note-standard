@@ -217,7 +217,7 @@ exports.getUsers = async (req, res) => {
     let query = serviceSupabase
       .from("profiles")
       .select(
-        "id, username, email, full_name, avatar_url, role, status, is_online, last_seen, created_at, notesCount:notes(count)",
+        "id, username, email, full_name, avatar_url, role, status, is_online, last_seen, created_at, last_ip, country_code, notesCount:notes(count)",
         { count: "exact" },
       );
 
