@@ -147,6 +147,19 @@ const register = async (req, res) => {
       console.error("[AUTH-WARN] Failed to send welcome email:", err.message);
     });
 
+    // 5. Send Admin Alert for New Registration
+    const xForwardedFor = req.headers['x-forwarded-for'] || '';
+    let clientIp = xForwardedFor.split(',')[0].trim();
+    if (!clientIp) {
+      clientIp = req.ip || req.socket?.remoteAddress || 'Unknown';
+    }
+    const geo = geoip.lookup(clientIp);
+    const countryCode = geo ? geo.country : 'Unknown';
+
+    mailService.sendNewRegistrationAdminAlert(email, fullName, username, clientIp, countryCode).catch(err => {
+      console.error("[AUTH-WARN] Failed to send admin alert email:", err.message);
+    });
+
     res.status(200).json({
       success: true,
       message: "Registration successful! You can now log in.",
@@ -189,10 +202,10 @@ const login = async (req, res) => {
       return res.status(401).json({ error: error.message });
     }
 
-    // Fetch real profile data to get plan_tier and username (with fallback)
+    // Fetch real profile data to get plan_tier, country_code, and username (with fallback)
     const { data: profile, error: pError } = await supabase
       .from("profiles")
-      .select("username, full_name, avatar_url, plan_tier")
+      .select("username, full_name, avatar_url, plan_tier, country_code")
       .eq("id", data.user.id)
       .single();
 
@@ -201,9 +214,12 @@ const login = async (req, res) => {
     }
 
     // --- IP & COUNTRY TRACKING (SECURITY UPGRADE) ---
-    const ipRaw = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '';
-    const ipList = ipRaw.split(',');
-    const clientIp = ipList[0].trim();
+    const xForwardedFor = req.headers['x-forwarded-for'] || '';
+    let clientIp = xForwardedFor.split(',')[0].trim();
+    if (!clientIp) {
+      clientIp = req.ip || req.socket?.remoteAddress || 'Unknown';
+    }
+    const ipList = xForwardedFor ? xForwardedFor.split(',') : [];
 
     let isProxy = false;
     if (
@@ -235,10 +251,14 @@ const login = async (req, res) => {
 
     // Persist new IP and Country
     if (clientIp) {
-      await supabase.from('profiles').update({
+      const { error: updateError } = await supabase.from('profiles').update({
         last_ip: finalIpString,
         country_code: countryCode
-      }).eq('id', data.user.id).catch(e => console.error("Failed to update profile IP:", e.message));
+      }).eq('id', data.user.id);
+      
+      if (updateError) {
+        console.error("[Security] Failed to update profile IP during login:", updateError.message);
+      }
     }
     // --- END SECURITY UPGRADE ---
 
@@ -488,9 +508,12 @@ const registerSession = async (req, res) => {
     }
 
     // --- IP & COUNTRY TRACKING (SECURITY UPGRADE) ---
-    const ipRaw = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '';
-    const ipList = ipRaw.split(',');
-    const clientIp = ipList[0].trim();
+    const xForwardedFor = req.headers['x-forwarded-for'] || '';
+    let clientIp = xForwardedFor.split(',')[0].trim();
+    if (!clientIp) {
+      clientIp = req.ip || req.socket?.remoteAddress || 'Unknown';
+    }
+    const ipList = xForwardedFor ? xForwardedFor.split(',') : [];
 
     // Proxy / VPN Detection Heuristic
     let isProxy = false;
@@ -532,10 +555,14 @@ const registerSession = async (req, res) => {
 
     // Persist new IP and Country
     if (clientIp) {
-      await supabase.from('profiles').update({
+      const { error: updateError } = await supabase.from('profiles').update({
         last_ip: finalIpString,
         country_code: countryCode
-      }).eq('id', user.id).catch(e => console.error("Failed to update profile IP:", e.message));
+      }).eq('id', user.id);
+      
+      if (updateError) {
+        console.error("[Security] Failed to update profile IP during registerSession:", updateError.message);
+      }
     }
     // --- END SECURITY UPGRADE ---
 
