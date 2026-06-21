@@ -180,6 +180,15 @@ self.addEventListener('push', (event) => {
                                 .catch(err => console.error('[SW] Delivery receipt failed (foreground):', err));
                         }
 
+                        // Broadcast BACKGROUND_PREFETCH to all open tabs (even hidden ones)
+                        // This allows React to silently fetch the message so it's ready when the app opens
+                        windowClients.forEach(client => {
+                            client.postMessage({
+                                type: 'BACKGROUND_PREFETCH',
+                                conversationId: notifConversationId
+                            });
+                        });
+
                         // User is NOT in this conversation → show notification AND fire delivery receipt IN PARALLEL.
                         // This is the critical iOS fix: showNotification is called immediately.
                         return Promise.all([
@@ -223,6 +232,9 @@ self.addEventListener('notificationclick', (event) => {
             // 1. Try to find an existing tab with the same URL or at least one on the same origin
             for (const client of windowClients) {
                 if (client.url === urlToOpen && 'focus' in client) {
+                    if (data?.conversationId) {
+                        client.postMessage({ type: 'CHAT_MESSAGE_RECEIVED', conversationId: data.conversationId });
+                    }
                     return client.focus();
                 }
             }

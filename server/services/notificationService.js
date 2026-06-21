@@ -105,6 +105,7 @@ const createNotification = async ({
         recipientId: receiverId,        // legacy compat
         targetUserId: receiverId,       // explicit
         targetAccountId: receiverId,    // explicit (same as userId in this app)
+        deliveryWebhookUrl: messageId ? `${gatewayUrlStr}/deliver/${messageId}` : undefined,
       },
     });
 
