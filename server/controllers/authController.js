@@ -200,6 +200,48 @@ const login = async (req, res) => {
       console.warn("[Auth] Profile enrichment failed, using metadata:", pError.message);
     }
 
+    // --- IP & COUNTRY TRACKING (SECURITY UPGRADE) ---
+    const ipRaw = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '';
+    const ipList = ipRaw.split(',');
+    const clientIp = ipList[0].trim();
+
+    let isProxy = false;
+    if (
+      ipList.length > 1 || 
+      req.headers['via'] || 
+      req.headers['x-forwarded-host'] || 
+      req.headers['proxy-connection']
+    ) {
+      isProxy = true;
+    }
+
+    const geo = geoip.lookup(clientIp);
+    const countryCode = geo ? geo.country : null;
+    const finalIpString = isProxy && clientIp ? `${clientIp} (Proxy)` : clientIp;
+
+    if (profile && profile.country_code && countryCode) {
+      if (profile.country_code !== countryCode) {
+        // Country Changed! Trigger Security Alert
+        const { createNotification } = require('../services/notificationService');
+        await createNotification({
+          receiverId: data.user.id,
+          type: 'security_alert',
+          title: 'Unusual Login Location',
+          message: `We detected a login from a new country/region (${countryCode}). If this was not you, please secure your account immediately.`,
+          link: '/settings/security'
+        }).catch(err => console.error("[Security] Failed to send location change notification:", err.message));
+      }
+    }
+
+    // Persist new IP and Country
+    if (clientIp) {
+      await supabase.from('profiles').update({
+        last_ip: finalIpString,
+        country_code: countryCode
+      }).eq('id', data.user.id).catch(e => console.error("Failed to update profile IP:", e.message));
+    }
+    // --- END SECURITY UPGRADE ---
+
     // Multi-Device Session Logic
     const deviceId = device_id || crypto.randomUUID();
     const sessionId = crypto.randomUUID();
