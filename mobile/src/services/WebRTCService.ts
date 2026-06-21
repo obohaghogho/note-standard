@@ -20,7 +20,11 @@ import {
 } from 'react-native-webrtc';
 import { Platform, PermissionsAndroid } from 'react-native';
 import InCallManager from 'react-native-incall-manager';
-import apiClient from '../api/apiClient';
+import { GATEWAY_URL } from '../Config';
+
+// ICE server fetch timeout — must be long enough to wake a cold server but short
+// enough not to block the call. 8s is the sweet spot on Render free tier.
+const ICE_FETCH_TIMEOUT_MS = 8000;
 
 registerGlobals();
 
@@ -61,14 +65,35 @@ class WebRTCService {
       if (!granted) throw new Error('Camera/Microphone permissions not granted');
     }
 
-    // Fetch ICE servers (cached after first call)
+    // Fetch ICE servers (cached after first call).
+    // CRITICAL FIX: Fetch directly from the gateway (always-awake) NOT via the API
+    // server. The API server (Render free tier) sleeps after inactivity; its 30-90s
+    // cold-start is longer than the 5s proxy timeout, so the proxy always times out
+    // and returns STUN-only. STUN alone cannot pierce symmetric NAT on LTE/5G.
     if (this.iceServers.length === 0) {
       try {
-        const response = await apiClient.get('/webrtc/ice-servers');
-        this.iceServers = response.data.iceServers || [];
-        console.log('[WebRTC] ICE servers fetched:', this.iceServers.length);
-      } catch (err) {
-        console.warn('[WebRTC] ICE fetch failed — using STUN fallback');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), ICE_FETCH_TIMEOUT_MS);
+        const response = await fetch(`${GATEWAY_URL}/webrtc/ice-servers`, {
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        if (data?.iceServers?.length) {
+          this.iceServers = data.iceServers;
+          const hasTurn = this.iceServers.some((s: any) => String(s.urls).startsWith('turn'));
+          console.log(`[WebRTC] ICE servers fetched: ${this.iceServers.length} (hasTurn=${hasTurn})`);
+          if (!hasTurn) {
+            console.warn('[WebRTC] ⚠️ No TURN server returned — calls may fail on restricted mobile networks');
+          }
+        } else {
+          throw new Error('Empty iceServers array');
+        }
+      } catch (err: any) {
+        console.warn('[WebRTC] ICE server fetch failed — using Google STUN fallback:', err?.message);
+        // STUN-only is a graceful degradation; it works on Wi-Fi & open networks.
+        // Calls on LTE with symmetric NAT will still fail, but this is better than crashing.
         this.iceServers = [
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },

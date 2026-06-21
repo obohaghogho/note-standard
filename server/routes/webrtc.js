@@ -14,11 +14,16 @@ const supabase = require('../config/database');
 const logger = require('../utils/logger');
 const fetch = require('node-fetch');
 
-let GATEWAY_INTERNAL_URL = process.env.REALTIME_GATEWAY_URL || process.env.API_URL || 'http://localhost:5000';
+// REALTIME_GATEWAY_URL must always point to the realtime-gateway service.
+// Fallback to the known Render URL — never localhost, which would silently fail in prod.
+let GATEWAY_INTERNAL_URL =
+  process.env.REALTIME_GATEWAY_URL ||
+  'https://realtime-gateway-gsb5.onrender.com';
 
-// Self-healing fallback: socket.notestandard.com does not serve HTTP GET routes on Render.
-// Redirect express proxy requests directly to the verified Render gateway URL so TURN server config can be resolved.
-if (GATEWAY_INTERNAL_URL.includes('socket.notestandard.com')) {
+// Self-healing: if someone accidentally sets REALTIME_GATEWAY_URL to the
+// WebSocket-only domain, swap to the direct Render HTTP URL.
+if (GATEWAY_INTERNAL_URL.includes('socket.notestandard.com') ||
+    GATEWAY_INTERNAL_URL === 'http://localhost:5000') {
   GATEWAY_INTERNAL_URL = 'https://realtime-gateway-gsb5.onrender.com';
 }
 

@@ -58,7 +58,39 @@ router.get('/ice-servers', async (req, res) => {
     // ── 2. Dashboard-Provided Static Credentials ──────────────
     // Triggered when TURN_STATIC_USERNAME is set in env
     if (turnStaticUsername) {
-      // Metered.ca global relay — all ports for maximum firewall penetration
+      // ── Priority 1: Custom TURN host (if configured) ──────────────────
+      // e.g. notestandard-realtime.metered.live gives better regional latency.
+      // NOTE: We use static creds for ALL configured hosts, regardless of whether
+      // the host is a Metered domain — the isMetered flag only governs the REST API
+      // credential-fetch path above. Here, if the admin set TURN_STATIC_USERNAME,
+      // they want static credentials served for their specific TURN host.
+      if (turnHost) {
+        iceServers.push({ urls: `stun:${turnHost}:3478` });
+        iceServers.push({
+          urls: `turn:${turnHost}:3478`,
+          username: turnStaticUsername,
+          credential: turnStaticCredential,
+        });
+        iceServers.push({
+          urls: `turn:${turnHost}:3478?transport=tcp`,
+          username: turnStaticUsername,
+          credential: turnStaticCredential,
+        });
+        iceServers.push({
+          urls: `turn:${turnHost}:443`,
+          username: turnStaticUsername,
+          credential: turnStaticCredential,
+        });
+        iceServers.push({
+          urls: `turns:${turnHost}:443?transport=tcp`,
+          username: turnStaticUsername,
+          credential: turnStaticCredential,
+        });
+      }
+
+      // ── Priority 2: Metered.ca global relay (universal fallback) ────────
+      // global.relay.metered.ca penetrates even the most restrictive
+      // corporate/mobile firewalls via port 80 and 443/TCP.
       iceServers.push({ urls: 'stun:stun.relay.metered.ca:80' });
       iceServers.push({
         urls: 'turn:global.relay.metered.ca:80',
@@ -81,7 +113,7 @@ router.get('/ice-servers', async (req, res) => {
         credential: turnStaticCredential,
       });
 
-      console.log('[WebRTC] Serving static Metered TURN credentials to client');
+      console.log('[WebRTC] Serving TURN credentials to client (custom host + global relay)');
       return res.json({
         iceServers,
         ttl: 86400,
