@@ -64,11 +64,22 @@ const createNotification = async ({
       is_read: false,
     });
 
-    // 3. Native & Web Push via the realtime-gateway.
-    //    The gateway already holds Firebase Admin and APNs credentials (used for call push),
-    //    and we also use it for Web Push to avoid duplicate sends (race conditions).
-    //    We route through the gateway's /internal/push endpoint for all notifications.
-    //    This ensures iOS users receive push notifications consistently.
+    // 3. Web Push (PWA — VAPID) — sent directly from the API server.
+    //    The API server has VAPID keys configured. The gateway's sendGenericPush
+    //    is gated behind PUSH_ENABLED !== 'true', which silently drops web pushes
+    //    if that env var isn't explicitly set on the gateway. The API server is
+    //    the authoritative source for web push to avoid silent delivery failures.
+    const pushQueue = require('./pushQueue');
+    const pushTask = () => sendPushNotification(receiverId, { title, message, link, type, messageId, conversationId });
+    if (!global.BOOT_STATE?.ready) {
+      pushQueue.push(pushTask);
+    } else {
+      pushTask().catch(err => console.error('[NotificationService] Web push failed:', err.message));
+    }
+
+    // 4. Native Push (FCM for Android, APNs for iOS) via the realtime-gateway.
+    //    The gateway holds Firebase Admin and APNs credentials.
+    //    We route through the gateway's /internal/push for all native push notifications.
 
     const gatewayUrlStr = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
     const bodyStr = message || title;

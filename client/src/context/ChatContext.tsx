@@ -913,7 +913,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             if (event.data?.type === 'CHAT_MESSAGE_RECEIVED') {
                 const { conversationId } = event.data;
                 if (conversationId) {
-                    console.log(`[SW→Chat] CHAT_MESSAGE_RECEIVED | conv:${conversationId} → firing markConversationRead`);
+                    console.log(`[SW→Chat] CHAT_MESSAGE_RECEIVED | conv:${conversationId} → refreshing messages + read receipt`);
+                    // iOS FIX: When iOS suspends the WebSocket, push notifications can arrive
+                    // while the socket is dead. The SW posts CHAT_MESSAGE_RECEIVED to tell us
+                    // a new message exists. We MUST call loadMessages(force=true) to fetch it,
+                    // because the socket.on('chat:message') handler will never fire on a dead socket.
+                    // Without this, iOS users must leave and re-enter the chat room to see new messages.
+                    loadMessagesRef.current(conversationId, true).catch(() => {});
                     markConversationReadRef.current(conversationId);
                 }
             }
