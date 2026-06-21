@@ -9,7 +9,7 @@ self.addEventListener('install', (event) => {
     // Force immediate update to bypass aggressive caching
     self.skipWaiting();
 });
-// Cache Bust Timestamp: 2026-06-17T13:07:00 — v5: iOS parallel push fix
+// Cache Bust Timestamp: 2026-06-21T09:00:00 — v6: fast-path delivery via gateway (eliminates cold-start delay)
 
 self.addEventListener('activate', (event) => {
     event.waitUntil(
@@ -74,7 +74,11 @@ self.addEventListener('push', (event) => {
             // CRITICAL: persist targetAccountId so notificationclick can read it and
             // pass it to the React app for account switching
             targetAccountId: data.data?.targetAccountId || null,
-            apiUrl: data.data?.apiUrl || 'https://note-standard-api.onrender.com'
+            apiUrl: data.data?.apiUrl || 'https://note-standard-api.onrender.com',
+            // FAST-PATH FIX: gateway URL bypasses the sleeping API server (Render cold-start fix).
+            // When present, the SW calls the gateway directly — it is always awake because it
+            // holds the sender's live socket connection.
+            deliveryWebhookUrl: data.data?.deliveryWebhookUrl || null,
         },
         actions: [
             { action: 'open', title: 'View Now' },
@@ -96,6 +100,15 @@ self.addEventListener('push', (event) => {
 
     if (options.data.type === 'chat_message' && options.data.messageId) {
         const targetApiUrl = options.data.apiUrl || 'https://note-standard-api.onrender.com';
+
+        // FAST-PATH: Use the gateway URL when available — the gateway is ALWAYS awake because it
+        // holds the sender's live socket connection. The API server (note-standard-api.onrender.com)
+        // sleeps after 15 min on Render free tier, causing a 30-90s cold-start delay before
+        // the delivery receipt is processed and the double tick appears.
+        // deliveryWebhookUrl points directly to /deliver/:messageId on the gateway.
+        // Fall back to the old API path for backwards compatibility.
+        const deliveryUrl = options.data.deliveryWebhookUrl
+            || `${targetApiUrl}/api/chat/messages/${options.data.messageId}/webhook-deliver`;
 
         // iOS CRITICAL FIX:
         // iOS 16.4+ Web Push has a strict "silent push" policy. If the Service Worker
@@ -161,22 +174,18 @@ self.addEventListener('push', (event) => {
                                 conversationId: notifConversationId,
                                 messageId: options.data.messageId
                             });
-                            // 2. Fire delivery receipt silently. No notification shown (user is looking at it).
+                            // 2. Fire delivery receipt silently via fast-path gateway URL.
                             //    This is NOT a silent push penalty because the user has the app open.
-                            return fetch(
-                                `${targetApiUrl}/api/chat/messages/${options.data.messageId}/webhook-deliver`,
-                                { method: 'POST' }
-                            ).catch(err => console.error('[SW] Delivery receipt failed (foreground):', err));
+                            return fetch(deliveryUrl, { method: 'POST' })
+                                .catch(err => console.error('[SW] Delivery receipt failed (foreground):', err));
                         }
 
                         // User is NOT in this conversation → show notification AND fire delivery receipt IN PARALLEL.
                         // This is the critical iOS fix: showNotification is called immediately.
                         return Promise.all([
                             self.registration.showNotification(title, options),
-                            fetch(
-                                `${targetApiUrl}/api/chat/messages/${options.data.messageId}/webhook-deliver`,
-                                { method: 'POST' }
-                            ).catch(err => console.error('[SW] Delivery receipt failed (background):', err))
+                            fetch(deliveryUrl, { method: 'POST' })
+                                .catch(err => console.error('[SW] Delivery receipt failed (background):', err))
                         ]);
                     });
             }).catch(err => {

@@ -454,6 +454,12 @@ async function sendGenericPush(params) {
             conversationId: payload.conversationId || null,
             targetAccountId: userId,
             apiUrl: process.env.BACKEND_URL || 'https://note-standard-api.onrender.com',
+            // FAST-PATH FIX: Point directly to the gateway for delivery receipts.
+            // The gateway is always awake (it holds the sender's socket).
+            // The API server may be asleep on Render free tier (30-90s cold start).
+            deliveryWebhookUrl: payload.messageId
+              ? `${process.env.SELF_URL || 'https://realtime-gateway-gsb5.onrender.com'}/deliver/${payload.messageId}`
+              : null,
           },
         });
 

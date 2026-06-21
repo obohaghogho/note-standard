@@ -154,7 +154,12 @@ const sendPushNotification = async (userId, payload) => {
         messageId: payload.messageId,
         conversationId: payload.conversationId || null,
         targetAccountId: userId,
-        apiUrl: process.env.BACKEND_URL || (process.env.NODE_ENV === 'production' ? 'https://note-standard-api.onrender.com' : 'http://127.0.0.1:5001')
+        apiUrl: process.env.BACKEND_URL || (process.env.NODE_ENV === 'production' ? 'https://note-standard-api.onrender.com' : 'http://127.0.0.1:5001'),
+        // FAST-PATH FIX: SW should call the gateway for delivery receipts, not the API server.
+        // The gateway is always awake; the API server cold-starts after 15 min on Render free tier.
+        deliveryWebhookUrl: payload.messageId
+          ? `${process.env.REALTIME_GATEWAY_URL || 'https://realtime-gateway-gsb5.onrender.com'}/deliver/${payload.messageId}`
+          : null,
       },
     });
 

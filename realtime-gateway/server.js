@@ -17,7 +17,18 @@ const { authMiddleware } = require('./auth');
 const cors = require('cors');
 const { Client } = require('pg');
 const fs = require('fs');
+const { createClient: createSupabaseClient } = require('@supabase/supabase-js');
 require('dotenv').config();
+
+// ─── Gateway-level Supabase client (for fast-path delivery webhook) ───────────
+// Separate from the pg LISTEN client — used for direct DB writes from HTTP endpoints.
+let gatewaySupabase = null;
+if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  gatewaySupabase = createSupabaseClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+}
 
 // ✅ 1. CRASH PREVENTION: GLOBAL ERROR HANDLERS
 process.on('uncaughtException', (err) => {
@@ -135,6 +146,74 @@ app.post('/internal/push/broadcast', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ✅ 5c. FAST-PATH DELIVERY WEBHOOK
+// This is the permanent fix for the single→double tick latency bug.
+//
+// Root cause: The Service Worker (sw.js) was calling webhook-deliver on the API
+// server (note-standard-api.onrender.com). On Render free tier, that server SLEEPS
+// after 15 min of inactivity. When the SW hit it, the cold-start took 30-90 seconds,
+// causing the double tick to appear only after a long delay.
+//
+// Why the GATEWAY is the right place for this:
+//   • The gateway is ALWAYS awake — it holds the sender's live socket connection.
+//     If User A just sent a message, their socket is here. The gateway cannot be
+//     asleep and simultaneously serving socket events.
+//   • We write delivered_at to Supabase and emit chat:message_delivered to the
+//     sender's user:<id> room directly via io.to() — no pg_notify round-trip,
+//     no API cold-start, no extra network hop.
+//
+// Called by the Service Worker when a push notification wakes User B's PWA.
+app.post('/deliver/:messageId', async (req, res) => {
+  try {
+    const { messageId } = req.params;
+
+    // Basic guard — UUIDs are 36 chars; reject obviously malformed IDs
+    if (!messageId || messageId.length < 10 || messageId.length > 100) {
+      return res.status(400).json({ error: 'Invalid messageId' });
+    }
+
+    if (!gatewaySupabase) {
+      console.warn('[Gateway] /deliver: Supabase not initialised — falling back gracefully');
+      return res.json({ ok: false, reason: 'supabase_unavailable' });
+    }
+
+    const now = new Date().toISOString();
+    const { data, error } = await gatewaySupabase
+      .from('messages')
+      .update({ delivered_at: now })
+      .eq('id', messageId)
+      .is('delivered_at', null)          // Idempotent: no-op if already delivered
+      .select('id, conversation_id, sender_id, delivered_at')
+      .single();
+
+    if (!error && data) {
+      const receiptPayload = {
+        messageId: data.id,
+        conversationId: data.conversation_id,
+        userId: data.sender_id,
+        delivered_at: data.delivered_at || now
+      };
+
+      console.log(`[Gateway] ⚡ Fast-path deliver | messageId:${messageId} | senderId:${data.sender_id} | conversationId:${data.conversation_id} | ts:${Date.now()}`);
+
+      // Emit directly via Socket.IO — sender gets the double-tick instantly
+      io.to(`user:${data.sender_id}`).emit('chat:message_delivered', receiptPayload);
+      // Also emit to the conversation room for any active participants
+      io.to(data.conversation_id).emit('chat:message_delivered', receiptPayload);
+    } else if (error && error.code !== 'PGRST204') {
+      // PGRST204 = 0 rows (already delivered) — silent success
+      // Any other error is worth logging
+      console.warn('[Gateway] /deliver DB error:', error.message);
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Gateway] /deliver unexpected error:', err.message);
+    // Always 200 — we don't want the SW to retry aggressively on errors
+    res.json({ ok: false, error: err.message });
   }
 });
 
