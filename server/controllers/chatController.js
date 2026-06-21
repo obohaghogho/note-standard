@@ -1124,12 +1124,23 @@ exports.webhookDeliver = async (req, res) => {
       .single();
 
     if (!error && data) {
-      await realtime.emitToConversation(data.conversation_id, "chat:message_delivered", {
+      const receiptPayload = {
         messageId,
         conversationId: data.conversation_id,
         userId: data.sender_id,
         delivered_at: data.delivered_at
-      });
+      };
+
+      console.log('[FORENSIC][API] webhookDeliver | messageId:' + messageId + ' | senderId:' + data.sender_id + ' | conversationId:' + data.conversation_id + ' | ts:' + Date.now());
+
+      // Emit to the conversation room (covers active participants in the chat)
+      await realtime.emitToConversation(data.conversation_id, 'chat:message_delivered', receiptPayload);
+
+      // CRITICAL FIX: Also emit directly to the sender user room.
+      // The sender may not be in the conversation socket room (e.g., on the home screen).
+      // Without this the push-triggered webhook delivery never reaches the sender,
+      // so the single tick stays permanently until they navigate back into the chat.
+      await realtime.emitToUser(data.sender_id, 'chat:message_delivered', receiptPayload);
     }
 
     res.json({ success: true });
@@ -2554,3 +2565,4 @@ exports.webhookDeliver = async (req, res) => {
     res.status(500).json({ error: "Server Error" });
   }
 };
+
