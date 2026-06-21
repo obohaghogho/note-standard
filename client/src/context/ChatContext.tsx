@@ -1159,25 +1159,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         const onDeliveryEvent = ({ messageId, eventId, conversationId }: { messageId: string; eventId?: string; conversationId: string }) => {
             if (!isMounted.current || (!messageId && !eventId) || !conversationId) return;
 
-            const currentMsgs = messagesRef.current[conversationId] || [];
-            const targetMsg = currentMsgs.find(m => (messageId && m.id === messageId) || (eventId && m.event_id === eventId));
-            if (!targetMsg) return;
-
-            const trackId = targetMsg.id;
-
-            // Dedup gate: skip if this message is already at 'delivered' or 'read'
-            const tickSet = appliedTicksRef.current.get(trackId);
+            // 1. RECORD CACHE FIRST (Race condition fix)
+            const tickSet = messageId ? appliedTicksRef.current.get(messageId) : undefined;
             const eventTickSet = eventId ? appliedTicksRef.current.get(eventId) : undefined;
             
             if ((tickSet && (tickSet.has('delivered') || tickSet.has('read'))) ||
                 (eventTickSet && (eventTickSet.has('delivered') || eventTickSet.has('read')))) return;
                 
-            const nextSet = tickSet || new Set<string>();
+            const nextSet = tickSet || eventTickSet || new Set<string>();
             nextSet.add('delivered');
-            appliedTicksRef.current.set(trackId, nextSet);
-            if (eventId) {
-                appliedTicksRef.current.set(eventId, nextSet);
-            }
+            if (messageId) appliedTicksRef.current.set(messageId, nextSet);
+            if (eventId) appliedTicksRef.current.set(eventId, nextSet);
             
             // Bound map size to prevent memory leak in long-lived sessions
             if (appliedTicksRef.current.size > 5000) {
@@ -1185,7 +1177,14 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 if (firstKey !== undefined) appliedTicksRef.current.delete(firstKey);
             }
 
+            // 2. NOW TRY TO UPDATE UI
+            const currentMsgs = messagesRef.current[conversationId] || [];
+            const targetMsg = currentMsgs.find(m => (messageId && m.id === messageId) || (eventId && m.event_id === eventId));
+            if (!targetMsg) return; // Silent return is fine now, because cache is recorded!
+
+            const trackId = targetMsg.id;
             const nowStr = new Date().toISOString();
+
             setMessages(prev => {
                 const current = prev[conversationId] || [];
                 return {
@@ -1196,7 +1195,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 };
             });
             setConversations(prev => prev.map(c => {
-                if (c.id === conversationId && c.lastMessage?.id === trackId) {
+                if (c.id === conversationId && c.lastMessage && (c.lastMessage.id === trackId || (c.lastMessage as any).event_id === eventId)) {
                     return { ...c, lastMessage: mergeMessageStatus(c.lastMessage as Message, { delivered_at: nowStr, status: 'delivered' }) as Conversation['lastMessage'] };
                 }
                 return c;
@@ -1652,6 +1651,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                             },
                             lastMessage: { 
                                 id: canonicalMessage.id, 
+                                event_id: intent.event_id,
                                 content: canonicalMessage.content, 
                                 sender_id: canonicalMessage.sender_id, 
                                 created_at: canonicalMessage.created_at,
@@ -1659,7 +1659,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                                 status: canonicalMessage.status,
                                 delivered_at: canonicalMessage.delivered_at,
                                 read_at: canonicalMessage.read_at
-                            }
+                            } as any
                         };
                     }
                     return conv;
@@ -1763,20 +1763,22 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 updated_at: optimisticMessage.created_at,
                 lastMessage: {
                     id: optimisticMessage.id,
+                    event_id: optimisticMessage.event_id,
                     content: optimisticMessage.content,
                     sender_id: optimisticMessage.sender_id,
                     created_at: optimisticMessage.created_at,
                     type: optimisticMessage.type,
                     status: optimisticMessage.status
-                } as Conversation['lastMessage'],
+                } as any,
                 last_message: {
                     id: optimisticMessage.id,
+                    event_id: optimisticMessage.event_id,
                     content: optimisticMessage.content,
                     sender_id: optimisticMessage.sender_id,
                     created_at: optimisticMessage.created_at,
                     type: optimisticMessage.type,
                     status: optimisticMessage.status
-                } as Conversation['lastMessage']
+                } as any
             };
         }));
 
