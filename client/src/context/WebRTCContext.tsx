@@ -383,13 +383,14 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setCallState({ type, status: 'calling', otherUser, conversationId, connectedAt: null, sessionId: null });
 
         try {
-            await ensureIceServers();
-            // Acquire media — caller has mic/cam ready while phone rings
+            // ACQUIRE MEDIA FIRST: Secure user gesture context before any network awaits
             callTrace('Requesting user media', { audio: true, video: type === 'video' });
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: getAudioConstraints(),
                 video: type === 'video' ? getVideoConstraints() : false,
             });
+
+            await ensureIceServers();
 
             // Validate stream: ensure audio tracks exist and are enabled
             const streamError = validateStream(stream, true);
@@ -441,23 +442,21 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         callTrace('Callee accepted call', { from: otherUser.id, type, sessionId });
 
         try {
-            await ensureIceServers();
-
             // iOS RINGTONE BLEED FIX:
-            // Stop the ringtone BEFORE opening the microphone. If getUserMedia()
-            // runs while the iOS speaker is still playing the ringtone, the AEC
-            // calibration period captures ring audio as its reference signal,
-            // causing a burst of noise at the start of every accepted call.
-            // The 80ms yield gives iOS's audio session manager time to fully
-            // switch from "speaker/ringtone" mode to "voice call" mode before
-            // the mic track is opened. This is invisible to the user.
+            // Stop the ringtone BEFORE opening the microphone.
             stopAllAudio();
-            await new Promise<void>(resolve => setTimeout(resolve, 80));
 
+            // ACQUIRE MEDIA FIRST: In iOS Safari, calling getUserMedia must happen as 
+            // close to the tap event as possible. If we await a network request (like 
+            // ensureIceServers) before calling getUserMedia, Safari revokes the user 
+            // gesture token and blocks camera/mic access, causing the call to fail.
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: getAudioConstraints(),
                 video: type === 'video' ? getVideoConstraints() : false,
             });
+
+            // Now fetch ICE servers since media is safely acquired
+            await ensureIceServers();
 
             // Validate stream: ensure audio tracks exist and are enabled
             const streamError = validateStream(stream, true);
