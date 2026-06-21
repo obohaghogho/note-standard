@@ -323,8 +323,8 @@ async function sendCallPush(params) {
         console.log(`[PushService] 📤 Sending Web Push (PWA) to: ${sub.endpoint.substring(0, 30)}...`);
         return webpush.sendNotification(pushSubscription, webPushPayload)
           .catch(err => {
-            if (err.statusCode === 410 || err.statusCode === 404) {
-              console.log(`[PushService] 🗑 Removed invalid web push sub: ${sub.endpoint.substring(0, 30)}...`);
+            if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 400) {
+              console.log(`[PushService] 🗑 Removed invalid web push sub: ${sub.endpoint.substring(0, 30)}... (Status: ${err.statusCode})`);
               return supabase.from("push_subscriptions")
                 .delete()
                 .match({ user_id: userId, endpoint: sub.endpoint });
@@ -468,11 +468,11 @@ async function sendGenericPush(params) {
             { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
             webPayload
           ).catch(err => {
-            if (err.statusCode === 410 || err.statusCode === 404) {
-              // Subscription expired — clean it up
+            if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 400) {
+              // Subscription expired or VAPID key mismatch (400) — clean it up
               supabase.from('push_subscriptions').delete()
                 .match({ user_id: userId, endpoint: sub.endpoint })
-                .then(() => console.log(`[PushService] 🗑 Removed expired web push sub for user ${userId}`));
+                .then(() => console.log(`[PushService] 🗑 Removed invalid web push sub for user ${userId} (Status: ${err.statusCode})`));
             } else {
               console.error(`[PushService] ❌ Web push failed for user ${userId}:`, err.message);
             }

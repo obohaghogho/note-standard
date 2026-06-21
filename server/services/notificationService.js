@@ -64,19 +64,12 @@ const createNotification = async ({
       is_read: false,
     });
 
-    // 3. Web Push (PWA — VAPID) — deferred through PushQueue if system is booting
-    const pushQueue = require('./pushQueue');
-    const pushTask = () => sendPushNotification(receiverId, { title, message, link, type, messageId, conversationId });
-    if (!global.BOOT_STATE?.ready) {
-      pushQueue.push(pushTask);
-    } else {
-      await pushTask();
-    }
-
-    // 4. Native Push (FCM for Android, APNs for iOS) via the realtime-gateway.
-    //    The gateway already holds Firebase Admin and APNs credentials (used for call push).
+    // 3. Native & Web Push via the realtime-gateway.
+    //    The gateway already holds Firebase Admin and APNs credentials (used for call push),
+    //    and we also use it for Web Push to avoid duplicate sends (race conditions).
     //    We route through the gateway's /internal/push endpoint for all notifications.
-    //    This ensures iOS users receive push notifications even when the PWA is closed.
+    //    This ensures iOS users receive push notifications consistently.
+
     const gatewayUrlStr = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
     const bodyStr = message || title;
     
@@ -175,13 +168,15 @@ const sendPushNotification = async (userId, payload) => {
 
       return webpush.sendNotification(pushSubscription, pushPayload)
         .catch((err) => {
-          if (err.statusCode === 410 || err.statusCode === 404) {
-            // Subscription has expired or is no longer valid, delete it
+          if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 400) {
+            // Subscription has expired, is no longer valid, or VAPID key mismatch (400) -> delete it
             return supabase.from("push_subscriptions")
               .delete()
-              .match({ user_id: userId, endpoint: sub.endpoint });
+              .eq("endpoint", sub.endpoint)
+              .then(() => console.log(`[NotificationService] 🗑 Removed invalid web push sub (Status: ${err.statusCode})`));
+          } else {
+            console.error("Error sending web push notification:", err);
           }
-          console.error("Push error:", err);
         });
     });
 
