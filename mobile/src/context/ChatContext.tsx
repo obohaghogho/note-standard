@@ -272,12 +272,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         });
                         const socket = socketManager.instance;
                         if (socket) {
-                            unacked.forEach(msg => {
-                                socket.emit('chat:delivered', {
-                                    conversationId,
-                                    messageId: msg.id,
-                                    deliveredAt: new Date().toISOString()
-                                });
+                            socket.emit('chat:delivered_batch', {
+                                conversationId,
+                                messageIds: unacked.map(m => m.id),
+                                deliveredAt: new Date().toISOString()
                             });
                         }
                     } catch (err) {

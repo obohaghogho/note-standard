@@ -139,7 +139,7 @@ class ManualDepositController {
       // 1. Fetch from legacy manual_deposits table
       const { data: legacy, error: legacyError } = await supabase
         .from("manual_deposits")
-        .select("*")
+        .select("id, user_id, amount, currency, reference, proof_url, status, admin_notes, created_at, updated_at")
         .eq("status", "pending")
         .order("created_at", { ascending: true });
 
@@ -148,7 +148,7 @@ class ManualDepositController {
       // 2. Fetch from unified transactions table (New Flow)
       const { data: unified, error: unifiedError } = await supabase
         .from("transactions")
-        .select("*")
+        .select("id, user_id, amount, currency, reference_id, metadata, status, type, created_at, updated_at")
         .eq("status", "PROCESSING")
         .eq("type", "DEPOSIT")
         .order("created_at", { ascending: true });
@@ -219,7 +219,7 @@ class ManualDepositController {
       if (!isUnified) {
         const { data, error } = await serviceSupabase
           .from("manual_deposits")
-          .select("*")
+          .select("id, user_id, amount, currency, reference, status")
           .eq("id", id)
           .single();
         if (error) throw error;
@@ -227,7 +227,7 @@ class ManualDepositController {
       } else {
         const { data, error } = await serviceSupabase
           .from("transactions")
-          .select("*")
+          .select("id, user_id, amount, currency, reference_id, metadata, status")
           .eq("id", id)
           .single();
         if (error) throw error;
@@ -351,7 +351,7 @@ class ManualDepositController {
       if (!isUnified) {
         const { data, error } = await serviceSupabase
           .from("manual_deposits")
-          .select("*")
+          .select("id, user_id, amount, currency, status")
           .eq("id", id)
           .single();
         if (error) throw error;
@@ -359,7 +359,7 @@ class ManualDepositController {
       } else {
         const { data, error } = await serviceSupabase
           .from("transactions")
-          .select("*")
+          .select("id, user_id, amount, currency, metadata, status")
           .eq("id", id)
           .single();
         if (error) throw error;

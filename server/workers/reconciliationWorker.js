@@ -347,10 +347,11 @@ class ReconciliationWorker {
             const now = new Date().toISOString();
             const { data: eligibleProposals, error } = await supabase
                 .from('reconciliation_proposals')
-                .select('*')
+                .select('id, wallet_id, drift_amount, status, eligible_at')
                 .eq('status', 'AUDITING')
                 .lte('eligible_at', now)
-                .lt('drift_amount', 0.001);
+                .lt('drift_amount', 0.001)
+                .limit(100);
 
             if (error) throw error;
             if (!eligibleProposals || eligibleProposals.length === 0) return;
@@ -514,9 +515,10 @@ class ReconciliationWorker {
             const payoutService = require('../services/payment/payoutService');
             const { data: stuckPayouts } = await supabase
                 .from('payout_requests')
-                .select('*')
+                .select('id, withdrawal_state, updated_at, provider_reference, provider')
                 .in('withdrawal_state', ['SENT', 'PROCESSING'])
-                .lte('updated_at', new Date(Date.now() - 5 * 60 * 1000).toISOString()); // Faster sync (5 mins)
+                .lte('updated_at', new Date(Date.now() - 5 * 60 * 1000).toISOString())
+                .limit(100);
 
             if (!stuckPayouts || stuckPayouts.length === 0) return;
 

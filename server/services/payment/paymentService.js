@@ -434,7 +434,7 @@ class PaymentService {
     
     let query = supabase
       .from("transactions")
-      .select("*")
+      .select("id, status, amount, currency, provider, provider_reference, reference_id")
       .order("created_at", { ascending: false });
 
     if (reference && externalId) {

@@ -20,11 +20,16 @@ async function broadcastTrendUpdate(app) {
 const getNotes = async (req, res) => {
   try {
     const { id } = req.user;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = (page - 1) * limit;
+
     const { data, error } = await supabase
       .from("notes")
-      .select("*")
+      .select("id, title, content, is_private, is_favorite, tags, created_at, updated_at")
       .eq("owner_id", id)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1);
 
     if (error) throw error;
     res.json(data);
@@ -41,7 +46,7 @@ const getNote = async (req, res) => {
 
     const { data, error } = await supabase
       .from("notes")
-      .select("*")
+      .select("id, title, content, is_private, is_favorite, tags, created_at, updated_at")
       .eq("id", noteId)
       .eq("owner_id", userId)
       .single();

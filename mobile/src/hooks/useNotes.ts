@@ -28,7 +28,8 @@ export const useNotes = () => {
     const addNote = async (note: Partial<Note>) => {
         if (!user) return;
         const id = await notesService.saveNote(note, user.id);
-        await loadNotes();
+        const localNotes = await notesService.getNotes(user.id);
+        setNotes(localNotes);
         return id;
     };
 

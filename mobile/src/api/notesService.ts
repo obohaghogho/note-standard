@@ -1,5 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import { supabase } from './supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface Note {
     id: string;
@@ -106,12 +107,26 @@ export const notesService = {
             }
 
             // 2. Download remote changes
-            const { data: remoteNotes } = await supabase
+            const syncKey = `@notes_last_sync_${userId}`;
+            const lastSyncStr = await AsyncStorage.getItem(syncKey);
+
+            let query = supabase
                 .from('notes')
-                .select('*')
+                .select('id, title, content, owner_id, is_private, is_favorite, tags, created_at, updated_at')
                 .eq('owner_id', userId);
 
-            if (remoteNotes) {
+            if (lastSyncStr) {
+                query = query.gt('updated_at', lastSyncStr);
+            }
+
+            const { data: remoteNotes, error: remoteError } = await query;
+            
+            if (remoteError) {
+                 console.error('Remote sync fetch failed:', remoteError);
+                 return;
+            }
+
+            if (remoteNotes && remoteNotes.length > 0) {
                 for (const rn of remoteNotes) {
                     db.runSync(`
             INSERT OR REPLACE INTO notes (id, title, content, owner_id, is_private, is_favorite, tags, created_at, updated_at, synced)
@@ -128,6 +143,15 @@ export const notesService = {
                         rn.updated_at
                     ]);
                 }
+                
+                const latestUpdate = remoteNotes.reduce((latest, note) => {
+                    return new Date(note.updated_at) > new Date(latest) ? note.updated_at : latest;
+                }, lastSyncStr || new Date(0).toISOString());
+                
+                await AsyncStorage.setItem(syncKey, latestUpdate);
+            } else if (!lastSyncStr && remoteNotes && remoteNotes.length === 0) {
+                // Initialize sync marker on first empty sync
+                await AsyncStorage.setItem(syncKey, new Date().toISOString());
             }
         } catch (err) {
             console.error('Sync failed:', err);
