@@ -164,6 +164,28 @@ module.exports = (io, socket) => {
     socket.to(conversationId).emit('chat:delivery_receipt', payload);
   });
 
+  // ── Batch Delivery Receipts (offline sync) ───────────────────────────────
+  // Emitted by client on load when multiple messages were received offline.
+  // Payload: { conversationId, messageIds: string[], deliveredAt: ISO string }
+  socket.on('chat:delivered_batch', (data) => {
+    const { conversationId, messageIds, deliveredAt } = data || {};
+    if (!conversationId || !Array.isArray(messageIds) || messageIds.length === 0) return;
+
+    console.log(`[FORENSIC][GW] Batch Delivery ACK | userId:${userId} | conversationId:${conversationId} | count:${messageIds.length} | ts:${Date.now()}`);
+
+    const resolvedAt = deliveredAt || new Date().toISOString();
+
+    // Fan out one receipt per message ID to the conversation room
+    messageIds.forEach(messageId => {
+      socket.to(conversationId).emit('chat:delivery_receipt', {
+        userId,
+        conversationId,
+        messageId,
+        deliveredAt: resolvedAt,
+      });
+    });
+  });
+
   // ── Team Call Notifications ────────────────────────────────────────────────
   socket.on('team:call_started', async (data) => {
     const { teamId, teamName } = data || {};
