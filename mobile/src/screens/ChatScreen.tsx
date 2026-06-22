@@ -67,9 +67,22 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     // ── NATIVE 60FPS KEYBOARD TRACKING ──────────────────────────────────────────
     const keyboard = useAnimatedKeyboard();
+    const TAB_BAR_HEIGHT = 70; // From MainTabs.tsx
     const animatedKeyboardStyle = useAnimatedStyle(() => {
         const kbHeight = keyboard.height.value;
-        const offset = kbHeight > insets.bottom ? kbHeight - insets.bottom : 0;
+        let offset = 0;
+        
+        if (kbHeight > 0) {
+            if (Platform.OS === 'ios') {
+                // iOS: ChatScreen is pushed 70px up by the tab bar.
+                // Subtract this 70px from the absolute keyboard height.
+                const rawOffset = kbHeight - TAB_BAR_HEIGHT;
+                offset = rawOffset > 0 ? rawOffset : 0;
+            } else {
+                // Android: Tab bar is hidden (tabBarHideOnKeyboard: true)
+                offset = kbHeight > insets.bottom ? kbHeight - insets.bottom : 0;
+            }
+        }
         return { paddingBottom: offset };
     });
 
