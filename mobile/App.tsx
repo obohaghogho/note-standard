@@ -1,6 +1,6 @@
 import 'react-native-get-random-values';
-import React, { useEffect } from 'react';
-import { Platform, LogBox } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Platform, LogBox, AppState, AppStateStatus } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
@@ -45,6 +45,30 @@ export default function App() {
     };
 
     bootstrap();
+  }, []);
+
+  // Self-healing token mechanism:
+  // Re-verify token registration every time the app comes to the foreground.
+  // This catches cases where initial registration failed due to network, or
+  // tokens were invalidated while the app was backgrounded.
+  const appState = useRef(AppState.currentState);
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextAppState === 'active'
+      ) {
+        console.log('[App] 🔄 App came to foreground. Re-verifying push tokens...');
+        PushHandler.init().catch(err => {
+          console.warn('[App] Foreground token re-verification failed:', err);
+        });
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, []);
 
   return (
