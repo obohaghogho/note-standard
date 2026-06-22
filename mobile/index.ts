@@ -44,9 +44,19 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
     const data = remoteMessage.data;
     if ((data?.type === 'chat_message' || data?.type === 'message') && data?.messageId) {
        const messageId = data.messageId;
-       const url = `${API_URL}/api/chat/messages/${messageId}/webhook-deliver`;
-       await fetch(url, { method: 'POST' });
-       console.log('[FCM Background] Delivery webhook triggered for message:', messageId);
+       // Phase 6 fix: Prefer the gateway fast-path URL embedded in the push payload.
+       // The gateway is always awake (it holds the sender's socket).
+       // The API server may be asleep on Render free-tier (30-90 s cold start),
+       // which caused the double-tick to appear after a long delay.
+       const webhookUrl = (typeof data.deliveryWebhookUrl === 'string' && data.deliveryWebhookUrl)
+         ? data.deliveryWebhookUrl
+         : `https://realtime-gateway-gsb5.onrender.com/deliver/${messageId}`;
+       try {
+         await fetch(webhookUrl, { method: 'POST' });
+         console.log('[FCM Background] Delivery webhook triggered for message:', messageId, '→', webhookUrl);
+       } catch (webhookErr) {
+         console.warn('[FCM Background] Delivery webhook failed (non-critical):', webhookErr);
+       }
     } else if (data?.type === 'incoming_call' && Platform.OS === 'android') {
        console.log('[FCM Background] Incoming call detected. Triggering CallService...');
        const callId = typeof data.call_id === 'string' ? data.call_id : typeof data.sessionId === 'string' ? data.sessionId : typeof data.caller_id === 'string' ? data.caller_id : uuidv4();

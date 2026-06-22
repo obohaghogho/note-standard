@@ -140,6 +140,35 @@ if (apnsKey && process.env.APNS_KEY_ID && process.env.APNS_TEAM_ID) {
   console.warn('[PushService] APNs initialization skipped: APNS_KEY or APNS_KEY_PATH/ID/TEAM_ID missing.');
 }
 
+// ─── Startup validation summary ──────────────────────────────────────────────
+// Runs once at module load so every deployment has an unambiguous log line.
+(function logStartupState() {
+  const pushEnabled = process.env.PUSH_ENABLED === 'true';
+  if (pushEnabled) {
+    console.log('[PushService] ✅ Native push ENABLED (PUSH_ENABLED=true)');
+  } else {
+    console.warn('[PushService] ⚠️  Native push DISABLED — all FCM/APNs delivery will be skipped. Set PUSH_ENABLED=true to enable.');
+  }
+
+  if (firebaseApp) {
+    console.log('[PushService] ✅ Firebase Admin (FCM) initialized — Android push ready.');
+  } else {
+    console.warn('[PushService] ⚠️  Firebase Admin NOT initialized — Android FCM push will be skipped.');
+  }
+
+  if (apnProviderProd) {
+    console.log('[PushService] ✅ APNs provider (Prod + Sandbox) initialized — iOS push ready.');
+  } else {
+    console.warn('[PushService] ⚠️  APNs provider NOT initialized — iOS native push will be skipped (web push still works).');
+  }
+
+  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    console.log('[PushService] ✅ Web Push (VAPID) configured — PWA push ready.');
+  } else {
+    console.warn('[PushService] ⚠️  VAPID keys missing — PWA web push will be skipped.');
+  }
+})();
+
 /**
  * Helper to remove invalid tokens from database
  */
@@ -282,9 +311,12 @@ async function sendCallPush(params) {
         };
         notification.sound = 'default';
         notification.contentAvailable = true;
+        // PHASE 7 FIX: Use sessionId as the canonical CallKit UUID.
+        // CallKit requires a stable UUID; peerId is a user ID (not a UUID format).
+        // sessionId is generated as a UUID by the signaling layer and is safe here.
         notification.payload = {
           ...payload,
-          uuid: payload.peerId || payload.callId,
+          uuid: payload.sessionId || payload.callId,
           callerName: payload.callerName, // Duplicate for root access
         };
         
@@ -403,7 +435,7 @@ async function sendGenericPush(params) {
         // iOS APNs — alert push (NOT voip) for regular chat notifications
         if (t.platform === 'ios' && t.type === 'apns') {
           if (!apnProviderProd && !apnProviderSandbox) {
-            console.warn('[PushService] ⚠️ iOS APNs provider not initialised — skipping for user:', userId);
+            console.warn(`[PushService] ⚠️ iOS APNs provider not initialised — skipping native push for user ${userId}. Web push (VAPID) is unaffected.`);
             return;
           }
           const notification = new apn.Notification();

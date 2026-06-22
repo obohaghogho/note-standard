@@ -24,6 +24,12 @@ Notifications.setNotificationHandler({
 });
 
 export class PushHandler {
+  // Phase 4: Singleton guard — CallKeep listeners must be registered exactly once.
+  // setupCallKeepListeners() is called from both index.ts (headless boot) and
+  // PushHandler.init() (app foreground). Without this guard the answer/endCall
+  // callbacks fire twice, causing duplicate navigation and double call-state transitions.
+  private static callKeepListenersSetup = false;
+
   static async init() {
     console.log('[PushHandler] 🛠️ Initializing Push Integration...');
 
@@ -152,15 +158,28 @@ export class PushHandler {
 
   static async registerDeviceToken() {
     console.log('[PushHandler] 📡 Fetching and registering device tokens...');
-    try {
-      const tokenData = await Notifications.getDevicePushTokenAsync();
-      const token = tokenData.data;
-      await this.registerTokenWithBackend(token, Platform.OS === 'ios' ? 'apns' : 'fcm');
-    } catch (err) {
-      console.error('[PushHandler] ❌ Failed to fetch standard device token:', err);
-    }
 
-    if (Platform.OS === 'ios') {
+    if (Platform.OS === 'android') {
+      // Phase 5 fix: Use the native Firebase FCM token, NOT Expo's device push token.
+      // Expo's getDevicePushTokenAsync() returns a token formatted for Expo's
+      // push proxy, which FCM on the gateway (admin.messaging().send()) rejects
+      // as messaging/invalid-registration-token on many devices.
+      try {
+        await messaging().registerDeviceForRemoteMessages();
+        const fcmToken = await messaging().getToken();
+        await this.registerTokenWithBackend(fcmToken, 'fcm');
+      } catch (err) {
+        console.error('[PushHandler] ❌ Failed to fetch FCM token (Android):', err);
+      }
+    } else if (Platform.OS === 'ios') {
+      // iOS: APNs alert token (used for chat notifications via APNs).
+      try {
+        const tokenData = await Notifications.getDevicePushTokenAsync();
+        await this.registerTokenWithBackend(tokenData.data, 'apns');
+      } catch (err) {
+        console.error('[PushHandler] ❌ Failed to fetch APNs token (iOS):', err);
+      }
+      // iOS VoIP token is registered via PushKit in setupVoIP() below.
       try {
         VoipPushNotification.registerVoipToken();
       } catch (err) {
@@ -170,6 +189,12 @@ export class PushHandler {
   }
 
   static setupCallKeepListeners() {
+    // Phase 4 guard — idempotent, safe to call multiple times.
+    if (this.callKeepListenersSetup) {
+      console.log('[PushHandler] CallKeep listeners already registered — skipping.');
+      return;
+    }
+    this.callKeepListenersSetup = true;
     console.log('[PushHandler] 🤖 Setting up global CallKeep listeners...');
     
     RNCallKeep.addEventListener('answerCall', async ({ callUUID }) => {
@@ -239,7 +264,11 @@ export class PushHandler {
   }
 
   static async registerTokenWithBackend(token: string, type: 'fcm' | 'voip' | 'apns', retryCount = 0) {
-    console.log(`[PushHandler] 📡 Registering ${type} token with backend (Try: ${retryCount + 1})...`);
+    // Phase 8: Audit log — mask token to avoid leaking credentials in logs.
+    const maskedToken = token && token.length > 10
+      ? `${token.substring(0, 6)}...${token.substring(token.length - 4)}`
+      : '(empty)';
+    console.log(`[PushHandler] 📡 Registering ${type} token | platform:${Platform.OS} | len:${token?.length ?? 0} | token:${maskedToken} | attempt:${retryCount + 1}`);
     try {
       const { getDeviceId } = require('../utils/notifications');
       const deviceId = await getDeviceId();
@@ -247,11 +276,12 @@ export class PushHandler {
         token, platform: Platform.OS, type, deviceId
       });
       if (response.data.success) {
-        console.log(`[PushHandler] ✅ ${type} token registered successfully.`);
+        console.log(`[PushHandler] ✅ ${type} token registered successfully | platform:${Platform.OS} | token:${maskedToken}`);
       } else {
         throw new Error(response.data.error || 'Unknown error');
       }
     } catch (err: any) {
+      console.error(`[PushHandler] ❌ ${type} token registration failed | attempt:${retryCount + 1} | error:${err.message}`);
       if (retryCount < 3 && (!err.response || err.response.status >= 500)) {
           setTimeout(() => this.registerTokenWithBackend(token, type, retryCount + 1), 5000);
       }
