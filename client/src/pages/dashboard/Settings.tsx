@@ -454,6 +454,27 @@ export default function Settings() {
                                     disabled={permission === 'denied'}
                                     onChange={(c) => c ? subscribeUser() : unsubscribeUser()}
                                 />
+                                <div className="h-px bg-white/5" />
+                                <Toggle
+                                    label="Offline Email Fallbacks"
+                                    description="Receive an email summary if you have unread messages and your device is offline or the app is closed."
+                                    checked={profile?.email_notifications !== 'none'}
+                                    onChange={async (c) => {
+                                        if (!user) return;
+                                        try {
+                                            const newValue = c ? 'immediate' : 'none';
+                                            const { error } = await supabase
+                                                .from('profiles')
+                                                .update({ email_notifications: newValue })
+                                                .eq('id', user.id);
+                                            if (error) throw error;
+                                            if (profile) setProfile({ ...profile, email_notifications: newValue });
+                                            toast.success('Email preferences updated');
+                                        } catch {
+                                            toast.error('Failed to change email preferences');
+                                        }
+                                    }}
+                                />
                             </div>
                             <div className="mt-6 pt-4 border-t border-white/10 flex justify-end flex-wrap">
                                 <Button onClick={handleSavePrivacy} loading={saving} disabled={!user} className="w-full sm:w-auto">

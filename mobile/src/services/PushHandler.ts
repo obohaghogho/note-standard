@@ -29,6 +29,7 @@ export class PushHandler {
   // PushHandler.init() (app foreground). Without this guard the answer/endCall
   // callbacks fire twice, causing duplicate navigation and double call-state transitions.
   private static callKeepListenersSetup = false;
+  private static tokenRefreshListenersSetup = false;
 
   static async init() {
     console.log('[PushHandler] 🛠️ Initializing Push Integration...');
@@ -42,6 +43,7 @@ export class PushHandler {
     }
 
     this.setupCallKeepListeners();
+    this.setupTokenRefreshListeners();
 
     if (Platform.OS === 'ios') {
       this.setupVoIP();
@@ -185,6 +187,38 @@ export class PushHandler {
       } catch (err) {
         console.error('[PushHandler] ❌ Failed to request iOS VoIP token:', err);
       }
+    }
+  }
+
+  static setupTokenRefreshListeners() {
+    if (this.tokenRefreshListenersSetup) return;
+    this.tokenRefreshListenersSetup = true;
+
+    if (Platform.OS === 'ios') {
+      Notifications.addPushTokenListener(async (tokenData) => {
+        console.log('[PushHandler] 🔄 APNs Token refreshed natively:', tokenData.data.substring(0, 10) + '...');
+        try {
+          await this.registerTokenWithBackend(tokenData.data, 'apns');
+        } catch (e) {
+          console.error('[PushHandler] ❌ Failed to sync refreshed APNs token:', e);
+        }
+      });
+    }
+  }
+
+  static setupTokenRefreshListeners() {
+    if (this.tokenRefreshListenersSetup) return;
+    this.tokenRefreshListenersSetup = true;
+
+    if (Platform.OS === 'ios') {
+      Notifications.addPushTokenListener(async (tokenData) => {
+        console.log('[PushHandler] 🔄 APNs Token refreshed natively:', tokenData.data.substring(0, 10) + '...');
+        try {
+          await this.registerTokenWithBackend(tokenData.data, 'apns');
+        } catch (e) {
+          console.error('[PushHandler] ❌ Failed to sync refreshed APNs token:', e);
+        }
+      });
     }
   }
 

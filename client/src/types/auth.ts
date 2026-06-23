@@ -18,6 +18,7 @@ export interface Profile {
   plan_tier?: 'free' | 'pro' | 'team' | 'business' | 'enterprise';
   daily_deposit_limit?: number | null;
   show_online_status?: boolean;
+  email_notifications?: 'immediate' | 'daily' | 'none';
   updated_at?: string;
 }
 

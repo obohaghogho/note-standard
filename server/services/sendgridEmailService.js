@@ -199,6 +199,35 @@ class SendGridEmailService {
     return this.sendEmail({ to: email, subject, htmlContent });
   }
 
+  async sendUnreadMessagesEmail(email, { senderName, count, link, type = 'message' }) {
+    const isCall = type === 'call';
+    const subject = isCall 
+      ? `Missed call from ${senderName}`
+      : `${senderName} sent you ${count} new message${count > 1 ? 's' : ''}`;
+      
+    const htmlContent = this._wrapTemplate(`
+      <h2 style="color: #8b5cf6; margin-bottom: 16px;">
+        ${isCall ? '📞 Missed Call' : '💬 New Messages'}
+      </h2>
+      <p style="font-size: 16px; color: #374151;">
+        ${isCall 
+          ? `You missed a call from <strong>${senderName}</strong> on NoteStandard.` 
+          : `<strong>${senderName}</strong> sent you ${count} new message${count > 1 ? 's' : ''} on NoteStandard.`}
+      </p>
+      <div style="margin-top: 32px; text-align: center;">
+        <a href="${link}"
+           style="display: inline-block; background: linear-gradient(135deg, #8b5cf6, #6366f1); color: white; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px rgba(99, 102, 241, 0.2);">
+           ${isCall ? 'Call Back' : 'Read Messages'}
+        </a>
+      </div>
+      <p style="margin-top: 32px; font-size: 13px; color: #6b7280; text-align: center;">
+        You received this email because your device was offline or you force-quit the app. 
+        To get instant notifications, leave the app running in the background.
+      </p>
+    `);
+    return this.sendEmail({ to: email, subject, htmlContent });
+  }
+
   _wrapTemplate(body) {
     return `
     <!DOCTYPE html>

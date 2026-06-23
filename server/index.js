@@ -177,6 +177,16 @@ server.listen(PORT, async () => {
     }
   }, 30000);
 
+  // Unread Message Email Fallback (runs every 5 minutes)
+  setInterval(async () => {
+    try {
+      const unreadMessageEmailer = require("./workers/unreadMessageEmailer");
+      await unreadMessageEmailer.process();
+    } catch (err) {
+      logger.error(`[UnreadMessageEmailer Worker] Error: ${err.message}`);
+    }
+  }, 5 * 60 * 1000);
+
   // 5. Initialize Adversarial Chaos Session (If Enabled)
   if (require("./services/chaos/ChaosService").enabled) {
     const chaosToken = require("./services/chaos/ChaosService").createSession();

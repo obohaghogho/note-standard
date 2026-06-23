@@ -36,6 +36,16 @@ import { v4 as uuidv4 } from 'uuid';
 // Bind CallKeep listeners globally so they work in headless mode
 PushHandler.setupCallKeepListeners();
 
+// Handle Android FCM token rotation in the background
+messaging().onTokenRefresh(async (token) => {
+  console.log('[FCM Background] Token refreshed natively:', token.substring(0, 10) + '...');
+  try {
+    await PushHandler.registerTokenWithBackend(token, 'fcm');
+  } catch (e) {
+    console.error('[FCM Background] Failed to sync refreshed token:', e);
+  }
+});
+
 // Headless background handler for Push Notifications
 messaging().setBackgroundMessageHandler(async remoteMessage => {
   console.log('[FCM Background] Message handled in the background!', remoteMessage);
