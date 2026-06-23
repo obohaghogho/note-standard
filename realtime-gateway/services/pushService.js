@@ -170,12 +170,30 @@ if (apnsKey && process.env.APNS_KEY_ID && process.env.APNS_TEAM_ID) {
 })();
 
 /**
+ * Helper to log push telemetry asynchronously
+ */
+function logPushMetric(metricData) {
+  // Fire and forget to avoid blocking delivery
+  supabase.from('push_metrics').insert([{
+    platform: metricData.platform || 'unknown',
+    push_type: metricData.push_type || 'unknown',
+    status: metricData.status,
+    error_code: metricData.error_code ? String(metricData.error_code).substring(0, 255) : null,
+    user_id: metricData.user_id || null,
+    device_id: metricData.device_id || null
+  }]).then(({ error }) => {
+    if (error) console.error('[PushMetrics] ❌ Failed to log metric:', error.message);
+  }).catch(() => {});
+}
+
+/**
  * Helper to remove invalid tokens from database
  */
-async function removeInvalidToken(token) {
+async function removeInvalidToken(token, platform = 'unknown', type = 'unknown', userId = null, deviceId = null) {
   try {
     await supabase.from('native_device_tokens').delete().eq('token', token);
     console.log(`[PushService] 🗑 Removed invalid token from DB: ${token.substring(0, 10)}...`);
+    logPushMetric({ platform, push_type: type, status: 'invalid_removed', user_id: userId, device_id: deviceId });
   } catch (e) {
     console.error(`[PushService] ❌ Failed to remove invalid token:`, e.message);
   }
@@ -184,7 +202,7 @@ async function removeInvalidToken(token) {
 /**
  * Helper to send APNs notification with automatic Sandbox fallback
  */
-async function sendApnsWithFallback(notification, token, label) {
+async function sendApnsWithFallback(notification, token, label, platform = 'ios', type = 'unknown', userId = null, deviceId = null) {
   if (!apnProviderProd || !apnProviderSandbox) return;
   
   try {
@@ -196,28 +214,35 @@ async function sendApnsWithFallback(notification, token, label) {
       
       if (isBadToken) {
         console.log(`[PushService] 🔄 APNs Prod rejected token for ${label} (BadDeviceToken). Falling back to Sandbox...`);
+        logPushMetric({ platform, push_type: type, status: 'failed', error_code: 'BadDeviceToken (Prod)', user_id: userId, device_id: deviceId });
         const resultSandbox = await apnProviderSandbox.send(notification, token);
         
         if (resultSandbox.failed && resultSandbox.failed.length > 0) {
           console.error(`[PushService] ❌ APNs Sandbox also failed for ${label}:`, JSON.stringify(resultSandbox.failed));
+          logPushMetric({ platform, push_type: type, status: 'failed', error_code: 'BadDeviceToken (Sandbox)', user_id: userId, device_id: deviceId });
           const sandboxFailure = resultSandbox.failed[0];
           if (sandboxFailure.response && sandboxFailure.response.reason === 'BadDeviceToken') {
-            await removeInvalidToken(token);
+            await removeInvalidToken(token, platform, type, userId, deviceId);
           }
         } else {
           console.log(`[PushService] ✅ APNs Sandbox delivery successful for ${label}.`);
+          logPushMetric({ platform, push_type: type, status: 'accepted', user_id: userId, device_id: deviceId });
         }
       } else {
+        const errorReason = failure.response && failure.response.reason ? failure.response.reason : 'Unknown Error';
         console.error(`[PushService] ❌ APNs Prod failed for ${label}:`, JSON.stringify(resultProd.failed));
+        logPushMetric({ platform, push_type: type, status: 'failed', error_code: errorReason, user_id: userId, device_id: deviceId });
         if (failure.response && (failure.response.reason === 'Unregistered' || failure.response.reason === 'BadDeviceToken')) {
-          await removeInvalidToken(token);
+          await removeInvalidToken(token, platform, type, userId, deviceId);
         }
       }
     } else {
       console.log(`[PushService] ✅ APNs Prod delivery successful for ${label}.`);
+      logPushMetric({ platform, push_type: type, status: 'accepted', user_id: userId, device_id: deviceId });
     }
   } catch (err) {
     console.error(`[PushService] ❌ APNs delivery error for ${label}:`, err.message);
+    logPushMetric({ platform, push_type: type, status: 'failed', error_code: err.message, user_id: userId, device_id: deviceId });
   }
 }
 
@@ -233,7 +258,7 @@ async function sendCallPush(params) {
     // 1. Fetch native tokens for the user
     const { data: tokens, error } = await supabase
       .from('native_device_tokens')
-      .select('token, platform, type')
+      .select('token, platform, type, device_id')
       .eq('user_id', userId);
 
     // 1.5. Fetch web push subscriptions for PWA users
@@ -289,11 +314,16 @@ async function sendCallPush(params) {
           }
         };
         console.log(`[PushService] 📤 Sending FCM Call push (Android) to: ${t.token.substring(0, 10)}...`);
+        logPushMetric({ platform: t.platform, push_type: t.type, status: 'attempted', user_id: userId, device_id: t.device_id });
         return admin.messaging().send(message)
+          .then(() => {
+            logPushMetric({ platform: t.platform, push_type: t.type, status: 'accepted', user_id: userId, device_id: t.device_id });
+          })
           .catch(err => {
             console.error(`[PushService] ❌ FCM call push fail for ${t.token.substring(0, 10)}:`, err.message);
+            logPushMetric({ platform: t.platform, push_type: t.type, status: 'failed', error_code: err.code || err.message, user_id: userId, device_id: t.device_id });
             if (err.code === 'messaging/registration-token-not-registered' || err.code === 'messaging/invalid-registration-token') {
-              removeInvalidToken(t.token);
+              removeInvalidToken(t.token, t.platform, t.type, userId, t.device_id);
             }
           });
       }
@@ -321,7 +351,8 @@ async function sendCallPush(params) {
         };
         
         console.log(`[PushService] 📤 Initiating VoIP Push (iOS) to topic: ${notification.topic}`);
-        return sendApnsWithFallback(notification, t.token, 'VoIP');
+        logPushMetric({ platform: t.platform, push_type: t.type, status: 'attempted', user_id: userId, device_id: t.device_id });
+        return sendApnsWithFallback(notification, t.token, 'VoIP', t.platform, t.type, userId, t.device_id);
       }
     });
     pushPromises.push(...nativePromises);
@@ -353,10 +384,16 @@ async function sendCallPush(params) {
         };
 
         console.log(`[PushService] 📤 Sending Web Push (PWA) to: ${sub.endpoint.substring(0, 30)}...`);
+        logPushMetric({ platform: 'web', push_type: 'vapid', status: 'attempted', user_id: userId, device_id: null });
         return webpush.sendNotification(pushSubscription, webPushPayload)
+          .then(() => {
+            logPushMetric({ platform: 'web', push_type: 'vapid', status: 'accepted', user_id: userId, device_id: null });
+          })
           .catch(err => {
+            logPushMetric({ platform: 'web', push_type: 'vapid', status: 'failed', error_code: String(err.statusCode || err.message), user_id: userId, device_id: null });
             if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 400) {
               console.log(`[PushService] 🗑 Removed invalid web push sub: ${sub.endpoint.substring(0, 30)}... (Status: ${err.statusCode})`);
+              logPushMetric({ platform: 'web', push_type: 'vapid', status: 'invalid_removed', user_id: userId, device_id: null });
               return supabase.from("push_subscriptions")
                 .delete()
                 .match({ user_id: userId, endpoint: sub.endpoint });
@@ -389,7 +426,7 @@ async function sendGenericPush(params) {
     // --- 1. Native tokens (FCM / APNs) ---
     const { data: tokens, error } = await supabase
       .from('native_device_tokens')
-      .select('token, platform, type')
+      .select('token, platform, type, device_id')
       .eq('user_id', userId);
 
     const nativePromises = [];
@@ -422,11 +459,17 @@ async function sendGenericPush(params) {
             },
           };
           console.log(`[PushService] 📤 Sending FCM notification (Android) to: ${t.token.substring(0, 10)}...`);
+          logPushMetric({ platform: t.platform, push_type: t.type, status: 'attempted', user_id: userId, device_id: t.device_id });
           nativePromises.push(
-            admin.messaging().send(message).catch(err => {
+            admin.messaging().send(message)
+              .then(() => {
+                logPushMetric({ platform: t.platform, push_type: t.type, status: 'accepted', user_id: userId, device_id: t.device_id });
+              })
+              .catch(err => {
               console.error(`[PushService] ❌ FCM chat fail:`, err.message);
+              logPushMetric({ platform: t.platform, push_type: t.type, status: 'failed', error_code: err.code || err.message, user_id: userId, device_id: t.device_id });
               if (err.code === 'messaging/registration-token-not-registered' || err.code === 'messaging/invalid-registration-token') {
-                removeInvalidToken(t.token);
+                removeInvalidToken(t.token, t.platform, t.type, userId, t.device_id);
               }
             })
           );
@@ -457,8 +500,9 @@ async function sendGenericPush(params) {
             targetUserId: payload.targetUserId || payload.recipientId || null,
             targetAccountId: payload.targetAccountId || payload.recipientId || null,
           };
-          console.log(`[PushService] 📤 Initiating APNs alert (iOS) to topic: ${notification.topic}`);
-          nativePromises.push(sendApnsWithFallback(notification, t.token, 'Chat'));
+          console.log(`[PushService] 📤 Initiating APNs Alert Push (iOS) to topic: ${notification.topic}`);
+          logPushMetric({ platform: t.platform, push_type: t.type, status: 'attempted', user_id: userId, device_id: t.device_id });
+          nativePromises.push(sendApnsWithFallback(notification, t.token, 'Alert', t.platform, t.type, userId, t.device_id));
         }
       });
     } else {
@@ -495,13 +539,18 @@ async function sendGenericPush(params) {
           },
         });
 
-        const webPromises = webSubs.map(sub =>
-          webpush.sendNotification(
+        const webPromises = webSubs.map(sub => {
+          logPushMetric({ platform: 'web', push_type: 'vapid', status: 'attempted', user_id: userId, device_id: null });
+          return webpush.sendNotification(
             { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
             webPayload
-          ).catch(err => {
+          ).then(() => {
+            logPushMetric({ platform: 'web', push_type: 'vapid', status: 'accepted', user_id: userId, device_id: null });
+          }).catch(err => {
+            logPushMetric({ platform: 'web', push_type: 'vapid', status: 'failed', error_code: String(err.statusCode || err.message), user_id: userId, device_id: null });
             if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 400) {
               // Subscription expired or VAPID key mismatch (400) — clean it up
+              logPushMetric({ platform: 'web', push_type: 'vapid', status: 'invalid_removed', user_id: userId, device_id: null });
               supabase.from('push_subscriptions').delete()
                 .match({ user_id: userId, endpoint: sub.endpoint })
                 .then(() => console.log(`[PushService] 🗑 Removed invalid web push sub for user ${userId} (Status: ${err.statusCode})`));
@@ -509,7 +558,7 @@ async function sendGenericPush(params) {
               console.error(`[PushService] ❌ Web push failed for user ${userId}:`, err.message);
             }
           })
-        );
+        });
 
         nativePromises.push(...webPromises);
         console.log(`[PushService] 📤 Web push dispatched to ${webSubs.length} subscription(s) for user ${userId}`);
