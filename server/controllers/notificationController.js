@@ -84,7 +84,7 @@ const markAllAsRead = async (req, res, next) => {
 const subscribeToNotifications = async (req, res, next) => {
   try {
     const { id: userId } = req.user;
-    const { subscription } = req.body;
+    const { subscription, vapidKeyVersion } = req.body;
 
     if (!subscription || !subscription.endpoint) {
       return res.status(400).json({ error: "Subscription endpoint is required" });
@@ -104,7 +104,8 @@ const subscribeToNotifications = async (req, res, next) => {
         user_id: userId, 
         endpoint, 
         p256dh, 
-        auth 
+        auth,
+        vapid_key_version: vapidKeyVersion || null
       }, {
         onConflict: "user_id,endpoint",
       });

@@ -1,16 +1,5 @@
 const supabase = require("../config/database");
-const webpush = require("web-push");
-// Configure web-push (keys must be present in .env or .env.development)
-if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails(
-    `mailto:${process.env.EMAIL_FROM || "noreply@notestandard.com"}`,
-    process.env.VAPID_PUBLIC_KEY,
-    process.env.VAPID_PRIVATE_KEY,
-  );
-} else {
-  // Loaded successfully from server/.env when present
-  console.warn("[NotificationService] VAPID keys missing. Push notifications will be disabled.");
-}
+// Gateway is authoritative for all push notifications.
 
 const realtime = require("./realtimeService");
 
@@ -64,18 +53,8 @@ const createNotification = async ({
       is_read: false,
     });
 
-    // 3. Web Push (PWA — VAPID) — sent directly from the API server.
-    //    The API server has VAPID keys configured. The gateway's sendGenericPush
-    //    is gated behind PUSH_ENABLED !== 'true', which silently drops web pushes
-    //    if that env var isn't explicitly set on the gateway. The API server is
-    //    the authoritative source for web push to avoid silent delivery failures.
-    const pushQueue = require('./pushQueue');
-    const pushTask = () => sendPushNotification(receiverId, { title, message, link, type, messageId, conversationId });
-    if (!global.BOOT_STATE?.ready) {
-      pushQueue.push(pushTask);
-    } else {
-      pushTask().catch(err => console.error('[NotificationService] Web push failed:', err.message));
-    }
+    // 3. Web Push (PWA — VAPID) is now handled entirely by the Realtime Gateway.
+    //    All push routing goes through /internal/push below.
 
     // 4. Native Push (FCM for Android, APNs for iOS) via the realtime-gateway.
     //    The gateway holds Firebase Admin and APNs credentials.
@@ -136,67 +115,6 @@ const createNotification = async ({
   }
 };
 
-/**
- * Sends a push notification to all subscribed devices of a user
- */
-const sendPushNotification = async (userId, payload) => {
-  if (process.env.PUSH_ENABLED === 'false') return;
-  try {
-    const { data: subscriptions, error } = await supabase
-      .from("push_subscriptions")
-      .select("endpoint, p256dh, auth")
-      .eq("user_id", userId);
-
-    if (error || !subscriptions) return;
-
-    const pushPayload = JSON.stringify({
-      title: payload.title,
-      body: payload.message,
-      icon: "/icon-192.png", // Default icon
-      data: {
-        url: payload.link,
-        type: payload.type,
-        messageId: payload.messageId,
-        conversationId: payload.conversationId || null,
-        targetAccountId: userId,
-        apiUrl: process.env.BACKEND_URL || (process.env.NODE_ENV === 'production' ? 'https://note-standard-api.onrender.com' : 'http://127.0.0.1:5001'),
-        // FAST-PATH FIX: SW should call the gateway for delivery receipts, not the API server.
-        // The gateway is always awake; the API server cold-starts after 15 min on Render free tier.
-        deliveryWebhookUrl: payload.messageId
-          ? `${process.env.REALTIME_GATEWAY_URL || 'https://realtime-gateway-gsb5.onrender.com'}/deliver/${payload.messageId}`
-          : null,
-      },
-    });
-
-    const sendPromises = subscriptions.map((sub) => {
-      // Reconstruct the subscription object required by web-push
-      const pushSubscription = {
-        endpoint: sub.endpoint,
-        keys: {
-          p256dh: sub.p256dh,
-          auth: sub.auth,
-        },
-      };
-
-      return webpush.sendNotification(pushSubscription, pushPayload)
-        .catch((err) => {
-          if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 400) {
-            // Subscription has expired, is no longer valid, or VAPID key mismatch (400) -> delete it
-            return supabase.from("push_subscriptions")
-              .delete()
-              .eq("endpoint", sub.endpoint)
-              .then(() => console.log(`[NotificationService] 🗑 Removed invalid web push sub (Status: ${err.statusCode})`));
-          } else {
-            console.error("Error sending web push notification:", err);
-          }
-        });
-    });
-
-    await Promise.all(sendPromises);
-  } catch (err) {
-    console.error("Failed to send push notification:", err);
-  }
-};
 
 /**
  * Broadcasts a notification to all users
@@ -250,59 +168,34 @@ const broadcastNotification = async ({
       is_read: false,
     });
 
-    // 4. Send Push Notifications to everyone in safe chunks
-    if (process.env.PUSH_ENABLED !== 'false') {
-      const pushPayload = JSON.stringify({
-        title,
-        body: message,
-        icon: "/logo192.png",
-        data: { url: link, type },
-      });
-
-      // Fetch ALL subscriptions
-      const { data: allSubscriptions } = await supabase
-        .from("push_subscriptions")
-        .select("endpoint, p256dh, auth, user_id");
-
-      if (allSubscriptions && allSubscriptions.length > 0) {
-        for (let i = 0; i < allSubscriptions.length; i += chunkSize) {
-          const subChunk = allSubscriptions.slice(i, i + chunkSize);
-          await Promise.all(
-            subChunk.map((sub) => {
-              const pushSubscription = {
-                endpoint: sub.endpoint,
-                keys: {
-                  p256dh: sub.p256dh,
-                  auth: sub.auth,
-                },
-              };
-              return webpush.sendNotification(pushSubscription, pushPayload).catch((err) => {
-                if (err.statusCode === 410 || err.statusCode === 404) {
-                  return supabase.from("push_subscriptions")
-                    .delete()
-                    .match({ user_id: sub.user_id, endpoint: sub.endpoint });
-                }
-              });
-            })
-          );
-        }
-      }
-    }
-
-    // 5. Native Push Broadcast (FCM/APNs) via Gateway
+    // 4. Send Push Notifications to everyone via Gateway
     const gatewayUrl = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
-    fetch(`${gatewayUrl}/internal/push/broadcast`, {
+    const lib = gatewayUrl.startsWith('https') ? require('https') : require('http');
+    
+    // Broadcast via Gateway handles BOTH native tokens and web push subscriptions natively
+    const payloadBody = JSON.stringify({
+      title,
+      body: message,
+      payload: {
+        type,
+        url: link || '/dashboard/notifications',
+      },
+    });
+
+    const req = lib.request({
+      hostname: new URL(gatewayUrl).hostname,
+      port: new URL(gatewayUrl).port || (gatewayUrl.startsWith('https') ? 443 : 80),
+      path: '/internal/push/broadcast',
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title,
-        body: message,
-        payload: {
-          type,
-          url: link || '/dashboard/notifications',
-        },
-      }),
-    }).catch(err => console.error('[NotificationService] Native broadcast via gateway failed:', err.message));
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payloadBody) }
+    }, (res) => {
+      res.on('data', () => {});
+      res.on('end', () => {});
+    });
+
+    req.on('error', (err) => console.error('[NotificationService] Broadcast push via gateway failed:', err.message));
+    req.write(payloadBody);
+    req.end();
 
     return true;
   } catch (err) {

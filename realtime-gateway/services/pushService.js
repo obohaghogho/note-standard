@@ -34,15 +34,20 @@ const supabase = createClient(
 );
 
 // Initialize Web Push (PWA)
-if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+  if (process.env.PUSH_ENABLED === 'true') {
+    throw new Error("Missing VAPID_PUBLIC_KEY or VAPID_PRIVATE_KEY while PUSH_ENABLED is true. Halting to prevent configuration drift.");
+  } else {
+    console.warn('[PushService] VAPID keys missing. Web Push notifications for PWA calls will be disabled.');
+  }
+} else {
+  const fingerprint = require('crypto').createHash('sha256').update(process.env.VAPID_PUBLIC_KEY).digest('hex').substring(0, 16);
   webpush.setVapidDetails(
     `mailto:${process.env.EMAIL_FROM || "noreply@notestandard.com"}`,
     process.env.VAPID_PUBLIC_KEY,
     process.env.VAPID_PRIVATE_KEY
   );
-  console.log('[PushService] Web Push (VAPID) initialized.');
-} else {
-  console.warn('[PushService] VAPID keys missing. Web Push notifications for PWA calls will be disabled.');
+  console.log(`[PushService] Web Push (VAPID) initialized. Fingerprint: ${fingerprint}`);
 }
 
 // Initialize Firebase Admin (Android FCM)
@@ -163,7 +168,8 @@ if (apnsKey && process.env.APNS_KEY_ID && process.env.APNS_TEAM_ID) {
   }
 
   if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
-    console.log('[PushService] ✅ Web Push (VAPID) configured — PWA push ready.');
+    const fingerprint = require('crypto').createHash('sha256').update(process.env.VAPID_PUBLIC_KEY).digest('hex').substring(0, 16);
+    console.log(`[PushService] ✅ Web Push (VAPID) configured — PWA push ready. Fingerprint: ${fingerprint}`);
   } else {
     console.warn('[PushService] ⚠️  VAPID keys missing — PWA web push will be skipped.');
   }
@@ -180,7 +186,9 @@ function logPushMetric(metricData) {
     status: metricData.status,
     error_code: metricData.error_code ? String(metricData.error_code).substring(0, 255) : null,
     user_id: metricData.user_id || null,
-    device_id: metricData.device_id || null
+    device_id: metricData.device_id || null,
+    vapid_version: metricData.vapid_version || null,
+    endpoint_hash: metricData.endpoint_hash || null
   }]).then(({ error }) => {
     if (error) console.error('[PushMetrics] ❌ Failed to log metric:', error.message);
   }).catch(() => {});
@@ -264,7 +272,7 @@ async function sendCallPush(params) {
     // 1.5. Fetch web push subscriptions for PWA users
     const { data: webSubscriptions, error: webError } = await supabase
       .from('push_subscriptions')
-      .select('endpoint, p256dh, auth')
+      .select('endpoint, p256dh, auth, vapid_key_version')
       .eq('user_id', userId);
 
     if (error && webError) throw error || webError;
@@ -383,17 +391,25 @@ async function sendCallPush(params) {
           keys: { p256dh: sub.p256dh, auth: sub.auth }
         };
 
+        const endpointHash = require('crypto').createHash('sha256').update(sub.endpoint).digest('hex').substring(0, 16);
+
+        if (sub.vapid_key_version && sub.vapid_key_version !== process.env.VAPID_PUBLIC_KEY) {
+          console.log(`[PushService] ⚠️ VAPID mismatch for web push sub: ${sub.endpoint.substring(0, 30)}... removing stale sub.`);
+          logPushMetric({ platform: 'web', push_type: 'vapid', status: 'invalid_removed', error_code: 'vapid_mismatch', user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
+          return supabase.from("push_subscriptions").delete().match({ user_id: userId, endpoint: sub.endpoint });
+        }
+
         console.log(`[PushService] 📤 Sending Web Push (PWA) to: ${sub.endpoint.substring(0, 30)}...`);
-        logPushMetric({ platform: 'web', push_type: 'vapid', status: 'attempted', user_id: userId, device_id: null });
+        logPushMetric({ platform: 'web', push_type: 'vapid', status: 'attempted', user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
         return webpush.sendNotification(pushSubscription, webPushPayload)
           .then(() => {
-            logPushMetric({ platform: 'web', push_type: 'vapid', status: 'accepted', user_id: userId, device_id: null });
+            logPushMetric({ platform: 'web', push_type: 'vapid', status: 'accepted', user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
           })
           .catch(err => {
-            logPushMetric({ platform: 'web', push_type: 'vapid', status: 'failed', error_code: String(err.statusCode || err.message), user_id: userId, device_id: null });
-            if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 400) {
+            logPushMetric({ platform: 'web', push_type: 'vapid', status: 'failed', error_code: String(err.statusCode || err.message), user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
+            if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 400 || err.statusCode === 403) {
               console.log(`[PushService] 🗑 Removed invalid web push sub: ${sub.endpoint.substring(0, 30)}... (Status: ${err.statusCode})`);
-              logPushMetric({ platform: 'web', push_type: 'vapid', status: 'invalid_removed', user_id: userId, device_id: null });
+              logPushMetric({ platform: 'web', push_type: 'vapid', status: 'invalid_removed', error_code: String(err.statusCode), user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
               return supabase.from("push_subscriptions")
                 .delete()
                 .match({ user_id: userId, endpoint: sub.endpoint });
@@ -515,7 +531,7 @@ async function sendGenericPush(params) {
     if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
       const { data: webSubs, error: webErr } = await supabase
         .from('push_subscriptions')
-        .select('endpoint, p256dh, auth')
+        .select('endpoint, p256dh, auth, vapid_key_version')
         .eq('user_id', userId);
 
       if (!webErr && webSubs && webSubs.length > 0) {
@@ -540,18 +556,26 @@ async function sendGenericPush(params) {
         });
 
         const webPromises = webSubs.map(sub => {
-          logPushMetric({ platform: 'web', push_type: 'vapid', status: 'attempted', user_id: userId, device_id: null });
+          const endpointHash = require('crypto').createHash('sha256').update(sub.endpoint).digest('hex').substring(0, 16);
+
+          if (sub.vapid_key_version && sub.vapid_key_version !== process.env.VAPID_PUBLIC_KEY) {
+            console.log(`[PushService] ⚠️ VAPID mismatch for web push sub: ${sub.endpoint.substring(0, 30)}... removing stale sub.`);
+            logPushMetric({ platform: 'web', push_type: 'vapid', status: 'invalid_removed', error_code: 'vapid_mismatch', user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
+            return supabase.from("push_subscriptions").delete().match({ user_id: userId, endpoint: sub.endpoint });
+          }
+
+          logPushMetric({ platform: 'web', push_type: 'vapid', status: 'attempted', user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
           return webpush.sendNotification(
             { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
             webPayload
           ).then(() => {
-            logPushMetric({ platform: 'web', push_type: 'vapid', status: 'accepted', user_id: userId, device_id: null });
+            logPushMetric({ platform: 'web', push_type: 'vapid', status: 'accepted', user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
           }).catch(err => {
-            logPushMetric({ platform: 'web', push_type: 'vapid', status: 'failed', error_code: String(err.statusCode || err.message), user_id: userId, device_id: null });
-            if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 400) {
-              // Subscription expired or VAPID key mismatch (400) — clean it up
-              logPushMetric({ platform: 'web', push_type: 'vapid', status: 'invalid_removed', user_id: userId, device_id: null });
-              supabase.from('push_subscriptions').delete()
+            logPushMetric({ platform: 'web', push_type: 'vapid', status: 'failed', error_code: String(err.statusCode || err.message), user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
+            if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 400 || err.statusCode === 403) {
+              // Subscription expired or VAPID key mismatch (400, 403) — clean it up
+              logPushMetric({ platform: 'web', push_type: 'vapid', status: 'invalid_removed', error_code: String(err.statusCode), user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
+              return supabase.from('push_subscriptions').delete()
                 .match({ user_id: userId, endpoint: sub.endpoint })
                 .then(() => console.log(`[PushService] 🗑 Removed invalid web push sub for user ${userId} (Status: ${err.statusCode})`));
             } else {

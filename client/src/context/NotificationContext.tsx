@@ -178,7 +178,10 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${session.access_token}`
                 },
-                body: JSON.stringify({ subscription })
+                body: JSON.stringify({ 
+                    subscription,
+                    vapidKeyVersion: import.meta.env.VITE_VAPID_PUBLIC_KEY
+                })
             });
 
             if (isIOSPWA) {

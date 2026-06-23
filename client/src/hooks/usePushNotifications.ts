@@ -63,7 +63,10 @@ export function usePushNotifications() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`
         },
-        body: JSON.stringify({ subscription: sub })
+        body: JSON.stringify({ 
+          subscription: sub,
+          vapidKeyVersion: VAPID_PUBLIC_KEY
+        })
       });
 
       if (!response.ok) {
