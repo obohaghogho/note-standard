@@ -9,6 +9,6 @@ CREATE TABLE IF NOT EXISTS public.push_metrics (
     device_id TEXT
 );
 
-CREATE INDEX idx_push_metrics_created_at ON public.push_metrics(created_at);
-CREATE INDEX idx_push_metrics_status ON public.push_metrics(status);
-CREATE INDEX idx_push_metrics_platform ON public.push_metrics(platform);
+CREATE INDEX IF NOT EXISTS idx_push_metrics_created_at ON public.push_metrics(created_at);
+CREATE INDEX IF NOT EXISTS idx_push_metrics_status ON public.push_metrics(status);
+CREATE INDEX IF NOT EXISTS idx_push_metrics_platform ON public.push_metrics(platform);
