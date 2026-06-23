@@ -227,10 +227,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const isReconnectingRef = useRef<boolean>(false);
     const reconnectBufferRef = useRef<unknown[]>([]);
     const reconcilingRef = useRef<boolean>(false); // Overlap lock for reconciliation
+    const foregroundSyncInFlightRef = useRef<boolean>(false); // Guard for foreground sync
     const lastServerAckRef = useRef<number>(Date.now()); // Tracks last real event from server
     // Stable ref to loadMessages — avoids TDZ when the reconciliation useEffect is declared
     // above the loadMessages useCallback. Synced after loadMessages is initialized.
     const loadMessagesRef = useRef<(conversationId: string, force?: boolean) => Promise<void>>(() => Promise.resolve());
+    const loadConversationsRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
     // Tab-primary singleton: Only one tab runs ACK batching, reconciliation and heartbeat.
     // Uses a localStorage lease refreshed every 4s. Other tabs detect staleness (>6s).
@@ -687,6 +689,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         const intentTime = intent.created_at;
                         const serverTime = new Date(conv.updated_at ?? 0).getTime();
 
+                        // If the server's last message is exactly the intent we're checking, server wins!
+                        if (conv.lastMessage?.event_id && conv.lastMessage.event_id === intent.event_id) {
+                            return conv;
+                        }
+
                         // Only override the preview if the intent is newer than the server data
                         if (intentTime <= serverTime) return conv;
 
@@ -834,7 +841,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     // Keep the ref synced so periodic reconciliation doesn't hit a TDZ
     useEffect(() => {
         loadMessagesRef.current = loadMessages;
-    }, [loadMessages]);
+        loadConversationsRef.current = loadConversations;
+    }, [loadMessages, loadConversations]);
 
     const clearState = useCallback(() => {
         console.log(`[ACCOUNT_FORENSIC] CHAT_CLEAR_STATE - Dropping chat caches at ${Date.now()}`);
@@ -1396,12 +1404,25 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         };
         
         // Layer 5: Reconciliation Engine Trigger (Tab Visibility)
+        const handleForegroundSync = async () => {
+            if (foregroundSyncInFlightRef.current) return;
+            foregroundSyncInFlightRef.current = true;
+            try {
+                console.log(`[Reconciliation Engine] Triggering foreground sync`);
+                await loadConversationsRef.current();
+                if (activeConversationIdRef.current) {
+                    await loadMessagesRef.current(activeConversationIdRef.current, true);
+                }
+            } catch (err) {
+                console.warn('[Reconciliation Engine] Foreground sync failed', err);
+            } finally {
+                foregroundSyncInFlightRef.current = false;
+            }
+        };
+
         const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible' && activeConversationIdRef.current) {
-                console.log(`[Reconciliation Engine] Tab visible, syncing ${activeConversationIdRef.current}`);
-                loadMessages(activeConversationIdRef.current, true).catch(err => 
-                    console.warn('[Reconciliation Engine] Failed to reconcile on visibility change', err)
-                );
+            if (document.visibilityState === 'visible') {
+                handleForegroundSync();
             }
         };
 
@@ -1464,13 +1485,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             // Also rejoin the active conversation room explicitly
             if (activeConversationIdRef.current) {
                 socket.emit('join_room', activeConversationIdRef.current);
-                
-                // Layer 5: Reconciliation Engine Trigger (Socket Reconnect)
-                // Force sync the active chat to catch any messages missed during the drop
-                loadMessages(activeConversationIdRef.current, true).catch(err => 
-                    console.warn('[Reconciliation Engine] Failed to reconcile on reconnect', err)
-                );
             }
+            
+            // Layer 5: Reconciliation Engine Trigger (Socket Reconnect)
+            // Force sync the chat list and active chat to catch any messages missed during the drop
+            handleForegroundSync();
         };
         
         // Layer 3 Reconnection buffer: 

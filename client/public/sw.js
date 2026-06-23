@@ -143,45 +143,82 @@ self.addEventListener('push', (event) => {
             }).then((activeAccountId) => {
                 return clients.matchAll({ type: 'window', includeUncontrolled: true })
                     .then(windowClients => {
-                        // Check if any open window is already on this conversation
-                        const activeClient = windowClients.find(client => {
+                        // ── WhatsApp/Telegram-style suppression ─────────────────────────────
+                        // RULE 1: If the user has the app OPEN and VISIBLE in any window,
+                        //         suppress the notification and post a silent in-app update.
+                        //         This matches WhatsApp: you never get a popup when looking at the app.
+                        // RULE 2: If the app is backgrounded, minimized, or closed, show the notification.
+                        //
+                        // Old behavior (WRONG): Only suppressed when on the EXACT same conversation URL.
+                        //   → User got notifications while on a different chat, home screen, settings, etc.
+                        // New behavior (CORRECT): Suppress whenever ANY app window is in the foreground.
+
+                        // Find any visible (non-hidden) window on our origin
+                        const foregroundClient = windowClients.find(client => {
                             try {
-                                const clientUrl = new URL(client.url);
-                                const clientConvId = clientUrl.searchParams.get('id');
-                                const isOnChatPage = clientUrl.pathname.includes('/chat');
-                                return isOnChatPage && clientConvId === notifConversationId && client.visibilityState !== 'hidden';
+                                // visibilityState === 'visible' means the tab is the active, focused tab
+                                return client.visibilityState === 'visible';
                             } catch (_) {
                                 return false;
                             }
                         });
 
-                        let isUserAlreadyViewing = !!activeClient;
+                        // Find the exact conversation client for precise in-app routing
+                        const conversationClient = notifConversationId
+                            ? windowClients.find(client => {
+                                try {
+                                    const clientUrl = new URL(client.url);
+                                    return clientUrl.searchParams.get('id') === notifConversationId;
+                                } catch (_) {
+                                    return false;
+                                }
+                            })
+                            : null;
 
-                        // FIX: Ensure we only suppress the push if the active window is 
-                        // ACTUALLY logged into the target account of the notification.
-                        if (isUserAlreadyViewing && options.data.targetAccountId && activeAccountId) {
+                        let appIsInForeground = !!foregroundClient;
+
+                        // Account-switch guard: if the visible window is logged into a DIFFERENT account
+                        // than the notification target, we must still show the notification.
+                        if (appIsInForeground && options.data.targetAccountId && activeAccountId) {
                             if (String(options.data.targetAccountId) !== String(activeAccountId)) {
-                                console.log(`[SW] Overriding suppression: active window is on account ${activeAccountId}, but push is for ${options.data.targetAccountId}`);
-                                isUserAlreadyViewing = false;
+                                console.log(`[SW] Account mismatch — visible window is account ${activeAccountId}, push is for ${options.data.targetAccountId}. Will show notification.`);
+                                appIsInForeground = false;
                             }
                         }
 
-                        if (isUserAlreadyViewing) {
-                            // User is actively viewing this conversation.
-                            // 1. Post a message to the React tab to trigger read-receipt logic (blue ticks).
-                            activeClient.postMessage({
+                        if (appIsInForeground) {
+                            // ── App is in the foreground: suppress popup, update app silently ──
+                            console.log(`[SW] App is visible — suppressing notification, posting in-app update.`);
+
+                            // Post CHAT_MESSAGE_RECEIVED to the most appropriate tab:
+                            //   • The exact conversation tab if open (triggers read-receipt + loadMessages)
+                            //   • Otherwise the foreground tab (triggers conversation list refresh)
+                            const targetClient = conversationClient || foregroundClient;
+                            targetClient.postMessage({
                                 type: 'CHAT_MESSAGE_RECEIVED',
                                 conversationId: notifConversationId,
                                 messageId: options.data.messageId
                             });
-                            // 2. Fire delivery receipt silently via fast-path gateway URL.
-                            //    This is NOT a silent push penalty because the user has the app open.
+
+                            // Also notify all OTHER tabs to refresh their conversation list
+                            windowClients.forEach(client => {
+                                if (client !== targetClient) {
+                                    client.postMessage({
+                                        type: 'BACKGROUND_PREFETCH',
+                                        conversationId: notifConversationId
+                                    });
+                                }
+                            });
+
+                            // Fire delivery receipt silently — user has the app open so this is not
+                            // a "silent push" in the iOS penalty sense.
                             return fetch(deliveryUrl, { method: 'POST' })
                                 .catch(err => console.error('[SW] Delivery receipt failed (foreground):', err));
                         }
 
-                        // Broadcast BACKGROUND_PREFETCH to all open tabs (even hidden ones)
-                        // This allows React to silently fetch the message so it's ready when the app opens
+                        // ── App is backgrounded or closed: show notification ──────────────
+                        // Broadcast BACKGROUND_PREFETCH to all open (but hidden) tabs so React
+                        // can silently pre-load the message and be ready when the user taps.
                         windowClients.forEach(client => {
                             client.postMessage({
                                 type: 'BACKGROUND_PREFETCH',
@@ -189,8 +226,9 @@ self.addEventListener('push', (event) => {
                             });
                         });
 
-                        // User is NOT in this conversation → show notification AND fire delivery receipt IN PARALLEL.
-                        // This is the critical iOS fix: showNotification is called immediately.
+                        // CRITICAL iOS FIX: showNotification and delivery receipt run in PARALLEL.
+                        // Awaiting the fetch before showNotification would violate iOS's strict
+                        // notification window policy and risk silent-push penalties.
                         return Promise.all([
                             self.registration.showNotification(title, options),
                             fetch(deliveryUrl, { method: 'POST' })
