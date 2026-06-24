@@ -147,10 +147,32 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         pushSubscribeRef.current = true;
         try {
             const registration = await navigator.serviceWorker.ready;
-            
+            const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+            if (!vapidKey) {
+                console.error('[Notifications] Missing VITE_VAPID_PUBLIC_KEY');
+                return;
+            }
+
             // Check for existing subscription first
             let subscription = await registration.pushManager.getSubscription();
             
+            if (subscription) {
+                // VAPID key validation: check if the existing subscription was created
+                // with the current VAPID key. If not, it will always return 403 from
+                // the push server, so we must unsubscribe and create a fresh one.
+                const existingKey = subscription.options?.applicationServerKey;
+                if (existingKey) {
+                    const existingKeyB64 = btoa(String.fromCharCode(...new Uint8Array(existingKey)));
+                    const normalizedExisting = existingKeyB64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+                    const normalizedCurrent = vapidKey.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+                    if (normalizedExisting !== normalizedCurrent) {
+                        console.warn('[Notifications] VAPID key mismatch detected — unsubscribing stale subscription and re-registering.');
+                        await subscription.unsubscribe();
+                        subscription = null;
+                    }
+                }
+            }
+
             if (!subscription) {
                 // We MUST NOT request permission automatically on load, especially on iOS.
                 // iOS strictly requires Notification.requestPermission() to be called from a direct user gesture (e.g., button click).
@@ -159,16 +181,11 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                     return;
                 }
 
-                const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
-                if (!vapidKey) {
-                    console.error('[Notifications] Missing VITE_VAPID_PUBLIC_KEY');
-                    return;
-                }
-
                 subscription = await registration.pushManager.subscribe({
                     userVisibleOnly: true,
                     applicationServerKey: urlBase64ToUint8Array(vapidKey)
                 });
+                console.log('[Notifications] ✅ Created fresh push subscription with current VAPID key.');
             }
 
             console.log('[Notifications] Syncing push subscription with backend...');
