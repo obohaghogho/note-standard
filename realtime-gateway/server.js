@@ -169,6 +169,28 @@ app.post('/internal/push', async (req, res) => {
   }
 });
 
+// 🔬 DIAGNOSTIC: Synchronous push that waits and returns full result
+app.post('/internal/push/diagnose', async (req, res) => {
+  const logs = [];
+  const origLog = console.log.bind(console);
+  const origWarn = console.warn.bind(console);
+  const origErr = console.error.bind(console);
+  console.log = (...args) => { logs.push({ level: 'log', msg: args.join(' ') }); origLog(...args); };
+  console.warn = (...args) => { logs.push({ level: 'warn', msg: args.join(' ') }); origWarn(...args); };
+  console.error = (...args) => { logs.push({ level: 'error', msg: args.join(' ') }); origErr(...args); };
+
+  try {
+    const { userId, title, body, payload } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    await pushService.sendGenericPush({ userId, title: title || 'Diag', body: body || 'Diag', payload: payload || {} });
+    console.log = origLog; console.warn = origWarn; console.error = origErr;
+    res.json({ ok: true, logs });
+  } catch (err) {
+    console.log = origLog; console.warn = origWarn; console.error = origErr;
+    res.status(500).json({ ok: false, error: err.message, logs });
+  }
+});
+
 app.post('/internal/push/broadcast', async (req, res) => {
   try {
     const { title, body, payload } = req.body;
