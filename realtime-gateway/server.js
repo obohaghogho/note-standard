@@ -96,13 +96,32 @@ app.get('/internal/version', (req, res) => {
   res.status(200).json({ version: '1.0.7', commit: 'fix_push_enabled' });
 });
 
-app.get('/internal/debug-env', (req, res) => {
+const { createClient } = require('@supabase/supabase-js');
+
+app.get('/internal/debug-env', async (req, res) => {
+  let dbTest = { success: false, error: null, rowCount: 0 };
+  try {
+    const pushService = require('./services/pushService');
+    // We will do a raw fetch to see if Supabase throws an error
+    const s = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+    const { data, error } = await s.from('push_subscriptions').select('id').limit(1);
+    if (error) {
+      dbTest.error = error;
+    } else {
+      dbTest.success = true;
+      dbTest.rowCount = data ? data.length : 0;
+    }
+  } catch (err) {
+    dbTest.error = err.message;
+  }
+
   res.status(200).json({
     has_vapid_public: !!process.env.VAPID_PUBLIC_KEY,
     has_vapid_private: !!process.env.VAPID_PRIVATE_KEY,
     has_vite_vapid: !!process.env.VITE_VAPID_PUBLIC_KEY,
     push_enabled_val: process.env.PUSH_ENABLED,
     supabase_url: process.env.SUPABASE_URL ? process.env.SUPABASE_URL.substring(0, 25) + '...' : null,
+    db_test: dbTest
   });
 });
 
