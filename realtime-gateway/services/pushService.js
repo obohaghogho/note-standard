@@ -5,20 +5,6 @@ const path = require('path');
 const webpush = require('web-push');
 
 // Initialize Supabase for fetching tokens with Keep-Alive to prevent TCP Port Exhaustion
-const http = require('http');
-const https = require('https');
-const nodeFetch = require('node-fetch');
-
-const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 100 });
-const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 100 });
-
-const customFetch = (url, options) => {
-  return nodeFetch(url, {
-    ...options,
-    agent: (parsedUrl) => parsedUrl.protocol === 'http:' ? httpAgent : httpsAgent
-  });
-};
-
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -26,9 +12,6 @@ const supabase = createClient(
     auth: {
       autoRefreshToken: false,
       persistSession: false
-    },
-    global: {
-      fetch: customFetch
     }
   }
 );
