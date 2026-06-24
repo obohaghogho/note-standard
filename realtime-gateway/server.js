@@ -91,6 +91,11 @@ app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
 
+// ✅ 3a. VERSION CHECK
+app.get('/internal/version', (req, res) => {
+  res.status(200).json({ version: '1.0.7', commit: 'fix_push_enabled' });
+});
+
 // ✅ 3b. BOOT-READY SIGNAL ENDPOINT
 // Called by the API BootManager when ALL services are ready.
 // This is the ONLY event that unlocks socket acceptance.
