@@ -536,14 +536,26 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }, [session, deviceId]);
 
-    const markConversationDelivered = useCallback(async (conversationId: string) => {
-        if (!session || !deviceId) return;
+    const markConversationDelivered = useCallback(async (conversationId: string, msgIds?: string[]) => {
+        if (!session || !user?.id) return;
         try {
-            await api.put(`/chat/conversations/${conversationId}/deliver`, { deviceId });
+            // FAST-PATH: Call Gateway directly — it is always awake and writes to DB immediately.
+            // The API server sleeps on Render free tier (30-90s cold start delays delivery ACKs).
+            const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || 'https://realtime-gateway-gsb5.onrender.com';
+            if (msgIds && msgIds.length > 0) {
+                await fetch(`${gatewayUrl}/deliver/batch`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ messageIds: msgIds, userId: user.id })
+                });
+            } else {
+                // No specific IDs — fall back to API server (best-effort)
+                await api.put(`/chat/conversations/${conversationId}/deliver`, { deviceId });
+            }
         } catch (err) {
             console.error('[Chat] Failed to mark conversation delivered:', err);
         }
-    }, [session, deviceId]);
+    }, [session, user?.id, deviceId]);
 
     const markConversationRead = useCallback(async (conversationId: string) => {
         if (!session || !deviceId) return;
@@ -613,35 +625,46 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 setLoading(false);
                 joinAllRooms(mappedData);
 
-                // WhatsApp-Style Connection Bulk ACKs
+                // WhatsApp-Style Connection Bulk ACKs (FAST-PATH via Gateway)
                 // If a user was offline when messages were sent, their device never emitted
                 // the `chat:delivered` socket event. When they load the app, we scan for any
                 // unread conversations where they are the receiver, and immediately blast out
-                // delivery ACKs. This makes the sender's UI instantly jump to double-ticks.
+                // delivery ACKs via the Gateway's always-awake /deliver/batch endpoint.
+                const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || 'https://realtime-gateway-gsb5.onrender.com';
                 const nowStr = new Date().toISOString();
                 const s = socketRef.current;
+                
+                // Collect ALL undelivered message IDs across all conversations in one batch
+                const allUndeliveredIds: string[] = [];
                 mappedData.forEach((conv: Conversation) => {
-                    // Check if there are unread messages, and the last message is from someone else
                     if ((conv.unreadCount ?? 0) > 0 && conv.lastMessage && conv.lastMessage.sender_id !== user?.id) {
                         const msgId = conv.lastMessage.id;
-                        if (msgId && s && s.connected) {
-                            // Ensure the entire conversation backlog is marked delivered via API
-                            // This ensures the sender gets double ticks for ALL older messages
-                            markConversationDelivered(conv.id);
-                            
-                            // Emit the real-time event for the last message as a fast-path
-                            s.emit('chat:delivered', { 
-                                conversationId: conv.id, 
-                                messageId: msgId, 
-                                eventId: conv.lastMessage.event_id, 
-                                senderId: conv.lastMessage.sender_id, // ADDED: Required for Gateway to route to sender
-                                deliveredAt: nowStr, 
-                                deviceId: deviceIdRef.current 
-                            });
-                            pendingDeliveryAcksRef.current.add(msgId);
+                        if (msgId) {
+                            allUndeliveredIds.push(msgId);
+                            // Also emit socket event for instant real-time tick on sender
+                            if (s && s.connected) {
+                                s.emit('chat:delivered', { 
+                                    conversationId: conv.id, 
+                                    messageId: msgId, 
+                                    eventId: conv.lastMessage.event_id, 
+                                    senderId: conv.lastMessage.sender_id,
+                                    deliveredAt: nowStr, 
+                                    deviceId: deviceIdRef.current 
+                                });
+                                pendingDeliveryAcksRef.current.add(msgId);
+                            }
                         }
                     }
                 });
+
+                // Single batch call to Gateway — writes delivered_at and emits double-ticks
+                if (allUndeliveredIds.length > 0 && user?.id) {
+                    fetch(`${gatewayUrl}/deliver/batch`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ messageIds: allUndeliveredIds, userId: user.id })
+                    }).catch(err => console.error('[Chat] Batch delivery ACK failed:', err));
+                }
 
                 // Phase 4: Conversation Preloading (PERF FIX: reduced from 5 → 2)
                 // Preload only the 2 most recent conversations to reduce cold-start I/O.
@@ -1039,13 +1062,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     deliveredAt: new Date().toISOString()
                 });
 
-                // 2. HTTP PUT — persists delivered_at to DB immediately.
-                //    This ensures the sender sees the double tick even if they were
-                //    offline during the socket emit above (self-healing on reload).
-                //    Previously this was batched after 5 seconds, causing the
-                //    single→double tick delay when the sender reconnected quickly.
-                api.put(`/chat/messages/${msg.id}/deliver`, {
-                    deviceId: deviceIdRef.current
+                // 2. HTTP POST to Gateway fast-path — persists delivered_at directly, bypassing the sleeping API server.
+                //    The Gateway is always awake (it holds the sender's live socket connection).
+                const gatewayBase = import.meta.env.VITE_GATEWAY_URL || 'https://realtime-gateway-gsb5.onrender.com';
+                fetch(`${gatewayBase}/deliver/batch`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ messageIds: [msg.id], userId: user?.id })
                 }).catch(() => {}); // fire-and-forget, non-fatal
 
                 // 3. Debounced read mark — fires 1.5s after the last message arrives

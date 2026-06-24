@@ -273,6 +273,75 @@ app.post('/deliver/:messageId', async (req, res) => {
   }
 });
 
+// ✅ 5d. FAST-PATH BATCH DELIVERY ENDPOINT
+// Called directly by the frontend (bypassing the sleeping API server) when the
+// recipient opens a conversation or connects to the socket.
+//
+// Why this is needed:
+//   The API server (note-standard-api.onrender.com) is on Render's free tier.
+//   It SLEEPS after 15 minutes of inactivity. When the frontend calls
+//   PUT /api/chat/messages/:id/deliver on a sleeping server, the cold-start
+//   takes 30-90 seconds. By then, the client has moved on and delivered_at
+//   remains NULL permanently — causing the single-tick to never become a double-tick.
+//
+// The Gateway is ALWAYS awake (it holds live socket connections).
+// This endpoint writes delivered_at to Supabase directly and immediately
+// emits chat:message_delivered to the sender — no cold start, no delay.
+app.post('/deliver/batch', async (req, res) => {
+  try {
+    const { messageIds, userId } = req.body;
+
+    if (!Array.isArray(messageIds) || messageIds.length === 0 || !userId) {
+      return res.status(400).json({ error: 'messageIds (array) and userId required' });
+    }
+
+    if (!gatewaySupabase) {
+      return res.json({ ok: false, reason: 'supabase_unavailable' });
+    }
+
+    const now = new Date().toISOString();
+
+    const { data, error } = await gatewaySupabase
+      .from('messages')
+      .update({ delivered_at: now })
+      .in('id', messageIds)
+      .neq('sender_id', userId)
+      .is('delivered_at', null)
+      .select('id, conversation_id, sender_id');
+
+    if (error) {
+      console.warn('[Gateway] /deliver/batch DB error:', error.message);
+      return res.json({ ok: false, error: error.message });
+    }
+
+    if (data && data.length > 0) {
+      console.log(`[Gateway] ⚡ Fast-path batch deliver | ${data.length} messages | userId:${userId}`);
+
+      // Group by conversation and sender to minimise socket emits
+      const bySender = {};
+      data.forEach(msg => {
+        const key = `${msg.sender_id}:${msg.conversation_id}`;
+        if (!bySender[key]) bySender[key] = { senderId: msg.sender_id, conversationId: msg.conversation_id, messageIds: [] };
+        bySender[key].messageIds.push(msg.id);
+      });
+
+      Object.values(bySender).forEach(({ senderId, conversationId, messageIds: ids }) => {
+        const payload = { conversationId, messageIds: ids, userId, delivered_at: now };
+        // Emit to sender (double-tick)
+        io.to(`user:${senderId}`).emit('chat:messages_delivered_batch', payload);
+        // Emit to conversation room (covers active participants)
+        io.to(conversationId).emit('chat:messages_delivered_batch', payload);
+      });
+    }
+
+    res.json({ ok: true, updated: data?.length || 0 });
+  } catch (err) {
+    console.error('[Gateway] /deliver/batch unexpected error:', err.message);
+    res.json({ ok: false, error: err.message });
+  }
+});
+
+
 
 /**
  * Global Dispatcher for Socket Events
