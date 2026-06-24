@@ -96,6 +96,16 @@ app.get('/internal/version', (req, res) => {
   res.status(200).json({ version: '1.0.7', commit: 'fix_push_enabled' });
 });
 
+app.get('/internal/debug-env', (req, res) => {
+  res.status(200).json({
+    has_vapid_public: !!process.env.VAPID_PUBLIC_KEY,
+    has_vapid_private: !!process.env.VAPID_PRIVATE_KEY,
+    has_vite_vapid: !!process.env.VITE_VAPID_PUBLIC_KEY,
+    push_enabled_val: process.env.PUSH_ENABLED,
+    supabase_url: process.env.SUPABASE_URL ? process.env.SUPABASE_URL.substring(0, 25) + '...' : null,
+  });
+});
+
 // ✅ 3b. BOOT-READY SIGNAL ENDPOINT
 // Called by the API BootManager when ALL services are ready.
 // This is the ONLY event that unlocks socket acceptance.
