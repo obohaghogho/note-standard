@@ -148,11 +148,11 @@ if (apnsKey && process.env.APNS_KEY_ID && process.env.APNS_TEAM_ID) {
 // ─── Startup validation summary ──────────────────────────────────────────────
 // Runs once at module load so every deployment has an unambiguous log line.
 (function logStartupState() {
-  const pushEnabled = process.env.PUSH_ENABLED === 'true';
+  const pushEnabled = process.env.PUSH_ENABLED !== 'false';
   if (pushEnabled) {
-    console.log('[PushService] ✅ Native push ENABLED (PUSH_ENABLED=true)');
+    console.log('[PushService] ✅ Native push ENABLED (default or PUSH_ENABLED=true)');
   } else {
-    console.warn('[PushService] ⚠️  Native push DISABLED — all FCM/APNs delivery will be skipped. Set PUSH_ENABLED=true to enable.');
+    console.warn('[PushService] ⚠️  Native push explicitly DISABLED (PUSH_ENABLED=false) — all FCM/APNs delivery will be skipped.');
   }
 
   if (firebaseApp) {
@@ -259,7 +259,7 @@ async function sendApnsWithFallback(notification, token, label, platform = 'ios'
  * @param {Object} params - { userId, title, body, payload }
  */
 async function sendCallPush(params) {
-  if (process.env.PUSH_ENABLED !== 'true') return;
+  if (process.env.PUSH_ENABLED === 'false') return;
   const { userId, title, body, payload } = params;
   
   try {
@@ -435,7 +435,7 @@ async function sendCallPush(params) {
  * @param {Object} params - { userId, title, body, payload }
  */
 async function sendGenericPush(params) {
-  if (process.env.PUSH_ENABLED !== 'true') return;
+  if (process.env.PUSH_ENABLED === 'false') return;
   const { userId, title, body, payload } = params;
 
   try {
@@ -606,7 +606,7 @@ async function sendGenericPush(params) {
  * @param {Object} params - { title, body, payload }
  */
 async function sendBroadcastPush(params) {
-  if (process.env.PUSH_ENABLED !== 'true') return;
+  if (process.env.PUSH_ENABLED === 'false') return;
   const { title, body, payload } = params;
   try {
     const { data: tokens, error } = await supabase
