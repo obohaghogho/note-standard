@@ -42,7 +42,7 @@ async function getFromIDB(): Promise<string | null> {
       req.onsuccess = () => resolve(req.result || null);
       req.onerror = () => reject(req.error);
     });
-  } catch (_) {
+  } catch {
     return null;
   }
 }
