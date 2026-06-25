@@ -187,6 +187,14 @@ server.listen(PORT, async () => {
     }
   }, 5 * 60 * 1000);
 
+  // Push Subscription Daily Cleanup
+  try {
+    const { startPushCleanupJob } = require("./workers/pushCleanup");
+    startPushCleanupJob();
+  } catch (err) {
+    logger.error(`[PushCleanup Worker] Initialization Error: ${err.message}`);
+  }
+
   // 5. Initialize Adversarial Chaos Session (If Enabled)
   if (require("./services/chaos/ChaosService").enabled) {
     const chaosToken = require("./services/chaos/ChaosService").createSession();

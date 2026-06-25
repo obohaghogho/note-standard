@@ -6,6 +6,7 @@ import { API_URL } from '../lib/api';
 import { AnimatePresence } from 'framer-motion';
 import NotificationToast, { type NotificationToastData } from '../components/common/NotificationToast';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { getDeviceId, getDeviceMetadata } from '../utils/deviceId';
 
 interface Notification {
     id: string;
@@ -189,6 +190,9 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             }
 
             console.log('[Notifications] Syncing push subscription with backend...');
+            const deviceId = await getDeviceId();
+            const { device_name, platform } = getDeviceMetadata();
+
             await fetch(`${API_URL}/api/notifications/subscribe`, {
                 method: 'POST',
                 headers: {
@@ -197,7 +201,23 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                 },
                 body: JSON.stringify({ 
                     subscription,
-                    vapidKeyVersion: import.meta.env.VITE_VAPID_PUBLIC_KEY
+                    vapidKeyVersion: import.meta.env.VITE_VAPID_PUBLIC_KEY,
+                    deviceId,
+                    deviceName: device_name,
+                    platform
+                })
+            });
+
+            console.log('[Notifications] Cleaning up stale endpoints for this device...');
+            await fetch(`${API_URL}/api/notifications/sync-endpoint`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`
+                },
+                body: JSON.stringify({ 
+                    currentEndpoint: subscription.endpoint,
+                    deviceId
                 })
             });
 

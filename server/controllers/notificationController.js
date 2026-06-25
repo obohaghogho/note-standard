@@ -84,7 +84,7 @@ const markAllAsRead = async (req, res, next) => {
 const subscribeToNotifications = async (req, res, next) => {
   try {
     const { id: userId } = req.user;
-    const { subscription, vapidKeyVersion } = req.body;
+    const { subscription, vapidKeyVersion, deviceId, deviceName, platform } = req.body;
 
     if (!subscription || !subscription.endpoint) {
       return res.status(400).json({ error: "Subscription endpoint is required" });
@@ -105,14 +105,53 @@ const subscribeToNotifications = async (req, res, next) => {
         endpoint, 
         p256dh, 
         auth,
-        vapid_key_version: vapidKeyVersion || null
+        vapid_key_version: vapidKeyVersion || null,
+        status: 'healthy',
+        device_id: deviceId || null,
+        device_name: deviceName || null,
+        platform: platform || null,
+        last_seen_at: new Date().toISOString()
       }, {
-        onConflict: "user_id,endpoint",
+        onConflict: "endpoint",
       });
 
     if (error) throw error;
 
     res.json({ message: "Subscribed to push notifications" });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Synchronizes the browser's active endpoint with the database.
+ * Deletes any subscriptions for this user that don't match the current endpoint.
+ */
+const syncEndpoint = async (req, res, next) => {
+  try {
+    const { id: userId } = req.user;
+    const { currentEndpoint, deviceId } = req.body;
+
+    if (!currentEndpoint) {
+      return res.status(400).json({ error: "currentEndpoint is required" });
+    }
+
+    if (!deviceId) {
+      // If client didn't send deviceId, we shouldn't recklessly delete endpoints.
+      return res.json({ message: "No deviceId provided, skipping aggressive sync" });
+    }
+
+    // Delete ONLY subscriptions for THIS user AND THIS device that do NOT match the current endpoint
+    const { error } = await supabase
+      .from("push_subscriptions")
+      .delete()
+      .eq("user_id", userId)
+      .eq("device_id", deviceId)
+      .neq("endpoint", currentEndpoint);
+
+    if (error) throw error;
+
+    res.json({ message: "Endpoints synchronized" });
   } catch (err) {
     next(err);
   }
@@ -296,4 +335,5 @@ module.exports = {
   registerNativeToken,
   sendNotification,
   notifyTeam,
+  syncEndpoint,
 };

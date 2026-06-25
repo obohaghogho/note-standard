@@ -1,0 +1,369 @@
+/* ================================================
+   PushHealthDashboard.css
+   Admin Push Notification Health Dashboard
+   ================================================ */
+
+.push-health-page {
+  padding: 1.5rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  color: #e2e8f0;
+  font-family: 'Inter', sans-serif;
+}
+
+/* ─── Header ─────────────────────────────────── */
+.ph-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.ph-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.ph-header-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+}
+
+.ph-header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #e2e8f0, #a5b4fc);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0;
+}
+
+.ph-header p {
+  color: #64748b;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.ph-refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  color: #94a3b8;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.ph-refresh-btn:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; }
+.ph-refresh-btn.spinning svg { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── Section Labels ─────────────────────────── */
+.ph-section-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #475569;
+  margin: 2rem 0 1rem;
+}
+
+/* ─── Stat Cards Grid ────────────────────────── */
+.ph-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.ph-stat-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: transform 0.2s, border-color 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.ph-stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  border-radius: 2px;
+}
+
+.ph-stat-card.blue::before   { background: linear-gradient(90deg, #3b82f6, #6366f1); }
+.ph-stat-card.green::before  { background: linear-gradient(90deg, #10b981, #06b6d4); }
+.ph-stat-card.amber::before  { background: linear-gradient(90deg, #f59e0b, #f97316); }
+.ph-stat-card.red::before    { background: linear-gradient(90deg, #ef4444, #dc2626); }
+.ph-stat-card.purple::before { background: linear-gradient(90deg, #a855f7, #ec4899); }
+.ph-stat-card.cyan::before   { background: linear-gradient(90deg, #06b6d4, #3b82f6); }
+
+.ph-stat-card:hover { transform: translateY(-2px); border-color: rgba(255,255,255,0.15); }
+
+.ph-stat-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.05);
+}
+
+.ph-stat-card.blue .ph-stat-icon   { color: #60a5fa; }
+.ph-stat-card.green .ph-stat-icon  { color: #34d399; }
+.ph-stat-card.amber .ph-stat-icon  { color: #fbbf24; }
+.ph-stat-card.red .ph-stat-icon    { color: #f87171; }
+.ph-stat-card.purple .ph-stat-icon { color: #c084fc; }
+.ph-stat-card.cyan .ph-stat-icon   { color: #22d3ee; }
+
+.ph-stat-value {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.ph-stat-label {
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* ─── Two-column Row ─────────────────────────── */
+.ph-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+@media (max-width: 768px) { .ph-two-col { grid-template-columns: 1fr; } }
+
+/* ─── Panel Cards ────────────────────────────── */
+.ph-panel {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  padding: 1.5rem;
+}
+
+.ph-panel h3 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #cbd5e1;
+  margin: 0 0 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ─── Success Rate Gauge ─────────────────────── */
+.ph-gauge-container {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.ph-gauge {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  flex-shrink: 0;
+}
+
+.ph-gauge-svg { transform: rotate(-90deg); }
+
+.ph-gauge-bg { fill: none; stroke: rgba(255,255,255,0.06); stroke-width: 10; }
+
+.ph-gauge-fill {
+  fill: none;
+  stroke-width: 10;
+  stroke-linecap: round;
+  transition: stroke-dasharray 1s ease;
+}
+
+.ph-gauge-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.ph-gauge-pct {
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.ph-gauge-sub {
+  font-size: 0.65rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.ph-metric-rows { flex: 1; display: flex; flex-direction: column; gap: 0.75rem; }
+
+.ph-metric-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.82rem;
+}
+
+.ph-metric-row .label { color: #94a3b8; }
+.ph-metric-row .val   { font-weight: 700; font-variant-numeric: tabular-nums; }
+.ph-metric-row .val.success { color: #34d399; }
+.ph-metric-row .val.fail    { color: #f87171; }
+
+/* ─── Error Code Bar Chart ───────────────────── */
+.ph-bar-list { display: flex; flex-direction: column; gap: 0.85rem; }
+
+.ph-bar-row { display: flex; flex-direction: column; gap: 4px; }
+
+.ph-bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+
+.ph-bar-label span:last-child { font-weight: 700; color: #e2e8f0; }
+
+.ph-bar-track {
+  height: 8px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.ph-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.8s ease;
+}
+
+/* ─── Device Donut ───────────────────────────── */
+.ph-device-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.ph-device-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: rgba(255,255,255,0.03);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+}
+
+.ph-device-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ph-device-info { flex: 1; }
+.ph-device-name { font-size: 0.78rem; color: #94a3b8; }
+.ph-device-count { font-size: 1.1rem; font-weight: 700; }
+
+/* ─── Multi-device Table ─────────────────────── */
+.ph-table-wrapper {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.ph-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.ph-table th {
+  background: rgba(255,255,255,0.04);
+  padding: 0.75rem 1rem;
+  text-align: left;
+  color: #64748b;
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.ph-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: #cbd5e1;
+  font-variant-numeric: tabular-nums;
+}
+
+.ph-table tr:last-child td { border-bottom: none; }
+.ph-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+/* ─── Status Badges ──────────────────────────── */
+.ph-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.ph-badge.accepted   { background: rgba(16,185,129,0.15); color: #34d399; }
+.ph-badge.attempted  { background: rgba(59,130,246,0.15); color: #60a5fa; }
+.ph-badge.failed     { background: rgba(239,68,68,0.15);  color: #f87171; }
+.ph-badge.invalid_removed { background: rgba(245,158,11,0.15); color: #fbbf24; }
+
+/* ─── Activity Table (full width) ───────────────  */
+.ph-full { grid-column: 1 / -1; }
+
+/* ─── Loading State ──────────────────────────── */
+.ph-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  gap: 1rem;
+  color: #64748b;
+}
+
+.ph-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255,255,255,0.05);
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* ─── Truncated User IDs ─────────────────────── */
+.ph-uid {
+  font-family: 'Courier New', monospace;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
