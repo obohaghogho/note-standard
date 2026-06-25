@@ -21,8 +21,7 @@ import {
     Zap,
     ShieldAlert,
     ArrowDownToLine,
-    ArrowUpFromLine,
-    Bell
+    ArrowUpFromLine
 } from 'lucide-react';
 import { LanguageSelector } from '../common/LanguageSelector';
 import SecureImage from '../common/SecureImage';
