@@ -128,6 +128,43 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
+// TEST 1 & 2: Gateway Reachability Diagnostics
+app.get("/api/diagnose-gateway", async (req, res) => {
+  const gatewayUrl = process.env.REALTIME_GATEWAY_URL;
+  const result = {
+    env_REALTIME_GATEWAY_URL: gatewayUrl,
+    is_undefined: gatewayUrl === undefined,
+    is_localhost: gatewayUrl ? gatewayUrl.includes('localhost') : false,
+    ping_status: null,
+    ping_body: null,
+    ping_time_ms: null,
+    ping_error: null
+  };
+
+  if (!gatewayUrl) {
+    return res.json(result);
+  }
+
+  const start = Date.now();
+  try {
+    const fetch = require('node-fetch');
+    // Fetch from gateway's public health endpoint or just the root
+    const pingRes = await fetch(`${gatewayUrl}/health`, { timeout: 10000 });
+    result.ping_time_ms = Date.now() - start;
+    result.ping_status = pingRes.status;
+    result.ping_body = await pingRes.text();
+  } catch (err) {
+    result.ping_time_ms = Date.now() - start;
+    result.ping_error = {
+      message: err.message,
+      code: err.code,
+      stack: err.stack
+    };
+  }
+
+  res.json(result);
+});
+
 app.get("/", (req, res) => {
   res.json({ message: "Note Standard API is running 🚀" });
 });

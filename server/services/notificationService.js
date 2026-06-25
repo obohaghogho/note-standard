@@ -63,12 +63,13 @@ const createNotification = async ({
     const gatewayUrlStr = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
     const bodyStr = message || title;
     
-    // Lazy-initialize KeepAlive agents to prevent TCP Ephemeral Port Exhaustion
+    // Temporary: Disable KeepAlive to test if Render is tearing down long-lived sockets
+    // and causing the push request to fail silently.
     if (!global.__pushHttpAgent) {
       const http = require('http');
       const https = require('https');
-      global.__pushHttpAgent = new http.Agent({ keepAlive: true, maxSockets: 100 });
-      global.__pushHttpsAgent = new https.Agent({ keepAlive: true, maxSockets: 100 });
+      global.__pushHttpAgent = new http.Agent({ keepAlive: false });
+      global.__pushHttpsAgent = new https.Agent({ keepAlive: false });
     }
     
     const targetUrl = new URL('/internal/push', gatewayUrlStr);
@@ -97,14 +98,34 @@ const createNotification = async ({
       path: targetUrl.pathname,
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payloadBody) },
-      agent: agent
+      agent: agent,
+      timeout: 10000 // 10 seconds timeout
     }, (res) => {
-      // Must consume the response to return the socket to the pool
-      res.on('data', () => {});
-      res.on('end', () => {});
+      let responseBody = '';
+      res.on('data', chunk => responseBody += chunk);
+      res.on('end', () => {
+        console.log(`[NotificationService] Gateway push response status: ${res.statusCode}`);
+        console.log(`[NotificationService] Gateway push response body: ${responseBody}`);
+      });
     });
 
-    req.on('error', (err) => console.error('[NotificationService] Native push via gateway failed:', err.message));
+    req.on('error', (err) => {
+      console.error('[NotificationService] ❌ Native push via gateway failed.');
+      console.error(`[NotificationService] Target URL: ${gatewayUrlStr}/internal/push`);
+      console.error(`[NotificationService] Error Code: ${err.code}`);
+      console.error(`[NotificationService] Errno: ${err.errno}`);
+      console.error(`[NotificationService] Hostname: ${err.hostname}`);
+      console.error(`[NotificationService] Stack: ${err.stack}`);
+    });
+    
+    req.on('timeout', () => {
+      console.error('[NotificationService] ❌ Gateway push request timed out.');
+      req.destroy();
+    });
+
+    console.log(`[NotificationService] 📤 Dispatching HTTP push request to Gateway: ${gatewayUrlStr}/internal/push`);
+    console.log(`[NotificationService] Payload: ${payloadBody.substring(0, 150)}...`);
+    
     req.write(payloadBody);
     req.end();
 
