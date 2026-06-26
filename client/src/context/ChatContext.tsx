@@ -616,8 +616,24 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 // Requirement 9: Prevent conversation overwrite race. Merge-by-id logic.
                 setConversations(prev => {
                     const existingMap = new Map(prev.map(c => [c.id, c]));
-                    mappedData.forEach((c: Conversation) => existingMap.set(c.id, c));
-                    return Array.from(existingMap.values()).sort((a, b) => 
+                    mappedData.forEach((incoming: Conversation) => {
+                        const existing = existingMap.get(incoming.id);
+                        if (!existing) {
+                            existingMap.set(incoming.id, incoming);
+                            return;
+                        }
+                        // FIX 4: Merge-preserve — never overwrite a real-time status upgrade
+                        // with a potentially stale server snapshot. Apply mergeMessageStatus
+                        // to the lastMessage so that optimistic ticks survive reconciliation.
+                        const mergedLastMessage = (existing.lastMessage && incoming.lastMessage)
+                            ? mergeMessageStatus(existing.lastMessage as Message, incoming.lastMessage as Partial<Message>) as Conversation['lastMessage']
+                            : (incoming.lastMessage ?? existing.lastMessage);
+                        existingMap.set(incoming.id, {
+                            ...incoming,
+                            lastMessage: mergedLastMessage,
+                        });
+                    });
+                    return Array.from(existingMap.values()).sort((a, b) =>
                         new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
                     );
                 });
@@ -1131,18 +1147,25 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                             return conv;
                         }
 
+                        // FIX 3: Carry delivery metadata when writing lastMessage from incoming socket event.
+                        // Without this, lastMessage starts with status='sent' and no delivered_at,
+                        // even if the DB already has delivered_at set (instant-online recipient).
+                        const incomingLastMsg = shouldUpdateLastMessage ? {
+                            id: msg.id,
+                            content: msg.content,
+                            sender_id: msg.sender_id,
+                            created_at: msg.created_at,
+                            type: msg.type,
+                            event_id: msg.event_id,
+                            delivered_at: msg.delivered_at,
+                            read_at: msg.read_at,
+                            status: (msg.status ?? 'sent') as NonNullable<Conversation['lastMessage']>['status']
+                        } : conv.lastMessage;
+
                         return {
                             ...conv,
                             updated_at: shouldUpdateLastMessage ? msg.created_at : conv.updated_at,
-                            lastMessage: shouldUpdateLastMessage
-                                ? {
-                                    id: msg.id,
-                                    content: msg.content,
-                                    sender_id: msg.sender_id,
-                                    created_at: msg.created_at,
-                                    status: (msg.status ?? 'sent') as NonNullable<Conversation['lastMessage']>['status']
-                                  }
-                                : conv.lastMessage,
+                            lastMessage: incomingLastMsg,
                             unreadCount: shouldIncrementUnread
                                 ? (conv.unreadCount || 0) + newlyAddedCount
                                 : conv.unreadCount
@@ -1211,25 +1234,70 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             // 2. NOW TRY TO UPDATE UI
             const currentMsgs = messagesRef.current[conversationId] || [];
             const targetMsg = currentMsgs.find(m => (messageId && m.id === messageId) || (eventId && m.event_id === eventId));
-            if (!targetMsg) return; // Silent return is fine now, because cache is recorded!
-
-            const trackId = targetMsg.id;
+            const trackId = targetMsg?.id ?? messageId; // FIX 2: fall back to messageId if msg not yet in state
             const nowStr = new Date().toISOString();
+
+            if (targetMsg) {
+                setMessages(prev => {
+                    const current = prev[conversationId] || [];
+                    return {
+                        ...prev,
+                        [conversationId]: current.map(m =>
+                            m.id === trackId ? mergeMessageStatus(m, { delivered_at: nowStr, status: 'delivered' }) : m
+                        )
+                    };
+                });
+            }
+
+            // FIX 2: Update chat list lastMessage unconditionally for the conversation.
+            // Previously this was gated on lastMessage.id === trackId, which fails during
+            // the React commit race where conversationsRef still holds the pre-update snapshot.
+            setConversations(prev => prev.map(c => {
+                if (c.id !== conversationId) return c;
+                const lm = c.lastMessage;
+                if (!lm) return c;
+                // Only upgrade — never downgrade
+                const isMatch = lm.id === trackId || (lm as any).event_id === eventId || lm.id === messageId;
+                if (!isMatch) return c;
+                return { ...c, lastMessage: mergeMessageStatus(lm as Message, { delivered_at: nowStr, status: 'delivered' }) as Conversation['lastMessage'] };
+            }));
+        };
+
+        // FIX 1: Handler for chat:messages_delivered_batch.
+        // The gateway /deliver/batch endpoint emits this to the sender's socket room.
+        // Previously this event had no listener — delivery receipts from batch fast-path were silently dropped.
+        const onBatchDeliveryEvent = ({ conversationId, messageIds, userId: recipientId, delivered_at }: { conversationId: string; messageIds: string[]; userId: string; delivered_at: string }) => {
+            if (!isMounted.current || !Array.isArray(messageIds) || messageIds.length === 0 || !conversationId) return;
+            if (recipientId === user?.id) return; // ignore own echoes
+
+            const nowStr = delivered_at || new Date().toISOString();
+
+            // Filter to IDs not yet upgraded
+            const newIds = messageIds.filter(id => {
+                const tickSet = appliedTicksRef.current.get(id);
+                if (tickSet?.has('delivered') || tickSet?.has('read')) return false;
+                const nextSet = tickSet || new Set<string>();
+                nextSet.add('delivered');
+                appliedTicksRef.current.set(id, nextSet);
+                return true;
+            });
+            if (newIds.length === 0) return;
 
             setMessages(prev => {
                 const current = prev[conversationId] || [];
+                if (!current.some(m => newIds.includes(m.id))) return prev;
                 return {
                     ...prev,
                     [conversationId]: current.map(m =>
-                        m.id === trackId ? mergeMessageStatus(m, { delivered_at: nowStr, status: 'delivered' }) : m
+                        newIds.includes(m.id) ? mergeMessageStatus(m, { delivered_at: nowStr, status: 'delivered' }) : m
                     )
                 };
             });
+            // FIX 2 also applies here — update lastMessage unconditionally if it is in the batch
             setConversations(prev => prev.map(c => {
-                if (c.id === conversationId && c.lastMessage && (c.lastMessage.id === trackId || (c.lastMessage as any).event_id === eventId)) {
-                    return { ...c, lastMessage: mergeMessageStatus(c.lastMessage as Message, { delivered_at: nowStr, status: 'delivered' }) as Conversation['lastMessage'] };
-                }
-                return c;
+                if (c.id !== conversationId || !c.lastMessage) return c;
+                if (!newIds.includes(c.lastMessage.id)) return c;
+                return { ...c, lastMessage: mergeMessageStatus(c.lastMessage as Message, { delivered_at: nowStr, status: 'delivered' }) as Conversation['lastMessage'] };
             }));
         };
 
@@ -1263,11 +1331,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     )
                 };
             });
+            // FIX 2: Remove strict lastMessage.id gate — upgrade unconditionally if it's a match
             setConversations(prev => prev.map(c => {
-                if (c.id === conversationId && c.lastMessage?.id === messageId) {
-                    return { ...c, lastMessage: mergeMessageStatus(c.lastMessage as Message, { read_at: nowStr, delivered_at: nowStr, status: 'read' }) as Conversation['lastMessage'] };
-                }
-                return c;
+                if (c.id !== conversationId || !c.lastMessage) return c;
+                if (c.lastMessage.id !== messageId) return c;
+                return { ...c, lastMessage: mergeMessageStatus(c.lastMessage as Message, { read_at: nowStr, delivered_at: nowStr, status: 'read' }) as Conversation['lastMessage'] };
             }));
         };
 
@@ -1466,6 +1534,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         socket.off('chat:delivery_receipt', onDeliveryEvent);
         socket.on('chat:delivery_receipt', onDeliveryEvent);
 
+        // FIX 1: Subscribe to batch delivery receipts from the gateway /deliver/batch fast-path.
+        // This event was previously emitted by the gateway but never consumed by the client.
+        socket.off('chat:messages_delivered_batch', onBatchDeliveryEvent);
+        socket.on('chat:messages_delivered_batch', onBatchDeliveryEvent);
+
         socket.off('chat:message_read', onReadEvent);
         socket.on('chat:message_read', onReadEvent);
 
@@ -1533,6 +1606,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             socket.off('chat:message_edited', onMessageEdited);
             socket.off('chat:message_delivered', onDeliveryEvent);
             socket.off('chat:delivery_receipt', onDeliveryEvent);
+            socket.off('chat:messages_delivered_batch', onBatchDeliveryEvent);
             socket.off('chat:message_read', onReadEvent);
             socket.off('chat:read_receipt', onBatchReadEvent);
             socket.off('chat:conversation_updated', onConversationUpdated);
