@@ -73,6 +73,36 @@ export function usePushNotifications() {
         throw new Error('Failed to save subscription on server');
       }
 
+      // Phase 1: Dual-Write to new V2 multi-account installation endpoint
+      try {
+        const { getDeviceId } = await import('../utils/deviceId');
+        const deviceId = getDeviceId();
+        
+        await fetch(`${API_URL}/api/notifications/register-installation`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({
+            deviceId,
+            pushEndpoint: sub.endpoint,
+            pushP256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(sub.getKey('p256dh')!))),
+            pushAuth: btoa(String.fromCharCode.apply(null, new Uint8Array(sub.getKey('auth')!))),
+            platform: 'web',
+            type: 'vapid',
+            capabilities: {
+              supports_web_push: true,
+              supports_fcm: false,
+              supports_apns: false,
+              supports_background_sync: 'serviceWorker' in navigator
+            }
+          })
+        });
+      } catch (v2Err) {
+        console.warn('V2 Installation sync failed (non-fatal):', v2Err);
+      }
+
       console.log('Successfully subscribed to push notifications');
     } catch (error) {
       console.error('Push subscription error:', error);

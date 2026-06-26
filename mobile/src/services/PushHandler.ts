@@ -309,6 +309,25 @@ export class PushHandler {
       const response = await apiClient.post(`/notifications/register-native-token`, {
         token, platform: Platform.OS, type, deviceId
       });
+
+      // Phase 1: Dual-Write to new V2 multi-account installation endpoint
+      try {
+        await apiClient.post(`/notifications/register-installation`, {
+          deviceId,
+          pushEndpoint: token,
+          platform: Platform.OS,
+          type,
+          capabilities: {
+            supports_web_push: false,
+            supports_fcm: type === 'fcm',
+            supports_apns: type === 'apns' || type === 'voip',
+            supports_background_sync: true
+          }
+        });
+      } catch (v2Err: any) {
+        console.warn(`[PushHandler] ⚠️ V2 Installation sync failed (non-fatal):`, v2Err.message);
+      }
+
       if (response.data.success) {
         console.log(`[PushHandler] ✅ ${type} token registered successfully | platform:${Platform.OS} | token:${maskedToken}`);
       } else {

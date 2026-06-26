@@ -16,8 +16,7 @@ async function runTargetedMigrations() {
     console.log("Connected to PostgreSQL");
 
     const migrationsToApply = [
-      "186_fix_auto_ledger_uuid_cast.sql",
-      "187_drop_legacy_wallet_triggers.sql"
+      "218_multi_account_shadow_telemetry.sql"
     ];
 
     const migrationsDir = path.join(__dirname, "../database/migrations");

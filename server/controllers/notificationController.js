@@ -254,6 +254,74 @@ const registerNativeToken = async (req, res, next) => {
 };
 
 /**
+ * Registers an installation and associates the current user (Phase 1 V2 Multi-Account)
+ */
+const registerInstallation = async (req, res, next) => {
+  try {
+    const { id: userId } = req.user;
+    const { 
+      deviceId, 
+      pushEndpoint, 
+      pushP256dh, 
+      pushAuth, 
+      platform, 
+      type,
+      capabilities 
+    } = req.body;
+
+    if (!deviceId || !platform || !type) {
+      return res.status(400).json({ error: "deviceId, platform, and type are required" });
+    }
+
+    // 1. Upsert Device Installation
+    const { data: installation, error: instError } = await supabase
+      .from("device_installations")
+      .upsert({
+        device_id: deviceId,
+        push_endpoint: pushEndpoint || null,
+        push_p256dh: pushP256dh || null,
+        push_auth: pushAuth || null,
+        platform,
+        type,
+        capabilities: capabilities || { supports_web_push: false, supports_fcm: false, supports_apns: false, supports_background_sync: false },
+        token_updated_at: new Date().toISOString(),
+        last_seen_at: new Date().toISOString(),
+        last_registration_source: type
+      }, {
+        onConflict: "device_id"
+      })
+      .select("installation_id")
+      .single();
+
+    if (instError) {
+      console.error("[Push V2] Error upserting installation:", instError);
+      throw instError;
+    }
+
+    // 2. Upsert Installation Account Link
+    const { error: accError } = await supabase
+      .from("installation_accounts")
+      .upsert({
+        installation_id: installation.installation_id,
+        user_id: userId,
+        session_state: 'ACTIVE',
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: "installation_id,user_id"
+      });
+
+    if (accError) {
+      console.error("[Push V2] Error upserting installation account:", accError);
+      throw accError;
+    }
+
+    res.json({ success: true, message: "Installation registered successfully", installation_id: installation.installation_id });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
  * Generic endpoint to send a notification from the frontend
  */
 const sendNotification = async (req, res, next) => {
@@ -333,6 +401,7 @@ module.exports = {
   deleteAllNotifications,
   notifyLogin,
   registerNativeToken,
+  registerInstallation,
   sendNotification,
   notifyTeam,
   syncEndpoint,

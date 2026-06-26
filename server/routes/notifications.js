@@ -11,6 +11,7 @@ const {
   deleteAllNotifications,
   notifyLogin,
   registerNativeToken,
+  registerInstallation,
   sendNotification,
   notifyTeam,
   syncEndpoint,
@@ -25,6 +26,7 @@ router.patch("/read-all", markAllAsRead);
 router.post("/subscribe", subscribeToNotifications);
 router.post("/sync-endpoint", syncEndpoint);
 router.post("/register-native-token", registerNativeToken);
+router.post("/register-installation", registerInstallation);
 router.post("/login-notify", notifyLogin);
 router.post("/send", sendNotification);
 router.post("/notify-team", notifyTeam);

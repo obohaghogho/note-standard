@@ -239,12 +239,99 @@ async function sendApnsWithFallback(notification, token, label, platform = 'ios'
 }
 
 /**
+ * Phase 1.5 Shadow Mode: Compute routing decisions using the new multi-account installation model
+ * without actually sending the push notification.
+ */
+async function shadowComputeRouting(params) {
+  try {
+    const { userId, payload } = params;
+    const messageId = payload?.messageId || payload?.sessionId || 'unknown-' + Date.now();
+    
+    // 1. Resolve installations and session states
+    const { data: installations, error } = await supabase
+      .from('installation_accounts')
+      .select('session_state, device_installations(installation_id, type, push_endpoint)')
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('[ShadowMode] Error fetching installations:', error);
+      return;
+    }
+
+    const sockets = presence.getUserSockets(userId);
+    const isOnline = sockets.length > 0;
+    
+    let decision = 'NO_INSTALLATION';
+    let suppressionReason = null;
+    let pushSent = false;
+    let activeCount = 0;
+    let endpointCount = 0;
+    
+    const resolvedInstallations = [];
+
+    if (installations && installations.length > 0) {
+      decision = 'PUSH';
+      
+      installations.forEach(inst => {
+        const state = inst.session_state;
+        // In some Supabase versions, one-to-one joins return an object or array. Handle both.
+        const deviceInst = Array.isArray(inst.device_installations) ? inst.device_installations[0] : inst.device_installations;
+        
+        resolvedInstallations.push({
+          id: deviceInst ? deviceInst.installation_id : null,
+          state: state
+        });
+        
+        if (state === 'ACTIVE') activeCount++;
+        if (deviceInst && deviceInst.push_endpoint) endpointCount++;
+      });
+      
+      if (endpointCount === 0) {
+        decision = 'NO_ENDPOINT';
+        suppressionReason = 'NO_VALID_ENDPOINTS';
+        pushSent = false;
+      } else if (activeCount > 0 && isOnline) {
+        decision = 'SUPPRESSED';
+        suppressionReason = 'ACTIVE_SOCKET_PRESENT';
+        pushSent = false;
+      } else {
+        decision = 'PUSH';
+        pushSent = true;
+      }
+    }
+
+    // Insert into telemetry
+    await supabase.from('push_delivery_telemetry').insert({
+      message_id: messageId,
+      recipient_id: userId,
+      resolved_installations: resolvedInstallations,
+      socket_present: isOnline,
+      push_sent: pushSent,
+      reason: suppressionReason || decision,
+      routing_engine_version: 'v2-shadow',
+      routing_decision: decision,
+      suppression_reason: suppressionReason,
+      installation_count: installations ? installations.length : 0,
+      active_socket_count: sockets.length,
+      endpoint_count: endpointCount
+    });
+    
+    console.log(`[ShadowMode] Computed routing for ${userId} | Decision: ${decision} | Inst: ${installations?.length || 0} | EP: ${endpointCount}`);
+  } catch (err) {
+    console.error('[ShadowMode] Error:', err.message);
+  }
+}
+
+/**
  * Sends high-priority push notifications to wake up native apps
  * @param {Object} params - { userId, title, body, payload }
  */
 async function sendCallPush(params) {
   if (process.env.PUSH_ENABLED === 'false') return;
   const { userId, title, body, payload } = params;
+  
+  // Phase 1.5: Shadow Mode Execution
+  shadowComputeRouting(params).catch(e => console.error(e));
   
   try {
     // 1. Fetch native tokens for the user
@@ -423,6 +510,9 @@ async function sendCallPush(params) {
 async function sendGenericPush(params) {
   if (process.env.PUSH_ENABLED === 'false') return;
   const { userId, title, body, payload } = params;
+
+  // Phase 1.5: Shadow Mode Execution
+  shadowComputeRouting(params).catch(e => console.error(e));
 
   try {
     const isOnline = presence.isUserOnline(userId);
