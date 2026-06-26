@@ -75,22 +75,6 @@ function mergeMessageStatus(oldMsg: Msg | ConvLastMessage, newMsg: Partial<Msg>)
   };
 }
 
-// State mutation helpers (mirror ChatContext setMessages / setConversations patterns)
-function applyDeliveryToMessages(
-  messages: Record<string, Msg[]>,
-  conversationId: string,
-  messageId: string,
-  nowStr: string
-): Record<string, Msg[]> {
-  const current = messages[conversationId] || [];
-  return {
-    ...messages,
-    [conversationId]: current.map(m =>
-      m.id === messageId ? mergeMessageStatus(m, { delivered_at: nowStr, status: 'delivered' }) as Msg : m
-    ),
-  };
-}
-
 function applyDeliveryToConversations(
   conversations: Conv[],
   conversationId: string,
@@ -262,7 +246,6 @@ describe('Fix 2 — lastMessage unconditional update (race condition)', () => {
   test('delivery event updates chat list even when conversationRef holds stale lastMessage id', () => {
     // Simulate race: conversation state has old lastMessage.id but delivery event
     // arrives with the new message's id. Without Fix 2, this silently drops.
-    const staleMsgId = 'msg-000';
     const newMsgId = MSG_ID;
     let convs: Conv[] = [{
       id: CONV_ID,

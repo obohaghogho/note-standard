@@ -739,7 +739,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         const pendingPreview = {
                             id: `temp-${intent.event_id}`,
                             content: `⏳ ${intent.payload.content}`,
-                            sender_id: conv.members?.find((m: any) => m)?.user_id ?? '',
+                            sender_id: conv.members?.find((m: { user_id: string }) => m)?.user_id ?? '',
                             created_at: new Date(intentTime).toISOString(),
                             type: (intent.payload.type || 'text') as 'text' | 'image' | 'video' | 'audio' | 'file'
                         };
@@ -1257,7 +1257,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const lm = c.lastMessage;
                 if (!lm) return c;
                 // Only upgrade — never downgrade
-                const isMatch = lm.id === trackId || (lm as any).event_id === eventId || lm.id === messageId;
+                const isMatch = lm.id === trackId || ('event_id' in lm ? (lm as { event_id?: string }).event_id === eventId : false) || lm.id === messageId;
                 if (!isMatch) return c;
                 return { ...c, lastMessage: mergeMessageStatus(lm as Message, { delivered_at: nowStr, status: 'delivered' }) as Conversation['lastMessage'] };
             }));
@@ -1775,7 +1775,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                                 status: canonicalMessage.status,
                                 delivered_at: canonicalMessage.delivered_at,
                                 read_at: canonicalMessage.read_at
-                            } as any
+                            } as NonNullable<Conversation['lastMessage']>
                         };
                     }
                     return conv;
@@ -1885,7 +1885,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     created_at: optimisticMessage.created_at,
                     type: optimisticMessage.type,
                     status: optimisticMessage.status
-                } as any,
+                } as NonNullable<Conversation['lastMessage']>,
                 last_message: {
                     id: optimisticMessage.id,
                     event_id: optimisticMessage.event_id,
@@ -1894,7 +1894,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     created_at: optimisticMessage.created_at,
                     type: optimisticMessage.type,
                     status: optimisticMessage.status
-                } as any
+                } as unknown as NonNullable<Conversation['lastMessage']>
             };
         }));
 
