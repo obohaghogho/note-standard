@@ -3,6 +3,7 @@ const apn = require('apn');
 const { createClient } = require('@supabase/supabase-js');
 const path = require('path');
 const webpush = require('web-push');
+const presence = require('../events/presence');
 
 // Initialize Supabase for fetching tokens with Keep-Alive to prevent TCP Port Exhaustion
 const supabase = createClient(
@@ -261,11 +262,13 @@ async function sendCallPush(params) {
     if (error && webError) throw error || webError;
 
     if ((!tokens || tokens.length === 0) && (!webSubscriptions || webSubscriptions.length === 0)) {
-      console.log(`[PushService] No native tokens or web subscriptions found for user ${userId}`);
+      console.log(`[FORENSIC][PushService] ⚠️ CALL PUSH SKIPPED for user ${userId}: No valid native or web push subscriptions found.`);
       return;
     }
 
-    console.log(`[PushService] 📡 [DUAL-DELIVERY] Signaling user ${userId}`);
+    const isOnline = presence.isUserOnline(userId);
+    const sockets = presence.getUserSockets(userId);
+    console.log(`[FORENSIC][PushService] 📡 [DUAL-DELIVERY] Signaling user ${userId}. Online: ${isOnline}, Sockets: ${sockets.length} ([${sockets.join(',')}])`);
     console.log(`[PushService] 📦 Payload:`, JSON.stringify(payload, null, 2));
 
     const pushPromises = [];
@@ -422,6 +425,10 @@ async function sendGenericPush(params) {
   const { userId, title, body, payload } = params;
 
   try {
+    const isOnline = presence.isUserOnline(userId);
+    const sockets = presence.getUserSockets(userId);
+    console.log(`[FORENSIC][PushService] Preparing push for user ${userId}. Online: ${isOnline}, Sockets: ${sockets.length} ([${sockets.join(',')}])`);
+
     // --- 1. Native tokens (FCM / APNs) ---
     const { data: tokens, error } = await supabase
       .from('native_device_tokens')
@@ -577,7 +584,12 @@ async function sendGenericPush(params) {
     }
 
     await Promise.all(nativePromises.filter(Boolean));
-    console.log(`[PushService] ✅ Push completed for user ${userId}.`);
+    
+    if (nativePromises.length === 0) {
+      console.log(`[FORENSIC][PushService] ⚠️ PUSH SKIPPED for user ${userId}: No valid native or web push subscriptions found.`);
+    } else {
+      console.log(`[FORENSIC][PushService] ✅ Push dispatched to ${nativePromises.length} endpoint(s) for user ${userId}.`);
+    }
   } catch (err) {
     console.error('[PushService] sendGenericPush error:', err.message);
   }

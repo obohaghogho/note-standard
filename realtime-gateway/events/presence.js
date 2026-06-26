@@ -23,6 +23,11 @@ function isUserOnline(userId) {
   return sockets && sockets.size > 0 && userVisibility.get(userId) !== false;
 }
 
+function getUserSockets(userId) {
+  const sockets = onlineUsers.get(userId);
+  return sockets ? Array.from(sockets) : [];
+}
+
 function markUserOnline(userId, socketId) {
   if (!onlineUsers.has(userId)) {
     onlineUsers.set(userId, new Set());
@@ -138,3 +143,4 @@ module.exports = (io, socket) => {
 
 module.exports.isUserOnline = isUserOnline;
 module.exports.getOnlineUserIds = getOnlineUserIds;
+module.exports.getUserSockets = getUserSockets;

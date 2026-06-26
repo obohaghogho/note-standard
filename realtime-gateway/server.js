@@ -461,13 +461,29 @@ io.on('connection', async (socket) => {
   const sessionId = socket.sessionId;
   const deviceId = socket.deviceId;
 
-  // Soft Socket Replacement
+  // Soft Socket Replacement (by sessionId)
   const sessionRoom = `session:${sessionId}`;
   const existingSockets = await io.in(sessionRoom).fetchSockets();
   if (existingSockets.length > 0) {
     console.log(`[Socket.IO] ♻️ Soft replacing existing socket for session ${sessionId}`);
     existingSockets.forEach(s => {
       if (s.id !== socket.id) {
+        s.emit('session:replaced');
+        s.disconnect(true);
+      }
+    });
+  }
+
+  // Multi-Account & Stale Session Device Cleanup
+  // If a new connection arrives from the same device, but it has a different sessionId,
+  // it means the user either switched accounts or re-logged in. We must disconnect the old
+  // sockets to prevent stale presence, without breaking multi-tab for the active session.
+  if (deviceId) {
+    const deviceRoom = `device:${deviceId}`;
+    const deviceSockets = await io.in(deviceRoom).fetchSockets();
+    deviceSockets.forEach(s => {
+      if (s.id !== socket.id && !s.rooms.has(`session:${sessionId}`)) {
+        console.log(`[Socket.IO] ♻️ Disconnecting stale socket for previous session on device ${deviceId}`);
         s.emit('session:replaced');
         s.disconnect(true);
       }
