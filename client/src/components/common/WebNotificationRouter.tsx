@@ -164,14 +164,44 @@ export const WebNotificationRouter: React.FC = () => {
             const sub = await reg.pushManager.getSubscription();
             if (!sub) return;
             const apiBase = import.meta.env.VITE_API_URL || '';
-            return fetch(`${apiBase}/api/notifications/subscribe`, {
+            const token = activeAccount.tokens.access_token;
+
+            // Legacy re-register
+            await fetch(`${apiBase}/api/notifications/subscribe`, {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${activeAccount.tokens.access_token}`
-              },
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
               body: JSON.stringify({ subscription: sub })
             });
+
+            // V2 re-register — link this subscription to the new active account
+            try {
+              const { getDeviceId } = await import('../../utils/deviceId');
+              const deviceId = await getDeviceId();
+              const subJson = sub.toJSON();
+              console.log('[ACCOUNT_FORENSIC] [V2] Re-registering installation for switched account...');
+              const v2Resp = await fetch(`${apiBase}/api/notifications/register-installation`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({
+                  deviceId,
+                  pushEndpoint: sub.endpoint,
+                  pushP256dh: subJson.keys?.p256dh || null,
+                  pushAuth: subJson.keys?.auth || null,
+                  platform: 'web',
+                  type: 'vapid',
+                  capabilities: {
+                    supports_web_push: true,
+                    supports_fcm: false,
+                    supports_apns: false,
+                    supports_background_sync: 'serviceWorker' in navigator
+                  }
+                })
+              });
+              const v2Data = await v2Resp.json();
+              console.log('[ACCOUNT_FORENSIC] [V2] Installation registered. installation_id:', v2Data?.installation_id);
+            } catch (v2Err: any) {
+              console.error('[ACCOUNT_FORENSIC] [V2] Installation re-register FAILED (non-fatal):', v2Err.message);
+            }
           })
           .then(() => console.log('[ACCOUNT_FORENSIC] PUSH_RE_REGISTERED for new account'))
           .catch(e => console.warn('[ACCOUNT_FORENSIC] Push re-registration non-fatal:', e.message));

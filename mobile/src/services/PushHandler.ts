@@ -298,46 +298,52 @@ export class PushHandler {
   }
 
   static async registerTokenWithBackend(token: string, type: 'fcm' | 'voip' | 'apns', retryCount = 0) {
-    // Phase 8: Audit log — mask token to avoid leaking credentials in logs.
     const maskedToken = token && token.length > 10
       ? `${token.substring(0, 6)}...${token.substring(token.length - 4)}`
       : '(empty)';
     console.log(`[PushHandler] 📡 Registering ${type} token | platform:${Platform.OS} | len:${token?.length ?? 0} | token:${maskedToken} | attempt:${retryCount + 1}`);
+    
+    const { getDeviceId } = require('../utils/notifications');
+    const deviceId = await getDeviceId();
+    console.log(`[PushHandler] 🔑 Device ID resolved: ${deviceId}`);
+
+    // Step 1: Legacy token registration
     try {
-      const { getDeviceId } = require('../utils/notifications');
-      const deviceId = await getDeviceId();
       const response = await apiClient.post(`/notifications/register-native-token`, {
         token, platform: Platform.OS, type, deviceId
       });
-
-      // Phase 1: Dual-Write to new V2 multi-account installation endpoint
-      try {
-        await apiClient.post(`/notifications/register-installation`, {
-          deviceId,
-          pushEndpoint: token,
-          platform: Platform.OS,
-          type,
-          capabilities: {
-            supports_web_push: false,
-            supports_fcm: type === 'fcm',
-            supports_apns: type === 'apns' || type === 'voip',
-            supports_background_sync: true
-          }
-        });
-      } catch (v2Err: any) {
-        console.warn(`[PushHandler] ⚠️ V2 Installation sync failed (non-fatal):`, v2Err.message);
-      }
-
       if (response.data.success) {
-        console.log(`[PushHandler] ✅ ${type} token registered successfully | platform:${Platform.OS} | token:${maskedToken}`);
+        console.log(`[PushHandler] ✅ Legacy token registered successfully | token:${maskedToken}`);
       } else {
         throw new Error(response.data.error || 'Unknown error');
       }
     } catch (err: any) {
-      console.error(`[PushHandler] ❌ ${type} token registration failed | attempt:${retryCount + 1} | error:${err.message}`);
+      console.error(`[PushHandler] ❌ Legacy token registration failed | attempt:${retryCount + 1} | error:${err.message}`);
       if (retryCount < 3 && (!err.response || err.response.status >= 500)) {
-          setTimeout(() => this.registerTokenWithBackend(token, type, retryCount + 1), 5000);
+        setTimeout(() => this.registerTokenWithBackend(token, type, retryCount + 1), 5000);
       }
+    }
+
+    // Step 2: V2 Installation dual-write — runs independently of Step 1's success/failure
+    try {
+      console.log(`[PushHandler] 📡 [V2] Dual-writing installation | deviceId:${deviceId} | type:${type}`);
+      const v2Response = await apiClient.post(`/notifications/register-installation`, {
+        deviceId,
+        pushEndpoint: token,
+        platform: Platform.OS,
+        type,
+        capabilities: {
+          supports_web_push: false,
+          supports_fcm: type === 'fcm',
+          supports_apns: type === 'apns' || type === 'voip',
+          supports_background_sync: true
+        }
+      });
+      console.log(`[PushHandler] ✅ [V2] Installation registered. installation_id: ${v2Response.data?.installation_id}`);
+    } catch (v2Err: any) {
+      const status = v2Err.response?.status;
+      const data = v2Err.response?.data;
+      console.error(`[PushHandler] ❌ [V2] Installation sync FAILED | status:${status} | error:${v2Err.message} | response:${JSON.stringify(data)}`);
     }
   }
 

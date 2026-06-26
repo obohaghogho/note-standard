@@ -445,6 +445,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }).catch(err => {
               console.warn('[Auth] Background device registration failed:', err.message);
             });
+
+            // V2 Boot-Sync: Register/update this browser's push installation in the
+            // new multi-account tables. Runs on every SIGNED_IN and account switch.
+            // This is the critical path that seeds the V2 schema for existing subscribers
+            // without requiring any user action.
+            if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator &&
+                typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+              navigator.serviceWorker.ready.then(async (reg) => {
+                const sub = await reg.pushManager.getSubscription();
+                if (!sub) return;
+                console.log(`[Auth] [V2 Boot-Sync] Syncing installation for ${currentUser.email}...`);
+                const subJson = sub.toJSON();
+                const resp = await fetch(`${apiBase}/api/notifications/register-installation`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${newSession.access_token}`
+                  },
+                  body: JSON.stringify({
+                    deviceId,
+                    pushEndpoint: sub.endpoint,
+                    pushP256dh: (subJson.keys as any)?.p256dh || null,
+                    pushAuth: (subJson.keys as any)?.auth || null,
+                    platform: 'web',
+                    type: 'vapid',
+                    capabilities: {
+                      supports_web_push: true,
+                      supports_fcm: false,
+                      supports_apns: false,
+                      supports_background_sync: true
+                    }
+                  })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                  console.log(`[Auth] [V2 Boot-Sync] ✅ installation_id: ${data.installation_id}`);
+                } else {
+                  console.error(`[Auth] [V2 Boot-Sync] ❌ status:${resp.status} error:${data?.error}`);
+                }
+              }).catch(e => console.warn('[Auth] [V2 Boot-Sync] non-fatal:', e.message));
+            }
           }
 
           if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || wasSwitching) {

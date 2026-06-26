@@ -259,6 +259,10 @@ const registerNativeToken = async (req, res, next) => {
 const registerInstallation = async (req, res, next) => {
   try {
     const { id: userId } = req.user;
+    
+    console.log(`[FORENSIC] registerInstallation CALLED by user ${userId}`);
+    console.log(`[FORENSIC] Payload:`, JSON.stringify(req.body, null, 2));
+    
     const { 
       deviceId, 
       pushEndpoint, 
@@ -270,10 +274,12 @@ const registerInstallation = async (req, res, next) => {
     } = req.body;
 
     if (!deviceId || !platform || !type) {
+      console.error(`[FORENSIC] Missing required fields. deviceId: ${deviceId}, platform: ${platform}, type: ${type}`);
       return res.status(400).json({ error: "deviceId, platform, and type are required" });
     }
 
     // 1. Upsert Device Installation
+    console.log(`[FORENSIC] Upserting device_installations for deviceId: ${deviceId}`);
     const { data: installation, error: instError } = await supabase
       .from("device_installations")
       .upsert({
@@ -294,11 +300,14 @@ const registerInstallation = async (req, res, next) => {
       .single();
 
     if (instError) {
-      console.error("[Push V2] Error upserting installation:", instError);
+      console.error("[FORENSIC][Push V2] Error upserting device_installations:", instError);
       throw instError;
     }
+    
+    console.log(`[FORENSIC] device_installations upsert SUCCESS. installation_id: ${installation.installation_id}`);
 
     // 2. Upsert Installation Account Link
+    console.log(`[FORENSIC] Upserting installation_accounts for installation_id: ${installation.installation_id}, user_id: ${userId}`);
     const { error: accError } = await supabase
       .from("installation_accounts")
       .upsert({
@@ -311,12 +320,14 @@ const registerInstallation = async (req, res, next) => {
       });
 
     if (accError) {
-      console.error("[Push V2] Error upserting installation account:", accError);
+      console.error("[FORENSIC][Push V2] Error upserting installation_accounts:", accError);
       throw accError;
     }
 
+    console.log(`[FORENSIC] installation_accounts upsert SUCCESS`);
     res.json({ success: true, message: "Installation registered successfully", installation_id: installation.installation_id });
   } catch (err) {
+    console.error("[FORENSIC] registerInstallation CATCH BLOCK:", err.message);
     next(err);
   }
 };
