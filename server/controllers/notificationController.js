@@ -296,7 +296,7 @@ const registerInstallation = async (req, res, next) => {
         last_registration_source: type,
         endpoint_status: 'VALID',
         failure_count: 0,
-        last_validation_reason: reason || 'BOOT_SYNC'
+        last_validation_reason: reason || 'SIGNED_IN'
       }, {
         onConflict: "device_id"
       })

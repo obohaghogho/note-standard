@@ -332,6 +332,7 @@ export class PushHandler {
         pushEndpoint: token,
         platform: Platform.OS,
         type,
+        reason: 'MOBILE_BOOT',
         capabilities: {
           supports_web_push: false,
           supports_fcm: type === 'fcm',

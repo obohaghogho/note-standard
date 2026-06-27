@@ -471,7 +471,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     pushAuth: (subJson.keys as any)?.auth || null,
                     platform: 'web',
                     type: 'vapid',
-                    reason: wasSwitching ? 'ACCOUNT_SWITCH' : (event === 'INITIAL_SESSION' ? 'EXISTING_USER_BOOT' : 'LOGIN'),
+                    reason: wasSwitching ? 'ACCOUNT_SWITCH' : (event === 'INITIAL_SESSION' ? 'INITIAL_SESSION' : 'SIGNED_IN'),
                     capabilities: {
                       supports_web_push: true,
                       supports_fcm: false,

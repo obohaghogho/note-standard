@@ -189,6 +189,7 @@ export const WebNotificationRouter: React.FC = () => {
                   pushAuth: subJson.keys?.auth || null,
                   platform: 'web',
                   type: 'vapid',
+                  reason: 'ACCOUNT_SWITCH',
                   capabilities: {
                     supports_web_push: true,
                     supports_fcm: false,

@@ -91,6 +91,7 @@ export function usePushNotifications() {
             pushAuth: btoa(String.fromCharCode.apply(null, new Uint8Array(sub.getKey('auth')!))),
             platform: 'web',
             type: 'vapid',
+            reason: 'SIGNED_IN',
             capabilities: {
               supports_web_push: true,
               supports_fcm: false,

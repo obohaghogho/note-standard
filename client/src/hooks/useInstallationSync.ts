@@ -66,7 +66,7 @@ export function useInstallationSync(userId: string | null | undefined) {
               supports_apns: false,
               supports_background_sync: 'serviceWorker' in navigator
             },
-            reason: 'BOOT_SYNC'
+            reason: 'WEB_BOOT'
           })
         });
 
