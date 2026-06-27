@@ -67,10 +67,10 @@ export const ContactPage = () => {
                                         <h3 className="text-lg font-semibold text-white/80">Alternate Email</h3>
                                     </div>
                                     <a 
-                                        href="mailto:obohoboh107@gmail.com" 
+                                        href="mailto:admin.notestandard@gmail.com" 
                                         className="text-lg text-primary/80 hover:text-primary hover:underline transition-colors block ml-8"
                                     >
-                                        obohoboh107@gmail.com
+                                        admin.notestandard@gmail.com
                                     </a>
                                 </div>
                             </div>

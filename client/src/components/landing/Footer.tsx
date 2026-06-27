@@ -44,7 +44,7 @@ export const Footer = () => {
                         <div className="flex flex-col gap-1">
                             <p>Address: 10 Winnie Okia Street</p>
                             <p>Email: <a href="mailto:admin@notestandard.com" className="hover:text-white transition-colors">admin@notestandard.com</a></p>
-                            <p>Alt Email: <a href="mailto:obohoboh107@gmail.com" className="hover:text-white transition-colors">obohoboh107@gmail.com</a></p>
+                            <p>Alt Email: <a href="mailto:admin.notestandard@gmail.com" className="hover:text-white transition-colors">admin.notestandard@gmail.com</a></p>
                         </div>
                     </div>
                     <div className="flex flex-wrap gap-4 justify-center md:justify-end">
