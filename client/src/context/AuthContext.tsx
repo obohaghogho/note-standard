@@ -420,7 +420,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // or USER_UPDATED instead, so the switched-to account never got a session_id,
           // causing the socket to connect with a stale/missing session.
           // Now we also register on any switch (wasSwitching) or initial sign-in.
-          const shouldRegisterSession = event === 'SIGNED_IN' || wasSwitching;
+          // JOURNEY 3 FIX: INITIAL_SESSION covers existing/inactive users who never logged out.
+          const shouldRegisterSession = event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || wasSwitching;
           if (shouldRegisterSession) {
             const WEB_DEVICE_KEY = 'notestandard_web_device_id';
             let deviceId = localStorage.getItem(WEB_DEVICE_KEY);
@@ -470,6 +471,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     pushAuth: (subJson.keys as any)?.auth || null,
                     platform: 'web',
                     type: 'vapid',
+                    reason: wasSwitching ? 'ACCOUNT_SWITCH' : (event === 'INITIAL_SESSION' ? 'EXISTING_USER_BOOT' : 'LOGIN'),
                     capabilities: {
                       supports_web_push: true,
                       supports_fcm: false,
