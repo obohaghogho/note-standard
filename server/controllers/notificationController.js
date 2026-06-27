@@ -270,7 +270,8 @@ const registerInstallation = async (req, res, next) => {
       pushAuth, 
       platform, 
       type,
-      capabilities 
+      capabilities,
+      reason 
     } = req.body;
 
     if (!deviceId || !platform || !type) {
@@ -279,7 +280,7 @@ const registerInstallation = async (req, res, next) => {
     }
 
     // 1. Upsert Device Installation
-    console.log(`[FORENSIC] Upserting device_installations for deviceId: ${deviceId}`);
+    console.log(`[FORENSIC] Upserting device_installations for deviceId: ${deviceId} | Reason: ${reason || 'BOOT_SYNC'}`);
     const { data: installation, error: instError } = await supabase
       .from("device_installations")
       .upsert({
@@ -292,7 +293,10 @@ const registerInstallation = async (req, res, next) => {
         capabilities: capabilities || { supports_web_push: false, supports_fcm: false, supports_apns: false, supports_background_sync: false },
         token_updated_at: new Date().toISOString(),
         last_seen_at: new Date().toISOString(),
-        last_registration_source: type
+        last_registration_source: type,
+        endpoint_status: 'VALID',
+        failure_count: 0,
+        last_validation_reason: reason || 'BOOT_SYNC'
       }, {
         onConflict: "device_id"
       })

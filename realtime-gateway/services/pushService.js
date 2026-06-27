@@ -250,7 +250,7 @@ async function computeV2Routing(params) {
     // 1. Resolve installations and session states
     const { data: installations, error } = await supabase
       .from('installation_accounts')
-      .select('session_state, device_installations(installation_id, type, push_endpoint, platform, push_p256dh, push_auth, capabilities, device_id)')
+      .select('session_state, device_installations(installation_id, type, push_endpoint, platform, push_p256dh, push_auth, capabilities, device_id, endpoint_status)')
       .eq('user_id', userId);
 
     if (error) {
@@ -285,7 +285,7 @@ async function computeV2Routing(params) {
         
         if (state === 'ACTIVE' || state === 'BACKGROUND') {
           activeCount++;
-          if (deviceInst && deviceInst.push_endpoint) {
+          if (deviceInst && deviceInst.push_endpoint && deviceInst.endpoint_status !== 'INVALID') {
             endpointCount++;
             pushTargets.push(deviceInst);
           }
@@ -548,8 +548,11 @@ async function sendCallPush(params) {
           .catch(err => {
             logPushMetric({ platform: 'web', push_type: 'vapid', status: 'failed', error_code: String(err.statusCode || err.message), user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
             if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 400 || err.statusCode === 403) {
-              console.log(`[PushService] 🗑 Removed invalid web push sub: ${sub.endpoint.substring(0, 30)}... (Status: ${err.statusCode})`);
-              logPushMetric({ platform: 'web', push_type: 'vapid', status: 'invalid_removed', error_code: String(err.statusCode), user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
+              console.log(`[FORENSIC][PushService] ⚠️ Marking web push sub INVALID: ${sub.endpoint.substring(0, 30)}... (Status: ${err.statusCode})`);
+              logPushMetric({ platform: 'web', push_type: 'vapid', status: 'invalid_marked', error_code: String(err.statusCode), user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
+              
+              // We don't delete legacy subscriptions instantly here anymore, but legacy doesn't have endpoint_status. 
+              // We will just delete legacy as it's legacy.
               return supabase.from("push_subscriptions")
                 .delete()
                 .match({ user_id: userId, endpoint: sub.endpoint });
@@ -652,8 +655,16 @@ async function dispatchV2Push(params, pushTargets, isCall = false) {
           .then(() => logPushMetric({ platform: 'web', push_type: 'vapid', status: 'accepted', user_id: userId, device_id: t.device_id, endpoint_hash: endpointHash }))
           .catch(err => {
             logPushMetric({ platform: 'web', push_type: 'vapid', status: 'failed', error_code: String(err.statusCode || err.message), user_id: userId, device_id: t.device_id, endpoint_hash: endpointHash });
-            if (err.statusCode === 410 || err.statusCode === 404) {
-               supabase.from('device_installations').delete().eq('push_endpoint', t.push_endpoint).then();
+            if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 400 || err.statusCode === 403) {
+               console.log(`[FORENSIC][V2Router] ⚠️ Marking V2 Installation INVALID (${t.device_id}): ${t.push_endpoint.substring(0, 30)}... (Status: ${err.statusCode})`);
+               supabase.from('device_installations')
+                 .update({ 
+                   endpoint_status: 'INVALID',
+                   failure_reason: String(err.statusCode),
+                   last_validation_reason: 'PROVIDER_REJECTED',
+                   last_push_failure: new Date().toISOString()
+                 })
+                 .eq('push_endpoint', t.push_endpoint).then();
             }
           })
       );

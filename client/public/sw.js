@@ -6,12 +6,14 @@
  */
 
 self.addEventListener('install', (event) => {
+    console.log(`[FORENSIC][SW] INSTALL event at ${new Date().toISOString()}`);
     // Force immediate update to bypass aggressive caching
     self.skipWaiting();
 });
 // Cache Bust Timestamp: 2026-06-21T09:00:00 — v6: fast-path delivery via gateway (eliminates cold-start delay)
 
 self.addEventListener('activate', (event) => {
+    console.log(`[FORENSIC][SW] ACTIVATE event at ${new Date().toISOString()}`);
     event.waitUntil(
         caches.keys().then(keys =>
             Promise.all(keys.map(key => caches.delete(key)))
@@ -31,7 +33,7 @@ self.addEventListener('message', (event) => {
 
 // Handle Push Notifications
 self.addEventListener('push', (event) => {
-    console.log('[SW] Push Received');
+    console.log(`[FORENSIC][SW] PUSH RECEIVED at ${new Date().toISOString()}`);
     
     let data = {};
     if (event.data) {
@@ -249,7 +251,7 @@ self.addEventListener('push', (event) => {
 
 // Handle Notification Clicks
 self.addEventListener('notificationclick', (event) => {
-    console.log('[SW] Notification Clicked:', event.action);
+    console.log(`[FORENSIC][SW] NOTIFICATIONCLICK event at ${new Date().toISOString()} | Action: ${event.action}`);
     event.notification.close();
 
     if (event.action === 'close') return;
@@ -292,14 +294,17 @@ self.addEventListener('notificationclick', (event) => {
 
 // Handle Push Subscription Change (Token Rotation)
 self.addEventListener('pushsubscriptionchange', (event) => {
-    console.log('[SW] pushsubscriptionchange fired: Token rotated by browser');
+    const oldEndpoint = event.oldSubscription ? event.oldSubscription.endpoint.substring(0, 30) + '...' : 'UNKNOWN';
+    console.log(`[FORENSIC][SW] PUSHSUBSCRIPTIONCHANGE event at ${new Date().toISOString()}`);
+    console.log(`[FORENSIC][SW] Old endpoint: ${oldEndpoint}`);
     
     // The browser has invalidated the old token. We must resubscribe and 
     // send the new token to the backend, otherwise we will get 410 Gone errors.
     event.waitUntil(
         self.registration.pushManager.subscribe(event.oldSubscription.options)
             .then(subscription => {
-                console.log('[SW] Successfully resubscribed. Sending to backend...', subscription.endpoint);
+                const newEndpoint = subscription ? subscription.endpoint.substring(0, 30) + '...' : 'UNKNOWN';
+                console.log(`[FORENSIC][SW] Successfully resubscribed. New endpoint: ${newEndpoint}`);
                 
                 // Read auth token from IndexedDB to send back to server
                 return new Promise((resolve) => {
