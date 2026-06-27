@@ -467,8 +467,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   body: JSON.stringify({
                     deviceId,
                     pushEndpoint: sub.endpoint,
-                    pushP256dh: (subJson.keys as any)?.p256dh || null,
-                    pushAuth: (subJson.keys as any)?.auth || null,
+                    pushP256dh: subJson.keys?.["p256dh"] || null,
+                    pushAuth: subJson.keys?.["auth"] || null,
                     platform: 'web',
                     type: 'vapid',
                     reason: wasSwitching ? 'ACCOUNT_SWITCH' : (event === 'INITIAL_SESSION' ? 'INITIAL_SESSION' : 'SIGNED_IN'),

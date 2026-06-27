@@ -43,7 +43,7 @@ export const Feed = () => {
 
     // ─── Sort helper ─────────────────────────────────────────────────────────
     const applySortAndFilter = useCallback((raw: FeedNoteData[], s: SortOption, tag: string | null): FeedNoteData[] => {
-        let filtered = tag ? raw.filter(n => n.tags?.includes(tag)) : raw;
+        const filtered = tag ? raw.filter(n => n.tags?.includes(tag)) : raw;
 
         switch (s) {
             case 'most_liked':

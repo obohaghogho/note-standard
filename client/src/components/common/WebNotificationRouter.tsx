@@ -200,8 +200,8 @@ export const WebNotificationRouter: React.FC = () => {
               });
               const v2Data = await v2Resp.json();
               console.log('[ACCOUNT_FORENSIC] [V2] Installation registered. installation_id:', v2Data?.installation_id);
-            } catch (v2Err: any) {
-              console.error('[ACCOUNT_FORENSIC] [V2] Installation re-register FAILED (non-fatal):', v2Err.message);
+            } catch (v2Err) {
+              console.error('[ACCOUNT_FORENSIC] [V2] Installation re-register FAILED (non-fatal):', v2Err instanceof Error ? v2Err.message : String(v2Err));
             }
           })
           .then(() => console.log('[ACCOUNT_FORENSIC] PUSH_RE_REGISTERED for new account'))

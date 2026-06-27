@@ -77,7 +77,7 @@ export const FeedNoteCard = ({ note, onCommentClick, onTagClick }: FeedNoteCardP
             if (!res.ok) throw new Error('Failed to toggle like');
             const data = await res.json();
             setLiked(data.liked);
-        } catch (error) {
+        } catch {
             setLiked(previousLiked);
             setLikesCount(previousCount);
             toast.error('Failed to update like');

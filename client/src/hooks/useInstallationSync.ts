@@ -77,8 +77,8 @@ export function useInstallationSync(userId: string | null | undefined) {
           const errData = await resp.json().catch(() => ({}));
           console.error('[V2 Sync] ❌ Server rejected sync. status:', resp.status, 'error:', errData?.error);
         }
-      } catch (err: any) {
-        console.error('[V2 Sync] ❌ Boot-time sync failed:', err.message);
+      } catch (err) {
+        console.error('[V2 Sync] ❌ Boot-time sync failed:', err instanceof Error ? err.message : String(err));
       }
     };
 
