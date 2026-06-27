@@ -605,6 +605,33 @@ const logout = async (req, res) => {
     const { session_id } = req.body;
     
     if (session_id) {
+      // 1. V2 Push Migration: Set installation_accounts to LOGGED_OUT
+      const { data: session } = await supabase
+        .from('user_sessions')
+        .select('device_id, user_id')
+        .eq('session_id', session_id)
+        .single();
+
+      if (session && session.device_id) {
+        const { data: installation } = await supabase
+          .from('device_installations')
+          .select('installation_id')
+          .eq('device_id', session.device_id)
+          .single();
+
+        if (installation) {
+          await supabase.from('installation_accounts').update({
+            session_state: 'LOGGED_OUT',
+            updated_at: new Date()
+          }).match({
+            installation_id: installation.installation_id,
+            user_id: session.user_id
+          });
+          console.log(`[Push V2] Marked installation ${installation.installation_id} as LOGGED_OUT for user ${session.user_id}`);
+        }
+      }
+
+      // 2. Revoke the standard session
       await supabase.from('user_sessions').update({ 
         token_state: 'revoked', 
         revoked_at: new Date() 

@@ -265,6 +265,7 @@ async function computeV2Routing(params) {
     let suppressionReason = null;
     let pushSent = false;
     let activeCount = 0;
+    let loggedOutCount = 0;
     let endpointCount = 0;
     
     const resolvedInstallations = [];
@@ -282,14 +283,22 @@ async function computeV2Routing(params) {
           state: state
         });
         
-        if (state === 'ACTIVE') activeCount++;
-        if (deviceInst && deviceInst.push_endpoint) {
-          endpointCount++;
-          pushTargets.push(deviceInst);
+        if (state === 'ACTIVE' || state === 'BACKGROUND') {
+          activeCount++;
+          if (deviceInst && deviceInst.push_endpoint) {
+            endpointCount++;
+            pushTargets.push(deviceInst);
+          }
+        } else if (state === 'LOGGED_OUT') {
+          loggedOutCount++;
         }
       });
       
-      if (endpointCount === 0) {
+      if (loggedOutCount === installations.length) {
+        decision = 'NO_ACTIVE_SESSION';
+        suppressionReason = 'USER_LOGGED_OUT_ON_ALL_DEVICES';
+        pushSent = false;
+      } else if (endpointCount === 0) {
         decision = 'NO_ENDPOINT';
         suppressionReason = 'NO_VALID_ENDPOINTS';
         pushSent = false;
@@ -368,6 +377,10 @@ async function sendCallPush(params) {
       return;
     } else if (routingData.decision === 'SUPPRESSED') {
       console.log(`[V2Router] Call push suppressed for ${userId}: ${routingData.suppressionReason}`);
+      await logV2Telemetry(params, routingData, fallbackUsed);
+      return;
+    } else if (routingData.decision === 'NO_ACTIVE_SESSION') {
+      console.log(`[V2Router] Call push aborted for ${userId}: ${routingData.suppressionReason}`);
       await logV2Telemetry(params, routingData, fallbackUsed);
       return;
     } else if (routingData.decision === 'NO_INSTALLATION' || routingData.decision === 'NO_ENDPOINT') {
@@ -675,6 +688,10 @@ async function sendGenericPush(params) {
       return;
     } else if (routingData.decision === 'SUPPRESSED') {
       console.log(`[V2Router] Push suppressed for user ${userId}: ${routingData.suppressionReason}`);
+      await logV2Telemetry(params, routingData, fallbackUsed);
+      return;
+    } else if (routingData.decision === 'NO_ACTIVE_SESSION') {
+      console.log(`[V2Router] Push aborted for ${userId}: ${routingData.suppressionReason}`);
       await logV2Telemetry(params, routingData, fallbackUsed);
       return;
     } else if (routingData.decision === 'NO_INSTALLATION' || routingData.decision === 'NO_ENDPOINT') {
