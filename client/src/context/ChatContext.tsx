@@ -15,6 +15,7 @@ import { supabase } from '../lib/supabase';
 import { generateCorrelationId, trackCorrelation, completeCorrelation } from '../lib/correlationId';
 import { logger } from '../lib/logger';
 import { ChatBootKernel } from './ChatBootKernel';
+import { getDeviceId } from '../utils/deviceId';
 
 export interface Message {
     id: string;
@@ -339,11 +340,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         const kernel = ChatBootKernel.getInstance();
 
         const registerSession = async (): Promise<string | null> => {
-            let localDeviceId = localStorage.getItem('chat_device_id');
-            if (!localDeviceId) {
-                localDeviceId = `web-${Math.random().toString(36).substring(2, 9)}`;
-                localStorage.setItem('chat_device_id', localDeviceId);
-            }
+            const localDeviceId = await getDeviceId();
             setDeviceId(localDeviceId);
             deviceIdRef.current = localDeviceId;
 

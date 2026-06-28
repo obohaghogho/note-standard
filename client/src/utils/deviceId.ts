@@ -63,22 +63,43 @@ async function setToIDB(id: string): Promise<void> {
 }
 
 export async function getDeviceId(): Promise<string> {
-  let id = localStorage.getItem('notestandard_device_id');
+  // 1. Try primary unified key first
+  let id = localStorage.getItem('chat_device_id');
   if (id) {
-    // Sync to IDB just in case
     await setToIDB(id);
     return id;
   }
 
-  id = await getFromIDB();
+  // 2. Fallback to legacy web device key (from AuthContext)
+  id = localStorage.getItem('notestandard_web_device_id');
   if (id) {
-    // Sync to LS just in case
-    localStorage.setItem('notestandard_device_id', id);
+    console.log(`[DeviceMigration] Migrating from notestandard_web_device_id: ${id}`);
+    localStorage.setItem('chat_device_id', id);
+    await setToIDB(id);
     return id;
   }
 
+  // 3. Fallback to legacy general device key (from older deviceId.ts)
+  id = localStorage.getItem('notestandard_device_id');
+  if (id) {
+    console.log(`[DeviceMigration] Migrating from notestandard_device_id: ${id}`);
+    localStorage.setItem('chat_device_id', id);
+    await setToIDB(id);
+    return id;
+  }
+
+  // 4. Try IndexedDB fallback
+  id = await getFromIDB();
+  if (id) {
+    console.log(`[DeviceMigration] Recovered device ID from IDB: ${id}`);
+    localStorage.setItem('chat_device_id', id);
+    return id;
+  }
+
+  // 5. Generate fresh ID if nothing exists
   id = generateUUID();
-  localStorage.setItem('notestandard_device_id', id);
+  console.log(`[DeviceMigration] Generated new canonical device ID: ${id}`);
+  localStorage.setItem('chat_device_id', id);
   await setToIDB(id);
   return id;
 }

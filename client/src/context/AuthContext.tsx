@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import * as accountManager from "../utils/accountManager";
 import { updateSessionMeta } from "../utils/accountManager";
 import { refreshSessionIsolated } from "../utils/authUtils";
+import { getDeviceId } from "../utils/deviceId";
 
 interface AuthContextValue {
   user: User | null;
@@ -423,12 +424,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // JOURNEY 3 FIX: INITIAL_SESSION covers existing/inactive users who never logged out.
           const shouldRegisterSession = event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || wasSwitching;
           if (shouldRegisterSession) {
-            const WEB_DEVICE_KEY = 'notestandard_web_device_id';
-            let deviceId = localStorage.getItem(WEB_DEVICE_KEY);
-            if (!deviceId) {
-              deviceId = crypto.randomUUID();
-              localStorage.setItem(WEB_DEVICE_KEY, deviceId);
-            }
+            getDeviceId().then(deviceId => {
             const apiBase = import.meta.env.VITE_API_URL || '';
             fetch(`${apiBase}/api/auth/register-session`, {
               method: 'POST',
@@ -454,8 +450,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator &&
                 typeof Notification !== 'undefined' && Notification.permission === 'granted') {
               navigator.serviceWorker.ready.then(async (reg) => {
-                const sub = await reg.pushManager.getSubscription();
-                if (!sub) return;
+                let sub = await reg.pushManager.getSubscription();
+                
+                const currentVapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+                if (currentVapidKey) {
+                  const padding = '='.repeat((4 - (currentVapidKey.length % 4)) % 4);
+                  const base64 = (currentVapidKey + padding).replace(/-/g, '+').replace(/_/g, '/');
+                  const rawData = window.atob(base64);
+                  const currentVapidBuffer = new Uint8Array(rawData.length);
+                  for (let i = 0; i < rawData.length; ++i) {
+                    currentVapidBuffer[i] = rawData.charCodeAt(i);
+                  }
+
+                  if (sub && sub.options.applicationServerKey) {
+                    const existingVapidBuffer = new Uint8Array(sub.options.applicationServerKey);
+                    let isMismatch = currentVapidBuffer.length !== existingVapidBuffer.length;
+                    if (!isMismatch) {
+                      for (let i = 0; i < currentVapidBuffer.length; i++) {
+                        if (currentVapidBuffer[i] !== existingVapidBuffer[i]) {
+                          isMismatch = true; break;
+                        }
+                      }
+                    }
+                    if (isMismatch) {
+                      console.warn('[Auth] [V2 Boot-Sync] VAPID key mismatch detected. Existing user token is stale. Resubscribing...');
+                      await sub.unsubscribe();
+                      sub = null;
+                    } else {
+                      try {
+                        const statusRes = await fetch(`${apiBase}/api/notifications/installation-status/${deviceId}`, {
+                          headers: { 'Authorization': `Bearer ${newSession.access_token}` }
+                        });
+                        if (statusRes.ok) {
+                          const statusData = await statusRes.json();
+                          if (statusData.status === 'INVALID') {
+                            console.warn(`[Auth] [V2 Boot-Sync] Backend reported subscription as INVALID (Reason: ${statusData.failure_reason}). Forcing fresh subscription...`);
+                            await sub.unsubscribe();
+                            sub = null;
+                          }
+                        }
+                      } catch (err: any) {
+                        console.warn('[Auth] [V2 Boot-Sync] Failed to check installation status:', err.message);
+                      }
+                    }
+                  }
+                  
+                  if (!sub && Notification.permission === 'granted') {
+                    console.log('[Auth] [V2 Boot-Sync] Generating fresh push subscription...');
+                    sub = await reg.pushManager.subscribe({
+                      userVisibleOnly: true,
+                      applicationServerKey: currentVapidBuffer
+                    });
+                  }
+                }
+                
+                if (!sub) {
+                    console.log('[Auth] [V2 Boot-Sync] No push subscription available.');
+                    return;
+                }
+                
                 console.log(`[Auth] [V2 Boot-Sync] Syncing installation for ${currentUser.email}...`);
                 const subJson = sub.toJSON();
                 const resp = await fetch(`${apiBase}/api/notifications/register-installation`, {
@@ -488,6 +541,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
               }).catch(e => console.warn('[Auth] [V2 Boot-Sync] non-fatal:', e.message));
             }
+            });
           }
 
           if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || wasSwitching) {

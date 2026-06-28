@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from './AuthContext';
 import * as accountManager from '../utils/accountManager';
 import { resolveLocalUrl } from '../lib/networkUtils';
+import { getDeviceId } from '../utils/deviceId';
 
 // ─── Config ──────────────────────────────────────────────────────
 const rawSocketUrl = import.meta.env.VITE_SOCKET_URL;
@@ -177,7 +178,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 ? accountManager.getAccount(accountManager.getActiveAccountId()!) 
                 : null;
             const sessionId = storedAccount?.sessionId || localStorage.getItem('chat_session_id');
-            const deviceId = storedAccount?.deviceId || localStorage.getItem('chat_device_id');
+
+            getDeviceId().then(fallbackDeviceId => {
+                const deviceId = storedAccount?.deviceId || fallbackDeviceId;
 
             if (!sessionId || !deviceId) {
                 console.warn('[ACCOUNT_FORENSIC] SOCKET_INITIALIZE_REJECTED - Missing sessionId or deviceId at ' + Date.now());
@@ -279,6 +282,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     reject(new Error("Socket connection failed"));
                 }
             });
+            }).catch(err => reject(err));
         });
     }, [connected, teardown, user?.id]);
 

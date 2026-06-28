@@ -157,6 +157,27 @@ const syncEndpoint = async (req, res, next) => {
   }
 };
 
+const getInstallationStatus = async (req, res, next) => {
+  try {
+    const { deviceId } = req.params;
+    if (!deviceId) return res.status(400).json({ error: "deviceId required" });
+    
+    const { data, error } = await supabase
+      .from("device_installations")
+      .select("endpoint_status, failure_reason")
+      .eq("device_id", deviceId)
+      .maybeSingle();
+      
+    if (error || !data) {
+      return res.json({ status: "UNKNOWN" });
+    }
+    
+    res.json({ status: data.endpoint_status, failure_reason: data.failure_reason });
+  } catch (err) {
+    next(err);
+  }
+};
+
 const deleteNotification = async (req, res, next) => {
   try {
     const userId = req.user.id;
@@ -420,4 +441,5 @@ module.exports = {
   sendNotification,
   notifyTeam,
   syncEndpoint,
+  getInstallationStatus,
 };

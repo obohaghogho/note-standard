@@ -259,6 +259,7 @@ async function computeV2Routing(params) {
     }
 
     const sockets = presence.getUserSockets(userId);
+    const activeDeviceIds = presence.getActiveDeviceIds(userId);
     const isOnline = sockets.length > 0;
     
     let decision = 'NO_INSTALLATION';
@@ -286,8 +287,20 @@ async function computeV2Routing(params) {
         if (state === 'ACTIVE' || state === 'BACKGROUND') {
           activeCount++;
           if (deviceInst && deviceInst.push_endpoint && deviceInst.endpoint_status !== 'INVALID') {
+            // ── Device-aware suppression ──────────────────────────────────────────
+            // FIX: Previously this block suppressed push for ALL devices if ANY socket
+            // was online for the user. Now we check if THIS specific device's canonical
+            // device_id is present in the active socket map. A device is only suppressed
+            // if its own socket is connected — not someone else's device.
+            const isThisDeviceActive = deviceInst.device_id && activeDeviceIds.has(deviceInst.device_id);
+            console.log(`[DeviceDiagnostic] Routing check | deviceId:${deviceInst.device_id} | activeDeviceIds:[${[...activeDeviceIds].join(',')}] | isActive:${isThisDeviceActive} | endpoint_status:${deviceInst.endpoint_status}`);
             endpointCount++;
-            pushTargets.push(deviceInst);
+            if (!isThisDeviceActive) {
+              // Device not currently on a socket — include it as a push target
+              pushTargets.push(deviceInst);
+            } else {
+              console.log(`[PushSuppression] Suppressing push to device ${deviceInst.device_id} (userId:${userId}) — active socket present.`);
+            }
           }
         } else if (state === 'LOGGED_OUT') {
           loggedOutCount++;
@@ -302,9 +315,10 @@ async function computeV2Routing(params) {
         decision = 'NO_ENDPOINT';
         suppressionReason = 'NO_VALID_ENDPOINTS';
         pushSent = false;
-      } else if (activeCount > 0 && isOnline) {
+      } else if (pushTargets.length === 0) {
+        // All valid endpoints belong to active devices — suppress entirely
         decision = 'SUPPRESSED';
-        suppressionReason = 'ACTIVE_SOCKET_PRESENT';
+        suppressionReason = 'ACTIVE_SOCKET_PRESENT_ON_ALL_DEVICES';
         pushSent = false;
       } else {
         decision = 'PUSH';
