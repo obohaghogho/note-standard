@@ -1,3 +1,4 @@
+ 
 import React, { useState, useEffect } from 'react';
 import { Sparkles, AlertCircle, FileText, CheckCircle, ArrowRight } from 'lucide-react';
 import { api } from '../../lib/api';

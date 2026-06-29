@@ -312,7 +312,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }, 60000);
         return () => clearInterval(interval);
     // loadMessages intentionally omitted — accessed via loadMessagesRef to avoid TDZ
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     }, [user, session]);
 
     // Flight Recorder

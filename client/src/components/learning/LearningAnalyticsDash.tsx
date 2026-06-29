@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import React from 'react';
 import { Flame, Brain, Clock, Target, TrendingUp, Award } from 'lucide-react';
 

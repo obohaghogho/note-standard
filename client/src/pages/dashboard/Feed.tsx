@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { FeedLayout } from '../../components/community/FeedLayout';
 import { FeedHeader } from '../../components/community/FeedHeader';
 import { FeedTabs } from '../../components/community/FeedTabs';
@@ -7,90 +7,152 @@ import { FeedSearch } from '../../components/community/FeedSearch';
 import { FeedContent } from '../../components/community/FeedContent';
 import { FeedSidebar } from '../../components/community/FeedSidebar';
 import { FeedFAB } from '../../components/community/FeedFAB';
+import { PostComposer } from '../../components/community/PostComposer';
+import { useCommunityFeed } from '../../hooks/useCommunityFeed';
+import { useAuth } from '../../context/AuthContext';
+import { CommunityPost } from '../../services/communityService';
+import { RefreshCw } from 'lucide-react';
 
 const FEED_TABS = [
-  { id: 'following', label: 'Following' },
   { id: 'trending', label: 'Trending' },
   { id: 'latest', label: 'Latest' },
-  { id: 'recommended', label: 'Recommended' },
-  { id: 'spaces', label: 'Spaces' },
+  { id: 'following', label: 'Following' },
   { id: 'saved', label: 'Saved' },
-  { id: 'my-posts', label: 'My Posts' }
+  { id: 'my-posts', label: 'My Posts' },
+  { id: 'spaces', label: 'Spaces' },
 ];
 
 export const Feed: React.FC = () => {
+  const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState('trending');
-  const [isLoading, setIsLoading] = useState(true);
-  const [posts, setPosts] = useState<any[]>([]); // Mock posts
+  const [filterState, setFilterState] = useState({ category: 'All', sort: 'latest' });
+  const [search, setSearch] = useState('');
+  const [showComposer, setShowComposer] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const touchStartY = useRef<number>(0);
 
-  // Simulate loading data
-  React.useEffect(() => {
-    setIsLoading(true);
-    const timer = setTimeout(() => {
-      // Mock data representing the Universal Post structure
-      setPosts([
-        {
-          id: '1',
-          title: 'The Future of AI in Productivity',
-          content: 'Here is how AI is transforming the way we work and think...',
-          post_type: 'text',
-          category: 'Technology',
-          tags: ['AI', 'Productivity', 'Future'],
-          saves_count: 124,
-          shares_count: 45,
-          created_at: new Date().toISOString(),
-          profiles: {
-            username: 'Alex_Dev',
-            avatar_url: 'https://i.pravatar.cc/150?u=a042581f4e29026024d',
-            is_verified: true
-          }
-        },
-        {
-          id: '2',
-          title: 'Beautiful UI Designs 2026',
-          post_type: 'image',
-          category: 'Design',
-          tags: ['UI', 'UX', 'Design'],
-          media_urls: ['https://images.unsplash.com/photo-1618761714954-0b8cd0026356?auto=format&fit=crop&q=80&w=1000'],
-          saves_count: 56,
-          shares_count: 12,
-          created_at: new Date().toISOString(),
-          profiles: {
-            username: 'DesignGuru',
-            avatar_url: 'https://i.pravatar.cc/150?u=a042581f4e29026704d',
-            is_verified: false
-          }
+  const {
+    posts,
+    isLoading,
+    isFetchingMore,
+    error,
+    hasMore,
+    loadMore,
+    refresh,
+    optimisticLike,
+    optimisticBookmark,
+    prependPost,
+    removePost,
+  } = useCommunityFeed({
+    tab: activeTab,
+    category: filterState.category !== 'All' ? filterState.category : undefined,
+    sort: filterState.sort,
+    search: search || undefined,
+  });
+
+  // ── Infinite scroll (IntersectionObserver) ────────────────────────────────
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isFetchingMore) {
+          loadMore();
         }
-      ]);
-      setIsLoading(false);
-    }, 1500);
+      },
+      { rootMargin: '300px' }
+    );
 
-    return () => clearTimeout(timer);
-  }, [activeTab]);
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, isFetchingMore, loadMore]);
+
+  // ── Pull-to-refresh (touch) ───────────────────────────────────────────────
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY;
+  }, []);
+
+  const handleTouchEnd = useCallback(async (e: React.TouchEvent) => {
+    const dy = e.changedTouches[0].clientY - touchStartY.current;
+    if (dy > 80 && window.scrollY === 0) {
+      setIsRefreshing(true);
+      await refresh();
+      setIsRefreshing(false);
+    }
+  }, [refresh]);
+
+  const handleTabChange = useCallback((tab: string) => {
+    setActiveTab(tab);
+  }, []);
+
+  const handleFilterChange = useCallback((state: { category: string; sort: string }) => {
+    setFilterState(state);
+  }, []);
+
+  const handlePosted = useCallback((post: CommunityPost) => {
+    prependPost(post);
+    setShowComposer(false);
+  }, [prependPost]);
 
   return (
-    <FeedLayout
-      sidebar={
-        <div className="py-4 h-full flex flex-col">
-          <div className="px-4 mb-4">
-             <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">NoteStandard</h2>
-             <p className="text-xs text-gray-500">Knowledge Ecosystem</p>
+    <>
+      <div onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+        {/* Pull-to-refresh indicator */}
+        {isRefreshing && (
+          <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-white dark:bg-gray-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 border border-gray-100 dark:border-gray-700">
+            <RefreshCw size={14} className="animate-spin" />
+            Refreshing…
           </div>
-          <FeedSearch />
-          {/* We can add left sidebar navigation here later */}
-        </div>
-      }
-      content={
-        <>
-          <FeedHeader />
-          <FeedTabs activeTab={activeTab} onTabChange={setActiveTab} tabs={FEED_TABS} />
-          <FeedFilters />
-          <FeedContent posts={posts} isLoading={isLoading} />
-        </>
-      }
-      rightSidebar={<FeedSidebar />}
-      fab={<FeedFAB />}
-    />
+        )}
+
+        <FeedLayout
+          sidebar={
+            <div className="py-4 h-full flex flex-col">
+              <div className="px-4 mb-4">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">NoteStandard</h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Knowledge Ecosystem</p>
+              </div>
+              <FeedSearch onSearch={setSearch} />
+            </div>
+          }
+          content={
+            <>
+              <FeedHeader />
+              <FeedTabs activeTab={activeTab} onTabChange={handleTabChange} tabs={FEED_TABS} />
+              <FeedFilters onChange={handleFilterChange} />
+              <FeedContent
+                posts={posts}
+                isLoading={isLoading}
+                isFetchingMore={isFetchingMore}
+                error={error}
+                sentinelRef={sentinelRef}
+                onOpenComposer={() => setShowComposer(true)}
+                onDelete={removePost}
+                onOptimisticLike={optimisticLike}
+                onOptimisticBookmark={optimisticBookmark}
+                currentUserAvatar={profile?.avatar_url}
+              />
+            </>
+          }
+          rightSidebar={<FeedSidebar />}
+          fab={
+            <FeedFAB
+              onPosted={handlePosted}
+            />
+          }
+        />
+      </div>
+
+      {/* Post composer (from "Share your knowledge..." click) */}
+      {showComposer && (
+        <PostComposer
+          onClose={() => setShowComposer(false)}
+          onPosted={handlePosted}
+        />
+      )}
+    </>
   );
 };
 

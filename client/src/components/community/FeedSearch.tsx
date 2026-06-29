@@ -1,18 +1,42 @@
-import React from 'react';
-import { Search } from 'lucide-react';
+import React, { useState, useCallback } from 'react';
+import { Search, X } from 'lucide-react';
 
-export const FeedSearch: React.FC = () => {
+interface Props {
+  onSearch: (query: string) => void;
+}
+
+export const FeedSearch: React.FC<Props> = ({ onSearch }) => {
+  const [value, setValue] = useState('');
+
+  const handleChange = useCallback((v: string) => {
+    setValue(v);
+    // Debounced search
+    if ((window as any).__feedSearchTimer) clearTimeout((window as any).__feedSearchTimer);
+    (window as any).__feedSearchTimer = setTimeout(() => onSearch(v), 400);
+  }, [onSearch]);
+
+  const clear = () => {
+    setValue('');
+    onSearch('');
+  };
+
   return (
-    <div className="px-4 py-3">
-      <div className="relative">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Search className="h-4 w-4 text-gray-400" />
-        </div>
+    <div className="px-4 mb-2">
+      <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition-all">
+        <Search size={15} className="text-gray-400 shrink-0" />
         <input
-          type="text"
-          className="block w-full pl-10 pr-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl leading-5 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200"
-          placeholder="Search community, spaces, creators..."
+          id="community-search"
+          type="search"
+          value={value}
+          onChange={e => handleChange(e.target.value)}
+          placeholder="Search posts…"
+          className="flex-1 bg-transparent text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none"
         />
+        {value && (
+          <button onClick={clear} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+            <X size={14} />
+          </button>
+        )}
       </div>
     </div>
   );

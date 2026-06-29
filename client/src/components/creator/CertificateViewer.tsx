@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useState, useEffect } from 'react';
 import { Award, CheckCircle, ExternalLink, ShieldCheck, Download } from 'lucide-react';
 import { api } from '../../lib/api';

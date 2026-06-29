@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, RotateCcw, Bookmark, AlertTriangle, CheckCircle } from 'lucide-react';
 

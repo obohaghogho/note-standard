@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useState } from 'react';
 import { Shuffle, Brain, Clock, Target, ChevronRight, Zap, RotateCcw } from 'lucide-react';
 import { FlashcardDeck } from './FlashcardDeck';

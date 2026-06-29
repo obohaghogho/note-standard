@@ -41,7 +41,7 @@ export const AiTutorPanel: React.FC<{ space: any; initialMode?: TutorMode }> = (
       setMessages(prev => [...prev, { role: 'ai', content: answer }]);
       setHistory(prev => [...prev, { role: 'user', content: userMessage }, { role: 'assistant', content: answer }]);
     } catch {
-      setMessages(prev => [...prev, { role: 'ai', content: 'I'm temporarily unavailable. Please try again.' }]);
+      setMessages(prev => [...prev, { role: 'ai', content: "I'm temporarily unavailable. Please try again." }]);
     } finally {
       setIsTyping(false);
     }

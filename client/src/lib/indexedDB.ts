@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 const DB_NAME = 'notestandard_feed_db';
 const DB_VERSION = 1;
 

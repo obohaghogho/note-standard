@@ -1,3 +1,4 @@
+ 
 import React from 'react';
 import { Megaphone, Pin, TrendingUp, Award, Book, ArrowRight, Sparkles } from 'lucide-react';
 
