@@ -187,9 +187,97 @@ const getFeed = async (req, res, next) => {
     }
 }
 
+const toggleBookmark = async (req, res, next) => {
+  try {
+    const { id: userId } = req.user;
+    const { postId } = req.params;
+    const { data: existing } = await supabase.from('community_bookmarks').select('id').eq('post_id', postId).eq('user_id', userId).maybeSingle();
+    if (existing) {
+      await supabase.from('community_bookmarks').delete().eq('id', existing.id);
+      return res.json({ bookmarked: false });
+    } else {
+      await supabase.from('community_bookmarks').insert([{ post_id: postId, user_id: userId }]);
+      return res.json({ bookmarked: true });
+    }
+  } catch (err) { next(err); }
+};
+
+const deletePost = async (req, res, next) => {
+  try {
+    const { id: userId } = req.user;
+    const { postId } = req.params;
+    const { error } = await supabase.from('community_posts').delete().eq('id', postId).eq('author_id', userId);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err) { next(err); }
+};
+
+const editPost = async (req, res, next) => {
+  try {
+    const { id: userId } = req.user;
+    const { postId } = req.params;
+    const { title, content } = req.body;
+    const { data, error } = await supabase.from('community_posts').update({ title, content, updated_at: new Date() }).eq('id', postId).eq('author_id', userId).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) { next(err); }
+};
+
+const deleteComment = async (req, res, next) => {
+  try {
+    const { id: userId } = req.user;
+    const { commentId } = req.params;
+    const { error } = await supabase.from('community_comments').delete().eq('id', commentId).eq('author_id', userId);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err) { next(err); }
+};
+
+const editComment = async (req, res, next) => {
+  try {
+    const { id: userId } = req.user;
+    const { commentId } = req.params;
+    const { content } = req.body;
+    const { data, error } = await supabase.from('community_comments').update({ content, is_edited: true }).eq('id', commentId).eq('author_id', userId).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) { next(err); }
+};
+
+const toggleFollow = async (req, res, next) => {
+  try {
+    const { id: userId } = req.user;
+    const { profileId } = req.params;
+    const { data: existing } = await supabase.from('community_follows').select('id').eq('follower_id', userId).eq('following_id', profileId).maybeSingle();
+    if (existing) {
+      await supabase.from('community_follows').delete().eq('id', existing.id);
+      return res.json({ following: false });
+    } else {
+      await supabase.from('community_follows').insert([{ follower_id: userId, following_id: profileId }]);
+      return res.json({ following: true });
+    }
+  } catch (err) { next(err); }
+};
+
+const reportItem = async (req, res, next) => {
+  try {
+    const { id: userId } = req.user;
+    const { postId, commentId, reason } = req.body;
+    const { data, error } = await supabase.from('community_reports').insert([{ reporter_id: userId, post_id: postId || null, comment_id: commentId || null, reason }]).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   createCommunityPost,
   addComment,
   toggleLike,
-  getFeed
-};
+  getFeed,
+  toggleBookmark,
+  deletePost,
+  editPost,
+  deleteComment,
+  editComment,
+  toggleFollow,
+  reportItem
