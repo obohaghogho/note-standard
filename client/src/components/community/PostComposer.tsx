@@ -1,9 +1,8 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   X, Image as ImageIcon, Video, BarChart2, Link as LinkIcon, Type,
-  Smile, AtSign, Hash, Loader2, ChevronDown, Trash2
+  AtSign, Hash, Loader2, ChevronDown
 } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import {
   CommunityPost,
@@ -24,7 +23,6 @@ interface Props {
 type PostType = 'text' | 'image' | 'video' | 'poll' | 'link';
 
 export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) => {
-  const { user, profile } = useAuth();
   const { socket } = useSocket();
 
   const [postType, setPostType] = useState<PostType>(editPost?.post_type as PostType || 'text');
@@ -55,7 +53,7 @@ export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) =
           if (parsed.content) setContent(parsed.content);
           if (parsed.title) setTitle(parsed.title);
           setDraft('draft restored');
-        } catch (_e) {
+        } catch {
           // Ignore malformed draft JSON — start fresh
         }
       }
@@ -160,8 +158,8 @@ export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) =
 
       onPosted(result);
       onClose();
-    } catch (e: any) {
-      setError(e.message || 'Post failed. Please try again.');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Post failed. Please try again.');
     } finally {
       setSubmitting(false);
     }

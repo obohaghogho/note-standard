@@ -1,5 +1,4 @@
 import React, { useEffect, useRef } from 'react';
-import { useFeedStore } from '../../../stores/feedStore';
 
 interface AnalyticsLayerProps {
   postId: string;

@@ -135,8 +135,8 @@ export const UniversalPostCard: React.FC<Props> = ({
       await deletePost(post.id);
       onDelete?.(post.id);
       if (socket) socket.emit('community:post_deleted', { postId: post.id });
-    } catch (e: any) {
-      alert('Could not delete: ' + e.message);
+    } catch (e: unknown) {
+      alert('Could not delete: ' + (e instanceof Error ? e.message : 'Unknown error'));
     }
   }, [post.id, socket, onDelete]);
 
@@ -407,7 +407,7 @@ export const UniversalPostCard: React.FC<Props> = ({
 };
 
 
-const PollWidget: React.FC<{ postId: string; pollOptions: any }> = ({ postId, pollOptions }) => {
+const PollWidget: React.FC<{ postId: string; pollOptions: Array<{ id: string; option_text: string; votes_count: number }> }> = ({ postId, pollOptions }) => {
   const [voted, setVoted] = useState<string | null>(null);
   const [localOptions, setLocalOptions] = useState<Array<{ id: string; option_text: string; votes_count: number }>>(
     Array.isArray(pollOptions) ? pollOptions : []
@@ -428,7 +428,7 @@ const PollWidget: React.FC<{ postId: string; pollOptions: any }> = ({ postId, po
         return;
       }
       await votePollOption(postId, optionId);
-    } catch (_) {
+    } catch {
       // Revert on failure
       setVoted(null);
       setLocalOptions(prev => prev.map(o => o.id === optionId ? { ...o, votes_count: Math.max(0, (o.votes_count || 1) - 1) } : o));
