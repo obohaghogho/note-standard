@@ -455,6 +455,7 @@ const callHandlers = require('./events/call');
 const walletHandlers = require('./events/wallet');
 const notificationHandlers = require('./events/notifications');
 const presenceHandlers = require('./events/presence');
+const communityHandlers = require('./events/community');
 
 io.on('connection', async (socket) => {
   const userId = socket.userId;
@@ -500,6 +501,7 @@ io.on('connection', async (socket) => {
   callHandlers(io, socket);
   walletHandlers(io, socket);
   notificationHandlers(io, socket);
+  communityHandlers(io, socket);
 
   socket.on('disconnect', (reason) => {
     console.log(`[Socket.IO] ✗ ${socket.id} disconnected (${reason})`);
