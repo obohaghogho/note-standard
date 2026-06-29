@@ -41,7 +41,7 @@ export const FeedSidebar: React.FC = () => {
           const data = await res.json();
           setSpaces(Array.isArray(data) ? data.slice(0, 5) : []);
         }
-      } catch (_) {
+      } catch {
         // Fail silently – sidebar is non-critical
       } finally {
         setLoadingSpaces(false);
@@ -64,7 +64,7 @@ export const FeedSidebar: React.FC = () => {
           data.forEach(c => { init[c.id] = c.is_following ?? false; });
           setFollowingState(init);
         }
-      } catch (_) {
+      } catch {
         // Fail silently
       } finally {
         setLoadingCreators(false);
@@ -78,7 +78,7 @@ export const FeedSidebar: React.FC = () => {
     setFollowingState(prev => ({ ...prev, [creatorId]: !was }));
     try {
       await toggleFollow(creatorId);
-    } catch (_) {
+    } catch {
       setFollowingState(prev => ({ ...prev, [creatorId]: was }));
     }
   };

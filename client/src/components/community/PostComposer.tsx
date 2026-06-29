@@ -55,7 +55,9 @@ export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) =
           if (parsed.content) setContent(parsed.content);
           if (parsed.title) setTitle(parsed.title);
           setDraft('draft restored');
-        } catch (_) {}
+        } catch (_e) {
+          // Ignore malformed draft JSON — start fresh
+        }
       }
     }
   }, [editPost]);

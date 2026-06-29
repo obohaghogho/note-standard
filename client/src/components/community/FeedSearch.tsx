@@ -5,14 +5,20 @@ interface Props {
   onSearch: (query: string) => void;
 }
 
+// Extend window type for the debounce timer without using `any`
+declare global {
+  interface Window {
+    __feedSearchTimer?: ReturnType<typeof setTimeout>;
+  }
+}
+
 export const FeedSearch: React.FC<Props> = ({ onSearch }) => {
   const [value, setValue] = useState('');
 
   const handleChange = useCallback((v: string) => {
     setValue(v);
-    // Debounced search
-    if ((window as any).__feedSearchTimer) clearTimeout((window as any).__feedSearchTimer);
-    (window as any).__feedSearchTimer = setTimeout(() => onSearch(v), 400);
+    if (window.__feedSearchTimer) clearTimeout(window.__feedSearchTimer);
+    window.__feedSearchTimer = setTimeout(() => onSearch(v), 400);
   }, [onSearch]);
 
   const clear = () => {

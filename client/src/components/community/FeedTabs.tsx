@@ -1,5 +1,6 @@
 import React from 'react';
-import { Settings, PenTool, Search, Layout } from 'lucide-react';
+
+
 
 interface TabConfig {
   id: string;
