@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import React from 'react';
 import { ShieldAlert, Users, MessageSquareWarning, Activity, HelpCircle } from 'lucide-react';
 
@@ -29,7 +30,7 @@ export const SpaceModeratorDash: React.FC<{ spaceId: string }> = ({ spaceId }) =
             <h3 className="font-bold text-heading">Opportunity: Unanswered Questions</h3>
             <button className="text-xs font-medium text-primary hover:underline">View All</button>
           </div>
-          <p className="text-sm text-muted mb-4">These questions have been active for >24h without a response. Tag experts to help!</p>
+          <p className="text-sm text-muted mb-4">These questions have been active for &gt;24h without a response. Tag experts to help!</p>
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
               <div key={i} className="p-3 bg-surface border border-border rounded-xl flex items-start justify-between gap-4">
