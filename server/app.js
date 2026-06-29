@@ -188,6 +188,13 @@ const teamRoutes = require("./routes/teamRoutes");
 const sessionRoutes = require("./routes/session");
 const agoraRoutes = require("./routes/agora");
 
+// Phase 3–4B Routes
+const aiTutorRoutes = require("./routes/aiTutor");
+const creatorRoutes = require("./routes/creator");
+
+// v2.5 Operations Dashboard
+const opsRoutes = require("./routes/ops");
+
 // API Mounts
 app.use("/api/auth", authRoutes);
 app.use("/api/wallet", walletRoutes);
@@ -212,6 +219,13 @@ app.use("/api/teams", teamRoutes);
 app.use("/api/agora", requireAuth, agoraRoutes);
 app.use("/api/system", require("./routes/system"));
 app.use("/api/session", sessionRoutes);
+
+// Phase 3–4B: AI Tutor, Creator Platform
+app.use("/api/ai-tutor", aiTutorRoutes);
+app.use("/api/creator", creatorRoutes);
+
+// v2.5: Operations Dashboard
+app.use("/api/ops", opsRoutes);
 
 // Phase 6.2: Replay Debugger
 const replayRoutes = require("./tools/replayDebugger/replayRoutes");

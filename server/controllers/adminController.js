@@ -1895,3 +1895,60 @@ exports.getCallSessions = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch call sessions" });
   }
 };
+
+// ============================================================
+// v2.5 Operations Dashboard Endpoints
+// ============================================================
+
+const operationsService = require("../services/admin/OperationsService");
+
+/**
+ * Middleware to ensure the user has one of the allowed admin roles.
+ */
+exports.requireAdminRole = (allowedRoles = []) => {
+  return (req, res, next) => {
+    const userRole = req.user?.admin_role;
+    if (!userRole) {
+      return res.status(403).json({ error: 'Access denied: Requires admin privileges.' });
+    }
+    if (allowedRoles.length > 0 && !allowedRoles.includes(userRole)) {
+      return res.status(403).json({ error: `Access denied: Requires one of [${allowedRoles.join(', ')}]` });
+    }
+    next();
+  };
+};
+
+exports.getHealthDashboard = async (req, res, next) => {
+  try {
+    const [latest, history] = await Promise.all([
+      operationsService.getLatestHealth(),
+      operationsService.getHealthHistory(24) // last 24 hours
+    ]);
+    
+    res.json({ latest, history });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getFeatureFlags = async (req, res, next) => {
+  try {
+    const flags = await operationsService.getFeatureFlags();
+    res.json({ flags });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.updateFeatureFlag = async (req, res, next) => {
+  try {
+    const { flagKey } = req.params;
+    const { isEnabled } = req.body;
+    const adminId = req.user.id;
+
+    const flag = await operationsService.toggleFeatureFlag(flagKey, isEnabled, adminId);
+    res.json({ flag });
+  } catch (err) {
+    next(err);
+  }
+};

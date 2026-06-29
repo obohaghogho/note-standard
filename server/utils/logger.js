@@ -103,4 +103,72 @@ const logger = {
     }
 };
 
-module.exports = logger;
+/**
+ * Standard HTTP Request Logger Middleware
+ * Injects request context and emits standardized telemetry.
+ */
+const requestLogger = (req, res, next) => {
+    const reqStart = Date.now();
+    req.id = req.headers['x-request-id'] || require('crypto').randomUUID();
+    req.traceId = req.headers['x-trace-id'] || req.id;
+  
+    res.on('finish', () => {
+        const durationMs = Date.now() - reqStart;
+      
+        logger.info(`${req.method} ${req.originalUrl} ${res.statusCode} - ${durationMs}ms`, {
+            type: 'http_request',
+            request_id: req.id,
+            trace_id: req.traceId,
+            user_id: req.user?.id || 'anonymous',
+            space_id: req.params.spaceId || req.body.spaceId || undefined,
+            node_id: req.params.nodeId || req.body.nodeId || undefined,
+            product_id: req.params.productId || req.body.productId || undefined,
+            method: req.method,
+            path: req.originalUrl,
+            status: res.statusCode,
+            duration_ms: durationMs,
+            controller: req.route?.path || 'unknown'
+        });
+    });
+  
+    next();
+};
+  
+/**
+ * Standard Background Job Logger
+ */
+const jobLogger = (jobId, queue, action) => {
+    const jobStart = Date.now();
+    let attempt = 1; // Assuming 1 for simplicity, could pass via action
+    
+    return {
+        success: (result) => {
+            logger.info(`Job ${queue}:${jobId} completed successfully`, {
+                type: 'background_job',
+                job_id: jobId,
+                queue,
+                attempt,
+                duration: Date.now() - jobStart,
+                result: 'success',
+                metadata: result
+            });
+        },
+        fail: (error) => {
+            logger.error(`Job ${queue}:${jobId} FAILED`, {
+                type: 'background_job',
+                job_id: jobId,
+                queue,
+                attempt,
+                duration: Date.now() - jobStart,
+                result: 'failed',
+                error: error.message
+            });
+        }
+    };
+};
+
+module.exports = {
+    ...logger,
+    requestLogger,
+    jobLogger
+};

@@ -14,6 +14,15 @@ const features = {
     STATE_PROTECTION_MIDDLEWARE: process.env.FF_STATE_PROTECTION_MIDDLEWARE === 'true' || false,
     SEQUENCE_ENFORCEMENT: process.env.FF_SEQUENCE_ENFORCEMENT === 'true' || false,
     BACKGROUND_RECOVERY_WORKERS: process.env.FF_BACKGROUND_RECOVERY_WORKERS === 'true' || false,
+    
+    // Knowledge Ecosystem Features
+    SPACES_ENABLED: process.env.FF_SPACES_ENABLED === 'true' || false,
+    MARKETPLACE_ENABLED: process.env.FF_MARKETPLACE_ENABLED === 'true' || false,
+    LEARNING_MODE_ENABLED: process.env.FF_LEARNING_MODE_ENABLED === 'true' || false,
+    VOICE_ROOMS_ENABLED: process.env.FF_VOICE_ROOMS_ENABLED === 'true' || false,
+    EVENTS_ENABLED: process.env.FF_EVENTS_ENABLED === 'true' || false,
+    POLLS_ENABLED: process.env.FF_POLLS_ENABLED === 'true' || false,
+    DIAGNOSTICS_ENABLED: process.env.FF_DIAGNOSTICS_ENABLED === 'true' || false,
 };
 
 // Parse allowlist and percentage for SEQUENCE_ENFORCEMENT staged rollout

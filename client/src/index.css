@@ -1,13 +1,30 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
 @layer base {
-  :root {
-    --background: 0 0% 4%;
-    --foreground: 0 0% 93%;
+    /* NoteStandard Design System v1.0 */
+    --background: #FAFAFA;
+    --surface: #FFFFFF;
+    --elevated: #F8FAFC;
+    --border: #E5E7EB;
+    --muted: #6B7280;
+    --heading: #111827;
+    --body: #374151;
+    
     --floating-ui-offset: 0px;
     --chat-input-height: 0px;
+  }
+
+  .dark, [data-theme="dark"] {
+    --background: #09090B;
+    --surface: #18181B;
+    --elevated: #27272A; /* Using elevated as card */
+    --card: #27272A;
+    --border: #3F3F46;
+    --heading: #FAFAFA;
+    --body: #D4D4D8;
+    --muted: #A1A1AA;
   }
 
   * {
@@ -36,8 +53,8 @@
     overflow: hidden;
     position: fixed;
     overscroll-behavior-y: none;
-    background-color: #0a0a0a;
-    @apply bg-background text-foreground antialiased;
+    background-color: var(--background);
+    @apply bg-background text-body font-sans antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 

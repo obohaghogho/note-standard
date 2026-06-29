@@ -2,6 +2,7 @@ const supabase = require("../config/database");
 // Gateway is authoritative for all push notifications.
 
 const realtime = require("./realtimeService");
+const eventBus = require("./eventBus");
 
 /**
  * Creates a notification and emits it via Gateway
@@ -229,3 +230,39 @@ module.exports = {
   createNotification,
   broadcastNotification,
 };
+
+// --- Activity Bus Integration ---
+eventBus.on('activity_logged', async (activity) => {
+  // Translate specific activity types into notifications based on business logic
+  try {
+    const { user_id, action_type, entity_type, entity_id, metadata } = activity;
+
+    // Example mapping: A user earned a badge
+    if (action_type === 'earned_badge') {
+      await createNotification({
+        receiverId: user_id,
+        senderId: null, // System
+        type: 'achievement',
+        title: 'New Badge Earned!',
+        message: `Congratulations! You earned the ${metadata.badge_name || 'new'} badge.`,
+        link: '/dashboard/settings', // Or profile link
+      });
+    }
+
+    // Example mapping: Someone liked a post
+    if (action_type === 'liked_post' && metadata.post_owner_id && metadata.post_owner_id !== user_id) {
+       await createNotification({
+        receiverId: metadata.post_owner_id,
+        senderId: user_id,
+        type: 'like',
+        title: 'New Like',
+        message: `Someone liked your post.`,
+        link: `/dashboard/community/post/${entity_id}`,
+      });
+    }
+    
+    // Add more mappings as needed for Phase 1-4 features
+  } catch (err) {
+    console.error('[NotificationService] Error processing activity event:', err);
+  }
+});
