@@ -1,8 +1,23 @@
 import React from 'react';
-import { Users, Shield, Zap, BookOpen, Share2, Plus } from 'lucide-react';
+import { Users, Shield, BookOpen, Share2 } from 'lucide-react';
+
+interface SpaceData {
+  name: string;
+  description: string;
+  banner_url?: string;
+  avatar_url?: string;
+  member_count: number;
+  online_count: number;
+  category: string;
+  health_score: number;
+  quality_score: number;
+  mod_score: number;
+  response_score: number;
+  safety_score: number;
+}
 
 interface SpaceHeroProps {
-  space: any;
+  space: SpaceData;
 }
 
 export const SpaceHero: React.FC<SpaceHeroProps> = ({ space }) => {

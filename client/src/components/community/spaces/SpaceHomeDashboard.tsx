@@ -2,8 +2,17 @@
 import React from 'react';
 import { Megaphone, Pin, TrendingUp, Award, Book, ArrowRight, Sparkles } from 'lucide-react';
 
+interface SpaceManifest {
+  features?: { ai?: boolean };
+}
+
+interface SpaceData {
+  name: string;
+  manifest?: SpaceManifest;
+}
+
 interface SpaceHomeDashboardProps {
-  space: any;
+  space: SpaceData;
   onNavigateTab: (tab: string) => void;
 }
 

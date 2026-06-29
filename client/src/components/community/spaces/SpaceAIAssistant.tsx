@@ -1,8 +1,14 @@
 import React, { useState } from 'react';
-import { Sparkles, Send, Bot, User, Search, RefreshCw } from 'lucide-react';
+import { Sparkles, Send, Bot, User, RefreshCw } from 'lucide-react';
 import { api } from '../../../lib/api'; // Assuming a generic API wrapper exists
 
-export const SpaceAIAssistant: React.FC<{ space: any }> = ({ space }) => {
+interface SpaceInfo {
+  id: string;
+  name: string;
+  manifest?: { features?: { ai?: boolean } };
+}
+
+export const SpaceAIAssistant: React.FC<{ space: SpaceInfo }> = ({ space }) => {
   const [messages, setMessages] = useState<{role: 'user' | 'ai', content: string}[]>([
     { role: 'ai', content: `Hello! I'm the AI assistant for ${space.name}. I can help you search discussions, summarize guides, and find experts. What would you like to know?` }
   ]);
@@ -22,7 +28,7 @@ export const SpaceAIAssistant: React.FC<{ space: any }> = ({ space }) => {
       // Direct call to the Phase 2A endpoint built earlier
       const res = await api.post(`/community/spaces/${space.id}/ask`, { query: userMessage });
       setMessages(prev => [...prev, { role: 'ai', content: res.data.answer }]);
-    } catch (err) {
+    } catch (_err) {
       setMessages(prev => [...prev, { role: 'ai', content: 'Sorry, I am currently unavailable. Please try again later.' }]);
     } finally {
       setIsTyping(false);
