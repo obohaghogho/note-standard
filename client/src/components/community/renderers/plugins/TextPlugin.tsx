@@ -11,7 +11,7 @@ export const TextPlugin: PostPlugin = {
     return typeof content.text === 'string' && content.text.length > 0;
   },
 
-  Renderer: ({ content, context: _context }) => {
+  Renderer: ({ content }) => {
     return (
       <div className="text-plugin-content">
         <p className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">

@@ -28,7 +28,7 @@ export const SpaceAIAssistant: React.FC<{ space: SpaceInfo }> = ({ space }) => {
       // Direct call to the Phase 2A endpoint built earlier
       const res = await api.post(`/community/spaces/${space.id}/ask`, { query: userMessage });
       setMessages(prev => [...prev, { role: 'ai', content: res.data.answer }]);
-    } catch (_err) {
+    } catch {
       setMessages(prev => [...prev, { role: 'ai', content: 'Sorry, I am currently unavailable. Please try again later.' }]);
     } finally {
       setIsTyping(false);

@@ -1,7 +1,7 @@
 import React from 'react';
-import { BookOpen, ChevronRight, FileText, Settings, History } from 'lucide-react';
+import { BookOpen, ChevronRight, FileText, History } from 'lucide-react';
 
-export const SpaceWiki: React.FC<{ spaceId: string }> = ({ spaceId }) => {
+export const SpaceWiki: React.FC<{ spaceId: string }> = () => {
   return (
     <div className="flex flex-col md:flex-row gap-6 h-[75vh]">
       {/* Sidebar Navigation */}

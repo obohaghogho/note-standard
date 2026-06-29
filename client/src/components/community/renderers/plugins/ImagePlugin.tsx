@@ -10,7 +10,7 @@ export const ImagePlugin: PostPlugin = {
     return Array.isArray(content.urls) && content.urls.length > 0;
   },
 
-  Renderer: ({ content, context: _context }) => {
+  Renderer: ({ content }) => {
     const [isLoaded, setIsLoaded] = useState(false);
     
     // Simplistic rendering for V1. Future iteration handles galleries/progressive loading.

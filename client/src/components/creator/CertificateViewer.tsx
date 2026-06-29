@@ -1,10 +1,19 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useState, useEffect } from 'react';
 import { Award, CheckCircle, ExternalLink, ShieldCheck, Download } from 'lucide-react';
 import { api } from '../../lib/api';
 
-export const CertificateViewer = ({ token }) => {
-  const [cert, setCert] = useState<any>(null);
+interface Certificate {
+  certificate_token: string;
+  learner_name: string;
+  path_title: string;
+  creator_name: string;
+  space_name: string;
+  issued_at: string;
+  completion_pct: number;
+}
+
+export const CertificateViewer = ({ token }: { token: string }) => {
+  const [cert, setCert] = useState<Certificate | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -17,7 +26,7 @@ export const CertificateViewer = ({ token }) => {
         } else {
           setError(res.data.reason || 'Invalid certificate.');
         }
-      } catch (err) {
+      } catch {
         setError('Error verifying certificate.');
       } finally {
         setLoading(false);

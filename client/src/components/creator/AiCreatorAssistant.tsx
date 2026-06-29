@@ -13,7 +13,7 @@ interface Suggestion {
   concepts?: string[];
 }
 
-export const AiCreatorAssistant = ({ spaceId }) => {
+export const AiCreatorAssistant = ({ spaceId }: { spaceId?: string }) => {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(true);
 

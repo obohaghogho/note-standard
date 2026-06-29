@@ -3,8 +3,16 @@ import React, { useState, useEffect } from 'react';
 import { FileEdit, CheckCircle, Clock, Search, Plus } from 'lucide-react';
 import { api } from '../../lib/api';
 
+interface Draft {
+  id: string;
+  title: string;
+  status: 'draft' | 'published' | 'outdated';
+  content_type: string;
+  updated_at: string;
+}
+
 export const CreatorStudio = () => {
-  const [drafts, setDrafts] = useState<any[]>([]);
+  const [drafts, setDrafts] = useState<Draft[]>([]);
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
 

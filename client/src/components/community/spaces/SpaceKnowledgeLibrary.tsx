@@ -1,7 +1,7 @@
 import React from 'react';
 import { BookMarked, BrainCircuit, Star, Clock, FolderOpen, ArrowRight } from 'lucide-react';
 
-export const SpaceKnowledgeLibrary: React.FC<{ spaceId: string }> = ({ spaceId: _spaceId }) => {
+export const SpaceKnowledgeLibrary: React.FC<{ spaceId: string }> = () => {
   return (
     <div className="space-y-8">
       {/* Header */}

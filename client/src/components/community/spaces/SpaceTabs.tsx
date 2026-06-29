@@ -1,9 +1,13 @@
 import React from 'react';
 
+interface SpaceManifest {
+  features?: Record<string, boolean>;
+}
+
 interface SpaceTabsProps {
   activeTab: string;
   onSelectTab: (tab: string) => void;
-  manifest: any;
+  manifest: SpaceManifest;
   userRole: string;
 }
 
