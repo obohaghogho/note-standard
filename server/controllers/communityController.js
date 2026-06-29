@@ -352,7 +352,7 @@ const votePollOption = async (req, res, next) => {
     const { id: userId } = req.user;
     const { postId, optionId } = req.params;
 
-    // Verify poll option belongs to post
+    // Verify poll option belongs to this post
     const { data: option } = await supabase
       .from('community_poll_options')
       .select('id, poll_id, community_polls!inner(post_id)')
@@ -362,7 +362,7 @@ const votePollOption = async (req, res, next) => {
 
     if (!option) return res.status(404).json({ error: 'Poll option not found' });
 
-    // Check existing vote
+    // Enforce one vote per user per poll (UNIQUE constraint also enforces this at DB level)
     const { data: existing } = await supabase
       .from('community_poll_votes')
       .select('id')
@@ -372,27 +372,31 @@ const votePollOption = async (req, res, next) => {
 
     if (existing) return res.status(400).json({ error: 'Already voted' });
 
-    // Insert vote
-    await supabase.from('community_poll_votes').insert([{
+    // Insert vote — DB trigger (migration 229) atomically increments votes_count
+    const { error: voteError } = await supabase.from('community_poll_votes').insert([{
       poll_id: option.poll_id,
       option_id: optionId,
       user_id: userId
     }]);
 
-    // Increment option count via standard update (using RPC is better but if not available we read/write or let trigger handle it. Assuming no trigger, we increment manually)
-    // Actually, migration 228 didn't create a trigger for votes_count, so we manually increment it.
-    const { data: currentOpt } = await supabase.from('community_poll_options').select('votes_count').eq('id', optionId).single();
-    const newCount = (currentOpt?.votes_count || 0) + 1;
-    await supabase.from('community_poll_options').update({ votes_count: newCount }).eq('id', optionId);
+    if (voteError) throw voteError;
 
-    // Notify WS
-    const realtime = require('../services/realtimeService');
-    realtime.broadcast('community_event', {
-      type: 'poll_voted',
-      postId,
-      optionId,
-      newCount
-    });
+    // Read the trigger-updated count to return to the client
+    const { data: updatedOpt } = await supabase
+      .from('community_poll_options')
+      .select('votes_count')
+      .eq('id', optionId)
+      .single();
+
+    const newCount = updatedOpt?.votes_count ?? 0;
+
+    // Broadcast real-time poll update to all clients viewing this post
+    try {
+      const realtime = require('../services/realtimeService');
+      realtime.broadcast('community_event', { type: 'poll_voted', postId, optionId, newCount });
+    } catch {
+      // Realtime broadcast is non-critical — vote was still recorded
+    }
 
     res.json({ success: true, optionId, votes_count: newCount });
   } catch (err) { next(err); }
