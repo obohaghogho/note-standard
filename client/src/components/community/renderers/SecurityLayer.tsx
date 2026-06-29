@@ -2,15 +2,14 @@ import React, { useMemo } from 'react';
 import DOMPurify from 'dompurify';
 
 interface SecurityLayerProps {
-  content: any;
-  pluginId: string;
-  children: (sanitizedContent: any) => React.ReactNode;
+  content: unknown;
+  children: (sanitizedContent: unknown) => React.ReactNode;
 }
 
-export const SecurityLayer: React.FC<SecurityLayerProps> = ({ content, pluginId, children }) => {
+export const SecurityLayer: React.FC<SecurityLayerProps> = ({ content, children }) => {
   const sanitizedContent = useMemo(() => {
     // We must return a deep clone of the content to avoid mutating the original store
-    const sanitize = (obj: any): any => {
+    const sanitize = (obj: unknown): unknown => {
       if (typeof obj === 'string') {
         // Strict DOMPurify configuration
         return DOMPurify.sanitize(obj, {
@@ -25,14 +24,15 @@ export const SecurityLayer: React.FC<SecurityLayerProps> = ({ content, pluginId,
       }
       
       if (typeof obj === 'object' && obj !== null) {
-        const cleaned: Record<string, any> = {};
-        for (const key in obj) {
+        const cleaned: Record<string, unknown> = {};
+        const record = obj as Record<string, unknown>;
+        for (const key in record) {
           // Additional safety: don't sanitize URLs that are supposed to be arrays of image links,
           // but DO validate them to ensure they are https
-          if (key === 'urls' && Array.isArray(obj[key])) {
-             cleaned[key] = obj[key].filter((url: string) => url.startsWith('https://'));
+          if (key === 'urls' && Array.isArray(record[key])) {
+             cleaned[key] = (record[key] as string[]).filter((url: string) => url.startsWith('https://'));
           } else {
-             cleaned[key] = sanitize(obj[key]);
+             cleaned[key] = sanitize(record[key]);
           }
         }
         return cleaned;

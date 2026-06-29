@@ -1,4 +1,3 @@
-import React from 'react';
 import type { PostPlugin } from './PluginContract';
 
 // Define the type for dynamic imports

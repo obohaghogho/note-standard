@@ -19,7 +19,21 @@ PluginRegistry.register(ImagePlugin);
 // PluginRegistry.registerAsync('poll', () => import('./plugins/PollPlugin'));
 
 interface ContentResolverProps {
-  post: any;
+  post: {
+    id: string;
+    post_type: string;
+    content?: unknown;
+    media_urls?: string[];
+    profiles?: { avatar_url?: string; username?: string; is_verified?: boolean };
+    category?: string;
+    title?: string;
+    tags?: string[];
+    user_has_liked?: boolean;
+    likes_count?: number;
+    comments_count?: number;
+    shares_count?: number;
+    user_has_saved?: boolean;
+  };
   flags?: Record<string, boolean>;
 }
 
@@ -111,7 +125,7 @@ export const ContentResolver: React.FC<ContentResolverProps> = ({ post, flags = 
 
           {/* Plugin Execution Sandbox */}
           <PluginErrorBoundary pluginId={plugin.id}>
-            <SecurityLayer content={contentPayload} pluginId={plugin.id}>
+            <SecurityLayer content={contentPayload}>
               {(sanitizedContent) => (
                 <div className="relative group">
                   <plugin.Renderer content={sanitizedContent} context={context} />

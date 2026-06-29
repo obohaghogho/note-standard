@@ -106,9 +106,9 @@ export function DashboardLayout() {
             
             <main
                 className={cn(
-                    "flex-1 transition-all duration-300 min-w-0 flex flex-col w-full h-full relative",
+                    "flex-1 transition-all duration-300 min-w-0 flex flex-col h-full relative",
                     !isChatActiveOnMobile && "pb-safe md:ml-64",
-                    isChatActiveOnMobile && "absolute inset-0 z-[60] bg-gray-950 w-full m-0 p-0 md:relative md:inset-auto md:z-0 md:bg-transparent md:ml-64 md:w-auto overflow-hidden"
+                    isChatActiveOnMobile && "absolute inset-0 z-[60] bg-gray-950 m-0 p-0 md:relative md:inset-auto md:z-0 md:bg-transparent md:ml-64 overflow-hidden"
                 )}
             >
                 {renderHeader()}

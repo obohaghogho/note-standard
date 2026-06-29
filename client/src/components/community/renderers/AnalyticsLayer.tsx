@@ -12,6 +12,7 @@ export const AnalyticsLayer: React.FC<AnalyticsLayerProps> = ({ postId, postType
   const hasRecordedImpression = useRef(false);
 
   useEffect(() => {
+    const start = startTime.current;
     // 1. Setup Intersection Observer for Impressions
     const observer = new IntersectionObserver(
       (entries) => {
@@ -32,7 +33,7 @@ export const AnalyticsLayer: React.FC<AnalyticsLayerProps> = ({ postId, postType
     return () => {
       observer.disconnect();
       // 2. Record Read Duration on unmount
-      const duration = Date.now() - startTime.current;
+      const duration = Date.now() - start;
       if (duration > 1000) { // Only log if they looked at it for > 1s
         console.log(`[Analytics] Read Duration: ${postId} - ${duration}ms`);
       }

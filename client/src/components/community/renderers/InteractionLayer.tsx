@@ -3,7 +3,14 @@ import { Heart, MessageCircle, Bookmark, Share2 } from 'lucide-react';
 import { useFeedStore } from '../../../stores/feedStore';
 
 interface InteractionLayerProps {
-  post: any;
+  post: {
+    id: string;
+    user_has_liked?: boolean;
+    likes_count?: number;
+    comments_count?: number;
+    shares_count?: number;
+    user_has_saved?: boolean;
+  };
   supportedActions: string[];
 }
 

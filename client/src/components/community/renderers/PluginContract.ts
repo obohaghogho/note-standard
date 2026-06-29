@@ -18,7 +18,7 @@ export interface PluginContext {
   flags: Record<string, boolean>; // e.g., { LEARNING_MODE: true }
 }
 
-export interface PostPlugin<T = any> {
+export interface PostPlugin<T = unknown> {
   id: string; // e.g., 'text', 'image', 'poll'
   version: number;
   
@@ -29,7 +29,7 @@ export interface PostPlugin<T = any> {
   Preview?: React.FC<{ content: T; context: PluginContext }>;
   
   // Validates the content payload before rendering (prevent crashes)
-  validator: (content: any) => boolean;
+  validator: (content: unknown) => boolean;
   
   // Actions this plugin inherently supports
   supportedActions: Array<'like' | 'comment' | 'share' | 'save' | 'vote' | 'buy'>;

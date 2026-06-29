@@ -30,8 +30,6 @@
 
   * {
     box-sizing: border-box;
-    overflow-wrap: break-word;
-    word-wrap: break-word;
   }
 
   html {
@@ -78,12 +76,7 @@
     touch-action: manipulation;
   }
 
-  /* Prevent flex/grid children from overflowing their parents.
-     Scoped to flex/grid layout children only to avoid collapsing
-     inline elements like icon wrappers on narrow mobile screens. */
-  .flex > *, .grid > * {
-    min-width: 0;
-  }
+  /* Removed dangerous global min-width: 0 hack to prevent structural collapse */
 
   /* Images only — safe to apply height:auto + display:block.
      NOTE: svg, canvas, video, iframe are intentionally excluded:
