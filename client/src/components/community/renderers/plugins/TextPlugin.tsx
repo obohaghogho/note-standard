@@ -1,5 +1,5 @@
 import React from 'react';
-import { PostPlugin } from './PluginContract';
+import type { PostPlugin } from '../PluginContract';
 
 // Using a basic div here, but would integrate DOMPurify in reality
 export const TextPlugin: PostPlugin = {

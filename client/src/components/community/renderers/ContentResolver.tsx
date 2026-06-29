@@ -6,7 +6,7 @@ import { SecurityLayer } from './SecurityLayer';
 import { PluginErrorBoundary } from './PluginErrorBoundary';
 import { DiagnosticOverlay } from './DiagnosticOverlay';
 import { MoreHorizontal } from 'lucide-react';
-import { PluginContext, PostPlugin } from './PluginContract';
+import type { PluginContext, PostPlugin } from './PluginContract';
 
 // Import and register core plugins (synchronous)
 import { TextPlugin } from './plugins/TextPlugin';

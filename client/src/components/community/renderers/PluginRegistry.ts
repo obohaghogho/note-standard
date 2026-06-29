@@ -1,5 +1,5 @@
 import React from 'react';
-import { PostPlugin } from './PluginContract';
+import type { PostPlugin } from './PluginContract';
 
 // Define the type for dynamic imports
 type PluginLoader = () => Promise<{ default: PostPlugin }>;

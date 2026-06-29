@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PostPlugin } from '../PluginContract';
+import type { PostPlugin } from '../PluginContract';
 
 export const ImagePlugin: PostPlugin = {
   id: 'image',

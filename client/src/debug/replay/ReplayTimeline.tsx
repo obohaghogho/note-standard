@@ -1,5 +1,5 @@
 import React from "react";
-import { ReplayEvent } from "./replayTypes";
+import type { ReplayEvent } from "./replayTypes";
 
 export default function ReplayTimeline({
   events,

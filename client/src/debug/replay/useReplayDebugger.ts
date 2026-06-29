@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ReplayResponse } from "./replayTypes";
+import type { ReplayResponse } from "./replayTypes";
 import api from "../../api/axiosInstance";
 
 export function useReplayDebugger(conversationId: string | null) {
