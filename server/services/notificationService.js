@@ -249,9 +249,9 @@ eventBus.on('activity_logged', async (activity) => {
       });
     }
 
-    // Example mapping: Someone liked a post
+    // Community: liked a post
     if (action_type === 'liked_post' && metadata.post_owner_id && metadata.post_owner_id !== user_id) {
-       await createNotification({
+      await createNotification({
         receiverId: metadata.post_owner_id,
         senderId: user_id,
         type: 'like',
@@ -260,8 +260,66 @@ eventBus.on('activity_logged', async (activity) => {
         link: `/dashboard/community/post/${entity_id}`,
       });
     }
-    
-    // Add more mappings as needed for Phase 1-4 features
+
+    // Community: commented on a post
+    if (action_type === 'commented_post' && metadata.post_owner_id && metadata.post_owner_id !== user_id) {
+      await createNotification({
+        receiverId: metadata.post_owner_id,
+        senderId: user_id,
+        type: 'comment',
+        title: 'New Comment',
+        message: metadata.snippet ? `"${metadata.snippet}"` : 'Someone commented on your post.',
+        link: `/dashboard/community/post/${entity_id}`,
+      });
+    }
+
+    // Community: replied to a comment
+    if (action_type === 'replied_comment' && metadata.comment_owner_id && metadata.comment_owner_id !== user_id) {
+      await createNotification({
+        receiverId: metadata.comment_owner_id,
+        senderId: user_id,
+        type: 'reply',
+        title: 'New Reply',
+        message: metadata.snippet ? `"${metadata.snippet}"` : 'Someone replied to your comment.',
+        link: `/dashboard/community/post/${metadata.post_id}`,
+      });
+    }
+
+    // Community: mentioned a user
+    if (action_type === 'mentioned_user' && metadata.mentioned_user_id && metadata.mentioned_user_id !== user_id) {
+      await createNotification({
+        receiverId: metadata.mentioned_user_id,
+        senderId: user_id,
+        type: 'mention',
+        title: 'You were mentioned',
+        message: metadata.snippet ? `"${metadata.snippet}"` : 'Someone mentioned you in a post.',
+        link: `/dashboard/community/post/${entity_id}`,
+      });
+    }
+
+    // Community: followed a user
+    if (action_type === 'followed_user' && metadata.followed_user_id && metadata.followed_user_id !== user_id) {
+      await createNotification({
+        receiverId: metadata.followed_user_id,
+        senderId: user_id,
+        type: 'follow',
+        title: 'New Follower',
+        message: 'Someone started following you.',
+        link: `/dashboard/community/profile/${user_id}`,
+      });
+    }
+
+    // Badge
+    if (action_type === 'earned_badge') {
+      await createNotification({
+        receiverId: user_id,
+        senderId: null,
+        type: 'achievement',
+        title: 'New Badge Earned!',
+        message: `Congratulations! You earned the ${metadata.badge_name || 'new'} badge.`,
+        link: '/dashboard/settings',
+      });
+    }
   } catch (err) {
     console.error('[NotificationService] Error processing activity event:', err);
   }

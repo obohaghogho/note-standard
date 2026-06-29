@@ -89,22 +89,66 @@ const addComment = async (req, res, next) => {
 
     if (commentError) throw commentError;
 
-    // Notify post owner
+    // Notify post owner (via activity bus so the event-driven notification service handles it)
     const { data: post } = await supabase
       .from("community_posts")
       .select("author_id, title")
       .eq("id", postId)
       .single();
 
-    if (post && post.author_id !== userId) {
-      await createNotification({
-        receiverId: post.author_id,
-        senderId: userId,
-        type: "comment",
-        title: "New Comment on your post",
-        message: content.substring(0, 50),
-        link: `/dashboard/community/post/${postId}`,
+    const snippet = content.substring(0, 80);
+
+    // Comment notification (or reply notification if parentId is set)
+    if (parentId) {
+      // Notify the parent comment author
+      const { data: parentComment } = await supabase
+        .from("community_comments")
+        .select("author_id")
+        .eq("id", parentId)
+        .single();
+
+      if (parentComment && parentComment.author_id !== userId) {
+        await activityService.logActivity({
+          userId,
+          actionType: 'replied_comment',
+          entityType: 'community_comment',
+          entityId: comment.id,
+          metadata: {
+            comment_owner_id: parentComment.author_id,
+            post_id: postId,
+            snippet,
+          }
+        });
+      }
+    } else if (post && post.author_id !== userId) {
+      await activityService.logActivity({
+        userId,
+        actionType: 'commented_post',
+        entityType: 'community_post',
+        entityId: postId,
+        metadata: { post_owner_id: post.author_id, snippet }
       });
+    }
+
+    // Extract @mentions from content and notify each mentioned user
+    const mentions = [...content.matchAll(/@(\w+)/g)].map(m => m[1]);
+    if (mentions.length > 0) {
+      const { data: mentionedProfiles } = await supabase
+        .from('profiles')
+        .select('id, username')
+        .in('username', mentions);
+
+      for (const mp of (mentionedProfiles || [])) {
+        if (mp.id !== userId) {
+          await activityService.logActivity({
+            userId,
+            actionType: 'mentioned_user',
+            entityType: 'community_post',
+            entityId: postId,
+            metadata: { mentioned_user_id: mp.id, snippet }
+          });
+        }
+      }
     }
 
     res.status(201).json(comment);
@@ -257,6 +301,14 @@ const toggleFollow = async (req, res, next) => {
       return res.json({ following: false });
     } else {
       await supabase.from('community_follows').insert([{ follower_id: userId, following_id: profileId }]);
+      // Fire follow notification via activity bus
+      await activityService.logActivity({
+        userId,
+        actionType: 'followed_user',
+        entityType: 'profile',
+        entityId: profileId,
+        metadata: { followed_user_id: profileId }
+      });
       return res.json({ following: true });
     }
   } catch (err) { next(err); }
