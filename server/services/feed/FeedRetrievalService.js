@@ -11,7 +11,7 @@ const features = require('../../config/features');
 class FeedRetrievalService {
   
   async getFeed(req) {
-    const { userId, tab = 'latest', cursor, limit = 20 } = req;
+    const { userId, tab = 'latest', cursor, limit = 20, category, sort, search } = req;
     
     // 1. Analytics tracking
     analyticsService.trackEvent(userId, 'feed_load', { tab, cursor: !!cursor });
@@ -26,22 +26,90 @@ class FeedRetrievalService {
       // Note: In an enterprise system, retrieval just pulls candidates from an indexed pool.
       // Here we simulate it by pulling a large batch from DB, then processing in memory.
       
+      // Handle special tabs that need different queries
+      if (tab === 'following') {
+        // Get posts from users the current user follows
+        const { data: follows } = await supabase
+          .from('community_follows')
+          .select('following_id')
+          .eq('follower_id', userId);
+        const followingIds = (follows || []).map(f => f.following_id);
+        if (followingIds.length === 0) return { posts: [], nextCursor: null, hasMore: false };
+        let query = supabase
+          .from('community_posts')
+          .select('*, profiles!author_id(id, username, avatar_url, is_verified), community_likes(user_id), community_bookmarks(user_id)')
+          .eq('status', 'public')
+          .in('author_id', followingIds)
+          .order('created_at', { ascending: false })
+          .limit(limit + 1);
+        if (parsedCursor) query = query.lt('created_at', parsedCursor.timestamp);
+        const { data, error } = await query;
+        if (error) throw error;
+        const hasMore = (data || []).length > limit;
+        return { posts: (data || []).slice(0, limit), hasMore, nextCursor: hasMore ? data[limit - 1]?.created_at : null };
+      }
+
+      if (tab === 'saved') {
+        const { data: bookmarks } = await supabase
+          .from('community_bookmarks')
+          .select('post_id')
+          .eq('user_id', userId);
+        const postIds = (bookmarks || []).map(b => b.post_id);
+        if (postIds.length === 0) return { posts: [], nextCursor: null, hasMore: false };
+        const { data, error } = await supabase
+          .from('community_posts')
+          .select('*, profiles!author_id(id, username, avatar_url, is_verified), community_likes(user_id), community_bookmarks(user_id)')
+          .eq('status', 'public')
+          .in('id', postIds)
+          .order('created_at', { ascending: false })
+          .limit(limit);
+        if (error) throw error;
+        return { posts: data || [], hasMore: false, nextCursor: null };
+      }
+
+      if (tab === 'my-posts') {
+        const { data, error } = await supabase
+          .from('community_posts')
+          .select('*, profiles!author_id(id, username, avatar_url, is_verified), community_likes(user_id), community_bookmarks(user_id)')
+          .eq('author_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(limit);
+        if (error) throw error;
+        return { posts: data || [], hasMore: false, nextCursor: null };
+      }
+
       let query = supabase
         .from('community_posts')
-        .select('*, profiles!author_id(username, avatar_url, is_verified, plan_tier)')
+        .select('*, profiles!author_id(id, username, avatar_url, is_verified), community_likes(user_id), community_bookmarks(user_id)')
         .eq('status', 'public');
 
+      // Category filter
+      if (category && category !== 'All') {
+        query = query.eq('category', category);
+      }
+
+      // Text search
+      if (search && search.trim()) {
+        query = query.or(`title.ilike.%${search.trim()}%,content.ilike.%${search.trim()}%`);
+      }
+
       if (parsedCursor && tab === 'latest') {
-        // Simple pagination for 'latest'
         query = query.lt('created_at', parsedCursor.timestamp);
       }
       
-      const { data, error } = await query
-        .order('created_at', { ascending: false })
-        .limit(100); // Fetch a larger candidate pool for in-memory ranking
+      // Sort
+      if (sort === 'most_liked') {
+        query = query.order('saves_count', { ascending: false });
+      } else if (sort === 'most_commented') {
+        query = query.order('shares_count', { ascending: false });
+      } else {
+        query = query.order('created_at', { ascending: false });
+      }
+
+      const { data, error } = await query.limit(100);
         
       if (error) {
-        if (error.code === '42P01') return { posts: [], nextCursor: null };
+        if (error.code === '42P01') return { posts: [], nextCursor: null, hasMore: false };
         throw error;
       }
       
@@ -135,7 +203,8 @@ class FeedRetrievalService {
 
       return {
         posts: cleanFeed,
-        nextCursor
+        nextCursor,
+        hasMore: rawPosts.length >= limit,
       };
 
     } catch (error) {

@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { requireAuth } = require("../middleware/auth");
 const { 
-  createCommunityPost, addComment, toggleLike, getFeed,
+  createCommunityPost, addComment, toggleLike, getFeed, getComments,
   toggleBookmark, deletePost, editPost, deleteComment, editComment,
   toggleFollow, reportItem
 } = require("../controllers/communityController");
@@ -16,6 +16,7 @@ router.post("/post", createCommunityPost);
 router.put("/post/:postId", editPost);
 router.delete("/post/:postId", deletePost);
 router.post("/post/:postId/bookmark", toggleBookmark);
+router.get("/post/:postId/comments", getComments);
 
 router.post("/comment", addComment);
 router.put("/comment/:commentId", editComment);

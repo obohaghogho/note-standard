@@ -172,13 +172,16 @@ const toggleLike = async (req, res, next) => {
  */
 const getFeed = async (req, res, next) => {
     try {
-        const { tab = 'latest', limit = 20, cursor } = req.query;
+        const { tab = 'latest', limit = 20, cursor, category, sort, search } = req.query;
         
         const feedResult = await feedRetrievalService.getFeed({
           userId: req.user.id,
           tab,
           limit: parseInt(limit),
-          cursor
+          cursor,
+          category,
+          sort,
+          search,
         });
 
         res.json(feedResult);
@@ -269,11 +272,25 @@ const reportItem = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const getComments = async (req, res, next) => {
+  try {
+    const { postId } = req.params;
+    const { data, error } = await supabase
+      .from('community_comments')
+      .select('*, profiles!author_id(id, username, avatar_url, is_verified)')
+      .eq('post_id', postId)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   createCommunityPost,
   addComment,
   toggleLike,
   getFeed,
+  getComments,
   toggleBookmark,
   deletePost,
   editPost,
