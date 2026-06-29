@@ -9,7 +9,12 @@
     "build": "node ../scripts/verify-apple-local.js && vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:report": "playwright show-report",
+    "ci": "npm run typecheck && npm run lint && npm run build && npm run test:e2e"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.89.0",
@@ -53,6 +58,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
+    "@playwright/test": "^1.61.1",
     "@prerenderer/renderer-jsdom": "^1.1.9",
     "@prerenderer/rollup-plugin": "^0.3.12",
     "@tailwindcss/vite": "^4.2.1",

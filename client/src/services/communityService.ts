@@ -70,7 +70,7 @@ const QUEUE_KEY = 'community_action_queue';
 
 interface OfflineAction {
   id: string;
-  type: 'like' | 'unlike' | 'bookmark' | 'unbookmark' | 'comment' | 'follow' | 'unfollow';
+  type: 'like' | 'unlike' | 'bookmark' | 'unbookmark' | 'comment' | 'follow' | 'unfollow' | 'vote';
   payload: Record<string, unknown>;
   timestamp: number;
 }
@@ -107,6 +107,9 @@ export async function flushOfflineQueue() {
           break;
         case 'follow':
           await toggleFollow(action.payload.profileId as string);
+          break;
+        case 'vote':
+          await votePollOption(action.payload.postId as string, action.payload.optionId as string);
           break;
       }
     } catch (_) {
@@ -229,6 +232,12 @@ export async function toggleBookmark(postId: string): Promise<{ bookmarked: bool
 export async function toggleFollow(profileId: string): Promise<{ following: boolean }> {
   const res = await authFetch(`${API_URL}/api/community/profile/${profileId}/follow`, { method: 'POST' });
   if (!res.ok) throw new Error(`Follow failed (${res.status})`);
+  return res.json();
+}
+
+export async function votePollOption(postId: string, optionId: string): Promise<{ optionId: string; votes_count: number }> {
+  const res = await authFetch(`${API_URL}/api/community/post/${postId}/poll/${optionId}/vote`, { method: 'POST' });
+  if (!res.ok) throw new Error(`Vote failed (${res.status})`);
   return res.json();
 }
 

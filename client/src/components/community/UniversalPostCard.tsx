@@ -405,44 +405,61 @@ export const UniversalPostCard: React.FC<Props> = ({
   );
 };
 
-// ── Poll Widget ──────────────────────────────────────────────────────────────
+import { votePollOption, queueOfflineAction } from '../../services/communityService';
+
 const PollWidget: React.FC<{ postId: string; pollOptions: any }> = ({ postId, pollOptions }) => {
   const [voted, setVoted] = useState<string | null>(null);
-  const options: Array<{ id: string; option_text: string; votes_count: number }> =
-    Array.isArray(pollOptions) ? pollOptions : [];
-  const totalVotes = options.reduce((sum, o) => sum + (o.votes_count || 0), 0);
+  const [localOptions, setLocalOptions] = useState<Array<{ id: string; option_text: string; votes_count: number }>>(
+    Array.isArray(pollOptions) ? pollOptions : []
+  );
+
+  const totalVotes = localOptions.reduce((sum, o) => sum + (o.votes_count || 0), 0);
 
   const handleVote = async (optionId: string) => {
     if (voted) return;
     setVoted(optionId);
-    // TODO: call poll vote endpoint when implemented
+    
+    // Optimistic UI update
+    setLocalOptions(prev => prev.map(o => o.id === optionId ? { ...o, votes_count: (o.votes_count || 0) + 1 } : o));
+    
+    try {
+      if (!navigator.onLine) {
+        queueOfflineAction({ type: 'vote', payload: { postId, optionId } });
+        return;
+      }
+      await votePollOption(postId, optionId);
+    } catch (_) {
+      // Revert on failure
+      setVoted(null);
+      setLocalOptions(prev => prev.map(o => o.id === optionId ? { ...o, votes_count: Math.max(0, (o.votes_count || 1) - 1) } : o));
+    }
   };
 
   return (
     <div className="space-y-2 mt-2">
-      {options.map((opt) => {
-        const pct = totalVotes > 0 ? Math.round((opt.votes_count / totalVotes) * 100) : 0;
-        const isVoted = voted === opt.id;
-        return (
-          <button
-            key={opt.id}
-            onClick={() => handleVote(opt.id)}
-            disabled={!!voted}
-            className={`relative w-full text-left rounded-lg border px-4 py-2.5 text-sm overflow-hidden transition-colors ${
-              isVoted ? 'border-blue-500 text-blue-700 dark:text-blue-300' : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600'
-            }`}
-          >
-            {voted && (
-              <div
-                className="absolute inset-y-0 left-0 bg-blue-50 dark:bg-blue-900/20 transition-all"
-                style={{ width: `${pct}%` }}
-              />
-            )}
-            <span className="relative z-10">{opt.option_text}</span>
-            {voted && <span className="relative z-10 float-right font-medium">{pct}%</span>}
-          </button>
-        );
-      })}
+        {localOptions.map((opt) => {
+          const pct = totalVotes > 0 ? Math.round(((opt.votes_count || 0) / totalVotes) * 100) : 0;
+          const isVoted = voted === opt.id;
+          return (
+            <button
+              key={opt.id}
+              onClick={() => handleVote(opt.id)}
+              disabled={!!voted}
+              className={`relative w-full text-left rounded-lg border px-4 py-2.5 text-sm overflow-hidden transition-colors ${
+                isVoted ? 'border-blue-500 text-blue-700 dark:text-blue-300' : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600'
+              }`}
+            >
+              {voted && (
+                <div
+                  className="absolute inset-y-0 left-0 bg-blue-50 dark:bg-blue-900/20 transition-all"
+                  style={{ width: `${pct}%` }}
+                />
+              )}
+              <span className="relative z-10">{opt.option_text}</span>
+              {voted && <span className="relative z-10 float-right font-medium">{pct}%</span>}
+            </button>
+          );
+        })}
       <p className="text-xs text-gray-400">{totalVotes} votes</p>
     </div>
   );

@@ -28,12 +28,35 @@ const createCommunityPost = async (req, res, next) => {
         category: category || 'General',
         tags: tags || [],
         status: status || 'public',
-        poll_options,
         link_url,
         code_language
       }])
       .select('*, profiles!author_id(username, avatar_url)')
       .single();
+
+    if (postError) throw postError;
+
+    // Handle Polls
+    if (post_type === 'poll' && Array.isArray(poll_options) && poll_options.length >= 2) {
+      const { data: poll } = await supabase
+        .from('community_polls')
+        .insert([{ post_id: post.id, question: title || content || 'Poll' }])
+        .select('id')
+        .single();
+        
+      if (poll) {
+        const optionInserts = poll_options.map(opt => ({
+          poll_id: poll.id,
+          option_text: opt.option_text || opt,
+          votes_count: 0
+        }));
+        await supabase.from('community_poll_options').insert(optionInserts);
+        
+        // Attach back to post so UI gets it immediately
+        const { data: optionsData } = await supabase.from('community_poll_options').select('*').eq('poll_id', poll.id);
+        post.poll_options = optionsData;
+      }
+    }
 
     if (postError) throw postError;
 
@@ -324,6 +347,57 @@ const reportItem = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const votePollOption = async (req, res, next) => {
+  try {
+    const { id: userId } = req.user;
+    const { postId, optionId } = req.params;
+
+    // Verify poll option belongs to post
+    const { data: option } = await supabase
+      .from('community_poll_options')
+      .select('id, poll_id, community_polls!inner(post_id)')
+      .eq('id', optionId)
+      .eq('community_polls.post_id', postId)
+      .single();
+
+    if (!option) return res.status(404).json({ error: 'Poll option not found' });
+
+    // Check existing vote
+    const { data: existing } = await supabase
+      .from('community_poll_votes')
+      .select('id')
+      .eq('poll_id', option.poll_id)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (existing) return res.status(400).json({ error: 'Already voted' });
+
+    // Insert vote
+    await supabase.from('community_poll_votes').insert([{
+      poll_id: option.poll_id,
+      option_id: optionId,
+      user_id: userId
+    }]);
+
+    // Increment option count via standard update (using RPC is better but if not available we read/write or let trigger handle it. Assuming no trigger, we increment manually)
+    // Actually, migration 228 didn't create a trigger for votes_count, so we manually increment it.
+    const { data: currentOpt } = await supabase.from('community_poll_options').select('votes_count').eq('id', optionId).single();
+    const newCount = (currentOpt?.votes_count || 0) + 1;
+    await supabase.from('community_poll_options').update({ votes_count: newCount }).eq('id', optionId);
+
+    // Notify WS
+    const realtime = require('../services/realtimeService');
+    realtime.broadcast('community_event', {
+      type: 'poll_voted',
+      postId,
+      optionId,
+      newCount
+    });
+
+    res.json({ success: true, optionId, votes_count: newCount });
+  } catch (err) { next(err); }
+};
+
 const getComments = async (req, res, next) => {
   try {
     const { postId } = req.params;
@@ -349,4 +423,6 @@ module.exports = {
   deleteComment,
   editComment,
   toggleFollow,
-  reportItem
+  reportItem,
+  votePollOption
+};

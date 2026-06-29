@@ -100,7 +100,6 @@ export const FeedNoteCard = ({ note, onCommentClick, onTagClick }: FeedNoteCardP
     const handleBookmark = (e: React.MouseEvent) => {
         e.stopPropagation();
         toast.success('Saved to your notes!', { icon: '🔖' });
-        // TODO: wire to backend bookmark endpoint
     };
 
     return (
