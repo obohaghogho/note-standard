@@ -23,6 +23,7 @@ import {
   deletePost,
   reportItem,
   queueOfflineAction,
+  votePollOption,
 } from '../../services/communityService';
 import { CommentSection } from './CommentSection';
 import { PostComposer } from './PostComposer';
@@ -405,7 +406,6 @@ export const UniversalPostCard: React.FC<Props> = ({
   );
 };
 
-import { votePollOption, queueOfflineAction } from '../../services/communityService';
 
 const PollWidget: React.FC<{ postId: string; pollOptions: any }> = ({ postId, pollOptions }) => {
   const [voted, setVoted] = useState<string | null>(null);
