@@ -1,4 +1,4 @@
-const supabase = require('../../config/database');
+const supabase = require('../config/database');
 const creatorAnalyticsService = require('../services/creator/CreatorAnalyticsService');
 const graphService = require('../services/graph/GraphService');
 
@@ -126,6 +126,24 @@ exports.saveDraft = async (req, res, next) => {
     }
 
     res.json({ draft: savedDraft });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.deleteDraft = async (req, res, next) => {
+  try {
+    const creatorId = req.user.id;
+    const { id } = req.params;
+
+    const { error } = await supabase
+      .from('creator_drafts')
+      .delete()
+      .eq('id', id)
+      .eq('creator_id', creatorId);
+
+    if (error) throw error;
+    res.json({ success: true });
   } catch (err) {
     next(err);
   }

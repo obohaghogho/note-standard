@@ -17,7 +17,6 @@ router.post("/like", toggleLike);
 // Spaces
 router.get("/spaces", spaceController.getSpaces);
 router.post("/spaces", spaceController.createSpace);
-router.get("/spaces/:spaceId/manifest", spaceController.getManifest);
 router.post("/spaces/:spaceId/join", spaceController.joinSpace);
 router.post("/spaces/:spaceId/ask", spaceAiController.askSpaceAi);
 
