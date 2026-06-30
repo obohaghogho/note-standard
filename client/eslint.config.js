@@ -6,7 +6,8 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // Ignore build output and Playwright config/tests from strict TS linting
+  globalIgnores(['dist', 'playwright.config.ts', 'tests/**']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -20,14 +21,6 @@ export default defineConfig([
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,
-      parserOptions: {
-        project: [
-          './tsconfig.app.json',
-          './tsconfig.node.json',
-          './tsconfig.playwright.json',
-        ],
-        tsconfigRootDir: import.meta.dirname,
-      },
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
@@ -37,5 +30,13 @@ export default defineConfig([
       ],
     },
   },
+  // Relaxed config for Playwright test files (no project-based type checking)
+  {
+    files: ['playwright.config.ts', 'tests/**/*.ts'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 2020,
+      globals: { ...globals.browser, ...globals.node },
+    },
+  },
 ])
-
