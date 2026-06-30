@@ -475,9 +475,9 @@ input[type=number] {
   scroll-behavior: auto;
   /* WhatsApp/Telegram technique: allow browser to natively pin newest message when container shrinks */
   overflow-anchor: auto;
-  /* padding-bottom clears space at the VISUAL BOTTOM (between newest msg and absolute composer) */
   padding-top: 8px;
-  padding-bottom: calc(var(--composer-height, 80px) + 16px);
+  /* No padding-bottom needed: composer is a flex sibling, not absolutely positioned */
+  padding-bottom: 0;
 }
 @media (min-width: 768px) {
   .chat-messages {
@@ -495,9 +495,13 @@ input[type=number] {
 .chat-input-bar {
   flex-shrink: 0;
   flex-grow: 0;
+  position: relative;   /* In normal flex flow — moves with .chat-root at 60fps */
   z-index: 40;
   width: 100%;
   background: inherit;
+  /* GPU compositor layer: the browser can animate this element independently.
+     This is the key to smooth keyboard animation — no relayout required. */
+  will-change: transform;
 }
 
 @media (max-width: 768px) {
@@ -604,7 +608,7 @@ input[type=number] {
     padding-left: 10px !important;
     padding-right: 10px !important;
     padding-top: 6px !important;
-    padding-bottom: calc(var(--composer-height, 80px) + 16px) !important;
+    padding-bottom: 0 !important; /* No clearance needed — bar is in flex flow */
   }
 
   .keyboard-open .msg-bubble {

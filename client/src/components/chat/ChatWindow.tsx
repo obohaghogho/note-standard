@@ -1163,7 +1163,7 @@ const ChatWindow: React.FC = () => {
 
 
             {!isPending ? (
-                <div className="chat-input-bar absolute md:relative bottom-0 inset-x-0 bg-gray-950/80 backdrop-blur-2xl border-t border-white/10 z-40" ref={composerRef}>
+                <div className="chat-input-bar relative bg-gray-950/80 backdrop-blur-2xl border-t border-white/10 z-40" ref={composerRef}>
                     <div className="max-w-[900px] mx-auto px-3 py-2 md:p-4 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
                         {activeConversation?.isBlocked ? (
                             <div className="flex flex-col items-center justify-center p-4 bg-gray-800/80 rounded-2xl border border-gray-700/50">
