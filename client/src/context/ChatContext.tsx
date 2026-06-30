@@ -1263,14 +1263,19 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         // FIX 1: Handler for chat:messages_delivered_batch.
         // The gateway /deliver/batch endpoint emits this to the sender's socket room.
         // Previously this event had no listener — delivery receipts from batch fast-path were silently dropped.
-        const onBatchDeliveryEvent = ({ conversationId, messageIds, userId: recipientId, delivered_at }: { conversationId: string; messageIds: string[]; userId: string; delivered_at: string }) => {
-            if (!isMounted.current || !Array.isArray(messageIds) || messageIds.length === 0 || !conversationId) return;
+        const onBatchDeliveryEvent = ({ conversationId, messageIds, eventIds, userId: recipientId, delivered_at }: { conversationId: string; messageIds: string[]; eventIds?: string[]; userId: string; delivered_at: string }) => {
+            if (!isMounted.current || (!Array.isArray(messageIds) && !Array.isArray(eventIds)) || !conversationId) return;
             if (recipientId === user?.id) return; // ignore own echoes
+
+            const mIds = messageIds || [];
+            const eIds = eventIds || [];
+            if (mIds.length === 0 && eIds.length === 0) return;
 
             const nowStr = delivered_at || new Date().toISOString();
 
             // Filter to IDs not yet upgraded
-            const newIds = messageIds.filter(id => {
+            const processIds = [...mIds, ...eIds].filter(id => {
+                if (!id) return false;
                 const tickSet = appliedTicksRef.current.get(id);
                 if (tickSet?.has('delivered') || tickSet?.has('read')) return false;
                 const nextSet = tickSet || new Set<string>();
@@ -1278,22 +1283,24 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 appliedTicksRef.current.set(id, nextSet);
                 return true;
             });
-            if (newIds.length === 0) return;
+            if (processIds.length === 0) return;
 
             setMessages(prev => {
                 const current = prev[conversationId] || [];
-                if (!current.some(m => newIds.includes(m.id))) return prev;
+                if (!current.some(m => processIds.includes(m.id) || (m.event_id && processIds.includes(m.event_id)))) return prev;
                 return {
                     ...prev,
                     [conversationId]: current.map(m =>
-                        newIds.includes(m.id) ? mergeMessageStatus(m, { delivered_at: nowStr, status: 'delivered' }) : m
+                        (processIds.includes(m.id) || (m.event_id && processIds.includes(m.event_id))) ? mergeMessageStatus(m, { delivered_at: nowStr, status: 'delivered' }) : m
                     )
                 };
             });
             // FIX 2 also applies here — update lastMessage unconditionally if it is in the batch
             setConversations(prev => prev.map(c => {
                 if (c.id !== conversationId || !c.lastMessage) return c;
-                if (!newIds.includes(c.lastMessage.id)) return c;
+                const lm = c.lastMessage;
+                const isMatch = processIds.includes(lm.id) || ('event_id' in lm && lm.event_id ? processIds.includes(lm.event_id as string) : false);
+                if (!isMatch) return c;
                 return { ...c, lastMessage: mergeMessageStatus(c.lastMessage as Message, { delivered_at: nowStr, status: 'delivered' }) as Conversation['lastMessage'] };
             }));
         };

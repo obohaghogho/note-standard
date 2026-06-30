@@ -630,7 +630,8 @@ const ChatWindow: React.FC = () => {
             });
     };
 
-    // Typing Status Debounce
+    // Typing Status State Machine
+    const lastTypingEmitRef = useRef<number>(0);
     const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | string) => {
@@ -638,12 +639,20 @@ const ChatWindow: React.FC = () => {
         const val = applyAutoCorrect(value);
         setInputValue(val);
 
-        // Emit typing status
-        sendTypingStatus(true);
+        // Emit typing status (throttled to 2 seconds to prevent rate limiting)
+        const now = Date.now();
+        if (now - lastTypingEmitRef.current > 2000) {
+            sendTypingStatus(true);
+            lastTypingEmitRef.current = now;
+        }
+        
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        
+        // Debounce stop typing emit by 2.5 seconds after last keystroke
         typingTimeoutRef.current = setTimeout(() => {
             sendTypingStatus(false);
-        }, 3000);
+            lastTypingEmitRef.current = 0;
+        }, 2500);
 
         // Update draft
         if (activeConversationId) {

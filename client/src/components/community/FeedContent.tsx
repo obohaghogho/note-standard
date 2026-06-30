@@ -85,9 +85,9 @@ export const FeedContent: React.FC<Props> = ({
             <div className="w-20 h-20 mx-auto bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
               <span className="text-3xl">🌌</span>
             </div>
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">It's quiet here</h3>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Welcome to the Community!</h3>
             <p className="text-gray-500 dark:text-gray-400 text-sm">
-              Follow creators and join spaces to personalize your feed.
+              Discover ideas, share your knowledge, follow creators, and join spaces that match your interests. Your next great conversation starts here.
             </p>
             <button
               onClick={onOpenComposer}

@@ -98,6 +98,7 @@ module.exports = (io, socket) => {
       // If they are visible and just came online, broadcast
       if (isVisible && !wasAlreadyOnline) {
         console.log(`[Presence] ✓ ${userId} is now ONLINE (Visible: true)`);
+        console.log(`[FORENSIC][GW] PRESENCE_ONLINE | socket_id:${socket.id} | user_id:${userId} | ts:${Date.now()}`);
         socket.broadcast.emit('user_online', {
           userId,
           online: true,

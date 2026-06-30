@@ -2,7 +2,6 @@ const ALLOWED_EMBED_DOMAINS = [
   'youtube.com',
   'youtu.be',
   'codepen.io',
-  'codesandbox.io',
   'figma.com',
   'open.spotify.com'
 ];

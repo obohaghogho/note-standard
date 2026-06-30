@@ -89,6 +89,8 @@ module.exports = (io, socket) => {
     if (!checkRateLimit(`chat_typing:${userId}`, 6, 10000)) {
       return; // drop silently
     }
+    
+    console.log(`[FORENSIC][GW] TYPING_START | conversation_id:${room} | user_id:${userId} | ts:${Date.now()}`);
 
     socket.to(room).emit('chat:typing', {
       userId,
@@ -119,7 +121,7 @@ module.exports = (io, socket) => {
     const { conversationId, messageIds, readAt, senderId } = data || {};
     if (!conversationId || !Array.isArray(messageIds) || messageIds.length === 0) return;
 
-    console.log(`[FORENSIC][GW] Read ACK Received | userId:${userId} | conversationId:${conversationId} | messageIds:[${messageIds.join(',')}] | ts:${Date.now()}`);
+    console.log(`[FORENSIC][GW] MESSAGE_READ | message_id:${messageIds.join(',')} | ts:${Date.now()}`);
 
     const payload = {
       userId,

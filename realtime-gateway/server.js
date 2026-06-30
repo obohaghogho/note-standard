@@ -239,7 +239,7 @@ app.post('/deliver/batch', async (req, res) => {
       .in('id', messageIds)
       .neq('sender_id', userId)
       .is('delivered_at', null)
-      .select('id, conversation_id, sender_id');
+      .select('id, conversation_id, sender_id, event_id');
 
     if (error) {
       console.warn('[Gateway] /deliver/batch DB error:', error.message);
@@ -248,17 +248,21 @@ app.post('/deliver/batch', async (req, res) => {
 
     if (data && data.length > 0) {
       console.log(`[Gateway] ⚡ Fast-path batch deliver | ${data.length} messages | userId:${userId}`);
+      data.forEach(msg => {
+          console.log(`[FORENSIC][GW] MESSAGE_DELIVERED | message_id:${msg.id} | event_id:${msg.event_id || 'N/A'} | ts:${now}`);
+      });
 
       // Group by conversation and sender to minimise socket emits
       const bySender = {};
       data.forEach(msg => {
         const key = `${msg.sender_id}:${msg.conversation_id}`;
-        if (!bySender[key]) bySender[key] = { senderId: msg.sender_id, conversationId: msg.conversation_id, messageIds: [] };
+        if (!bySender[key]) bySender[key] = { senderId: msg.sender_id, conversationId: msg.conversation_id, messageIds: [], eventIds: [] };
         bySender[key].messageIds.push(msg.id);
+        if (msg.event_id) bySender[key].eventIds.push(msg.event_id);
       });
 
-      Object.values(bySender).forEach(({ senderId, conversationId, messageIds: ids }) => {
-        const payload = { conversationId, messageIds: ids, userId, delivered_at: now };
+      Object.values(bySender).forEach(({ senderId, conversationId, messageIds: ids, eventIds }) => {
+        const payload = { conversationId, messageIds: ids, eventIds, userId, delivered_at: now };
         // Emit to sender (double-tick)
         io.to(`user:${senderId}`).emit('chat:messages_delivered_batch', payload);
         // Emit to conversation room (covers active participants)
@@ -310,18 +314,20 @@ app.post('/deliver/:messageId', async (req, res) => {
       .update({ delivered_at: now })
       .eq('id', messageId)
       .is('delivered_at', null)          // Idempotent: no-op if already delivered
-      .select('id, conversation_id, sender_id, delivered_at')
+      .select('id, conversation_id, sender_id, delivered_at, event_id')
       .single();
 
     if (!error && data) {
       const receiptPayload = {
         messageId: data.id,
+        eventId: data.event_id,
         conversationId: data.conversation_id,
         userId: data.sender_id,
         delivered_at: data.delivered_at || now
       };
 
       console.log(`[Gateway] ⚡ Fast-path deliver | messageId:${messageId} | senderId:${data.sender_id} | conversationId:${data.conversation_id} | ts:${Date.now()}`);
+      console.log(`[FORENSIC][GW] MESSAGE_DELIVERED | message_id:${data.id} | event_id:${data.event_id || 'N/A'} | ts:${now}`);
 
       // Emit directly via Socket.IO — sender gets the double-tick instantly
       io.to(`user:${data.sender_id}`).emit('chat:message_delivered', receiptPayload);
@@ -423,8 +429,8 @@ const io = new Server(httpServer, {
   },
   transports: ['polling', 'websocket'],
   perMessageDeflate: false,
-  pingTimeout: 60000,
-  pingInterval: 25000,
+  pingTimeout: 20000,
+  pingInterval: 10000,
   allowEIO3: true,
 });
 
@@ -545,6 +551,10 @@ async function initPgListener() {
         const envelope = JSON.parse(msg.payload);
         const msgId = envelope.payload?.id || envelope.payload?.messageId || 'N/A';
         console.log(`[FORENSIC][GW] PG_NOTIFY Received | event:${envelope.event} | messageId:${msgId} | cid:${envelope.correlation_id || 'N/A'} | ts:${Date.now()}`);
+        
+        if (envelope.event === 'chat:message' || envelope.event === 'chat:new_message') {
+            console.log(`[FORENSIC][GW] MESSAGE_CREATED | message_id:${msgId} | event_id:${envelope.payload?.event_id || 'N/A'} | ts:${Date.now()}`);
+        }
         
         // Handle session revocation gracefully
         if (envelope.event === 'session:revoked') {

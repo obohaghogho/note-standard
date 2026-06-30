@@ -123,7 +123,7 @@ export const ContentResolver: React.FC<ContentResolverProps> = ({ post, flags = 
 
           {post.title && <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight mb-3">{post.title}</h2>}
 
-          {/* Plugin Execution Sandbox */}
+          {/* Plugin Execution Environment */}
           <PluginErrorBoundary pluginId={plugin.id}>
             <SecurityLayer content={contentPayload}>
               {(sanitizedContent) => (
