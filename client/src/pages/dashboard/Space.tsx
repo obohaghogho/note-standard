@@ -14,7 +14,13 @@ export default function SpacePage() {
   const { spaceId } = useParams<{ spaceId: string }>();
   const navigate = useNavigate();
   
-  const [space, setSpace] = useState<any>(null);
+  type SpaceData = {
+    id: string;
+    manifest: Record<string, unknown>;
+    userRole: string;
+    [key: string]: unknown;
+  };
+  const [space, setSpace] = useState<SpaceData | null>(null);
   const [activeTab, setActiveTab] = useState('home');
   const [isLoading, setIsLoading] = useState(true);
   

@@ -130,7 +130,7 @@ export function useCommunityFeed(params: FeedParams) {
       setPosts(prev => prev.map(p => p.id === postId ? { ...p, ...updates } : p));
     };
 
-    const handleLikeToggled = ({ postId, isLiked: _isLiked, count }: { postId: string; isLiked: boolean; count: number }) => {
+    const handleLikeToggled = ({ postId, count }: { postId: string; isLiked: boolean; count: number }) => {
       setPosts(prev => prev.map(p => p.id === postId ? { ...p, likes_count: count } : p));
     };
 

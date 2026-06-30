@@ -24,7 +24,7 @@ export interface CommunityPost {
   likes_count?: number;
   comments_count?: number;
   media_urls: string[];
-  poll_options?: any;
+  poll_options?: unknown;
   link_url?: string;
   code_language?: string;
   created_at: string;
@@ -80,7 +80,7 @@ export function queueOfflineAction(action: Omit<OfflineAction, 'id' | 'timestamp
     const queue: OfflineAction[] = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
     queue.push({ ...action, id: crypto.randomUUID(), timestamp: Date.now() });
     localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
-  } catch (_) { /* noop */ }
+  } catch { /* noop */ }
 }
 
 export async function flushOfflineQueue() {
@@ -89,7 +89,7 @@ export async function flushOfflineQueue() {
   try {
     queue = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
     if (queue.length === 0) return;
-  } catch (_) { return; }
+  } catch { return; }
 
   const remaining: OfflineAction[] = [];
 
@@ -112,7 +112,7 @@ export async function flushOfflineQueue() {
           await votePollOption(action.payload.postId as string, action.payload.optionId as string);
           break;
       }
-    } catch (_) {
+    } catch {
       remaining.push(action);
     }
   }
@@ -131,13 +131,13 @@ export function getCachedFeed(key: string): FeedResult | null {
     const { data, ts } = JSON.parse(raw);
     if (Date.now() - ts > CACHE_TTL_MS) return null;
     return data;
-  } catch (_) { return null; }
+  } catch { return null; }
 }
 
 export function setCachedFeed(key: string, data: FeedResult) {
   try {
     localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ data, ts: Date.now() }));
-  } catch (_) { /* noop - storage full */ }
+  } catch { /* noop - storage full */ }
 }
 
 // ─── API Helpers ───────────────────────────────────────────────────────────────
@@ -299,7 +299,7 @@ export async function uploadMediaFile(
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         try { resolve(JSON.parse(xhr.responseText).url); }
-        catch (_) { reject(new Error('Invalid upload response')); }
+        catch { reject(new Error('Invalid upload response')); }
       } else {
         reject(new Error(`Upload failed (${xhr.status})`));
       }

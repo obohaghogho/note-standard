@@ -4,7 +4,7 @@ import { offlineQueue } from '../lib/offlineQueue';
 
 interface Post {
   id: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface FeedState {
