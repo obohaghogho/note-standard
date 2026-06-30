@@ -55,7 +55,7 @@ test.describe('Poll Creation & Voting', () => {
     // Find a poll post in the feed
     const pollOption = page.locator('[data-testid="poll-option"]').first();
     if (await pollOption.isVisible({ timeout: 5000 })) {
-      const beforeText = await pollOption.innerText();
+      await pollOption.innerText();
       await pollOption.click();
       await page.waitForTimeout(800);
 

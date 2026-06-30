@@ -60,7 +60,7 @@ test.describe('Offline Action Queue Simulation', () => {
     await context.setOffline(true);
     await page.waitForTimeout(500);
     // Check that the app shows some offline indicator (toast or banner)
-    const offlineBanner = page.locator('[data-testid="offline-banner"], text=offline, text=No connection').first();
+    page.locator('[data-testid="offline-banner"], text=offline, text=No connection').first();
     // This is optional based on UI implementation
     await context.setOffline(false);
   });

@@ -72,13 +72,7 @@ self.addEventListener('push', (event) => {
         const gatewayLatency = trace.pushProviderStartTs - trace.gatewayReceiveTs;
         const pushProviderLatency = swWakeupTs - trace.pushProviderStartTs;
         
-        console.log(\`n[LATENCY_TRACE] Push Delivery Breakdown for Message: \
-- Total End-to-End Latency: \ms
-- API Overhead: \ms
-- Database Insert: \ms
-- Gateway Processing: \ms
-- Push Provider & Network: \ms
-        \);
+        console.log(`\n[LATENCY_TRACE] Push Delivery Breakdown for Message:\n- Total End-to-End Latency: ${totalLatency}ms\n- API Overhead: ${apiLatency}ms\n- Database Insert: ${dbLatency}ms\n- Gateway Processing: ${gatewayLatency}ms\n- Push Provider & Network: ${pushProviderLatency}ms`);
     }
 
     const options = {

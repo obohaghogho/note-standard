@@ -66,8 +66,9 @@ test.describe('Performance Metrics & Load Time', () => {
       return new Promise<Record<string, number>>((resolve) => {
         new PerformanceObserver((list) => {
           const entries: Record<string, number> = {};
-          list.getEntries().forEach((entry: any) => {
-            entries[entry.name] = entry.value;
+          list.getEntries().forEach((entry) => {
+            const e = entry as PerformanceEntry & { value: number };
+            entries[e.name] = e.value;
           });
           resolve(entries);
         }).observe({ type: 'largest-contentful-paint', buffered: true });
