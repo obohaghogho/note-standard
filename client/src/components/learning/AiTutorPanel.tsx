@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, Send, Bot, User, RefreshCw } from 'lucide-react';
+import { Send, Bot, User } from 'lucide-react';
 import { api } from '../../lib/api';
 
 type TutorMode = 'teach' | 'explain_simple' | 'socratic' | 'diagnose' | 'recommend' | 'schedule' | 'challenge';
@@ -14,7 +14,9 @@ const MODES: { id: TutorMode; label: string; emoji: string; description: string 
   { id: 'challenge',      label: 'Challenge',  emoji: '⚡', description: 'Test your mastery' },
 ];
 
-export const AiTutorPanel: React.FC<{ space: any; initialMode?: TutorMode }> = ({ space, initialMode = 'teach' }) => {
+interface TutorSpace { id: string; name: string; [key: string]: unknown; }
+
+export const AiTutorPanel: React.FC<{ space: TutorSpace; initialMode?: TutorMode }> = ({ space, initialMode = 'teach' }) => {
   const [mode, setMode] = useState<TutorMode>(initialMode);
   const [messages, setMessages] = useState<{ role: 'user' | 'ai'; content: string }[]>([
     { role: 'ai', content: `I'm in **${MODES.find(m => m.id === initialMode)?.label}** mode. Ask me anything about what you're studying in ${space.name}.` }

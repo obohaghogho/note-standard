@@ -489,8 +489,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                             sub = null;
                           }
                         }
-                      } catch (err: any) {
-                        console.warn('[Auth] [V2 Boot-Sync] Failed to check installation status:', err.message);
+                      } catch (err: unknown) {
+                        console.warn('[Auth] [V2 Boot-Sync] Failed to check installation status:', err instanceof Error ? err.message : String(err));
                       }
                     }
                   }

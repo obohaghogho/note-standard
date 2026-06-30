@@ -21,7 +21,10 @@ const DEMO_FLASHCARDS = [
   { id: '2', front: 'What does the dependency array in useEffect do?', back: 'Controls when the effect re-runs. Empty array = once on mount. Listed values = re-run when those values change.', difficulty: 'medium' as const },
 ];
 
-export const StudySession: React.FC<{ space: any; pathNode: any; onComplete: () => void }> = ({ space, pathNode, onComplete }) => {
+interface StudySpace { name: string; [key: string]: unknown; }
+interface PathNode { title?: string; [key: string]: unknown; }
+
+export const StudySession: React.FC<{ space: StudySpace; pathNode: PathNode; onComplete: () => void }> = ({ space, pathNode, onComplete }) => {
   const [currentStep, setCurrentStep] = useState<StudyStep>('summary');
   const [completedSteps, setCompletedSteps] = useState<Set<StudyStep>>(new Set());
   const [showTutor, setShowTutor] = useState(false);

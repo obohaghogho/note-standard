@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Award, CheckCircle, ExternalLink, ShieldCheck, Download } from 'lucide-react';
+import { Award, ExternalLink, ShieldCheck, Download } from 'lucide-react';
 import { api } from '../../lib/api';
 
 interface Certificate {

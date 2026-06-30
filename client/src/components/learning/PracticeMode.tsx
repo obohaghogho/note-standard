@@ -25,7 +25,9 @@ const DEMO_CARDS = [
   { id: 'p3', front: 'What is a React Concurrent Feature?', back: 'Features like Suspense and useTransition that allow React to interrupt, pause, and resume rendering to keep the UI responsive.', difficulty: 'hard' as const, source: 'new' },
 ];
 
-export const PracticeMode: React.FC<{ space: any }> = ({ space }) => {
+interface PracticeSpace { id: string; name: string; [key: string]: unknown; }
+
+export const PracticeMode: React.FC<{ space: PracticeSpace }> = ({ space }) => {
   const [phase, setPhase] = useState<'config' | 'session' | 'results'>('config');
   const [sessionType, setSessionType] = useState<SessionType>('mixed');
   const [timeBudget, setTimeBudget] = useState(TIME_BUDGETS[1]);

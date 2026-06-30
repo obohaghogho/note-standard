@@ -52,7 +52,7 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({ cards, onRate, onC
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isFlipped, currentIndex]);
+  }, [isFlipped, currentIndex, handleRate]);
 
   // ── Touch / Swipe (mobile) ─────────────────────────────────
   const onTouchStart = (e: React.TouchEvent) => {
