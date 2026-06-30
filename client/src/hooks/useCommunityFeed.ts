@@ -72,8 +72,8 @@ export function useCommunityFeed(params: FeedParams) {
       setHasMore(result.hasMore);
       cursorRef.current = result.nextCursor;
       setCachedFeed(cacheKey, result);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load feed');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load feed');
     } finally {
       setIsLoading(false);
     }
@@ -99,8 +99,8 @@ export function useCommunityFeed(params: FeedParams) {
       });
       setHasMore(result.hasMore);
       cursorRef.current = result.nextCursor;
-    } catch (err: any) {
-      setError(err.message || 'Failed to load more');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load more');
     } finally {
       setIsFetchingMore(false);
     }
@@ -130,7 +130,7 @@ export function useCommunityFeed(params: FeedParams) {
       setPosts(prev => prev.map(p => p.id === postId ? { ...p, ...updates } : p));
     };
 
-    const handleLikeToggled = ({ postId, isLiked, count }: { postId: string; isLiked: boolean; count: number }) => {
+    const handleLikeToggled = ({ postId, isLiked: _isLiked, count }: { postId: string; isLiked: boolean; count: number }) => {
       setPosts(prev => prev.map(p => p.id === postId ? { ...p, likes_count: count } : p));
     };
 

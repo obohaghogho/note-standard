@@ -3,7 +3,7 @@ import { idbEnqueueAction, idbGetAll, idbDelete, STORES, idbSet } from './indexe
 interface QueuedAction {
   id?: number;
   type: string; // 'LIKE', 'COMMENT', 'SAVE', etc.
-  payload: any;
+  payload: unknown;
   timestamp: number;
   retryCount: number;
 }
@@ -14,7 +14,7 @@ const BASE_BACKOFF_MS = 2000;
 class OfflineQueue {
   private isProcessing = false;
 
-  async enqueue(type: string, payload: any): Promise<number> {
+  async enqueue(type: string, payload: unknown): Promise<number> {
     const actionId = await idbEnqueueAction({ type, payload });
     this.processQueue(); // Attempt to process immediately if online
     return actionId;
@@ -35,8 +35,8 @@ class OfflineQueue {
         try {
           await this.executeAction(action);
           await idbDelete(STORES.OFFLINE_QUEUE, action.id!);
-        } catch (error: any) {
-          console.error('[OfflineQueue] Action failed:', action, error);
+        } catch (error: unknown) {
+          console.error('[OfflineQueue] Action failed:', action, error instanceof Error ? error.message : error);
           
           if (action.retryCount >= MAX_RETRIES) {
              console.error('[OfflineQueue] Max retries reached, dropping action.');

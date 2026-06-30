@@ -52,7 +52,7 @@ const initDB = (): Promise<IDBDatabase> => {
 
 // --- Generic Helpers ---
 
-export const idbSet = async (storeName: string, value: any): Promise<void> => {
+export const idbSet = async <T>(storeName: string, value: T): Promise<void> => {
   const db = await initDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(storeName, 'readwrite');
@@ -63,7 +63,7 @@ export const idbSet = async (storeName: string, value: any): Promise<void> => {
   });
 };
 
-export const idbGet = async (storeName: string, key: string | number): Promise<any> => {
+export const idbGet = async <T = unknown>(storeName: string, key: string | number): Promise<T | undefined> => {
   const db = await initDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(storeName, 'readonly');
@@ -74,7 +74,7 @@ export const idbGet = async (storeName: string, key: string | number): Promise<a
   });
 };
 
-export const idbGetAll = async (storeName: string): Promise<any[]> => {
+export const idbGetAll = async <T = unknown>(storeName: string): Promise<T[]> => {
   const db = await initDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(storeName, 'readonly');
@@ -98,7 +98,7 @@ export const idbDelete = async (storeName: string, key: string | number): Promis
 
 // --- Offline Queue Specific Helpers ---
 
-export const idbEnqueueAction = async (action: any): Promise<number> => {
+export const idbEnqueueAction = async <T extends Record<string, unknown>>(action: T): Promise<number> => {
   const db = await initDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORES.OFFLINE_QUEUE, 'readwrite');
