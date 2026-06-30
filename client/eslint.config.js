@@ -20,6 +20,14 @@ export default defineConfig([
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,
+      parserOptions: {
+        project: [
+          './tsconfig.app.json',
+          './tsconfig.node.json',
+          './tsconfig.playwright.json',
+        ],
+        tsconfigRootDir: import.meta.dirname,
+      },
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
@@ -30,3 +38,4 @@ export default defineConfig([
     },
   },
 ])
+
