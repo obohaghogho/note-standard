@@ -33,6 +33,7 @@ self.addEventListener('message', (event) => {
 
 // Handle Push Notifications
 self.addEventListener('push', (event) => {
+    const swWakeupTs = Date.now();
     console.log(`[FORENSIC][SW] PUSH RECEIVED at ${new Date().toISOString()}`);
     
     let data = {};
@@ -63,6 +64,23 @@ self.addEventListener('push', (event) => {
         }
     }
 
+    if (data.data?.trace) {
+        const trace = data.data.trace;
+        const totalLatency = swWakeupTs - trace.clientSendTs;
+        const apiLatency = trace.dbStartTs - trace.apiReceiveTs;
+        const dbLatency = trace.dbDoneTs - trace.dbStartTs;
+        const gatewayLatency = trace.pushProviderStartTs - trace.gatewayReceiveTs;
+        const pushProviderLatency = swWakeupTs - trace.pushProviderStartTs;
+        
+        console.log(\`n[LATENCY_TRACE] Push Delivery Breakdown for Message: \
+- Total End-to-End Latency: \ms
+- API Overhead: \ms
+- Database Insert: \ms
+- Gateway Processing: \ms
+- Push Provider & Network: \ms
+        \);
+    }
+
     const options = {
         body: data.body || 'You have a new update.',
         icon: data.icon || '/icon-192.png',
@@ -81,6 +99,7 @@ self.addEventListener('push', (event) => {
             // When present, the SW calls the gateway directly — it is always awake because it
             // holds the sender's live socket connection.
             deliveryWebhookUrl: data.data?.deliveryWebhookUrl || null,
+            trace: data.data?.trace || null,
         },
         actions: [
             { action: 'open', title: 'View Now' },

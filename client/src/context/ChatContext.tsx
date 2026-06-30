@@ -1675,7 +1675,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     replyToId: intent.payload.replyTo?.id,
                     eventId: intent.event_id,
                     deviceId: currentDeviceId,
-                    sessionId: currentSessionId
+                    sessionId: currentSessionId,
+                    clientSendTs: intent.payload.clientSendTs || intent.created_at
                 }, {
                     headers: intent.payload.correlationId ? { 'X-Correlation-ID': intent.payload.correlationId } : undefined
                 });
@@ -1906,7 +1907,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         await offlineQueue.pushIntent({
             event_id: clientEventId,
             conversation_id: conversationId,
-            payload: { content, type, attachmentId, replyTo, correlationId: cid },
+            payload: { content, type, attachmentId, replyTo, correlationId: cid, clientSendTs: Date.now() },
             created_at: Date.now()
         });
 

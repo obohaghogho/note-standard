@@ -1,5 +1,6 @@
 const supabase = require("../config/database");
-const { createNotification } = require("../services/notificationService");
+const usernameCache = new Map(); // Cache to prevent blocking DB lookups during push dispatch
+const { createNotification, dispatchFastPush } = require("../services/notificationService");
 const { detectLanguage } = require("../services/translationService");
 const realtime = require("../services/realtimeService");
 const features = require("../config/features");
@@ -1163,9 +1164,10 @@ exports.sendMessage = async (req, res) => {
     }
 
     const { conversationId } = req.params;
-    const { content, type, attachmentId, replyToId, deviceId, sessionId } = req.body;
+    const { content, type, attachmentId, replyToId, deviceId, sessionId, clientSendTs } = req.body;
     const userId = req.user.id;
 
+    const t1_ApiReceived = Date.now();
     const startTimeMs = Date.now();
     logger.info("Message request received [Stage 1]", {
       correlationId: req.correlationId,
@@ -1255,6 +1257,8 @@ exports.sendMessage = async (req, res) => {
     let isDuplicate = false;
     const eventId = req.body.eventId || crypto.randomUUID();
 
+    const t2_DbInsertStart = Date.now();
+
     try {
       let insertedMessage = null;
 
@@ -1342,6 +1346,7 @@ exports.sendMessage = async (req, res) => {
         }
       }
 
+      const t3_DbInsertDone = Date.now();
       createdMessageId = insertedMessage.id;
 
       // ── CHATLIST FIX: Stamp authoritative last-message pointer ──────────────
@@ -1621,25 +1626,43 @@ exports.sendMessage = async (req, res) => {
       const otherMembers = members.filter(m => m.user_id !== userId);
 
       if (otherMembers.length > 0) {
-        // Fetch sender info for the notification title
-        const { data: sender } = await supabase
-          .from("profiles")
-          .select("username")
-          .eq("id", userId)
-          .single();
+        let senderName = usernameCache.get(userId);
+        if (!senderName) {
+          const { data: sender } = await supabase
+            .from("profiles")
+            .select("username")
+            .eq("id", userId)
+            .single();
+          senderName = sender?.username || "Someone";
+          usernameCache.set(userId, senderName);
+        }
 
-        // Fire notifications asynchronously so slow push endpoints (60s timeouts)
-        // do not block the Node event loop or delay subsequent operations.
-        const notificationPromises = otherMembers.map(async (member) => {
+        const previewContent = getNotificationPreview(type || 'text', content);
+
+        const fastPushPromises = otherMembers.map(async (member) => {
           if (member.is_muted) {
-            console.log(`[Chat Notify] Skipping muted user: ${member.user_id}`);
+            console.log(`[Chat Notify] Skipping muted user fast-push: ${member.user_id}`);
             return;
           }
+          await dispatchFastPush({
+            receiverId: member.user_id,
+            type: "chat_message",
+            title: senderName,
+            message: previewContent,
+            link: `/dashboard/chat?id=${conversationId}`,
+            messageId: createdMessageId,
+            conversationId: conversationId,
+            trace: {
+              clientSendTs,
+              apiReceiveTs: t1_ApiReceived,
+              dbStartTs: t2_DbInsertStart,
+              dbDoneTs: t3_DbInsertDone,
+            }
+          });
+        });
 
-          const senderName = sender?.username || "Someone";
-          const previewContent = getNotificationPreview(type || 'text', content);
-
-          // This internal await is fine because it runs in parallel for each member
+        const dbNotificationPromises = otherMembers.map(async (member) => {
+          if (member.is_muted) return;
           await createNotification({
             receiverId: member.user_id,
             senderId: userId,
@@ -1649,20 +1672,12 @@ exports.sendMessage = async (req, res) => {
             link: `/dashboard/chat?id=${conversationId}`,
             messageId: createdMessageId,
             conversationId: conversationId,
-          });
-
-        });
-
-        // DO NOT AWAIT notificationPromises here! Let them run in the background.
-        // We already sent res.json() to the sender, and we don't want to block
-        // the rest of the function or the event loop.
-        Promise.allSettled(notificationPromises).then(results => {
-          results.forEach((result, idx) => {
-             if (result.status === 'rejected') {
-                console.error(`[Chat Notify] Batch error for member ${otherMembers[idx].user_id}:`, result.reason);
-             }
+            skipPush: true,
           });
         });
+
+        Promise.allSettled(fastPushPromises).then();
+        Promise.allSettled(dbNotificationPromises).then();
       }
 
       // --- Mention Logic ---
@@ -1675,14 +1690,41 @@ exports.sendMessage = async (req, res) => {
           .in("username", usernames);
 
         if (mentionedUsers) {
-          // Fetch sender info if not already fetched
-          const senderName =
-            (await supabase.from("profiles").select("username").eq("id", userId)
-              .single()).data?.username || "Someone";
+          let senderName = usernameCache.get(userId);
+          if (!senderName) {
+            const { data: sender } = await supabase
+              .from("profiles")
+              .select("username")
+              .eq("id", userId)
+              .single();
+            senderName = sender?.username || "Someone";
+            usernameCache.set(userId, senderName);
+          }
 
-          for (const mUser of mentionedUsers) {
-            if (mUser.id !== userId) { // Don't notify self
-              const previewContent = getNotificationPreview(type || 'text', content);
+          const previewContent = getNotificationPreview(type || 'text', content);
+
+          const mentionPushes = mentionedUsers.map(async (mUser) => {
+            if (mUser.id !== userId) {
+              await dispatchFastPush({
+                receiverId: mUser.id,
+                type: "mention",
+                title: senderName,
+                message: `Mentioned you: ${previewContent}`,
+                link: `/dashboard/chat?id=${conversationId}`,
+                messageId: createdMessageId,
+                conversationId: conversationId,
+                trace: {
+                  clientSendTs,
+                  apiReceiveTs: t1_ApiReceived,
+                  dbStartTs: t2_DbInsertStart,
+                  dbDoneTs: t3_DbInsertDone,
+                }
+              });
+            }
+          });
+
+          const mentionDBLogs = mentionedUsers.map(async (mUser) => {
+            if (mUser.id !== userId) {
               await createNotification({
                 receiverId: mUser.id,
                 senderId: userId,
@@ -1690,9 +1732,15 @@ exports.sendMessage = async (req, res) => {
                 title: senderName,
                 message: `Mentioned you: ${previewContent}`,
                 link: `/dashboard/chat?id=${conversationId}`,
+                messageId: createdMessageId,
+                conversationId: conversationId,
+                skipPush: true,
               });
             }
-          }
+          });
+
+          Promise.allSettled(mentionPushes).then();
+          Promise.allSettled(mentionDBLogs).then();
         }
       }
     } catch (notifErr) {

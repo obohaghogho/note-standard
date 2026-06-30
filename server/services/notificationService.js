@@ -23,6 +23,8 @@ const createNotification = async ({
   link,
   messageId,
   conversationId,
+  trace,
+  skipPush = false,
 }) => {
   try {
     // 1. Persist to Database
@@ -53,6 +55,11 @@ const createNotification = async ({
       created_at: data.created_at,
       is_read: false,
     });
+
+    // If skipPush is true, we stop here (push was already dispatched fast-path)
+    if (skipPush) {
+      return true;
+    }
 
     // 3. Web Push (PWA — VAPID) is now handled entirely by the Realtime Gateway.
     //    All push routing goes through /internal/push below.
@@ -87,6 +94,7 @@ const createNotification = async ({
         targetUserId: receiverId,       // explicit
         targetAccountId: receiverId,    // explicit (same as userId in this app)
         deliveryWebhookUrl: messageId ? `${gatewayUrlStr}/deliver/${messageId}` : undefined,
+        trace,
       },
     });
 
@@ -133,6 +141,88 @@ const createNotification = async ({
     return true;
   } catch (err) {
     console.error("Error creating notification:", err.message);
+    return false;
+  }
+};
+
+
+/**
+ * Sends a push notification immediately, bypassing the notification table write.
+ */
+const dispatchFastPush = async ({
+  receiverId,
+  type,
+  title,
+  message,
+  link,
+  messageId,
+  conversationId,
+  trace,
+}) => {
+  try {
+    const gatewayUrlStr = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
+    const bodyStr = message || title;
+    
+    if (!global.__pushHttpAgent) {
+      const http = require('http');
+      const https = require('https');
+      global.__pushHttpAgent = new http.Agent({ keepAlive: false });
+      global.__pushHttpsAgent = new https.Agent({ keepAlive: false });
+    }
+    
+    const targetUrl = new URL('/internal/push', gatewayUrlStr);
+    const payloadBody = JSON.stringify({
+      userId: receiverId,
+      title,
+      body: bodyStr,
+      payload: {
+        type,
+        conversationId: conversationId || null,
+        messageId: messageId || null,
+        url: link || '/dashboard/notifications',
+        recipientId: receiverId,
+        targetUserId: receiverId,
+        targetAccountId: receiverId,
+        deliveryWebhookUrl: messageId ? `${gatewayUrlStr}/deliver/${messageId}` : undefined,
+        trace,
+      },
+    });
+
+    const lib = targetUrl.protocol === 'https:' ? require('https') : require('http');
+    const agent = targetUrl.protocol === 'https:' ? global.__pushHttpsAgent : global.__pushHttpAgent;
+
+    const req = lib.request({
+      hostname: targetUrl.hostname,
+      port: targetUrl.port || (targetUrl.protocol === 'https:' ? 443 : 80),
+      path: targetUrl.pathname,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payloadBody) },
+      agent: agent,
+      timeout: 10000
+    }, (res) => {
+      let responseBody = '';
+      res.on('data', chunk => responseBody += chunk);
+      res.on('end', () => {
+        console.log(`[NotificationService][FastPush] Gateway push response status: ${res.statusCode}`);
+      });
+    });
+
+    req.on('error', (err) => {
+      console.error('[NotificationService][FastPush] ❌ Native push via gateway failed.', err.message);
+    });
+    
+    req.on('timeout', () => {
+      console.error('[NotificationService][FastPush] ❌ Gateway push request timed out.');
+      req.destroy();
+    });
+
+    console.log(`[NotificationService][FastPush] 📤 Dispatching HTTP push request to Gateway: ${gatewayUrlStr}/internal/push`);
+    req.write(payloadBody);
+    req.end();
+
+    return true;
+  } catch (err) {
+    console.error("Error in dispatchFastPush:", err.message);
     return false;
   }
 };
@@ -229,7 +319,9 @@ const broadcastNotification = async ({
 module.exports = {
   createNotification,
   broadcastNotification,
+  dispatchFastPush,
 };
+
 
 // --- Activity Bus Integration ---
 eventBus.on('activity_logged', async (activity) => {

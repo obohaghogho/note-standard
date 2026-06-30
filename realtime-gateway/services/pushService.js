@@ -643,6 +643,7 @@ async function dispatchV2Push(params, pushTargets, isCall = false) {
     } else if (t.platform === 'web' && t.type === 'vapid' && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
       if (isCall) continue; // Web pushes usually don't handle VoIP call pushes the same way
 
+      if (payload?.trace) { payload.trace.pushProviderStartTs = Date.now(); }
       const webPayload = JSON.stringify({
         title,
         body,
@@ -654,6 +655,7 @@ async function dispatchV2Push(params, pushTargets, isCall = false) {
           conversationId: payload?.conversationId || null,
           targetAccountId: userId,
           apiUrl: process.env.BACKEND_URL || 'https://note-standard-api.onrender.com',
+          trace: payload?.trace,
           deliveryWebhookUrl: payload?.messageId
             ? `${process.env.SELF_URL || 'https://realtime-gateway-gsb5.onrender.com'}/deliver/${payload.messageId}`
             : null,
@@ -838,7 +840,8 @@ async function sendGenericPush(params) {
         .eq('user_id', userId);
 
       if (!webErr && webSubs && webSubs.length > 0) {
-        const webPayload = JSON.stringify({
+        if (payload?.trace) { payload.trace.pushProviderStartTs = Date.now(); }
+      const webPayload = JSON.stringify({
           title,
           body,
           icon: '/icon-192.png',

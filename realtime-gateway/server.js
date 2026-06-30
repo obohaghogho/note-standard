@@ -159,6 +159,10 @@ app.post('/internal/push', async (req, res) => {
     const { userId, title, body, payload } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId required' });
 
+    if (payload?.trace) {
+      payload.trace.gatewayReceiveTs = Date.now();
+    }
+
     // Fire-and-forget so the API server isn't blocked waiting for APNs/FCM
     pushService.sendGenericPush({ userId, title, body: body || '', payload: payload || {} })
       .catch(err => console.error('[Gateway] /internal/push error:', err.message));
@@ -182,6 +186,10 @@ app.post('/internal/push/diagnose', async (req, res) => {
   try {
     const { userId, title, body, payload } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId required' });
+
+    if (payload?.trace) {
+      payload.trace.gatewayReceiveTs = Date.now();
+    }
     await pushService.sendGenericPush({ userId, title: title || 'Diag', body: body || 'Diag', payload: payload || {} });
     console.log = origLog; console.warn = origWarn; console.error = origErr;
     res.json({ ok: true, logs });
