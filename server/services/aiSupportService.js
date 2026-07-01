@@ -196,7 +196,7 @@ Do NOT escalate for routine questions — solve them yourself using the knowledg
 
       try {
         const completion = await this.openai.chat.completions.create({
-          model: "llama-3.3-70b-versatile",
+          model: "moonshotai/kimi-k2-instruct",
           messages: messagesPayload,
           max_tokens: 300,
           temperature: 0.7,

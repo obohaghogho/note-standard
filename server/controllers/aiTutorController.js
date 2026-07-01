@@ -121,7 +121,7 @@ BEHAVIORAL RULES:
 
     const completion = await groq.chat.completions.create({
       messages,
-      model: 'llama-3.3-70b-versatile',
+      model: 'moonshotai/kimi-k2-instruct',
       temperature: mode === 'challenge' ? 0.5 : 0.3,
       max_tokens: 600
     });
