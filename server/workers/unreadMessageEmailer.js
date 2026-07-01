@@ -20,8 +20,8 @@ class UnreadMessageEmailer {
       // We look for messages that:
       // - Are NOT delivered
       // - Email NOT sent yet
-      // - For chat: older than 15 mins. For calls: older than 2 mins.
-      const { data: messages, error } = await supabase
+      // - Older than 2 mins (we'll filter the 15-min ones in memory to avoid complex .or() PostgREST errors)
+      const { data: messagesRaw, error } = await supabase
         .from('messages')
         .select(`
           id,
@@ -29,23 +29,50 @@ class UnreadMessageEmailer {
           type,
           created_at,
           sender_id,
-          conversation_id,
-          sender:profiles!messages_sender_id_fkey(username, full_name),
-          conversation:conversations(
-            members:conversation_members(user_id)
-          )
+          conversation_id
         `)
         .is('delivered_at', null)
         .eq('email_sent', false)
-        .or(`and(type.eq.call_incoming,created_at.lt.${twoMinsAgo}),and(type.neq.call_incoming,created_at.lt.${fifteenMinsAgo})`);
+        .lt('created_at', twoMinsAgo);
 
       if (error) {
         throw new Error(`DB Error fetching undelivered messages: ${error.message}`);
       }
 
-      if (!messages || messages.length === 0) {
+      if (!messagesRaw || messagesRaw.length === 0) {
         return; // Nothing to process
       }
+
+      // Memory filter: Calls > 2 mins, Chats > 15 mins
+      const messages = messagesRaw.filter(msg => {
+        if (msg.type === 'call_incoming') return true;
+        return new Date(msg.created_at) < new Date(fifteenMinsAgo);
+      });
+
+      if (messages.length === 0) return;
+
+      // 1b. Fetch Conversation Members (since messages -> auth.users FK breaks PostgREST joins to profiles)
+      const convIds = [...new Set(messages.map(m => m.conversation_id))];
+      const { data: membersData } = await supabase
+        .from('conversation_members')
+        .select('conversation_id, user_id')
+        .in('conversation_id', convIds);
+
+      // 1c. Fetch Sender Profiles
+      const senderIds = [...new Set(messages.map(m => m.sender_id))];
+      const { data: senderProfiles } = await supabase
+        .from('profiles')
+        .select('id, username, full_name')
+        .in('id', senderIds);
+
+      const sendersMap = {};
+      (senderProfiles || []).forEach(p => sendersMap[p.id] = p);
+
+      const membersMap = {};
+      (membersData || []).forEach(m => {
+        if (!membersMap[m.conversation_id]) membersMap[m.conversation_id] = [];
+        membersMap[m.conversation_id].push(m);
+      });
 
       // 2. Group messages by Receiver -> Sender
       const emailsToSend = {}; // receiverId -> { senders: { senderId: { count, name, type } } }
@@ -53,7 +80,7 @@ class UnreadMessageEmailer {
 
       for (const msg of messages) {
         processedMessageIds.push(msg.id);
-        const members = msg.conversation?.members || [];
+        const members = membersMap[msg.conversation_id] || [];
         
         for (const member of members) {
           const receiverId = member.user_id;
@@ -64,7 +91,7 @@ class UnreadMessageEmailer {
           }
 
           if (!emailsToSend[receiverId].senders[msg.sender_id]) {
-            const s = msg.sender || {};
+            const s = sendersMap[msg.sender_id] || {};
             emailsToSend[receiverId].senders[msg.sender_id] = {
               name: s.full_name || s.username || 'Someone',
               count: 0,

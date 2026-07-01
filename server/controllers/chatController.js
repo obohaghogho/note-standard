@@ -1676,7 +1676,7 @@ exports.sendMessage = async (req, res) => {
           });
         });
 
-        Promise.allSettled(fastPushPromises).then();
+        await Promise.allSettled(fastPushPromises);
         Promise.allSettled(dbNotificationPromises).then();
       }
 
@@ -1739,7 +1739,7 @@ exports.sendMessage = async (req, res) => {
             }
           });
 
-          Promise.allSettled(mentionPushes).then();
+          await Promise.allSettled(mentionPushes);
           Promise.allSettled(mentionDBLogs).then();
         }
       }

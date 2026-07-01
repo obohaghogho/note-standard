@@ -160,18 +160,15 @@ const dispatchFastPush = async ({
   trace,
 }) => {
   try {
+    const axios = require('axios');
     const gatewayUrlStr = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
     const bodyStr = message || title;
     
-    if (!global.__pushHttpAgent) {
-      const http = require('http');
-      const https = require('https');
-      global.__pushHttpAgent = new http.Agent({ keepAlive: false });
-      global.__pushHttpsAgent = new https.Agent({ keepAlive: false });
-    }
+    // Normalize Gateway URL
+    const baseUrl = gatewayUrlStr.endsWith('/') ? gatewayUrlStr.slice(0, -1) : gatewayUrlStr;
+    const targetUrl = `${baseUrl}/internal/push`;
     
-    const targetUrl = new URL('/internal/push', gatewayUrlStr);
-    const payloadBody = JSON.stringify({
+    const payloadBody = {
       userId: receiverId,
       title,
       body: bodyStr,
@@ -183,44 +180,23 @@ const dispatchFastPush = async ({
         recipientId: receiverId,
         targetUserId: receiverId,
         targetAccountId: receiverId,
-        deliveryWebhookUrl: messageId ? `${gatewayUrlStr}/deliver/${messageId}` : undefined,
+        deliveryWebhookUrl: messageId ? `${baseUrl}/deliver/${messageId}` : undefined,
         trace,
       },
-    });
+    };
 
-    const lib = targetUrl.protocol === 'https:' ? require('https') : require('http');
-    const agent = targetUrl.protocol === 'https:' ? global.__pushHttpsAgent : global.__pushHttpAgent;
+    console.log(`[NotificationService][FastPush] 📤 Dispatching axios push request to Gateway: ${targetUrl}`);
 
-    const req = lib.request({
-      hostname: targetUrl.hostname,
-      port: targetUrl.port || (targetUrl.protocol === 'https:' ? 443 : 80),
-      path: targetUrl.pathname,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payloadBody) },
-      agent: agent,
-      timeout: 10000
-    }, (res) => {
-      let responseBody = '';
-      res.on('data', chunk => responseBody += chunk);
-      res.on('end', () => {
-        console.log(`[NotificationService][FastPush] Gateway push response status: ${res.statusCode}`);
+    // Fire-and-forget but return a promise to allow awaiting if needed
+    return axios.post(targetUrl, payloadBody, { timeout: 10000 })
+      .then(res => {
+        console.log(`[NotificationService][FastPush] Gateway push response status: ${res.status}`);
+        return true;
+      })
+      .catch(err => {
+        console.error('[NotificationService][FastPush] ❌ Native push via gateway failed.', err.message);
+        return false;
       });
-    });
-
-    req.on('error', (err) => {
-      console.error('[NotificationService][FastPush] ❌ Native push via gateway failed.', err.message);
-    });
-    
-    req.on('timeout', () => {
-      console.error('[NotificationService][FastPush] ❌ Gateway push request timed out.');
-      req.destroy();
-    });
-
-    console.log(`[NotificationService][FastPush] 📤 Dispatching HTTP push request to Gateway: ${gatewayUrlStr}/internal/push`);
-    req.write(payloadBody);
-    req.end();
-
-    return true;
   } catch (err) {
     console.error("Error in dispatchFastPush:", err.message);
     return false;
