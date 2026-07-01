@@ -57,6 +57,33 @@ export class PushHandler {
       console.warn(`[PushHandler] ⚠️ Push permission not granted (status: ${finalStatus}). Device token registration skipped.`);
     }
 
+    // ── INSTRUMENTATION: Verify Android Notification Channels exist ──
+    // If no channels exist on Android 8.0+, manual local notifications (needed for
+    // Data-Only FCM messages) will silently drop. This log confirms channel state.
+    if (Platform.OS === 'android') {
+      try {
+        const channels = await Notifications.getNotificationChannelsAsync();
+        if (channels && channels.length > 0) {
+          console.log(`[EVIDENCE] ANDROID_CHANNELS_OK | count:${channels.length} | channels:${JSON.stringify(channels.map(c => ({ id: c.id, name: c.name, importance: c.importance })))}`);
+        } else {
+          // No channels registered — manual local notifications will silently fail!
+          // expo-notifications usually auto-creates a default channel, but if it didn't,
+          // this is a critical failure point.
+          console.warn('[EVIDENCE] ANDROID_CHANNELS_MISSING — no notification channels found! Local notifications will be silently dropped. Creating default channel now...');
+          await Notifications.setNotificationChannelAsync('default', {
+            name: 'Default',
+            importance: Notifications.AndroidImportance.HIGH,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#FF231F7C',
+            sound: 'default',
+          });
+          console.log('[EVIDENCE] ANDROID_DEFAULT_CHANNEL_CREATED');
+        }
+      } catch (chanErr: any) {
+        console.warn(`[EVIDENCE] ANDROID_CHANNEL_CHECK_FAILED | error:${chanErr?.message}`);
+      }
+    }
+
     // Foreground listener for React Native Firebase Messaging (Data-only pushes)
     messaging().onMessage(async remoteMessage => {
       console.log('[PushHandler] 🔔 Firebase Foreground Message:', remoteMessage.data);
@@ -206,21 +233,7 @@ export class PushHandler {
     }
   }
 
-  static setupTokenRefreshListeners() {
-    if (this.tokenRefreshListenersSetup) return;
-    this.tokenRefreshListenersSetup = true;
-
-    if (Platform.OS === 'ios') {
-      Notifications.addPushTokenListener(async (tokenData) => {
-        console.log('[PushHandler] 🔄 APNs Token refreshed natively:', tokenData.data.substring(0, 10) + '...');
-        try {
-          await this.registerTokenWithBackend(tokenData.data, 'apns');
-        } catch (e) {
-          console.error('[PushHandler] ❌ Failed to sync refreshed APNs token:', e);
-        }
-      });
-    }
-  }
+  // (Duplicate setupTokenRefreshListeners removed — was silently clobbering the first definition)
 
   static setupCallKeepListeners() {
     // Phase 4 guard — idempotent, safe to call multiple times.

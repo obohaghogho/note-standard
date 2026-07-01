@@ -305,6 +305,29 @@ app.post('/deliver/batch', async (req, res) => {
 app.post('/deliver/:messageId', async (req, res) => {
   try {
     const { messageId } = req.params;
+    // ── INSTRUMENTATION: Capture diagnostic probe from mobile background handler ──
+    // The mobile setBackgroundMessageHandler sends optional fields to prove execution.
+    const {
+      app_state,          // 'terminated' | 'background' | 'foreground' — as seen by native handler
+      handlerExecuted,    // true if JS thread woke up
+      timeline = {},      // { fcmReceivedTs, handlerStartTs, webhookSentTs }
+      userId: probeUserId,
+      conversationId: probeConvId,
+    } = req.body || {};
+
+    if (handlerExecuted === true) {
+      // This log line is the primary evidence: if it appears, the JS thread woke up.
+      console.log(
+        `[EVIDENCE] BACKGROUND_HANDLER_EXECUTED | messageId:${messageId}` +
+        ` | app_state:${app_state || 'unknown'}` +
+        ` | userId:${probeUserId || 'unknown'}` +
+        ` | conversationId:${probeConvId || 'unknown'}` +
+        ` | handlerStartTs:${timeline.handlerStartTs || 'N/A'}` +
+        ` | fcmReceivedTs:${timeline.fcmReceivedTs || 'N/A'}` +
+        ` | webhookSentTs:${timeline.webhookSentTs || 'N/A'}` +
+        ` | gatewayReceiveTs:${Date.now()}`
+      );
+    }
 
     // Basic guard — UUIDs are 36 chars; reject obviously malformed IDs
     if (!messageId || messageId.length < 10 || messageId.length > 100) {
