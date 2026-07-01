@@ -447,11 +447,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // new multi-account tables. Runs on every SIGNED_IN and account switch.
             // This is the critical path that seeds the V2 schema for existing subscribers
             // without requiring any user action.
-            if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator &&
-                typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-              navigator.serviceWorker.ready.then(async (reg) => {
+            // V2 Boot-Sync: Register/update this browser's push installation in the
+            // new multi-account tables. Runs on every SIGNED_IN and account switch.
+            // ROOT FIX: Extracted registration into runPushRegistration() so it can be
+            // called both immediately (permission 'granted') and after auto-requesting
+            // permission for 'default' devices (never prompted). Previously, 'default'
+            // devices silently skipped the entire chain and never got a subscription.
+            const runPushRegistration = async () => {
+              if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+              if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+              try {
+                const reg = await navigator.serviceWorker.ready;
                 let sub = await reg.pushManager.getSubscription();
-                
+
                 const currentVapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
                 if (currentVapidKey) {
                   const padding = '='.repeat((4 - (currentVapidKey.length % 4)) % 4);
@@ -467,13 +475,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     let isMismatch = currentVapidBuffer.length !== existingVapidBuffer.length;
                     if (!isMismatch) {
                       for (let i = 0; i < currentVapidBuffer.length; i++) {
-                        if (currentVapidBuffer[i] !== existingVapidBuffer[i]) {
-                          isMismatch = true; break;
-                        }
+                        if (currentVapidBuffer[i] !== existingVapidBuffer[i]) { isMismatch = true; break; }
                       }
                     }
                     if (isMismatch) {
-                      console.warn('[Auth] [V2 Boot-Sync] VAPID key mismatch detected. Existing user token is stale. Resubscribing...');
+                      console.warn('[Auth] [V2 Boot-Sync] VAPID key mismatch — resubscribing...');
                       await sub.unsubscribe();
                       sub = null;
                     } else {
@@ -484,18 +490,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         if (statusRes.ok) {
                           const statusData = await statusRes.json();
                           if (statusData.status === 'INVALID') {
-                            console.warn(`[Auth] [V2 Boot-Sync] Backend reported subscription as INVALID (Reason: ${statusData.failure_reason}). Forcing fresh subscription...`);
+                            console.warn(`[Auth] [V2 Boot-Sync] INVALID endpoint detected — forcing fresh subscription...`);
                             await sub.unsubscribe();
                             sub = null;
                           }
                         }
                       } catch (err: unknown) {
-                        console.warn('[Auth] [V2 Boot-Sync] Failed to check installation status:', err instanceof Error ? err.message : String(err));
+                        console.warn('[Auth] [V2 Boot-Sync] Failed to check status:', err instanceof Error ? err.message : String(err));
                       }
                     }
                   }
-                  
-                  if (!sub && Notification.permission === 'granted') {
+
+                  if (!sub) {
                     console.log('[Auth] [V2 Boot-Sync] Generating fresh push subscription...');
                     sub = await reg.pushManager.subscribe({
                       userVisibleOnly: true,
@@ -503,20 +509,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     });
                   }
                 }
-                
+
                 if (!sub) {
-                    console.log('[Auth] [V2 Boot-Sync] No push subscription available.');
-                    return;
+                  console.log('[Auth] [V2 Boot-Sync] No push subscription available.');
+                  return;
                 }
-                
+
                 console.log(`[Auth] [V2 Boot-Sync] Syncing installation for ${currentUser.email}...`);
                 const subJson = sub.toJSON();
                 const resp = await fetch(`${apiBase}/api/notifications/register-installation`, {
                   method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${newSession.access_token}`
-                  },
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${newSession.access_token}` },
                   body: JSON.stringify({
                     deviceId,
                     pushEndpoint: sub.endpoint,
@@ -525,12 +528,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     platform: 'web',
                     type: 'vapid',
                     reason: wasSwitching ? 'ACCOUNT_SWITCH' : (event === 'INITIAL_SESSION' ? 'INITIAL_SESSION' : 'SIGNED_IN'),
-                    capabilities: {
-                      supports_web_push: true,
-                      supports_fcm: false,
-                      supports_apns: false,
-                      supports_background_sync: true
-                    }
+                    capabilities: { supports_web_push: true, supports_fcm: false, supports_apns: false, supports_background_sync: true }
                   })
                 });
                 const data = await resp.json();
@@ -539,7 +537,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 } else {
                   console.error(`[Auth] [V2 Boot-Sync] ❌ status:${resp.status} error:${data?.error}`);
                 }
-              }).catch(e => console.warn('[Auth] [V2 Boot-Sync] non-fatal:', e.message));
+              } catch (e: unknown) {
+                console.warn('[Auth] [V2 Boot-Sync] non-fatal:', e instanceof Error ? e.message : String(e));
+              }
+            };
+
+            if (typeof Notification !== 'undefined') {
+              if (Notification.permission === 'granted') {
+                // Already granted — run immediately
+                runPushRegistration();
+              } else if (Notification.permission === 'default') {
+                // Never asked — prompt automatically on login, then register if approved
+                console.log('[Auth] [V2 Boot-Sync] Permission default — auto-requesting...');
+                Notification.requestPermission().then(result => {
+                  console.log(`[Auth] [V2 Boot-Sync] Permission result: ${result}`);
+                  if (result === 'granted') runPushRegistration();
+                }).catch(() => {});
+              }
             }
             });
           }
