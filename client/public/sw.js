@@ -140,38 +140,59 @@ self.addEventListener('push', (event) => {
         // using Promise.all(). This guarantees the notification shows immediately while
         // the delivery receipt is still sent to the server.
         event.waitUntil(
-            new Promise((resolve) => {
-                try {
-                    const request = indexedDB.open('NoteStandardDB', 1);
-                    request.onsuccess = (e) => {
-                        const db = e.target.result;
-                        if (!db.objectStoreNames.contains('sw_state')) return resolve(null);
-                        const tx = db.transaction('sw_state', 'readonly');
-                        const getReq = tx.objectStore('sw_state').get('activeAccountId');
-                        getReq.onsuccess = () => resolve(getReq.result || null);
-                        getReq.onerror = () => resolve(null);
-                    };
-                    request.onerror = () => resolve(null);
-                } catch (err) {
-                    resolve(null);
-                }
-            }).then((activeAccountId) => {
-                return clients.matchAll({ type: 'window', includeUncontrolled: true })
-                    .then(windowClients => {
-                        // ── WhatsApp/Telegram-style suppression ─────────────────────────────
-                        // RULE 1: If the user has the app OPEN and VISIBLE in any window,
-                        //         suppress the notification and post a silent in-app update.
-                        //         This matches WhatsApp: you never get a popup when looking at the app.
-                        // RULE 2: If the app is backgrounded, minimized, or closed, show the notification.
-                        //
-                        // Old behavior (WRONG): Only suppressed when on the EXACT same conversation URL.
-                        //   → User got notifications while on a different chat, home screen, settings, etc.
-                        // New behavior (CORRECT): Suppress whenever ANY app window is in the foreground.
+            clients.matchAll({ type: 'window', includeUncontrolled: true })
+                .then(windowClients => {
+                    const hasWindows = windowClients && windowClients.length > 0;
+                    
+                    if (!hasWindows) {
+                        console.log('[FORENSIC][SW] No window clients found (app is closed). Showing notification immediately.');
+                        return Promise.all([
+                            self.registration.showNotification(title, options),
+                            fetch(deliveryUrl, { method: 'POST' })
+                                .catch(err => console.error('[SW] Delivery receipt failed (background/no-window):', err))
+                        ]);
+                    }
 
+                    // There are open windows. Retrieve activeAccountId from IndexedDB with a safety timeout.
+                    return new Promise((resolve) => {
+                        try {
+                            const request = indexedDB.open('NoteStandardDB', 1);
+                            
+                            const dbTimeout = setTimeout(() => {
+                                console.warn('[SW] IndexedDB open timed out after 1000ms. Resolving with null.');
+                                resolve(null);
+                            }, 1000);
+
+                            request.onsuccess = (e) => {
+                                clearTimeout(dbTimeout);
+                                const db = e.target.result;
+                                if (!db.objectStoreNames.contains('sw_state')) return resolve(null);
+                                const tx = db.transaction('sw_state', 'readonly');
+                                const getReq = tx.objectStore('sw_state').get('activeAccountId');
+                                getReq.onsuccess = () => resolve(getReq.result || null);
+                                getReq.onerror = () => {
+                                    console.error('[SW] IndexedDB get activeAccountId failed');
+                                    resolve(null);
+                                };
+                            };
+                            request.onerror = () => {
+                                clearTimeout(dbTimeout);
+                                console.error('[SW] IndexedDB open failed');
+                                resolve(null);
+                            };
+                            request.onblocked = () => {
+                                clearTimeout(dbTimeout);
+                                console.warn('[SW] IndexedDB open blocked');
+                                resolve(null);
+                            };
+                        } catch (err) {
+                            console.error('[SW] IndexedDB try-catch error:', err);
+                            resolve(null);
+                        }
+                    }).then((activeAccountId) => {
                         // Find any visible (non-hidden) window on our origin
                         const foregroundClient = windowClients.find(client => {
                             try {
-                                // visibilityState === 'visible' means the tab is the active, focused tab
                                 return client.visibilityState === 'visible';
                             } catch (_) {
                                 return false;
@@ -205,9 +226,6 @@ self.addEventListener('push', (event) => {
                             // ── App is in the foreground: suppress popup, update app silently ──
                             console.log(`[SW] App is visible — suppressing notification, posting in-app update.`);
 
-                            // Post CHAT_MESSAGE_RECEIVED to the most appropriate tab:
-                            //   • The exact conversation tab if open (triggers read-receipt + loadMessages)
-                            //   • Otherwise the foreground tab (triggers conversation list refresh)
                             const targetClient = conversationClient || foregroundClient;
                             targetClient.postMessage({
                                 type: 'CHAT_MESSAGE_RECEIVED',
@@ -215,7 +233,7 @@ self.addEventListener('push', (event) => {
                                 messageId: options.data.messageId
                             });
 
-                            // Also notify all OTHER tabs to refresh their conversation list
+                            // Notify all OTHER tabs to refresh their conversation list
                             windowClients.forEach(client => {
                                 if (client !== targetClient) {
                                     client.postMessage({
@@ -225,15 +243,11 @@ self.addEventListener('push', (event) => {
                                 }
                             });
 
-                            // Fire delivery receipt silently — user has the app open so this is not
-                            // a "silent push" in the iOS penalty sense.
                             return fetch(deliveryUrl, { method: 'POST' })
                                 .catch(err => console.error('[SW] Delivery receipt failed (foreground):', err));
                         }
 
-                        // ── App is backgrounded or closed: show notification ──────────────
-                        // Broadcast BACKGROUND_PREFETCH to all open (but hidden) tabs so React
-                        // can silently pre-load the message and be ready when the user taps.
+                        // ── App is backgrounded: show notification ──────────────
                         windowClients.forEach(client => {
                             client.postMessage({
                                 type: 'BACKGROUND_PREFETCH',
@@ -241,21 +255,17 @@ self.addEventListener('push', (event) => {
                             });
                         });
 
-                        // CRITICAL iOS FIX: showNotification and delivery receipt run in PARALLEL.
-                        // Awaiting the fetch before showNotification would violate iOS's strict
-                        // notification window policy and risk silent-push penalties.
                         return Promise.all([
                             self.registration.showNotification(title, options),
                             fetch(deliveryUrl, { method: 'POST' })
                                 .catch(err => console.error('[SW] Delivery receipt failed (background):', err))
                         ]);
                     });
-            }).catch(err => {
-                // Safety net: if anything above throws, we MUST still show the notification.
-                // Swallowing this would be a silent push and trigger the iOS penalty.
-                console.error('[SW] Push handler error, falling back to show notification:', err);
-                return self.registration.showNotification(title, options);
-            })
+                })
+                .catch(err => {
+                    console.error('[SW] Push handler error, falling back to show notification:', err);
+                    return self.registration.showNotification(title, options);
+                })
         );
     } else {
         event.waitUntil(self.registration.showNotification(title, options));
