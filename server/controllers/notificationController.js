@@ -300,7 +300,16 @@ const registerInstallation = async (req, res, next) => {
       return res.status(400).json({ error: "deviceId, platform, and type are required" });
     }
 
-    // 1. Upsert Device Installation
+    // 1a. Clear any existing installation that claims this pushEndpoint but has a different deviceId
+    if (pushEndpoint) {
+      await supabase
+        .from('device_installations')
+        .delete()
+        .eq('push_endpoint', pushEndpoint)
+        .neq('device_id', deviceId);
+    }
+
+    // 1b. Upsert Device Installation
     console.log(`[FORENSIC] Upserting device_installations for deviceId: ${deviceId} | Reason: ${reason || 'BOOT_SYNC'}`);
     const { data: installation, error: instError } = await supabase
       .from("device_installations")
