@@ -62,16 +62,23 @@ const authMiddleware = async (socket, next) => {
       return next(new Error('Authentication error: Session ID and Device ID required'));
     }
 
-    // 2. Verify Session State in DB
-    const { data: sessionData } = await supabase
+    const { data: sessionData, error: sessionError } = await supabase
       .from('user_sessions')
       .select('token_state, user_id, device_id')
       .eq('session_id', sessionId)
-      .single();
+      .maybeSingle();
 
-    if (!sessionData || sessionData.token_state !== 'valid' || sessionData.device_id !== deviceId) {
-      console.warn(`[Auth] ✗ Connection rejected: Session ${sessionId} is revoked or mismatched`);
+    if (sessionData && sessionData.token_state !== 'valid') {
+      console.warn(`[Auth Forensic] ✗ Connection rejected: Session ${sessionId} has token_state='${sessionData.token_state}'`);
       return next(new Error('Authentication error: Session is invalid or revoked'));
+    }
+
+    if (sessionData && sessionData.device_id !== deviceId) {
+      console.warn(`[Auth Forensic] ⚠ Device mismatch! Expected '${sessionData.device_id}', got '${deviceId}'. Proceeding to JWT verification as a fallback.`);
+    }
+
+    if (!sessionData) {
+      console.warn(`[Auth Forensic] ⚠ Session ${sessionId} NOT FOUND in database. Proceeding to JWT verification as a fallback.`);
     }
 
     // 3. Verify token with Supabase (with retry logic)
