@@ -1,4 +1,5 @@
 const sgMail = require("@sendgrid/mail");
+const nodemailer = require("nodemailer");
 const logger = require("../utils/logger");
 
 /**
@@ -19,10 +20,32 @@ class SendGridEmailService {
     }
     this.from = process.env.EMAIL_FROM || "noreply@notestandard.com";
     this.senderName = "Note Standard";
+
+    // Setup backup SMTP transporter
+    const host = process.env.SMTP_HOST;
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+
+    if (host && user && pass) {
+      this.smtpTransporter = nodemailer.createTransport({
+        host,
+        port: process.env.SMTP_PORT || 587,
+        secure: process.env.SMTP_SECURE !== undefined
+          ? process.env.SMTP_SECURE === "true"
+          : process.env.SMTP_PORT == 465,
+        auth: { user, pass },
+        pool: true,
+        maxConnections: 5,
+        maxMessages: 100,
+      });
+      logger.info("[SendGridEmailService] SMTP backup transporter initialized successfully.");
+    } else {
+      logger.warn("[SendGridEmailService] SMTP backup transporter config missing.");
+    }
   }
 
   /**
-   * Send an email via SendGrid
+   * Send an email via SendGrid with automatic SMTP fallback
    * @param {Object} params
    * @param {string} params.to - Recipient email
    * @param {string} params.subject - Subject line
@@ -30,32 +53,51 @@ class SendGridEmailService {
    * @returns {Promise<boolean>} Success status
    */
   async sendEmail({ to, subject, htmlContent }) {
-    if (!this.apiKey) {
-      logger.warn("[SendGridEmailService] API Key missing. Skipping email.");
-      return false;
+    if (this.apiKey) {
+      const msg = {
+        to,
+        from: {
+          email: this.from,
+          name: this.senderName,
+        },
+        subject,
+        html: htmlContent,
+      };
+
+      try {
+        await sgMail.send(msg);
+        logger.info(`[SendGridEmailService] Email sent to ${to}: ${subject} (via SendGrid)`);
+        return true;
+      } catch (error) {
+        logger.error(
+          `[SendGridEmailService] SendGrid failed to send email to ${to}:`,
+          error.response?.body || error.message
+        );
+        logger.warn("[SendGridEmailService] Attempting SMTP fallback...");
+      }
+    } else {
+      logger.warn("[SendGridEmailService] SendGrid API Key missing. Trying SMTP backup...");
     }
 
-    const msg = {
-      to,
-      from: {
-        email: this.from,
-        name: this.senderName,
-      },
-      subject,
-      html: htmlContent,
-    };
-
-    try {
-      await sgMail.send(msg);
-      logger.info(`[SendGridEmailService] Email sent to ${to}: ${subject}`);
-      return true;
-    } catch (error) {
-      logger.error(
-        `[SendGridEmailService] Failed to send email to ${to}:`,
-        error.response?.body || error.message
-      );
-      return false;
+    if (this.smtpTransporter) {
+      try {
+        const mailOptions = {
+          from: `"${this.senderName}" <${process.env.SMTP_FROM || this.from}>`,
+          to,
+          subject,
+          html: htmlContent,
+        };
+        const info = await this.smtpTransporter.sendMail(mailOptions);
+        logger.info(`[SendGridEmailService] Email sent to ${to}: ${subject} (via SMTP Backup)`);
+        return true;
+      } catch (smtpError) {
+        logger.error(`[SendGridEmailService] SMTP Backup failed to send email to ${to}:`, smtpError.message);
+      }
+    } else {
+      logger.error("[SendGridEmailService] No SMTP backup transporter configured.");
     }
+
+    return false;
   }
 
   // ─── Email Templates (Migrated from Brevo) ────────────────────

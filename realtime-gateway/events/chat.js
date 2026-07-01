@@ -294,6 +294,43 @@ module.exports = (io, socket) => {
     });
   });
 
+  // ── Immediate Socket Delivery Receipt ─────────────────────────────────
+  // Emitted by the pg_notify dispatch path (dispatchSocketEvent in server.js)
+  // when a chat:message is delivered to a recipient room. We hook into this
+  // to instantly emit a delivery receipt back to the original sender WITHOUT
+  // requiring the Service Worker to call /deliver/:messageId first.
+  //
+  // This fixes the "single tick stays single until user opens chat" problem:
+  // Before: double-tick required push notification → SW → /deliver webhook
+  // After:  double-tick fires immediately when recipient socket receives message
+  //
+  // The /deliver webhook path still runs as a fallback for offline devices.
+  socket.on('chat:mark_delivered', (data) => {
+    const { messageId, eventId, conversationId: convId, senderId } = data || {};
+    if (!messageId && !eventId) return;
+
+    const now = new Date().toISOString();
+    console.log(`[FORENSIC][GW] SOCKET_DELIVERY_ACK | messageId:${messageId} | eventId:${eventId} | recipientId:${userId} | senderId:${senderId} | ts:${now}`);
+
+    const receiptPayload = {
+      messageId,
+      eventId,
+      conversationId: convId,
+      userId,          // the recipient who received it
+      delivered_at: now,
+    };
+
+    // Notify the original sender
+    if (senderId) {
+      io.to(`user:${senderId}`).emit('chat:message_delivered', receiptPayload);
+    }
+
+    // Also broadcast to the conversation room
+    if (convId) {
+      io.to(convId).emit('chat:message_delivered', receiptPayload);
+    }
+  });
+
   // ── Message Deleted ──────────────────────────────────────────────────────
 
   // Payload: { conversationId, teamId, messageId }

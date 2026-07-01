@@ -287,20 +287,12 @@ async function computeV2Routing(params) {
         if (state === 'ACTIVE' || state === 'BACKGROUND') {
           activeCount++;
           if (deviceInst && deviceInst.push_endpoint && deviceInst.endpoint_status !== 'INVALID') {
-            // ── Device-aware suppression ──────────────────────────────────────────
-            // FIX: Previously this block suppressed push for ALL devices if ANY socket
-            // was online for the user. Now we check if THIS specific device's canonical
-            // device_id is present in the active socket map. A device is only suppressed
-            // if its own socket is connected — not someone else's device.
-            const isThisDeviceActive = deviceInst.device_id && activeDeviceIds.has(deviceInst.device_id);
-            console.log(`[DeviceDiagnostic] Routing check | deviceId:${deviceInst.device_id} | activeDeviceIds:[${[...activeDeviceIds].join(',')}] | isActive:${isThisDeviceActive} | endpoint_status:${deviceInst.endpoint_status}`);
+            // PUSH SUPPRESSION REMOVED: Always push to valid endpoints regardless of socket state.
+            // The client-side Service Worker handles deduplication: it checks document.visibilityState
+            // and the active conversation before showing a notification popup.
+            console.log(`[DeviceDiagnostic] Routing check | deviceId:${deviceInst.device_id} | endpoint_status:${deviceInst.endpoint_status}`);
             endpointCount++;
-            if (!isThisDeviceActive) {
-              // Device not currently on a socket — include it as a push target
-              pushTargets.push(deviceInst);
-            } else {
-              console.log(`[PushSuppression] Suppressing push to device ${deviceInst.device_id} (userId:${userId}) — active socket present.`);
-            }
+            pushTargets.push(deviceInst);
           }
         } else if (state === 'LOGGED_OUT') {
           loggedOutCount++;
