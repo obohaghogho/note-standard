@@ -672,3 +672,30 @@ input[type=number] {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
+
+/* ======================================================
+   GLOBAL RESPONSIVENESS AND TEXT WRAPPING SYSTEMS
+   ====================================================== */
+
+/* Prevent long words, URLs, and continuous string blocks from overflowing parent containers */
+h1, h2, h3, h4, h5, h6, p, span, a, li, label, td, th, blockquote, figcaption {
+  overflow-wrap: break-word !important;
+  word-wrap: break-word !important;
+  word-break: break-word; /* Safe break for modern browsers */
+}
+
+/* Ensure code blocks, pre tags, and user generated content doesn't push past viewport */
+pre, code {
+  white-space: pre-wrap !important;
+  word-break: break-all !important;
+}
+
+/* Enforce responsive behavior on all media elements */
+img, picture, video, canvas, iframe {
+  max-width: 100% !important;
+}
+
+/* Help standard grid cells and flex children respect boundaries */
+.grid, .flex, .flex-col, .flex-row {
+  min-width: 0;
+}

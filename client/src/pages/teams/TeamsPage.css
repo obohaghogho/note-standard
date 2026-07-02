@@ -645,6 +645,12 @@
 }
 
 @keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.teams-page__back-button {
+  display: none;
   align-items: center;
   justify-content: center;
   width: 36px;

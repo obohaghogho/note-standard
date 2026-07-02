@@ -20,7 +20,7 @@ export const LandingPage = () => {
     }, [authReady, user, navigate]);
 
     return (
-        <div className="h-full overflow-y-auto min-h-[100dvh] bg-crystal text-foreground selection:bg-primary/30 w-full">
+        <div className="h-full overflow-y-auto overflow-x-hidden min-h-[100dvh] bg-crystal text-foreground selection:bg-primary/30 w-full">
             <SEO 
                 title="Real-Time Messaging & Social Communication"
                 description="NoteStandard by Jossy Digital Technologies Ltd provides secure messaging, voice notes, media sharing, real-time conversations, and social communication."

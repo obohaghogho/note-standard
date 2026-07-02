@@ -218,7 +218,7 @@ export const Login = () => {
 
 
     return (
-        <div className="h-full overflow-y-auto min-h-[100dvh] flex items-center justify-center p-4 relative bg-[#0a0a0a] w-full max-w-full">
+        <div className="h-full overflow-y-auto overflow-x-hidden min-h-[100dvh] flex items-center justify-center p-4 relative bg-[#0a0a0a] w-full max-w-full">
             <div className="absolute top-0 left-1/4 w-full max-w-[800px] h-[500px] bg-primary/10 rounded-full blur-[120px] -z-10" />
             <div className="absolute bottom-0 right-1/4 w-full max-w-[600px] h-[500px] bg-purple-500/5 rounded-full blur-[100px] -z-10" />
 
