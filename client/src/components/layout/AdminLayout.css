@@ -2,10 +2,10 @@
 
 .admin-layout {
     display: flex;
-    min-height: 100dvh;
+    height: 100dvh;
     background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
     color: #e4e4e7;
-    overflow-x: clip;
+    overflow: hidden;
 }
 
 /* Sidebar */
@@ -158,9 +158,9 @@
     transition: margin-left 0.3s ease;
     display: flex;
     flex-direction: column;
-    min-height: 100dvh;
+    height: 100dvh;
     min-width: 0;
-    overflow-x: hidden;
+    overflow: hidden;
 }
 
 .admin-sidebar.collapsed ~ .admin-main {
