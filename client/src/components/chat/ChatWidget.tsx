@@ -331,10 +331,10 @@ export const ChatWidget = () => {
                        location.pathname.startsWith('/admin/chats') ||
                        location.pathname.startsWith('/dashboard/teams');
 
-    if (!user || isKeyboardVisible || isChatRoom) return null;
+    if (!user || (!isOpen && isKeyboardVisible) || isChatRoom) return null;
 
     return (
-        <div className={`chat-widget ${isOpen ? 'open' : ''} ${isMinimized ? 'minimized' : ''}`} style={{ display: isKeyboardVisible || isChatRoom ? 'none' : 'block' }}>
+        <div className={`chat-widget ${isOpen ? 'open' : ''} ${isMinimized ? 'minimized' : ''} ${isOpen && isKeyboardVisible ? 'keyboard-visible' : ''}`} style={{ display: (!isOpen && isKeyboardVisible) || isChatRoom ? 'none' : 'block' }}>
             {!isOpen && (
                 <button className="chat-widget-button" onClick={() => setIsOpen(true)}>
                     <MessageCircle size={24} />

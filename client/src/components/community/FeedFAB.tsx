@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Edit3, Image, BarChart2, Link as LinkIcon } from 'lucide-react';
 import { PostComposer } from './PostComposer';
-import { CommunityPost } from '../../services/communityService';
+import type { CommunityPost } from '../../services/communityService';
 
 interface Props {
   onPosted: (post: CommunityPost) => void;

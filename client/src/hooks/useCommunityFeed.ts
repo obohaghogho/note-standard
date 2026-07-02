@@ -9,9 +9,11 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import {
+import type {
   CommunityPost,
   FeedResult,
+} from '../services/communityService';
+import {
   getFeed,
   getCachedFeed,
   setCachedFeed,

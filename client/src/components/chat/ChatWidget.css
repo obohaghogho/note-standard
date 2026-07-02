@@ -402,12 +402,22 @@
         left: auto;
     }
 
-    .chat-widget-window {
-        width: calc(100vw - 40px);
-        height: 60dvh;
-        bottom: 80px;
+    .chat-widget.open {
+        position: fixed;
+        top: 0;
+        left: 0;
         right: 0;
-        border-radius: 16px;
+        bottom: 0;
+        z-index: 2000;
+    }
+
+    .chat-widget-window {
+        width: 100vw;
+        height: 100dvh;
+        border-radius: 0;
+        border: none;
+        box-shadow: none;
+        background: rgb(10, 10, 18);
     }
 
     .chat-widget-button {

@@ -66,6 +66,7 @@ exports.getStats = async (req, res) => {
       { count: openChats },
       { count: pendingChats },
       { count: onlineUsers },
+      { count: totalMessages },
     ] = await Promise.all([
       serviceSupabase.from("profiles").select("*", {
         count: "exact",
@@ -84,6 +85,10 @@ exports.getStats = async (req, res) => {
         count: "exact",
         head: true,
       }).eq("is_online", true),
+      serviceSupabase.from("messages").select("*", {
+        count: "exact",
+        head: true,
+      }),
     ]);
 
     // Active users (24h)
@@ -116,6 +121,7 @@ exports.getStats = async (req, res) => {
       openChats: openChats || 0,
       pendingChats: pendingChats || 0,
       onlineUsers: onlineUsers || 0,
+      totalMessages: totalMessages || 0,
       serverStatus: "healthy",
       topCreators: topCreators || [],
       usageTrends: usageTrends || [],

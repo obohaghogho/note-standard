@@ -1793,45 +1793,47 @@ exports.sendMessage = async (req, res) => {
                isTyping: false 
             });
 
-            if (aiResponse && aiResponse.text) {
+             if (aiResponse && aiResponse.text) {
               // Insert AI message
-              const { data: autoMsg, error: autoErr } = await supabase
-                .from("messages")
-                .insert([{
-                  conversation_id: conversationId,
-                  sender_id: botSenderId,
-                  content: aiResponse.text,
-                  type: "text",
-                }])
-                .select()
-                .single();
+              const { data: rpcData, error: autoErr } = await supabase.rpc('rpc_send_message', {
+                p_conversation_id: conversationId,
+                p_sender_id: botSenderId,
+                p_content: aiResponse.text,
+                p_type: "text",
+                p_event_id: require("crypto").randomUUID(),
+                p_original_language: "en",
+                p_attachment_id: null,
+                p_reply_to_id: null
+              });
+              const autoMsg = rpcData?.message;
 
-              if (!autoErr) {
+              if (!autoErr && autoMsg) {
                  await realtime.emitToConversation(conversationId, "chat:message", autoMsg);
               }
               
               // If escalated, update status
               if (aiResponse.isEscalated) {
-                 await supabase
-                  .from("conversations")
-                  .update({ support_status: "escalated" })
-                  .eq("id", conversationId);
+                  await supabase
+                   .from("conversations")
+                   .update({ support_status: "escalated" })
+                   .eq("id", conversationId);
               }
             } else {
               // AI returned no response — send a fallback so the user isn't left hanging
               const fallbackMsg = "Hi there! 👋 Thanks for reaching out. Our team has been notified and will get back to you shortly. – Note Standard Support Team";
-              const { data: fallbackData, error: fallbackErr } = await supabase
-                .from("messages")
-                .insert([{
-                  conversation_id: conversationId,
-                  sender_id: botSenderId,
-                  content: fallbackMsg,
-                  type: "text",
-                }])
-                .select()
-                .single();
+              const { data: rpcData, error: fallbackErr } = await supabase.rpc('rpc_send_message', {
+                p_conversation_id: conversationId,
+                p_sender_id: botSenderId,
+                p_content: fallbackMsg,
+                p_type: "text",
+                p_event_id: require("crypto").randomUUID(),
+                p_original_language: "en",
+                p_attachment_id: null,
+                p_reply_to_id: null
+              });
+              const fallbackData = rpcData?.message;
               
-              if (!fallbackErr) {
+              if (!fallbackErr && fallbackData) {
                  await realtime.emitToConversation(conversationId, "chat:message", fallbackData);
               }
             }
@@ -1847,18 +1849,19 @@ exports.sendMessage = async (req, res) => {
             // Send fallback message so user always gets a response
             const errorFallbackMsg = "Hi there! 👋 Thanks for your message. Our support team has been notified and will respond shortly. – Note Standard Support Team";
             try {
-              const { data: errMsg, error: errMsgErr } = await supabase
-                .from("messages")
-                .insert([{
-                  conversation_id: conversationId,
-                  sender_id: botSenderId,
-                  content: errorFallbackMsg,
-                  type: "text",
-                }])
-                .select()
-                .single();
+              const { data: rpcData, error: errMsgErr } = await supabase.rpc('rpc_send_message', {
+                p_conversation_id: conversationId,
+                p_sender_id: botSenderId,
+                p_content: errorFallbackMsg,
+                p_type: "text",
+                p_event_id: require("crypto").randomUUID(),
+                p_original_language: "en",
+                p_attachment_id: null,
+                p_reply_to_id: null
+              });
+              const errMsg = rpcData?.message;
               
-              if (!errMsgErr) {
+              if (!errMsgErr && errMsg) {
                  await realtime.emitToConversation(conversationId, "chat:message", errMsg);
               }
             } catch (fallbackInsertErr) {

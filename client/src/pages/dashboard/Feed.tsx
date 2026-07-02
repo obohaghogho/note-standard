@@ -10,7 +10,7 @@ import { FeedFAB } from '../../components/community/FeedFAB';
 import { PostComposer } from '../../components/community/PostComposer';
 import { useCommunityFeed } from '../../hooks/useCommunityFeed';
 import { useAuth } from '../../context/AuthContext';
-import { CommunityPost } from '../../services/communityService';
+import type { CommunityPost } from '../../services/communityService';
 import { RefreshCw } from 'lucide-react';
 
 const FEED_TABS = [

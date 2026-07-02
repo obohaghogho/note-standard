@@ -4,8 +4,8 @@ import {
   AtSign, Hash, Loader2, ChevronDown
 } from 'lucide-react';
 import { useSocket } from '../../context/SocketContext';
+import type { CommunityPost } from '../../services/communityService';
 import {
-  CommunityPost,
   createPost,
   editPost as apiEditPost,
   uploadMediaFile,

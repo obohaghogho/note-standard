@@ -16,8 +16,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
+import type { CommunityPost } from '../../services/communityService';
 import {
-  CommunityPost,
   toggleLike,
   toggleBookmark,
   deletePost,

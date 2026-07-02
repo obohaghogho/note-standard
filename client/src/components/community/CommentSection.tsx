@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Send, X, Edit3, Trash2, Reply } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
+import type { CommunityComment } from '../../services/communityService';
 import {
-  CommunityComment,
   getComments,
   addComment,
   editComment,

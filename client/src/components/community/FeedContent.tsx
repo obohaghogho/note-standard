@@ -1,7 +1,7 @@
 import React from 'react';
 import { Loader2 } from 'lucide-react';
 import { UniversalPostCard } from './UniversalPostCard';
-import { CommunityPost } from '../../services/communityService';
+import type { CommunityPost } from '../../services/communityService';
 
 interface Props {
   posts: CommunityPost[];
