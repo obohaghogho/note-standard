@@ -350,9 +350,9 @@ export const AdminChat = () => {
     if (!isAdmin) return <div className="p-8">Access Denied</div>;
 
     return (
-        <div className="p-4 md:p-8 bg-crystal min-h-screen relative w-full flex items-center justify-center">
+        <div className="p-4 md:p-8 bg-crystal flex-1 relative w-full h-full flex items-center justify-center">
             <div className="absolute inset-0 bg-black/35 backdrop-blur-sm pointer-events-none z-0" />
-            <div className="admin-chat relative z-10 w-full max-w-[1400px]">
+            <div className={`admin-chat relative z-10 w-full max-w-[1400px] flex-1 ${activeChat ? 'chat-active' : ''}`}>
             <div className="chat-list">
                 <div className="chat-list-header">
                     <h3>Support Chats</h3>
@@ -442,6 +442,13 @@ export const AdminChat = () => {
                                     const userProfile = chatMember?.profile;
                                     return (
                                         <>
+                                            <button 
+                                                className="mobile-back-btn"
+                                                onClick={() => setActiveChat(null)}
+                                                aria-label="Back to chats"
+                                            >
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                                            </button>
                                             <div className="avatar">
                                                 {userProfile?.avatar_url ? (
                                                     <SecureImage src={userProfile.avatar_url} alt="" fallbackType="profile" />
