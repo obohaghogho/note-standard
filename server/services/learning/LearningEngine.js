@@ -3,7 +3,7 @@ const graphService = require('../graph/GraphService');
 const Groq = require('groq-sdk');
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-const MODEL = 'moonshotai/kimi-k2-instruct';
+const MODEL = 'llama-3.1-8b-instant';
 
 // Builds the standard AI metadata payload attached to every artifact
 function buildAiMetadata(sourceNodeIds, confidence = null) {

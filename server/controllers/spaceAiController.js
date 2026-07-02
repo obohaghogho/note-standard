@@ -75,7 +75,7 @@ ${contextString}`;
                 { role: "system", content: systemPrompt },
                 { role: "user", content: query }
             ],
-            model: "moonshotai/kimi-k2-instruct",
+            model: "llama-3.1-8b-instant",
             temperature: 0.3,
             max_tokens: 500
         });
