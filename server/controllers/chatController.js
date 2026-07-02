@@ -9,6 +9,7 @@ const replayGuard = require("../utils/replayGuard");
 const crypto = require("crypto");
 const { emitMessageEvent } = require("../rpc/eventLedger");
 const logger = require("../utils/logger");
+const PIPELINE_VERSION = process.env.MESSAGING_PIPELINE_VERSION || 'v2';
 
 /**
  * _hydrateReplyTo — batch-resolve reply_to nested objects in place.
@@ -1579,7 +1580,7 @@ exports.sendMessage = async (req, res) => {
       // If not (delivered_at still null), re-emit to all recipients.
       // Handles: iOS backgrounding, network switch (LTE↔WiFi), cold gateway routing.
       // Fire-and-forget — does NOT block the response, does NOT double-write to DB.
-      if (process.env.MESSAGING_PIPELINE_VERSION !== 'v2' && !isDuplicate && safePayload.id && members.length > 0) {
+      if (PIPELINE_VERSION !== 'v2' && !isDuplicate && safePayload.id && members.length > 0) {
         const recheckMessageId = safePayload.id;
         const recheckMembers = [...members]; // snapshot at send time
         const recheckCorrelationId = req.correlationId;
@@ -1654,7 +1655,7 @@ exports.sendMessage = async (req, res) => {
           });
         });
 
-        if (process.env.MESSAGING_PIPELINE_VERSION !== 'v2') {
+        if (PIPELINE_VERSION !== 'v2') {
           const fastPushPromises = otherMembers.map(async (member) => {
             if (member.is_muted) {
               console.log(`[Chat Notify] Skipping muted user fast-push: ${member.user_id}`);

@@ -149,7 +149,7 @@ module.exports = (io, socket) => {
 
     console.log(`[FORENSIC][GW] Delivery ACK Received | userId:${userId} | conversationId:${conversationId} | messageId:${messageId} | eventId:${eventId} | ts:${Date.now()}`);
 
-    const PIPELINE_VERSION = process.env.MESSAGING_PIPELINE_VERSION || 'v1';
+    const PIPELINE_VERSION = process.env.MESSAGING_PIPELINE_VERSION || 'v2';
     if (PIPELINE_VERSION === 'v2' && messageId) {
       const deliveryEngine = require('../services/deliveryEngine');
       await deliveryEngine.handleDeliveryAck(supabase, io, messageId, userId);
@@ -181,7 +181,7 @@ module.exports = (io, socket) => {
 
     console.log(`[FORENSIC][GW] Batch Delivery ACK | userId:${userId} | conversationId:${conversationId} | count:${messageIds.length} | ts:${Date.now()}`);
 
-    const PIPELINE_VERSION = process.env.MESSAGING_PIPELINE_VERSION || 'v1';
+    const PIPELINE_VERSION = process.env.MESSAGING_PIPELINE_VERSION || 'v2';
     if (PIPELINE_VERSION === 'v2') {
       const receiptEngine = require('../services/receiptEngine');
       await receiptEngine.markDeliveredBatch(supabase, io, messageIds, userId);

@@ -30,7 +30,7 @@ if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
   );
 }
 
-const PIPELINE_VERSION = process.env.MESSAGING_PIPELINE_VERSION || 'v1';
+const PIPELINE_VERSION = process.env.MESSAGING_PIPELINE_VERSION || 'v2';
 console.log(`[Gateway] Messaging pipeline version: ${PIPELINE_VERSION}`);
 
 // ✅ 1. CRASH PREVENTION: GLOBAL ERROR HANDLERS
