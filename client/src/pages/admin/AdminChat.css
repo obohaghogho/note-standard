@@ -693,24 +693,7 @@
     flex-shrink: 0;
 }
 
-.mobile-back-btn {
-    display: none;
-}
-
 @media (max-width: 768px) {
-    .mobile-back-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0.5rem;
-        background: rgba(255, 255, 255, 0.05);
-        border: none;
-        border-radius: 50%;
-        color: #e4e4e7;
-        margin-right: 0.5rem;
-        cursor: pointer;
-    }
-    
     .chat-window {
         flex: 1;
         min-height: 0;

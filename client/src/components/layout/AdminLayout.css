@@ -15,10 +15,9 @@
     background: rgba(15, 15, 26, 0.95);
     border-right: 1px solid rgba(99, 102, 241, 0.1);
     transition: width 0.3s ease, transform 0.3s ease;
-    position: fixed;
-    left: 0;
+    position: sticky;
     top: 0;
-    bottom: 0;
+    height: 100dvh;
     z-index: 100;
     backdrop-filter: blur(10px);
 }
@@ -156,7 +155,6 @@
 /* Main Content Area */
 .admin-main {
     flex: 1;
-    margin-left: 260px;
     transition: margin-left 0.3s ease;
     display: flex;
     flex-direction: column;
@@ -166,7 +164,7 @@
 }
 
 .admin-sidebar.collapsed ~ .admin-main {
-    margin-left: 72px;
+    /* No margin needed since sidebar is sticky in flex layout */
 }
 
 /* Header */
@@ -350,16 +348,20 @@
     }
 
     .admin-main {
-        margin-left: 260px;
+        /* No margin needed */
     }
 
     .admin-sidebar.collapsed ~ .admin-main {
-        margin-left: 72px;
+        /* No margin needed */
     }
 }
 
 @media (max-width: 768px) {
     .admin-sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
         transform: translateX(-100%);
     }
     
@@ -369,7 +371,7 @@
     }
     
     .admin-main {
-        margin-left: 0 !important;
+        /* No margin needed */
     }
 
     .admin-header h1 {
@@ -377,7 +379,15 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-width: 120px;
+        max-width: 140px;
+    }
+    
+    .mobile-hidden-title {
+        display: none;
+    }
+    
+    .desktop-only-lang {
+        display: none;
     }
 
     .mobile-toggle-btn {

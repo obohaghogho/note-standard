@@ -174,6 +174,21 @@ export const AdminChat = () => {
         };
     }, [activeChat, session, socket, connected, user]);
 
+    // Dispatch custom events to AdminLayout to toggle the top mobile header back button
+    useEffect(() => {
+        window.dispatchEvent(new CustomEvent('admin-chat-active', { detail: !!activeChat }));
+        return () => {
+            window.dispatchEvent(new CustomEvent('admin-chat-active', { detail: false }));
+        };
+    }, [activeChat]);
+
+    // Listen to back button event from AdminLayout
+    useEffect(() => {
+        const handleBack = () => setActiveChat(null);
+        window.addEventListener('admin-chat-back', handleBack);
+        return () => window.removeEventListener('admin-chat-back', handleBack);
+    }, []);
+
     // Initial Fetch
     useEffect(() => {
         const fetchChats = async () => {
@@ -442,13 +457,6 @@ export const AdminChat = () => {
                                     const userProfile = chatMember?.profile;
                                     return (
                                         <>
-                                            <button 
-                                                className="mobile-back-btn"
-                                                onClick={() => setActiveChat(null)}
-                                                aria-label="Back to chats"
-                                            >
-                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-                                            </button>
                                             <div className="avatar">
                                                 {userProfile?.avatar_url ? (
                                                     <SecureImage src={userProfile.avatar_url} alt="" fallbackType="profile" />
