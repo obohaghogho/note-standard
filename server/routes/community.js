@@ -8,6 +8,7 @@ const {
 } = require("../controllers/communityController");
 const spaceController = require("../controllers/spaceController");
 const spaceAiController = require("../controllers/spaceAiController");
+const aiTutorController = require("../controllers/aiTutorController");
 const supabase = require("../config/database");
 
 router.use(requireAuth);
@@ -86,6 +87,8 @@ router.get("/spaces", spaceController.getSpaces);
 router.post("/spaces", spaceController.createSpace);
 router.post("/spaces/:spaceId/join", spaceController.joinSpace);
 router.post("/spaces/:spaceId/ask", spaceAiController.askSpaceAi);
+// AI Tutor: client AiTutorPanel.tsx posts to /community/spaces/:spaceId/tutor
+router.post("/spaces/:spaceId/tutor", aiTutorController.tutorChat);
 
 module.exports = router;
 
