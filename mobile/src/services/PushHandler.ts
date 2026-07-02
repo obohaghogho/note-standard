@@ -10,13 +10,29 @@ import messaging from '@react-native-firebase/messaging';
 import { navigate } from '../navigation/AppNavigator';
 import apiClient from '../api/apiClient';
 
-// Configure how notifications are handled when the app is in the foreground
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const { data } = notification.request.content;
-    const isMessage = data?.type === 'message' || data?.type === 'chat_message';
+    const payload = data?.data ?? data;
+    const isMessage = payload?.type === 'message' || payload?.type === 'chat_message';
+    
+    let shouldSuppress = isMessage;
+    if (isMessage && (payload?.recipientId || payload?.targetAccountId)) {
+      try {
+        const { AuthService } = require('./AuthService');
+        const currentUser = await AuthService.getUser();
+        const targetId = payload.recipientId || payload.targetAccountId;
+        if (currentUser && currentUser.id !== targetId) {
+          console.log(`[PushHandler] Foreground message account mismatch | active:${currentUser.id} | recipient:${targetId}. Suppress disabled.`);
+          shouldSuppress = false;
+        }
+      } catch (err) {
+        console.warn('[PushHandler] Error checking current user for suppression:', err);
+      }
+    }
+
     return {
-      shouldShowAlert: !isMessage,
+      shouldShowAlert: !shouldSuppress,
       shouldPlaySound: true,
       shouldSetBadge: false,
     } as any;
@@ -128,11 +144,31 @@ export class PushHandler {
           });
         }
         
-        EventEmitter.emit('notification', {
-          title: title || payload.title || 'New Message',
-          message: body || payload.message || '',
-          type: payload.type
-        });
+        const targetId = payload.recipientId || payload.targetAccountId;
+        if (targetId) {
+          const { AuthService } = require('./AuthService');
+          AuthService.getUser().then((currentUser: any) => {
+            if (!currentUser || currentUser.id === targetId) {
+              EventEmitter.emit('notification', {
+                title: title || payload.title || 'New Message',
+                message: body || payload.message || '',
+                type: payload.type
+              });
+            }
+          }).catch(() => {
+            EventEmitter.emit('notification', {
+              title: title || payload.title || 'New Message',
+              message: body || payload.message || '',
+              type: payload.type
+            });
+          });
+        } else {
+          EventEmitter.emit('notification', {
+            title: title || payload.title || 'New Message',
+            message: body || payload.message || '',
+            type: payload.type
+          });
+        }
       }
     });
 

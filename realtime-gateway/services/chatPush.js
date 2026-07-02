@@ -163,6 +163,8 @@ async function sendFcm(fbApp, supabase, target, { userId, title, body, messageId
       messageId: String(messageId || ''),
       conversationId: String(conversationId || ''),
       deliveryWebhookUrl: String(webhookUrl || ''),
+      recipientId: String(userId || ''),
+      targetAccountId: String(userId || ''),
     },
     android: { priority: 'high', ttl: 86400 },
   };
@@ -185,7 +187,14 @@ async function sendWeb(supabase, target, { userId, title, body, messageId, conve
   const payload = JSON.stringify({
     title: title || 'New Message',
     body: body || 'You have a new message',
-    data: { type: 'chat_message', messageId, conversationId, url: '/dashboard/chat' },
+    data: {
+      type: 'chat_message',
+      messageId,
+      conversationId,
+      url: '/dashboard/chat',
+      recipientId: userId,
+      targetAccountId: userId,
+    },
   });
 
   try {

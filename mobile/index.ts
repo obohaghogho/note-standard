@@ -83,6 +83,8 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
               type: 'chat_message',
               messageId,
               conversationId,
+              recipientId: data.recipientId,
+              targetAccountId: data.targetAccountId,
               url: typeof data.url === 'string' ? data.url : '/dashboard/chat',
             },
             sound: true,
