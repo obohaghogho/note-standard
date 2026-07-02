@@ -216,7 +216,7 @@ export const AdminLayout = () => {
                 </header>
 
                 {/* Page Content */}
-                <main className="admin-content">
+                <main className={`admin-content ${location.pathname.startsWith('/admin/chats') ? 'chat-page-layout' : ''}`}>
                     <Outlet key={location.pathname} />
                 </main>
 

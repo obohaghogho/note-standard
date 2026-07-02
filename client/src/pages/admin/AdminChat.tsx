@@ -365,7 +365,7 @@ export const AdminChat = () => {
     if (!isAdmin) return <div className="p-8">Access Denied</div>;
 
     return (
-        <div className="p-4 md:p-8 bg-crystal flex-1 relative w-full h-full flex items-center justify-center">
+        <div className="p-0 md:p-6 lg:p-8 bg-crystal flex-1 relative w-full h-full flex flex-col items-center justify-center min-h-0 overflow-hidden">
             <div className="absolute inset-0 bg-black/35 backdrop-blur-sm pointer-events-none z-0" />
             <div className={`admin-chat relative z-10 w-full max-w-[1400px] flex-1 ${activeChat ? 'chat-active' : ''}`}>
             <div className="chat-list">

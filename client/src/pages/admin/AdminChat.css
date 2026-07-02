@@ -17,6 +17,8 @@
 @media (max-width: 768px) {
     .admin-chat {
         flex-direction: column;
+        border-radius: 0;
+        border: none;
     }
     
     .admin-chat.chat-active .chat-list {

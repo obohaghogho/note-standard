@@ -329,6 +329,11 @@
     flex-direction: column;
 }
 
+.admin-content.chat-page-layout {
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+
 @media (min-width: 768px) {
     .admin-content {
         padding: 2rem;
