@@ -30,7 +30,7 @@ const chatPush = require('./chatPush');
 const pendingAcks = new Map();
 
 // Configurable timeout (seconds) before falling back to push
-const ACK_TIMEOUT_MS = parseInt(process.env.MESSAGE_ACK_TIMEOUT_MS || process.env.DELIVERY_ACK_TIMEOUT_MS || '3000', 10);
+const ACK_TIMEOUT_MS = parseInt(process.env.MESSAGE_ACK_TIMEOUT_MS || process.env.DELIVERY_ACK_TIMEOUT_MS || '1000', 10);
 
 /**
  * Telemetry Helpers
@@ -109,8 +109,10 @@ async function processIncomingMessage(io, supabase, envelope, deps = {}) {
     const sockets = await io.in(`user:${recipientId}`).fetchSockets();
     const socketsCount = sockets.length;
 
-    // Log the initial delivery state trace
-    await logInitialTelemetry(supabase, messageId, recipientId, socketsCount);
+    // Log the initial delivery state trace (non-blocking)
+    logInitialTelemetry(supabase, messageId, recipientId, socketsCount).catch(err => {
+      console.error('[DeliveryEngine] Background telemetry initial insert failed:', err.message);
+    });
 
     if (socketsCount > 0) {
       // Recipient has a socket — message was delivered via dispatchSocketEvent.
@@ -143,8 +145,10 @@ async function processIncomingMessage(io, supabase, envelope, deps = {}) {
 
         console.log(`[DeliveryEngine] ACK timeout (${ACK_TIMEOUT_MS}ms) | messageId:${messageId} | recipient:${recipientId} — sending push`);
 
-        // Record the fallback trigger to telemetry
-        await updateTelemetryFallback(supabase, messageId, recipientId);
+        // Record the fallback trigger to telemetry (non-blocking)
+        updateTelemetryFallback(supabase, messageId, recipientId).catch(err => {
+          console.error('[DeliveryEngine] Background telemetry fallback update failed:', err.message);
+        });
 
         await chatPush.sendChatPush({
           supabase,

@@ -15,6 +15,11 @@
 const admin = require('firebase-admin');
 const webpush = require('web-push');
 
+// In-memory cache for user installation/endpoints: Map<userId, { installations, expiresAt }>
+const installationsCache = new Map();
+const CACHE_TTL_MS = 15000; // 15 seconds TTL
+
+
 /**
  * @param {object}  opts
  * @param {object}  opts.supabase       - Supabase client
@@ -84,15 +89,29 @@ async function sendChatPush({ supabase, firebaseApp: fbApp, userId, title, body,
     }
   }
 
-  // 1. Fetch endpoints from the single source of truth
-  const { data: installations, error } = await supabase
-    .from('installation_accounts')
-    .select('session_state, device_installations(installation_id, type, push_endpoint, platform, push_p256dh, push_auth, device_id, endpoint_status)')
-    .eq('user_id', userId);
+  // 1. Fetch endpoints from cache or database (single source of truth)
+  let installations = null;
+  const nowTime = Date.now();
+  const cached = installationsCache.get(userId);
 
-  if (error) {
-    console.error('[ChatPush] Failed to query installations:', error.message);
-    return;
+  if (cached && cached.expiresAt > nowTime) {
+    installations = cached.installations;
+  } else {
+    const { data, error } = await supabase
+      .from('installation_accounts')
+      .select('session_state, device_installations(installation_id, type, push_endpoint, platform, push_p256dh, push_auth, device_id, endpoint_status)')
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('[ChatPush] Failed to query installations:', error.message);
+      return;
+    }
+
+    installations = data || [];
+    installationsCache.set(userId, {
+      installations,
+      expiresAt: nowTime + CACHE_TTL_MS
+    });
   }
 
   if (!installations || installations.length === 0) {
@@ -137,16 +156,18 @@ async function sendChatPush({ supabase, firebaseApp: fbApp, userId, title, body,
     providerResult = `failed: ${firstError?.reason?.message || 'unknown error'}`;
   }
 
-  try {
-    await supabase.from('push_delivery_telemetry')
+  if (messageId) {
+    supabase.from('push_delivery_telemetry')
       .update({
         push_sent: sent > 0,
         provider_result: providerResult
       })
       .eq('message_id', messageId)
-      .eq('recipient_id', userId);
-  } catch (err) {
-    console.error('[ChatPush] Telemetry update failed:', err.message);
+      .eq('recipient_id', userId)
+      .then()
+      .catch(err => {
+        console.error('[ChatPush] Background telemetry update failed:', err.message);
+      });
   }
 
   console.log(`[ChatPush] Sent ${sent}/${targets.length} pushes for user ${userId} | messageId:${messageId || 'N/A'}`);
