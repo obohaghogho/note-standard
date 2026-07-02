@@ -585,9 +585,23 @@ async function dispatchV2Push(params, pushTargets, isCall = false) {
 
   for (const t of pushTargets) {
     if (t.platform === 'android' && t.type === 'fcm' && firebaseApp) {
+      // ── DATA-ONLY FCM MESSAGE (permanent architecture) ──────────────────────
+      // DO NOT add a top-level `notification` or `android.notification` block for
+      // chat messages. Adding either causes Firebase to classify the push as a
+      // "Notification Message", which the Android OS intercepts and renders
+      // directly — bypassing the React Native JS thread entirely.
+      //
+      // Data-Only messages guarantee:
+      //   1. setBackgroundMessageHandler() ALWAYS executes (app terminated/background)
+      //   2. The JS thread controls the UI — correct channel, sound, content
+      //   3. The delivery webhook fires reliably → double tick works
+      //   4. No OS-level duplicate notifications
+      //
+      // For incoming calls we still use data-only (notification: undefined) —
+      // that path was already correct.
       const message = {
         token: t.push_endpoint,
-        notification: isCall ? undefined : { title, body },
+        // No top-level notification block — data-only for all message types
         data: isCall ? {
           ...Object.fromEntries(Object.entries(payload || {}).map(([k, v]) => [k, String(v)])),
           type: String(payload?.type || 'incoming_call'),
@@ -597,50 +611,38 @@ async function dispatchV2Push(params, pushTargets, isCall = false) {
           call_id: String(payload?.sessionId || payload?.callId || payload?.peerId || ''),
           conversation_id: String(payload?.conversationId || ''),
         } : {
-          type: String(payload?.type || 'notification'),
+          // Chat message — all fields in data so background handler can render alert
+          type: String(payload?.type || 'chat_message'),
+          title: String(title || 'New Message'),
+          body: String(body || 'You have a new message'),
           conversationId: String(payload?.conversationId || ''),
           messageId: String(payload?.messageId || ''),
           url: String(payload?.url || '/dashboard/notifications'),
           recipientId: String(payload?.recipientId || ''),
           targetUserId: String(payload?.targetUserId || payload?.recipientId || ''),
           targetAccountId: String(payload?.targetAccountId || payload?.recipientId || ''),
+          deliveryWebhookUrl: payload?.messageId
+            ? `${process.env.SELF_URL || 'https://realtime-gateway-gsb5.onrender.com'}/deliver/${payload.messageId}`
+            : '',
         },
         android: {
           priority: 'high',
-          ttl: isCall ? 0 : undefined,
-          notification: isCall ? undefined : {
-            sound: 'default',
-            tag: payload?.conversationId ? `chat-${payload.conversationId}` : `type-${payload?.type || 'notification'}`,
-          },
+          ttl: isCall ? 0 : 86400, // calls: 0 (expire immediately if undelivered); chats: 24h
+          // No android.notification block — JS thread renders the UI
         },
       };
 
-      // ── INSTRUMENTATION: Log exact FCM payload structure before send ──
-      // hasNotificationBlock = true means OS intercepts & displays silently (JS thread WON'T wake)
-      // hasNotificationBlock = false (data-only) means JS thread WILL wake via setBackgroundMessageHandler
-      const hasNotificationBlock = !!(message.notification || message.android?.notification);
-      console.log(
-        `[EVIDENCE] FCM_PAYLOAD_SENT | deviceId:${t.device_id} | userId:${userId}` +
-        ` | messageId:${payload?.messageId || 'N/A'} | isCall:${isCall}` +
-        ` | hasNotificationBlock:${hasNotificationBlock}` +
-        ` | isDataOnly:${!hasNotificationBlock}` +
-        ` | token:${t.push_endpoint.substring(0, 12)}...` +
-        ` | fcmSendTs:${Date.now()}`
-      );
-      console.log(`[EVIDENCE] FCM_PAYLOAD_STRUCTURE | ${JSON.stringify({ notification: message.notification, data: message.data, android_notification: message.android?.notification })}`);
-
-      console.log(`[V2Router] 📤 Sending FCM to V2 Installation (${t.device_id}): ${t.push_endpoint.substring(0, 10)}...`);
+      console.log(`[PushService] 📤 FCM data-only push | deviceId:${t.device_id} | userId:${userId} | messageId:${payload?.messageId || 'N/A'} | isCall:${isCall} | ts:${Date.now()}`);
       logPushMetric({ platform: t.platform, push_type: t.type, status: 'attempted', user_id: userId, device_id: t.device_id });
-      
+
       nativePromises.push(
         admin.messaging().send(message)
           .then((fcmMessageId) => {
-            // fcmMessageId is the Firebase message name e.g. "projects/*/messages/0:1234..."
-            console.log(`[EVIDENCE] FCM_RESPONSE_ACCEPTED | deviceId:${t.device_id} | userId:${userId} | messageId:${payload?.messageId || 'N/A'} | fcmMessageId:${fcmMessageId} | ts:${Date.now()}`);
+            console.log(`[PushService] ✅ FCM accepted | deviceId:${t.device_id} | userId:${userId} | messageId:${payload?.messageId || 'N/A'} | fcmId:${fcmMessageId}`);
             logPushMetric({ platform: t.platform, push_type: t.type, status: 'accepted', user_id: userId, device_id: t.device_id });
           })
           .catch(err => {
-            console.error(`[EVIDENCE] FCM_RESPONSE_FAILED | deviceId:${t.device_id} | userId:${userId} | messageId:${payload?.messageId || 'N/A'} | errorCode:${err.code || 'N/A'} | errorMessage:${err.message} | ts:${Date.now()}`);
+            console.error(`[PushService] ❌ FCM rejected | deviceId:${t.device_id} | userId:${userId} | messageId:${payload?.messageId || 'N/A'} | code:${err.code || 'N/A'} | msg:${err.message}`);
             logPushMetric({ platform: t.platform, push_type: t.type, status: 'failed', error_code: err.code || err.message, user_id: userId, device_id: t.device_id });
             if (err.code === 'messaging/registration-token-not-registered' || err.code === 'messaging/invalid-registration-token') {
               supabase.from('device_installations').delete().eq('push_endpoint', t.push_endpoint).then();
@@ -764,53 +766,41 @@ async function sendGenericPush(params) {
 
     if (!error && tokens && tokens.length > 0) {
       tokens.forEach((t) => {
-        // Android FCM — notification + data message shows in system tray when app is closed
+        // Android FCM — data-only message: JS thread controls notification display
         if (t.platform === 'android' && t.type === 'fcm' && firebaseApp) {
           const message = {
             token: t.token,
-            notification: {
-              title: title,
-              body: body,
-            },
+            // No notification block — data-only so setBackgroundMessageHandler always executes
             data: {
-              type: String(payload.type || 'notification'),
+              type: String(payload.type || 'chat_message'),
+              title: String(title || 'New Message'),
+              body: String(body || 'You have a new message'),
               conversationId: String(payload.conversationId || ''),
               messageId: String(payload.messageId || ''),
               url: String(payload.url || '/dashboard/notifications'),
               recipientId: String(payload.recipientId || ''),
               targetUserId: String(payload.targetUserId || payload.recipientId || ''),
               targetAccountId: String(payload.targetAccountId || payload.recipientId || ''),
+              deliveryWebhookUrl: payload.messageId
+                ? `${process.env.SELF_URL || 'https://realtime-gateway-gsb5.onrender.com'}/deliver/${payload.messageId}`
+                : '',
             },
             android: {
               priority: 'high',
-              notification: {
-                sound: 'default',
-                tag: payload.conversationId ? `chat-${payload.conversationId}` : `type-${payload.type || 'notification'}`,
-              },
+              ttl: 86400,
+              // No android.notification block — JS thread renders the UI
             },
           };
-          // ── INSTRUMENTATION: Log exact FCM payload structure before send ──
-          const legacyHasNotification = !!(message.notification || message.android?.notification);
-          console.log(
-            `[EVIDENCE] FCM_PAYLOAD_SENT (legacy) | userId:${userId}` +
-            ` | messageId:${payload?.messageId || 'N/A'}` +
-            ` | hasNotificationBlock:${legacyHasNotification}` +
-            ` | isDataOnly:${!legacyHasNotification}` +
-            ` | token:${t.token.substring(0, 12)}...` +
-            ` | fcmSendTs:${Date.now()}`
-          );
-          console.log(`[EVIDENCE] FCM_PAYLOAD_STRUCTURE (legacy) | ${JSON.stringify({ notification: message.notification, data: message.data, android_notification: message.android?.notification })}`);
-
-          console.log(`[PushService] 📤 Sending FCM notification (Android) to: ${t.token.substring(0, 10)}...`);
+          console.log(`[PushService] 📤 FCM data-only push (legacy) | userId:${userId} | messageId:${payload?.messageId || 'N/A'} | ts:${Date.now()}`);
           logPushMetric({ platform: t.platform, push_type: t.type, status: 'attempted', user_id: userId, device_id: t.device_id });
           nativePromises.push(
             admin.messaging().send(message)
               .then((fcmMessageId) => {
-                console.log(`[EVIDENCE] FCM_RESPONSE_ACCEPTED (legacy) | userId:${userId} | messageId:${payload?.messageId || 'N/A'} | fcmMessageId:${fcmMessageId} | ts:${Date.now()}`);
+                console.log(`[PushService] ✅ FCM accepted (legacy) | userId:${userId} | messageId:${payload?.messageId || 'N/A'} | fcmId:${fcmMessageId}`);
                 logPushMetric({ platform: t.platform, push_type: t.type, status: 'accepted', user_id: userId, device_id: t.device_id });
               })
               .catch(err => {
-                console.error(`[EVIDENCE] FCM_RESPONSE_FAILED (legacy) | userId:${userId} | messageId:${payload?.messageId || 'N/A'} | errorCode:${err.code || 'N/A'} | errorMessage:${err.message} | ts:${Date.now()}`);
+                console.error(`[PushService] ❌ FCM rejected (legacy) | userId:${userId} | messageId:${payload?.messageId || 'N/A'} | code:${err.code || 'N/A'} | msg:${err.message}`);
                 logPushMetric({ platform: t.platform, push_type: t.type, status: 'failed', error_code: err.code || err.message, user_id: userId, device_id: t.device_id });
                 if (err.code === 'messaging/registration-token-not-registered' || err.code === 'messaging/invalid-registration-token') {
                   removeInvalidToken(t.token, t.platform, t.type, userId, t.device_id);

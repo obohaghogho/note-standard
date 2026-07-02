@@ -305,29 +305,6 @@ app.post('/deliver/batch', async (req, res) => {
 app.post('/deliver/:messageId', async (req, res) => {
   try {
     const { messageId } = req.params;
-    // ── INSTRUMENTATION: Capture diagnostic probe from mobile background handler ──
-    // The mobile setBackgroundMessageHandler sends optional fields to prove execution.
-    const {
-      app_state,          // 'terminated' | 'background' | 'foreground' — as seen by native handler
-      handlerExecuted,    // true if JS thread woke up
-      timeline = {},      // { fcmReceivedTs, handlerStartTs, webhookSentTs }
-      userId: probeUserId,
-      conversationId: probeConvId,
-    } = req.body || {};
-
-    if (handlerExecuted === true) {
-      // This log line is the primary evidence: if it appears, the JS thread woke up.
-      console.log(
-        `[EVIDENCE] BACKGROUND_HANDLER_EXECUTED | messageId:${messageId}` +
-        ` | app_state:${app_state || 'unknown'}` +
-        ` | userId:${probeUserId || 'unknown'}` +
-        ` | conversationId:${probeConvId || 'unknown'}` +
-        ` | handlerStartTs:${timeline.handlerStartTs || 'N/A'}` +
-        ` | fcmReceivedTs:${timeline.fcmReceivedTs || 'N/A'}` +
-        ` | webhookSentTs:${timeline.webhookSentTs || 'N/A'}` +
-        ` | gatewayReceiveTs:${Date.now()}`
-      );
-    }
 
     // Basic guard — UUIDs are 36 chars; reject obviously malformed IDs
     if (!messageId || messageId.length < 10 || messageId.length > 100) {
@@ -357,12 +334,10 @@ app.post('/deliver/:messageId', async (req, res) => {
         delivered_at: data.delivered_at || now
       };
 
-      console.log(`[Gateway] ⚡ Fast-path deliver | messageId:${messageId} | senderId:${data.sender_id} | conversationId:${data.conversation_id} | ts:${Date.now()}`);
-      console.log(`[FORENSIC][GW] MESSAGE_DELIVERED | message_id:${data.id} | event_id:${data.event_id || 'N/A'} | ts:${now}`);
+      console.log(`[Gateway] ⚡ Deliver | messageId:${messageId} | senderId:${data.sender_id} | conversationId:${data.conversation_id} | ts:${Date.now()}`);
 
-      // Emit directly via Socket.IO — sender gets the double-tick instantly
+      // Emit 'chat:message_delivered' — mobile ChatContext listens on this exact event name
       io.to(`user:${data.sender_id}`).emit('chat:message_delivered', receiptPayload);
-      // Also emit to the conversation room for any active participants
       io.to(data.conversation_id).emit('chat:message_delivered', receiptPayload);
     } else if (error && error.code !== 'PGRST204') {
       // PGRST204 = 0 rows (already delivered) — silent success

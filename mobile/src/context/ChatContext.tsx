@@ -426,7 +426,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }
         });
 
-        socketManager.on('chat:delivery_receipt', (data: any) => {
+        // 'chat:message_delivered' — sent by gateway when recipient device acks delivery
+        // (either via socket emit from chat:delivered, or via /deliver/:id HTTP webhook)
+        socketManager.on('chat:message_delivered', (data: any) => {
             const { conversationId, messageId, deliveredAt } = data;
             setMessages(prev => {
                 const current = prev[conversationId] || [];
@@ -558,7 +560,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         return () => {
             cancelled = true;
             socketManager.offEvent('chat:message');
-            socketManager.offEvent('chat:delivery_receipt');
+            socketManager.offEvent('chat:message_delivered');
             socketManager.offEvent('chat:read_receipt');
             socketManager.offEvent('chat:message_edited');
             socketManager.offEvent('chat:message_deleted');

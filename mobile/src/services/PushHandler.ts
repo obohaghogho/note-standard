@@ -57,30 +57,24 @@ export class PushHandler {
       console.warn(`[PushHandler] ⚠️ Push permission not granted (status: ${finalStatus}). Device token registration skipped.`);
     }
 
-    // ── INSTRUMENTATION: Verify Android Notification Channels exist ──
-    // If no channels exist on Android 8.0+, manual local notifications (needed for
-    // Data-Only FCM messages) will silently drop. This log confirms channel state.
+    // Ensure the Android notification channel exists with HIGH importance.
+    // On Android 8.0+ (API 26+), all local notifications require a channel.
+    // If the 'default' channel does not exist, any notification scheduled
+    // from setBackgroundMessageHandler will be silently dropped by the OS.
     if (Platform.OS === 'android') {
       try {
-        const channels = await Notifications.getNotificationChannelsAsync();
-        if (channels && channels.length > 0) {
-          console.log(`[EVIDENCE] ANDROID_CHANNELS_OK | count:${channels.length} | channels:${JSON.stringify(channels.map(c => ({ id: c.id, name: c.name, importance: c.importance })))}`);
-        } else {
-          // No channels registered — manual local notifications will silently fail!
-          // expo-notifications usually auto-creates a default channel, but if it didn't,
-          // this is a critical failure point.
-          console.warn('[EVIDENCE] ANDROID_CHANNELS_MISSING — no notification channels found! Local notifications will be silently dropped. Creating default channel now...');
-          await Notifications.setNotificationChannelAsync('default', {
-            name: 'Default',
-            importance: Notifications.AndroidImportance.HIGH,
-            vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#FF231F7C',
-            sound: 'default',
-          });
-          console.log('[EVIDENCE] ANDROID_DEFAULT_CHANNEL_CREATED');
-        }
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'Messages',
+          importance: Notifications.AndroidImportance.HIGH,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#4F46E5',
+          sound: 'default',
+          enableVibrate: true,
+          showBadge: true,
+        });
+        console.log('[PushHandler] ✅ Android notification channel \'default\' ensured (HIGH importance).');
       } catch (chanErr: any) {
-        console.warn(`[EVIDENCE] ANDROID_CHANNEL_CHECK_FAILED | error:${chanErr?.message}`);
+        console.warn('[PushHandler] ⚠️ Failed to set notification channel:', chanErr?.message);
       }
     }
 
