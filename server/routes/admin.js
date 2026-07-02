@@ -21,8 +21,9 @@ router.get("/analytics/detailed", adminController.getStats);
 router.get("/me", adminController.getAdminProfile);
 
 // Push Health Dashboard
-const { getPushHealth } = require(path.join(__dirname, '..', 'controllers', 'pushHealthController'));
+const { getPushHealth, getMessagingMetrics } = require(path.join(__dirname, '..', 'controllers', 'pushHealthController'));
 router.get("/push-health", getPushHealth);
+router.get("/messaging-metrics", getMessagingMetrics);
 
 
 // User Management

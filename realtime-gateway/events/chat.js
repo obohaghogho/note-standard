@@ -143,49 +143,61 @@ module.exports = (io, socket) => {
 
   // Emitted by client when a message is received (device received it).
   // Payload: { conversationId, messageId, eventId, deliveredAt: ISO string, senderId?: string }
-  socket.on('chat:delivered', (data) => {
+  socket.on('chat:delivered', async (data) => {
     const { conversationId, messageId, eventId, deliveredAt, senderId } = data || {};
     if (!conversationId || (!messageId && !eventId)) return;
 
     console.log(`[FORENSIC][GW] Delivery ACK Received | userId:${userId} | conversationId:${conversationId} | messageId:${messageId} | eventId:${eventId} | ts:${Date.now()}`);
 
-    const payload = {
-      userId,
-      conversationId,
-      messageId,
-      eventId,
-      deliveredAt: deliveredAt || new Date().toISOString(),
-    };
+    const PIPELINE_VERSION = process.env.MESSAGING_PIPELINE_VERSION || 'v1';
+    if (PIPELINE_VERSION === 'v2' && messageId) {
+      const deliveryEngine = require('../services/deliveryEngine');
+      await deliveryEngine.handleDeliveryAck(supabase, io, messageId, userId);
+    } else {
+      const payload = {
+        userId,
+        conversationId,
+        messageId,
+        eventId,
+        deliveredAt: deliveredAt || new Date().toISOString(),
+      };
 
-    // Route globally to the sender's user room if provided
-    if (senderId) {
-      socket.to(`user:${senderId}`).emit('chat:delivery_receipt', payload);
+      // Route globally to the sender's user room if provided
+      if (senderId) {
+        socket.to(`user:${senderId}`).emit('chat:message_delivered', payload);
+      }
+
+      // Still emit to the conversation room for active participants
+      socket.to(conversationId).emit('chat:message_delivered', payload);
     }
-
-    // Still emit to the conversation room for active participants
-    socket.to(conversationId).emit('chat:delivery_receipt', payload);
   });
 
   // ── Batch Delivery Receipts (offline sync) ───────────────────────────────
   // Emitted by client on load when multiple messages were received offline.
   // Payload: { conversationId, messageIds: string[], deliveredAt: ISO string }
-  socket.on('chat:delivered_batch', (data) => {
+  socket.on('chat:delivered_batch', async (data) => {
     const { conversationId, messageIds, deliveredAt } = data || {};
     if (!conversationId || !Array.isArray(messageIds) || messageIds.length === 0) return;
 
     console.log(`[FORENSIC][GW] Batch Delivery ACK | userId:${userId} | conversationId:${conversationId} | count:${messageIds.length} | ts:${Date.now()}`);
 
-    const resolvedAt = deliveredAt || new Date().toISOString();
+    const PIPELINE_VERSION = process.env.MESSAGING_PIPELINE_VERSION || 'v1';
+    if (PIPELINE_VERSION === 'v2') {
+      const receiptEngine = require('../services/receiptEngine');
+      await receiptEngine.markDeliveredBatch(supabase, io, messageIds, userId);
+    } else {
+      const resolvedAt = deliveredAt || new Date().toISOString();
 
-    // Fan out one receipt per message ID to the conversation room
-    messageIds.forEach(messageId => {
-      socket.to(conversationId).emit('chat:delivery_receipt', {
-        userId,
-        conversationId,
-        messageId,
-        deliveredAt: resolvedAt,
+      // Fan out one receipt per message ID to the conversation room
+      messageIds.forEach(messageId => {
+        socket.to(conversationId).emit('chat:message_delivered', {
+          userId,
+          conversationId,
+          messageId,
+          deliveredAt: resolvedAt,
+        });
       });
-    });
+    }
   });
 
   // ── Team Call Notifications ────────────────────────────────────────────────

@@ -30,6 +30,9 @@ if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
   );
 }
 
+const PIPELINE_VERSION = process.env.MESSAGING_PIPELINE_VERSION || 'v1';
+console.log(`[Gateway] Messaging pipeline version: ${PIPELINE_VERSION}`);
+
 // ✅ 1. CRASH PREVENTION: GLOBAL ERROR HANDLERS
 process.on('uncaughtException', (err) => {
   console.error('[Process] 🔥 Uncaught Exception:', err);
@@ -239,6 +242,12 @@ app.post('/deliver/batch', async (req, res) => {
       return res.json({ ok: false, reason: 'supabase_unavailable' });
     }
 
+    if (PIPELINE_VERSION === 'v2') {
+      const receiptEngine = require('./services/receiptEngine');
+      const result = await receiptEngine.markDeliveredBatch(gatewaySupabase, io, messageIds, userId);
+      return res.json({ ok: true, updated: result.updatedCount });
+    }
+
     const now = new Date().toISOString();
 
     const { data, error } = await gatewaySupabase
@@ -314,6 +323,12 @@ app.post('/deliver/:messageId', async (req, res) => {
     if (!gatewaySupabase) {
       console.warn('[Gateway] /deliver: Supabase not initialised — falling back gracefully');
       return res.json({ ok: false, reason: 'supabase_unavailable' });
+    }
+
+    if (PIPELINE_VERSION === 'v2') {
+      const deliveryEngine = require('./services/deliveryEngine');
+      await deliveryEngine.handleDeliveryAck(gatewaySupabase, io, messageId, req.query.recipientId);
+      return res.json({ ok: true });
     }
 
     const now = new Date().toISOString();
@@ -575,6 +590,14 @@ async function initPgListener() {
         }
 
         dispatchSocketEvent(envelope);
+
+        // v2: Gateway-driven push for chat messages
+        if (PIPELINE_VERSION === 'v2' && envelope.event === 'chat:message') {
+          const deliveryEngine = require('./services/deliveryEngine');
+          deliveryEngine.processIncomingMessage(io, gatewaySupabase, envelope).catch(err => {
+            console.error('[Gateway] deliveryEngine error:', err);
+          });
+        }
       } catch (err) {
         console.error('[Gateway] 🐘 Failed to parse notification payload:', err.message);
       }

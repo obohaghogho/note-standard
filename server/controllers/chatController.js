@@ -1579,7 +1579,7 @@ exports.sendMessage = async (req, res) => {
       // If not (delivered_at still null), re-emit to all recipients.
       // Handles: iOS backgrounding, network switch (LTE↔WiFi), cold gateway routing.
       // Fire-and-forget — does NOT block the response, does NOT double-write to DB.
-      if (!isDuplicate && safePayload.id && members.length > 0) {
+      if (process.env.MESSAGING_PIPELINE_VERSION !== 'v2' && !isDuplicate && safePayload.id && members.length > 0) {
         const recheckMessageId = safePayload.id;
         const recheckMembers = [...members]; // snapshot at send time
         const recheckCorrelationId = req.correlationId;
@@ -1639,28 +1639,6 @@ exports.sendMessage = async (req, res) => {
 
         const previewContent = getNotificationPreview(type || 'text', content);
 
-        const fastPushPromises = otherMembers.map(async (member) => {
-          if (member.is_muted) {
-            console.log(`[Chat Notify] Skipping muted user fast-push: ${member.user_id}`);
-            return;
-          }
-          await dispatchFastPush({
-            receiverId: member.user_id,
-            type: "chat_message",
-            title: senderName,
-            message: previewContent,
-            link: `/dashboard/chat?id=${conversationId}`,
-            messageId: createdMessageId,
-            conversationId: conversationId,
-            trace: {
-              clientSendTs,
-              apiReceiveTs: t1_ApiReceived,
-              dbStartTs: t2_DbInsertStart,
-              dbDoneTs: t3_DbInsertDone,
-            }
-          });
-        });
-
         const dbNotificationPromises = otherMembers.map(async (member) => {
           if (member.is_muted) return;
           await createNotification({
@@ -1676,7 +1654,31 @@ exports.sendMessage = async (req, res) => {
           });
         });
 
-        await Promise.allSettled(fastPushPromises);
+        if (process.env.MESSAGING_PIPELINE_VERSION !== 'v2') {
+          const fastPushPromises = otherMembers.map(async (member) => {
+            if (member.is_muted) {
+              console.log(`[Chat Notify] Skipping muted user fast-push: ${member.user_id}`);
+              return;
+            }
+            await dispatchFastPush({
+              receiverId: member.user_id,
+              type: "chat_message",
+              title: senderName,
+              message: previewContent,
+              link: `/dashboard/chat?id=${conversationId}`,
+              messageId: createdMessageId,
+              conversationId: conversationId,
+              trace: {
+                clientSendTs,
+                apiReceiveTs: t1_ApiReceived,
+                dbStartTs: t2_DbInsertStart,
+                dbDoneTs: t3_DbInsertDone,
+              }
+            });
+          });
+          await Promise.allSettled(fastPushPromises);
+        }
+
         Promise.allSettled(dbNotificationPromises).then();
       }
 

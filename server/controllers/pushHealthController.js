@@ -109,4 +109,148 @@ const getPushHealth = async (req, res, next) => {
   }
 };
 
-module.exports = { getPushHealth };
+/**
+ * GET /api/admin/messaging-metrics
+ * Returns complete messaging metrics for the v2 messaging delivery dashboard.
+ */
+const getMessagingMetrics = async (req, res, next) => {
+  try {
+    // 1. Messages Sent (total messages in system)
+    const { count: totalSent, error: sentErr } = await supabase
+      .from('messages')
+      .select('*', { count: 'exact', head: true });
+
+    if (sentErr) throw sentErr;
+
+    // 2. Messages Delivered
+    const { count: totalDelivered, error: delivErr } = await supabase
+      .from('messages')
+      .select('*', { count: 'exact', head: true })
+      .not('delivered_at', 'is', null);
+
+    if (delivErr) throw delivErr;
+
+    // 3. Messages Read
+    const { count: totalRead, error: readErr } = await supabase
+      .from('messages')
+      .select('*', { count: 'exact', head: true })
+      .not('read_at', 'is', null);
+
+    if (readErr) throw readErr;
+
+    // 4. V2 Telemetry Counts
+    const { data: telemetry, error: telErr } = await supabase
+      .from('push_delivery_telemetry')
+      .select('routing_decision, socket_present, push_sent, fallback_used, provider_result')
+      .eq('routing_engine_version', 'v2-messaging');
+
+    if (telErr) throw telErr;
+
+    let socketDeliveries = 0;
+    let pushDeliveries = 0;
+    let ackTimeoutFallbacks = 0;
+    let pushFailures = 0;
+    let successfulPushes = 0;
+    let pushAttempts = 0;
+
+    if (telemetry) {
+      telemetry.forEach(t => {
+        if (t.socket_present && !t.fallback_used) {
+          socketDeliveries++;
+        }
+        if (t.push_sent) {
+          pushDeliveries++;
+          pushAttempts++;
+          if (t.provider_result && t.provider_result.toLowerCase().includes('success')) {
+            successfulPushes++;
+          }
+        } else if ((t.provider_result || '').toLowerCase().includes('fail')) {
+          pushAttempts++;
+          pushFailures++;
+        }
+      });
+    }
+
+    const pushSuccessRate = pushAttempts > 0
+      ? Number(((successfulPushes / pushAttempts) * 100).toFixed(1))
+      : 100.0;
+
+    // 5. Calculate Average Delivery and Read Latencies
+    // We'll query the recent 500 messages to compute latency metrics
+    const { data: latencyData, error: latErr } = await supabase
+      .from('messages')
+      .select('created_at, delivered_at, read_at')
+      .order('created_at', { ascending: false })
+      .limit(500);
+
+    if (latErr) throw latErr;
+
+    let totalDeliveryTimeSec = 0;
+    let deliveryCount = 0;
+    let totalReadTimeSec = 0;
+    let readCount = 0;
+    let deliveredWithin5sCount = 0;
+    const sentCountForRate = latencyData ? latencyData.length : 0;
+
+    if (latencyData) {
+      latencyData.forEach(m => {
+        if (m.delivered_at && m.created_at) {
+          const dt = (new Date(m.delivered_at).getTime() - new Date(m.created_at).getTime()) / 1000;
+          if (dt >= 0) {
+            totalDeliveryTimeSec += dt;
+            deliveryCount++;
+            if (dt <= 5) {
+              deliveredWithin5sCount++;
+            }
+          }
+        }
+        if (m.read_at && m.delivered_at) {
+          const rt = (new Date(m.read_at).getTime() - new Date(m.delivered_at).getTime()) / 1000;
+          if (rt >= 0) {
+            totalReadTimeSec += rt;
+            readCount++;
+          }
+        }
+      });
+    }
+
+    const avgDeliveryTime = deliveryCount > 0 ? Number((totalDeliveryTimeSec / deliveryCount).toFixed(2)) : 0;
+    const avgReadTime = readCount > 0 ? Number((totalReadTimeSec / readCount).toFixed(2)) : 0;
+    const deliverySuccessRate = sentCountForRate > 0
+      ? Number(((deliveredWithin5sCount / sentCountForRate) * 100).toFixed(1))
+      : 100.0;
+
+    // 6. Recent message traces (last 20 logs)
+    const { data: recentTraces, error: traceErr } = await supabase
+      .from('push_delivery_telemetry')
+      .select('id, message_id, recipient_id, socket_present, push_sent, fallback_used, provider_result, delivery_ack_received, ack_latency_ms, created_at, routing_decision, reason')
+      .eq('routing_engine_version', 'v2-messaging')
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (traceErr) throw traceErr;
+
+    res.json({
+      metrics: {
+        messagesSent: totalSent || 0,
+        messagesDelivered: totalDelivered || 0,
+        messagesRead: totalRead || 0,
+        socketDeliveries,
+        pushDeliveries,
+        ackTimeoutFallbacks,
+        pushFailures,
+        avgDeliveryTime,
+        avgReadTime,
+        deliverySuccessRate,
+        pushSuccessRate
+      },
+      recentTraces: recentTraces || []
+    });
+
+  } catch (err) {
+    console.error('[MessagingMetrics] Error:', err);
+    next(err);
+  }
+};
+
+module.exports = { getPushHealth, getMessagingMetrics };

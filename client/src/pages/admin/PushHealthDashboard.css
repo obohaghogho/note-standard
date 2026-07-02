@@ -367,3 +367,36 @@
   font-size: 0.75rem;
   color: #94a3b8;
 }
+
+/* ─── Tabs styling ───────────────────────────── */
+.ph-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  padding-bottom: 0.5rem;
+}
+
+.ph-tab {
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.ph-tab:hover {
+  color: #cbd5e1;
+  background: rgba(255,255,255,0.03);
+}
+
+.ph-tab.active {
+  color: #e2e8f0;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+}
