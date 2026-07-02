@@ -677,14 +677,14 @@ input[type=number] {
    GLOBAL RESPONSIVENESS AND TEXT WRAPPING SYSTEMS
    ====================================================== */
 
-/* Prevent long words, URLs, and continuous string blocks from overflowing parent containers */
-h1, h2, h3, h4, h5, h6, p, span, a, li, label, td, th, blockquote, figcaption {
-  overflow-wrap: break-word !important;
-  word-wrap: break-word !important;
-  word-break: break-word; /* Safe break for modern browsers */
+/* Prevent long words, URLs, and URLs from overflowing in CONTENT areas only.
+   Excluded: span — nav labels, buttons, and badges should NOT break-word. */
+h1, h2, h3, h4, h5, h6, p, a, li, label, td, th, blockquote, figcaption {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 
-/* Ensure code blocks, pre tags, and user generated content doesn't push past viewport */
+/* Ensure code blocks and pre tags wrap instead of forcing horizontal scroll */
 pre, code {
   white-space: pre-wrap !important;
   word-break: break-all !important;
@@ -695,7 +695,3 @@ img, picture, video, canvas, iframe {
   max-width: 100% !important;
 }
 
-/* Help standard grid cells and flex children respect boundaries */
-.grid, .flex, .flex-col, .flex-row {
-  min-width: 0;
-}
