@@ -1,5 +1,6 @@
 const logger = require("../utils/logger");
 const pool = require("../config/pgPool");
+const { createNotification } = require("../services/notificationService");
 
 async function processReminders() {
   try {
@@ -21,19 +22,7 @@ async function processReminders() {
     try {
       await client.query("BEGIN");
       for (const note of dueReminders) {
-        // A. Insert in-app notification
-        await client.query(
-          `INSERT INTO notifications (user_id, type, title, body, channel, delivery_status) 
-           VALUES ($1, $2, $3, $4, 'in-app', 'pending')`,
-          [
-            note.owner_id, 
-            "note_reminder", 
-            "Note Reminder", 
-            `Reminder for your note: "${note.title || 'Untitled note'}" is due.`
-          ]
-        );
-
-        // B. Update reminder status / recurrence
+        // A. Update reminder status / recurrence
         let nextReminder = null;
         let isCompleted = true;
 
@@ -55,6 +44,18 @@ async function processReminders() {
         );
       }
       await client.query("COMMIT");
+
+      // B. Dispatch notifications in real-time after commit
+      for (const note of dueReminders) {
+        await createNotification({
+          receiverId: note.owner_id,
+          senderId: null,
+          type: "note_reminder",
+          title: "Note Reminder",
+          message: `Reminder for your note: "${note.title || 'Untitled note'}" is due.`,
+          link: `/dashboard/notes`
+        });
+      }
     } catch (err) {
       await client.query("ROLLBACK");
       throw err;

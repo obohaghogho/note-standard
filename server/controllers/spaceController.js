@@ -121,3 +121,38 @@ exports.joinSpace = async (req, res, next) => {
         next(err);
     }
 };
+
+exports.getSpaceById = async (req, res, next) => {
+    try {
+        const { spaceId } = req.params;
+        const userId = req.user.id;
+
+        // Fetch space details
+        const { data: space, error: spaceError } = await supabase
+            .from('community_spaces')
+            .select('*')
+            .eq('id', spaceId)
+            .single();
+
+        if (spaceError || !space) {
+            return res.status(404).json({ error: 'Space not found' });
+        }
+
+        // Get caller's membership role
+        const { data: member } = await supabase
+            .from('space_members')
+            .select('permission_role')
+            .eq('space_id', spaceId)
+            .eq('user_id', userId)
+            .maybeSingle();
+
+        const userRole = member ? member.permission_role : null;
+
+        res.json({
+            ...space,
+            userRole
+        });
+    } catch (err) {
+        next(err);
+    }
+};

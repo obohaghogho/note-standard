@@ -24,38 +24,59 @@ export default function SpacePage() {
   const [activeTab, setActiveTab] = useState('home');
   const [isLoading, setIsLoading] = useState(true);
   
-  // Dummy fetch for now. In reality, use React Query or Zustand to fetch Space + Manifest
+  // Fetch space details and user membership permissions dynamically
   useEffect(() => {
-    // Simulate fetching space + manifest
-    setTimeout(() => {
-      setSpace({
-        id: spaceId,
-        name: 'React Developers',
-        description: 'The premier community for advanced React and Next.js development.',
-        avatar_url: 'https://via.placeholder.com/150',
-        banner_url: 'https://via.placeholder.com/800x200',
-        category: 'Technology',
-        tags: ['React', 'JavaScript', 'Frontend'],
-        member_count: 12450,
-        online_count: 342,
-        health_score: 94,
-        quality_score: 97,
-        mod_score: 88,
-        response_score: 95,
-        safety_score: 99,
-        manifest: {
-          features: {
-            wiki: true,
-            ai: true,
-            collections: true,
-            events: false,
-            voice: false
+    let active = true;
+    const fetchSpace = async () => {
+      try {
+        setIsLoading(true);
+        const token = localStorage.getItem('token');
+        const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/community/spaces/${spaceId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
           }
-        },
-        userRole: 'member' // owner, admin, mod, member
-      });
-      setIsLoading(false);
-    }, 500);
+        });
+        if (!res.ok) throw new Error('Failed to fetch space');
+        const data = await res.json();
+        
+        if (active) {
+          setSpace({
+            ...data,
+            id: spaceId || '',
+            name: data.name || 'Unnamed Space',
+            description: data.description || '',
+            avatar_url: data.avatar_url || '',
+            banner_url: data.banner_url || '',
+            category: data.category || 'General',
+            tags: data.tags || [],
+            member_count: data.member_count || 1,
+            online_count: Math.max(1, Math.floor((data.member_count || 1) * 0.05)), // estimated online count based on 5% of members
+            health_score: data.health_score ?? 100,
+            quality_score: data.quality_score ?? 100,
+            mod_score: data.mod_score ?? 100,
+            response_score: data.response_score ?? 100,
+            safety_score: data.safety_score ?? 100,
+            manifest: data.manifest || {
+              features: {
+                wiki: true,
+                ai: true,
+                collections: true,
+                events: false,
+                voice: false
+              }
+            },
+            userRole: data.userRole || 'non-member'
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching space details:', err);
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    };
+
+    fetchSpace();
+    return () => { active = false; };
   }, [spaceId]);
 
   if (isLoading) {

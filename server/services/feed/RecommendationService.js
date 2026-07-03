@@ -10,13 +10,46 @@ class RecommendationService {
    * Retrieves recommended tags or categories for a user based on past activity.
    */
   async getUserPreferences(userId) {
-    // Phase 1 implementation: Fetch from activity service or user profile
-    // In future phases, this pulls from the AI Feature Vector store
-    return {
-      preferredTags: ['technology', 'productivity'],
-      preferredSpaces: [],
-      avoidCreators: []
-    };
+    try {
+      const { data: notes } = await supabase
+        .from('notes')
+        .select('tags')
+        .eq('owner_id', userId)
+        .is('deleted_at', null);
+
+      const tagCounts = {};
+      notes?.forEach(n => {
+        if (n.tags && Array.isArray(n.tags)) {
+          n.tags.forEach(tag => {
+            const t = tag.toLowerCase().trim();
+            if (t) tagCounts[t] = (tagCounts[t] || 0) + 1;
+          });
+        }
+      });
+
+      const preferredTags = Object.entries(tagCounts)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 5)
+        .map(([tag]) => tag);
+
+      // Default fallbacks if no tags exist
+      if (preferredTags.length === 0) {
+        preferredTags.push('technology', 'productivity', 'education');
+      }
+
+      return {
+        preferredTags,
+        preferredSpaces: [],
+        avoidCreators: []
+      };
+    } catch (err) {
+      console.error('[RecommendationService] Error in getUserPreferences:', err);
+      return {
+        preferredTags: ['technology', 'productivity'],
+        preferredSpaces: [],
+        avoidCreators: []
+      };
+    }
   }
 
   /**

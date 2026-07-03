@@ -1,5 +1,8 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const upload = multer({ limits: { fileSize: 50 * 1024 * 1024 } }); // 50MB limit
+
 const { requireAuth } = require('../middleware/auth');
 const { 
   getNotes, 
@@ -17,7 +20,11 @@ const {
   updateNotePermission,
   createNoteComment,
   getNoteComments,
-  deleteNotePermission
+  deleteNotePermission,
+  getNoteFiles,
+  uploadNoteFile,
+  downloadNoteFile,
+  deleteNoteFile
 } = require('../controllers/notesController');
 
 router.use(requireAuth); // All note routes need authentication
@@ -41,5 +48,11 @@ router.post('/', createNote);
 router.post('/share', shareNote);
 router.put('/:id', updateNote);
 router.delete('/:id', deleteNote);
+
+// Attachment routes
+router.get('/:id/files', getNoteFiles);
+router.post('/:id/files', upload.single('file'), uploadNoteFile);
+router.get('/:id/files/:fileId/download', downloadNoteFile);
+router.delete('/:id/files/:fileId', deleteNoteFile);
 
 module.exports = router;

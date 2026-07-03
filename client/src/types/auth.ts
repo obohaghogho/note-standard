@@ -20,6 +20,10 @@ export interface Profile {
   show_online_status?: boolean;
   email_notifications?: 'immediate' | 'daily' | 'none';
   updated_at?: string;
+  cover_url?: string;
+  bio?: string;
+  website?: string;
+  country_code?: string;
 }
 
 export interface Subscription {

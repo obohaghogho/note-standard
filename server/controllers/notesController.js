@@ -117,7 +117,8 @@ const updateNote = async (req, res) => {
     
     const { 
       title, content, is_private, is_archived, is_favorite, is_pinned, 
-      category_id, tags, cover_image, color, reminder_at, reminder_completed, repeat_type 
+      category_id, tags, cover_image, color, reminder_at, reminder_completed, repeat_type,
+      metadata, note_type, version, word_count, reading_time
     } = req.body;
 
     const updateData = {};
@@ -134,6 +135,11 @@ const updateNote = async (req, res) => {
     if (reminder_at !== undefined) updateData.reminder_at = reminder_at;
     if (reminder_completed !== undefined) updateData.reminder_completed = reminder_completed;
     if (repeat_type !== undefined) updateData.repeat_type = repeat_type;
+    if (metadata !== undefined) updateData.metadata = metadata;
+    if (note_type !== undefined) updateData.note_type = note_type;
+    if (version !== undefined) updateData.version = version;
+    if (word_count !== undefined) updateData.word_count = word_count;
+    if (reading_time !== undefined) updateData.reading_time = reading_time;
 
     // Fetch current note state to check if it's being made public
     const { data: currentNote } = await supabase
@@ -583,6 +589,189 @@ const deleteNotePermission = async (req, res) => {
   }
 };
 
+const getNoteFiles = async (req, res) => {
+  try {
+    const { id: userId } = req.user;
+    const { id: noteId } = req.params;
+
+    // 1. Verify access (owner or shared)
+    const access = await pool.query(
+      `SELECT n.id FROM notes n
+       LEFT JOIN note_permissions p ON n.id = p.note_id AND p.user_id = $2
+       WHERE n.id = $1 AND n.deleted_at IS NULL AND (n.owner_id = $2 OR p.id IS NOT NULL OR n.is_private = false)
+       LIMIT 1`,
+      [noteId, userId]
+    );
+    if (access.rows.length === 0) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    // 2. Fetch files from note_files
+    const { rows } = await pool.query(
+      "SELECT id, file_name, mime_type, file_size, storage_key, created_at FROM note_files WHERE note_id = $1 ORDER BY created_at DESC",
+      [noteId]
+    );
+
+    res.json(rows);
+  } catch (err) {
+    console.error("[notesController] getNoteFiles error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+const uploadNoteFile = async (req, res) => {
+  try {
+    const { id: userId } = req.user;
+    const { id: noteId } = req.params;
+    
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    // 1. Verify access (owner or editor permission)
+    const access = await pool.query(
+      `SELECT n.id, n.owner_id FROM notes n
+       LEFT JOIN note_permissions p ON n.id = p.note_id AND p.user_id = $2
+       WHERE n.id = $1 AND n.deleted_at IS NULL AND (n.owner_id = $2 OR (p.id IS NOT NULL AND p.role IN ('owner', 'editor')) OR n.is_private = false)
+       LIMIT 1`,
+      [noteId, userId]
+    );
+    if (access.rows.length === 0) {
+      return res.status(403).json({ error: "Access denied or editor role required to add attachments" });
+    }
+
+    const file = req.file;
+    const storageKey = `notes/${noteId}/${Date.now()}_${file.originalname}`;
+
+    // 2. Upload to Supabase Storage
+    const { error: uploadError } = await supabase.storage
+      .from('chat-media')
+      .upload(storageKey, file.buffer, {
+        contentType: file.mimetype,
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (uploadError) throw uploadError;
+
+    // 3. Insert record in note_files
+    const { rows } = await pool.query(
+      `INSERT INTO note_files (note_id, file_name, mime_type, file_size, storage_provider, storage_key) 
+       VALUES ($1, $2, $3, $4, 'supabase', $5) 
+       RETURNING *`,
+      [noteId, file.originalname, file.mimetype, file.size, storageKey]
+    );
+
+    // 4. Log Activity
+    await pool.query(
+      `INSERT INTO note_activities (note_id, user_id, action_type, details) 
+       VALUES ($1, $2, 'edited', $3)`,
+      [noteId, userId, JSON.stringify({ action: "uploaded_attachment", file_name: file.originalname })]
+    );
+
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error("[notesController] uploadNoteFile error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+const downloadNoteFile = async (req, res) => {
+  try {
+    const { id: userId } = req.user;
+    const { id: noteId, fileId } = req.params;
+
+    // 1. Verify access
+    const access = await pool.query(
+      `SELECT n.id FROM notes n
+       LEFT JOIN note_permissions p ON n.id = p.note_id AND p.user_id = $2
+       WHERE n.id = $1 AND n.deleted_at IS NULL AND (n.owner_id = $2 OR p.id IS NOT NULL OR n.is_private = false)
+       LIMIT 1`,
+      [noteId, userId]
+    );
+    if (access.rows.length === 0) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    // 2. Fetch file details
+    const fileRes = await pool.query(
+      "SELECT storage_key, file_name FROM note_files WHERE id = $1 AND note_id = $2 LIMIT 1",
+      [fileId, noteId]
+    );
+    if (fileRes.rows.length === 0) {
+      return res.status(404).json({ error: "Attachment not found" });
+    }
+
+    const { storage_key, file_name } = fileRes.rows[0];
+
+    // 3. Create signed URL for downloading
+    const { data, error } = await supabase.storage
+      .from('chat-media')
+      .createSignedUrl(storage_key, 3600, {
+        download: file_name
+      });
+
+    if (error) throw error;
+    res.json({ url: data.signedUrl });
+  } catch (err) {
+    console.error("[notesController] downloadNoteFile error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+const deleteNoteFile = async (req, res) => {
+  try {
+    const { id: userId } = req.user;
+    const { id: noteId, fileId } = req.params;
+
+    // 1. Verify editor access
+    const access = await pool.query(
+      `SELECT n.id FROM notes n
+       LEFT JOIN note_permissions p ON n.id = p.note_id AND p.user_id = $2
+       WHERE n.id = $1 AND n.deleted_at IS NULL AND (n.owner_id = $2 OR (p.id IS NOT NULL AND p.role IN ('owner', 'editor')) OR n.is_private = false)
+       LIMIT 1`,
+      [noteId, userId]
+    );
+    if (access.rows.length === 0) {
+      return res.status(403).json({ error: "Access denied or editor role required to delete attachments" });
+    }
+
+    // 2. Fetch file details
+    const fileRes = await pool.query(
+      "SELECT storage_key, file_name FROM note_files WHERE id = $1 AND note_id = $2 LIMIT 1",
+      [fileId, noteId]
+    );
+    if (fileRes.rows.length === 0) {
+      return res.status(404).json({ error: "Attachment not found" });
+    }
+
+    const { storage_key, file_name } = fileRes.rows[0];
+
+    // 3. Delete from Supabase storage
+    await supabase.storage
+      .from('chat-media')
+      .remove([storage_key]);
+
+    // 4. Delete from database
+    await pool.query(
+      "DELETE FROM note_files WHERE id = $1 AND note_id = $2",
+      [fileId, noteId]
+    );
+
+    // 5. Log Activity
+    await pool.query(
+      `INSERT INTO note_activities (note_id, user_id, action_type, details) 
+       VALUES ($1, $2, 'edited', $3)`,
+      [noteId, userId, JSON.stringify({ action: "deleted_attachment", file_name })]
+    );
+
+    res.json({ message: "Attachment deleted successfully" });
+  } catch (err) {
+    console.error("[notesController] deleteNoteFile error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
 module.exports = {
   getNotes,
   getNote,
@@ -600,4 +789,8 @@ module.exports = {
   createNoteComment,
   getNoteComments,
   deleteNotePermission,
+  getNoteFiles,
+  uploadNoteFile,
+  downloadNoteFile,
+  deleteNoteFile,
 };

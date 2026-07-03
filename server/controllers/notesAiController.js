@@ -136,6 +136,65 @@ const handleAiAssist = async (req, res) => {
   }
 };
 
+const handleTrendsBriefing = async (req, res) => {
+  const startTime = Date.now();
+  try {
+    const { id: userId } = req.user;
+
+    if (!groq) {
+      return res.status(503).json({ error: "AI service is currently unavailable. Groq API key is not configured." });
+    }
+
+    // 1. Fetch tags from latest daily_stats
+    const { rows: statsRows } = await pool.query(
+      "SELECT top_tags FROM daily_stats ORDER BY date DESC LIMIT 1"
+    );
+    const tagsContext = statsRows.length > 0 ? JSON.stringify(statsRows[0].top_tags) : "None yet";
+
+    // 2. Fetch last 20 public community posts
+    const { rows: postsRows } = await pool.query(
+      "SELECT title, content, tags, category FROM community_posts WHERE status = 'public' ORDER BY created_at DESC LIMIT 20"
+    );
+    const postsContext = postsRows.map(p => `- [${p.category || 'General'}] ${p.title || 'No Title'}: ${p.content?.substring(0, 100) || ''} (Tags: ${Array.isArray(p.tags) ? p.tags.join(', ') : ''})`).join('\n');
+
+    // 3. Prompt Setup
+    const instruction = "You are a Community Trends Intelligence AI. Synthesize the provided trending keywords and community discussion posts into a concise, professional, markdown-formatted AI Daily Briefing for the dashboard. Highlight active themes, community sentiment, emerging topics, and actionable study/note suggestions for members.";
+
+    const messages = [
+      {
+        role: "system",
+        content: instruction
+      },
+      {
+        role: "user",
+        content: `Trending Tags:\n${tagsContext}\n\nRecent Community Discussions:\n${postsContext || 'No discussions today.'}`
+      }
+    ];
+
+    // 4. Call Groq
+    const modelName = "llama-3.1-8b-instant";
+    const completion = await groq.chat.completions.create({
+      messages,
+      model: modelName,
+      temperature: 0.5,
+      max_tokens: 1000
+    });
+
+    const aiResponse = completion.choices[0]?.message?.content ?? "No trends briefing could be generated at this time.";
+
+    res.json({
+      success: true,
+      briefing: aiResponse,
+      model: modelName
+    });
+
+  } catch (err) {
+    logger.error("[NotesAiController] Trends Briefing failed:", err.message);
+    res.status(500).json({ error: "Failed to generate briefing", message: err.message });
+  }
+};
+
 module.exports = {
-  handleAiAssist
+  handleAiAssist,
+  handleTrendsBriefing
 };

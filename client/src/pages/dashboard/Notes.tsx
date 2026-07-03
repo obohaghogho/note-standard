@@ -7,7 +7,7 @@ import { EditNoteModal } from "../../components/dashboard/EditNoteModal";
 import { ViewNoteModal } from "../../components/dashboard/ViewNoteModal";
 import { ShareNoteModal } from "../../components/dashboard/ShareNoteModal";
 import { DeleteNoteModal } from "../../components/dashboard/DeleteNoteModal";
-import { Grid, List as ListIcon, Edit2, Share2, Trash2, Pin, Calendar, Flame, Keyboard, Layout, Settings2, Plus, Sparkles, FolderOpen, AlignLeft } from "lucide-react";
+import { Grid, List as ListIcon, Edit2, Share2, Trash2, Pin, Calendar, Flame, Keyboard, Layout, Settings2, Plus, Sparkles, FolderOpen, AlignLeft, Clock } from "lucide-react";
 import { supabase } from "../../lib/supabaseSafe";
 import { useAuth } from "../../context/AuthContext";
 import { useNotes } from "../../context/NotesContext";
@@ -321,6 +321,12 @@ function NotesContent() {
                     {!note.is_private && (
                       <span className="text-[8px] bg-emerald-500/20 text-emerald-400 font-extrabold px-1.5 py-0.5 rounded uppercase">
                         Public
+                      </span>
+                    )}
+                    {note.reminder_at && !note.reminder_completed && (
+                      <span className="text-[8px] bg-amber-500/20 text-amber-300 font-extrabold px-1.5 py-0.5 rounded flex items-center gap-1 uppercase">
+                        <Clock className="w-2.5 h-2.5" />
+                        Reminder
                       </span>
                     )}
                   </div>

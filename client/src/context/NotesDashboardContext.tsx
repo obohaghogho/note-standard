@@ -106,25 +106,39 @@ export const NotesDashboardProvider: React.FC<{ children: React.ReactNode }> = (
   const loadFromCache = useCallback(async () => {
     if (!user) return;
     try {
-      const cachedWidgets = await idbGet<DashboardWidget[]>(STORES.USER_PREFS, `widgets_${user.id}`);
-      if (cachedWidgets) setWidgets(cachedWidgets);
+      const cachedWidgets = await idbGet<any>(STORES.USER_PREFS, `widgets_${user.id}`);
+      if (cachedWidgets && Array.isArray(cachedWidgets.widget)) {
+        setWidgets(cachedWidgets.widget);
+      }
 
-      const cachedStats = await idbGet<DashboardStats>(STORES.DASHBOARD_STATS, user.id);
-      if (cachedStats) setStats(cachedStats);
+      const cachedStats = await idbGet<any>(STORES.DASHBOARD_STATS, user.id);
+      if (cachedStats) {
+        const { userId, ...pureStats } = cachedStats;
+        setStats(pureStats);
+      }
 
-      const cachedRecent = await idbGet<RecentNote[]>(STORES.DASHBOARD_RECENT, user.id);
-      if (cachedRecent) setRecentNotes(cachedRecent);
+      const cachedRecent = await idbGet<any>(STORES.DASHBOARD_RECENT, user.id);
+      if (cachedRecent && Array.isArray(cachedRecent.notes)) {
+        setRecentNotes(cachedRecent.notes);
+      }
 
-      const cachedCats = await idbGet<NoteCategory[]>(STORES.DASHBOARD_CATEGORIES, user.id);
-      if (cachedCats) setCategories(cachedCats);
+      const cachedCats = await idbGet<any>(STORES.DASHBOARD_CATEGORIES, user.id);
+      if (cachedCats && Array.isArray(cachedCats.categories)) {
+        setCategories(cachedCats.categories);
+      }
 
-      const cachedActivity = await idbGet<{ timeline: ActivityItem[]; chart: ChartPoint[] }>(STORES.DASHBOARD_ACTIVITY, user.id);
-      if (cachedActivity) setActivity(cachedActivity);
+      const cachedActivity = await idbGet<any>(STORES.DASHBOARD_ACTIVITY, user.id);
+      if (cachedActivity) {
+        setActivity({ 
+          timeline: cachedActivity.timeline || [], 
+          chart: cachedActivity.chart || [] 
+        });
+      }
 
-      const cachedSuggestions = await idbGet<{ suggestions: SuggestionItem[]; streak: number }>(STORES.DASHBOARD_SUGGESTIONS, user.id);
+      const cachedSuggestions = await idbGet<any>(STORES.DASHBOARD_SUGGESTIONS, user.id);
       if (cachedSuggestions) {
-        setSuggestions(cachedSuggestions.suggestions);
-        setStreak(cachedSuggestions.streak);
+        setSuggestions(cachedSuggestions.suggestions || []);
+        setStreak(cachedSuggestions.streak || 0);
       }
     } catch (err) {
       console.warn("[DashboardCache] Failed to load cache:", err);

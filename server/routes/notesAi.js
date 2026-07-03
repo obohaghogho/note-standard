@@ -7,5 +7,6 @@ const notesAiController = require("../controllers/notesAiController");
 router.use(requireAuth);
 
 router.post("/assist", notesAiController.handleAiAssist);
+router.get("/trends-briefing", notesAiController.handleTrendsBriefing);
 
 module.exports = router;

@@ -121,6 +121,7 @@ router.get("/profile/:profileId", async (req, res, next) => {
 
 // Spaces
 router.get("/spaces", spaceController.getSpaces);
+router.get("/spaces/:spaceId", spaceController.getSpaceById);
 router.post("/spaces", spaceController.createSpace);
 router.post("/spaces/:spaceId/join", spaceController.joinSpace);
 router.post("/spaces/:spaceId/ask", spaceAiController.askSpaceAi);

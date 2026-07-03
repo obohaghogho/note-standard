@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNotesDashboard } from "../../context/NotesDashboardContext";
-import { Folder, FolderOpen, MoreVertical, Calendar } from "lucide-react";
+import { Folder, FolderOpen, Settings2, Calendar } from "lucide-react";
+import { FolderModal } from "../dashboard/FolderModal";
 
 interface CategoryListProps {
   onSelectCategory: (id: string | null) => void;
@@ -9,6 +10,7 @@ interface CategoryListProps {
 
 export const CategoryList: React.FC<CategoryListProps> = ({ onSelectCategory, selectedCategoryId }) => {
   const { categories, loading } = useNotesDashboard();
+  const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
 
   if (loading) {
     return (
@@ -75,19 +77,25 @@ export const CategoryList: React.FC<CategoryListProps> = ({ onSelectCategory, se
               }`}>
                 {cat.note_count}
               </span>
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // Edit category triggers
-                }}
-                className="p-1 rounded hover:bg-white/5 text-neutral-500 hover:text-neutral-300 cursor-pointer"
-              >
-                <MoreVertical className="w-4 h-4" />
-              </button>
             </div>
           </div>
         );
       })}
+
+      {/* Manage Folders Trigger Button */}
+      <button
+        onClick={() => setIsFolderModalOpen(true)}
+        className="w-full flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-white/10 bg-neutral-900/10 hover:bg-neutral-900/30 text-xs font-semibold text-neutral-400 hover:text-white transition-all cursor-pointer mt-2"
+      >
+        <Settings2 className="w-4 h-4" />
+        Configure Folders
+      </button>
+
+      {/* Render folders settings modal */}
+      <FolderModal
+        isOpen={isFolderModalOpen}
+        onClose={() => setIsFolderModalOpen(false)}
+      />
     </div>
   );
 };

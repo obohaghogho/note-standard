@@ -48,12 +48,15 @@ router.post('/image', upload.single('file'), async (req, res) => {
 
         // Upload to Cloudinary
         const result = await new Promise((resolve, reject) => {
+            const isCover = req.query.type === 'cover';
+            const transformation = isCover
+                ? [{ width: 1200, height: 400, crop: 'fill', fetch_format: 'auto' }]
+                : [{ width: 400, height: 400, crop: 'fill', gravity: 'face', fetch_format: 'auto' }];
+
             const uploadStream = cloudinary.uploader.upload_stream(
                 {
                     folder: 'note_standard_profiles',
-                    transformation: [
-                        { width: 400, height: 400, crop: 'fill', gravity: 'face', fetch_format: 'auto' }
-                    ]
+                    transformation
                 },
                 (error, result) => {
                     if (error) reject(error);
