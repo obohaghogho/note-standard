@@ -313,6 +313,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         
         if (isMounted.current) {
+          if (initialSession?.access_token) {
+            localStorage.setItem("token", initialSession.access_token);
+          } else {
+            localStorage.removeItem("token");
+          }
           // Rule 9: Listener handles state, but we set initial once for loading sync
           setSession(initialSession);
           setUser(initialSession?.user ?? null);
@@ -385,6 +390,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // If we are switching, we ignore SIGNED_OUT from the old account
         if (switchInProgress.current) return;
 
+        localStorage.removeItem("token");
         setSession(null);
         setUser(null);
         setProfile(null);
@@ -397,6 +403,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
         const currentUser = newSession?.user ?? null;
         
+        if (newSession?.access_token) {
+          localStorage.setItem("token", newSession.access_token);
+        } else {
+          localStorage.removeItem("token");
+        }
+
         console.log(`[Auth Forensic] State update triggering for ${event} at ${Date.now()}`);
         setSession(newSession);
         setUser(prev => (prev?.id === currentUser?.id ? prev : currentUser));
