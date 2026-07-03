@@ -4,13 +4,7 @@ const { createNotification, broadcastNotification } = require(
 );
 const analyticsService = require("../services/analyticsService");
 const realtime = require("../services/realtimeService");
-const { Pool } = require("pg");
-
-const pool = new Pool({
-  connectionString: (process.env.DATABASE_URL || "").replace(":6543", ":5432"),
-  ssl: { rejectUnauthorized: false },
-});
-
+const pool = require("../config/pgPool");
 const exportService = require("../services/exportService");
 
 async function broadcastTrendUpdate(app) {
@@ -120,7 +114,26 @@ const updateNote = async (req, res) => {
   try {
     const { id: userId } = req.user;
     const { id: noteId } = req.params;
-    const { title, content, is_private } = req.body;
+    
+    const { 
+      title, content, is_private, is_archived, is_favorite, is_pinned, 
+      category_id, tags, cover_image, color, reminder_at, reminder_completed, repeat_type 
+    } = req.body;
+
+    const updateData = {};
+    if (title !== undefined) updateData.title = title;
+    if (content !== undefined) updateData.content = content;
+    if (is_private !== undefined) updateData.is_private = is_private;
+    if (is_archived !== undefined) updateData.is_archived = is_archived;
+    if (is_favorite !== undefined) updateData.is_favorite = is_favorite;
+    if (is_pinned !== undefined) updateData.is_pinned = is_pinned;
+    if (category_id !== undefined) updateData.category_id = category_id;
+    if (tags !== undefined) updateData.tags = tags;
+    if (cover_image !== undefined) updateData.cover_image = cover_image;
+    if (color !== undefined) updateData.color = color;
+    if (reminder_at !== undefined) updateData.reminder_at = reminder_at;
+    if (reminder_completed !== undefined) updateData.reminder_completed = reminder_completed;
+    if (repeat_type !== undefined) updateData.repeat_type = repeat_type;
 
     // Fetch current note state to check if it's being made public
     const { data: currentNote } = await supabase
@@ -131,7 +144,7 @@ const updateNote = async (req, res) => {
 
     const { data, error } = await supabase
       .from("notes")
-      .update({ title, content, is_private })
+      .update(updateData)
       .eq("id", noteId)
       .eq("owner_id", userId) // Security: ensure ownership
       .select();

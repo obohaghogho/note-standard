@@ -1,11 +1,6 @@
 const Groq = require("groq-sdk");
-const { Pool } = require("pg");
 const logger = require("../utils/logger");
-
-const pool = new Pool({
-  connectionString: (process.env.DATABASE_URL || "").replace(":6543", ":5432"),
-  ssl: { rejectUnauthorized: false },
-});
+const pool = require("../config/pgPool");
 
 let groq;
 try {

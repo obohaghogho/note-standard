@@ -31,7 +31,7 @@ import type { Note } from "../../types/note";
 
 function NotesContent() {
   const { user } = useAuth();
-  const { notes, loading, refreshNotes } = useNotes();
+  const { notes, loading, refreshNotes, setNotes } = useNotes();
   const { widgets, refreshDashboard } = useNotesDashboard();
 
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -74,6 +74,7 @@ function NotesContent() {
 
       if (error) throw error;
       toast.success("Note moved to trash");
+      setNotes((prev) => prev.filter((n) => n.id !== deletingNoteId));
       refreshNotes("", sortBy);
       refreshDashboard();
     } catch (error) {
@@ -98,15 +99,18 @@ function NotesContent() {
             note_type: type,
             is_private: true,
             version: 1,
+            last_opened_at: new Date().toISOString(),
           },
         ])
         .select();
 
       if (error) throw error;
       toast.success("Blank note created!");
+      const newNote = data[0] as Note;
+      setNotes((prev) => [newNote, ...prev]);
       refreshNotes("", sortBy);
       refreshDashboard();
-      setEditingNote(data[0] as Note);
+      setEditingNote(newNote);
     } catch (err) {
       console.error(err);
       toast.error("Failed to create note");

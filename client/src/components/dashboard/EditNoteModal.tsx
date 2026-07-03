@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabaseSafe';
 import { toast } from 'react-hot-toast';
 import { AdDisplay } from '../ads/AdDisplay';
 import { useAuth } from '../../context/AuthContext';
+import { useNotes } from '../../context/NotesContext';
 import axios from 'axios';
 
 import type { Note } from '../../types/note';
@@ -22,6 +23,7 @@ interface EditNoteModalProps {
 
 export const EditNoteModal = ({ isOpen, onClose, onNoteUpdated, note }: EditNoteModalProps) => {
     const { user } = useAuth();
+    const { setNotes } = useNotes();
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [tags, setTags] = useState('');
@@ -49,23 +51,25 @@ export const EditNoteModal = ({ isOpen, onClose, onNoteUpdated, note }: EditNote
 
             // Increment note version on save!
             const nextVersion = (note.version || 1) + 1;
+            const updatedFields = {
+                title,
+                content,
+                tags: tagArray,
+                is_private: isPrivate,
+                version: nextVersion,
+                updated_at: new Date().toISOString()
+            };
 
             const { error } = await supabase
                 .from('notes')
-                .update({
-                    title,
-                    content,
-                    tags: tagArray,
-                    is_private: isPrivate,
-                    version: nextVersion,
-                    updated_at: new Date().toISOString()
-                })
+                .update(updatedFields)
                 .eq('id', note.id)
                 .eq('owner_id', user?.id);
 
             if (error) throw error;
 
             toast.success('Note updated successfully!');
+            setNotes(prev => prev.map(n => n.id === note.id ? { ...n, ...updatedFields } : n));
             onNoteUpdated();
             onClose();
         } catch (error) {

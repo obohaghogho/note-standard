@@ -10,7 +10,7 @@ const logger = require("../utils/logger");
  */
 let redisClient = null;
 
-if (process.env.REDIS_URL) {
+if (process.env.REDIS_URL && process.env.DISABLE_REDIS !== 'true') {
     try {
         redisClient = new IORedis(process.env.REDIS_URL, {
             maxRetriesPerRequest: null,

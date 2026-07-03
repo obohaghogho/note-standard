@@ -11,6 +11,7 @@ interface NotesContextType {
     loading: boolean;
     canCreateNote: boolean;
     refreshNotes: (searchTerm?: string, sortBy?: string) => Promise<void>;
+    setNotes: React.Dispatch<React.SetStateAction<Note[]>>;
 }
 
 const NotesContext = createContext<NotesContextType | undefined>(undefined);
@@ -185,7 +186,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, [socket, connected, fetchNotes]);
 
     return (
-        <NotesContext.Provider value={{ notes, stats, loading, canCreateNote, refreshNotes: fetchNotes }}>
+        <NotesContext.Provider value={{ notes, stats, loading, canCreateNote, refreshNotes: fetchNotes, setNotes }}>
             {children}
         </NotesContext.Provider>
     );
