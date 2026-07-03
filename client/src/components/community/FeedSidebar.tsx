@@ -157,7 +157,7 @@ export const FeedSidebar: React.FC = () => {
                         </p>
                         {creator.is_verified && <BadgeCheck size={12} className="text-blue-500 shrink-0" />}
                       </div>
-                      {creator.followers_count !== undefined && (
+                      {typeof creator.followers_count === 'number' && (
                         <p className="text-xs text-gray-500 dark:text-gray-400">
                           {creator.followers_count.toLocaleString()} followers
                         </p>

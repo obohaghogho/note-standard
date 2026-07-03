@@ -45,9 +45,9 @@ router.get("/suggested-creators", async (req, res, next) => {
 
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, avatar_url, is_verified, followers_count')
+      .select('id, username, avatar_url, is_verified')
       .not('id', 'in', `(${followingIds.join(',')})`)
-      .order('followers_count', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(limit);
 
     if (error) {
@@ -55,7 +55,19 @@ router.get("/suggested-creators", async (req, res, next) => {
       throw error;
     }
 
-    res.json(data || []);
+    // Dynamic followers count aggregation
+    const creatorsWithCounts = await Promise.all((data || []).map(async (profile) => {
+      const { count } = await supabase
+        .from('community_follows')
+        .select('*', { count: 'exact', head: true })
+        .eq('following_id', profile.id);
+      return {
+        ...profile,
+        followers_count: count || 0
+      };
+    }));
+
+    res.json(creatorsWithCounts);
   } catch (err) { next(err); }
 });
 
@@ -65,10 +77,26 @@ router.get("/profile/:profileId", async (req, res, next) => {
     const { profileId } = req.params;
     const userId = req.user.id;
 
-    const [{ data: profile }, { data: follows }] = await Promise.all([
-      supabase.from('profiles').select('id, username, avatar_url, is_verified, bio, followers_count, following_count').eq('id', profileId).single(),
+    const [{ data: profileData }, { data: follows }] = await Promise.all([
+      supabase.from('profiles').select('id, username, avatar_url, is_verified, bio').eq('id', profileId).single(),
       supabase.from('community_follows').select('id').eq('follower_id', userId).eq('following_id', profileId).maybeSingle(),
     ]);
+
+    if (!profileData) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    // Dynamic counts from follows table
+    const [{ count: followersCount }, { count: followingCount }] = await Promise.all([
+      supabase.from('community_follows').select('*', { count: 'exact', head: true }).eq('following_id', profileId),
+      supabase.from('community_follows').select('*', { count: 'exact', head: true }).eq('follower_id', profileId),
+    ]);
+
+    const profile = {
+      ...profileData,
+      followers_count: followersCount || 0,
+      following_count: followingCount || 0
+    };
 
     const { data: posts } = await supabase
       .from('community_posts')
