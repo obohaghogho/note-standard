@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { Search, Loader2, FileText, CornerDownLeft, Sparkles } from "lucide-react";
-import { useDebounce } from "../../hooks/useDebounce"; // Wait, does useDebounce exist? Let's check or write our own inline debounce.
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 

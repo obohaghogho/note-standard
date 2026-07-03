@@ -1,5 +1,5 @@
 import React from "react";
-import { useNotesDashboard, DashboardWidget } from "../../context/NotesDashboardContext";
+import { useNotesDashboard } from "../../context/NotesDashboardContext";
 import { Eye, EyeOff, Layout, ArrowUp, ArrowDown } from "lucide-react";
 
 export const LayoutCustomizer: React.FC = () => {
