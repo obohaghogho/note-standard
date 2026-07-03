@@ -190,10 +190,14 @@ const agoraRoutes = require("./routes/agora");
 
 // Phase 3–4B Routes
 const aiTutorRoutes = require("./routes/aiTutor");
+const notesAiRoutes = require("./routes/notesAi");
 const creatorRoutes = require("./routes/creator");
 
 // v2.5 Operations Dashboard
 const opsRoutes = require("./routes/ops");
+
+// Premium Dashboard Redesign
+const dashboardNotesRoutes = require("./routes/dashboard");
 
 // API Mounts
 app.use("/api/auth", authRoutes);
@@ -222,10 +226,14 @@ app.use("/api/session", sessionRoutes);
 
 // Phase 3–4B: AI Tutor, Creator Platform
 app.use("/api/ai-tutor", aiTutorRoutes);
+app.use("/api/notes/ai", notesAiRoutes);
 app.use("/api/creator", creatorRoutes);
 
 // v2.5: Operations Dashboard
 app.use("/api/ops", opsRoutes);
+
+// Premium Dashboard Redesign
+app.use("/api/dashboard", dashboardNotesRoutes);
 
 // Phase 6.2: Replay Debugger
 const replayRoutes = require("./tools/replayDebugger/replayRoutes");

@@ -24,4 +24,10 @@ module.exports = {
   RATE_SPIKE_LIMIT:         parseInt(process.env.RATE_SPIKE_LIMIT          || '30'),
   DAILY_IMPRESSION_CAP:     parseInt(process.env.DAILY_IMPRESSION_CAP      || '50'),
   DAILY_CLICK_CAP:          parseInt(process.env.DAILY_CLICK_CAP           || '10'),
+
+  // Notes Feature Flags
+  NOTES_AI_ENABLED:          process.env.NOTES_AI_ENABLED           !== 'false', // default ON
+  NOTES_COLLABORATION_ENABLED: process.env.NOTES_COLLABORATION_ENABLED !== 'false', // default ON
+  NOTES_OFFLINE_SYNC_ENABLED: process.env.NOTES_OFFLINE_SYNC_ENABLED   !== 'false', // default ON
+  NOTES_REMINDERS_ENABLED:    process.env.NOTES_REMINDERS_ENABLED    !== 'false', // default ON
 };

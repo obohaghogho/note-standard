@@ -1,12 +1,18 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 const DB_NAME = 'notestandard_feed_db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export const STORES = {
   FEED_CACHE: 'feed_cache',
   OFFLINE_QUEUE: 'offline_queue',
   DRAFTS: 'drafts',
-  USER_PREFS: 'user_prefs'
+  USER_PREFS: 'user_prefs',
+  NOTES_CACHE: 'notes_cache',
+  DASHBOARD_STATS: 'dashboard_stats',
+  DASHBOARD_RECENT: 'dashboard_recent',
+  DASHBOARD_CATEGORIES: 'dashboard_categories',
+  DASHBOARD_ACTIVITY: 'dashboard_activity',
+  DASHBOARD_SUGGESTIONS: 'dashboard_suggestions'
 };
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -43,6 +49,28 @@ const initDB = (): Promise<IDBDatabase> => {
       // User Preferences Store
       if (!db.objectStoreNames.contains(STORES.USER_PREFS)) {
         db.createObjectStore(STORES.USER_PREFS, { keyPath: 'key' });
+      }
+
+      // Notes Cache Store
+      if (!db.objectStoreNames.contains(STORES.NOTES_CACHE)) {
+        db.createObjectStore(STORES.NOTES_CACHE, { keyPath: 'id' });
+      }
+
+      // Dashboard Caching Stores (stores object with userId key)
+      if (!db.objectStoreNames.contains(STORES.DASHBOARD_STATS)) {
+        db.createObjectStore(STORES.DASHBOARD_STATS, { keyPath: 'userId' });
+      }
+      if (!db.objectStoreNames.contains(STORES.DASHBOARD_RECENT)) {
+        db.createObjectStore(STORES.DASHBOARD_RECENT, { keyPath: 'userId' });
+      }
+      if (!db.objectStoreNames.contains(STORES.DASHBOARD_CATEGORIES)) {
+        db.createObjectStore(STORES.DASHBOARD_CATEGORIES, { keyPath: 'userId' });
+      }
+      if (!db.objectStoreNames.contains(STORES.DASHBOARD_ACTIVITY)) {
+        db.createObjectStore(STORES.DASHBOARD_ACTIVITY, { keyPath: 'userId' });
+      }
+      if (!db.objectStoreNames.contains(STORES.DASHBOARD_SUGGESTIONS)) {
+        db.createObjectStore(STORES.DASHBOARD_SUGGESTIONS, { keyPath: 'userId' });
       }
     };
   });

@@ -4,6 +4,14 @@ const { createNotification, broadcastNotification } = require(
 );
 const analyticsService = require("../services/analyticsService");
 const realtime = require("../services/realtimeService");
+const { Pool } = require("pg");
+
+const pool = new Pool({
+  connectionString: (process.env.DATABASE_URL || "").replace(":6543", ":5432"),
+  ssl: { rejectUnauthorized: false },
+});
+
+const exportService = require("../services/exportService");
 
 async function broadcastTrendUpdate(app) {
   try {
@@ -300,6 +308,268 @@ const shareNote = async (req, res) => {
   }
 };
 
+// Full-Text Search across notes
+const searchNotes = async (req, res) => {
+  try {
+    const { id: userId } = req.user;
+    const { q } = req.query;
+
+    if (!q || !q.trim()) {
+      return res.json([]);
+    }
+
+    // Format query for plainto_tsquery or to_tsquery
+    // Replace non-alphanumeric words with space, split, join with & for prefix match
+    const keywords = q.trim().replace(/[^\w\s]/g, "").split(/\s+/).filter(Boolean);
+    if (keywords.length === 0) {
+      return res.json([]);
+    }
+    
+    // Create query string: 'word1:* & word2:*' (supports prefix matching)
+    const cleanQuery = keywords.map(kw => `${kw}:*`).join(" & ");
+
+    const { rows } = await pool.query(
+      `SELECT id, title, content, note_type, cover_image, color, word_count, reading_time, is_pinned, is_archived, created_at, updated_at,
+              ts_rank(search_vector, to_tsquery('english', $2)) as rank
+       FROM notes
+       WHERE owner_id = $1 AND deleted_at IS NULL AND search_vector @@ to_tsquery('english', $2)
+       ORDER BY rank DESC`,
+      [userId, cleanQuery]
+    );
+
+    res.json(rows);
+  } catch (err) {
+    console.error("[NotesController] searchNotes error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Export note into different formats
+const exportNote = async (req, res) => {
+  try {
+    const { id: userId } = req.user;
+    const { id: noteId } = req.params;
+    const { format } = req.query;
+
+    const result = await exportService.exportNote(noteId, userId, format);
+
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error });
+    }
+
+    res.setHeader("Content-Type", result.contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${result.filename}"`);
+    res.send(result.data);
+  } catch (err) {
+    console.error("[NotesController] exportNote error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Get soft-deleted trash notes
+const getTrashNotes = async (req, res) => {
+  try {
+    const { id: userId } = req.user;
+    const { rows } = await pool.query(
+      "SELECT id, title, note_type, deleted_at, cover_image, color FROM notes WHERE owner_id = $1 AND deleted_at IS NOT NULL ORDER BY deleted_at DESC",
+      [userId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error("[NotesController] getTrashNotes error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Restore a soft-deleted note
+const restoreNote = async (req, res) => {
+  try {
+    const { id: userId } = req.user;
+    const { id: noteId } = req.params;
+    const { rows } = await pool.query(
+      "UPDATE notes SET deleted_at = NULL, deleted_by = NULL WHERE id = $1 AND owner_id = $2 RETURNING *",
+      [noteId, userId]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Note not found in trash" });
+    }
+    res.json({ message: "Note restored successfully", note: rows[0] });
+  } catch (err) {
+    console.error("[NotesController] restoreNote error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Permanently delete a note
+const deleteNotePermanently = async (req, res) => {
+  try {
+    const { id: userId } = req.user;
+    const { id: noteId } = req.params;
+    const { rows } = await pool.query(
+      "DELETE FROM notes WHERE id = $1 AND owner_id = $2 RETURNING *",
+      [noteId, userId]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Note not found" });
+    }
+    res.json({ message: "Note permanently deleted" });
+  } catch (err) {
+    console.error("[NotesController] deleteNotePermanently error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Get shared note permissions
+const getNotePermissions = async (req, res) => {
+  try {
+    const { id: userId } = req.user;
+    const { id: noteId } = req.params;
+    
+    // Verify ownership
+    const ownership = await pool.query("SELECT id FROM notes WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL", [noteId, userId]);
+    if (ownership.rows.length === 0) {
+      return res.status(403).json({ error: "Only note owners can view permissions" });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT p.id, p.role, pr.email, pr.username 
+       FROM note_permissions p 
+       JOIN profiles pr ON p.user_id = pr.id 
+       WHERE p.note_id = $1`,
+      [noteId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error("[NotesController] getNotePermissions error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Update/upsert sharing permission role
+const updateNotePermission = async (req, res) => {
+  try {
+    const { id: userId } = req.user;
+    const { id: noteId } = req.params;
+    const { email, role } = req.body;
+
+    // Verify ownership
+    const ownership = await pool.query("SELECT id FROM notes WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL", [noteId, userId]);
+    if (ownership.rows.length === 0) {
+      return res.status(403).json({ error: "Only note owners can change permissions" });
+    }
+
+    // Resolve email to user
+    const userRes = await pool.query("SELECT id FROM profiles WHERE email = $1 LIMIT 1", [email]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    const targetUserId = userRes.rows[0].id;
+
+    if (targetUserId === userId) {
+      return res.status(400).json({ error: "Cannot alter owner permission" });
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO note_permissions (note_id, user_id, role) 
+       VALUES ($1, $2, $3) 
+       ON CONFLICT (note_id, user_id) 
+       DO UPDATE SET role = EXCLUDED.role 
+       RETURNING *`,
+      [noteId, targetUserId, role]
+    );
+
+    res.json({ message: "Permissions updated successfully", permission: rows[0] });
+  } catch (err) {
+    console.error("[NotesController] updateNotePermission error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Create threaded comment on a note
+const createNoteComment = async (req, res) => {
+  try {
+    const { id: userId } = req.user;
+    const { id: noteId } = req.params;
+    const { comment, parentCommentId } = req.body;
+
+    // Access check
+    const access = await pool.query(
+      `SELECT n.id FROM notes n
+       LEFT JOIN note_permissions p ON n.id = p.note_id AND p.user_id = $2
+       WHERE n.id = $1 AND n.deleted_at IS NULL AND (n.owner_id = $2 OR p.id IS NOT NULL OR n.is_private = false)
+       LIMIT 1`,
+      [noteId, userId]
+    );
+    if (access.rows.length === 0) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO note_comments (note_id, user_id, comment, parent_comment_id) 
+       VALUES ($1, $2, $3, $4) 
+       RETURNING *`,
+      [noteId, userId, comment, parentCommentId || null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error("[NotesController] createNoteComment error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Get comments list
+const getNoteComments = async (req, res) => {
+  try {
+    const { id: userId } = req.user;
+    const { id: noteId } = req.params;
+
+    // Access check
+    const access = await pool.query(
+      `SELECT n.id FROM notes n
+       LEFT JOIN note_permissions p ON n.id = p.note_id AND p.user_id = $2
+       WHERE n.id = $1 AND n.deleted_at IS NULL AND (n.owner_id = $2 OR p.id IS NOT NULL OR n.is_private = false)
+       LIMIT 1`,
+      [noteId, userId]
+    );
+    if (access.rows.length === 0) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT c.id, c.comment, c.parent_comment_id, c.created_at, pr.username, pr.avatar_url 
+       FROM note_comments c 
+       JOIN profiles pr ON c.user_id = pr.id 
+       WHERE c.note_id = $1 
+       ORDER BY c.created_at ASC`,
+      [noteId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error("[NotesController] getNoteComments error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Delete/revoke a note permission record
+const deleteNotePermission = async (req, res) => {
+  try {
+    const { id: userId } = req.user;
+    const { id: noteId, userPermissionId } = req.params;
+
+    // Verify ownership
+    const ownership = await pool.query("SELECT id FROM notes WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL", [noteId, userId]);
+    if (ownership.rows.length === 0) {
+      return res.status(403).json({ error: "Only note owners can delete permissions" });
+    }
+
+    await pool.query("DELETE FROM note_permissions WHERE note_id = $1 AND user_id = $2", [noteId, userPermissionId]);
+    res.json({ message: "Permission revoked successfully" });
+  } catch (err) {
+    console.error("[NotesController] deleteNotePermission error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
 module.exports = {
   getNotes,
   getNote,
@@ -307,4 +577,14 @@ module.exports = {
   updateNote,
   deleteNote,
   shareNote,
+  searchNotes,
+  exportNote,
+  getTrashNotes,
+  restoreNote,
+  deleteNotePermanently,
+  getNotePermissions,
+  updateNotePermission,
+  createNoteComment,
+  getNoteComments,
+  deleteNotePermission,
 };

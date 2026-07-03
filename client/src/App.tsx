@@ -14,6 +14,7 @@ import { WalletProvider } from './context/WalletContext';
 import { WebRTCProvider } from './context/WebRTCContext';
 import { PresenceProvider } from './context/PresenceContext';
 import { NotesProvider } from './context/NotesContext';
+import { NotesDashboardProvider } from './context/NotesDashboardContext';
 // import { ChatWidget } from './components/chat/ChatWidget'; // already handled by Route
 import { ChatWidget } from './components/chat/ChatWidget';
 import { ErrorBoundary } from 'react-error-boundary';
@@ -140,8 +141,9 @@ function App() {
                     <WebRTCProvider>
                       <WalletProvider>
                         <NotesProvider>
-                          <WebNotificationRouter />
-                          <Routes>
+                          <NotesDashboardProvider>
+                            <WebNotificationRouter />
+                            <Routes>
                             <Route path="/" element={<LandingPage />} />
                             <Route path="/login" element={<Login />} />
                             <Route path="/signup" element={<Signup />} />
@@ -215,6 +217,7 @@ function App() {
                           <ChatWidget />
                           {/* iOS install prompt — shown after 8s to iOS Safari users not running as PWA */}
                           <IOSInstallPrompt />
+                          </NotesDashboardProvider>
                         </NotesProvider>
                       </WalletProvider>
                     </WebRTCProvider>
