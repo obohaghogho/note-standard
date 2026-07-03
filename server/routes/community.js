@@ -72,13 +72,22 @@ router.get("/profile/:profileId", async (req, res, next) => {
 
     const { data: posts } = await supabase
       .from('community_posts')
-      .select('*, profiles!author_id(id, username, avatar_url, is_verified), community_likes(user_id), community_bookmarks(user_id)')
+      .select('*, profiles!author_id(id, username, avatar_url, is_verified), community_likes(user_id), community_bookmarks(user_id), community_comments(id)')
       .eq('author_id', profileId)
       .eq('status', 'public')
       .order('created_at', { ascending: false })
       .limit(20);
 
-    res.json({ profile, posts: posts || [], isFollowing: !!follows });
+    const postsWithCommentCount = (posts || []).map(post => {
+      const clean = {
+        ...post,
+        comments_count: post.community_comments?.length || 0
+      };
+      delete clean.community_comments;
+      return clean;
+    });
+
+    res.json({ profile, posts: postsWithCommentCount, isFollowing: !!follows });
   } catch (err) { next(err); }
 });
 

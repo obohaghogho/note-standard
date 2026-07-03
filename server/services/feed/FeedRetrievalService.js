@@ -37,7 +37,7 @@ class FeedRetrievalService {
         if (followingIds.length === 0) return { posts: [], nextCursor: null, hasMore: false };
         let query = supabase
           .from('community_posts')
-          .select('*, profiles!author_id(id, username, avatar_url, is_verified), community_likes(user_id), community_bookmarks(user_id)')
+          .select('*, profiles!author_id(id, username, avatar_url, is_verified), community_likes(user_id), community_bookmarks(user_id), community_comments(id)')
           .eq('status', 'public')
           .in('author_id', followingIds)
           .order('created_at', { ascending: false })
@@ -58,7 +58,7 @@ class FeedRetrievalService {
         if (postIds.length === 0) return { posts: [], nextCursor: null, hasMore: false };
         const { data, error } = await supabase
           .from('community_posts')
-          .select('*, profiles!author_id(id, username, avatar_url, is_verified), community_likes(user_id), community_bookmarks(user_id)')
+          .select('*, profiles!author_id(id, username, avatar_url, is_verified), community_likes(user_id), community_bookmarks(user_id), community_comments(id)')
           .eq('status', 'public')
           .in('id', postIds)
           .order('created_at', { ascending: false })
@@ -70,7 +70,7 @@ class FeedRetrievalService {
       if (tab === 'my-posts') {
         const { data, error } = await supabase
           .from('community_posts')
-          .select('*, profiles!author_id(id, username, avatar_url, is_verified), community_likes(user_id), community_bookmarks(user_id)')
+          .select('*, profiles!author_id(id, username, avatar_url, is_verified), community_likes(user_id), community_bookmarks(user_id), community_comments(id)')
           .eq('author_id', userId)
           .order('created_at', { ascending: false })
           .limit(limit);
@@ -80,7 +80,7 @@ class FeedRetrievalService {
 
       let query = supabase
         .from('community_posts')
-        .select('*, profiles!author_id(id, username, avatar_url, is_verified), community_likes(user_id), community_bookmarks(user_id)')
+        .select('*, profiles!author_id(id, username, avatar_url, is_verified), community_likes(user_id), community_bookmarks(user_id), community_comments(id)')
         .eq('status', 'public');
 
       // Category filter
@@ -188,7 +188,11 @@ class FeedRetrievalService {
       const isDiagnostics = features.DIAGNOSTICS_ENABLED;
       
       const cleanFeed = finalFeed.map(post => {
-        const clean = { ...post };
+        const clean = { 
+          ...post,
+          comments_count: post.community_comments?.length || 0
+        };
+        delete clean.community_comments;
         if (!isDiagnostics) {
           delete clean._rankScore;
         } else {
@@ -218,12 +222,20 @@ class FeedRetrievalService {
     try {
        const { data } = await supabase
         .from('community_posts')
-        .select('*, profiles!author_id(username, avatar_url)')
+        .select('*, profiles!author_id(username, avatar_url), community_comments(id)')
         .eq('status', 'public')
         .order('created_at', { ascending: false })
         .limit(limit);
         
-       return { posts: data || [], nextCursor: null, isFallback: true };
+       const posts = (data || []).map(post => {
+         const clean = {
+           ...post,
+           comments_count: post.community_comments?.length || 0
+         };
+         delete clean.community_comments;
+         return clean;
+       });
+       return { posts, nextCursor: null, isFallback: true };
     } catch (e) {
        return { posts: [], nextCursor: null, isFallback: true, error: true };
     }

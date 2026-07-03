@@ -136,10 +136,21 @@ export function useCommunityFeed(params: FeedParams) {
       setPosts(prev => prev.map(p => p.id === postId ? { ...p, likes_count: count } : p));
     };
 
+    const handleCommentCountUpdated = ({ postId, type }: { postId: string; type: 'add' | 'delete' }) => {
+      setPosts(prev => prev.map(p => {
+        if (p.id !== postId) return p;
+        return {
+          ...p,
+          comments_count: Math.max(0, (p.comments_count || 0) + (type === 'add' ? 1 : -1))
+        };
+      }));
+    };
+
     socket.on('community:post_created', handleNewPost);
     socket.on('community:post_deleted', handlePostDeleted);
     socket.on('community:post_edited', handlePostEdited);
     socket.on('community:like_toggled', handleLikeToggled);
+    socket.on('community:comment_count_updated', handleCommentCountUpdated);
 
     return () => {
       socket.emit('community:leave_feed');
@@ -147,6 +158,7 @@ export function useCommunityFeed(params: FeedParams) {
       socket.off('community:post_deleted', handlePostDeleted);
       socket.off('community:post_edited', handlePostEdited);
       socket.off('community:like_toggled', handleLikeToggled);
+      socket.off('community:comment_count_updated', handleCommentCountUpdated);
     };
   }, [socket]);
 

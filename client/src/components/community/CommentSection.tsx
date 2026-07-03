@@ -12,6 +12,8 @@ import {
 
 interface Props {
   postId: string;
+  onCommentAdded?: () => void;
+  onCommentDeleted?: () => void;
 }
 
 interface CommentItemProps {
@@ -113,7 +115,7 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, postId, level = 0, o
   );
 };
 
-export const CommentSection: React.FC<Props> = ({ postId }) => {
+export const CommentSection: React.FC<Props> = ({ postId, onCommentAdded, onCommentDeleted }) => {
   const { user } = useAuth();
   const { socket } = useSocket();
   const [comments, setComments] = useState<CommunityComment[]>([]);
@@ -145,23 +147,30 @@ export const CommentSection: React.FC<Props> = ({ postId }) => {
     const handleAdded = ({ comment }: { comment: CommunityComment }) => {
       setComments(prev => {
         if (prev.find(c => c.id === comment.id)) return prev;
+        onCommentAdded?.();
         return [...prev, comment];
       });
     };
 
-    const handleDeleted = ({ commentId }: { commentId: string }) => {
-      setComments(prev => prev.filter(c => c.id !== commentId));
+    const handleSocketCommentDeleted = ({ commentId }: { commentId: string }) => {
+      setComments(prev => {
+        if (prev.find(c => c.id === commentId)) {
+          onCommentDeleted?.();
+          return prev.filter(c => c.id !== commentId);
+        }
+        return prev;
+      });
     };
 
     socket.on('community:comment_added', handleAdded);
-    socket.on('community:comment_deleted', handleDeleted);
+    socket.on('community:comment_deleted', handleSocketCommentDeleted);
 
     return () => {
       socket.emit('community:leave_post', postId);
       socket.off('community:comment_added', handleAdded);
-      socket.off('community:comment_deleted', handleDeleted);
+      socket.off('community:comment_deleted', handleSocketCommentDeleted);
     };
-  }, [socket, postId]);
+  }, [socket, postId, onCommentAdded, onCommentDeleted]);
 
   // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
@@ -180,10 +189,11 @@ export const CommentSection: React.FC<Props> = ({ postId }) => {
       if (socket) {
         socket.emit('community:comment_added', { postId, comment });
       }
+      onCommentAdded?.();
     } finally {
       setSubmitting(false);
     }
-  }, [text, submitting, user, postId, replyTo, socket]);
+  }, [text, submitting, user, postId, replyTo, socket, onCommentAdded]);
 
   const handleReply = useCallback((parentId: string, username: string) => {
     setReplyTo({ id: parentId, username });
@@ -196,8 +206,14 @@ export const CommentSection: React.FC<Props> = ({ postId }) => {
   }, []);
 
   const handleDeleted = useCallback((id: string) => {
-    setComments(prev => prev.filter(c => c.id !== id));
-  }, []);
+    setComments(prev => {
+      if (prev.find(c => c.id === id)) {
+        onCommentDeleted?.();
+        return prev.filter(c => c.id !== id);
+      }
+      return prev;
+    });
+  }, [onCommentDeleted]);
 
   const flat = flattenTree(comments);
 

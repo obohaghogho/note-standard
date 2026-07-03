@@ -64,6 +64,7 @@ export const UniversalPostCard: React.FC<Props> = ({
   const [liked, setLiked] = useState(initialLiked);
   const [likeCount, setLikeCount] = useState(post.likes_count || post.community_likes?.length || 0);
   const [bookmarked, setBookmarked] = useState(initialBookmarked);
+  const [commentCount, setCommentCount] = useState(post.comments_count ?? 0);
   const [showComments, setShowComments] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [hidden, setHidden] = useState(false);
@@ -73,6 +74,29 @@ export const UniversalPostCard: React.FC<Props> = ({
   const likeInFlight = useRef(false);
   const bookmarkInFlight = useRef(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Sync commentCount if post prop updates from parent
+  useEffect(() => {
+    if (post.comments_count !== undefined) {
+      setCommentCount(post.comments_count);
+    }
+  }, [post.comments_count]);
+
+  // Click/touch outside to dismiss options menu
+  useEffect(() => {
+    if (!showMenu) return;
+    const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('touchstart', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+    };
+  }, [showMenu]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleLike = useCallback(async () => {
@@ -347,7 +371,7 @@ export const UniversalPostCard: React.FC<Props> = ({
                 <div className="p-1.5 rounded-full group-hover:bg-blue-50 dark:group-hover:bg-blue-500/10 transition-colors">
                   <MessageCircle size={17} />
                 </div>
-                <span>{post.comments_count ?? 0}</span>
+                <span>{commentCount}</span>
               </button>
 
               {/* Share */}
@@ -380,7 +404,11 @@ export const UniversalPostCard: React.FC<Props> = ({
         {/* ── Comments ───────────────────────────────────────────────────── */}
         {showComments && (
           <div className="border-t border-gray-100 dark:border-gray-800">
-            <CommentSection postId={post.id} />
+            <CommentSection 
+              postId={post.id} 
+              onCommentAdded={() => setCommentCount(c => c + 1)}
+              onCommentDeleted={() => setCommentCount(c => Math.max(0, c - 1))}
+            />
           </div>
         )}
       </article>

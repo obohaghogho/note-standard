@@ -81,6 +81,12 @@ module.exports = (io, socket) => {
       postId,
       comment
     });
+
+    // Also notify users on the global feed of the count update
+    socket.to('community_feed').emit('community:comment_count_updated', {
+      postId,
+      type: 'add'
+    });
   });
 
   socket.on('community:comment_deleted', (data) => {
@@ -90,6 +96,12 @@ module.exports = (io, socket) => {
     socket.to(`community_post:${postId}`).emit('community:comment_deleted', {
       postId,
       commentId
+    });
+
+    // Also notify users on the global feed of the count update
+    socket.to('community_feed').emit('community:comment_count_updated', {
+      postId,
+      type: 'delete'
     });
   });
 
