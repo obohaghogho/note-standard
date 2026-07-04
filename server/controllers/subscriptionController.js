@@ -29,16 +29,24 @@ exports.createCheckoutSession = async (req, res) => {
     // Fincra is completely cut off as requested by User. Paystack is the exclusive card payment provider.
     let usedMethod = "paystack";
 
-    // 2. Handle Currency Conversion
+    // 2. Handle Currency Conversion with safe fallback rates
     let processedCurrency = upCurrency;
     let finalAmount = usdAmount;
     let exchangeRate = 1;
 
-    if (usedMethod === "paystack") {
+    // Conservative static fallback rates (USD → X) used only if the live FX feed is unavailable
+    const FALLBACK_RATES = { USD: 1, NGN: 1600, EUR: 0.92, GBP: 0.79, JPY: 155 };
+
+    try {
       const conversion = await fxService.convert(usdAmount, "USD", upCurrency, true);
       finalAmount = conversion.amount;
       processedCurrency = upCurrency;
       exchangeRate = conversion.rate;
+    } catch (fxErr) {
+      console.warn(`[Subscription] FX conversion failed for ${upCurrency}: ${fxErr.message}. Falling back to static rate.`);
+      exchangeRate = FALLBACK_RATES[upCurrency] ?? 1;
+      finalAmount = usdAmount * exchangeRate;
+      processedCurrency = upCurrency;
     }
 
     // Ensure finalAmount is rounded to 2 decimal places to avoid API errors
@@ -93,9 +101,10 @@ exports.createCheckoutSession = async (req, res) => {
       currency: upCurrency
     });
   } catch (error) {
-    console.error("Error creating subscription checkout:", error);
-    console.error(error.stack);
-    res.status(500).json({ error: "Failed to create checkout session" });
+    console.error("Error creating subscription checkout:", error.message);
+    console.error("Stack:", error.stack);
+    if (error.details) console.error("Details:", JSON.stringify(error.details, null, 2));
+    res.status(500).json({ error: error.message || "Failed to create checkout session" });
   }
 };
 
