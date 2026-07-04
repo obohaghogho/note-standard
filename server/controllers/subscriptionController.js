@@ -67,38 +67,92 @@ exports.createCheckoutSession = async (req, res) => {
 
     // 4. Initialize Payment through PaymentService to pre-register transaction
     const PaymentService = require("../services/payment/paymentService");
-    const initResult = await PaymentService.initializePayment(
-      userId,
-      email,
-      finalAmount,
-      processedCurrency,
-      {
-        type: "subscription",
-        plan: planType.toLowerCase(),
-        display_label: `${planType} Subscription`,
-        usdAmount,
-        targetAmount: finalAmount,
-        targetCurrency: processedCurrency, 
-        displayCurrency: upCurrency, // What the user chose
-        exchangeRate: exchangeRate,
-      },
-      {
-        provider: usedMethod,
-        plan: providerPlan,
-        gatewayAmount: finalAmount,
-        gatewayCurrency: processedCurrency,
-        callbackUrl: getCallbackUrl("/dashboard/billing", {
-          payment_callback: "true",
-          method: usedMethod,
-          currency: upCurrency,
-        }, usedMethod)
+    let initResult;
+    try {
+      initResult = await PaymentService.initializePayment(
+        userId,
+        email,
+        finalAmount,
+        processedCurrency,
+        {
+          type: "subscription",
+          plan: planType.toLowerCase(),
+          display_label: `${planType} Subscription`,
+          usdAmount,
+          targetAmount: finalAmount,
+          targetCurrency: processedCurrency, 
+          displayCurrency: upCurrency, // What the user chose originally
+          exchangeRate: exchangeRate,
+        },
+        {
+          provider: usedMethod,
+          plan: providerPlan,
+          gatewayAmount: finalAmount,
+          gatewayCurrency: processedCurrency,
+          callbackUrl: getCallbackUrl("/dashboard/billing", {
+            payment_callback: "true",
+            method: usedMethod,
+            currency: upCurrency,
+          }, usedMethod)
+        }
+      );
+    } catch (error) {
+      const isCurrencyError = error.message?.includes("Currency not supported") || 
+                              error.message?.includes("currency") || 
+                              error.message?.includes("merchant");
+
+      if (isCurrencyError && processedCurrency !== "NGN") {
+        console.warn(`[Subscription] Currency ${processedCurrency} not supported by merchant. Retrying subscription checkout in NGN fallback.`);
+        
+        // Convert to NGN fallback
+        let ngnRate = 1600; // static fallback rate
+        try {
+          const conversion = await fxService.convert(usdAmount, "USD", "NGN", true);
+          ngnRate = conversion.rate;
+        } catch (fxErr) {
+          console.warn(`[Subscription] Fallback FX conversion to NGN failed: ${fxErr.message}. Using static rate.`);
+        }
+
+        const ngnAmount = Math.round(usdAmount * ngnRate * 100) / 100;
+        processedCurrency = "NGN";
+
+        initResult = await PaymentService.initializePayment(
+          userId,
+          email,
+          ngnAmount,
+          "NGN",
+          {
+            type: "subscription",
+            plan: planType.toLowerCase(),
+            display_label: `${planType} Subscription`,
+            usdAmount,
+            targetAmount: ngnAmount,
+            targetCurrency: "NGN", 
+            displayCurrency: upCurrency, // Keep track of user's original selection
+            exchangeRate: ngnRate,
+            fallback_to_ngn: true
+          },
+          {
+            provider: usedMethod,
+            plan: providerPlan,
+            gatewayAmount: ngnAmount,
+            gatewayCurrency: "NGN",
+            callbackUrl: getCallbackUrl("/dashboard/billing", {
+              payment_callback: "true",
+              method: usedMethod,
+              currency: "NGN",
+            }, usedMethod)
+          }
+        );
+      } else {
+        throw error;
       }
-    );
+    }
 
     res.json({ 
       url: initResult.checkoutUrl || initResult.url,
       method: usedMethod,
-      currency: upCurrency
+      currency: processedCurrency
     });
   } catch (error) {
     console.error("Error creating subscription checkout:", error.message);
