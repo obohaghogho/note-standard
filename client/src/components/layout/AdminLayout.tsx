@@ -93,7 +93,7 @@ export const AdminLayout = () => {
         { to: '/admin/chats', icon: MessageSquare, label: 'Support Chats', badge: newChatsCount },
         { to: '/admin/ads', icon: Target, label: 'Manage Ads' },
         { to: '/admin/audit-logs', icon: HistoryIcon, label: 'Audit Logs' },
-        { to: '/admin/reconciliation', icon: ShieldAlert, label: 'Observatory' },
+        { to: '/admin/reconciliation', icon: ShieldAlert, label: 'NFI Control' },
         { to: '/admin/broadcasts', icon: Megaphone, label: 'Broadcasts' },
         { to: '/admin/limit-requests', icon: Zap, label: 'Limit Requests' },
         { to: '/admin/deposits', icon: ArrowDownToLine, label: 'Manual Deposits' },

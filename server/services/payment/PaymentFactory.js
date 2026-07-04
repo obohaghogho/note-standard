@@ -11,6 +11,21 @@ const NowPaymentsProvider = require(
 const GreyProvider = require(
   path.join(__dirname, "providers", "GreyProvider"),
 );
+const FlutterwaveProvider = require(
+  path.join(__dirname, "providers", "FlutterwaveProvider"),
+);
+const StripeProvider = require(
+  path.join(__dirname, "providers", "StripeProvider"),
+);
+const ZenithProvider = require(
+  path.join(__dirname, "providers", "ZenithProvider"),
+);
+const MoniepointProvider = require(
+  path.join(__dirname, "providers", "MoniepointProvider"),
+);
+const ProvidusProvider = require(
+  path.join(__dirname, "providers", "ProvidusProvider"),
+);
 const logger = require("../../utils/logger");
 const currencyConfig = require("../../config/currencyConfig");
 
@@ -110,6 +125,16 @@ class PaymentFactory {
       case "grey":
       case "manual":
         return new GreyProvider();
+      case "flutterwave":
+        return new FlutterwaveProvider();
+      case "stripe":
+        return new StripeProvider();
+      case "zenith":
+        return new ZenithProvider();
+      case "moniepoint":
+        return new MoniepointProvider();
+      case "providus":
+        return new ProvidusProvider();
 
       default:
         throw new Error(`Unknown provider: ${name}`);

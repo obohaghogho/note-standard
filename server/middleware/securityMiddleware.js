@@ -106,7 +106,15 @@ const verifyTransactionSignature = (req, res, next) => {
   }
 };
 
+const requireAdmin = (req, res, next) => {
+  if (!req.user || req.user.role !== "admin") {
+    return res.status(403).json({ error: "Access denied. Admin role required." });
+  }
+  next();
+};
+
 module.exports = {
   requireRecaptcha,
   verifyTransactionSignature,
+  requireAdmin,
 };

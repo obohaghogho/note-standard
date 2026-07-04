@@ -269,6 +269,104 @@ class PaystackProvider extends BaseProvider {
       raw: payload,
     };
   }
+
+  async createVirtualAccount(data) {
+    return this.getDedicatedAccount(data.email, data.firstName, data.lastName, data.phone);
+  }
+
+  async transfer(data) {
+    const { amount, currency, destination } = data;
+    try {
+      if (!this.secretKey || this.secretKey === "paystack_test_placeholder") {
+        return { success: true, status: "success", reference: `tr_paystack_${Date.now()}` };
+      }
+      // Create transfer recipient
+      const recipientRes = await this.client.post("/transferrecipient", {
+        type: "nuban",
+        name: destination.accountName,
+        account_number: destination.accountNumber,
+        bank_code: destination.bankCode,
+        currency: currency.toUpperCase()
+      });
+      
+      const recipientCode = recipientRes.data.data.recipient_code;
+
+      // Initiate transfer
+      const transferRes = await this.client.post("/transfer", {
+        source: "balance",
+        reason: data.reason || "Wallet transfer",
+        amount: Math.round(amount * 100),
+        recipient: recipientCode
+      });
+
+      return {
+        success: true,
+        status: transferRes.data.data.status,
+        reference: transferRes.data.data.reference,
+        raw: transferRes.data.data
+      };
+    } catch (error) {
+      console.error("[PaystackProvider] Transfer error:", error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || "Paystack transfer failed");
+    }
+  }
+
+  async reverse(reference, reason) {
+    try {
+      if (!this.secretKey || this.secretKey === "paystack_test_placeholder") {
+        return { success: true, status: "reversed", reference: `re_paystack_${Date.now()}` };
+      }
+      const res = await this.client.post("/refund", {
+        transaction: reference,
+        merchant_note: reason
+      });
+      return {
+        success: true,
+        status: "reversed",
+        reference: res.data.data.reference,
+        raw: res.data.data
+      };
+    } catch (error) {
+      console.error("[PaystackProvider] Refund error:", error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || "Paystack refund failed");
+    }
+  }
+
+  async balanceInquiry(currency) {
+    try {
+      if (!this.secretKey || this.secretKey === "paystack_test_placeholder") {
+        return { balance: 150000.0, currency: currency.toUpperCase() };
+      }
+      const res = await this.client.get("/balance");
+      const balanceItem = res.data.data?.find(b => b.currency.toUpperCase() === currency.toUpperCase());
+      return {
+        balance: balanceItem ? balanceItem.balance / 100 : 0.0,
+        currency: currency.toUpperCase()
+      };
+    } catch (error) {
+      return { balance: 0.0, currency: currency.toUpperCase() };
+    }
+  }
+
+  async healthCheck() {
+    try {
+      const start = Date.now();
+      await this.client.get("/balance");
+      return { status: "healthy", latencyMs: Date.now() - start };
+    } catch {
+      return { status: "unhealthy", latencyMs: 999 };
+    }
+  }
+
+  async settlement(data) {
+    try {
+      if (!this.secretKey || this.secretKey === "paystack_test_placeholder") return [];
+      const res = await this.client.get("/settlement");
+      return res.data.data || [];
+    } catch {
+      return [];
+    }
+  }
 }
 
 module.exports = PaystackProvider;

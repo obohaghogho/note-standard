@@ -199,10 +199,16 @@ const opsRoutes = require("./routes/ops");
 // Premium Dashboard Redesign
 const dashboardNotesRoutes = require("./routes/dashboard");
 
+// NFI Routes
+const connectorRoutes = require("./routes/connectorRoutes");
+const financialRoutes = require("./routes/financialRoutes");
+
 // API Mounts
 app.use("/api/auth", authRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/deposit", manualDepositRoutes);
+app.use("/api/nfi/connectors", connectorRoutes);
+app.use("/api/nfi/financials", financialRoutes);
 app.use("/api/notes", notesRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/users", require("./routes/usersRoutes"));
