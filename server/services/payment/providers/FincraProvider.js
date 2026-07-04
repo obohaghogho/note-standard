@@ -454,6 +454,83 @@ class FincraProvider extends BaseProvider {
       throw new Error(msg);
     }
   }
+
+  async transfer(data) {
+    const { amount, currency, destination } = data;
+    try {
+      const res = await this.client.post("/disbursements/transfers", {
+        amount: amount,
+        currency: currency.toUpperCase(),
+        destination: {
+          accountNumber: destination.accountNumber,
+          bankCode: destination.bankCode,
+        },
+        business: this.businessId,
+        reference: `tr_fincra_${Date.now()}`
+      });
+      return {
+        success: true,
+        status: res.data.data.status,
+        reference: res.data.data.reference,
+        raw: res.data.data
+      };
+    } catch (error) {
+      logger.error("[Fincra] Transfer disbursement error:", error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || "Fincra disbursement transfer failed");
+    }
+  }
+
+  async reverse(reference, reason) {
+    try {
+      // Fincra refunds/reversals
+      const res = await this.client.post(`/disbursements/refunds`, {
+        reference: reference,
+        reason: reason,
+        business: this.businessId
+      });
+      return {
+        success: true,
+        status: "reversed",
+        reference: res.data.data.reference || `re_fincra_${Date.now()}`,
+        raw: res.data.data
+      };
+    } catch (error) {
+      logger.error("[Fincra] Refund error:", error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || "Fincra refund initiation failed");
+    }
+  }
+
+  async balanceInquiry(currency) {
+    try {
+      const res = await this.client.get(`/wallets/business/${this.businessId}`);
+      const wallet = res.data.data?.find(w => w.currency.toUpperCase() === currency.toUpperCase());
+      return {
+        balance: wallet ? Number(wallet.availableBalance) : 0.0,
+        currency: currency.toUpperCase()
+      };
+    } catch {
+      return { balance: 0.0, currency: currency.toUpperCase() };
+    }
+  }
+
+  async healthCheck() {
+    try {
+      const start = Date.now();
+      await this.client.get(`/wallets/business/${this.businessId}`);
+      return { status: "healthy", latencyMs: Date.now() - start };
+    } catch {
+      return { status: "unhealthy", latencyMs: 999 };
+    }
+  }
+
+  async settlement(data) {
+    try {
+      const res = await this.client.get(`/settlements/business/${this.businessId}`);
+      return res.data.data || [];
+    } catch {
+      return [];
+    }
+  }
 }
 
 module.exports = FincraProvider;

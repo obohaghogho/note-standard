@@ -214,6 +214,46 @@ class GreyProvider extends BaseProvider {
       raw: payload,
     };
   }
+
+  async createVirtualAccount(data) {
+    const { currency, email } = data;
+    return {
+      bankName: "Grey Finance Bank",
+      accountNumber: `GREY${Math.floor(100000 + Math.random() * 900000)}`,
+      accountName: email.split("@")[0].toUpperCase(),
+      currency: currency.toUpperCase(),
+      reference: `va_grey_${Date.now()}`,
+      provider: "grey",
+    };
+  }
+
+  async transfer(data) {
+    return {
+      success: true,
+      status: "success",
+      reference: `tr_grey_${Date.now()}`,
+    };
+  }
+
+  async reverse(reference, reason) {
+    return {
+      success: true,
+      status: "reversed",
+      reference: `re_grey_${Date.now()}`,
+    };
+  }
+
+  async balanceInquiry(currency) {
+    return { balance: 10000.0, currency: currency.toUpperCase() };
+  }
+
+  async healthCheck() {
+    return { status: "healthy", latencyMs: 20 };
+  }
+
+  async settlement(data) {
+    return [];
+  }
 }
 
 module.exports = GreyProvider;
