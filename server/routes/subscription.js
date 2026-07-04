@@ -8,5 +8,6 @@ router.post('/cancel', requireAuth, subscriptionController.cancelSubscription);
 router.get('/status', requireAuth, subscriptionController.getSubscriptionStatus);
 router.get('/rate', requireAuth, subscriptionController.getExchangeRate);
 router.post('/sync', requireAuth, subscriptionController.syncSubscription);
+router.get('/billing-history', requireAuth, subscriptionController.getBillingHistory);
 
 module.exports = router;

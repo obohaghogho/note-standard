@@ -360,6 +360,7 @@ class PaymentService {
         network,
         reference,
         callbackUrl,
+        plan: options.plan || metadata.plan || null,
         metadata: {
           ...metadata,
           transactionId: transaction.id,
@@ -925,12 +926,30 @@ class PaymentService {
           }
         }
 
+        let targetWalletId = tx.wallet_id;
+        const isSubscription = ["SUBSCRIPTION_PAYMENT", "SUBSCRIPTION"].includes(tx.type?.toUpperCase());
+
+        if (isSubscription) {
+          const { data: revWallet, error: revError } = await supabase
+            .from("wallets_store")
+            .select("id")
+            .eq("address", `REVENUE_${tx.currency.toUpperCase()}`)
+            .maybeSingle();
+
+          if (!revError && revWallet) {
+            targetWalletId = revWallet.id;
+            logger.info(`[Finalize] Subscription transaction: Routing credit leg to Platform Revenue wallet ${targetWalletId} instead of user wallet ${tx.wallet_id}`);
+          } else {
+            logger.error(`[Finalize] Failed to resolve Platform Revenue wallet for currency ${tx.currency}: ${revError?.message || "Not found"}`);
+          }
+        }
+
         logger.info(`[Finalize] Executing Journaled Settlement [confirm_deposit] for ${reference}`);
-        logger.info(`[Finalize] Settlement: ${settlementAmount} ${tx.currency} (wallet: ${tx.wallet_id})`);
+        logger.info(`[Finalize] Settlement: ${settlementAmount} ${tx.currency} (wallet: ${targetWalletId})`);
         
         const { data: rpcApplied, error: rpcError } = await supabase.rpc("confirm_deposit", {
             p_transaction_id: tx.id,
-            p_wallet_id: tx.wallet_id,
+            p_wallet_id: targetWalletId,
             p_amount: settlementAmount,
             p_external_hash: eventData?.reference || reference
         });
