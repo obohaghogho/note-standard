@@ -23,6 +23,14 @@ class PaystackProvider extends BaseProvider {
     let { email, amount, currency, reference, callbackUrl, metadata } = data;
     const { normalizeToSmallestUnit } = require("../../../config/currencyMetadata");
 
+    // ⚠️  ENVIRONMENT SANITY CHECK
+    // Test cards (e.g. 4242 4242 4242 4242) only work with sk_test_ keys.
+    // Using a live key (sk_live_) with test cards causes the Paystack gateway to
+    // hang on "please wait while we connect to your bank" indefinitely.
+    if (!this.isTestKey) {
+      console.warn('[PaystackProvider] ⚠️  LIVE KEY DETECTED. If you are testing with Paystack test cards (4242...), the payment WILL hang. Switch to sk_test_ keys in .env for sandbox testing.');
+    }
+
     // Enforce currency presence
     if (!currency) {
       throw new Error("[PaystackProvider] Currency is strictly required for initialization");
@@ -33,7 +41,7 @@ class PaystackProvider extends BaseProvider {
     // Enforce precision-safe normalization to smallest unit (cents/kobo/etc)
     const amountInSmallestUnit = normalizeToSmallestUnit(amount, upCurrency);
 
-    console.log(`[PaystackProvider] Initializing transaction: ${amount} ${upCurrency} (${amountInSmallestUnit} units) for ${email}`);
+    console.log(`[PaystackProvider] Initializing transaction: ${amount} ${upCurrency} (${amountInSmallestUnit} units) for ${email} [mode: ${this.isTestKey ? 'TEST' : 'LIVE'}]`);
 
     try {
       const response = await this.client.post("/transaction/initialize", {

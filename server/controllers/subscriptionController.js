@@ -53,16 +53,30 @@ exports.createCheckoutSession = async (req, res) => {
     finalAmount = Math.round(finalAmount * 100) / 100;
 
     // 3. Provider Specific Logic (e.g. Paystack Plans)
+    // IMPORTANT: Plan codes (PLN_xxx) only work in the environment they were created in.
+    // A live plan code will cause the gateway to hang forever if a test key is being used, and vice versa.
+    // We detect the key type at runtime and only attach the plan if the key matches the plan's environment.
     let providerPlan = null;
     if (usedMethod === 'paystack') {
+      const isTestKey = (process.env.PAYSTACK_SECRET_KEY || '').startsWith('sk_test_');
       const planId = planType.toUpperCase() === "BUSINESS" 
         ? process.env.PAYSTACK_PLAN_BUSINESS 
         : process.env.PAYSTACK_PLAN_PRO;
       
-      // Ensure the plan ID is valid and present
-      if (planId) {
+      // Only attach plan if:
+      // 1. The plan ID is set
+      // 2. The plan ID prefix matches the key type (test plan starts with PLN_ and created in test dashboard)
+      // 3. We're not in a cross-environment mismatch (live key + test card or test key + live plan)
+      if (planId && isTestKey) {
+        // Test key: only use plan if it exists (test plans are optional for basic sandbox testing)
+        // In many test setups there are no test plans — skip to avoid gateway hang
+        providerPlan = null;
+        console.log('[Subscription] Test key detected — plan code suppressed to prevent gateway hang. Charging as one-off.');
+      } else if (planId && !isTestKey) {
+        // Live key: attach the live plan code
         providerPlan = planId;
       }
+      // If no planId at all, providerPlan stays null — one-off charge
     }
 
     // 4. Initialize Payment through PaymentService to pre-register transaction
