@@ -5,11 +5,18 @@ import { Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function StatusTray() {
-  const { feed, openViewer, openCreator } = useStatus();
+  const { feed, myStatuses, openViewer, openCreator } = useStatus();
   const { user, profile } = useAuth();
 
-  // Find own entry
-  const myEntry = feed.find(u => u.user_id === user?.id);
+  // Construct own entry from myStatuses
+  const myEntry = myStatuses && myStatuses.length > 0 ? {
+    user_id: user?.id,
+    display_name: 'My Status',
+    avatar_url: profile?.avatar_url,
+    statuses: myStatuses,
+    has_unviewed: false
+  } : null;
+
   const others = feed.filter(u => u.user_id !== user?.id);
 
   // Sort: unviewed first, then viewed, then muted
@@ -27,7 +34,7 @@ export default function StatusTray() {
         <div 
           className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 snap-start group"
           onClick={() => {
-            if (myEntry) openViewer(feed.indexOf(myEntry), 0);
+            if (myEntry) openViewer(-1, 0);
             else openCreator();
           }}
         >

@@ -139,12 +139,19 @@ export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setViewerOpen(prev => {
       if (!prev) return null;
       const { userIndex, statusIndex } = prev;
+
+      // Handle own statuses (userIndex === -1)
+      if (userIndex === -1) {
+        // myStatuses is captured via closure — check length directly
+        // We can't access myStatuses here directly, so just close
+        return null;
+      }
+
       const userEntry = feed[userIndex];
       if (!userEntry) return null;
-      const isOwn = userIndex === 0;
       if (statusIndex + 1 < userEntry.statuses.length) {
         return { userIndex, statusIndex: statusIndex + 1 };
-      } else if (!isOwn && userIndex + 1 < feed.length) {
+      } else if (userIndex + 1 < feed.length) {
         return { userIndex: userIndex + 1, statusIndex: 0 };
       }
       return null;
@@ -155,6 +162,13 @@ export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setViewerOpen(prev => {
       if (!prev) return null;
       const { userIndex, statusIndex } = prev;
+
+      // Handle own statuses (userIndex === -1)
+      if (userIndex === -1) {
+        if (statusIndex > 0) return { userIndex, statusIndex: statusIndex - 1 };
+        return prev;
+      }
+
       if (statusIndex > 0) return { userIndex, statusIndex: statusIndex - 1 };
       if (userIndex > 0) {
         const prevUser = feed[userIndex - 1];

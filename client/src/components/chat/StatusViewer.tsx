@@ -5,14 +5,14 @@ import { useChat } from '../../context/ChatContext';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { X, Play, Pause, Eye, Trash2, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+
 
 const QUICK_REACTIONS = ['😂', '😍', '😢', '👏', '🔥', '🎉'];
 const STATUS_DURATION = 5000;
 
 export default function StatusViewer() {
-  const { feed, viewerOpen, closeViewer, nextStatus, prevStatus, markViewed, react, reply, deleteStatus } = useStatus();
-  const { user } = useAuth();
+  const { feed, myStatuses, viewerOpen, closeViewer, nextStatus, prevStatus, markViewed, react, reply, deleteStatus } = useStatus();
+  const { user, profile } = useAuth();
   const { setActiveConversationId } = useChat();
 
   const [paused, setPaused] = useState(false);
@@ -27,7 +27,17 @@ export default function StatusViewer() {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const { userIndex, statusIndex } = viewerOpen || {};
-  const userEntry = userIndex !== undefined ? feed[userIndex] : null;
+  
+  const userEntry = userIndex === -1 && myStatuses && myStatuses.length > 0 
+    ? {
+        user_id: user?.id,
+        display_name: 'My Status',
+        avatar_url: profile?.avatar_url,
+        statuses: myStatuses,
+        has_unviewed: false
+      }
+    : (userIndex !== undefined && userIndex !== -1 ? feed[userIndex] : null);
+
   const status = userEntry && statusIndex !== undefined ? userEntry.statuses[statusIndex] : null;
   const isOwn = status?.user_id === user?.id;
 
