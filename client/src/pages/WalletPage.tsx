@@ -258,6 +258,7 @@ function WalletContent() {
                                     wallets={financialView.wallets} 
                                     onSelect={(curr, net) => setSelectedAsset({ currency: curr, network: net || 'native' })}
                                     showBalances={showBalances}
+                                    selectedAsset={selectedAsset}
                                 />
                             )}
                         </div>

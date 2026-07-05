@@ -8,6 +8,7 @@ interface CurrencyListProps {
     wallets: WalletViewDTO[];
     onSelect: (currency: string, network?: string) => void;
     showBalances?: boolean;
+    selectedAsset?: { currency: string, network?: string };
 }
 
 const getCurrencyIcon = (curr: string) => {
@@ -45,7 +46,8 @@ const getCurrencyColor = (curr: string) => {
 export const CurrencyList: React.FC<CurrencyListProps> = ({ 
     wallets, 
     onSelect,
-    showBalances = true
+    showBalances = true,
+    selectedAsset
 }) => {
     return (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -57,6 +59,7 @@ export const CurrencyList: React.FC<CurrencyListProps> = ({
                 const balNum = parseFloat(String(wallet.balance)) || 0;
                 const availNum = parseFloat(String(wallet.available)) || 0;
                 const hasLocked = Math.abs(balNum - availNum) > 0.000000001;
+                const isSelected = selectedAsset?.currency === wallet.asset && (selectedAsset?.network === (wallet.network || 'native') || (!selectedAsset?.network && (!wallet.network || wallet.network === 'native')));
 
                 return (
                     <motion.div
@@ -65,7 +68,7 @@ export const CurrencyList: React.FC<CurrencyListProps> = ({
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ delay: index * 0.05 }}
                         onClick={() => onSelect(wallet.asset, wallet.network)}
-                        className={`p-4 rounded-xl border bg-gradient-to-br ${colorClass} hover:bg-opacity-30 cursor-pointer transition-all hover:scale-[1.02] shadow-sm`}
+                        className={`p-4 rounded-xl border bg-gradient-to-br ${colorClass} hover:bg-opacity-30 cursor-pointer transition-all hover:scale-[1.02] shadow-sm ${isSelected ? 'ring-2 ring-purple-500 border-purple-500 shadow-purple-500/20 scale-[1.02]' : ''}`}
                     >
                         <div className="flex justify-between items-start mb-2">
                             <div className="flex items-center gap-3">
