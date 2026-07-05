@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useStatus } from '../../context/StatusContext';
 import api from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
-import { X, Image as ImageIcon, Link as LinkIcon, Type, Send, Loader2 } from 'lucide-react';
+import { X, Image as ImageIcon, Video, Link as LinkIcon, Type, Send, Loader2 } from 'lucide-react';
 
 const BG_PRESETS = [
   { label: 'Purple', value: '#1a0a2e' },
@@ -60,7 +60,7 @@ export default function StatusCreator() {
       return;
     }
     if (tab === 'media' && !mediaFile) {
-      toast.error('Select an image');
+      toast.error('Select a photo or video');
       return;
     }
     if (tab === 'link' && !linkUrl.trim()) {
@@ -144,7 +144,7 @@ export default function StatusCreator() {
               onClick={() => setTab('media')} 
               className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${tab === 'media' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
             >
-              <ImageIcon size={16} /> Image
+              <ImageIcon size={16} /> Media
             </button>
             <button 
               onClick={() => setTab('link')} 
@@ -212,10 +212,11 @@ export default function StatusCreator() {
                   onClick={() => fileInputRef.current?.click()}
                   className="w-full aspect-[9/16] border-2 border-dashed border-gray-700 hover:border-blue-500 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer bg-gray-900/50 hover:bg-gray-800/50 transition-colors"
                 >
-                  <div className="w-16 h-16 rounded-full bg-gray-800 flex items-center justify-center text-blue-500">
-                    <ImageIcon size={32} />
+                  <div className="flex gap-2 w-20 h-20 rounded-full bg-gray-800 items-center justify-center text-blue-500">
+                    <ImageIcon size={28} />
+                    <Video size={28} />
                   </div>
-                  <div className="text-gray-400 font-medium">Click to select image</div>
+                  <div className="text-gray-400 font-medium">Click to select photo or video</div>
                 </div>
               ) : (
                 <div className="w-full aspect-[9/16] relative rounded-2xl overflow-hidden group bg-black flex items-center justify-center">

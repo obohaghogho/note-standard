@@ -93,7 +93,8 @@ function StatusThumbnail({ status, user }: {
   let content = null;
 
   if (['image', 'video', 'gif', 'document'].includes(status.type) && status.media_url) {
-    content = <img src={status.media_thumbnail || status.media_url} alt="Status" className="w-full h-full object-cover" />;
+    const imgUrl = status.type === 'video' ? status.media_url.replace(/\.[^/.]+$/, '.jpg') : status.media_url;
+    content = <img src={status.media_thumbnail || imgUrl} alt="Status" className="w-full h-full object-cover" />;
   } else if (status.type === 'audio') {
     content = <div className="w-full h-full bg-blue-500 flex items-center justify-center text-xl">🎵</div>;
   } else if (status.type === 'text') {
