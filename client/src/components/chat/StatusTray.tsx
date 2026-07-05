@@ -84,7 +84,10 @@ export default function StatusTray() {
   );
 }
 
-function StatusThumbnail({ status, user }: { status: any, user?: any }) {
+function StatusThumbnail({ status, user }: { 
+  status: { type: string; media_url?: string; media_thumbnail?: string; bg_gradient?: string; bg_color?: string; content?: string; link_image?: string; font_style?: string }; 
+  user?: { avatar_url?: string; user_id?: string; display_name?: string } 
+}) {
   if (!status) return null;
 
   let content = null;

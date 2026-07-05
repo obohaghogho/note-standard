@@ -70,7 +70,7 @@ export default function StatusCreator() {
 
     setSubmitting(true);
     try {
-      let payload: any = { privacy };
+      const payload: Record<string, string | number | null> = { privacy };
 
       if (tab === 'text') {
         payload.type = 'text';
@@ -111,8 +111,9 @@ export default function StatusCreator() {
       await createStatus(payload);
       toast.success('Status posted! 🚀');
       closeCreator();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Failed to post status');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      toast.error(e?.response?.data?.error || 'Failed to post status');
     } finally {
       setSubmitting(false);
       setMediaUploading(false);

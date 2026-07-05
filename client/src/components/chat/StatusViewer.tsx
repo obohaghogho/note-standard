@@ -13,8 +13,7 @@ const STATUS_DURATION = 5000;
 export default function StatusViewer() {
   const { feed, viewerOpen, closeViewer, nextStatus, prevStatus, markViewed, react, reply, deleteStatus } = useStatus();
   const { user } = useAuth();
-  const { setActiveConversationId, startConversation } = useChat();
-  const navigate = useNavigate();
+  const { setActiveConversationId } = useChat();
 
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -41,14 +40,14 @@ export default function StatusViewer() {
     setProgress(0);
     setReplyText('');
     setShowViewers(false);
-  }, [status?.id, isOwn, markViewed]);
+  }, [status, isOwn, markViewed]);
 
-  const getDuration = () => {
+  const getDuration = useCallback(() => {
     if (status?.type === 'video' && videoRef.current?.duration) {
       return videoRef.current.duration * 1000;
     }
     return STATUS_DURATION;
-  };
+  }, [status?.type]);
 
   const startTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -69,7 +68,7 @@ export default function StatusViewer() {
         elapsedRef.current = elapsed;
       }
     }, 50);
-  }, [status?.id, nextStatus]);
+  }, [status?.id, nextStatus, getDuration]);
 
   const stopTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -85,7 +84,7 @@ export default function StatusViewer() {
       if (status.type === 'video') videoRef.current?.play().catch(() => {});
     }
     return () => stopTimer();
-  }, [paused, status?.id, startTimer, stopTimer]);
+  }, [paused, status, startTimer, stopTimer]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -119,7 +118,9 @@ export default function StatusViewer() {
     try {
       await react(status.id, emoji);
       toast.success(emoji);
-    } catch {}
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleDelete = async () => {
@@ -301,7 +302,7 @@ export default function StatusViewer() {
               <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
                 {(status.viewers || []).length === 0 ? (
                   <div className="text-center text-gray-500 mt-10">No views yet</div>
-                ) : (status.viewers || []).map((v: any, idx: number) => (
+                ) : (status.viewers || []).map((v: { avatar_url?: string; id: string; display_name: string; viewed_at: string }, idx: number) => (
                   <div key={idx} className="flex items-center gap-3">
                     <img 
                       src={v.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${v.id}`} 
