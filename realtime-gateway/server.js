@@ -176,6 +176,25 @@ app.post('/internal/push', async (req, res) => {
   }
 });
 
+// ✅ 5e. INTERNAL CACHE INVALIDATION ENDPOINT
+// Called by the API server when a user's session_state changes (register-session, logout, etc.)
+// This clears the chatPush in-memory installation cache for the user, ensuring the next push
+// performs a fresh DB read and picks up the updated session_state (e.g. ACTIVE after register-session).
+// This is the fix for the "first message no push" race condition.
+app.post('/internal/cache/clear', (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    const chatPushService = require('./services/chatPush');
+    if (chatPushService.clearUserCache) {
+      chatPushService.clearUserCache(userId);
+    }
+    res.json({ ok: true, cleared: userId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 🔬 DIAGNOSTIC: Synchronous push that waits and returns full result
 app.post('/internal/push/diagnose', async (req, res) => {
   const logs = [];

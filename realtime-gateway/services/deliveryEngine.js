@@ -29,8 +29,12 @@ const chatPush = require('./chatPush');
 // Track pending delivery ACKs: Map<messageId, { timer, recipientId, conversationId }>
 const pendingAcks = new Map();
 
-// Configurable timeout (seconds) before falling back to push
-const ACK_TIMEOUT_MS = parseInt(process.env.MESSAGE_ACK_TIMEOUT_MS || process.env.DELIVERY_ACK_TIMEOUT_MS || '1000', 10);
+// Configurable timeout (ms) before falling back to push.
+// 3000ms default gives React/ChatContext enough time to mount
+// and send 'chat:delivered' before we fall back to a push notification.
+// This prevents the "first message no push" race condition where the
+// ACK timeout fired before the client's socket handler was registered.
+const ACK_TIMEOUT_MS = parseInt(process.env.MESSAGE_ACK_TIMEOUT_MS || process.env.DELIVERY_ACK_TIMEOUT_MS || '3000', 10);
 
 /**
  * Telemetry Helpers

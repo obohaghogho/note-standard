@@ -93,8 +93,13 @@ async function sendChatPush({ supabase, firebaseApp: fbApp, userId, title, body,
   let installations = null;
   const nowTime = Date.now();
   const cached = installationsCache.get(userId);
+  // isCacheMiss: true when the cache is empty/expired for this user.
+  // On a cache miss we ALWAYS do a live DB read (no cache write for first-time calls
+  // that race with session registration). This prevents the "first message silent skip"
+  // where an empty cache entry was written before session_state turned ACTIVE.
+  const isCacheMiss = !cached || cached.expiresAt <= nowTime;
 
-  if (cached && cached.expiresAt > nowTime) {
+  if (!isCacheMiss) {
     installations = cached.installations;
   } else {
     const { data, error } = await supabase
@@ -108,10 +113,15 @@ async function sendChatPush({ supabase, firebaseApp: fbApp, userId, title, body,
     }
 
     installations = data || [];
-    installationsCache.set(userId, {
-      installations,
-      expiresAt: nowTime + CACHE_TTL_MS
-    });
+    // Only cache if we found ACTIVE/BACKGROUND sessions — avoids caching an empty
+    // result that was caused by session_state still being null/pending.
+    const hasActiveSession = installations.some(i => i.session_state === 'ACTIVE' || i.session_state === 'BACKGROUND');
+    if (hasActiveSession) {
+      installationsCache.set(userId, {
+        installations,
+        expiresAt: nowTime + CACHE_TTL_MS
+      });
+    }
   }
 
   if (!installations || installations.length === 0) {
@@ -120,7 +130,7 @@ async function sendChatPush({ supabase, firebaseApp: fbApp, userId, title, body,
   }
 
   // 2. Collect valid push targets
-  const targets = [];
+  let targets = [];
   for (const inst of installations) {
     if (inst.session_state !== 'ACTIVE' && inst.session_state !== 'BACKGROUND') continue;
     const device = Array.isArray(inst.device_installations) ? inst.device_installations[0] : inst.device_installations;
@@ -128,8 +138,73 @@ async function sendChatPush({ supabase, firebaseApp: fbApp, userId, title, body,
     targets.push(device);
   }
 
+  // FIX: Relaxed session_state fallback.
+  // If no ACTIVE/BACKGROUND targets found, this likely means the session_state race
+  // condition hit (socket connected before /api/auth/register-session completed).
+  // Retry with relaxed filter: accept installations where session_state is null or any value.
+  // This handles the window between first socket connect and session activation.
   if (targets.length === 0) {
-    console.log(`[ChatPush] No valid endpoints for user ${userId}`);
+    console.log(`[ChatPush] ⚠️ No ACTIVE/BACKGROUND targets for ${userId} — retrying with relaxed session_state filter (race condition recovery)`);
+    for (const inst of installations) {
+      if (inst.session_state === 'LOGGED_OUT') continue; // Only skip explicitly logged-out sessions
+      const device = Array.isArray(inst.device_installations) ? inst.device_installations[0] : inst.device_installations;
+      if (!device?.push_endpoint || device.endpoint_status === 'INVALID') continue;
+      targets.push(device);
+    }
+  }
+
+  // FIX: Legacy push_subscriptions fallback for PWA users.
+  // Users who registered before the V2 installation_accounts system may only have
+  // rows in the legacy push_subscriptions table. Fall back to those to avoid silent skips.
+  if (targets.length === 0 && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    console.log(`[ChatPush] ⚠️ No V2 endpoints for ${userId} — falling back to legacy push_subscriptions`);
+    try {
+      const { data: legacySubs } = await supabase
+        .from('push_subscriptions')
+        .select('endpoint, p256dh, auth')
+        .eq('user_id', userId);
+
+      if (legacySubs && legacySubs.length > 0) {
+        console.log(`[ChatPush] Found ${legacySubs.length} legacy push subscription(s) for user ${userId}`);
+        const webhookUrlLegacy = messageId && gatewayUrl ? `${gatewayUrl}/deliver/${messageId}?recipientId=${userId}` : '';
+        const legacyResults = await Promise.allSettled(legacySubs.map(sub => {
+          const legacyPayload = JSON.stringify({
+            title: title || 'New Message',
+            body: body || 'You have a new message',
+            icon: '/icon-192.png',
+            data: {
+              type: 'chat_message',
+              messageId,
+              conversationId,
+              url: conversationId ? `/dashboard/chat?id=${conversationId}` : '/dashboard/chat',
+              recipientId: userId,
+              targetAccountId: userId,
+              deliveryWebhookUrl: webhookUrlLegacy,
+            },
+          });
+          return webpush.sendNotification(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+            legacyPayload
+          ).then(() => {
+            console.log(`[ChatPush] ✅ Legacy Web Push sent | user:${userId}`);
+          }).catch(err => {
+            if (err.statusCode === 410 || err.statusCode === 404) {
+              supabase.from('push_subscriptions').delete().match({ user_id: userId, endpoint: sub.endpoint }).then();
+            }
+            console.error(`[ChatPush] ❌ Legacy Web Push | user:${userId} | ${err.statusCode || err.message}`);
+          });
+        }));
+        const legacySent = legacyResults.filter(r => r.status === 'fulfilled').length;
+        console.log(`[ChatPush] Legacy fallback: sent ${legacySent}/${legacySubs.length} pushes for user ${userId}`);
+        return; // Done — legacy fallback handled delivery
+      }
+    } catch (legacyErr) {
+      console.error('[ChatPush] Legacy push_subscriptions fallback error:', legacyErr.message);
+    }
+  }
+
+  if (targets.length === 0) {
+    console.log(`[ChatPush] No valid endpoints for user ${userId} (V2 and legacy exhausted)`);
     return;
   }
 
@@ -232,4 +307,16 @@ async function sendWeb(supabase, target, { userId, title, body, messageId, conve
   }
 }
 
-module.exports = { sendChatPush };
+/**
+ * Clears the in-memory installation cache for a specific user.
+ * Call this whenever the user's session_state changes (e.g. after register-session)
+ * to ensure the next push uses a fresh DB query instead of stale cached data.
+ */
+function clearUserCache(userId) {
+  if (userId) {
+    installationsCache.delete(userId);
+    console.log(`[ChatPush] 🗑 Cache cleared for user ${userId}`);
+  }
+}
+
+module.exports = { sendChatPush, clearUserCache };

@@ -594,6 +594,28 @@ const registerSession = async (req, res) => {
     });
 
     res.status(200).json({ success: true, session_id: sessionId, device_id: deviceId });
+
+    // FIX: Invalidate the chatPush installation cache in the gateway.
+    // The gateway caches push installation endpoints per-user. When a new session is
+    // registered, the session_state transitions from null → ACTIVE in installation_accounts.
+    // If the cache still holds a stale entry with no ACTIVE sessions, the very first push
+    // to this user after login will be silently skipped (the "first message no push" bug).
+    // We clear the cache here so the next push performs a fresh DB read.
+    const gatewayUrl = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
+    const http = gatewayUrl.startsWith('https') ? require('https') : require('http');
+    const cacheBody = JSON.stringify({ userId: user.id });
+    const cacheReq = http.request({
+      hostname: new URL(gatewayUrl).hostname,
+      port: new URL(gatewayUrl).port || (gatewayUrl.startsWith('https') ? 443 : 80),
+      path: '/internal/cache/clear',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(cacheBody) },
+      timeout: 5000,
+    }, () => {}); // fire-and-forget
+    cacheReq.on('error', () => {}); // silence errors silently
+    cacheReq.write(cacheBody);
+    cacheReq.end();
+
   } catch (err) {
     console.error('[RegisterSession Error]:', err.message);
     res.status(500).json({ error: 'Failed to register session.' });

@@ -331,16 +331,19 @@ export async function safeDashboardStats(userId: string): Promise<DashboardData>
         supabase
           .from('notes')
           .select('id', { count: 'exact', head: true })
-          .eq('owner_id', userId),
+          .eq('owner_id', userId)
+          .is('deleted_at', null),
         supabase
           .from('notes')
           .select('id', { count: 'exact', head: true })
           .eq('owner_id', userId)
-          .eq('is_favorite', true),
+          .eq('is_favorite', true)
+          .is('deleted_at', null),
         supabase
           .from('notes')
           .select('id, title, is_favorite, created_at, updated_at')
           .eq('owner_id', userId)
+          .is('deleted_at', null)
           .order('updated_at', { ascending: false })
           .limit(3)
       ]);

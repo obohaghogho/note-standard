@@ -96,7 +96,9 @@ BEGIN
             ) AS last_message_json
         FROM messages m
         INNER JOIN user_conversations uc ON uc.id = m.conversation_id
+        INNER JOIN user_memberships um ON um.conversation_id = m.conversation_id
         WHERE m.is_deleted = false
+          AND (um.cleared_at IS NULL OR m.created_at > um.cleared_at)
         ORDER BY m.conversation_id, m.created_at DESC
     ),
 
@@ -188,7 +190,8 @@ BEGIN
     INNER JOIN user_memberships um ON um.conversation_id = uc.id
     LEFT JOIN members_agg ma ON ma.conversation_id = uc.id
     LEFT JOIN last_messages lm ON lm.conversation_id = uc.id
-    LEFT JOIN unread_counts unc ON unc.conversation_id = uc.id;
+    LEFT JOIN unread_counts unc ON unc.conversation_id = uc.id
+    WHERE NOT (uc.type = 'direct' AND lm.last_message_json IS NULL AND um.cleared_at IS NOT NULL);
 
     -- Return empty array if user has no conversations
     RETURN COALESCE(v_result, '[]'::jsonb);

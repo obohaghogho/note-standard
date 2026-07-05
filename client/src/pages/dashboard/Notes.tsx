@@ -141,7 +141,10 @@ function NotesContent() {
         return (
           <QuickActionsBar
             onNewNote={handleCreateNoteTrigger}
-            onOpenAi={() => toast.success("AI Copilot opened. Try typing Ctrl+/")}
+            onOpenAi={() => {
+              handleCreateNoteTrigger('text');
+              toast.success("AI Copilot opened in the editor panel!");
+            }}
           />
         );
       case "recent":

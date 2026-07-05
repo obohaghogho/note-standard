@@ -17,6 +17,9 @@ import type { Note } from '../../types/note';
 import { ChecklistModule, type ChecklistItem } from './ChecklistModule';
 import { AttachmentsList } from './AttachmentsList';
 import { FolderModal } from './FolderModal';
+import { DrawingModule } from './DrawingModule';
+import { VoiceModule } from './VoiceModule';
+import { ImageModule } from './ImageModule';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -39,7 +42,7 @@ export const EditNoteModal = ({ isOpen, onClose, onNoteUpdated, note }: EditNote
     const [isPrivate, setIsPrivate] = useState(true);
     const [isPinned, setIsPinned] = useState(false);
     const [categoryId, setCategoryId] = useState<string | null>(null);
-    const [noteType, setNoteType] = useState<'text' | 'checklist'>('text');
+    const [noteType, setNoteType] = useState<'text' | 'checklist' | 'voice' | 'image' | 'drawing' | 'document'>('text');
     const [color, setColor] = useState('');
     
     // Reminders states
@@ -68,7 +71,7 @@ export const EditNoteModal = ({ isOpen, onClose, onNoteUpdated, note }: EditNote
             setIsPrivate(note.is_private ?? true);
             setIsPinned(note.is_pinned ?? false);
             setCategoryId(note.category_id || null);
-            setNoteType(note.note_type === 'checklist' ? 'checklist' : 'text');
+            setNoteType(note.note_type || 'text');
             setColor(note.color || '');
             setReminderAt(note.reminder_at ? new Date(note.reminder_at).toISOString().slice(0, 16) : '');
             setRepeatType(note.repeat_type || 'none');
@@ -293,9 +296,9 @@ export const EditNoteModal = ({ isOpen, onClose, onNoteUpdated, note }: EditNote
                 </div>
 
                 {/* Main scrollable content */}
-                <div className="flex-grow overflow-y-auto flex flex-col lg:flex-row gap-6 p-6">
+                <div className="flex-grow overflow-y-auto flex flex-col md:flex-row gap-6 p-6">
                     {/* Left Column: Form Fields */}
-                    <div className="flex-grow space-y-5 lg:w-2/3">
+                    <div className="flex-grow space-y-5 md:w-2/3">
                         {/* Tab Switcher */}
                         <div className="flex border-b border-white/10 pb-2">
                             <button
@@ -344,7 +347,7 @@ export const EditNoteModal = ({ isOpen, onClose, onNoteUpdated, note }: EditNote
                                 <div>
                                     <div className="flex justify-between items-center mb-1">
                                         <label className="block text-sm font-semibold text-neutral-400">Content</label>
-                                        <div className="flex items-center gap-1 bg-white/5 rounded-lg p-0.5 border border-white/5 text-[10px]">
+                                        <div className="flex items-center gap-1 bg-white/5 rounded-lg p-0.5 border border-white/5 text-[10px] flex-wrap">
                                             <button
                                                 type="button"
                                                 onClick={() => setNoteType('text')}
@@ -363,14 +366,47 @@ export const EditNoteModal = ({ isOpen, onClose, onNoteUpdated, note }: EditNote
                                             >
                                                 Checklist
                                             </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setNoteType('voice')}
+                                                className={`px-2 py-0.5 rounded font-bold transition-all ${
+                                                    noteType === 'voice' ? 'bg-emerald-500 text-white shadow' : 'text-neutral-400 hover:text-white'
+                                                }`}
+                                            >
+                                                Voice
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setNoteType('drawing')}
+                                                className={`px-2 py-0.5 rounded font-bold transition-all ${
+                                                    noteType === 'drawing' ? 'bg-emerald-500 text-white shadow' : 'text-neutral-400 hover:text-white'
+                                                }`}
+                                            >
+                                                Canvas
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setNoteType('image')}
+                                                className={`px-2 py-0.5 rounded font-bold transition-all ${
+                                                    noteType === 'image' ? 'bg-emerald-500 text-white shadow' : 'text-neutral-400 hover:text-white'
+                                                }`}
+                                            >
+                                                Image
+                                            </button>
                                         </div>
                                     </div>
 
-                                    {noteType === 'checklist' ? (
+                                     {noteType === 'checklist' ? (
                                         <ChecklistModule
                                             items={checklistItems}
                                             onChange={setChecklistItems}
                                         />
+                                    ) : noteType === 'voice' ? (
+                                        <VoiceModule noteId={note.id} />
+                                    ) : noteType === 'drawing' ? (
+                                        <DrawingModule noteId={note.id} />
+                                    ) : noteType === 'image' ? (
+                                        <ImageModule noteId={note.id} />
                                     ) : (
                                         <div className="quill-editor bg-neutral-900/40 border border-white/10 rounded-xl overflow-hidden focus-within:border-emerald-500/50 focus-within:ring-1 focus-within:ring-emerald-500/20">
                                             <ReactQuill
@@ -467,7 +503,7 @@ export const EditNoteModal = ({ isOpen, onClose, onNoteUpdated, note }: EditNote
                     </div>
 
                     {/* Right Column: Settings & AI copilot */}
-                    <div className="w-full lg:w-1/3 border-t lg:border-t-0 lg:border-l border-white/10 lg:pl-6 pt-6 lg:pt-0 flex flex-col gap-6">
+                    <div className="w-full md:w-1/3 border-t md:border-t-0 md:border-l border-white/10 md:pl-6 pt-6 md:pt-0 flex flex-col gap-6 md:min-h-0">
                         {/* Reminders section */}
                         <div className="space-y-4 p-4 rounded-2xl border border-white/5 bg-neutral-950/20">
                             <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
@@ -521,7 +557,7 @@ export const EditNoteModal = ({ isOpen, onClose, onNoteUpdated, note }: EditNote
                         </div>
 
                         {/* AI Copilot Panel */}
-                        <div className="flex-grow flex flex-col gap-4">
+                        <div className="flex-grow flex flex-col gap-4 min-h-0">
                             <div className="flex items-center gap-2 border-b border-white/5 pb-2">
                                 <Bot className="w-5 h-5 text-emerald-400" />
                                 <span className="text-sm font-bold text-white">AI Copilot</span>
@@ -534,7 +570,7 @@ export const EditNoteModal = ({ isOpen, onClose, onNoteUpdated, note }: EditNote
                                 Instantly rewrite, translate, or expand your note contents using groq llama-3.1 AI models.
                             </p>
 
-                            <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin">
+                            <div className="flex flex-col gap-2 flex-1 min-h-[150px] overflow-y-auto pr-1 scrollbar-thin">
                                 {aiTools.map((tool, idx) => (
                                     <button
                                         key={idx}

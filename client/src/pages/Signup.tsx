@@ -133,7 +133,6 @@ export const Signup = () => {
             {/* Rich Background Aesthetics */}
             <div className="absolute top-0 right-[-10%] w-[600px] h-[600px] bg-primary/20 rounded-full blur-[120px] -z-10 animate-pulse" />
             <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-[100px] -z-10" />
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] opacity-[0.03] -z-10" />
 
             <div className="w-full max-w-md relative py-8 sm:py-12">
                 <Link to="/" className="inline-flex items-center text-gray-500 hover:text-white mb-8 transition-all group">

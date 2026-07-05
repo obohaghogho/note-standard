@@ -35,7 +35,12 @@ export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) =
   const [mediaFiles, setMediaFiles] = useState<File[]>([]);
   const [mediaPreviews, setMediaPreviews] = useState<string[]>(editPost?.media_urls || []);
   const [uploadProgress, setUploadProgress] = useState<number[]>([]);
-  const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
+  const [pollOptions, setPollOptions] = useState<string[]>(() => {
+    if (editPost?.post_type === 'poll' && editPost.poll_options) {
+      return editPost.poll_options.map(o => o.option_text || String(o));
+    }
+    return ['', ''];
+  });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
@@ -221,33 +226,31 @@ export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) =
           />
 
           {/* Main content textarea */}
-          {(postType === 'text' || postType === 'image' || postType === 'video') && (
-            <div className="relative">
-              <textarea
-                ref={textareaRef}
-                value={content}
-                onChange={e => setContent(e.target.value)}
-                placeholder="Share your knowledge… Use #hashtag and @mention"
-                rows={5}
-                maxLength={MAX_CHARS}
-                className="w-full bg-transparent text-gray-800 dark:text-gray-200 placeholder-gray-400 text-sm leading-relaxed focus:outline-none resize-none"
-              />
-              {/* Char counter ring */}
-              <div className="absolute bottom-1 right-1 flex items-center gap-1">
-                <svg className="-rotate-90" width="24" height="24">
-                  <circle cx="12" cy="12" r="9" fill="none" stroke="#e5e7eb" strokeWidth="2" />
-                  <circle
-                    cx="12" cy="12" r="9" fill="none"
-                    stroke={charPct > 0.9 ? '#ef4444' : '#3b82f6'}
-                    strokeWidth="2"
-                    strokeDasharray={`${56.5 * charPct} 56.5`}
-                    strokeLinecap="round"
-                  />
-                </svg>
-                {charPct > 0.8 && <span className={`text-xs ${charPct > 0.9 ? 'text-red-500' : 'text-gray-400'}`}>{MAX_CHARS - charCount}</span>}
-              </div>
+          <div className="relative">
+            <textarea
+              ref={textareaRef}
+              value={content}
+              onChange={e => setContent(e.target.value)}
+              placeholder="Share your knowledge… Use #hashtag and @mention"
+              rows={5}
+              maxLength={MAX_CHARS}
+              className="w-full bg-transparent text-gray-800 dark:text-gray-200 placeholder-gray-400 text-sm leading-relaxed focus:outline-none resize-none"
+            />
+            {/* Char counter ring */}
+            <div className="absolute bottom-1 right-1 flex items-center gap-1">
+              <svg className="-rotate-90" width="24" height="24">
+                <circle cx="12" cy="12" r="9" fill="none" stroke="#e5e7eb" strokeWidth="2" />
+                <circle
+                  cx="12" cy="12" r="9" fill="none"
+                  stroke={charPct > 0.9 ? '#ef4444' : '#3b82f6'}
+                  strokeWidth="2"
+                  strokeDasharray={`${56.5 * charPct} 56.5`}
+                  strokeLinecap="round"
+                />
+              </svg>
+              {charPct > 0.8 && <span className={`text-xs ${charPct > 0.9 ? 'text-red-500' : 'text-gray-400'}`}>{MAX_CHARS - charCount}</span>}
             </div>
-          )}
+          </div>
 
           {/* Link input */}
           {postType === 'link' && (
@@ -256,7 +259,8 @@ export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) =
               onChange={e => setLinkUrl(e.target.value)}
               placeholder="https://example.com"
               type="url"
-              className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              disabled={!!editPost}
             />
           )}
 
@@ -269,17 +273,18 @@ export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) =
                     value={opt}
                     onChange={e => setPollOptions(prev => prev.map((o, j) => j === i ? e.target.value : o))}
                     placeholder={`Option ${i + 1}`}
-                    className="flex-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                     maxLength={100}
+                    disabled={!!editPost}
                   />
-                  {pollOptions.length > 2 && (
+                  {pollOptions.length > 2 && !editPost && (
                     <button onClick={() => setPollOptions(prev => prev.filter((_, j) => j !== i))} className="p-1.5 text-gray-400 hover:text-red-500">
                       <X size={14} />
                     </button>
                   )}
                 </div>
               ))}
-              {pollOptions.length < 6 && (
+              {pollOptions.length < 6 && !editPost && (
                 <button onClick={() => setPollOptions(prev => [...prev, ''])} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">
                   + Add option
                 </button>

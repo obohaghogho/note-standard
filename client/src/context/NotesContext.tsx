@@ -39,7 +39,8 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     let query = supabase
                         .from('notes')
                         .select('*')
-                        .eq('owner_id', user.id);
+                        .eq('owner_id', user.id)
+                        .is('deleted_at', null);
 
                     if (sortBy === 'latest') query = query.order('updated_at', { ascending: false });
                     else if (sortBy === 'oldest') query = query.order('updated_at', { ascending: true });
@@ -61,12 +62,14 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     supabase
                       .from('notes')
                       .select('id', { count: 'exact', head: true })
-                      .eq('owner_id', user.id),
+                      .eq('owner_id', user.id)
+                      .is('deleted_at', null),
                     supabase
                       .from('notes')
                       .select('id', { count: 'exact', head: true })
                       .eq('owner_id', user.id)
                       .eq('is_favorite', true)
+                      .is('deleted_at', null)
                 ]);
                 setStats({
                     totalBy: totalRes.count || 0,
@@ -110,8 +113,9 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     console.log('[NotesContext] Real-time activity detected:', payload.eventType);
                     
                     // 2. Invalidate relevant caches in supabaseSafe
-                    // This ensures the NEXT fetchNotes (e.g. after a search change) gets fresh data.
+                    // This ensures the NEXT fetchNotes and dashboard stats get fresh data.
                     resetRateLimiters('notes-list-');
+                    resetRateLimiters(`dashboard-stats-${user.id}`);
 
                     // 3. Update local state immediately (Optimistic UI)
                     if (payload.eventType === 'INSERT') {
@@ -123,14 +127,33 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                         setStats(prev => ({ ...prev, totalBy: prev.totalBy + 1 }));
                     } else if (payload.eventType === 'UPDATE') {
                         const updatedNote = payload.new as Note;
-                        setNotes(prev => prev.map(n => n.id === updatedNote.id ? updatedNote : n));
-                        
-                        // Recalculate favorites if changed
-                        if (payload.old.is_favorite !== payload.new.is_favorite) {
-                            setStats(prev => ({ 
-                                ...prev, 
-                                favorites: payload.new.is_favorite ? prev.favorites + 1 : prev.favorites - 1 
+
+                        // Soft-delete: deleted_at was set — treat it as a removal
+                        if (updatedNote.deleted_at && !payload.old.deleted_at) {
+                            setNotes(prev => prev.filter(n => n.id !== updatedNote.id));
+                            setStats(prev => ({
+                                totalBy: Math.max(0, prev.totalBy - 1),
+                                favorites: updatedNote.is_favorite
+                                    ? Math.max(0, prev.favorites - 1)
+                                    : prev.favorites
                             }));
+                        // Restore from trash: deleted_at was cleared — treat as an insert
+                        } else if (!updatedNote.deleted_at && payload.old.deleted_at) {
+                            setNotes(prev => {
+                                if (prev.some(n => n.id === updatedNote.id)) return prev;
+                                return [updatedNote, ...prev];
+                            });
+                            setStats(prev => ({ ...prev, totalBy: prev.totalBy + 1 }));
+                        // Regular update (title/content/favorites change)
+                        } else {
+                            setNotes(prev => prev.map(n => n.id === updatedNote.id ? updatedNote : n));
+                            // Recalculate favorites if changed
+                            if (payload.old.is_favorite !== payload.new.is_favorite) {
+                                setStats(prev => ({
+                                    ...prev,
+                                    favorites: payload.new.is_favorite ? prev.favorites + 1 : prev.favorites - 1
+                                }));
+                            }
                         }
                     } else if (payload.eventType === 'DELETE') {
                         const deletedId = payload.old.id;

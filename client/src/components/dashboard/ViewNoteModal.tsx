@@ -3,6 +3,7 @@ import { Card } from '../../components/common/Card';
 import { X, Edit2, Share2, Calendar, Lock, Globe, User, CheckSquare } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import DOMPurify from 'dompurify';
+import { AttachmentsList } from './AttachmentsList';
 
 import type { Note } from '../../types/note';
 
@@ -103,6 +104,11 @@ export const ViewNoteModal = ({ isOpen, onClose, onEdit, onShare, note }: ViewNo
                             ))}
                         </div>
                     )}
+
+                    {/* Show attachments for all notes, especially important for voice/drawing/image types */}
+                    <div className="pt-6 border-t border-white/10 mt-6">
+                        <AttachmentsList noteId={note.id} />
+                    </div>
                 </div>
 
                 {/* Footer */}
