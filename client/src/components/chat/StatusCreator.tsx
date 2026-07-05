@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { useStatus } from '../../../context/StatusContext';
-import api from '../../../api/axiosInstance';
+import { useStatus } from '../../context/StatusContext';
+import api from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
 import { X, Image as ImageIcon, Link as LinkIcon, Type, Send, Loader2 } from 'lucide-react';
 

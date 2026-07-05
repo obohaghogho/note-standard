@@ -1,6 +1,6 @@
 import React from 'react';
-import { useStatus } from '../../../context/StatusContext';
-import { useAuth } from '../../../context/AuthContext';
+import { useStatus } from '../../context/StatusContext';
+import { useAuth } from '../../context/AuthContext';
 import { Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
 

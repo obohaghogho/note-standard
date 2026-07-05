@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { useStatus } from '../../../context/StatusContext';
-import { useAuth } from '../../../context/AuthContext';
-import { useChat } from '../../../context/ChatContext';
+import { useStatus } from '../../context/StatusContext';
+import { useAuth } from '../../context/AuthContext';
+import { useChat } from '../../context/ChatContext';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { X, Play, Pause, Eye, Trash2, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
