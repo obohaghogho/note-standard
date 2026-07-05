@@ -17,7 +17,12 @@ const BG_PRESETS = [
   { label: 'Deep', value: 'linear-gradient(135deg,#141e30,#243b55)' },
 ];
 
-const FONT_SIZES = [18, 22, 28, 36, 48];
+const FONT_FAMILIES = [
+  { name: 'System', value: 'system-ui, sans-serif' },
+  { name: 'Serif', value: 'Georgia, serif' },
+  { name: 'Mono', value: 'monospace' },
+  { name: 'Hand', value: '"Comic Sans MS", cursive' },
+];
 
 export default function StatusCreator() {
   const { createStatus, closeCreator } = useStatus();
@@ -26,7 +31,7 @@ export default function StatusCreator() {
   const [tab, setTab] = useState<'text' | 'media' | 'link'>('text');
   const [textContent, setTextContent] = useState('');
   const [bgPreset, setBgPreset] = useState(BG_PRESETS[4]);
-  const [fontSize, setFontSize] = useState(28);
+  const [fontIndex, setFontIndex] = useState(0);
   const [privacy, setPrivacy] = useState('contacts');
   
   const [mediaFile, setMediaFile] = useState<File | null>(null);
@@ -72,15 +77,19 @@ export default function StatusCreator() {
         payload.content = textContent.trim();
         if (isGradient) payload.bg_gradient = bgPreset.value;
         else payload.bg_color = bgPreset.value;
-        payload.font_size = fontSize;
+        
+        // Auto-scale font size like WhatsApp based on character count
+        const len = textContent.length;
+        payload.font_size = len < 50 ? 40 : len < 100 ? 32 : len < 200 ? 24 : 18;
+        payload.font_style = FONT_FAMILIES[fontIndex].value;
       }
 
       if (tab === 'media' && mediaFile) {
         setMediaUploading(true);
         const form = new FormData();
         form.append('file', mediaFile);
-        // Uses the main app's Cloudinary upload endpoint
-        const { data: upload } = await api.post('/upload/image', form, {
+        
+        const { data: upload } = await api.post('/upload/media', form, {
           headers: { 'Content-Type': 'multipart/form-data' },
           onUploadProgress: (e) => {
             if (e.total) setUploadProgress(Math.round((e.loaded / e.total) * 100));
@@ -88,7 +97,7 @@ export default function StatusCreator() {
         });
         setMediaUploading(false);
 
-        payload.type = 'image';
+        payload.type = upload.resource_type === 'video' ? 'video' : 'image';
         payload.media_url = upload.secure_url || upload.url;
         payload.content = caption.trim() || null;
       }
@@ -150,30 +159,32 @@ export default function StatusCreator() {
           {tab === 'text' && (
             <div className="flex-1 flex flex-col p-4 gap-6">
               <div 
-                className="w-full aspect-[9/16] rounded-2xl flex items-center justify-center p-6 shadow-inner transition-colors duration-300 relative"
+                className="w-full aspect-[9/16] rounded-2xl flex flex-col items-center justify-center p-6 shadow-inner transition-colors duration-300 relative"
                 style={previewStyle}
               >
+                <div className="absolute top-4 right-4 z-10 flex gap-2">
+                   <button
+                     onClick={() => setFontIndex(i => (i + 1) % FONT_FAMILIES.length)}
+                     className="w-10 h-10 bg-black/40 hover:bg-black/60 rounded-full text-white font-bold text-lg flex items-center justify-center backdrop-blur-md transition-colors border border-white/20"
+                     title="Change Font"
+                   >
+                     T
+                   </button>
+                </div>
+                
                 <textarea
                   autoFocus
-                  placeholder="What's on your mind?"
+                  placeholder="Type a status"
                   value={textContent}
                   onChange={e => setTextContent(e.target.value)}
-                  maxLength={500}
-                  className="w-full bg-transparent border-none text-white text-center placeholder-white/50 focus:outline-none resize-none font-bold"
-                  style={{ fontSize: `${fontSize}px`, minHeight: '150px' }}
+                  maxLength={700}
+                  className="w-full bg-transparent border-none text-white text-center placeholder-white/50 focus:outline-none resize-none font-medium flex-1 my-auto flex items-center"
+                  style={{ 
+                    fontFamily: FONT_FAMILIES[fontIndex].value, 
+                    fontSize: `${textContent.length < 50 ? 40 : textContent.length < 100 ? 32 : textContent.length < 200 ? 24 : 18}px`,
+                    lineHeight: '1.3'
+                  }}
                 />
-                
-                <div className="absolute bottom-4 right-4 flex flex-col gap-2 bg-black/40 backdrop-blur-md p-2 rounded-xl border border-white/10">
-                  {FONT_SIZES.map(s => (
-                    <button
-                      key={s}
-                      onClick={() => setFontSize(s)}
-                      className={`w-8 h-8 rounded-full text-xs font-bold transition-colors ${fontSize === s ? 'bg-white text-black' : 'text-white hover:bg-white/20'}`}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               <div>
@@ -206,11 +217,15 @@ export default function StatusCreator() {
                   <div className="text-gray-400 font-medium">Click to select image</div>
                 </div>
               ) : (
-                <div className="w-full aspect-[9/16] relative rounded-2xl overflow-hidden group">
-                  <img src={mediaPreview} alt="Preview" className="w-full h-full object-cover" />
+                <div className="w-full aspect-[9/16] relative rounded-2xl overflow-hidden group bg-black flex items-center justify-center">
+                  {mediaFile?.type.startsWith('video/') ? (
+                    <video src={mediaPreview} controls className="w-full h-full object-contain" />
+                  ) : (
+                    <img src={mediaPreview} alt="Preview" className="w-full h-full object-contain" />
+                  )}
                   <button 
                     onClick={() => { setMediaFile(null); setMediaPreview(null); }}
-                    className="absolute top-4 right-4 p-2 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-md border border-white/20 hover:bg-red-500/80"
+                    className="absolute top-4 right-4 p-2 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-md border border-white/20 hover:bg-red-500/80 z-20"
                   >
                     <X size={20} />
                   </button>
@@ -220,7 +235,7 @@ export default function StatusCreator() {
                 type="file" 
                 ref={fileInputRef} 
                 onChange={handleFileSelect} 
-                accept="image/*" 
+                accept="image/*,video/*" 
                 className="hidden" 
               />
               <input

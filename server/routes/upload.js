@@ -25,9 +25,9 @@ if (cloudinaryUrl) {
     console.log('CLOUDINARY_URL not found in environment');
 }
 
-// Multer setup for memory storage
+// Multer setup for image-only (legacy profile uploads)
 const storage = multer.memoryStorage();
-const upload = multer({
+const uploadImage = multer({
     storage,
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
     fileFilter: (req, file, cb) => {
@@ -39,8 +39,21 @@ const upload = multer({
     }
 });
 
-// Upload endpoint
-router.post('/image', upload.single('file'), async (req, res) => {
+// Multer setup for mixed media (statuses)
+const uploadMedia = multer({
+    storage,
+    limits: { fileSize: 15 * 1024 * 1024 }, // 15MB limit
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only image and video files are allowed'), false);
+        }
+    }
+});
+
+// Upload endpoint for profile images (legacy)
+router.post('/image', uploadImage.single('file'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No file uploaded' });
@@ -75,6 +88,43 @@ router.post('/image', upload.single('file'), async (req, res) => {
 
     } catch (error) {
         console.error('Upload error:', error);
+        res.status(500).json({ error: 'Upload failed', message: error.message });
+    }
+});
+
+// Upload endpoint for statuses (images and video)
+router.post('/media', uploadMedia.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        const isVideo = req.file.mimetype.startsWith('video/');
+
+        const result = await new Promise((resolve, reject) => {
+            const uploadStream = cloudinary.uploader.upload_stream(
+                {
+                    folder: 'note_standard_statuses',
+                    resource_type: isVideo ? 'video' : 'image',
+                    // No aggressive cropping to preserve aspect ratio
+                },
+                (error, result) => {
+                    if (error) reject(error);
+                    else resolve(result);
+                }
+            );
+            uploadStream.end(req.file.buffer);
+        });
+
+        res.json({
+            success: true,
+            url: result.secure_url,
+            public_id: result.public_id,
+            resource_type: result.resource_type,
+            format: result.format
+        });
+    } catch (error) {
+        console.error('Media upload error:', error);
         res.status(500).json({ error: 'Upload failed', message: error.message });
     }
 });

@@ -189,7 +189,16 @@ export default function StatusViewer() {
           style={bgStyle}
         >
           {status.type === 'text' && (
-            <div className="px-8 text-center text-white text-3xl font-bold leading-tight break-words" style={{ fontFamily: status.font_style, fontSize: `${status.font_size}px` }}>
+            <div 
+              className="w-full px-6 flex items-center justify-center text-center text-white font-medium break-words whitespace-pre-wrap" 
+              style={{ 
+                fontFamily: status.font_style || 'system-ui, sans-serif', 
+                fontSize: `${status.font_size || 28}px`,
+                lineHeight: '1.3',
+                maxHeight: '100%',
+                overflowY: 'auto'
+              }}
+            >
               {status.content}
             </div>
           )}
