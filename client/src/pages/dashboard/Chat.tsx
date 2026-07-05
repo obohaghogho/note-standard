@@ -3,10 +3,29 @@ import { ErrorBoundary } from '../../components/common/ErrorBoundary';
 import ChatWindow from '../../components/chat/ChatWindow';
 import ConversationList from '../../components/chat/ConversationList';
 import NewChatModal from '../../components/chat/NewChatModal';
+import StatusTray from '../../components/chat/StatusTray';
+import StatusViewer from '../../components/chat/StatusViewer';
+import StatusCreator from '../../components/chat/StatusCreator';
+import { StatusProvider, useStatus } from '../../context/StatusContext';
 import { Plus, MessageSquare, Menu } from 'lucide-react';
 import { useSearchParams, useOutletContext } from 'react-router-dom';
 import { useChat } from '../../context/ChatContext';
 import { motion, AnimatePresence } from 'framer-motion';
+
+const StatusOverlays = () => {
+    const { viewerOpen, creatorOpen, fetchFeed } = useStatus();
+    
+    useEffect(() => {
+        fetchFeed();
+    }, [fetchFeed]);
+
+    return (
+        <>
+            {viewerOpen && <StatusViewer />}
+            {creatorOpen && <StatusCreator />}
+        </>
+    );
+};
 
 function ChatContent() {
     const [isNewChatOpen, setIsNewChatOpen] = useState(false);
@@ -82,6 +101,8 @@ function ChatContent() {
                             </div>
                         </div>
 
+                        <StatusTray />
+
                         <div className="flex-1 overflow-hidden">
                             <ConversationList />
                         </div>
@@ -104,6 +125,7 @@ function ChatContent() {
             </AnimatePresence>
 
             <NewChatModal isOpen={isNewChatOpen} onClose={() => setIsNewChatOpen(false)} />
+            <StatusOverlays />
         </div>
     );
 }
@@ -111,7 +133,9 @@ function ChatContent() {
 export default function Chat() {
     return (
         <ErrorBoundary fallback={<div className="p-8 text-center text-red-500 bg-red-500/5 rounded-xl border border-red-500/10">Something went wrong loading chat. <button onClick={() => window.location.reload()} className="underline ml-2">Try again</button></div>}>
-            <ChatContent />
+            <StatusProvider>
+                <ChatContent />
+            </StatusProvider>
         </ErrorBoundary>
     );
 }
