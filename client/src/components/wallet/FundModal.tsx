@@ -494,7 +494,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         onClick={() => setTargetCurrency(coin)}
                                         className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl min-w-[80px] flex-1 text-xs font-bold border transition-all duration-300 ${
                                             targetCurrency === coin 
-                                            ? 'bg-purple-600 border-purple-400 text-white shadow-lg shadow-purple-500/40 scale-[1.02]' 
+                                            ? 'bg-purple-600 border-red-500 ring-2 ring-red-500 text-white shadow-lg shadow-red-500/40 scale-[1.02]' 
                                             : 'bg-gray-900/50 border-gray-800 text-gray-400 hover:text-gray-200 hover:bg-gray-800 hover:border-gray-700'
                                         }`}
                                     >
@@ -523,8 +523,8 @@ export const FundModal: React.FC<FundModalProps> = ({
                         }}
                         className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg transition-all ${
                             method === 'card' 
-                                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' 
-                                : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                                ? 'bg-purple-600 border border-red-500 ring-2 ring-red-500 text-white shadow-lg shadow-red-500/20' 
+                                : 'border border-transparent text-gray-400 hover:text-white hover:bg-gray-800'
                         } ${['BTC', 'ETH'].includes(effectivePayCurrency.toUpperCase()) ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                         <CreditCard size={18} />
@@ -541,8 +541,8 @@ export const FundModal: React.FC<FundModalProps> = ({
                         onClick={() => setMethod('bank')}
                         className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg transition-all ${
                             method === 'bank' 
-                                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' 
-                                : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                                ? 'bg-purple-600 border border-red-500 ring-2 ring-red-500 text-white shadow-lg shadow-red-500/20' 
+                                : 'border border-transparent text-gray-400 hover:text-white hover:bg-gray-800'
                         }`}
                     >
                         <Landmark size={18} />
@@ -555,8 +555,8 @@ export const FundModal: React.FC<FundModalProps> = ({
                             onClick={() => setMethod('crypto')}
                             className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg transition-all ${
                                 method === 'crypto' 
-                                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' 
-                                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                                    ? 'bg-purple-600 border border-red-500 ring-2 ring-red-500 text-white shadow-lg shadow-red-500/20' 
+                                    : 'border border-transparent text-gray-400 hover:text-white hover:bg-gray-800'
                             }`}
                         >
                             <Bitcoin size={18} />
@@ -582,7 +582,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         onClick={() => setPaymentFiat(fiat)}
                                         className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl min-w-[80px] flex-1 text-[10px] font-bold border transition-all duration-300 ${
                                             paymentFiat === fiat 
-                                            ? 'bg-purple-600 border-purple-400 text-white shadow-lg shadow-purple-500/40 scale-[1.02]' 
+                                            ? 'bg-purple-600 border-red-500 ring-2 ring-red-500 text-white shadow-lg shadow-red-500/40 scale-[1.02]' 
                                             : 'bg-gray-900/50 border-gray-800 text-gray-400 hover:text-gray-200 hover:bg-gray-800 hover:border-gray-700'
                                         }`}
                                     >
