@@ -107,9 +107,9 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
         const exists = wallets.find(w => w.asset === currency && w.network === network);
         if (!exists) {
             try {
-                toast.loading(`Creating ${currency} ${network !== 'native' ? `(${network})` : ''} service...`, { id: 'create-wallet' });
+                toast.loading(`Creating ${currency} ${network !== 'native' ? `(${network})` : ''} wallet...`, { id: 'create-wallet' });
                 await createWallet(currency, network);
-                toast.success(`${currency} service ready`, { id: 'create-wallet' });
+                toast.success(`${currency} wallet ready`, { id: 'create-wallet' });
             } catch {
                 toast.error(`Failed to create ${currency} wallet`, { id: 'create-wallet' });
             }
@@ -261,17 +261,17 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
                                 </div>
                                 <div>
                                     <h3 className="text-lg font-bold text-white">
-                                        {walletLoading ? 'Activating Service...' : 'Service Not Active'}
+                                        {walletLoading ? 'Activating Wallet...' : 'Wallet Not Active'}
                                     </h3>
                                     <p className="text-gray-400 text-sm mt-1 max-w-xs mx-auto">
                                         {walletLoading 
                                             ? `Setting up your secure ${selectedCurrency} endpoint.` 
-                                            : `You don't have a ${selectedCurrency} service active yet.`}
+                                            : `You don't have a ${selectedCurrency} wallet active yet.`}
                                     </p>
                                 </div>
                                 {!walletLoading && (
                                     <Button onClick={() => handleCurrencyChange(selectedCurrency, selectedNetwork)} className="bg-purple-600 hover:bg-purple-500">
-                                        Create {selectedCurrency} Service
+                                        Create {selectedCurrency} Wallet
                                     </Button>
                                 )}
                             </div>

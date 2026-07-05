@@ -292,7 +292,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                 toNetwork: effectiveTargetNetwork,
             });
             setBankDetails(result);
-            toast.success('Service allocation details generated!');
+            toast.success('Deposit allocation details generated!');
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : 'Failed to generate bank details');
         } finally {
@@ -376,16 +376,16 @@ export const FundModal: React.FC<FundModalProps> = ({
                     <X size={20} />
                 </button>
                 
-                <h2 className="modal-header text-2xl">Activate Digital Services</h2>
+                <h2 className="modal-header text-2xl">Deposit Funds</h2>
                 <div className="modal-body">
                     <p className="text-gray-400 text-sm mb-4 flex items-center gap-2">
                         <ShieldCheck size={16} className="text-primary" />
-                        Secure Activity Protocol
+                        Secure Network Protocol
                     </p>
 
                 {/* Asset Selector */}
                 <div className="relative mb-6">
-                    <label htmlFor="funding-wallet-selector" className="text-xs text-gray-400 font-medium ml-1 mb-1 block">Service Account</label>
+                    <label htmlFor="funding-wallet-selector" className="text-xs text-gray-400 font-medium ml-1 mb-1 block">Funding Wallet</label>
                     <button 
                         id="funding-wallet-selector"
                         onClick={() => setShowAssetSelector(!showAssetSelector)}
@@ -776,7 +776,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                                     )}
                                 </div>
                                 <p className="text-sm text-yellow-400 text-center">
-                                    Include the reference in your activity description
+                                    Include the reference in your transfer description
                                 </p>
 
                                 <div className="mt-4 p-4 bg-purple-600/10 border border-purple-500/20 rounded-xl space-y-4">

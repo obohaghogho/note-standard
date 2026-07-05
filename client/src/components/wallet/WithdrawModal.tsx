@@ -453,7 +453,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                                 className="bg-orange-900/10 border border-orange-500/20 p-4 rounded-xl text-sm space-y-2"
                             >
                                 <div className="flex justify-between text-gray-400">
-                                    <span>Activity Processing Fee</span>
+                                    <span>Network Fee</span>
                                     <span>{formatCurrency(withdrawFee.fee, selectedCurrency)}</span>
                                 </div>
                                 <div className="flex justify-between font-bold text-white pt-2 border-t border-orange-500/20">

@@ -159,7 +159,7 @@ function WalletContent() {
     const handleCreateWallet = async (currency: string) => {
         try {
             await createWallet(currency);
-            toast.success(`${currency} service activated!`);
+            toast.success(`${currency} wallet activated!`);
             setShowCreateModal(false);
             refresh();
         } catch {
@@ -201,13 +201,13 @@ function WalletContent() {
                 <div className="flex justify-between items-center">
                     <div>
                         <h1 className="text-2xl sm:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
-                            Activity Overview
+                            Wallet Overview
                         </h1>
-                        <p className="text-gray-400 text-sm mt-1">Manage your digital activities and technology tools</p>
+                        <p className="text-gray-400 text-sm mt-1">Manage your digital assets and cryptocurrencies</p>
                     </div>
                     <div className="flex gap-3">
                          <Button onClick={() => setShowCreateModal(true)} variant="outline" size="sm" className="hidden sm:flex border-gray-700 hover:border-purple-500">
-                            <Plus size={16} className="mr-2" /> Add Service
+                            <Plus size={16} className="mr-2" /> Add Asset
                         </Button>
                         <Button onClick={handleRefresh} variant="ghost" size="sm" className="bg-gray-800 hover:bg-gray-700">
                             <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
@@ -244,7 +244,7 @@ function WalletContent() {
                          
                          <div>
                             <div className="flex justify-between items-center gap-4 mb-4 flex-wrap">
-                                <h3 className="text-lg font-bold">Your Services</h3>
+                                <h3 className="text-lg font-bold">Your Assets</h3>
                                 <button onClick={() => setShowCreateModal(true)} className="text-purple-400 text-sm hover:text-purple-300 sm:hidden">
                                     + Add New
                                 </button>
@@ -344,7 +344,7 @@ function WalletContent() {
                     <button className="modal-close" onClick={() => setShowCreateModal(false)}>
                       <X size={20} />
                     </button>
-                    <h2 className="text-xl font-bold mb-6">Add New Service</h2>
+                    <h2 className="text-xl font-bold mb-6">Add New Asset</h2>
                     <div className="grid grid-cols-2 gap-4">
                       {SUPPORTED_CURRENCIES.map((curr) => {
                         const exists = financialView.wallets.some(w => w.asset === curr);
@@ -362,7 +362,7 @@ function WalletContent() {
                         );
                       })}
                       {financialView.wallets.length === SUPPORTED_CURRENCIES.length && (
-                          <p className="col-span-2 text-center text-gray-500 py-4">All available services active.</p>
+                          <p className="col-span-2 text-center text-gray-500 py-4">All available assets active.</p>
                       )}
                     </div>
                   </div>

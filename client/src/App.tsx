@@ -160,15 +160,15 @@ function App() {
                             {/* Phase 6.2: Replay Debugger UI */}
                             <Route path="/debug/replay" element={<ReplayPage />} />
 
-                            <Route path="/activity/success" element={<ActivitySuccess />} />
-                            <Route path="/activity/cancel" element={<ActivityCancel />} />
-                            <Route path="/activity" element={<Navigate to="/dashboard/activity" replace />} />
+                            <Route path="/wallet/success" element={<ActivitySuccess />} />
+                            <Route path="/wallet/cancel" element={<ActivityCancel />} />
+                            <Route path="/wallet" element={<Navigate to="/dashboard/wallet" replace />} />
                             
                             <Route path="/" element={<LandingPage />} />
                             
                             {/* High-priority Payment Redirects (Move before catch-alls) */}
-                            <Route path="/payment/success/*" element={<Navigate to="/activity/success" replace />} />
-                            <Route path="/payment/cancel/*" element={<Navigate to="/activity/cancel" replace />} />
+                            <Route path="/payment/success/*" element={<Navigate to="/wallet/success" replace />} />
+                            <Route path="/payment/cancel/*" element={<Navigate to="/wallet/cancel" replace />} />
                             
                             <Route path="/login" element={<Login />} />
 
@@ -182,7 +182,7 @@ function App() {
                                 <Route path="favorites" element={<Notes />} />
                                 <Route path="search" element={<Search />} />
                                 <Route path="billing" element={<Billing />} />
-                                <Route path="activity" element={<WalletPage />} />
+                                <Route path="wallet" element={<WalletPage />} />
                                 <Route path="history" element={<Transactions />} />
                                 <Route path="affiliates" element={<Affiliates />} />
                                 <Route path="deposit" element={<DepositPage />} />
