@@ -171,7 +171,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         
         // Final Security Blockade: Check DTO 'canExecute'
         if (!fromView?.canExecute) {
-            return toast.error('Exchange unavailable: Price data is stale or account is frozen.');
+            return toast.error('Swap unavailable: Price data is stale or account is frozen.');
         }
 
         if (fromCurrency === toCurrency) return toast.error('Cannot swap same currency');
@@ -197,7 +197,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                 captchaToken || undefined
             );
             
-            toast.success(`Exchange successful!`);
+            toast.success(`Swap successful!`);
             setAmount('');
             setPreview(null);
             setCaptchaToken(null);
@@ -226,7 +226,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-bold flex items-center gap-2">
                     <RefreshCcw size={20} className="text-purple-500" />
-                    Quick Exchange
+                    Quick Swap
                 </h2>
                 <div className="bg-purple-500/10 text-purple-400 px-2 py-1 rounded text-xs font-medium border border-purple-500/20">
                     {fromView?.mode === 'FRESH' ? 'Real-time' : 'Fixed-Rate'}
@@ -416,9 +416,9 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                     ) : !fromView?.canExecute ? (
                         fromView?.isFrozen
                             ? 'Account Frozen — Contact Support'
-                            : 'Exchange Suspended (Feed Offline)'
+                            : 'Swap Suspended (Feed Offline)'
                     ) : (
-                        `Exchange ${fromCurrency} → ${toCurrency}`
+                        `Swap ${fromCurrency} → ${toCurrency}`
                     )}
                 </Button>
                 
