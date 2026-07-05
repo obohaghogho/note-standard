@@ -6,7 +6,7 @@ export const TermsPage = () => {
     const navigate = useNavigate();
 
     return (
-        <div className="min-h-[100dvh] bg-[#0a0a0a] p-4 md:p-8 relative w-full max-w-full">
+        <div className="h-full overflow-y-auto min-h-[100dvh] bg-[#0a0a0a] p-4 md:p-8 relative w-full max-w-full">
             {/* Background gradients */}
             <div className="absolute top-0 right-1/4 w-full max-w-[1000px] h-[600px] bg-primary/10 rounded-full blur-[120px] -z-10" />
             <div className="absolute bottom-0 left-1/4 w-full max-w-[800px] h-[600px] bg-purple-500/5 rounded-full blur-[100px] -z-10" />
@@ -28,7 +28,7 @@ export const TermsPage = () => {
                             </div>
                             <h1 className="text-4xl md:text-5xl font-bold text-white tracking-tight">Terms of Service</h1>
                         </div>
-                        <p className="text-xl text-primary/80 font-medium ml-[68px]">Aghogho Plyboard Enterprise</p>
+                        <p className="text-xl text-primary/80 font-medium ml-[68px]">Jossy Digital Technologies Ltd</p>
                     </div>
 
                     <div className="space-y-12 text-gray-300">

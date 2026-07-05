@@ -17,6 +17,10 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ path, fetchUrl }) => {
 
     useEffect(() => {
         if (!path) return;
+        if (path.startsWith('blob:') || path.startsWith('data:')) {
+            setUrl(path);
+            return;
+        }
         let isMounted = true;
         setError(null);
         fetchUrl(path).then(u => {

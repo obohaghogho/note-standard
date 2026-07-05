@@ -17,7 +17,7 @@ interface CreateNoteModalProps {
 
 export const CreateNoteModal = ({ isOpen, onClose, onSuccess }: CreateNoteModalProps) => {
     const { user } = useAuth();
-    const { canCreateNote } = useNotes();
+    const { canCreateNote, refreshNotes } = useNotes();
     const navigate = useNavigate();
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
@@ -56,6 +56,11 @@ export const CreateNoteModal = ({ isOpen, onClose, onSuccess }: CreateNoteModalP
                 });
 
             if (error) throw error; // Used new error variable
+
+            // Trigger refetch so it appears on dashboard instantly
+            if (refreshNotes) {
+                await refreshNotes();
+            }
 
             // Reset and close
             setTitle('');

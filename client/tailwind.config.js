@@ -16,32 +16,62 @@ export default {
     },
     extend: {
       colors: {
-        background: "#0a0a0a", // Deep dark bg
-        foreground: "#ededed",
+        background: "var(--background)",
+        surface: "var(--surface)",
+        elevated: "var(--elevated)",
+        card: "var(--card)",
+        border: "var(--border)",
+        heading: "var(--heading)",
+        body: "var(--body)",
+        muted: "var(--muted)",
         primary: {
-          DEFAULT: "#3b82f6", // Fintech Blue
-          foreground: "#ffffff",
+          DEFAULT: "#2563EB", // Royal Blue
+          hover: "#1D4ED8",
+          soft: "#DBEAFE",
+          foreground: "#FFFFFF",
         },
-        card: {
-          DEFAULT: "rgba(255, 255, 255, 0.05)",
-          foreground: "#ededed",
-        },
-        border: "rgba(255, 255, 255, 0.1)",
+        success: { DEFAULT: "#16A34A" },
+        warning: { DEFAULT: "#F59E0B" },
+        danger: { DEFAULT: "#DC2626" },
+        info: { DEFAULT: "#0EA5E9" },
       },
       fontFamily: {
-        sans: ["Poppins", "sans-serif"],
+        sans: ["Inter", "system-ui", "sans-serif"],
       },
-      backdropBlur: {
-        xs: "2px",
+      fontWeight: {
+        normal: "400",
+        medium: "500",
+        semibold: "600",
+        bold: "700",
+        extrabold: "800",
       },
-      keyframes: {
-        wiggle: {
-          "0%, 100%": { transform: "rotate(-3deg)" },
-          "50%": { transform: "rotate(3deg)" },
-        },
+      borderRadius: {
+        button: "14px",
+        card: "18px",
+        dialog: "22px",
+        image: "16px",
+        input: "14px",
+        badge: "999px",
       },
-      animation: {
-        wiggle: "wiggle 1s ease-in-out infinite",
+      spacing: {
+        4: "4px",
+        8: "8px",
+        12: "12px",
+        16: "16px",
+        20: "20px",
+        24: "24px",
+        32: "32px",
+        40: "40px",
+        48: "48px",
+        64: "64px",
+      },
+      transitionDuration: {
+        fast: "120ms",
+        normal: "200ms",
+        complex: "300ms",
+      },
+      transitionTimingFunction: {
+        DEFAULT: "ease-in-out",
       },
     },
   },

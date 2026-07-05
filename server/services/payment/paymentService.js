@@ -49,9 +49,16 @@ class PaymentService {
     const method = metadata.method || options.method || "card";
 
     logger.info(`[DEBUG] Step 1: Provider selection for ${currency} (${isCrypto ? 'Crypto' : 'Fiat'}) method: ${method}`);
+    
+    // Force Paystack for all NGN transactions to prevent manual Grey transfers
+    let resolvedProvider = options.provider;
+    if (currency && String(currency).toUpperCase() === "NGN") {
+      resolvedProvider = "paystack";
+    }
+
     // 1. Determine provider via Factory or explicit request
-    const provider = options.provider
-      ? PaymentFactory.getProviderByName(options.provider)
+    const provider = resolvedProvider
+      ? PaymentFactory.getProviderByName(resolvedProvider)
       : PaymentFactory.getProvider(
         currency,
         metadata.region || "NG",
@@ -276,6 +283,12 @@ class PaymentService {
         idempotencyKey,
         targetCurrency,
         targetNetwork,
+        // Gateway conversion tracking (used by finalizeTransaction for correct settlement)
+        // Populated when depositService pre-converts a non-native currency (EUR/GBP/JPY→USD)
+        original_amount: amount,
+        original_currency: currency,
+        gateway_currency: options.gatewayCurrency || null,
+        gateway_amount: options.gatewayAmount || null,
       },
       type: isCrypto || targetCurrency !== currency
         ? "Digital Assets Purchase"
@@ -347,10 +360,12 @@ class PaymentService {
         network,
         reference,
         callbackUrl,
+        plan: options.plan || metadata.plan || null,
         metadata: {
           ...metadata,
           transactionId: transaction.id,
           userId,
+          user_id: userId, // Fallback alias for parseWebhookEvent readers
           original_currency: currency,
           original_amount: amount,
           gateway_currency: options.gatewayCurrency || currency
@@ -420,7 +435,7 @@ class PaymentService {
     
     let query = supabase
       .from("transactions")
-      .select("*")
+      .select("id, status, amount, currency, provider, provider_reference, reference_id")
       .order("created_at", { ascending: false });
 
     if (reference && externalId) {
@@ -711,29 +726,30 @@ class PaymentService {
         return;
     }
 
-    // 3. Find NGN Wallet
+    // 3. Find or create NGN Wallet (DFOS v6.4: Insert into wallets_store, not wallets VIEW)
     let { data: wallet } = await supabase
-      .from("wallets")
+      .from("wallets_store")  // ←← CRITICAL FIX: wallets is a VIEW, wallets_store is the real table
       .select("id")
       .eq("user_id", userId)
       .eq("currency", currency || "NGN")
-      .single();
+      .maybeSingle();
 
     if (!wallet) {
       // Create wallet if missing
       const { data: newWallet, error: walletErr } = await supabase
-        .from("wallets")
+        .from("wallets_store")  // ←← CRITICAL FIX: must insert into wallets_store
         .insert({
           user_id: userId,
           currency: currency || "NGN",
-          balance: 0,
+          address: `${currency || "NGN"}_${userId.substring(0, 8)}`,
         })
         .select("id")
         .single();
       
       if (walletErr) {
-          logger.error(`[Reconciliation] Failed to create wallet for user ${userId}: ${walletErr.message}`);
-          return;
+          const errMsg = `[Reconciliation] Failed to create wallet in wallets_store for user ${userId}: ${walletErr.message}`;
+          logger.error(errMsg);
+          throw new Error(errMsg);
       }
       wallet = newWallet;
     }
@@ -760,7 +776,14 @@ class PaymentService {
       });
 
     if (insertErr) {
-        logger.error(`[Reconciliation] Failed to create transaction for DVA payment ${reference}: ${insertErr.message}`);
+        // Duplicate key (23505) means transaction was already created — safe to continue
+        if (insertErr.code === "23505") {
+            logger.info(`[Reconciliation] Transaction already exists for DVA payment ${reference} (race condition — safe to continue).`);
+        } else {
+            const errMsg = `[Reconciliation] Failed to create transaction for DVA payment ${reference}: ${insertErr.message}`;
+            logger.error(errMsg);
+            throw new Error(errMsg);
+        }
     } else {
         logger.info(`[Reconciliation] Successfully provisioned transaction for DVA payment ${reference} (User: ${userId})`);
     }
@@ -779,11 +802,18 @@ class PaymentService {
           .from("transactions")
           .select("*")
           .or(`reference_id.eq.${reference},provider_reference.eq.${reference}`)
-          .single();
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-        if (fetchError || !tx) {
-          logger.error(`[Finalize] Transaction not found: ${reference}`);
-          return { status: "FAILED", error: "TRANSACTION_NOT_FOUND" };
+        if (fetchError) {
+          logger.error(`[Finalize] DB error fetching transaction for ${reference}: ${fetchError.message}`);
+          throw new Error(`DB_FETCH_ERROR: ${fetchError.message}`);
+        }
+
+        if (!tx) {
+          logger.error(`[Finalize] Transaction not found for reference: ${reference}`);
+          throw new Error(`TRANSACTION_NOT_FOUND: No transaction matches reference ${reference}`);
         }
 
         // 2. IDEMPOTENCY GUARD
@@ -797,22 +827,129 @@ class PaymentService {
           };
         }
 
-        // 3. CORE LANE SETTLEMENT (Strictly Fiat / Ledger Purity)
-        // Rule: Internal deposits/purchases use VERIFIED amount directly. No FX service.
-        // Safety Guard: In sandbox, Paystack auto-converts USD -> NGN. 
-        // We must ensure we don't credit NGN amounts to a USD wallet.
-        let settlementAmount = tx.amount;
-        if (eventData?.amount && (!eventData.currency || eventData.currency === tx.currency)) {
-            settlementAmount = eventData.amount;
-        } else if (eventData?.amount && eventData.currency !== tx.currency) {
-            logger.warn(`[Finalize] Currency mismatch for ${reference}: Provider returned ${eventData.currency}, DB has ${tx.currency}. Fallback to DB amount: ${tx.amount}`);
+        // 2.b Webhook Verification & Quarantine Queue
+        // IMPORTANT: Paystack adds its own transaction fees to the amount in the webhook payload.
+        // e.g., customer deposits NGN 1500 -> Paystack webhook returns NGN 1522.85 (fees included).
+        // We MUST NOT quarantine on amount difference -- only on CURRENCY mismatch which
+        // is a genuine integrity violation (different currency = wrong payment entirely).
+        if (eventData) {
+          const expectedCurrency = String(tx.processing_currency || tx.currency).toUpperCase();
+          const actualCurrency = String(eventData.currency || tx.currency).toUpperCase();
+
+          // Only quarantine on currency mismatch — different currency = wrong payment
+          // NOTE: Do NOT compare amounts. Paystack includes its own transaction fees in
+          // the webhook amount (e.g., NGN 1500 deposit → webhook reports NGN 1522.85).
+          // Comparing amounts would quarantine every legitimate deposit.
+          if (actualCurrency && expectedCurrency !== actualCurrency) {
+            logger.error(
+              `[QUARANTINE] Currency Mismatch for reference: ${reference}. ` +
+              `Expected: ${expectedCurrency}, Webhook: ${actualCurrency}`
+            );
+
+            await supabase
+              .from("transactions")
+              .update({
+                status: "QUARANTINED",
+                metadata: {
+                  ...tx.metadata,
+                  quarantine_reason: "Currency Mismatch",
+                  actual_currency: actualCurrency,
+                  expected_currency: expectedCurrency,
+                  quarantined_at: new Date().toISOString()
+                }
+              })
+              .eq("id", tx.id);
+
+            return {
+              status: "QUARANTINED",
+              error: "CURRENCY_INTEGRITY_MISMATCH",
+              transactionId: tx.id
+            };
+          }
+
+          // Log fee delta for audit visibility (informational only)
+          if (eventData.amount) {
+            const Decimal = require("decimal.js");
+            const expectedAmount = new Decimal(tx.processing_amount || tx.amount);
+            const actualAmount = new Decimal(eventData.amount);
+            const delta = actualAmount.minus(expectedAmount);
+            if (!delta.isZero()) {
+              logger.info(
+                `[Finalize] Fee delta for ${reference}: customer requested ${expectedAmount} ${expectedCurrency}, ` +
+                `Paystack total (incl. fees): ${actualAmount} ${actualCurrency}. ` +
+                `Crediting customer original amount: ${expectedAmount}.`
+              );
+            }
+          }
         }
-        
+
+        // 3. CORE LANE SETTLEMENT (Strictly Fiat / Ledger Purity)
+        // Settlement Amount Resolution (DFOS v6.4 — Multi-Currency Fix)
+        //
+        // The rule: credit the wallet with the ORIGINAL amount in the WALLET currency,
+        // not the gateway-settled amount. This is because:
+        //  - Paystack may process USD→NGN internally (sandbox or some live configs)
+        //  - We pre-convert EUR/GBP/JPY→USD before sending to gateway
+        //  - The DB transaction record always holds the ORIGINAL currency/amount
+        //
+        // Resolution priority:
+        //  1. If eventData currency matches the DB tx currency: use eventData amount (normal case)
+        //  2. If an intentional gateway conversion was recorded in metadata: use original_amount
+        //  3. Fallback: always use tx.amount from the DB (safe, never over-credits)
+        let settlementAmount = tx.amount; // Safe baseline: always the DB-recorded original amount
+
+        if (eventData?.amount) {
+          const eventCurrency = (eventData.currency || "").toUpperCase();
+          const txCurrency = (tx.currency || "").toUpperCase();
+
+          if (!eventCurrency || eventCurrency === txCurrency) {
+            // Case 1: Currencies match — direct settlement
+            settlementAmount = eventData.amount;
+          } else if (tx.metadata?.gateway_currency && tx.metadata?.original_amount) {
+            // Case 2: Intentional pre-conversion (e.g. EUR→USD sent to Paystack)
+            // The gateway settled in gateway_currency (USD), but the wallet is in tx.currency (EUR).
+            // We credit the wallet with original_amount (EUR) — the pre-conversion amount.
+            settlementAmount = tx.metadata.original_amount;
+            logger.info(
+              `[Finalize] Gateway conversion detected for ${reference}: ` +
+              `Crediting ${settlementAmount} ${txCurrency} (gateway settled ${eventData.amount} ${eventCurrency})`
+            );
+          } else {
+            // Case 3: Unexpected currency mismatch — use safe DB fallback, alert loudly
+            logger.error(
+              `[Finalize] CURRENCY_MISMATCH for ${reference}: ` +
+              `Provider returned ${eventCurrency}, DB has ${txCurrency}. ` +
+              `No gateway_currency metadata found. Falling back to DB amount: ${tx.amount}. ` +
+              `MANUAL AUDIT REQUIRED.`
+            );
+            // settlementAmount already set to tx.amount — no change needed
+          }
+        }
+
+        let targetWalletId = tx.wallet_id;
+        const isSubscription = ["SUBSCRIPTION_PAYMENT", "SUBSCRIPTION"].includes(tx.type?.toUpperCase());
+
+        if (isSubscription) {
+          const { data: revWallet, error: revError } = await supabase
+            .from("wallets_store")
+            .select("id")
+            .eq("address", `REVENUE_${tx.currency.toUpperCase()}`)
+            .maybeSingle();
+
+          if (!revError && revWallet) {
+            targetWalletId = revWallet.id;
+            logger.info(`[Finalize] Subscription transaction: Routing credit leg to Platform Revenue wallet ${targetWalletId} instead of user wallet ${tx.wallet_id}`);
+          } else {
+            logger.error(`[Finalize] Failed to resolve Platform Revenue wallet for currency ${tx.currency}: ${revError?.message || "Not found"}`);
+          }
+        }
+
         logger.info(`[Finalize] Executing Journaled Settlement [confirm_deposit] for ${reference}`);
+        logger.info(`[Finalize] Settlement: ${settlementAmount} ${tx.currency} (wallet: ${targetWalletId})`);
         
         const { data: rpcApplied, error: rpcError } = await supabase.rpc("confirm_deposit", {
             p_transaction_id: tx.id,
-            p_wallet_id: tx.wallet_id,
+            p_wallet_id: targetWalletId,
             p_amount: settlementAmount,
             p_external_hash: eventData?.reference || reference
         });

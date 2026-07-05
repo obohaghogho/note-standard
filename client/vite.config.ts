@@ -2,13 +2,27 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindxml from '@tailwindcss/vite'
 import path from 'path'
+import prerender from '@prerenderer/rollup-plugin'
+import JSDOMRenderer from '@prerenderer/renderer-jsdom'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindxml()],
+  plugins: [
+    react(), 
+    tailwindxml(),
+    prerender({
+      routes: ['/', '/about', '/contact'],
+      renderer: new JSDOMRenderer(),
+      server: {
+        port: 3000,
+        host: 'localhost',
+      },
+    })
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      'shared': path.resolve(__dirname, '../shared'),
     },
   },
   server: {

@@ -207,3 +207,65 @@ exports.sendWelcomeEmail = async (email, fullName) => {
     return false;
   }
 };
+
+/**
+ * Send Admin Alert on New Registration
+ * @param {string} email - User email
+ * @param {string} fullName - User full name
+ * @param {string} username - Username
+ * @param {string} ip - IP address
+ * @param {string} country - Country code
+ */
+exports.sendNewRegistrationAdminAlert = async (email, fullName, username, ip, country) => {
+  try {
+    const adminEmail = "obohoboh107@gmail.com";
+    
+    const mailOptions = {
+      from: `"Note Standard Admin" <${env.EMAIL_FROM}>`,
+      to: adminEmail,
+      subject: `🚨 New User Registration: ${username}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+          <h2 style="color: #6366f1;">New User Registered</h2>
+          <p>A new user has just registered on Note Standard.</p>
+          <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+            <tr>
+              <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Full Name:</strong></td>
+              <td style="padding: 10px; border-bottom: 1px solid #eee;">${fullName || 'N/A'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Username:</strong></td>
+              <td style="padding: 10px; border-bottom: 1px solid #eee;">${username || 'N/A'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Email:</strong></td>
+              <td style="padding: 10px; border-bottom: 1px solid #eee;">${email}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>IP Address:</strong></td>
+              <td style="padding: 10px; border-bottom: 1px solid #eee; font-family: monospace;">${ip || 'Unknown'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Country:</strong></td>
+              <td style="padding: 10px; border-bottom: 1px solid #eee;">${country || 'N/A'}</td>
+            </tr>
+          </table>
+          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+          <p style="font-size: 10px; color: #999;">This is an automated system notification.</p>
+        </div>
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    logger.info("Admin registration alert sent", {
+      messageId: info.messageId,
+      adminEmail
+    });
+    return true;
+  } catch (error) {
+    logger.error("Failed to send admin registration alert", {
+      error: error.message
+    });
+    return false;
+  }
+};

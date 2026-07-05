@@ -9,25 +9,59 @@ export const PushNotificationBanner: React.FC = () => {
     const [visible, setVisible] = useState(false);
 
     useEffect(() => {
-        // Only show if we haven't already dismissed it, we have push capability, and we are not subscribed
-        const isDismissed = localStorage.getItem('push_banner_dismissed') === 'true';
-        if (isDismissed) {
-            setDismissed(true);
-            return;
-        }
-
         const supportsPush = 'serviceWorker' in navigator && 'PushManager' in window;
         if (!supportsPush) return;
+        if (permission === 'denied') return;
 
-        // On iOS Safari (not installed as PWA), PushManager might exist but subscribing will fail or it's not supported.
-        // We will rely on the fact that if it's default/not subscribed, we show it, but only if they haven't explicitly denied it.
-        if (permission !== 'denied' && !isSubscribed) {
-            // Delay slightly so it doesn't interrupt immediate load
-            const timer = setTimeout(() => {
-                setVisible(true);
-            }, 3000);
-            return () => clearTimeout(timer);
-        }
+        // iOS REVOCATION RECOVERY:
+        // After the parallel push fix (sw.js v5), iOS may have already silently revoked
+        // push permission due to accumulated silent push penalties from the old code.
+        // When this happens, the PushManager subscription is deleted by iOS, but
+        // 'push_banner_dismissed' is still 'true' in localStorage, so the banner
+        // never re-appeared to let the user re-subscribe.
+        //
+        // Fix: If the user previously dismissed the banner but no longer has an active
+        // subscription, we clear the dismissed flag so the banner re-surfaces and lets
+        // them re-enable push. This is a one-time recovery pass.
+        const checkAndResetIfRevoked = async () => {
+            const isDismissed = localStorage.getItem('push_banner_dismissed') === 'true';
+
+            if (isDismissed && Notification.permission === 'granted') {
+                // The user granted permission before — check if subscription still exists
+                try {
+                    const reg = await navigator.serviceWorker.ready;
+                    const existingSub = await reg.pushManager.getSubscription();
+                    if (!existingSub) {
+                        // Subscription is gone (iOS revoked it). Clear the dismissed flag.
+                        console.warn('[PushBanner] Subscription revoked by OS — resetting dismissed flag for re-enrollment.');
+                        localStorage.removeItem('push_banner_dismissed');
+                        setDismissed(false);
+                        // Show the banner after a short delay
+                        setTimeout(() => setVisible(true), 3000);
+                    } else {
+                        // Subscription exists and user dismissed — respect their choice
+                        setDismissed(true);
+                    }
+                } catch (err) {
+                    console.warn('[PushBanner] Could not check subscription status:', err);
+                    setDismissed(true);
+                }
+                return;
+            }
+
+            if (isDismissed) {
+                setDismissed(true);
+                return;
+            }
+
+            // Normal first-time flow: show banner if not subscribed
+            if (!isSubscribed) {
+                const timer = setTimeout(() => setVisible(true), 3000);
+                return () => clearTimeout(timer);
+            }
+        };
+
+        checkAndResetIfRevoked();
     }, [permission, isSubscribed]);
 
     if (!visible || dismissed || isSubscribed || permission === 'denied') return null;

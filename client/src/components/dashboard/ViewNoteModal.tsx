@@ -1,7 +1,9 @@
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
-import { X, Edit2, Share2, Calendar, Lock, Globe, User } from 'lucide-react';
+import { X, Edit2, Share2, Calendar, Lock, Globe, User, CheckSquare } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import DOMPurify from 'dompurify';
+import { AttachmentsList } from './AttachmentsList';
 
 import type { Note } from '../../types/note';
 
@@ -61,10 +63,37 @@ export const ViewNoteModal = ({ isOpen, onClose, onEdit, onShare, note }: ViewNo
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                    <div className="text-gray-200 text-lg whitespace-pre-wrap leading-relaxed">
-                        {note.content || 'No content...'}
-                    </div>
+                <div className="flex-grow overflow-y-auto p-6 space-y-6">
+                    {note.note_type === 'checklist' && note.metadata?.items ? (
+                        <div className="space-y-3 bg-neutral-900/20 border border-white/5 p-4 rounded-2xl">
+                            <span className="text-[10px] text-neutral-500 font-bold uppercase tracking-wider block mb-2 flex items-center gap-1">
+                              <CheckSquare className="w-3.5 h-3.5" />
+                              Checklist Checklist Items
+                            </span>
+                            {note.metadata.items.map((item: any) => (
+                                <div
+                                    key={item.id}
+                                    className="flex items-center gap-3 py-1.5"
+                                    style={{ marginLeft: `${item.indent * 24}px` }}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={item.completed}
+                                        readOnly
+                                        className="w-4.5 h-4.5 rounded border-gray-600 bg-neutral-900 text-emerald-500 focus:ring-emerald-500 pointer-events-none"
+                                    />
+                                    <span className={`text-base font-medium ${item.completed ? 'line-through text-neutral-500' : 'text-neutral-200'}`}>
+                                        {item.text || 'Empty item'}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div 
+                            className="text-gray-200 text-base leading-relaxed prose dark:prose-invert max-w-none ql-editor"
+                            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(note.content || 'No content...') }}
+                        />
+                    )}
 
                     {note.tags && note.tags.length > 0 && (
                         <div className="flex flex-wrap gap-2 pt-4">
@@ -75,6 +104,11 @@ export const ViewNoteModal = ({ isOpen, onClose, onEdit, onShare, note }: ViewNo
                             ))}
                         </div>
                     )}
+
+                    {/* Show attachments for all notes, especially important for voice/drawing/image types */}
+                    <div className="pt-6 border-t border-white/10 mt-6">
+                        <AttachmentsList noteId={note.id} />
+                    </div>
                 </div>
 
                 {/* Footer */}

@@ -19,7 +19,10 @@ import {
     Target,
     Home,
     Zap,
-    ShieldAlert
+    ShieldAlert,
+    ArrowDownToLine,
+    ArrowUpFromLine,
+    ArrowLeft
 } from 'lucide-react';
 import { LanguageSelector } from '../common/LanguageSelector';
 import SecureImage from '../common/SecureImage';
@@ -40,6 +43,7 @@ export const AdminLayout = () => {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
     const [newChatsCount] = useState(0);
+    const [chatActive, setChatActive] = useState(false);
 
     const fetchAdminProfile = useCallback(async () => {
         if (!session?.access_token) return;
@@ -72,6 +76,12 @@ export const AdminLayout = () => {
         fetchAdminProfile();
     }, [session, fetchAdminProfile]);
 
+    useEffect(() => {
+        const handleChatActive = (e: any) => setChatActive(e.detail);
+        window.addEventListener('admin-chat-active', handleChatActive);
+        return () => window.removeEventListener('admin-chat-active', handleChatActive);
+    }, []);
+
     const handleLogout = async () => {
         await signOut();
         navigate('/login');
@@ -83,11 +93,14 @@ export const AdminLayout = () => {
         { to: '/admin/chats', icon: MessageSquare, label: 'Support Chats', badge: newChatsCount },
         { to: '/admin/ads', icon: Target, label: 'Manage Ads' },
         { to: '/admin/audit-logs', icon: HistoryIcon, label: 'Audit Logs' },
-        { to: '/admin/reconciliation', icon: ShieldAlert, label: 'Observatory' },
+        { to: '/admin/reconciliation', icon: ShieldAlert, label: 'NFI Control' },
         { to: '/admin/broadcasts', icon: Megaphone, label: 'Broadcasts' },
         { to: '/admin/limit-requests', icon: Zap, label: 'Limit Requests' },
+        { to: '/admin/deposits', icon: ArrowDownToLine, label: 'Manual Deposits' },
+        { to: '/admin/withdrawals', icon: ArrowUpFromLine, label: 'Manual Withdrawals' },
         { to: '/admin/auto-reply', icon: Bot, label: 'Auto-Reply' },
         { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
+        { to: '/admin/push-health', icon: Bell, label: 'Push Health' },
         { to: '/admin/settings', icon: Settings, label: 'Settings' },
     ];
 
@@ -158,17 +171,28 @@ export const AdminLayout = () => {
                 {/* Top Header */}
                 <header className="admin-header">
                     <div className="header-left">
-                        <button 
-                            className="mobile-toggle-btn"
-                            onClick={() => setSidebarOpen(!sidebarOpen)}
-                        >
-                            {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
-                        </button>
-                        <h1>Administration</h1>
+                        {chatActive ? (
+                            <button 
+                                className="mobile-toggle-btn"
+                                onClick={() => window.dispatchEvent(new CustomEvent('admin-chat-back'))}
+                            >
+                                <ArrowLeft size={20} />
+                            </button>
+                        ) : (
+                            <button 
+                                className="mobile-toggle-btn"
+                                onClick={() => setSidebarOpen(!sidebarOpen)}
+                            >
+                                {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+                            </button>
+                        )}
+                        <h1 className={chatActive ? 'mobile-hidden-title' : ''}>Administration</h1>
                     </div>
                     <div className="header-right">
-                        <LanguageSelector />
-                        <div className="h-6 w-[1px] bg-white/10 mx-2" />
+                        <div className="desktop-only-lang">
+                            <LanguageSelector />
+                        </div>
+                        <div className="h-6 w-[1px] bg-white/10 mx-1 md:mx-2 desktop-only-lang" />
                         <button className="notification-btn">
                             <Bell size={20} />
                             {newChatsCount > 0 && <span className="notif-dot" />}
@@ -192,7 +216,7 @@ export const AdminLayout = () => {
                 </header>
 
                 {/* Page Content */}
-                <main className="admin-content">
+                <main className={`admin-content ${location.pathname.startsWith('/admin/chats') ? 'chat-page-layout' : ''}`}>
                     <Outlet key={location.pathname} />
                 </main>
 

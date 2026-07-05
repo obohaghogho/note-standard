@@ -6,10 +6,13 @@ import walletApi from '../api/walletApi';
 import { WalletContext } from '../context/WalletContext';
 
 interface DepositStatus {
-    id: string;
+    id?: string;
     status: string;
-    amount: number;
-    currency: string;
+    amount?: number;
+    currency?: string;
+    rateLimited?: boolean;
+    data?: unknown;
+    success?: boolean;
 }
 
 type UIStatus = 'loading' | 'success' | 'timed_out' | 'failed' | 'verifying';
@@ -54,8 +57,16 @@ export const ActivitySuccess: React.FC = () => {
         stoppedRef.current = true;
         setDeposit(data);
         setUiStatus('success');
+        
+        // Retrieve and track payment method telemetry
+        const method = localStorage.getItem('pendingDepositMethod');
+        if (method === 'apple-pay') {
+            console.log('[Telemetry] apple_pay_authorized', { reference: data.id, amount: data.amount, currency: data.currency });
+        }
+        localStorage.removeItem('pendingDepositMethod');
         localStorage.removeItem('pendingDepositReference');
         localStorage.removeItem('pendingDepositTime');
+
         if (walletContext) await walletContext.refresh();
         setTimeout(() => navigate('/dashboard/activity'), 3000);
     }, [walletContext, navigate]);
@@ -63,6 +74,12 @@ export const ActivitySuccess: React.FC = () => {
     const handleFailure = useCallback(() => {
         stoppedRef.current = true;
         setUiStatus('failed');
+
+        const method = localStorage.getItem('pendingDepositMethod');
+        if (method === 'apple-pay') {
+            console.log('[Telemetry] apple_pay_failed', { reason: 'verification_failed' });
+        }
+        localStorage.removeItem('pendingDepositMethod');
         localStorage.removeItem('pendingDepositReference');
         localStorage.removeItem('pendingDepositTime');
     }, []);
@@ -183,7 +200,7 @@ export const ActivitySuccess: React.FC = () => {
     const pollingRef = resolveRef();
 
     return (
-        <div className="min-h-[100dvh] bg-[#0a0a0a] flex items-center justify-center p-4 w-full max-w-full overflow-hidden">
+        <div className="h-full overflow-y-auto min-h-[100dvh] bg-[#0a0a0a] flex items-center justify-center p-4 w-full max-w-full">
             <div className="bg-gray-800 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl border border-gray-700/50">
 
                 {/* Loading / polling */}

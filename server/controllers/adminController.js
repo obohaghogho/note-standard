@@ -66,6 +66,7 @@ exports.getStats = async (req, res) => {
       { count: openChats },
       { count: pendingChats },
       { count: onlineUsers },
+      { count: totalMessages },
     ] = await Promise.all([
       serviceSupabase.from("profiles").select("*", {
         count: "exact",
@@ -84,6 +85,10 @@ exports.getStats = async (req, res) => {
         count: "exact",
         head: true,
       }).eq("is_online", true),
+      serviceSupabase.from("messages").select("*", {
+        count: "exact",
+        head: true,
+      }),
     ]);
 
     // Active users (24h)
@@ -116,6 +121,7 @@ exports.getStats = async (req, res) => {
       openChats: openChats || 0,
       pendingChats: pendingChats || 0,
       onlineUsers: onlineUsers || 0,
+      totalMessages: totalMessages || 0,
       serverStatus: "healthy",
       topCreators: topCreators || [],
       usageTrends: usageTrends || [],
@@ -217,7 +223,7 @@ exports.getUsers = async (req, res) => {
     let query = serviceSupabase
       .from("profiles")
       .select(
-        "id, username, email, full_name, avatar_url, role, status, is_online, last_seen, created_at, notesCount:notes(count)",
+        "id, username, email, full_name, avatar_url, role, status, is_online, last_seen, created_at, last_ip, country_code, notesCount:notes(count)",
         { count: "exact" },
       );
 
@@ -1567,5 +1573,388 @@ exports.getSystemStatus = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/admin/withdrawals/pending - Get MANUAL_PENDING withdrawals
+ */
+exports.getPendingWithdrawals = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    
+    const { data, error } = await serviceSupabase
+      .from("payout_requests")
+      .select("*")
+      .eq("status", "MANUAL_PENDING")
+      .order("created_at", { ascending: false });
 
+    // Fetch profiles manually
+    if (data && data.length > 0) {
+      const userIds = [...new Set(data.map(d => d.user_id))];
+      const { data: profiles } = await serviceSupabase
+        .from("profiles")
+        .select("id, email, full_name, username")
+        .in("id", userIds);
+        
+      const profilesMap = {};
+      (profiles || []).forEach(p => profilesMap[p.id] = p);
+      
+      data.forEach(d => {
+        d.profile = profilesMap[d.user_id] || null;
+      });
+    }
 
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    logger.error("[Admin] Error fetching pending withdrawals:", err.message);
+    res.status(500).json({ error: "Failed to fetch pending withdrawals" });
+  }
+};
+
+/**
+ * PUT /api/admin/withdrawals/:id/approve - Approve a manual withdrawal
+ */
+exports.approveWithdrawal = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adminNotes } = req.body;
+    const payoutService = require("../services/payment/payoutService");
+    
+    const serviceSupabase = getServiceSupabase();
+    const { data: request, error: reqErr } = await serviceSupabase
+      .from("payout_requests")
+      .select("status")
+      .eq("id", id)
+      .single();
+
+    if (reqErr || !request) {
+      return res.status(404).json({ error: "Withdrawal not found" });
+    }
+
+    if (request.status !== "MANUAL_PENDING") {
+      return res.status(400).json({ error: `Withdrawal is not pending manual fulfillment (Current Status: ${request.status})` });
+    }
+
+    const updated = await payoutService.updatePayoutState(id, "COMPLETED", {
+      metadata: { admin_approved: true, approved_at: new Date().toISOString(), approved_by: req.user.id, admin_notes: adminNotes }
+    });
+
+    await logAdminAction(req, "APPROVE_MANUAL_WITHDRAWAL", "payout_requests", id);
+    res.json({ success: true, message: "Withdrawal marked as completed", request: updated });
+  } catch (err) {
+    logger.error("[Admin] Error approving withdrawal:", err.message);
+    res.status(500).json({ error: "Failed to approve withdrawal" });
+  }
+};
+
+/**
+ * PUT /api/admin/withdrawals/:id/reject - Reject manual withdrawal and refund wallet
+ */
+exports.rejectWithdrawal = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adminNotes } = req.body;
+    
+    if (!adminNotes) return res.status(400).json({ error: "Rejection reason is required" });
+
+    const serviceSupabase = getServiceSupabase();
+    
+    // 1. Fetch withdrawal details
+    const { data: request, error: reqErr } = await serviceSupabase
+      .from("payout_requests")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (request) {
+      const { data: pData } = await serviceSupabase.from("profiles").select("email").eq("id", request.user_id).single();
+      request.profile = pData || { email: "" };
+    }
+
+    if (reqErr || !request) {
+      return res.status(404).json({ error: "Withdrawal not found" });
+    }
+
+    if (request.status !== "MANUAL_PENDING") {
+      return res.status(400).json({ error: `Cannot reject. Withdrawal status is ${request.status}` });
+    }
+
+    // 2. Fetch or create Wallet for Refund
+    const walletService = require("../services/walletService");
+    const wallet = await walletService.createWallet(request.user_id, request.currency, "native");
+    if (!wallet) throw new Error("Could not find user wallet for refund");
+
+    // 3. Create Refund Transaction Record
+    const { data: tx, error: txError } = await serviceSupabase
+      .from("transactions")
+      .insert([{
+        wallet_id: wallet.id,
+        user_id: request.user_id,
+        type: "DEPOSIT", // A refund acts as a deposit back to the wallet
+        display_label: "Withdrawal Refund",
+        category: "refund",
+        description: `Refund for rejected withdrawal. Reason: ${adminNotes}`,
+        amount: request.amount, // Total amount initially requested
+        currency: request.currency,
+        status: "COMPLETED",
+        reference_id: `refnd-${id.substring(0,8)}`,
+        metadata: {
+            original_payout_id: id,
+            reason: adminNotes,
+            rejected_by: req.user.id
+        },
+        completed_at: new Date().toISOString()
+      }])
+      .select()
+      .single();
+
+    if (txError) throw txError;
+
+    // 4. Update Wallet Balance (Refund)
+    const { error: balError } = await serviceSupabase.rpc("confirm_deposit", {
+      p_transaction_id: tx.id,
+      p_wallet_id: wallet.id,
+      p_amount: request.amount
+    });
+
+    if (balError) throw balError;
+
+    // 5. Mark payout as FAILED_FINAL
+    const payoutService = require("../services/payment/payoutService");
+    const updated = await payoutService.updatePayoutState(id, "FAILED_FINAL", {
+      error: adminNotes,
+      metadata: { admin_rejected: true, rejected_at: new Date().toISOString(), rejected_by: req.user.id, reason: adminNotes }
+    });
+
+    // 6. Notify user
+    await createNotification({
+        receiverId: request.user_id,
+        type: "withdrawal_rejected",
+        title: "Withdrawal Rejected",
+        message: `Your withdrawal of ${request.currency} ${request.amount} was rejected. Funds have been returned to your wallet. Reason: ${adminNotes}`,
+        link: "/dashboard/activity",
+    });
+
+    await logAdminAction(req, "REJECT_MANUAL_WITHDRAWAL", "payout_requests", id, { reason: adminNotes });
+    
+    res.json({ success: true, message: "Withdrawal rejected and funds refunded", request: updated });
+  } catch (err) {
+    logger.error("[Admin] Error rejecting withdrawal:", err.message);
+    res.status(500).json({ error: err.message || "Failed to reject withdrawal" });
+  }
+};
+
+/**
+ * GET /api/admin/financial-stats
+ * Premium institutional dashboard analytics showing backing ratios and liabilities vs reserves.
+ */
+exports.getFinancialStats = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+
+    const { data: wallets, error } = await serviceSupabase
+      .from("wallets_store")
+      .select("address, currency, balance");
+
+    if (error) throw error;
+
+    const stats = {};
+    const currencies = ["NGN", "USD", "EUR", "GBP", "JPY"];
+    
+    currencies.forEach(curr => {
+      stats[curr] = {
+        currency: curr,
+        liabilities: 0,
+        treasury_reserves: 0,
+        unsettled_balances: 0,
+        fx_pool: 0,
+        revenue: 0,
+        net_exposure: 0,
+        collateral_ratio_percent: 100
+      };
+    });
+
+    (wallets || []).forEach(w => {
+      const curr = w.currency;
+      if (!stats[curr]) return;
+
+      const addr = w.address || "";
+      const val = Number(w.balance) || 0;
+
+      if (addr.startsWith("TREASURY_")) {
+        stats[curr].treasury_reserves = Math.abs(val);
+      } else if (addr.startsWith("SETTLEMENT_PAYSTACK_")) {
+        stats[curr].unsettled_balances = Math.abs(val);
+      } else if (addr.startsWith("FX_POOL_")) {
+        stats[curr].fx_pool = Math.abs(val);
+      } else if (addr.startsWith("REVENUE_")) {
+        stats[curr].revenue = val;
+      } else if (
+        !addr.startsWith("SETTLEMENT_") &&
+        !addr.startsWith("TREASURY_") &&
+        !addr.startsWith("FX_POOL_") &&
+        !addr.startsWith("RECONCILIATION_") &&
+        !addr.startsWith("PENDING_")
+      ) {
+        stats[curr].liabilities += val;
+      }
+    });
+
+    currencies.forEach(curr => {
+      const s = stats[curr];
+      const backingAssets = s.treasury_reserves + s.unsettled_balances;
+      
+      s.net_exposure = Math.max(0, s.liabilities - backingAssets);
+      s.collateral_ratio_percent = s.liabilities > 0 
+        ? Math.round((backingAssets / s.liabilities) * 100) 
+        : 100;
+    });
+
+    const { count: anomalyAlertsCount } = await serviceSupabase
+      .from("security_audit_logs")
+      .select("*", { count: "exact", head: true })
+      .in("event_type", ["TREASURY_RESERVE_BREACH", "TREASURY_BACKSTOP_TAPPED", "LEDGER_DRIFT_DETECTED"]);
+
+    res.json({
+      success: true,
+      stats: Object.values(stats),
+      anomaly_alerts_count: anomalyAlertsCount || 0,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    logger.error("[AdminStats] Error fetching financial stats:", err.message);
+    res.status(500).json({ error: "Failed to load financial statistics" });
+  }
+};
+
+/**
+ * POST /api/admin/settlements/sweep
+ * Triggers manual Paystack settlement sweeps with optional age constraint override.
+ */
+exports.sweepSettlements = async (req, res) => {
+  try {
+    const { override = false } = req.body;
+    const ReconciliationWorker = require("../workers/reconciliationWorker");
+
+    logger.info(`[AdminSweep] Admin ${req.user.id} triggered manual settlement sweep. Override: ${override}`);
+    
+    const results = await ReconciliationWorker.sweepAllCurrencies(override);
+
+    await logAdminAction(req, "TRIGGER_SETTLEMENT_SWEEP", "settlements", "all", {
+      manual_override: override,
+      sweep_results: results
+    });
+
+    res.json({
+      success: true,
+      message: "Settlement sweep executed successfully",
+      swept_currencies: results
+    });
+  } catch (err) {
+    logger.error("[AdminSweep] Manual settlement sweep failed:", err.message);
+    res.status(500).json({ error: err.message || "Failed to execute manual settlement sweep" });
+  }
+};
+
+/**
+ * GET /api/admin/calls
+ * Get all system call sessions with pagination and filters
+ */
+exports.getCallSessions = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const status = req.query.status;
+    const callType = req.query.callType;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    let query = serviceSupabase
+      .from("call_sessions")
+      .select(`
+        *,
+        caller:profiles!caller_id (username, full_name, avatar_url),
+        callee:profiles!callee_id (username, full_name, avatar_url)
+      `, { count: "exact" });
+
+    if (status) query = query.eq("status", status);
+    if (callType) query = query.eq("call_type", callType);
+
+    const { data: calls, error, count } = await query
+      .order("started_at", { ascending: false })
+      .range(from, to);
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      calls: calls || [],
+      pagination: {
+        page,
+        limit,
+        total: count || 0,
+        totalPages: Math.ceil((count || 0) / limit),
+      },
+    });
+  } catch (err) {
+    logger.error("[AdminCalls] Failed to load call sessions:", err.message);
+    res.status(500).json({ error: "Failed to fetch call sessions" });
+  }
+};
+
+// ============================================================
+// v2.5 Operations Dashboard Endpoints
+// ============================================================
+
+const operationsService = require("../services/admin/OperationsService");
+
+/**
+ * Middleware to ensure the user has one of the allowed admin roles.
+ */
+exports.requireAdminRole = (allowedRoles = []) => {
+  return (req, res, next) => {
+    const userRole = req.user?.admin_role;
+    if (!userRole) {
+      return res.status(403).json({ error: 'Access denied: Requires admin privileges.' });
+    }
+    if (allowedRoles.length > 0 && !allowedRoles.includes(userRole)) {
+      return res.status(403).json({ error: `Access denied: Requires one of [${allowedRoles.join(', ')}]` });
+    }
+    next();
+  };
+};
+
+exports.getHealthDashboard = async (req, res, next) => {
+  try {
+    const [latest, history] = await Promise.all([
+      operationsService.getLatestHealth(),
+      operationsService.getHealthHistory(24) // last 24 hours
+    ]);
+    
+    res.json({ latest, history });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getFeatureFlags = async (req, res, next) => {
+  try {
+    const flags = await operationsService.getFeatureFlags();
+    res.json({ flags });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.updateFeatureFlag = async (req, res, next) => {
+  try {
+    const { flagKey } = req.params;
+    const { isEnabled } = req.body;
+    const adminId = req.user.id;
+
+    const flag = await operationsService.toggleFeatureFlag(flagKey, isEnabled, adminId);
+    res.json({ flag });
+  } catch (err) {
+    next(err);
+  }
+};

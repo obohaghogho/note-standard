@@ -84,7 +84,7 @@ const markAllAsRead = async (req, res, next) => {
 const subscribeToNotifications = async (req, res, next) => {
   try {
     const { id: userId } = req.user;
-    const { subscription } = req.body;
+    const { subscription, vapidKeyVersion, deviceId, deviceName, platform } = req.body;
 
     if (!subscription || !subscription.endpoint) {
       return res.status(400).json({ error: "Subscription endpoint is required" });
@@ -104,14 +104,75 @@ const subscribeToNotifications = async (req, res, next) => {
         user_id: userId, 
         endpoint, 
         p256dh, 
-        auth 
+        auth,
+        vapid_key_version: vapidKeyVersion || null,
+        status: 'healthy',
+        device_id: deviceId || null,
+        device_name: deviceName || null,
+        platform: platform || null,
+        last_seen_at: new Date().toISOString()
       }, {
-        onConflict: "user_id,endpoint",
+        onConflict: "endpoint",
       });
 
     if (error) throw error;
 
     res.json({ message: "Subscribed to push notifications" });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Synchronizes the browser's active endpoint with the database.
+ * Deletes any subscriptions for this user that don't match the current endpoint.
+ */
+const syncEndpoint = async (req, res, next) => {
+  try {
+    const { id: userId } = req.user;
+    const { currentEndpoint, deviceId } = req.body;
+
+    if (!currentEndpoint) {
+      return res.status(400).json({ error: "currentEndpoint is required" });
+    }
+
+    if (!deviceId) {
+      // If client didn't send deviceId, we shouldn't recklessly delete endpoints.
+      return res.json({ message: "No deviceId provided, skipping aggressive sync" });
+    }
+
+    // Delete ONLY subscriptions for THIS user AND THIS device that do NOT match the current endpoint
+    const { error } = await supabase
+      .from("push_subscriptions")
+      .delete()
+      .eq("user_id", userId)
+      .eq("device_id", deviceId)
+      .neq("endpoint", currentEndpoint);
+
+    if (error) throw error;
+
+    res.json({ message: "Endpoints synchronized" });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getInstallationStatus = async (req, res, next) => {
+  try {
+    const { deviceId } = req.params;
+    if (!deviceId) return res.status(400).json({ error: "deviceId required" });
+    
+    const { data, error } = await supabase
+      .from("device_installations")
+      .select("endpoint_status, failure_reason")
+      .eq("device_id", deviceId)
+      .maybeSingle();
+      
+    if (error || !data) {
+      return res.json({ status: "UNKNOWN" });
+    }
+    
+    res.json({ status: data.endpoint_status, failure_reason: data.failure_reason });
   } catch (err) {
     next(err);
   }
@@ -182,9 +243,15 @@ const registerNativeToken = async (req, res, next) => {
     const { id: userId } = req.user;
     const { token, platform, type, deviceId } = req.body;
 
-    if (!token || !platform || !type) {
-      return res.status(400).json({ error: "Token, platform, and type are required" });
+    if (!token || !platform || !type || !deviceId) {
+      return res.status(400).json({ error: "Token, platform, type, and deviceId are required" });
     }
+
+    // First, delete any existing token mapping for this token to prevent unique constraint violations on token
+    await supabase
+      .from("native_device_tokens")
+      .delete()
+      .eq("token", token);
 
     const { error } = await supabase
       .from("native_device_tokens")
@@ -196,7 +263,7 @@ const registerNativeToken = async (req, res, next) => {
         device_id: deviceId,
         updated_at: new Date().toISOString()
       }, {
-        onConflict: "user_id,token",
+        onConflict: "device_id,type",
       });
 
     if (error) throw error;
@@ -204,6 +271,116 @@ const registerNativeToken = async (req, res, next) => {
     res.json({ success: true, message: "Native token registered successfully" });
   } catch (err) {
     next(err);
+  }
+};
+
+/**
+ * Registers an installation and associates the current user (Phase 1 V2 Multi-Account)
+ */
+const registerInstallation = async (req, res, next) => {
+  let attempt = 0;
+  const maxAttempts = 3;
+  
+  while (attempt < maxAttempts) {
+    attempt++;
+    try {
+      const { id: userId } = req.user;
+      
+      console.log(`[FORENSIC] registerInstallation CALLED by user ${userId} | Attempt ${attempt}/${maxAttempts}`);
+      console.log(`[FORENSIC] Payload:`, JSON.stringify(req.body, null, 2));
+      
+      const { 
+        deviceId, 
+        pushEndpoint, 
+        pushP256dh, 
+        pushAuth, 
+        platform, 
+        type,
+        capabilities,
+        reason 
+      } = req.body;
+
+      if (!deviceId || !platform || !type) {
+        console.error(`[FORENSIC] Missing required fields. deviceId: ${deviceId}, platform: ${platform}, type: ${type}`);
+        return res.status(400).json({ error: "deviceId, platform, and type are required" });
+      }
+
+      // 1a. Clear any existing installation that claims this pushEndpoint but has a different deviceId
+      if (pushEndpoint) {
+        await supabase
+          .from('device_installations')
+          .delete()
+          .eq('push_endpoint', pushEndpoint)
+          .neq('device_id', deviceId);
+      }
+
+      // 1b. Upsert Device Installation
+      console.log(`[FORENSIC] Upserting device_installations for deviceId: ${deviceId} | Reason: ${reason || 'BOOT_SYNC'}`);
+      
+      const upsertPayload = {
+        device_id: deviceId,
+        push_endpoint: pushEndpoint || null,
+        push_p256dh: pushP256dh || null,
+        push_auth: pushAuth || null,
+        platform,
+        type,
+        capabilities: capabilities || { supports_web_push: false, supports_fcm: false, supports_apns: false, supports_background_sync: false },
+        token_updated_at: new Date().toISOString(),
+        last_seen_at: new Date().toISOString(),
+        last_registration_source: type,
+        endpoint_status: 'VALID',
+        failure_count: 0,
+        last_validation_reason: reason || 'SIGNED_IN'
+      };
+
+      const { data: installation, error: instError } = await supabase
+        .from("device_installations")
+        .upsert(upsertPayload, { onConflict: "device_id" })
+        .select("installation_id")
+        .single();
+
+      if (instError) {
+        console.error("[FORENSIC][Push V2] Error upserting device_installations:", instError);
+        throw instError;
+      }
+      
+      console.log(`[FORENSIC] device_installations upsert SUCCESS. installation_id: ${installation.installation_id}`);
+
+      // 2. Upsert Installation Account Link
+      console.log(`[FORENSIC] Upserting installation_accounts for installation_id: ${installation.installation_id}, user_id: ${userId}`);
+      const { error: accError } = await supabase
+        .from("installation_accounts")
+        .upsert({
+          installation_id: installation.installation_id,
+          user_id: userId,
+          session_state: 'ACTIVE',
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: "installation_id,user_id"
+        });
+
+      if (accError) {
+        console.error("[FORENSIC][Push V2] Error upserting installation_accounts:", accError);
+        throw accError;
+      }
+
+      console.log(`[FORENSIC] installation_accounts upsert SUCCESS`);
+      return res.json({ success: true, message: "Installation registered successfully", installation_id: installation.installation_id });
+      
+    } catch (err) {
+      const isConflict = err.code === '23505' || err.code === '23503' || 
+                         err.message?.includes('device_installations_push_endpoint_key') || 
+                         err.message?.includes('installation_accounts_installation_id_fkey');
+      
+      if (isConflict && attempt < maxAttempts) {
+        console.warn(`[FORENSIC][Push V2] Conflict/race condition hit (Attempt ${attempt}/${maxAttempts}): ${err.message}. Retrying in 100ms...`);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        continue;
+      }
+      
+      console.error("[FORENSIC] registerInstallation CATCH BLOCK after max attempts:", err.message);
+      return next(err);
+    }
   }
 };
 
@@ -287,6 +464,9 @@ module.exports = {
   deleteAllNotifications,
   notifyLogin,
   registerNativeToken,
+  registerInstallation,
   sendNotification,
   notifyTeam,
+  syncEndpoint,
+  getInstallationStatus,
 };

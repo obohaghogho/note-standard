@@ -4,7 +4,9 @@ import { safeProfile, safeSubscription, supabase, resetRateLimiters, ensureProfi
 import type { Profile, Subscription } from "../types/auth";
 import toast from "react-hot-toast";
 import * as accountManager from "../utils/accountManager";
+import { updateSessionMeta } from "../utils/accountManager";
 import { refreshSessionIsolated } from "../utils/authUtils";
+import { getDeviceId } from "../utils/deviceId";
 
 interface AuthContextValue {
   user: User | null;
@@ -99,7 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (isMounted.current) {
-        if (profileResult && profileResult !== 'ERROR') {
+        if (profileResult) {
           const prof = profileResult as Profile;
           setProfile(prof);
           
@@ -110,7 +112,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
         
-        if (subResult && subResult !== 'ERROR') {
+        if (subResult) {
           setSubscription(subResult as Subscription | null);
         }
       }
@@ -133,7 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
       
       if (user?.id) {
-        accountManager.removeAccount(user.id);
+        accountManager.updateAccountTokens(user.id, { access_token: '', refresh_token: '', expires_at: 0 });
       }
       
       // Rule 9: state will be updated by onAuthStateChange listener
@@ -185,18 +187,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const currentSwitchId = switchIdRef.current;
       console.log(`[Auth] Switch #${currentSwitchId}: refreshing ${target.email}...`);
 
-      // Rule 13: refresh if needed before setSession
-      let freshSession = await refreshSessionIsolated(target);
-      
-      if (!freshSession) {
-        // Retry if something changed in storage
-        const latestFromStorage = accountManager.getAccount(userId);
-        const latestToken = latestFromStorage?.tokens?.refresh_token || latestFromStorage?.session?.refresh_token;
-        const targetToken = target.tokens?.refresh_token || target.session?.refresh_token;
+      // Rule 13: Try to use the stored access token first via setSession.
+      // CRITICAL: Do NOT call refreshSessionIsolated() eagerly. Supabase enforces single-use
+      // refresh tokens. If the mobile app already consumed this refresh token, calling
+      // refreshSessionIsolated() here will get a 400 'invalid_grant' error.
+      // Strategy: Try setSession with the stored token first. If it succeeds (even with a stale
+      // access token), Supabase's SDK will auto-refresh it. Only fall back to manual refresh
+      // if we have no access token at all.
 
-        if (latestFromStorage && latestToken && latestToken !== targetToken) {
-          console.log(`[Auth] Token rotated in another tab while switching. Retrying...`);
-          freshSession = await refreshSessionIsolated(latestFromStorage);
+      const storedAccess = target.tokens?.access_token || target.session?.access_token;
+      const storedRefresh = target.tokens?.refresh_token || target.session?.refresh_token;
+
+      if (!storedRefresh) {
+        toast.dismiss(toastId);
+        toast.error(`No credentials found for ${target.email}. Please log in again.`);
+        setIsSwitching(false);
+        switchInProgress.current = false;
+        window.location.href = `/login?add_account=true&hint=${encodeURIComponent(target.email)}`;
+        return;
+      }
+
+      // Attempt setSession with whatever tokens we have.
+      // Supabase SDK will silently auto-refresh the access token if it's expired.
+      let freshSession: { access_token: string; refresh_token: string } | null = null;
+
+      try {
+        const { data: setResult, error: setError } = await supabase.auth.setSession({
+          access_token: storedAccess || '',
+          refresh_token: storedRefresh,
+        });
+        
+        if (!setError && setResult.session) {
+          // setSession succeeded — save any newly rotated tokens
+          freshSession = {
+            access_token: setResult.session.access_token,
+            refresh_token: setResult.session.refresh_token,
+          };
+          accountManager.updateAccountTokens(userId, setResult.session);
+          console.log('[Auth] setSession succeeded for', target.email);
+        } else {
+          console.warn('[Auth] setSession failed:', setError?.message, '— trying isolated refresh as last resort');
+          // Only now try refreshSessionIsolated as last resort
+          const latestAccount = accountManager.getAccount(userId);
+          if (latestAccount) {
+            const isolated = await refreshSessionIsolated(latestAccount);
+            if (isolated) freshSession = isolated;
+          }
+        }
+      } catch (sessionErr) {
+        console.warn('[Auth] setSession threw:', sessionErr, '— trying isolated refresh as last resort');
+        const latestAccount = accountManager.getAccount(userId);
+        if (latestAccount) {
+          const isolated = await refreshSessionIsolated(latestAccount).catch(() => null);
+          if (isolated) freshSession = isolated;
         }
       }
 
@@ -204,19 +247,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (currentSwitchId !== switchIdRef.current) return;
 
       if (!freshSession) {
-        throw new Error(`Session for ${target.email} has expired. Please log in again to that account.`);
+        toast.dismiss(toastId);
+        toast.error(`Session for ${target.email} has expired. Please re-authenticate.`);
+        setIsSwitching(false);
+        switchInProgress.current = false;
+        window.location.href = `/login?add_account=true&hint=${encodeURIComponent(target.email)}`;
+        return;
       }
 
       // Rule 3: Update active account ID FIRST
       accountManager.setActiveAccountId(userId);
 
-      // Rule 4: Atomic setSession
-      const { error } = await supabase.auth.setSession({
-        access_token: freshSession.access_token,
-        refresh_token: freshSession.refresh_token
-      });
-
-      if (error) throw error;
+      // NOTE: We do NOT call supabase.auth.setSession() again here.
+      // The session was already established in the try block above.
+      // Calling setSession again would burn the newly rotated refresh token (Supabase single-use policy).
 
       // Note: Logic continues in onAuthStateChange listener.
       // We don't need syncUserData here as listener will trigger it.
@@ -269,6 +313,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         
         if (isMounted.current) {
+          if (initialSession?.access_token) {
+            localStorage.setItem("token", initialSession.access_token);
+          } else {
+            localStorage.removeItem("token");
+          }
           // Rule 9: Listener handles state, but we set initial once for loading sync
           setSession(initialSession);
           setUser(initialSession?.user ?? null);
@@ -290,8 +339,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     let profileChannel: RealtimeChannel | null = null;
     let subscriptionChannel: RealtimeChannel | null = null;
+    let activeSubscriptionUserId: string | null = null;
 
     const setupSubscriptions = (userId: string) => {
+      // Guard against duplicate initialization for the same user
+      if (activeSubscriptionUserId === userId && profileChannel && subscriptionChannel) {
+        return;
+      }
+      activeSubscriptionUserId = userId;
+
       // 1. Aggressively clean up ALL previous profile/subscription channels to prevent leaks and race conditions
       supabase.getChannels().forEach(c => {
         if (c.topic.startsWith('public:profiles:') || c.topic.startsWith('public:subscriptions:')) {
@@ -324,12 +380,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!isMounted.current) return;
       
       const currentId = switchIdRef.current;
-      console.log(`[Auth] Event: ${event} (#${currentId})`, { email: newSession?.user?.email });
+      console.log(`[Auth Forensic] Event: ${event} (#${currentId}) at ${Date.now()}`, { 
+        email: newSession?.user?.email,
+        hasSession: !!newSession,
+        hasUser: !!newSession?.user
+      });
 
       if (event === 'SIGNED_OUT') {
         // If we are switching, we ignore SIGNED_OUT from the old account
         if (switchInProgress.current) return;
 
+        localStorage.removeItem("token");
         setSession(null);
         setUser(null);
         setProfile(null);
@@ -339,13 +400,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
         const currentUser = newSession?.user ?? null;
         
+        if (newSession?.access_token) {
+          localStorage.setItem("token", newSession.access_token);
+        } else {
+          localStorage.removeItem("token");
+        }
+
+        console.log(`[Auth Forensic] State update triggering for ${event} at ${Date.now()}`);
         setSession(newSession);
-        setUser(currentUser);
+        setUser(prev => (prev?.id === currentUser?.id ? prev : currentUser));
 
         // Rule 4: Switch complete - Disable lock immediately to allow syncUserData to fetch
+        // Capture wasSwitching BEFORE clearing it so session-registration logic can use it.
+        const wasSwitching = switchInProgress.current;
         if (switchInProgress.current) {
           switchInProgress.current = false;
           setIsSwitching(false);
@@ -358,8 +428,152 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           accountManager.updateAccountTokens(currentUser.id, newSession);
           accountManager.setActiveAccountId(currentUser.id);
 
-          setupSubscriptions(currentUser.id);
-          syncUserData(currentUser.id, currentUser, currentId);
+          // Register device+session with backend (background, non-blocking).
+          // BUG FIX: Previously only ran on SIGNED_IN. Account switches fire TOKEN_REFRESHED
+          // or USER_UPDATED instead, so the switched-to account never got a session_id,
+          // causing the socket to connect with a stale/missing session.
+          // Now we also register on any switch (wasSwitching) or initial sign-in.
+          // JOURNEY 3 FIX: INITIAL_SESSION covers existing/inactive users who never logged out.
+          const shouldRegisterSession = event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || wasSwitching;
+          if (shouldRegisterSession) {
+            getDeviceId().then(deviceId => {
+            const apiBase = import.meta.env.VITE_API_URL || '';
+            fetch(`${apiBase}/api/auth/register-session`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                email: currentUser.email,
+                device_id: deviceId,
+                platform: 'web',
+                _supabase_access_token: newSession.access_token,
+              })
+            }).then(r => r.json()).then(data => {
+              if (data.session_id) {
+                updateSessionMeta(currentUser.id, data.session_id, deviceId!);
+              }
+            }).catch(err => {
+              console.warn('[Auth] Background device registration failed:', err.message);
+            });
+
+            // V2 Boot-Sync: Register/update this browser's push installation in the
+            // new multi-account tables. Runs on every SIGNED_IN and account switch.
+            // This is the critical path that seeds the V2 schema for existing subscribers
+            // without requiring any user action.
+            // V2 Boot-Sync: Register/update this browser's push installation in the
+            // new multi-account tables. Runs on every SIGNED_IN and account switch.
+            // ROOT FIX: Extracted registration into runPushRegistration() so it can be
+            // called both immediately (permission 'granted') and after auto-requesting
+            // permission for 'default' devices (never prompted). Previously, 'default'
+            // devices silently skipped the entire chain and never got a subscription.
+            const runPushRegistration = async () => {
+              if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+              if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+              try {
+                const reg = await navigator.serviceWorker.ready;
+                let sub = await reg.pushManager.getSubscription();
+
+                const currentVapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+                if (currentVapidKey) {
+                  const padding = '='.repeat((4 - (currentVapidKey.length % 4)) % 4);
+                  const base64 = (currentVapidKey + padding).replace(/-/g, '+').replace(/_/g, '/');
+                  const rawData = window.atob(base64);
+                  const currentVapidBuffer = new Uint8Array(rawData.length);
+                  for (let i = 0; i < rawData.length; ++i) {
+                    currentVapidBuffer[i] = rawData.charCodeAt(i);
+                  }
+
+                  if (sub && sub.options.applicationServerKey) {
+                    const existingVapidBuffer = new Uint8Array(sub.options.applicationServerKey);
+                    let isMismatch = currentVapidBuffer.length !== existingVapidBuffer.length;
+                    if (!isMismatch) {
+                      for (let i = 0; i < currentVapidBuffer.length; i++) {
+                        if (currentVapidBuffer[i] !== existingVapidBuffer[i]) { isMismatch = true; break; }
+                      }
+                    }
+                    if (isMismatch) {
+                      console.warn('[Auth] [V2 Boot-Sync] VAPID key mismatch — resubscribing...');
+                      await sub.unsubscribe();
+                      sub = null;
+                    } else {
+                      try {
+                        const statusRes = await fetch(`${apiBase}/api/notifications/installation-status/${deviceId}`, {
+                          headers: { 'Authorization': `Bearer ${newSession.access_token}` }
+                        });
+                        if (statusRes.ok) {
+                          const statusData = await statusRes.json();
+                          if (statusData.status === 'INVALID') {
+                            console.warn(`[Auth] [V2 Boot-Sync] INVALID endpoint detected — forcing fresh subscription...`);
+                            await sub.unsubscribe();
+                            sub = null;
+                          }
+                        }
+                      } catch (err: unknown) {
+                        console.warn('[Auth] [V2 Boot-Sync] Failed to check status:', err instanceof Error ? err.message : String(err));
+                      }
+                    }
+                  }
+
+                  if (!sub) {
+                    console.log('[Auth] [V2 Boot-Sync] Generating fresh push subscription...');
+                    sub = await reg.pushManager.subscribe({
+                      userVisibleOnly: true,
+                      applicationServerKey: currentVapidBuffer
+                    });
+                  }
+                }
+
+                if (!sub) {
+                  console.log('[Auth] [V2 Boot-Sync] No push subscription available.');
+                  return;
+                }
+
+                console.log(`[Auth] [V2 Boot-Sync] Syncing installation for ${currentUser.email}...`);
+                const subJson = sub.toJSON();
+                const resp = await fetch(`${apiBase}/api/notifications/register-installation`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${newSession.access_token}` },
+                  body: JSON.stringify({
+                    deviceId,
+                    pushEndpoint: sub.endpoint,
+                    pushP256dh: subJson.keys?.["p256dh"] || null,
+                    pushAuth: subJson.keys?.["auth"] || null,
+                    platform: 'web',
+                    type: 'vapid',
+                    reason: wasSwitching ? 'ACCOUNT_SWITCH' : (event === 'INITIAL_SESSION' ? 'INITIAL_SESSION' : 'SIGNED_IN'),
+                    capabilities: { supports_web_push: true, supports_fcm: false, supports_apns: false, supports_background_sync: true }
+                  })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                  console.log(`[Auth] [V2 Boot-Sync] ✅ installation_id: ${data.installation_id}`);
+                } else {
+                  console.error(`[Auth] [V2 Boot-Sync] ❌ status:${resp.status} error:${data?.error}`);
+                }
+              } catch (e: unknown) {
+                console.warn('[Auth] [V2 Boot-Sync] non-fatal:', e instanceof Error ? e.message : String(e));
+              }
+            };
+
+            if (typeof Notification !== 'undefined') {
+              if (Notification.permission === 'granted') {
+                // Already granted — run immediately
+                runPushRegistration();
+              } else if (Notification.permission === 'default') {
+                // Never asked — prompt automatically on login, then register if approved
+                console.log('[Auth] [V2 Boot-Sync] Permission default — auto-requesting...');
+                Notification.requestPermission().then(result => {
+                  console.log(`[Auth] [V2 Boot-Sync] Permission result: ${result}`);
+                  if (result === 'granted') runPushRegistration();
+                }).catch(() => {});
+              }
+            }
+            });
+          }
+
+          if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || wasSwitching) {
+             setupSubscriptions(currentUser.id);
+             syncUserData(currentUser.id, currentUser, currentId);
+          }
         }
       }
     });

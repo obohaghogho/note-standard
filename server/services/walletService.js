@@ -42,8 +42,14 @@ class WalletService {
    */
   async upgradeIfMock(userId, wallet, targetNetwork = null) {
     const isCrypto = ["BTC", "ETH", "USDT", "USDC"].includes(wallet.currency);
-    const MOCK_KEYWORDS = ["-", "dummy", "test", "mock", "address", "123456", "example"];
-    const isMock = wallet.address && MOCK_KEYWORDS.some(kw => wallet.address.toLowerCase().includes(kw));
+    const isMock = !wallet.address || 
+                   wallet.address.length < 26 || 
+                   wallet.address.toLowerCase().includes("mock") || 
+                   wallet.address.toLowerCase().includes("dummy") || 
+                   wallet.address.toLowerCase().includes("example") || 
+                   wallet.address.toLowerCase().includes("generating") || 
+                   wallet.address.toLowerCase() === "tbd" || 
+                   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(wallet.address);
     
     // Also upgrade if the network doesn't match and it's not a native request
     const networkMismatch = targetNetwork && targetNetwork !== "NATIVE" && wallet.network !== targetNetwork;

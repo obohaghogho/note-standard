@@ -28,4 +28,14 @@ export class TeamsService {
       throw err;
     }
   }
+
+  static async removeMember(teamId: string, userId: string): Promise<any> {
+    try {
+      const response = await apiClient.delete(`/teams/${teamId}/members/${userId}`);
+      return response.data;
+    } catch (err) {
+      console.error('[TeamsService] Failed to remove member:', err);
+      throw err;
+    }
+  }
 }

@@ -159,6 +159,91 @@ class FlutterwaveProvider extends BaseProvider {
       raw: payload,
     };
   }
+
+  async transfer(data) {
+    const { amount, currency, destination } = data;
+    try {
+      if (!this.secretKey || this.secretKey === "flutterwave_test_placeholder") {
+        return { success: true, status: "success", reference: `tr_flutterwave_${Date.now()}` };
+      }
+      const res = await this.client.post("/transfers", {
+        account_bank: destination.bankCode,
+        account_number: destination.accountNumber,
+        amount: amount,
+        narration: data.reason || "Wallet transfer narration",
+        currency: currency.toUpperCase(),
+        reference: `tr_flw_${Date.now()}`,
+        callback_url: data.callbackUrl
+      });
+      return {
+        success: true,
+        status: res.data.data.status,
+        reference: res.data.data.reference,
+        raw: res.data.data
+      };
+    } catch (error) {
+      console.error("[FlutterwaveProvider] Transfer error:", error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || "Flutterwave transfer failed");
+    }
+  }
+
+  async reverse(reference, reason) {
+    try {
+      if (!this.secretKey || this.secretKey === "flutterwave_test_placeholder") {
+        return { success: true, status: "reversed", reference: `re_flutterwave_${Date.now()}` };
+      }
+      // Refund endpoint
+      const res = await this.client.post(`/transactions/${reference}/refund`, {
+        amount: reason.amount, // optional override
+        comments: reason
+      });
+      return {
+        success: true,
+        status: "reversed",
+        reference: res.data.data.reference || `re_flw_${Date.now()}`,
+        raw: res.data.data
+      };
+    } catch (error) {
+      console.error("[FlutterwaveProvider] Refund error:", error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || "Flutterwave refund failed");
+    }
+  }
+
+  async balanceInquiry(currency) {
+    try {
+      if (!this.secretKey || this.secretKey === "flutterwave_test_placeholder") {
+        return { balance: 200000.0, currency: currency.toUpperCase() };
+      }
+      const res = await this.client.get(`/balances/${currency.toUpperCase()}`);
+      return {
+        balance: res.data.data.available_balance || 0.0,
+        currency: currency.toUpperCase()
+      };
+    } catch (error) {
+      return { balance: 0.0, currency: currency.toUpperCase() };
+    }
+  }
+
+  async healthCheck() {
+    try {
+      const start = Date.now();
+      // Try to fetch balances list
+      await this.client.get("/balances");
+      return { status: "healthy", latencyMs: Date.now() - start };
+    } catch {
+      return { status: "unhealthy", latencyMs: 999 };
+    }
+  }
+
+  async settlement(data) {
+    try {
+      if (!this.secretKey || this.secretKey === "flutterwave_test_placeholder") return [];
+      const res = await this.client.get("/settlements");
+      return res.data.data || [];
+    } catch {
+      return [];
+    }
+  }
 }
 
 module.exports = FlutterwaveProvider;

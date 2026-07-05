@@ -48,6 +48,8 @@ const getUserWithRetry = async (token, maxAttempts = 3) => {
 const authMiddleware = async (socket, next) => {
   try {
     const token = socket.handshake.auth.token;
+    const sessionId = socket.handshake.auth.sessionId;
+    const deviceId = socket.handshake.auth.deviceId;
     
     // 1. Initial validation
     if (!token || typeof token !== 'string' || token.trim() === '' || token === 'undefined' || token === 'null' || token.length < 10) {
@@ -55,7 +57,31 @@ const authMiddleware = async (socket, next) => {
       return next(new Error('Authentication error: Token missing or malformed'));
     }
 
-    // 2. Verify token with Supabase (with retry logic)
+    if (!sessionId || !deviceId) {
+      console.warn(`[Auth] ✗ Connection rejected: Missing sessionId or deviceId`);
+      return next(new Error('Authentication error: Session ID and Device ID required'));
+    }
+
+    const { data: sessionData, error: sessionError } = await supabase
+      .from('user_sessions')
+      .select('token_state, user_id, device_id')
+      .eq('session_id', sessionId)
+      .maybeSingle();
+
+    if (sessionData && sessionData.token_state !== 'valid') {
+      console.warn(`[Auth Forensic] ✗ Connection rejected: Session ${sessionId} has token_state='${sessionData.token_state}'`);
+      return next(new Error('Authentication error: Session is invalid or revoked'));
+    }
+
+    if (sessionData && sessionData.device_id !== deviceId) {
+      console.warn(`[Auth Forensic] ⚠ Device mismatch! Expected '${sessionData.device_id}', got '${deviceId}'. Proceeding to JWT verification as a fallback.`);
+    }
+
+    if (!sessionData) {
+      console.warn(`[Auth Forensic] ⚠ Session ${sessionId} NOT FOUND in database. Proceeding to JWT verification as a fallback.`);
+    }
+
+    // 3. Verify token with Supabase (with retry logic)
     const { data: { user }, error } = await getUserWithRetry(token);
 
     if (error || !user) {
@@ -71,6 +97,8 @@ const authMiddleware = async (socket, next) => {
     // Attach user info to socket
     socket.userId = user.id;
     socket.userEmail = user.email;
+    socket.sessionId = sessionId;
+    socket.deviceId = deviceId;
 
     // Fetch profile info for UI (calls, etc.)
     const { data: profile } = await supabase
@@ -82,7 +110,7 @@ const authMiddleware = async (socket, next) => {
     socket.userName = profile?.full_name || profile?.username || user.email.split('@')[0];
     socket.userAvatar = profile?.avatar_url || null;
     
-    console.log(`[Auth] User authenticated: ${user.id} (${socket.userName})`);
+    console.log(`[Auth] User authenticated: ${user.id} (${socket.userName}) on session: ${sessionId}`);
     next();
   } catch (err) {
     console.error('[Auth] Internal error:', err.message);

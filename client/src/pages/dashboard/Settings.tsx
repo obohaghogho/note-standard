@@ -36,10 +36,16 @@ export default function Settings() {
     const [username, setUsername] = useState('');
     const [fullName, setFullName] = useState('');
     const [avatarUrl, setAvatarUrl] = useState('');
+    const [coverUrl, setCoverUrl] = useState('');
+    const [bio, setBio] = useState('');
+    const [website, setWebsite] = useState('');
+    const [countryCode, setCountryCode] = useState('');
     const [loading, setLoading] = useState(!authProfile); // Only load if we don't have profile yet
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [uploadingCover, setUploadingCover] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const coverFileInputRef = useRef<HTMLInputElement>(null);
 
     // Initial Tab Effect
     useEffect(() => {
@@ -81,6 +87,10 @@ export default function Settings() {
             setUsername(authProfile.username || '');
             setFullName(authProfile.full_name || '');
             setAvatarUrl(authProfile.avatar_url || '');
+            setCoverUrl(authProfile.cover_url || '');
+            setBio(authProfile.bio || '');
+            setWebsite(authProfile.website || '');
+            setCountryCode(authProfile.country_code || '');
             setPreferredChatLanguage(authProfile.preferred_language || 'en');
             setPrivacySettings({
                 analytics: authProfile.user_consent ?? true,
@@ -137,6 +147,47 @@ export default function Settings() {
         }
     };
 
+    const handleCoverFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            toast.error('Please select an image file');
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error('Image must be less than 5MB');
+            return;
+        }
+
+        setUploadingCover(true);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await fetch(`${API_URL}/api/upload/image?type=cover`, {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Upload failed');
+            }
+
+            const data = await response.json();
+            setCoverUrl(data.url);
+            toast.success('Cover banner uploaded! Click Save to apply.');
+        } catch (error: unknown) {
+            console.error('Error uploading cover:', error);
+            toast.error(error instanceof Error ? error.message : 'Failed to upload cover banner');
+        } finally {
+            setUploadingCover(false);
+        }
+    };
+
     const handleSave = async () => {
         if (!user) return;
 
@@ -152,6 +203,10 @@ export default function Settings() {
                             username,
                             full_name: fullName,
                             avatar_url: avatarUrl,
+                            cover_url: coverUrl,
+                            bio,
+                            website,
+                            country_code: countryCode,
                         })
                         .eq('id', user.id);
 
@@ -168,7 +223,11 @@ export default function Settings() {
                         data: {
                             full_name: fullName,
                             avatar_url: avatarUrl,
-                            username: username
+                            username: username,
+                            cover_url: coverUrl,
+                            bio,
+                            website,
+                            country_code: countryCode,
                         }
                     });
 
@@ -454,6 +513,27 @@ export default function Settings() {
                                     disabled={permission === 'denied'}
                                     onChange={(c) => c ? subscribeUser() : unsubscribeUser()}
                                 />
+                                <div className="h-px bg-white/5" />
+                                <Toggle
+                                    label="Offline Email Fallbacks"
+                                    description="Receive an email summary if you have unread messages and your device is offline or the app is closed."
+                                    checked={profile?.email_notifications !== 'none'}
+                                    onChange={async (c) => {
+                                        if (!user) return;
+                                        try {
+                                            const newValue = c ? 'immediate' : 'none';
+                                            const { error } = await supabase
+                                                .from('profiles')
+                                                .update({ email_notifications: newValue })
+                                                .eq('id', user.id);
+                                            if (error) throw error;
+                                            if (profile) setProfile({ ...profile, email_notifications: newValue });
+                                            toast.success('Email preferences updated');
+                                        } catch {
+                                            toast.error('Failed to change email preferences');
+                                        }
+                                    }}
+                                />
                             </div>
                             <div className="mt-6 pt-4 border-t border-white/10 flex justify-end flex-wrap">
                                 <Button onClick={handleSavePrivacy} loading={saving} disabled={!user} className="w-full sm:w-auto">
@@ -546,52 +626,85 @@ export default function Settings() {
                         </h2>
 
                         <div className="space-y-6">
-                            {/* Avatar Section */}
-                            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 text-center sm:text-left flex-wrap">
-                                <div className="relative">
-                                    {avatarUrl ? (
+                            {/* Cover Banner Header */}
+                            <div>
+                                <div className="relative w-full h-40 sm:h-48 rounded-xl overflow-hidden bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-white/10 group mb-4">
+                                    {coverUrl ? (
                                         <SecureImage
-                                            src={avatarUrl}
-                                            alt="Profile"
-                                            className="w-24 h-24 rounded-full object-cover border-2 border-primary/30"
+                                            src={coverUrl}
+                                            alt="Cover"
+                                            className="w-full h-full object-cover"
                                         />
                                     ) : (
-                                        <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-2xl font-bold text-white">
-                                            {initials}
+                                        <div className="w-full h-full flex items-center justify-center text-sm text-gray-500">
+                                            No cover photo uploaded
                                         </div>
                                     )}
                                     <button
-                                        onClick={() => fileInputRef.current?.click()}
-                                        disabled={uploading}
-                                        className="absolute bottom-0 right-0 p-2 bg-primary rounded-full text-white hover:bg-primary/80 transition-colors disabled:opacity-50"
+                                        onClick={() => coverFileInputRef.current?.click()}
+                                        disabled={uploadingCover}
+                                        className="absolute bottom-3 right-3 bg-black/65 hover:bg-black/80 px-3 py-1.5 rounded-lg text-white text-xs font-semibold flex items-center gap-1.5 backdrop-blur-sm transition-colors border border-white/10 disabled:opacity-50"
                                     >
-                                        {uploading ? (
-                                            <Loader2 size={16} className="animate-spin" />
+                                        {uploadingCover ? (
+                                            <Loader2 size={14} className="animate-spin" />
                                         ) : (
-                                            <Camera size={16} />
+                                            <Camera size={14} />
                                         )}
+                                        Change Cover
                                     </button>
                                     <input
-                                        id="avatar-upload"
-                                        name="avatar-upload"
-                                        ref={fileInputRef}
+                                        id="cover-upload"
+                                        name="cover-upload"
+                                        ref={coverFileInputRef}
                                         type="file"
                                         accept="image/*"
-                                        onChange={handleFileChange}
+                                        onChange={handleCoverFileChange}
                                         className="hidden"
                                     />
                                 </div>
-                                <div className="flex-1 min-w-0 break-words">
-                                    <h3 className="font-medium text-white flex items-center gap-2">
-                                        Profile Picture
-                                        <UserBadge planTier={authProfile?.plan_tier} isVerified={authProfile?.is_verified} />
-                                    </h3>
-                                    <p className="text-sm text-gray-400 mb-2">
-                                        Click the camera icon to upload a new photo
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                        Recommended: Square image, at least 200x200px
-                                    </p>
+
+                                {/* Avatar Positioned Overlap (Using Negative Margin Flow to avoid overlapping input labels!) */}
+                                <div className="px-4 sm:px-6 -mt-10 sm:-mt-12 flex items-end gap-4 relative z-10 mb-6">
+                                    <div className="relative flex-shrink-0">
+                                        {avatarUrl ? (
+                                            <SecureImage
+                                                src={avatarUrl}
+                                                alt="Profile"
+                                                className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-4 border-black/80 bg-black"
+                                            />
+                                        ) : (
+                                            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-2xl font-bold text-white border-4 border-black/80 bg-black">
+                                                {initials}
+                                            </div>
+                                        )}
+                                        <button
+                                            onClick={() => fileInputRef.current?.click()}
+                                            disabled={uploading}
+                                            className="absolute bottom-0 right-0 p-1.5 bg-primary rounded-full text-white hover:bg-primary/80 transition-colors border-2 border-black disabled:opacity-50 shadow-md"
+                                        >
+                                            {uploading ? (
+                                                <Loader2 size={12} className="animate-spin" />
+                                            ) : (
+                                                <Camera size={12} />
+                                            )}
+                                        </button>
+                                        <input
+                                            id="avatar-upload"
+                                            name="avatar-upload"
+                                            ref={fileInputRef}
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleFileChange}
+                                            className="hidden"
+                                        />
+                                    </div>
+                                    <div className="mb-2 pb-1">
+                                        <h3 className="font-semibold text-base sm:text-lg text-white flex items-center gap-1.5 leading-none">
+                                            {fullName || username || 'User'}
+                                            <UserBadge planTier={authProfile?.plan_tier} isVerified={authProfile?.is_verified} />
+                                        </h3>
+                                        <p className="text-xs text-gray-400 mt-1">Update your profile picture and banner</p>
+                                    </div>
                                 </div>
                             </div>
 
@@ -640,6 +753,63 @@ export default function Settings() {
                                 <p className="text-xs text-gray-500 mt-1">
                                     Email cannot be changed
                                 </p>
+                            </div>
+
+                            {/* Bio */}
+                            <div>
+                                <label htmlFor="bio" className="block text-sm font-medium text-gray-300 mb-1.5 cursor-pointer">
+                                    Bio
+                                </label>
+                                <textarea
+                                    id="bio"
+                                    name="bio"
+                                    rows={3}
+                                    value={bio}
+                                    onChange={(e) => setBio(e.target.value)}
+                                    placeholder="Write a short bio about yourself..."
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-primary text-sm transition-colors"
+                                />
+                            </div>
+
+                            {/* Website */}
+                            <div>
+                                <Input
+                                    id="website"
+                                    name="website"
+                                    label="Website"
+                                    value={website}
+                                    onChange={(e) => setWebsite(e.target.value)}
+                                    placeholder="https://yourwebsite.com"
+                                    className="bg-white/5"
+                                    autoComplete="url"
+                                />
+                            </div>
+
+                            {/* Country Selection */}
+                            <div className="flex flex-col gap-1.5">
+                                <label htmlFor="countryCode" className="block text-sm font-medium text-gray-300 cursor-pointer">
+                                    Country
+                                </label>
+                                <select
+                                    id="countryCode"
+                                    name="countryCode"
+                                    value={countryCode}
+                                    onChange={(e) => setCountryCode(e.target.value)}
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-primary text-sm transition-colors"
+                                >
+                                    <option value="" className="bg-gray-900">Select a country</option>
+                                    <option value="US" className="bg-gray-900">United States</option>
+                                    <option value="GB" className="bg-gray-900">United Kingdom</option>
+                                    <option value="CA" className="bg-gray-900">Canada</option>
+                                    <option value="AU" className="bg-gray-900">Australia</option>
+                                    <option value="DE" className="bg-gray-900">Germany</option>
+                                    <option value="FR" className="bg-gray-900">France</option>
+                                    <option value="JP" className="bg-gray-900">Japan</option>
+                                    <option value="NG" className="bg-gray-900">Nigeria</option>
+                                    <option value="ZA" className="bg-gray-900">South Africa</option>
+                                    <option value="BR" className="bg-gray-900">Brazil</option>
+                                    <option value="IN" className="bg-gray-900">India</option>
+                                </select>
                             </div>
 
                             {/* Save Button */}

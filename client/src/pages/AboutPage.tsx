@@ -7,10 +7,10 @@ export const AboutPage = () => {
     const navigate = useNavigate();
 
     return (
-        <div className="min-h-[100dvh] bg-[#0a0a0a] p-4 md:p-8 relative w-full max-w-full">
+        <div className="h-full overflow-y-auto min-h-[100dvh] bg-[#0a0a0a] p-4 md:p-8 relative w-full max-w-full">
             <SEO 
                 title="About Us"
-                description="Learn about Aghogho Plyboard Enterprise and our commitment to providing simple and reliable software solutions for digital services."
+                description="Learn about Jossy Digital Technologies Ltd and our commitment to providing simple and reliable real-time messaging and social communication solutions."
             />
             {/* Background gradients */}
             <div className="absolute top-0 right-1/4 w-full max-w-[1000px] h-[600px] bg-primary/10 rounded-full blur-[120px] -z-10" />
@@ -36,10 +36,10 @@ export const AboutPage = () => {
                     <div className="space-y-10 text-gray-300">
                         <section>
                             <p className="leading-relaxed text-lg mb-4">
-                                Aghogho Plyboard Enterprise develops mobile applications for public use, providing digital solutions that are accessible and user-friendly for businesses and consumers.
+                                Jossy Digital Technologies Ltd develops mobile applications for public use, providing secure real-time messaging and social communication solutions that are accessible and user-friendly for businesses and consumers.
                             </p>
                             <p className="leading-relaxed text-gray-400">
-                                Our team develops mobile apps for public use, focusing on utility, accessibility, and seamless user experience. We design applications that serve businesses and individuals across Nigeria and beyond.
+                                Our team develops applications focusing on instant connectivity, high-quality audio/video calling, and seamless user experience. We design platforms that serve businesses and individuals globally.
                             </p>
                         </section>
 
@@ -49,17 +49,17 @@ export const AboutPage = () => {
                                 Our Goal
                             </h2>
                             <p className="leading-relaxed">
-                                Our goal is to create simple and reliable software solutions that help users interact with digital services more efficiently.
+                                Our goal is to create simple and reliable software solutions that help users connect and communicate globally without barriers.
                             </p>
                         </section>
 
                         <section>
                             <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
                                 <Globe className="w-6 h-6 text-primary" />
-                                Our Applications
+                                Our Platform
                             </h2>
                             <p className="leading-relaxed">
-                                Through our applications, users can access various technology-driven features designed to support digital interactions, productivity, and online activities.
+                                Through NoteStandard, users can access secure messaging, share media, and participate in high-quality audio and video calls, designed to support global interactions and productivity.
                             </p>
                         </section>
 

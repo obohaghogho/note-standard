@@ -37,10 +37,10 @@ exports.handleFlutterwave = async (req, res) => {
   return provider.processWebhook(req, res);
 };
 
-// ─── Fincra ───────────────────────────────────────────────────
+// ─── Fincra (Cut off/Disabled) ───────────────────────────────
 exports.handleFincra = async (req, res) => {
-  const provider = PaymentFactory.getProviderByName("fincra");
-  return provider.processWebhook(req, res);
+  logger.info("[Webhook] Received Fincra webhook. Fincra is completely cut off from this application. Ignoring.");
+  return res.status(200).json({ received: true, status: "disabled" });
 };
 
 // ─── Crypto (NowPayments) ────────────────────────────────────

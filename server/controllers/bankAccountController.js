@@ -4,9 +4,19 @@ const { serializeBankAccount } = require('../utils/bankAccountSerializer');
 const logger = require('../utils/logger');
 const securityMonitor = require('../services/securityMonitor');
 
-// ─── Input Validation Constants ──────────────────────────────
-const SUPPORTED_CURRENCIES = new Set(['USD', 'GBP', 'EUR']);
-const ACCOUNT_NUMBER_REGEX = /^\d{8,20}$/;
+// ── Input Validation Constants ───────────────────────────────────────────────────────────
+// Supported currencies for bank account storage:
+//   USD, GBP, EUR — Grey / international wire withdrawals
+//   NGN           — Nigerian NUBAN accounts (10-digit) for domestic Paystack payouts
+//   JPY           — Japanese bank accounts for future international payouts
+const SUPPORTED_CURRENCIES = new Set(['USD', 'GBP', 'EUR', 'NGN', 'JPY']);
+
+// Account number validation:
+// Accepts: 8–34 digits to cover:
+//   - Nigerian NUBAN (exactly 10 digits)
+//   - Standard international account numbers (8–20 digits)
+//   - IBAN-formatted numbers (up to 34 alphanumeric, digits extracted by serializer)
+const ACCOUNT_NUMBER_REGEX = /^\d{8,34}$/;
 
 /**
  * FAIL-CLOSED helper — used on every cryptographic and integrity failure.

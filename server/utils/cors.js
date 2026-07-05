@@ -80,8 +80,9 @@ const corsOptions = {
     "apikey",
     "Pragma",
     "x-device-id",
+    "X-Correlation-ID",
   ],
-  exposedHeaders: ["X-Total-Count", "Content-Disposition"],
+  exposedHeaders: ["X-Total-Count", "Content-Disposition", "X-Correlation-ID"],
   maxAge: 86400,
   optionsSuccessStatus: 200,
 };

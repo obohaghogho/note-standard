@@ -1,5 +1,5 @@
 import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot, hydrateRoot } from 'react-dom/client'
 import { Toaster, toast } from 'react-hot-toast'
 import App from './App.tsx'
 import './index.css'
@@ -135,10 +135,100 @@ if ('serviceWorker' in navigator) {
 
 console.log('🚀 NoteStandard Booting...');
 
+// ── Production-grade cross-platform keyboard tracker ────────────────────────
+// Handles both iOS Safari and Android Chrome keyboard viewports.
+// We strictly emit --kb-height so the CSS can hardware-accelerate the translation.
+(() => {
+  const applyViewportVars = () => {
+    const vp = window.visualViewport;
+    if (vp) {
+      // --vv-top: how far the visual viewport top is from the layout viewport top
+      // (used for top-down absolute positioning of the composer)
+      const vvTop = vp.offsetTop;
+      const vvHeight = vp.height;
+      document.documentElement.style.setProperty('--vv-top', `${vvTop}px`);
+      document.documentElement.style.setProperty('--vv-height', `${vvHeight}px`);
+
+      // --kb-height: how much of the layout viewport is obscured by the keyboard
+      // If the OS shrank the layout viewport (PWA mode), this evaluates to 0, preventing double offset.
+      const kbHeight = Math.max(0, window.innerHeight - (vvHeight + vvTop));
+      document.documentElement.style.setProperty('--kb-height', `${kbHeight}px`);
+      if (kbHeight > 60) {
+        document.documentElement.classList.add('keyboard-open');
+      } else {
+        document.documentElement.classList.remove('keyboard-open');
+      }
+    } else {
+      document.documentElement.style.setProperty('--vv-top', '0px');
+      document.documentElement.style.setProperty('--vv-height', `${window.innerHeight}px`);
+      document.documentElement.style.setProperty('--kb-height', '0px');
+      document.documentElement.classList.remove('keyboard-open');
+    }
+  };
+
+  // Apply immediately (no rAF) so there is zero frame delay
+  const setViewportVarsSync = () => applyViewportVars();
+
+  // For non-keyboard resizes (rotation etc.) rAF is fine
+  let rafId: number | null = null;
+  const setViewportVarsRaf = () => {
+    if (rafId !== null) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(() => { applyViewportVars(); rafId = null; });
+  };
+
+  // Run immediately on load.
+  applyViewportVars();
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', setViewportVarsSync, { passive: true });
+    window.visualViewport.addEventListener('scroll', setViewportVarsSync, { passive: true });
+  }
+
+  // Orientation/desktop resize — rAF is fine here
+  window.addEventListener('resize', setViewportVarsRaf, { passive: true });
+
+  // Chrome 94+ Virtual Keyboard API.
+  // IMPORTANT: Do NOT set overlaysContent = true here.
+  // overlaysContent=true tells Chrome not to shrink the visual viewport when the keyboard opens.
+  // Our container strategy (.chat-root tracks --vv-height) REQUIRES the visual viewport to shrink.
+  // Without shrinking, --vv-height stays at full screen height and the composer lands behind the keyboard.
+  // The visualViewport 'resize' listener above already handles everything we need.
+  if ('virtualKeyboard' in navigator) {
+    // Fallback: also toggle keyboard-open class via geometrychange for browsers
+    // where visualViewport.resize doesn't fire reliably.
+    (navigator as unknown as { virtualKeyboard: { addEventListener: (type: string, listener: (e: { target: { boundingRect: { height: number } } }) => void) => void } }).virtualKeyboard.addEventListener('geometrychange', (event: { target: { boundingRect: { height: number } } }) => {
+      const { height } = event.target.boundingRect;
+      if (height > 60) {
+        document.documentElement.classList.add('keyboard-open');
+      } else {
+        document.documentElement.classList.remove('keyboard-open');
+      }
+    });
+  }
+
+  // Prevent ANY document-level scrolling on focus and generally lock document scroll to 0,0.
+  const forceScrollReset = () => {
+    if (window.scrollY !== 0 || window.scrollX !== 0) {
+      window.scrollTo(0, 0);
+    }
+  };
+
+  document.addEventListener('focusin', (e) => {
+    const tag = (e.target as HTMLElement)?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') {
+      forceScrollReset();
+      // Apply viewport immediately on focus so the layout is ready before the keyboard animates
+      applyViewportVars();
+    }
+  }, { passive: true });
+
+  window.addEventListener('scroll', forceScrollReset, { passive: true });
+})();
+
+
 const container = document.getElementById('root');
 if (container) {
-  const root = createRoot(container);
-  root.render(
+  const appElement = (
     <StrictMode>
       <App />
       <Toaster
@@ -154,6 +244,14 @@ if (container) {
       />
     </StrictMode>
   );
+
+  if (container.hasChildNodes()) {
+    hydrateRoot(container, appElement);
+  } else {
+    const root = createRoot(container);
+    root.render(appElement);
+  }
 } else {
   console.error('❌ Root container not found!');
 }
+

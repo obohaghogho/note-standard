@@ -3,6 +3,14 @@ import { API_URL } from '../Config';
 import { AuthService } from '../services/AuthService';
 import { Alert } from 'react-native';
 
+/**
+ * Global flag — set to true by AuthContext while a notification-driven account
+ * switch is in progress. The 401 interceptor reads this to decide whether to
+ * show the 'Session Expired' alert or stay silent so navigation can complete.
+ */
+export let isSwitchingAccount = false;
+export const setSwitchingAccount = (v: boolean) => { isSwitchingAccount = v; };
+
 const apiClient = axios.create({
   baseURL: `${API_URL}/api`,
   timeout: 15000, // 15 seconds
@@ -12,6 +20,7 @@ const apiClient = axios.create({
     'X-Client-Info': 'mobile', // Legacy header for some controllers
   },
 });
+console.log('API_URL is configured to:', API_URL);
 
 // Request Interceptor: Attach Auth Token
 apiClient.interceptors.request.use(
@@ -20,6 +29,13 @@ apiClient.interceptors.request.use(
       const token = await AuthService.getToken();
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+      }
+      const user = await AuthService.getUser();
+      if (user) {
+        const { AccountManager } = require('../utils/AccountManager');
+        const account = await AccountManager.getAccount(user.id);
+        if (account?.sessionId) config.headers['X-Session-ID'] = account.sessionId;
+        if (account?.deviceId) config.headers['X-Device-ID'] = account.deviceId;
       }
     } catch (e) {
       console.error('[apiClient] Error fetching token from storage', e);
@@ -30,22 +46,26 @@ apiClient.interceptors.request.use(
 );
 
 // Response Interceptor: Handle Global Errors (401, 500, etc.)
-let isRefreshing = false;
-let refreshSubscribers: ((token: string | null) => void)[] = [];
+const isRefreshing: Record<string, boolean> = {};
+const refreshSubscribers: Record<string, ((token: string | null) => void)[]> = {};
 
-function onRefreshed(token: string) {
-  refreshSubscribers.forEach(cb => cb(token));
-  refreshSubscribers = [];
+function onRefreshed(sessionId: string, token: string) {
+  if (refreshSubscribers[sessionId]) {
+    refreshSubscribers[sessionId].forEach(cb => cb(token));
+    delete refreshSubscribers[sessionId];
+  }
 }
 
-function onRefreshFailed() {
-  // Reject all queued requests
-  refreshSubscribers.forEach(cb => cb(null));
-  refreshSubscribers = [];
+function onRefreshFailed(sessionId: string) {
+  if (refreshSubscribers[sessionId]) {
+    refreshSubscribers[sessionId].forEach(cb => cb(null));
+    delete refreshSubscribers[sessionId];
+  }
 }
 
-function subscribeTokenRefresh(cb: (token: string | null) => void) {
-  refreshSubscribers.push(cb);
+function subscribeTokenRefresh(sessionId: string, cb: (token: string | null) => void) {
+  if (!refreshSubscribers[sessionId]) refreshSubscribers[sessionId] = [];
+  refreshSubscribers[sessionId].push(cb);
 }
 
 apiClient.interceptors.response.use(
@@ -58,10 +78,15 @@ apiClient.interceptors.response.use(
       
       // If 401 Unauthorized, attempt to refresh the token
       if (status === 401 && !originalRequest._retry) {
-        if (isRefreshing) {
+        const { AccountManager } = require('../utils/AccountManager');
+        const currentUser = await AuthService.getUser();
+        const account = currentUser ? await AccountManager.getAccount(currentUser.id) : null;
+        const sessionId = account?.sessionId || 'unknown';
+
+        if (isRefreshing[sessionId]) {
           // Queue the request until token refresh completes
           return new Promise((resolve, reject) => {
-            subscribeTokenRefresh(newToken => {
+            subscribeTokenRefresh(sessionId, newToken => {
               if (!newToken) {
                 reject(error);
                 return;
@@ -73,10 +98,10 @@ apiClient.interceptors.response.use(
         }
 
         originalRequest._retry = true;
-        isRefreshing = true;
+        isRefreshing[sessionId] = true;
         
         try {
-          console.log('[apiClient] 401 Detected. Attempting token refresh...');
+          console.log(`[apiClient] 401 Detected. Attempting token refresh for session: ${sessionId}`);
           const refreshToken = await AuthService.getRefreshToken();
           
           if (!refreshToken) {
@@ -87,7 +112,9 @@ apiClient.interceptors.response.use(
           // Use axios directly to avoid interceptor recursion
           // Added x-client-type to ensure bypass of web-only checks on server
           const res = await axios.post(`${API_URL}/api/auth/refresh-token`, { 
-            refresh_token: refreshToken 
+            refresh_token: refreshToken,
+            session_id: sessionId,
+            device_id: account?.deviceId
           }, { 
             timeout: 30000,
             headers: {
@@ -104,17 +131,21 @@ apiClient.interceptors.response.use(
           // Save new tokens
           await AuthService.setToken(newToken);
           if (newRefreshToken) await AuthService.setRefreshToken(newRefreshToken);
+          if (currentUser) {
+            await AccountManager.updateTokens(currentUser.id, newToken, newRefreshToken, sessionId);
+            await AccountManager.setTokenState(currentUser.id, "valid");
+          }
           
           console.log('[apiClient] ✓ Token refreshed successfully');
-          isRefreshing = false;
-          onRefreshed(newToken);
+          isRefreshing[sessionId] = false;
+          onRefreshed(sessionId, newToken);
 
           // Retry the original request
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
           return apiClient(originalRequest);
         } catch (refreshError: any) {
-          isRefreshing = false;
-          onRefreshFailed();
+          isRefreshing[sessionId] = false;
+          onRefreshFailed(sessionId);
           
           console.error('[apiClient] ✗ Token refresh failed:', refreshError.message);
           
@@ -127,13 +158,19 @@ apiClient.interceptors.response.use(
           );
 
           if (isAuthError) {
-            console.warn('[apiClient] Refresh token invalid. Logging out...');
-            const currentUser = await AuthService.getUser();
-            await AuthService.logout();
-            
-            // Only alert if we actually had a user session that we are now losing
-            if (currentUser) {
-                Alert.alert('Session Expired', 'Your session has expired. Please log in again.');
+            console.warn('[apiClient] Refresh token invalid. Expiring session...');
+            // NEVER show 'Session Expired' alert during an account switch.
+            // The switch is optimistic — the token may be stale but still refreshable.
+            // The alert would race with the deepNavigateToChat call and confuse the user.
+            if (!isSwitchingAccount) {
+              if (currentUser) {
+                  await AuthService.expireSession(currentUser.id, true);
+                  Alert.alert('Session Expired', 'Your session has expired. Please log in again.');
+              } else {
+                  await AuthService.logout(); // Fallback
+              }
+            } else {
+              console.warn('[apiClient] Session expired during account switch — suppressing alert, letting background refresh handle it.');
             }
           }
           

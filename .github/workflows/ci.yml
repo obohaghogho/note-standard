@@ -11,10 +11,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 env:
   CI: true
   HUSKY: 0
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   quality:

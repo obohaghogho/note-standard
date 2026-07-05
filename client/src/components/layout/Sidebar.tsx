@@ -19,7 +19,8 @@ import {
     TrendingUp,
     Smartphone,
     X,
-    AlertTriangle
+    AlertTriangle,
+    Wallet
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { Button } from '../common/Button';
@@ -59,8 +60,8 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
         { icon: MessageSquare, label: t('nav.chat'), to: '/dashboard/chat' },
         { icon: Share2, label: t('nav.shared'), to: '/dashboard/shared' },
         { icon: Users, label: t('nav.teams'), to: '/dashboard/teams' },
-        { icon: Activity, label: t('nav.wallet'), to: '/dashboard/activity' },
-        { icon: FileText, label: 'Activity Logs', to: '/dashboard/history' },
+        { icon: Wallet, label: t('nav.wallet'), to: '/dashboard/wallet' },
+        { icon: FileText, label: 'Transaction History', to: '/dashboard/history' },
         { icon: TrendingUp, label: 'Affiliates', to: '/dashboard/affiliates' },
         { icon: Bell, label: t('common.notifications'), to: '/dashboard/notifications' },
         { icon: Smartphone, label: 'Download App', to: '/download' },
@@ -89,7 +90,7 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
             )}
             
             <div className={cn(
-                "w-64 h-[100dvh] border-r border-white/10 flex flex-col fixed left-0 top-0 z-[70] transition-transform duration-300 bg-gray-900",
+                "w-64 min-w-[16rem] shrink-0 inset-y-0 border-r border-white/10 flex flex-col fixed left-0 z-[70] transition-transform duration-300 bg-gray-900",
                 isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
             )}>
             {/* Header */}

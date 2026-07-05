@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "289841656724",
+    "project_id": "notestandard-ac58b",
+    "storage_bucket": "notestandard-ac58b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:289841656724:android:e39b75ad793aca7903d581",
+        "android_client_info": {
+          "package_name": "com.notestandard.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCvv6SSPNTHW7J4yHbVYzOjuZQ_iTyxKUY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

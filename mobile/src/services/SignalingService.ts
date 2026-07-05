@@ -1,214 +1,259 @@
 /**
- * SignalingService – Pure Socket.IO based in-app VoIP signaling.
+ * SignalingService – WebRTC Signaling Engine (WhatsApp/Telegram pattern).
  *
- * ❌ No RNCallKeep, no Telecom, no tel: links, no GSM dialer.
- * ✅ WebSocket signaling only — works on WiFi + mobile data.
+ * CALLER FLOW:
+ *  1. startCall() → acquireMedia() → emit call:initiate
+ *  2. call:answered → createPeerConnectionAndOffer() → emit call:signal(offer)
+ *  3. call:signal(answer) → handleAnswer() + request buffered ICE
  *
- * Flow (outgoing):
- *   1. Caller emits  call:initiate → gateway
- *   2. Gateway relays call:incoming → callee
- *   3. Callee answers → emits call:ready → gateway
- *   4. Gateway relays call:ready → caller
- *   5. Both join Agora channel
- *
- * Flow (incoming):
- *   1. Receive call:incoming → show in-app UI via CallService
- *   2. User answers → emit call:ready
- *   3. Join Agora channel
+ * CALLEE FLOW:
+ *  1. call:incoming → displayIncomingCall()
+ *  2. answerCall() → acquireMedia() → prepareForIncomingCall() → emit call:answer
+ *  3. call:signal(offer) → handleOffer() → emit call:signal(answer) + request buffered ICE
  */
 import { io, Socket } from 'socket.io-client';
 import CallService from './CallService';
-import AgoraService from './AgoraService';
+import WebRTCService from './WebRTCService';
 import { GATEWAY_URL } from '../Config';
 
 class SignalingService {
-  private socket: Socket | null = null;
-  private userId: string | null = null;
-  public activeTargetId: string | null = null;
-  public activeConversationId: string | null = null;
-  public activeCallType: 'audio' | 'video' = 'audio';
+  private socket:               Socket | null = null;
+  private userId:               string | null = null;
+  public  activeTargetId:       string | null = null;
+  public  activeConversationId: string | null = null;
+  public  activeCallType:       'audio' | 'video' = 'audio';
+  public  activeSessionId:      string | null = null;
 
-  // ── Init ──────────────────────────────────────────────────────────────────
-
-  async init(userToken: string, userId: string) {
-    // Prevent duplicate connections
+  async init(userToken: string, userId: string, sessionId?: string, deviceId?: string) {
     if (this.socket?.connected) {
-      console.log('[Signaling] Already connected – reusing socket');
+      console.log('[Signaling] Reusing existing connection');
       return;
     }
-
     this.userId = userId;
 
     this.socket = io(GATEWAY_URL, {
-      auth: { token: userToken },
+      auth: { token: userToken, sessionId, deviceId },
       transports: ['websocket'],
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
     });
 
-    this.socket.on('connect', () => {
-      console.log('[Signaling] ✅ Connected to gateway');
+    this.socket.on('connect',    () => console.log('[Signaling] ✅ Connected'));
+    this.socket.on('disconnect', (r) => console.warn('[Signaling] ⚠️ Disconnected:', r));
+
+    // ── Session lifecycle events from gateway ────────────────────────────────
+    this.socket.on('auth:revoked', () => {
+      console.warn('[Signaling] 🛑 Session revoked by gateway. Forcing logout...');
+      this.disconnect();
+      const EventEmitter = require('./EventEmitter').default;
+      EventEmitter.emit('auth:logout', null);
     });
 
-    this.socket.on('disconnect', (reason) => {
-      console.warn('[Signaling] ⚠️ Disconnected:', reason);
+    this.socket.on('session:replaced', () => {
+      console.warn('[Signaling] ♻️ Session replaced by a newer connection on this device.');
+      this.disconnect();
+      // Note: do NOT force full logout on replacement — just drop connection.
+      // The new socket will take over. Emit a gentle refresh event instead.
+      const EventEmitter = require('./EventEmitter').default;
+      EventEmitter.emit('socket:replaced', null);
     });
 
-    this.socket.on('connect_error', (err) => {
-      console.error('[Signaling] ❌ Connection error:', err.message);
-    });
-
-    // ── Incoming call from remote peer ──────────────────────────────────────
+    // ── 1. Incoming call ───────────────────────────────────────────────────
     this.socket.on('call:incoming', async (data) => {
       console.log('[Signaling] 📲 Incoming call:', data);
-      this.activeTargetId = data.from;
+      this.activeTargetId       = data.from;
       this.activeConversationId = data.conversationId;
-      this.activeCallType = data.type === 'video' ? 'video' : 'audio';
+      this.activeCallType       = data.callType === 'video' ? 'video' : 'audio';
+      this.activeSessionId      = data.sessionId;
 
       await CallService.displayIncomingCall({
-        callerId: data.from,
-        callerName: data.fromName || 'Unknown',
-        callType: data.type || 'audio',
+        callerId:       data.from,
+        callerName:     data.fromName || 'Someone',
+        callType:       data.callType || 'audio',
         conversationId: data.conversationId,
+        sessionId:      data.sessionId,
       });
     });
 
-    // ── Remote peer accepted our call ───────────────────────────────────────
-    this.socket.on('call:ready', async (data) => {
-      console.log('[Signaling] ✅ Remote peer ready');
-      // For the caller, we already joined pre-emptively in startCall.
-      // But we can call it again to be safe, ensuring the type is correct.
+    // ── 2. Caller: callee answered — now create PC and send offer ──────────
+    this.socket.on('call:answered', async (data) => {
+      const { sessionId } = data;
+      if (sessionId && this.activeSessionId && sessionId !== this.activeSessionId) {
+        console.warn('[Signaling] Ignoring stray call:answered for session:', sessionId);
+        return;
+      }
+      console.log('[Signaling] ✅ Callee answered — creating offer');
+      this.activeSessionId = sessionId || this.activeSessionId;
+
+      const targetId = this.activeTargetId;
+      const sessId   = this.activeSessionId;
+
       try {
-        await AgoraService.joinChannel(this.activeConversationId!, 0, this.activeCallType || 'audio');
-        // connected state is handled by CallScreen via Agora events or CallService.onCallConnected
+        // Register ICE callback BEFORE creating the PC so no candidates are missed
+        WebRTCService.registerCallbacks({
+          onIceCandidate: (candidate) => {
+            this.emit('call:ice-candidate', { to: targetId, candidate, sessionId: sessId });
+          },
+        });
+
+        // Phase 2a: create PC + add already-acquired tracks + create offer
+        const offer = await WebRTCService.createPeerConnectionAndOffer();
+        this.emit('call:signal', { to: targetId, signal: offer, sessionId: sessId });
       } catch (err) {
-        console.error('[Signaling] Agora join failed on ready:', err);
+        console.error('[Signaling] createPeerConnectionAndOffer failed:', err);
+        await this.endActiveCall();
       }
     });
 
-    // ── Remote ended / rejected / timed out ─────────────────────────────────
+    // ── 3. SDP relay ───────────────────────────────────────────────────────
+    this.socket.on('call:signal', async (data) => {
+      const { signal, from, sessionId } = data;
+      if (sessionId && this.activeSessionId && sessionId !== this.activeSessionId) {
+        console.warn('[Signaling] Ignoring stray call:signal for session:', sessionId);
+        return;
+      }
+      console.log(`[Signaling] 📡 SDP: ${signal.type} from ${from} session: ${sessionId}`);
+
+      try {
+        if (signal.type === 'offer') {
+          // CALLEE: PC already exists (created in answerCall) — just set remote desc
+          const answer = await WebRTCService.handleOffer(signal);
+          this.emit('call:signal', { to: from, signal: answer, sessionId: sessionId || this.activeSessionId });
+          // Request any ICE candidates the caller buffered while waiting
+          this.emit('call:request-buffered-ice', { sessionId: sessionId || this.activeSessionId, fromUserId: from });
+
+        } else if (signal.type === 'answer') {
+          // CALLER: set remote description from callee's answer
+          await WebRTCService.handleAnswer(signal);
+          // Request any ICE candidates the callee buffered while creating their answer
+          this.emit('call:request-buffered-ice', { sessionId: sessionId || this.activeSessionId, fromUserId: from });
+        }
+      } catch (err) {
+        console.error('[Signaling] SDP handling failed:', err);
+      }
+    });
+
+    // ── 4. ICE trickle ─────────────────────────────────────────────────────
+    this.socket.on('call:ice-candidate', async (data) => {
+      const { candidate, sessionId } = data;
+      if (sessionId && this.activeSessionId && sessionId !== this.activeSessionId) {
+        console.warn('[Signaling] Ignoring stray call:ice-candidate for session:', sessionId);
+        return;
+      }
+      if (candidate) await WebRTCService.addIceCandidate(candidate);
+    });
+
+    // ── 5. Remote ended ────────────────────────────────────────────────────
     this.socket.on('call:ended', async () => {
       console.log('[Signaling] 📵 Remote ended call');
-      await AgoraService.leaveChannel();
+      await WebRTCService.leaveChannel();
       await CallService.handleCallEnded('remote');
+      this.resetState();
     });
 
+    // ── 6. Call rejected ────────────────────────────────────────────────────
     this.socket.on('call:rejected', async () => {
-      console.log('[Signaling] 🚫 Remote rejected call');
-      await AgoraService.leaveChannel();
+      console.log('[Signaling] 🚫 Call declined');
+      await WebRTCService.leaveChannel();
       await CallService.rejectCall();
+      this.resetState();
     });
 
+    // ── 7. Timeout ─────────────────────────────────────────────────────────
     this.socket.on('call:timeout', async () => {
-      console.log('[Signaling] ⏱️ Call timed out (signaling)');
-      await AgoraService.leaveChannel();
+      console.log('[Signaling] ⏱️ Ring timeout');
+      await WebRTCService.leaveChannel();
       await CallService.handleCallEnded('timeout');
+      this.resetState();
     });
   }
 
-  // ── Disconnect ────────────────────────────────────────────────────────────
+  // ── Public API ────────────────────────────────────────────────────────────
 
-  disconnect() {
-    if (this.socket) {
-      this.socket.removeAllListeners();
-      this.socket.disconnect();
-      this.socket = null;
-    }
-  }
-
-  // ── Emit helpers ──────────────────────────────────────────────────────────
-
-  private emit(event: string, data: any) {
-    if (!this.socket?.connected) {
-      console.warn(`[Signaling] Cannot emit ${event} – socket not connected`);
-      return;
-    }
-    this.socket.emit(event, data);
-  }
-
-  // ── Start outgoing call ───────────────────────────────────────────────────
-
-  async startCall(
-    targetUserId: string,
-    targetName: string,
-    type: 'audio' | 'video',
-    conversationId: string
-  ) {
+  /**
+   * Caller initiates a call.
+   * Acquires media IMMEDIATELY so the caller has mic/camera ready while ringing.
+   */
+  async startCall(targetUserId: string, targetName: string, type: 'audio' | 'video', conversationId: string) {
     console.log(`[Signaling] 📞 Initiating ${type} call to ${targetUserId}`);
-    this.activeTargetId = targetUserId;
+    this.activeTargetId       = targetUserId;
     this.activeConversationId = conversationId;
-    this.activeCallType = type;
+    this.activeCallType       = type;
 
-    await CallService.startOutgoingCall({
-      callerId: targetUserId,
-      callerName: targetName,
-      callType: type,
-      conversationId,
-    });
+    await CallService.startOutgoingCall({ callerId: this.userId ?? '', callerName: targetName, callType: type, conversationId });
 
-    // Join Agora pre-emptively so we're ready when remote answers
-    try {
-      await AgoraService.joinChannel(conversationId, 0, type);
-    } catch (err) {
-      console.error('[Signaling] Agora join failed (outgoing):', err);
-    }
+    // Phase 1: acquire media now — caller gets camera/mic while callee's phone rings
+    await WebRTCService.acquireMedia(type);
 
-    this.emit('call:initiate', {
-      to: targetUserId,
-      type,
-      conversationId,
-      fromId: this.userId,
-    });
+    this.emit('call:initiate', { to: targetUserId, callType: type, conversationId });
   }
 
-  // ── Answer incoming call ──────────────────────────────────────────────────
-
+  /**
+   * Callee answers the call.
+   * Acquires media, creates PC with tracks, THEN tells the caller we're ready.
+   * The caller will send the SDP offer only after receiving call:answer.
+   */
   async answerCall() {
+    console.log('[Signaling] Answering call...');
     await CallService.answerCall();
 
-    this.emit('call:ready', {
-      to: this.activeTargetId,
-      conversationId: this.activeConversationId,
+    // Phase 1: acquire media
+    await WebRTCService.acquireMedia(this.activeCallType);
+
+    const targetId = this.activeTargetId;
+    const sessId   = this.activeSessionId;
+
+    // Register ICE callback before creating PC so no candidates are dropped
+    WebRTCService.registerCallbacks({
+      onIceCandidate: (candidate) => {
+        this.emit('call:ice-candidate', { to: targetId, candidate, sessionId: sessId });
+      },
     });
 
-    try {
-      await AgoraService.joinChannel(this.activeConversationId!, 0, this.activeCallType || 'audio');
-      CallService.onCallConnected();
-    } catch (err) {
-      console.error('[Signaling] Agora join failed on answer:', err);
-      await this.endActiveCall();
-    }
-  }
+    // Phase 2b: create PC and add local tracks — PC is ready for the incoming offer
+    await WebRTCService.prepareForIncomingCall();
 
-  // ── Reject incoming call ──────────────────────────────────────────────────
+    // NOW tell the caller we're ready — offer will arrive to a fully prepared PC
+    this.emit('call:answer', { to: targetId, sessionId: sessId });
+    console.log('[Signaling] call:answer emitted — PC ready for offer');
+  }
 
   async rejectIncomingCall() {
-    this.emit('call:reject', { to: this.activeTargetId });
-    await AgoraService.leaveChannel();
+    console.log('[Signaling] Rejecting call');
+    this.emit('call:reject', { to: this.activeTargetId, sessionId: this.activeSessionId });
+    await WebRTCService.leaveChannel();
     await CallService.rejectCall();
-    this.activeTargetId = null;
-    this.activeConversationId = null;
+    this.resetState();
   }
-
-  // ── End / cancel any active call ──────────────────────────────────────────
 
   async endActiveCall() {
+    console.log('[Signaling] Ending call');
     if (this.activeTargetId) {
-      this.emit('call:end', {
-        to: this.activeTargetId,
-        conversationId: this.activeConversationId,
-      });
+      this.emit('call:end', { to: this.activeTargetId, sessionId: this.activeSessionId, conversationId: this.activeConversationId });
     }
-    await AgoraService.leaveChannel();
+    await WebRTCService.leaveChannel();
     await CallService.handleCallEnded('normal');
-    this.activeTargetId = null;
-    this.activeConversationId = null;
+    this.resetState();
   }
 
-  // ── Kept for backward compat with CallScreen ──────────────────────────────
-  cancelActiveCall() {
-    this.endActiveCall();
+  cancelActiveCall() { this.endActiveCall(); }
+
+  disconnect() {
+    this.socket?.removeAllListeners();
+    this.socket?.disconnect();
+    this.socket = null;
+  }
+
+  private resetState() {
+    this.activeTargetId       = null;
+    this.activeConversationId = null;
+    this.activeSessionId      = null;
+  }
+
+  private emit(event: string, data: any) {
+    if (!this.socket?.connected) { console.warn(`[Signaling] Offline — dropping: ${event}`); return; }
+    this.socket.emit(event, data);
   }
 }
 

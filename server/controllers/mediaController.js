@@ -82,6 +82,12 @@ exports.getSignedUrl = async (req, res) => {
         const { path } = req.query;
         if (!path) return res.status(400).json({ error: 'Path is required' });
 
+        // Reject non-storage paths (blob:, http:, data:) — these are local URLs,
+        // not Supabase storage paths, and will always fail.
+        if (path.startsWith('blob:') || path.startsWith('http:') || path.startsWith('https:') || path.startsWith('data:')) {
+            return res.status(400).json({ error: 'Invalid storage path — only Supabase storage paths are accepted.' });
+        }
+
         const { data, error } = await supabase
             .storage
             .from('chat-media')

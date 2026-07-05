@@ -164,6 +164,10 @@
     --card-accent: linear-gradient(90deg, #06b6d4, #22d3ee);
 }
 
+.stat-card.indigo {
+    --card-accent: linear-gradient(90deg, #6366f1, #818cf8);
+}
+
 .stat-icon {
     width: 48px;
     height: 48px;
@@ -203,6 +207,11 @@
 .stat-card.cyan .stat-icon {
     background: rgba(6, 182, 212, 0.15);
     color: #22d3ee;
+}
+
+.stat-card.indigo .stat-icon {
+    background: rgba(99, 102, 241, 0.15);
+    color: #818cf8;
 }
 
 .stat-content {

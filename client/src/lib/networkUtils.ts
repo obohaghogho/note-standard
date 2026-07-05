@@ -1,0 +1,9 @@
+export function resolveLocalUrl(url: string | undefined, fallback: string): string {
+  const base = url || fallback;
+  if (typeof window === 'undefined') return base;
+  const isLocalNet = /^192\.168\.\d+\.\d+$/.test(window.location.hostname) || /^10\.\d+\.\d+\.\d+$/.test(window.location.hostname);
+  if (isLocalNet && base.includes('localhost')) {
+    return base.replace('localhost', window.location.hostname);
+  }
+  return base;
+}

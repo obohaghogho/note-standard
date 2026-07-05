@@ -45,6 +45,7 @@ interface Stats {
     openChats: number;
     pendingChats: number;
     onlineUsers: number;
+    totalMessages?: number;
     serverStatus: string;
     topCreators?: TopCreator[];
     usageTrends?: Trend[];
@@ -125,6 +126,12 @@ export const AdminDashboard = () => {
             value: stats?.totalNotes || 0,
             icon: FileText,
             color: 'purple'
+        },
+        {
+            label: 'Total Messages',
+            value: stats?.totalMessages || 0,
+            icon: MessageSquare,
+            color: 'indigo'
         },
         {
             label: 'Open Chats',

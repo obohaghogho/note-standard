@@ -363,3 +363,71 @@ exports.inviteMember = async (req, res, next) => {
     next(err);
   }
 };
+
+exports.removeMember = async (req, res, next) => {
+  try {
+    const { teamId, userId: targetUserId } = req.params;
+    const requesterId = req.user.id;
+
+    // 1. Check requester permissions
+    const { data: requester, error: requesterError } = await supabase
+      .from('team_members')
+      .select('role')
+      .eq('team_id', teamId)
+      .eq('user_id', requesterId)
+      .single();
+
+    if (requesterError || !requester || (requester.role !== 'owner' && requester.role !== 'admin')) {
+      return res.status(403).json({ error: 'Only team admins can remove members' });
+    }
+
+    // 2. Prevent removing the owner
+    const { data: targetMember, error: targetError } = await supabase
+      .from('team_members')
+      .select('role, profiles:user_id(username)')
+      .eq('team_id', teamId)
+      .eq('user_id', targetUserId)
+      .single();
+
+    if (targetError || !targetMember) {
+      return res.status(404).json({ error: 'Member not found in team' });
+    }
+
+    if (targetMember.role === 'owner') {
+      return res.status(403).json({ error: 'Cannot remove the team owner' });
+    }
+
+    // 3. Remove the member
+    const { error: deleteError } = await supabase
+      .from('team_members')
+      .delete()
+      .eq('team_id', teamId)
+      .eq('user_id', targetUserId);
+
+    if (deleteError) throw deleteError;
+
+    // 4. Send system message & emit realtime event
+    const targetUsername = Array.isArray(targetMember.profiles) ? targetMember.profiles[0]?.username : targetMember.profiles?.username;
+    
+    const { data: sysMsg } = await supabase
+      .from('team_messages')
+      .insert({
+        team_id: teamId,
+        sender_id: requesterId,
+        message_type: 'system',
+        content: `removed ${targetUsername || 'a member'} from the team`,
+        metadata: { event: 'member_removed', user_id: targetUserId }
+      })
+      .select('*, profiles:sender_id(*)')
+      .single();
+
+    try {
+      await realtime.emit('to_room', teamId, 'team:member_removed', { teamId, userId: targetUserId });
+      if (sysMsg) await realtime.emit('to_room', teamId, 'team:message', sysMsg);
+    } catch (e) { console.warn(e); }
+
+    res.json({ success: true, message: 'Member removed successfully' });
+  } catch (err) {
+    next(err);
+  }
+};

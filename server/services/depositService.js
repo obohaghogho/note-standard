@@ -1,5 +1,5 @@
 const supabase = require("../config/database");
-console.log("[DepositService] LOADED V3 - Checking for userId in profile lookup");
+console.log("[DepositService] LOADED V4 - currencyConfig integrated");
 const { v4: uuidv4 } = require("uuid");
 const fxService = require("./fxService");
 const commissionService = require("./commissionService");
@@ -7,6 +7,7 @@ const logger = require("../utils/logger");
 const paystackService = require("./paystackService");
 const math = require("../utils/mathUtils");
 const { checkDailyLimit } = require("../utils/limitCheck");
+const currencyConfig = require("../config/currencyConfig");
 const CLIENT_URL = process.env.CLIENT_URL || "https://notestandard.com";
 
 const PaymentService = require("./payment/paymentService");
@@ -24,27 +25,8 @@ async function createCardDeposit(
 ) {
   const { toCurrency, toNetwork } = options;
   const upCurrency = currency.toUpperCase();
-  // --- UNIVERSAL USD FALLBACK FOR INTERNATIONAL (DFOS v6.3) ---
-  // Since Paystack primarily supports NGN and USD, we convert EUR/GBP/JPY
-  // to USD for the gateway. This provides a better experience than NGN
-  // while ensuring the transaction can be processed.
-  let gatewayOptions = { isCrypto: false };
 
-  if (["EUR", "GBP", "JPY"].includes(upCurrency)) {
-    try {
-      const rate = await fxService.getRate(upCurrency, "USD");
-      // Add a small 1% buffer for FX volatility
-      const bufferedRate = math.multiply(rate, 1.01); 
-      const amountInUsd = math.multiply(amount, bufferedRate);
-      
-      gatewayOptions.gatewayCurrency = "USD";
-      gatewayOptions.gatewayAmount = parseFloat(math.formatSafe(amountInUsd));
-      
-      logger.info(`[DepositService] Routing ${amount} ${upCurrency} via USD ($${gatewayOptions.gatewayAmount}) for Paystack compatibility.`);
-    } catch (fxErr) {
-      logger.warn(`[DepositService] USD fallback conversion failed: ${fxErr.message}. Proceeding natively.`);
-    }
-  } else if (upCurrency === "BTC" || upCurrency === "ETH") {
+  if (upCurrency === "BTC" || upCurrency === "ETH") {
     throw new Error(`${upCurrency} deposits are not supported via payment`);
   }
 
@@ -114,23 +96,24 @@ async function createCardDeposit(
     }
   }
 
-  // Initialize payment through unified service
-  return await PaymentService.initializePayment(
+  // Initialize payment through enterprise PaymentIntentService
+  const PaymentIntentService = require("./payment/PaymentIntentService");
+  return await PaymentIntentService.createPaymentIntent({
     userId,
-    profile.email,
+    email: profile.email,
     amount,
     currency,
-    {
+    method: "card",
+    isCrypto: false,
+    metadata: {
       type: toCurrency && toCurrency !== currency ? "Digital Assets Purchase" : "DEPOSIT",
-      method: "card",
       userPlan,
       idempotencyKey,
       targetCurrency: toCurrency,
       targetNetwork: toNetwork,
       customerName: profile.full_name || profile.username || profile.email.split("@")[0],
     },
-    gatewayOptions,
-  );
+  });
 }
 
 /**
@@ -148,6 +131,14 @@ async function createBankDeposit(
   const upCurrency = currency.toUpperCase();
   if (upCurrency === "BTC" || upCurrency === "ETH") {
     throw new Error("BTC and ETH deposits are not supported via bank transfer");
+  }
+
+  // ── Bank Transfer Support Check (DFOS v6.4) ──────────────────────────────
+  // Check if this currency supports bank transfer deposits.
+  // JPY does not — we return a friendly error with the fallback suggestion.
+  const bankTransferSupport = currencyConfig.getBankTransferSupport(upCurrency);
+  if (!bankTransferSupport.supported) {
+    throw new Error(bankTransferSupport.message || `Bank transfers in ${currency} are not supported.`);
   }
 
   // Define default bank details (fallbacks)
@@ -229,26 +220,28 @@ async function createBankDeposit(
   
   // ── Optimization: Cache Virtual Accounts in Dedicated Accounts Table ──
   try {
-      const { data: dbAccount } = await supabase
-          .from("dedicated_accounts")
-          .select("*")
-          .eq("user_id", userId)
-          .eq("currency", upCurrency)
-          .eq("provider", upCurrency === "NGN" ? "paystack" : "fincra")
-          .maybeSingle();
+      let dbAccount = null;
+      if (upCurrency === "NGN") {
+          const { data } = await supabase
+              .from("dedicated_accounts")
+              .select("*")
+              .eq("user_id", userId)
+              .eq("currency", "NGN")
+              .eq("provider", "paystack")
+              .maybeSingle();
+          dbAccount = data;
+      }
 
       if (dbAccount) {
-          logger.info(`[DepositService] Using stored dedicated account for ${upCurrency} (User: ${userId})`);
+          logger.info(`[DepositService] Using stored dedicated account for NGN (User: ${userId})`);
           liveDetails = {
               bankName: dbAccount.bank_name,
               accountNumber: dbAccount.account_number,
               accountName: dbAccount.account_name,
-              note: upCurrency === "NGN" 
-                ? "Funds are credited instantly after transfer" 
-                : `Funds are credited after ${upCurrency} settlement (1-3 days)`,
+              note: "Funds are credited instantly after transfer",
           };
       } else {
-          // Generate new account if missing
+          // Generate new NGN account if missing
           if (upCurrency === "NGN") {
               const PaystackProvider = require("./payment/providers/PaystackProvider");
               const paystack = new PaystackProvider();
@@ -290,42 +283,9 @@ async function createBankDeposit(
                   }
               }
           } else if (["USD", "EUR", "GBP"].includes(upCurrency)) {
-              const hasFincra = process.env.FINCRA_SECRET_KEY && process.env.FINCRA_PUBLIC_KEY;
-              const isFincraDisabled = process.env.FINCRA_VIRTUAL_ACCOUNTS_DISABLED === "true";
-
-              if (hasFincra && !isFincraDisabled) {
-                  const FincraProvider = require("./payment/providers/FincraProvider");
-                  const fincra = new FincraProvider();
-                  const va = await fincra.createVirtualAccount({
-                    currency: upCurrency, 
-                    email: profile.email, 
-                    firstName, 
-                    lastName, 
-                    phone: userPhone 
-                  });
-
-                  if (va) {
-                    liveDetails = {
-                      bankName: va.bankName,
-                      accountNumber: va.accountNumber,
-                      accountName: va.accountName,
-                      routingNumber: va.routingNumber || va.swiftCode,
-                      note: `Funds are credited after ${upCurrency} settlement (1-3 days)`,
-                    };
-
-                    // Store in dedicated_accounts table
-                    await supabase.from("dedicated_accounts").insert({
-                        user_id: userId,
-                        provider: "fincra",
-                        provider_account_id: String(va.id || ""),
-                        bank_name: va.bankName,
-                        account_number: va.accountNumber,
-                        account_name: va.accountName,
-                        currency: upCurrency,
-                        metadata: { routingNumber: va.routingNumber, swiftCode: va.swiftCode }
-                    });
-                  }
-              }
+              // Fincra virtual accounts are completely cut off as requested by User.
+              // We fall back entirely to manual bank transfer details from the Grey instructions table.
+              logger.info(`[DepositService] FCY Virtual Accounts are disabled. Using Grey manual transfer accounts.`);
           }
       }
   } catch (err) {

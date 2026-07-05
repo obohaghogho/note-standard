@@ -7,10 +7,10 @@ export const ContactPage = () => {
     const navigate = useNavigate();
 
     return (
-        <div className="min-h-[100dvh] bg-[#0a0a0a] p-4 md:p-8 relative w-full max-w-full">
+        <div className="h-full overflow-y-auto min-h-[100dvh] bg-[#0a0a0a] p-4 md:p-8 relative w-full max-w-full">
             <SEO 
                 title="Contact Us"
-                description="Get in touch with the NoteStandard team for support, feedback, or partnership enquiries."
+                description="Get in touch with the NoteStandard team for support, feedback, or partnership enquiries regarding our real-time messaging platform."
             />
             {/* Background gradients */}
             <div className="absolute top-0 right-1/4 w-full max-w-[1000px] h-[600px] bg-primary/10 rounded-full blur-[120px] -z-10" />
@@ -40,7 +40,7 @@ export const ContactPage = () => {
                                 <h2 className="text-xl font-semibold text-white">Company Name</h2>
                             </div>
                             <p className="text-lg mb-4 text-white font-medium">
-                                Aghogho Plyboard Enterprise
+                                Jossy Digital Technologies Ltd
                             </p>
                             
                             <div className="h-px bg-white/10 my-4" />
@@ -67,10 +67,10 @@ export const ContactPage = () => {
                                         <h3 className="text-lg font-semibold text-white/80">Alternate Email</h3>
                                     </div>
                                     <a 
-                                        href="mailto:obohaghogho107@gmail.com" 
+                                        href="mailto:admin.notestandard@gmail.com" 
                                         className="text-lg text-primary/80 hover:text-primary hover:underline transition-colors block ml-8"
                                     >
-                                        obohaghogho107@gmail.com
+                                        admin.notestandard@gmail.com
                                     </a>
                                 </div>
                             </div>

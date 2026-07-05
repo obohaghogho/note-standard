@@ -1,4 +1,5 @@
 const sgMail = require("@sendgrid/mail");
+const nodemailer = require("nodemailer");
 const logger = require("../utils/logger");
 
 /**
@@ -19,10 +20,32 @@ class SendGridEmailService {
     }
     this.from = process.env.EMAIL_FROM || "noreply@notestandard.com";
     this.senderName = "Note Standard";
+
+    // Setup backup SMTP transporter
+    const host = process.env.SMTP_HOST;
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+
+    if (host && user && pass) {
+      this.smtpTransporter = nodemailer.createTransport({
+        host,
+        port: process.env.SMTP_PORT || 587,
+        secure: process.env.SMTP_SECURE !== undefined
+          ? process.env.SMTP_SECURE === "true"
+          : process.env.SMTP_PORT == 465,
+        auth: { user, pass },
+        pool: true,
+        maxConnections: 5,
+        maxMessages: 100,
+      });
+      logger.info("[SendGridEmailService] SMTP backup transporter initialized successfully.");
+    } else {
+      logger.warn("[SendGridEmailService] SMTP backup transporter config missing.");
+    }
   }
 
   /**
-   * Send an email via SendGrid
+   * Send an email via SendGrid with automatic SMTP fallback
    * @param {Object} params
    * @param {string} params.to - Recipient email
    * @param {string} params.subject - Subject line
@@ -30,32 +53,51 @@ class SendGridEmailService {
    * @returns {Promise<boolean>} Success status
    */
   async sendEmail({ to, subject, htmlContent }) {
-    if (!this.apiKey) {
-      logger.warn("[SendGridEmailService] API Key missing. Skipping email.");
-      return false;
+    if (this.apiKey) {
+      const msg = {
+        to,
+        from: {
+          email: this.from,
+          name: this.senderName,
+        },
+        subject,
+        html: htmlContent,
+      };
+
+      try {
+        await sgMail.send(msg);
+        logger.info(`[SendGridEmailService] Email sent to ${to}: ${subject} (via SendGrid)`);
+        return true;
+      } catch (error) {
+        logger.error(
+          `[SendGridEmailService] SendGrid failed to send email to ${to}:`,
+          error.response?.body || error.message
+        );
+        logger.warn("[SendGridEmailService] Attempting SMTP fallback...");
+      }
+    } else {
+      logger.warn("[SendGridEmailService] SendGrid API Key missing. Trying SMTP backup...");
     }
 
-    const msg = {
-      to,
-      from: {
-        email: this.from,
-        name: this.senderName,
-      },
-      subject,
-      html: htmlContent,
-    };
-
-    try {
-      await sgMail.send(msg);
-      logger.info(`[SendGridEmailService] Email sent to ${to}: ${subject}`);
-      return true;
-    } catch (error) {
-      logger.error(
-        `[SendGridEmailService] Failed to send email to ${to}:`,
-        error.response?.body || error.message
-      );
-      return false;
+    if (this.smtpTransporter) {
+      try {
+        const mailOptions = {
+          from: `"${this.senderName}" <${process.env.SMTP_FROM || this.from}>`,
+          to,
+          subject,
+          html: htmlContent,
+        };
+        const info = await this.smtpTransporter.sendMail(mailOptions);
+        logger.info(`[SendGridEmailService] Email sent to ${to}: ${subject} (via SMTP Backup)`);
+        return true;
+      } catch (smtpError) {
+        logger.error(`[SendGridEmailService] SMTP Backup failed to send email to ${to}:`, smtpError.message);
+      }
+    } else {
+      logger.error("[SendGridEmailService] No SMTP backup transporter configured.");
     }
+
+    return false;
   }
 
   // ─── Email Templates (Migrated from Brevo) ────────────────────
@@ -195,6 +237,35 @@ class SendGridEmailService {
            View Wallet
         </a>
       </div>
+    `);
+    return this.sendEmail({ to: email, subject, htmlContent });
+  }
+
+  async sendUnreadMessagesEmail(email, { senderName, count, link, type = 'message' }) {
+    const isCall = type === 'call';
+    const subject = isCall 
+      ? `Missed call from ${senderName}`
+      : `${senderName} sent you ${count} new message${count > 1 ? 's' : ''}`;
+      
+    const htmlContent = this._wrapTemplate(`
+      <h2 style="color: #8b5cf6; margin-bottom: 16px;">
+        ${isCall ? '📞 Missed Call' : '💬 New Messages'}
+      </h2>
+      <p style="font-size: 16px; color: #374151;">
+        ${isCall 
+          ? `You missed a call from <strong>${senderName}</strong> on NoteStandard.` 
+          : `<strong>${senderName}</strong> sent you ${count} new message${count > 1 ? 's' : ''} on NoteStandard.`}
+      </p>
+      <div style="margin-top: 32px; text-align: center;">
+        <a href="${link}"
+           style="display: inline-block; background: linear-gradient(135deg, #8b5cf6, #6366f1); color: white; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px rgba(99, 102, 241, 0.2);">
+           ${isCall ? 'Call Back' : 'Read Messages'}
+        </a>
+      </div>
+      <p style="margin-top: 32px; font-size: 13px; color: #6b7280; text-align: center;">
+        You received this email because your device was offline or you force-quit the app. 
+        To get instant notifications, leave the app running in the background.
+      </p>
     `);
     return this.sendEmail({ to: email, subject, htmlContent });
   }

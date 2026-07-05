@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 
 interface SEOProps {
   title: string;
@@ -7,6 +8,8 @@ interface SEOProps {
 }
 
 export const SEO = ({ title, description, keywords }: SEOProps) => {
+  const location = useLocation();
+
   useEffect(() => {
     // Set Document Title
     const fullTitle = `${title} | NoteStandard`;
@@ -39,9 +42,19 @@ export const SEO = ({ title, description, keywords }: SEOProps) => {
       }
     });
 
-    // Cleanup: Reset to global defaults if needed (optional)
-    // For now, let's just keep the last set values.
-  }, [title, description, keywords]);
+    // Update canonical URL
+    const canonicalUrl = `https://notestandard.com${location.pathname === '/' ? '' : location.pathname}`;
+    let canonicalLink = document.querySelector('link[rel="canonical"]');
+    if (canonicalLink) {
+      canonicalLink.setAttribute('href', canonicalUrl);
+    } else {
+      canonicalLink = document.createElement('link');
+      canonicalLink.setAttribute('rel', 'canonical');
+      canonicalLink.setAttribute('href', canonicalUrl);
+      document.head.appendChild(canonicalLink);
+    }
+
+  }, [title, description, keywords, location.pathname]);
 
   return null;
 };

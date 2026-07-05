@@ -1,4 +1,5 @@
 const express = require("express");
+global.__BOOT_READY__ = false;
 const logger = require("./utils/logger");
 const path = require("path");
 const cors = require("cors");
@@ -56,6 +57,9 @@ app.use((req, res, next) => {
   next();
 });
 
+const correlationId = require("./middleware/correlationId");
+app.use(correlationId);
+
 // ─── Webhook Pre-Parser Interceptor ──────────────────────────
 app.use((req, res, next) => {
   if (req.originalUrl && req.originalUrl.includes('webhook')) {
@@ -87,7 +91,18 @@ const { requireAuth, requireAdmin } = require("./middleware/authMiddleware");
 const ApiError = require("./utils/apiError");
 const paymentController = require("./controllers/payment/paymentController");
 
-// ─── Routes ──────────────────────────────────────────────────
+
+// ─── Deterministic Boot Architecture Gate ──────────────────
+// SINGLE admission authority for ALL HTTP traffic.
+// The BootManager must mark every service ready before any request passes.
+const bootGate = require('./middleware/bootGate');
+app.use(bootGate);
+
+// Boot Status Endpoint (public, always available)
+app.get("/api/boot/status", (req, res) => {
+  res.json(global.BOOT_STATE || { phase: "STARTING", ready: false });
+});
+
 // Health check (with Supabase ping)
 app.get("/api/health", async (req, res) => {
   try {
@@ -113,6 +128,43 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
+// TEST 1 & 2: Gateway Reachability Diagnostics
+app.get("/api/diagnose-gateway", async (req, res) => {
+  const gatewayUrl = process.env.REALTIME_GATEWAY_URL;
+  const result = {
+    env_REALTIME_GATEWAY_URL: gatewayUrl,
+    is_undefined: gatewayUrl === undefined,
+    is_localhost: gatewayUrl ? gatewayUrl.includes('localhost') : false,
+    ping_status: null,
+    ping_body: null,
+    ping_time_ms: null,
+    ping_error: null
+  };
+
+  if (!gatewayUrl) {
+    return res.json(result);
+  }
+
+  const start = Date.now();
+  try {
+    const fetch = require('node-fetch');
+    // Fetch from gateway's public health endpoint or just the root
+    const pingRes = await fetch(`${gatewayUrl}/health`, { timeout: 10000 });
+    result.ping_time_ms = Date.now() - start;
+    result.ping_status = pingRes.status;
+    result.ping_body = await pingRes.text();
+  } catch (err) {
+    result.ping_time_ms = Date.now() - start;
+    result.ping_error = {
+      message: err.message,
+      code: err.code,
+      stack: err.stack
+    };
+  }
+
+  res.json(result);
+});
+
 app.get("/", (req, res) => {
   res.json({ message: "Note Standard API is running 🚀" });
 });
@@ -134,15 +186,36 @@ const statusRoutes = require('./routes/status');
 const manualDepositRoutes = require("./routes/manualDepositRoutes");
 const bankAccountRoutes = require("./routes/bankAccountRoutes");
 const teamRoutes = require("./routes/teamRoutes");
+const sessionRoutes = require("./routes/session");
+const agoraRoutes = require("./routes/agora");
+
+// Phase 3–4B Routes
+const aiTutorRoutes = require("./routes/aiTutor");
+const notesAiRoutes = require("./routes/notesAi");
+const creatorRoutes = require("./routes/creator");
+
+// v2.5 Operations Dashboard
+const opsRoutes = require("./routes/ops");
+
+// Premium Dashboard Redesign
+const dashboardNotesRoutes = require("./routes/dashboard");
+
+// NFI Routes
+const connectorRoutes = require("./routes/connectorRoutes");
+const financialRoutes = require("./routes/financialRoutes");
 
 // API Mounts
 app.use("/api/auth", authRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/deposit", manualDepositRoutes);
+app.use("/api/nfi/connectors", connectorRoutes);
+app.use("/api/nfi/financials", financialRoutes);
 app.use("/api/notes", notesRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/users", require("./routes/usersRoutes"));
 app.use("/api/upload", uploadRoutes);
+app.use("/api/media", require("./routes/media"));
+app.use("/api/version", require("./routes/version"));
 app.use("/api/subscription", subscriptionRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/notifications", notificationRoutes);
@@ -153,8 +226,41 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/status', statusRoutes);
 app.use("/api/bank-account", bankAccountRoutes);
 app.use("/api/limit-requests", requireAuth, require("./routes/limitRequests"));
-app.use("/api/agora", require("./routes/agora"));
+app.use("/api/webrtc", require("./routes/webrtc"));
 app.use("/api/teams", teamRoutes);
+app.use("/api/agora", requireAuth, agoraRoutes);
+app.use("/api/system", require("./routes/system"));
+app.use("/api/session", sessionRoutes);
+
+// Phase 3–4B: AI Tutor, Creator Platform
+app.use("/api/ai-tutor", aiTutorRoutes);
+app.use("/api/notes/ai", notesAiRoutes);
+app.use("/api/creator", creatorRoutes);
+
+// v2.5: Operations Dashboard
+app.use("/api/ops", opsRoutes);
+
+// Premium Dashboard Redesign
+app.use("/api/dashboard", dashboardNotesRoutes);
+
+// Phase 6.2: Replay Debugger
+const replayRoutes = require("./tools/replayDebugger/replayRoutes");
+app.use(replayRoutes);
+
+// Phase 6.2 Step 3: Chaos Simulator
+const { runChaosScenario } = require("./tools/chaosSimulator/index.js");
+app.post("/api/debug/chaos/run", async (req, res) => {
+  const { conversation_id, level } = req.body;
+  const result = await runChaosScenario({
+    conversationId: conversation_id,
+    level: level || 1
+  });
+  res.json(result);
+});
+
+// Phase 8.3: Replay Certification Layer
+const certificateRoutes = require("./tools/replayCertification/certificateAPI");
+app.use(certificateRoutes);
 
 // ─── Payment, Transaction & Webhook Routes ────────────────────
 // CRITICAL: These MUST be mounted BEFORE the SystemState mutation block.
@@ -213,9 +319,6 @@ app.post("/api/verify-payment", requireAuth, paymentController.verifyPayment);
 // ─── Flutterwave (Legacy → Fincra) ───────────────────────────
 // DEPRECATED: Standard Flutterwave logic is now routed through the Fincra engine 
 // or the unified webhook router. Direct Flutterwave endpoints are being retired.
-
-app.use("/api/media", require("./routes/media"));
-app.use("/api/version", require("./routes/version"));
 
 // ─── Dynamic App Downloads ───────────────────────────────────
 const downloadService = require("./services/DownloadService");

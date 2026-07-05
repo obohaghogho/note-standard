@@ -1,6 +1,6 @@
 {
   "name": "note-standard",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Root package for note-standard monorepo",
   "scripts": {
     "install:all": "npm install && npm install -w client && npm install -w server && npm install -w realtime-gateway",
@@ -14,7 +14,8 @@
     "build:client": "npm run build -w client",
     "lint": "eslint .",
     "typecheck": "npm run typecheck -w client",
-    "prepare": "echo 'Skipping husky in production'"
+    "prepare": "echo 'Skipping husky in production'",
+    "chaos:ci": "node server/tools/ciChaosGate/ciRunner.js"
   },
   "dependencies": {
     "bip39": "^3.1.0",

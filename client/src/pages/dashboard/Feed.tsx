@@ -1,183 +1,159 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { Input } from '../../components/common/Input';
-import { CommentModal } from '../../components/dashboard/CommentModal';
-import { Search, Loader2 } from 'lucide-react';
-import { supabase, safeCall } from '../../lib/supabaseSafe';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { FeedLayout } from '../../components/community/FeedLayout';
+import { FeedHeader } from '../../components/community/FeedHeader';
+import { FeedTabs } from '../../components/community/FeedTabs';
+import { FeedFilters } from '../../components/community/FeedFilters';
+import { FeedSearch } from '../../components/community/FeedSearch';
+import { FeedContent } from '../../components/community/FeedContent';
+import { FeedSidebar } from '../../components/community/FeedSidebar';
+import { FeedFAB } from '../../components/community/FeedFAB';
+import { PostComposer } from '../../components/community/PostComposer';
+import { useCommunityFeed } from '../../hooks/useCommunityFeed';
 import { useAuth } from '../../context/AuthContext';
-import { FeedNoteCard } from '../../components/dashboard/FeedNoteCard';
-import type { FeedNoteData } from '../../components/dashboard/FeedNoteCard';
+import type { CommunityPost } from '../../services/communityService';
+import { RefreshCw } from 'lucide-react';
 
-export const Feed = () => {
-    const { user } = useAuth();
-    const [notes, setNotes] = useState<FeedNoteData[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [hasFetched, setHasFetched] = useState(false);
-    const [activeNote, setActiveNote] = useState<FeedNoteData | null>(null);
-    const fetchFeedRef = useRef<() => void>(() => {});
+const FEED_TABS = [
+  { id: 'trending', label: 'Trending' },
+  { id: 'latest', label: 'Latest' },
+  { id: 'following', label: 'Following' },
+  { id: 'saved', label: 'Saved' },
+  { id: 'my-posts', label: 'My Posts' },
+  { id: 'spaces', label: 'Spaces' },
+];
 
-    const fetchFeed = useCallback(async () => {
-        if (!user) return;
-        setLoading(true);
-        
-        const result = await safeCall(
-            `feed-${user.id}-${searchTerm}`,
-            async () => {
-                // Fetch public notes
-                const query = supabase
-                    .from('notes')
-                    .select(`
-                        *,
-                        owner:profiles!owner_id (username, email, avatar_url, plan_tier, is_verified)
-                    `)
-                    .eq('is_private', false)
-                    .order('created_at', { ascending: false });
+export const Feed: React.FC = () => {
+  const { profile } = useAuth();
+  const [activeTab, setActiveTab] = useState('trending');
+  const [filterState, setFilterState] = useState({ category: 'All', sort: 'latest' });
+  const [search, setSearch] = useState('');
+  const [showComposer, setShowComposer] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const touchStartY = useRef<number>(0);
 
-                if (searchTerm) {
-                    query.ilike('title', `%${searchTerm}%`);
-                }
+  const {
+    posts,
+    isLoading,
+    isFetchingMore,
+    error,
+    hasMore,
+    loadMore,
+    refresh,
+    optimisticLike,
+    optimisticBookmark,
+    prependPost,
+    removePost,
+  } = useCommunityFeed({
+    tab: activeTab,
+    category: filterState.category !== 'All' ? filterState.category : undefined,
+    sort: filterState.sort,
+    search: search || undefined,
+  });
 
-                const { data: notesData, error } = await query;
-                if (error) throw error;
+  // ── Infinite scroll (IntersectionObserver) ────────────────────────────────
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
 
-                if (notesData) {
-                    // Fetch likes and comments counts for each note
-                    const enhancedNotes = await Promise.all(notesData.map(async (note) => {
-                        const [likesCount, commentsCount, userLike] = await Promise.all([
-                            supabase.rpc('get_like_count', { p_note_id: note.id }),
-                            supabase.rpc('get_comment_count', { p_note_id: note.id }),
-                            supabase.from('likes').select('id').eq('note_id', note.id).eq('user_id', user.id).maybeSingle()
-                        ]);
-
-                        return {
-                            ...note,
-                            likes_count: likesCount.data || 0,
-                            comments_count: commentsCount.data || 0,
-                            user_has_liked: !!userLike.data
-                        };
-                    }));
-
-                    return enhancedNotes;
-                }
-                return [];
-            },
-            { minDelay: 1000, fallback: [] }
-        );
-
-        setNotes(result || []);
-        setLoading(false);
-    }, [user, searchTerm]);
-
-    // Update the ref to always point to the latest stable fetch function
-    useEffect(() => {
-        fetchFeedRef.current = fetchFeed;
-    }, [fetchFeed]);
-
-    // Effect 1: Initial Mount Fetcher - 🔥 Production-safe guard
-    useEffect(() => {
-        if (!user || hasFetched || searchTerm) return;
-        
-        console.log('[Feed] Production-safe initial fetch');
-        fetchFeed();
-        setHasFetched(true);
-    }, [user, hasFetched, searchTerm, fetchFeed]);
-
-    // Effect 2: Debounced Search Fetcher
-    useEffect(() => {
-        if (!searchTerm) return; // Managed by initial fetch or realtime
-        
-        const timeoutId = setTimeout(() => {
-            fetchFeed();
-        }, 500);
-        return () => clearTimeout(timeoutId);
-    }, [fetchFeed, searchTerm]);
-
-    // Effect 2: Realtime Listeners - 🔥 ONLY RUN ONCE
-    useEffect(() => {
-        if (!user) return;
-
-        console.log('[Feed] Setting up stable realtime listeners');
-        
-        // Setup Realtime Subscriptions for counts
-        let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-        const debouncedRefetch = () => {
-            if (debounceTimer) clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => fetchFeedRef.current(), 1000);
-        };
-
-        const commentChannel = supabase
-            .channel('public-comments')
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'comments' },
-                () => debouncedRefetch()
-            )
-            .subscribe();
-
-        const likeChannel = supabase
-            .channel('public-likes')
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'likes' },
-                () => debouncedRefetch()
-            )
-            .subscribe();
-
-        return () => {
-            if (debounceTimer) clearTimeout(debounceTimer);
-            supabase.removeChannel(commentChannel);
-            supabase.removeChannel(likeChannel);
-        };
-    }, [user]); // Only re-runs if the user identity changes
-
-    return (
-        <div className="space-y-6 max-w-4xl mx-auto">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="space-y-1">
-                    <h1 className="text-3xl font-bold">Community Feed</h1>
-                    <p className="text-gray-400">Discover public notes from other users</p>
-                </div>
-                <div className="w-full md:w-72">
-                    <Input
-                        id="feed-search"
-                        name="feedSearch"
-                        icon={Search}
-                        placeholder="Search public notes..."
-                        className="bg-[#121212]"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                </div>
-            </div>
-
-            {loading ? (
-                <div className="flex items-center justify-center py-20">
-                    <Loader2 className="animate-spin text-primary" size={32} />
-                </div>
-            ) : notes.length === 0 ? (
-                <div className="text-center py-20 space-y-3">
-                    <div className="text-gray-500">No public notes found yet.</div>
-                    <div className="text-sm text-gray-600">Be the first to share a note publicly!</div>
-                </div>
-            ) : (
-                <div className="space-y-4">
-                    {notes.map((note) => (
-                        <FeedNoteCard
-                            key={note.id}
-                            note={note}
-                            onCommentClick={setActiveNote}
-                        />
-                    ))}
-                </div>
-            )}
-
-            <CommentModal
-                isOpen={!!activeNote}
-                onClose={() => setActiveNote(null)}
-                note={activeNote}
-            />
-        </div>
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isFetchingMore) {
+          loadMore();
+        }
+      },
+      { rootMargin: '300px' }
     );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, isFetchingMore, loadMore]);
+
+  // ── Pull-to-refresh (touch) ───────────────────────────────────────────────
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY;
+  }, []);
+
+  const handleTouchEnd = useCallback(async (e: React.TouchEvent) => {
+    const dy = e.changedTouches[0].clientY - touchStartY.current;
+    if (dy > 80 && window.scrollY === 0) {
+      setIsRefreshing(true);
+      await refresh();
+      setIsRefreshing(false);
+    }
+  }, [refresh]);
+
+  const handleTabChange = useCallback((tab: string) => {
+    setActiveTab(tab);
+  }, []);
+
+  const handleFilterChange = useCallback((state: { category: string; sort: string }) => {
+    setFilterState(state);
+  }, []);
+
+  const handlePosted = useCallback((post: CommunityPost) => {
+    prependPost(post);
+    setShowComposer(false);
+  }, [prependPost]);
+
+  return (
+    <>
+      <div onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+        {/* Pull-to-refresh indicator */}
+        {isRefreshing && (
+          <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-white dark:bg-gray-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 border border-gray-100 dark:border-gray-700">
+            <RefreshCw size={14} className="animate-spin" />
+            Refreshing…
+          </div>
+        )}
+
+        <FeedLayout
+          sidebar={
+            <div className="py-4 h-full flex flex-col">
+              <div className="px-4 mb-4">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">NoteStandard</h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Knowledge Ecosystem</p>
+              </div>
+              <FeedSearch onSearch={setSearch} />
+            </div>
+          }
+          content={
+            <>
+              <FeedHeader />
+              <FeedTabs activeTab={activeTab} onTabChange={handleTabChange} tabs={FEED_TABS} />
+              <FeedFilters onChange={handleFilterChange} />
+              <FeedContent
+                posts={posts}
+                isLoading={isLoading}
+                isFetchingMore={isFetchingMore}
+                error={error}
+                sentinelRef={sentinelRef}
+                onOpenComposer={() => setShowComposer(true)}
+                onDelete={removePost}
+                onOptimisticLike={optimisticLike}
+                onOptimisticBookmark={optimisticBookmark}
+                currentUserAvatar={profile?.avatar_url}
+              />
+            </>
+          }
+          rightSidebar={<FeedSidebar />}
+          fab={
+            <FeedFAB
+              onPosted={handlePosted}
+            />
+          }
+        />
+      </div>
+
+      {/* Post composer (from "Share your knowledge..." click) */}
+      {showComposer && (
+        <PostComposer
+          onClose={() => setShowComposer(false)}
+          onPosted={handlePosted}
+        />
+      )}
+    </>
+  );
 };
 
 export default Feed;

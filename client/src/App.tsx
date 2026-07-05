@@ -14,11 +14,13 @@ import { WalletProvider } from './context/WalletContext';
 import { WebRTCProvider } from './context/WebRTCContext';
 import { PresenceProvider } from './context/PresenceContext';
 import { NotesProvider } from './context/NotesContext';
+import { NotesDashboardProvider } from './context/NotesDashboardContext';
 // import { ChatWidget } from './components/chat/ChatWidget'; // already handled by Route
 import { ChatWidget } from './components/chat/ChatWidget';
 import { ErrorBoundary } from 'react-error-boundary';
 import { VersionGuard } from './components/common/VersionGuard';
 import { IOSInstallPrompt } from './components/common/IOSInstallPrompt';
+import { WebNotificationRouter } from './components/common/WebNotificationRouter';
 import DashboardHome from './pages/dashboard/DashboardHome';
 import Notes from './pages/dashboard/Notes';
 import Chat from './pages/dashboard/Chat';
@@ -64,13 +66,18 @@ const AdminSettings = lazyWithRetry(() => import('./pages/admin/AdminSettings'),
 const ManageAds = lazyWithRetry(() => import('./pages/admin/ManageAds'), 'ManageAds');
 const LimitRequestsPage = lazyWithRetry(() => import('./pages/admin/LimitRequestsPage'), 'LimitRequestsPage');
 const ManualDeposits = lazyWithRetry(() => import('./pages/admin/ManualDeposits'), 'ManualDeposits');
+const ManualWithdrawals = lazyWithRetry(() => import('./pages/admin/ManualWithdrawals'), 'ManualWithdrawals');
 const ReconciliationDashboard = lazyWithRetry(() => import('./pages/admin/ReconciliationDashboard').then(m => ({ default: m.ReconciliationDashboard })), 'ReconciliationDashboard');
+const PushHealthDashboard = lazyWithRetry(() => import('./pages/admin/PushHealthDashboard'), 'PushHealthDashboard');
 
 
 const ChatRedirect = () => {
   const { id } = useParams();
   return <Navigate to={`/dashboard/chat?id=${id}`} replace />;
 };
+
+// Phase 6.2: Replay Debugger UI
+const ReplayPage = lazyWithRetry(() => import('./debug/replay/ReplayPage'), 'ReplayPage');
 
 function App() {
   useEffect(() => {
@@ -89,51 +96,27 @@ function App() {
       }
     };
 
-    // Global handler for online/offline status
-    const handleOnline = () => {
-      toast.success('Back online', { id: 'online-status' });
-    };
-
-    const handleOffline = () => {
-      toast.error(
-        () => (
-          <span>
-            <b>⚠️ No internet connection.</b>
-            <br />
-            Please check your network and try again.
-          </span>
-        ),
-        { id: 'online-status', duration: Infinity }
-      );
-    };
+    // Online/offline toasts removed — they were getting stuck on screen
 
     // Attach global error handlers
     window.addEventListener('error', handleError);
     window.addEventListener('unhandledrejection', handler);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    // Initial check for offline state
-    if (!navigator.onLine) {
-      handleOffline();
-    }
 
     // Cleanup on unmount
     return () => {
       window.removeEventListener('error', handleError);
       window.removeEventListener('unhandledrejection', handler);
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
   return (
     <Router>
       <ErrorBoundary 
-        fallback={
+        fallbackRender={({ error }) => (
           <div style={{ padding: '2rem', textAlign: 'center', color: '#ef4444' }}>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Something went wrong</h2>
-            <p style={{ marginTop: '0.5rem', color: '#9ca3af' }}>Please refresh the page to continue.</p>
+            <p style={{ marginTop: '0.5rem', color: '#9ca3af' }}>{error?.message || 'Unknown error'}</p>
+            <p style={{ marginTop: '0.5rem', color: '#ef4444', fontSize: '0.8rem', textAlign: 'left', whiteSpace: 'pre-wrap' }}>{error?.stack}</p>
             <button 
               onClick={() => window.location.reload()}
               style={{ marginTop: '1rem', padding: '0.5rem 1rem', background: '#3b82f6', color: 'white', borderRadius: '0.5rem', border: 'none', cursor: 'pointer' }}
@@ -141,7 +124,7 @@ function App() {
               Reload Page
             </button>
           </div>
-        }
+        )}
       >
         <Suspense fallback={
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#0a0a0a' }}>
@@ -158,7 +141,9 @@ function App() {
                     <WebRTCProvider>
                       <WalletProvider>
                         <NotesProvider>
-                          <Routes>
+                          <NotesDashboardProvider>
+                            <WebNotificationRouter />
+                            <Routes>
                             <Route path="/" element={<LandingPage />} />
                             <Route path="/login" element={<Login />} />
                             <Route path="/signup" element={<Signup />} />
@@ -172,15 +157,18 @@ function App() {
                             
                             <Route path="/chat/:id" element={<ChatRedirect />} />
 
-                            <Route path="/activity/success" element={<ActivitySuccess />} />
-                            <Route path="/activity/cancel" element={<ActivityCancel />} />
-                            <Route path="/activity" element={<Navigate to="/dashboard/activity" replace />} />
+                            {/* Phase 6.2: Replay Debugger UI */}
+                            <Route path="/debug/replay" element={<ReplayPage />} />
+
+                            <Route path="/wallet/success" element={<ActivitySuccess />} />
+                            <Route path="/wallet/cancel" element={<ActivityCancel />} />
+                            <Route path="/wallet" element={<Navigate to="/dashboard/wallet" replace />} />
                             
                             <Route path="/" element={<LandingPage />} />
                             
                             {/* High-priority Payment Redirects (Move before catch-alls) */}
-                            <Route path="/payment/success/*" element={<Navigate to="/activity/success" replace />} />
-                            <Route path="/payment/cancel/*" element={<Navigate to="/activity/cancel" replace />} />
+                            <Route path="/payment/success/*" element={<Navigate to="/wallet/success" replace />} />
+                            <Route path="/payment/cancel/*" element={<Navigate to="/wallet/cancel" replace />} />
                             
                             <Route path="/login" element={<Login />} />
 
@@ -194,7 +182,7 @@ function App() {
                                 <Route path="favorites" element={<Notes />} />
                                 <Route path="search" element={<Search />} />
                                 <Route path="billing" element={<Billing />} />
-                                <Route path="activity" element={<WalletPage />} />
+                                <Route path="wallet" element={<WalletPage />} />
                                 <Route path="history" element={<Transactions />} />
                                 <Route path="affiliates" element={<Affiliates />} />
                                 <Route path="deposit" element={<DepositPage />} />
@@ -218,8 +206,10 @@ function App() {
                                 <Route path="reconciliation" element={<ReconciliationDashboard />} />
                                 <Route path="ads" element={<ManageAds />} />
                                 <Route path="deposits" element={<ManualDeposits />} />
+                                <Route path="withdrawals" element={<ManualWithdrawals />} />
                                 <Route path="limit-requests" element={<LimitRequestsPage />} />
                                 <Route path="settings" element={<AdminSettings />} />
+                                <Route path="push-health" element={<PushHealthDashboard />} />
                               </Route>
                             </Route>
                           </Routes>
@@ -227,6 +217,7 @@ function App() {
                           <ChatWidget />
                           {/* iOS install prompt — shown after 8s to iOS Safari users not running as PWA */}
                           <IOSInstallPrompt />
+                          </NotesDashboardProvider>
                         </NotesProvider>
                       </WalletProvider>
                     </WebRTCProvider>

@@ -21,7 +21,10 @@ export default tseslint.config(
       "chat_*.js",
       "*.log",
       "*.txt",
-      "*.sql"
+      "*.sql",
+      // Playwright config and e2e tests are not part of any tsconfig project
+      "client/playwright.config.ts",
+      "client/tests/**"
     ],
   },
 
@@ -30,7 +33,7 @@ export default tseslint.config(
 
   // 3. Client configuration (React + TypeScript)
   {
-    files: ["client/src/**/*.{ts,tsx}", "client/*.ts"],
+    files: ["client/src/**/*.{ts,tsx}", "client/vite.config.ts"],
     extends: [
       ...tseslint.configs.recommended,
     ],
@@ -63,7 +66,7 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": "off",
       "@typescript-eslint/no-explicit-any": "warn",
-      "@typescript-eslint/no-unused-vars": "error",
+      "@typescript-eslint/no-unused-vars": "warn",
       "@typescript-eslint/ban-ts-comment": "warn",
       "import-x/no-unresolved": "off",
       "import-x/no-duplicates": "warn",

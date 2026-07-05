@@ -2,6 +2,7 @@ import React from 'react';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { NotificationRouter } from '../services/NotificationRouter';
 import AuthStack from './AuthStack';
 import MainStack from './MainStack';
 
@@ -25,7 +26,12 @@ export default function AppNavigator() {
   }
 
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer 
+      ref={navigationRef}
+      onReady={() => {
+        NotificationRouter.setAppReady();
+      }}
+    >
       {isAuthenticated ? <MainStack /> : <AuthStack />}
     </NavigationContainer>
   );

@@ -80,3 +80,4 @@ server/scripts/audit_drift.js
 server/scripts/live_payment_verify.js
 server/scripts/add_enum_values.js
 *.apk
+.vercel

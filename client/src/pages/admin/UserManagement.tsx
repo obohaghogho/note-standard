@@ -31,6 +31,8 @@ interface User {
     notesCount: number;
     daily_deposit_limit: number | null;
     plan_tier: string;
+    last_ip: string | null;
+    country_code: string | null;
 }
 
 interface Pagination {
@@ -219,6 +221,8 @@ export const UserManagement = () => {
                         <tr>
                             <th>User</th>
                             <th>Email</th>
+                            <th>IP Address</th>
+                            <th>Country</th>
                             <th>Role</th>
                             <th>Status</th>
                             <th>Notes</th>
@@ -229,19 +233,23 @@ export const UserManagement = () => {
                     <tbody>
                         {loading ? (
                             <tr>
-                                <td colSpan={7} className="loading-row">
+                                <td colSpan={9} className="loading-row">
                                     <div className="loader-small" />
                                     Loading users...
                                 </td>
                             </tr>
                         ) : users.length === 0 ? (
                             <tr>
-                                <td colSpan={7} className="empty-row">
+                                <td colSpan={9} className="empty-row">
                                     No users found
                                 </td>
                             </tr>
                         ) : (
-                            users?.map(user => (
+                            users?.map(user => {
+                                const isProxy = user.last_ip?.includes('(Proxy)');
+                                const cleanIp = user.last_ip?.replace('(Proxy)', '').trim();
+                                
+                                return (
                                 <tr key={user.id}>
                                     <td className="user-cell">
                                         <div className="user-info">
@@ -263,6 +271,30 @@ export const UserManagement = () => {
                                     </td>
                                     <td className="max-w-[150px] md:max-w-[200px]">
                                         <div className="truncate" title={user.email}>{user.email}</div>
+                                    </td>
+                                    <td>
+                                        <div className="flex flex-col items-start gap-1">
+                                            <span className="font-mono text-xs">{cleanIp || 'Unknown'}</span>
+                                            {isProxy && (
+                                                <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded border border-red-500/30">
+                                                    PROXY/VPN
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div className="flex items-center gap-2">
+                                            {user.country_code ? (
+                                                <>
+                                                    <span className="text-lg" title={user.country_code}>
+                                                        {String.fromCodePoint(...[...user.country_code.toUpperCase()].map(c => 0x1F1E6 - 65 + c.charCodeAt(0)))}
+                                                    </span>
+                                                    <span className="text-xs text-gray-400">{user.country_code}</span>
+                                                </>
+                                            ) : (
+                                                <span className="text-xs text-gray-500">N/A</span>
+                                            )}
+                                        </div>
                                     </td>
                                     <td>
                                         <span className={`role-badge ${user.role}`}>
@@ -321,7 +353,8 @@ export const UserManagement = () => {
                                         </div>
                                     </td>
                                 </tr>
-                            ))
+                                );
+                            })
                         )}
                     </tbody>
                 </table>

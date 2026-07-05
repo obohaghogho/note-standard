@@ -34,7 +34,13 @@ export const supabase = createClient(supabaseUrl || '', supabaseKey || '', {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true, // Allow Supabase to process recovery/signup tokens from URL automatically
-        storage: window.localStorage
+        storage: window.localStorage,
+        // Disable the BroadcastChannel lock to prevent spurious 5-second timeout
+        // warnings in React Strict Mode (dev) and multi-tab environments.
+        // Strict Mode unmounts/remounts components which orphans the lock holder,
+        // triggering the "Lock was not released within 5000ms" console warning.
+        // Our app handles multi-tab session sync via onAuthStateChange instead.
+        lock: (name: string, acquireTimeout: number, fn: () => Promise<unknown>) => fn(),
     },
     global: {
         headers: { 'x-application-name': 'note-standard' }

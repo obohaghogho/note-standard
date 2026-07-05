@@ -11,7 +11,7 @@ import { AuthStackParamList } from '../navigation/AuthStack';
 type Props = { navigation: NativeStackNavigationProp<AuthStackParamList, 'Login'> };
 
 export default function LoginScreen({ navigation }: Props) {
-  const { login } = useAuth();
+  const { login, accounts } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -56,6 +56,33 @@ export default function LoginScreen({ navigation }: Props) {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Welcome Back</Text>
             <Text style={styles.cardSubtitle}>Sign in to your account</Text>
+
+            {accounts.length > 0 && (
+              <View style={styles.quickSwitchContainer}>
+                <Text style={styles.quickSwitchLabel}>Quick Switch</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickSwitchScroll}>
+                  {accounts.map(acc => (
+                    <TouchableOpacity 
+                      key={acc.id} 
+                      style={styles.quickSwitchItem} 
+                      onPress={() => setEmail(acc.email)}
+                    >
+                      <LinearGradient colors={['#6366f1', '#4f46e5']} style={styles.quickSwitchAvatar}>
+                        <Text style={styles.quickSwitchAvatarText}>
+                          {acc.full_name?.charAt(0) || acc.username.charAt(0)}
+                        </Text>
+                      </LinearGradient>
+                      <Text style={styles.quickSwitchName} numberOfLines={1}>
+                        {acc.full_name || acc.username}
+                      </Text>
+                      <Text style={styles.quickSwitchEmail} numberOfLines={1}>
+                        {acc.email}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Email</Text>
@@ -228,5 +255,52 @@ const styles = StyleSheet.create({
     color: '#6366f1',
     fontSize: 13,
     fontWeight: '600',
+  },
+  quickSwitchContainer: {
+    marginBottom: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e1e3a',
+  },
+  quickSwitchLabel: {
+    color: '#aaa',
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    marginBottom: 12,
+    letterSpacing: 1,
+  },
+  quickSwitchScroll: {
+    flexDirection: 'row',
+  },
+  quickSwitchItem: {
+    alignItems: 'center',
+    marginRight: 16,
+    width: 72,
+  },
+  quickSwitchAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  quickSwitchAvatarText: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  quickSwitchName: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  quickSwitchEmail: {
+    color: '#666',
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: 2,
   },
 });

@@ -13,6 +13,8 @@ const onlineUsers = new Map();
 // Map<userId, boolean> tracking if the user wants their online status broadcasted
 const userVisibility = new Map();
 const lastSeenMap = new Map();
+// Map<socketId, deviceId> — canonical device ID for each active socket
+const socketDeviceMap = new Map();
 
 function getOnlineUserIds() {
   return Array.from(onlineUsers.keys());
@@ -23,17 +25,27 @@ function isUserOnline(userId) {
   return sockets && sockets.size > 0 && userVisibility.get(userId) !== false;
 }
 
-function markUserOnline(userId, socketId) {
+function getUserSockets(userId) {
+  const sockets = onlineUsers.get(userId);
+  return sockets ? Array.from(sockets) : [];
+}
+
+function markUserOnline(userId, socketId, deviceId) {
   if (!onlineUsers.has(userId)) {
     onlineUsers.set(userId, new Set());
   }
   onlineUsers.get(userId).add(socketId);
+  if (deviceId) {
+    socketDeviceMap.set(socketId, deviceId);
+    console.log(`[DeviceDiagnostic] Socket registered | userId:${userId} | socketId:${socketId} | deviceId:${deviceId}`);
+  }
 }
 
 function removeSocket(userId, socketId) {
   const sockets = onlineUsers.get(userId);
   if (sockets) {
     sockets.delete(socketId);
+    socketDeviceMap.delete(socketId);
     if (sockets.size === 0) {
       onlineUsers.delete(userId);
       userVisibility.delete(userId);
@@ -43,6 +55,21 @@ function removeSocket(userId, socketId) {
     }
   }
   return { wentOffline: false };
+}
+
+/**
+ * Returns the set of canonical device IDs actively connected for a given user.
+ * Used by computeV2Routing to do per-device suppression.
+ */
+function getActiveDeviceIds(userId) {
+  const sockets = onlineUsers.get(userId);
+  if (!sockets || sockets.size === 0) return new Set();
+  const deviceIds = new Set();
+  sockets.forEach(sid => {
+    const dId = socketDeviceMap.get(sid);
+    if (dId) deviceIds.add(dId);
+  });
+  return deviceIds;
 }
 
 module.exports = (io, socket) => {
@@ -66,11 +93,12 @@ module.exports = (io, socket) => {
       userVisibility.set(userId, isVisible);
 
       const wasAlreadyOnline = onlineUsers.has(userId) && onlineUsers.get(userId).size > 0;
-      markUserOnline(userId, socket.id);
+      markUserOnline(userId, socket.id, socket.deviceId);
 
       // If they are visible and just came online, broadcast
       if (isVisible && !wasAlreadyOnline) {
         console.log(`[Presence] ✓ ${userId} is now ONLINE (Visible: true)`);
+        console.log(`[FORENSIC][GW] PRESENCE_ONLINE | socket_id:${socket.id} | user_id:${userId} | ts:${Date.now()}`);
         socket.broadcast.emit('user_online', {
           userId,
           online: true,
@@ -94,7 +122,7 @@ module.exports = (io, socket) => {
   socket.on('presence:heartbeat', () => {
     const isVisible = userVisibility.get(userId) !== false;
     const wasOnline = onlineUsers.has(userId) && onlineUsers.get(userId).size > 0;
-    markUserOnline(userId, socket.id);
+    markUserOnline(userId, socket.id, socket.deviceId);
 
     if (!wasOnline && isVisible) {
       console.log(`[Presence] ↑ ${userId} heartbeat — back ONLINE`);
@@ -138,3 +166,5 @@ module.exports = (io, socket) => {
 
 module.exports.isUserOnline = isUserOnline;
 module.exports.getOnlineUserIds = getOnlineUserIds;
+module.exports.getUserSockets = getUserSockets;
+module.exports.getActiveDeviceIds = getActiveDeviceIds;

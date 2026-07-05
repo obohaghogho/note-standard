@@ -1,28 +1,44 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
 @layer base {
   :root {
-    --background: 0 0% 4%;
-    --foreground: 0 0% 93%;
+    /* NoteStandard Design System v1.0 */
+    --background: #FAFAFA;
+    --surface: #FFFFFF;
+    --elevated: #F8FAFC;
+    --border: #E5E7EB;
+    --muted: #6B7280;
+    --heading: #111827;
+    --body: #374151;
+    
     --floating-ui-offset: 0px;
     --chat-input-height: 0px;
   }
 
+  .dark, [data-theme="dark"] {
+    --background: #09090B;
+    --surface: #18181B;
+    --elevated: #27272A; /* Using elevated as card */
+    --card: #27272A;
+    --border: #3F3F46;
+    --heading: #FAFAFA;
+    --body: #D4D4D8;
+    --muted: #A1A1AA;
+  }
+
   * {
     box-sizing: border-box;
-    overflow-wrap: break-word;
-    word-wrap: break-word;
   }
 
   html {
     width: 100%;
+    height: 100%;
     margin: 0;
     padding: 0;
-    overflow-x: hidden;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
+    overflow: hidden;
+    position: fixed;
     overscroll-behavior-y: none;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
@@ -30,42 +46,37 @@
 
   body {
     width: 100%;
-    height: 100dvh;
+    height: 100%;
     margin: 0;
     padding: 0;
     overflow: hidden;
+    position: fixed;
     overscroll-behavior-y: none;
-    background-color: #0a0a0a;
-    @apply bg-background text-foreground antialiased;
+    background-color: var(--background);
+    @apply bg-background text-body font-sans antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
-    /* touch-action is intentionally NOT set on body — setting pan-x pan-y here
-       suppresses legitimate touch events on mobile inputs, scroll areas, and
-       interactive elements like the chat input and notification dropdowns. */
   }
 
+  /* 
+   * #root must NEVER have transform — it breaks position:fixed for all modals/overlays.
+   * Simple 100% fill is all that is needed here.
+   */
   #root {
     width: 100%;
     height: 100%;
     display: flex;
     flex-direction: column;
-    z-index: 1;
-    overflow-x: hidden;
-    overflow-y: auto;
+    overflow: hidden;
     overscroll-behavior-y: none;
-    -webkit-overflow-scrolling: touch;
   }
 
-  /* Remove tap highlight globally */
+  /* Remove tap highlight globally and enforce fast tap response */
   * {
     -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
   }
 
-  /* Prevent flex/grid children from overflowing their parents.
-     Scoped to flex/grid layout children only to avoid collapsing
-     inline elements like icon wrappers on narrow mobile screens. */
-  .flex > *, .grid > * {
-    min-width: 0;
-  }
+  /* Removed dangerous global min-width: 0 hack to prevent structural collapse */
 
   /* Images only — safe to apply height:auto + display:block.
      NOTE: svg, canvas, video, iframe are intentionally excluded:
@@ -212,16 +223,7 @@
 
 /* CRYSTAL THEME UTILITIES - GLOBALIZED */
 .bg-crystal {
-  background-color: #050510;
-  background-image: 
-    radial-gradient(ellipse 600px 400px at 10% 20%, rgba(16, 185, 129, 0.35) 0%, transparent 70%),
-    radial-gradient(ellipse 500px 500px at 85% 15%, rgba(139, 92, 246, 0.4) 0%, transparent 70%),
-    radial-gradient(ellipse 400px 400px at 50% 80%, rgba(59, 130, 246, 0.25) 0%, transparent 70%),
-    radial-gradient(ellipse 300px 300px at 70% 50%, rgba(16, 185, 129, 0.2) 0%, transparent 60%),
-    linear-gradient(135deg, rgba(255,255,255,0.03) 0%, transparent 50%);
-  background-attachment: fixed;
-  background-size: cover;
-  position: relative;
+  background-color: #0F1220;
 }
 
 .crystal-shape {
@@ -253,11 +255,11 @@
 
 /* MOBILE RESPONSIVENESS UTILITIES */
 .min-h-screen-safe {
-  min-height: 100dvh;
+  min-height: 100%;
 }
 
 .h-screen-safe {
-  height: 100dvh;
+  height: 100%;
 }
 
 .pb-safe {
@@ -288,3 +290,399 @@ input[type=number] {
   -moz-appearance: textfield;
   appearance: textfield;
 }
+
+/* Custom Sleek Premium Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+/* ======================================================
+   WHATSAPP-STYLE CHAT LAYOUT
+   ====================================================== */
+
+/* Emoji Picker Custom UI */
+.emoji-picker-container {
+    width: 320px;
+    max-width: calc(100vw - 64px);
+    background: #111116;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.emoji-picker-header {
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #9ca3af;
+    background: #181820;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.emoji-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
+    gap: 6px;
+    padding: 12px;
+    max-height: 220px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+.emoji-picker-grid::-webkit-scrollbar {
+    width: 6px;
+}
+.emoji-picker-grid::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+}
+
+.emoji-btn {
+    font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+    font-size: 22px;
+    line-height: 1;
+    padding: 6px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.15s, transform 0.1s;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+}
+.emoji-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    transform: scale(1.15);
+}
+
+/* 
+  The chat root takes exactly the visible viewport height.
+  100dvh = dynamic viewport height (shrinks when keyboard opens on modern browsers).
+  Fallback: calc(var(--vh,1vh)*100 - var(--kb-height,0px)) driven by VisualViewport JS.
+*/
+/*
+ * .chat-root: The main keyboard-avoidance container.
+ * 
+ * How it works on iOS Safari:
+ *  1. visualViewport fires 'resize' when keyboard opens.
+ *  2. JS sets --kb-height = window.innerHeight - visualViewport.height.
+ *  3. padding-bottom pushes the input bar above the keyboard.
+ *  4. The messages flex area shrinks to fill the remaining space.
+ *
+ * NO transforms. NO fixed positioning tricks. NO body locking.
+ * This is the exact pattern used by Telegram Web & WhatsApp Web.
+ */
+.chat-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  overscroll-behavior: none;
+}
+
+/*
+ * MOBILE OVERRIDE — Visual Viewport Container Strategy
+ *
+ * This is the same technique used by WhatsApp Web and Telegram Web.
+ *
+ * Problem: On Android PWA, the browser does NOT reliably resize the layout
+ * viewport when the soft keyboard opens. 'position:fixed' elements on the
+ * composer cannot be trusted to track the keyboard edge frame-by-frame.
+ *
+ * Solution: Make .chat-root itself track the visual viewport.
+ * JS in main.tsx fires on every visualViewport 'resize' event and updates
+ * --vv-height and --vv-top. We apply these to the chat-root container.
+ * The container then shrinks to exactly the visible screen area.
+ * The composer (a normal flex child) naturally lands at the bottom of
+ * the shrunken container — perfectly flush with the keyboard top. Gap = 0px.
+ */
+@media (max-width: 768px) {
+  .chat-root {
+    /* Take it out of the dashboard flex flow and pin it to the visual viewport */
+    position: fixed;
+    top: var(--vv-top, 0px);
+    left: 0;
+    right: 0;
+    /* This is the key: height tracks the visual viewport, shrinking when the keyboard opens */
+    height: var(--vv-height, 100dvh);
+    bottom: auto;
+    z-index: 10;
+  }
+}
+
+/* Header — flex child, remains at top */
+.chat-header {
+  flex-shrink: 0;
+  flex-grow: 0;
+  position: relative;
+  z-index: 30;
+  /* Safe area: notch phones */
+  padding-top: env(safe-area-inset-top, 0px);
+  width: 100%;
+}
+
+/*
+ * .chat-messages — fills all space between header and composer.
+ *
+ * CRITICAL: We use flex-direction: column-reverse. This geometrically inverts
+ * the CSS box model directions:
+ *   - padding-bottom → renders at the VISUAL TOP of the list
+ *   - padding-top    → renders at the VISUAL BOTTOM of the list
+ *
+ * Therefore, to clear space between the last (newest) message and the absolute
+ * composer bar, we must use padding-TOP, not padding-bottom.
+ */
+.chat-messages {
+  display: flex;
+  flex-direction: column-reverse;
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: auto;
+  /* WhatsApp/Telegram technique: allow browser to natively pin newest message when container shrinks */
+  overflow-anchor: auto;
+  padding-top: 8px;
+  /* No padding-bottom needed: composer is a flex sibling, not absolutely positioned */
+  padding-bottom: 0;
+}
+@media (min-width: 768px) {
+  .chat-messages {
+    /* On desktop, composer is a flex item (not absolute), so no top-padding clearance needed */
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+}
+
+/* Desktop padding removed — composer is a standard flex item now, so it will never overlap messages */
+
+/*
+ * .chat-input-bar — Absolute positioning handled by Tailwind classes in ChatWindow.tsx
+ */
+.chat-input-bar {
+  flex-shrink: 0;
+  flex-grow: 0;
+  position: relative;   /* In normal flex flow — moves with .chat-root at 60fps */
+  z-index: 40;
+  width: 100%;
+  background: inherit;
+  /* GPU compositor layer: the browser can animate this element independently.
+     This is the key to smooth keyboard animation — no relayout required. */
+  will-change: transform;
+}
+
+@media (max-width: 768px) {
+  .chat-input-bar {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* Ensure desktop also respects safe-areas if installed as PWA or on Notch devices */
+@media (min-width: 769px) {
+  .chat-input-bar {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/*
+ * .chat-keyboard-spacer — top of message list (DOM bottom in column-reverse).
+ * Mobile: just 8px breathing room (container already shrank for keyboard).
+ * Desktop: needs no space as keyboard doesn't apply.
+ */
+.chat-keyboard-spacer {
+  height: 8px;
+  width: 100%;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+/* Scroll anchor — placed after last message, scrollIntoView targets this */
+.chat-scroll-anchor {
+  height: 1px;
+  width: 100%;
+  flex-shrink: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+/* Spacer replaced by padding-bottom on .chat-messages */
+
+/* Typing indicator fade-in */
+@keyframes typing-dot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+.typing-dot {
+  animation: typing-dot 1.4s infinite ease-in-out;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* Message bubble entrance */
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.msg-bubble {
+  animation: msg-in 0.18s ease-out both;
+}
+
+/* ======================================================
+   ANDROID TOUCH & SELECTION HARDENING
+   ====================================================== */
+
+/*
+ * Inside the message list, we need touch-action: pan-y so the
+ * useChatGesture hook can detect long-press vs scroll correctly.
+ * The global `* { touch-action: manipulation }` above would override
+ * this without the explicit scoped rule below.
+ */
+.chat-messages,
+.chat-messages * {
+  touch-action: pan-y;
+}
+
+/*
+ * .conv-item — CSS-layer complement to the inline userSelect:none
+ * applied in ConversationList.tsx. Belt-and-suspenders to ensure
+ * ZERO text is selectable on conversation list rows on Android/iOS.
+ */
+.conv-item {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ======================================================
+   KEYBOARD OPEN COMPACT MODE (WHATSAPP-STYLE)
+   ====================================================== */
+@media (max-width: 767px) {
+  .keyboard-open .chat-header > div {
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+  }
+
+  .keyboard-open .chat-header h2 {
+    font-size: 15px !important;
+  }
+
+  .keyboard-open .chat-header p {
+    display: none !important; /* Hide online/typing/status text to save vertical space on mobile header */
+  }
+
+  .keyboard-open .chat-messages {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    padding-top: 6px !important;
+    padding-bottom: 0 !important; /* No clearance needed — bar is in flex flow */
+  }
+
+  .keyboard-open .msg-bubble {
+    margin-top: 4px !important;
+  }
+
+  .keyboard-open .msg-bubble > div {
+    padding: 8px 12px !important;
+    font-size: 13.5px !important;
+    line-height: 1.4 !important;
+    border-radius: 14px !important;
+  }
+
+  .keyboard-open .chat-input-bar > div {
+    padding: 6px 8px !important;
+  }
+
+  .keyboard-open .chat-input-bar form {
+    gap: 6px !important;
+  }
+
+  .keyboard-open .chat-input-bar button[type="submit"],
+  .keyboard-open .chat-input-bar button[aria-label="Record voice note"] {
+    width: 38px !important;
+    height: 38px !important;
+  }
+
+  .keyboard-open .chat-input-bar button[type="button"] {
+    padding: 4px !important;
+  }
+
+  .keyboard-open .chat-input-bar button[type="button"] svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  .keyboard-open #chat-window-input {
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+    font-size: 14px !important;
+  }
+}
+
+/* -- WhatsApp-grade textarea: show custom scrollbars -- */
+#chat-window-input::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+#chat-window-input::-webkit-scrollbar-track {
+  background: transparent;
+}
+#chat-window-input::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+#chat-window-input::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+#chat-window-input {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+/* ======================================================
+   GLOBAL RESPONSIVENESS AND TEXT WRAPPING SYSTEMS
+   ====================================================== */
+
+/* Prevent long words, URLs, and URLs from overflowing in CONTENT areas only.
+   Excluded: span — nav labels, buttons, and badges should NOT break-word. */
+h1, h2, h3, h4, h5, h6, p, a, li, label, td, th, blockquote, figcaption {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+/* Ensure code blocks and pre tags wrap instead of forcing horizontal scroll */
+pre, code {
+  white-space: pre-wrap !important;
+  word-break: break-all !important;
+}
+
+/* Enforce responsive behavior on all media elements */
+img, picture, video, canvas, iframe {
+  max-width: 100% !important;
+}
+

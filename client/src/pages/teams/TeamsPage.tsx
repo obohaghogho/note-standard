@@ -29,6 +29,7 @@ import {
   ArrowLeft,
   Camera,
   Trash2,
+  Video
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import SecureImage from '../../components/common/SecureImage';
@@ -36,6 +37,9 @@ import { ConfirmationModal } from '../../components/common/ConfirmationModal';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '../../utils/cn';
+import { useAgoraCall } from '../../hooks/useAgoraCall';
+import { useSocket } from '../../context/SocketContext';
+import { TeamCallOverlay } from '../../components/teams/TeamCallOverlay';
 import './TeamsPage.css';
 
 // ====================================
@@ -49,7 +53,8 @@ const TeamHeader: React.FC<{
   isInfoOpen: boolean;
   onToggleInfo: () => void;
   onInvite: () => void;
-}> = ({ team, myRole, onBack, isInfoOpen, onToggleInfo, onInvite }) => {
+  onJoinCall: () => void;
+}> = ({ team, myRole, onBack, isInfoOpen, onToggleInfo, onInvite, onJoinCall }) => {
   return (
     <div className="teams-page__header flex items-center justify-between p-3 md:p-5 bg-gray-900/50 backdrop-blur-3xl border-b border-white/5 z-20">
       <div className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer group" onClick={onToggleInfo}>
@@ -76,6 +81,13 @@ const TeamHeader: React.FC<{
       </div>
 
       <div className="flex items-center gap-1 md:gap-3">
+         <button 
+          onClick={(e) => { e.stopPropagation(); onJoinCall(); }}
+          className="p-2.5 text-gray-400 hover:text-green-400 hover:bg-green-400/10 transition-all rounded-2xl active:scale-95"
+          title="Join Conference Call"
+         >
+            <Video size={20} />
+         </button>
          <button 
           onClick={onToggleInfo}
           className={cn(
@@ -241,9 +253,15 @@ const TeamInfoSidebar: React.FC<{
 // ====================================
 
 export function TeamsPage() {
-  const { isBusiness } = useAuth();
+  const { user, isBusiness } = useAuth();
   const navigate = useNavigate();
+  const { socket } = useSocket();
   
+  const agoraCall = useAgoraCall();
+
+  // Active team call banner state
+  const [activeCall, setActiveCall] = useState<{ teamId: string; teamName: string; callerName: string } | null>(null);
+
   // State
   const [teams, setTeams] = useState<TeamWithUnreadCount[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
@@ -292,6 +310,24 @@ export function TeamsPage() {
   useEffect(() => {
     loadTeams();
   }, [loadTeams]);
+
+  // Listen for team call start/end notifications on the socket
+  useEffect(() => {
+    if (!socket) return;
+    const onNotification = (n: { type: string; title: string; message?: string; sender?: { username: string }; link?: string }) => {
+      if (n.type === 'team_call') {
+        // Extract teamId from the notification link e.g. /dashboard/teams?teamId=xxx
+        const match = n.link?.match(/teamId=([^&]+)/);
+        const teamId = match?.[1] || '';
+        setActiveCall({ teamId, teamName: n.title.replace('Conference Call: ', ''), callerName: n.sender?.username || 'A member' });
+      }
+      if (n.type === 'team_call_ended') {
+        setActiveCall(null);
+      }
+    };
+    socket.on('notification', onNotification);
+    return () => { socket.off('notification', onNotification); };
+  }, [socket]);
 
   const handleNewTeamClick = () => {
     if (!isBusiness) {
@@ -492,10 +528,21 @@ export function TeamsPage() {
                isInfoOpen={isInfoOpen}
                onToggleInfo={() => setIsInfoOpen(!isInfoOpen)}
                onInvite={handleInviteClick}
+               onJoinCall={() => {
+                 agoraCall.joinCall(`team_${selectedTeamId}`, user?.id || '0');
+                 socket?.emit('team:call_started', {
+                   teamId: selectedTeamId,
+                   teamName: selectedTeam.name
+                 });
+               }}
              />
 
              <div className="flex-1 overflow-hidden">
-                <TeamChat teamId={selectedTeamId} />
+                <TeamChat
+                  teamId={selectedTeamId}
+                  activeCall={activeCall?.teamId === selectedTeamId ? activeCall : null}
+                  onJoinCall={() => agoraCall.joinCall(`team_${selectedTeamId}`, user?.id || '0')}
+                />
              </div>
           </div>
 
@@ -629,6 +676,27 @@ export function TeamsPage() {
               </Button>
            </div>
         </div>
+      )}
+
+      {/* Agora Call Overlay */}
+      {selectedTeam && (
+        <TeamCallOverlay
+            joinState={agoraCall.joinState}
+            localVideoTrack={agoraCall.localVideoTrack}
+            remoteUsers={agoraCall.remoteUsers}
+            isMuted={agoraCall.isMuted}
+            isVideoOff={agoraCall.isVideoOff}
+            onLeave={() => {
+              agoraCall.leaveCall();
+              socket?.emit('team:call_ended', {
+                teamId: selectedTeamId,
+                teamName: selectedTeam.name
+              });
+            }}
+            onToggleMute={agoraCall.toggleMute}
+            onToggleVideo={agoraCall.toggleVideo}
+            teamName={selectedTeam.name}
+        />
       )}
     </div>
   );

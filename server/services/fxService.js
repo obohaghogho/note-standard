@@ -72,8 +72,8 @@ class FXService {
     // The sanity check quarantines any live price that deviates >15% from
     // the stored LKG (or >35% on initial-seed-sync). 
     const FALLBACK_SEEDS = {
-      BTC: 70000, // Updated to be closer to recent market
-      ETH: 2500,  // Updated to be closer to recent market
+      BTC: 65000, // Updated to be closer to recent market
+      ETH: 3500,  // Updated to be closer to recent market
       USDT: 1.0,
       USDC: 1.0,
       "USD-COIN": 1.0,
@@ -391,7 +391,7 @@ class FXService {
     // ── Step 2: NON-NEGOTIABLE Ticker Integrity Check ────────────
     // Guarantee major assets are never zero. If legacy returned 0 for
     // BTC or ETH (e.g. circuit breaker active), force-fill from LKG cache.
-    const SEEDS = { BTC: 70000, ETH: 2500, USD: 1, NGN: 0.00066 };
+    const SEEDS = { BTC: 65000, ETH: 3500, USD: 1, NGN: 0.00066 };
     for (const [ticker, seedPrice] of Object.entries(SEEDS)) {
       if (!rates[ticker] || rates[ticker] <= 0) {
         // Try LKG cache first (has real market data from before rate-limit)

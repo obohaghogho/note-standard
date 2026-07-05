@@ -1,22 +1,27 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  Smartphone, 
-  Apple, 
-  AlertCircle, 
+import {
+  Smartphone,
+  Apple,
   ArrowRight,
-  Monitor,
-  Zap,
   Globe,
   QrCode,
-  Menu
+  ChevronLeft,
+  CheckCircle2,
+  Share2,
+  PlusSquare,
+  Chrome,
+  MoreVertical,
+  Bell,
+  Zap,
+  Shield,
+  Wifi,
+  Download,
+  Info,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '../../components/common/Button';
-import { cn } from '../../utils/cn';
-import toast from 'react-hot-toast';
 import { QRCodeSVG } from 'qrcode.react';
 import { IOSInstallModal } from '../../components/common/IOSInstallModal';
-import { API_URL } from '../../lib/api';
+import toast from 'react-hot-toast';
 
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: string[];
@@ -27,266 +32,320 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
 }
 
-export const DownloadPage: React.FC = () => {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isInstallable, setIsInstallable] = useState(false);
-  const [isIOSModalOpen, setIsIOSModalOpen] = useState(false);
+// ─── Platform detection ───────────────────────────────────────────────────────
+function detectPlatform(): 'ios' | 'android' | 'desktop' {
+  if (typeof window === 'undefined') return 'desktop';
+  const ua = navigator.userAgent;
+  if (/iPad|iPhone|iPod/.test(ua) && !(window as unknown as Record<string, unknown>).MSStream) return 'ios';
+  if (/android/i.test(ua)) return 'android';
+  return 'desktop';
+}
 
-  const isIOS = typeof window !== 'undefined' && 
-    /iPad|iPhone|iPod/.test(navigator.userAgent) && 
-    !(window as Window & typeof globalThis & { MSStream?: unknown }).MSStream;
+function isInStandaloneMode(): boolean {
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
+}
+
+// ─── Feature pills ────────────────────────────────────────────────────────────
+const FEATURES = [
+  { icon: Zap,    label: 'Instant load',       color: 'text-yellow-400', bg: 'bg-yellow-400/10' },
+  { icon: Bell,   label: 'Push notifications', color: 'text-blue-400',   bg: 'bg-blue-400/10'   },
+  { icon: Wifi,   label: 'Works offline',       color: 'text-green-400',  bg: 'bg-green-400/10'  },
+  { icon: Shield, label: 'Secure & private',    color: 'text-purple-400', bg: 'bg-purple-400/10' },
+];
+
+export const DownloadPage: React.FC = () => {
   const navigate = useNavigate();
+  const platform  = detectPlatform();
+  const alreadyInstalled = isInStandaloneMode();
+
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [canInstall, setCanInstall]         = useState(false);
+  const [installed, setInstalled]           = useState(alreadyInstalled);
+  const [isIOSModalOpen, setIsIOSModalOpen] = useState(false);
+  const [activeGuide, setActiveGuide]       = useState<'android' | 'ios' | 'desktop'>(platform === 'ios' ? 'ios' : platform === 'android' ? 'android' : 'desktop');
 
   useEffect(() => {
-    if (isIOS) {
-      setIsInstallable(true);
-    }
+    if (platform === 'ios') { setCanInstall(true); return; }
 
-    const handleBeforeInstallPrompt = (e: Event) => {
-      // Prevent the mini-infobar from appearing on mobile
+    const handler = (e: Event) => {
       e.preventDefault();
-      // Stash the event so it can be triggered later.
       setDeferredPrompt(e as BeforeInstallPromptEvent);
-      // Update UI notify the user they can install the PWA
-      setIsInstallable(true);
+      setCanInstall(true);
     };
+    window.addEventListener('beforeinstallprompt', handler);
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', () => {
+      setInstalled(true);
+      setDeferredPrompt(null);
+      toast.success('🎉 NoteStandard installed successfully!');
+    });
 
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    };
-  }, [isIOS]);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, [platform]);
 
-  const handleInstallPWA = async () => {
-    if (isIOS && !deferredPrompt) {
-      setIsIOSModalOpen(true);
+  const handleInstall = async () => {
+    if (platform === 'ios') { setIsIOSModalOpen(true); return; }
+    if (!deferredPrompt) {
+      toast('Open this page in Chrome/Edge on Android and tap the menu → "Add to Home Screen"', { icon: 'ℹ️', duration: 6000 });
       return;
     }
-
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
+    await deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     if (outcome === 'accepted') {
-      toast.success('NoteStandard is being installed!');
+      setInstalled(true);
+      toast.success('Installing NoteStandard…');
     }
     setDeferredPrompt(null);
-    setIsInstallable(false);
+    setCanInstall(false);
   };
 
-  const handleNativeDownload = (platform: 'android' | 'ios') => {
-    if (platform === 'ios') {
-      toast('Downloading IPA. Note: Apple requires AltStore or a developer certificate to install IPAs directly. We highly recommend using "Install via Browser" below instead!', {
-        icon: '⚠️',
-        duration: 8000,
-      });
-      const filename = 'NoteStandard.ipa';
-      const link = document.createElement('a');
-      link.href = `${API_URL}/downloads/${filename}`;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } else {
-      toast.success(`Starting Android (APK) download...`);
-      // Redirect to the backend dynamic resolver
-      window.location.href = `${API_URL}/api/app/latest-apk`;
-    }
+  // ─── Guide steps ─────────────────────────────────────────────────────────
+  const GUIDES = {
+    android: [
+      { icon: Chrome,      color: 'bg-blue-500/10 text-blue-400',   title: 'Open in Chrome',             desc: 'Make sure you are visiting notestandard.com using the Chrome browser on your Android phone.' },
+      { icon: MoreVertical,color: 'bg-gray-500/10 text-gray-300',   title: 'Tap the ⋮ menu',              desc: 'Tap the three-dot menu in the top-right corner of Chrome.' },
+      { icon: PlusSquare,  color: 'bg-green-500/10 text-green-400', title: 'Add to Home Screen',         desc: 'Select "Add to Home Screen" or "Install App" from the menu. Tap "Add" to confirm.' },
+      { icon: CheckCircle2,color: 'bg-primary/10 text-primary',      title: 'Done! Open from your screen', desc: 'NoteStandard now appears on your home screen just like a native app — with push notifications!' },
+    ],
+    ios: [
+      { icon: Globe,       color: 'bg-blue-500/10 text-blue-400',   title: 'Open Safari',                desc: 'This only works in Safari. If you\'re using Chrome on iOS, copy the URL and open it in Safari.' },
+      { icon: Share2,      color: 'bg-purple-500/10 text-purple-400',title: 'Tap the Share button',       desc: 'Tap the Share icon (box with an arrow) at the bottom of Safari.' },
+      { icon: PlusSquare,  color: 'bg-green-500/10 text-green-400', title: 'Add to Home Screen',         desc: 'Scroll down in the share sheet and tap "Add to Home Screen", then tap "Add".' },
+      { icon: CheckCircle2,color: 'bg-primary/10 text-primary',      title: 'Done! Launch from your screen', desc: 'NoteStandard is now on your iPhone home screen and works like a native app.' },
+    ],
+    desktop: [
+      { icon: Chrome,      color: 'bg-blue-500/10 text-blue-400',   title: 'Use Chrome or Edge',         desc: 'Open notestandard.com in Google Chrome or Microsoft Edge on your computer.' },
+      { icon: Download,    color: 'bg-green-500/10 text-green-400', title: 'Look for the install icon',  desc: 'A small install icon (⊕) appears in the address bar on the right. Click it.' },
+      { icon: CheckCircle2,color: 'bg-primary/10 text-primary',      title: 'Click Install',               desc: 'Click "Install" in the popup. The app opens in its own window — no browser UI!' },
+    ],
   };
+
+  const steps = GUIDES[activeGuide];
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-6 md:p-12 overflow-y-auto relative">
-      <button 
-          onClick={() => navigate('/dashboard')} 
-          className="absolute top-6 left-6 z-50 p-3 bg-white/5 hover:bg-white/10 rounded-full backdrop-blur-md border border-white/10 transition-all flex items-center justify-center text-gray-300 hover:text-white"
-          aria-label="Return to Dashboard"
-      >
-          <Menu size={24} />
-      </button>
-      <div className="max-w-6xl mx-auto space-y-12">
-        
-        {/* Hero Section */}
-        <div className="flex flex-col lg:flex-row items-center gap-12 bg-gradient-to-br from-blue-600/10 to-purple-600/10 rounded-[3rem] p-8 md:p-16 border border-white/5 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/10 rounded-full blur-[120px] -z-10"></div>
-          
-          <div className="flex-1 space-y-6 text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/20 border border-primary/30 text-primary text-xs font-black uppercase tracking-widest animate-pulse">
-              <Zap size={14} /> Mobile App Now available
-            </div>
-            <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-tight italic uppercase">
-              Take NoteStandard <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">Everywhere</span>
-            </h1>
-            <p className="text-gray-400 text-lg font-medium max-w-xl leading-relaxed">
-              Experience the full power of real-time collaboration and secure note-taking on your mobile device. Choose your preferred installation method below.
-            </p>
-            
-            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 pt-4">
-              <Button 
-                onClick={() => handleNativeDownload('android')}
-                className="h-14 px-8 rounded-2xl bg-[#3DDC84] hover:bg-[#32b86c] text-black font-black flex items-center gap-3 shadow-xl shadow-[#3DDC84]/20 border-none"
-              >
-                <Smartphone size={20} /> Android APK
-              </Button>
-              <Button 
-                onClick={() => handleNativeDownload('ios')}
-                className="h-14 px-8 rounded-2xl bg-white hover:bg-gray-200 text-black font-black flex items-center gap-3 shadow-xl shadow-white/10 border-none"
-              >
-                <Apple size={20} /> iOS IPA
-              </Button>
-            </div>
+    <div className="min-h-screen bg-[#080808] text-white overflow-y-auto">
+
+      {/* ── Top nav ── */}
+      <div className="sticky top-0 z-40 flex items-center gap-3 px-4 py-3 bg-[#080808]/80 backdrop-blur-lg border-b border-white/5">
+        <button
+          onClick={() => navigate('/dashboard')}
+          className="p-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-all text-gray-400 hover:text-white"
+        >
+          <ChevronLeft size={20} />
+        </button>
+        <span className="font-bold text-sm text-gray-300">Get the App</span>
+        {installed && (
+          <span className="ml-auto flex items-center gap-1.5 text-[11px] font-bold text-green-400 bg-green-400/10 border border-green-400/20 rounded-full px-3 py-1">
+            <CheckCircle2 size={12} /> Already installed
+          </span>
+        )}
+      </div>
+
+      <div className="max-w-3xl mx-auto px-4 py-10 space-y-12">
+
+        {/* ── Hero ── */}
+        <div className="text-center space-y-5 pt-4">
+          {/* Platform badge */}
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold">
+            {platform === 'android' && <><Smartphone size={13} /> You're on Android</>}
+            {platform === 'ios'     && <><Apple size={13} /> You're on iPhone/iPad</>}
+            {platform === 'desktop' && <><Globe size={13} /> You're on a computer</>}
           </div>
 
-          <div className="flex-1 relative group">
-             <div className="absolute inset-0 bg-blue-500/20 blur-[100px] rounded-full group-hover:scale-110 transition-transform"></div>
-             <img 
-               src="/images/mobile_mockup.png" 
-               alt="NoteStandard Mobile" 
-               className="relative w-full max-w-[400px] mx-auto drop-shadow-[0_35px_35px_rgba(0,0,0,0.5)] transform hover:rotate-2 transition-all duration-500"
-             />
+          <h1 className="text-4xl md:text-5xl font-black tracking-tight leading-tight">
+            Install{' '}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-purple-400">
+              NoteStandard
+            </span>
+            <br />on Your Device
+          </h1>
+          <p className="text-gray-400 text-base max-w-xl mx-auto leading-relaxed">
+            NoteStandard is a <strong className="text-white">Web App (PWA)</strong> — install it directly from your browser in seconds.
+            No App Store needed. Works on Android, iPhone, and desktop.
+          </p>
+
+          {/* Feature pills */}
+          <div className="flex flex-wrap justify-center gap-2 pt-2">
+            {FEATURES.map(({ icon: Icon, label, color, bg }) => (
+              <div key={label} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${bg} border border-white/5 text-xs font-semibold ${color}`}>
+                <Icon size={12} />{label}
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* PWA & Install Options Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-          
-          {/* PWA Option */}
-          <div className={cn(
-            "p-8 rounded-[2.5rem] border transition-all duration-300 flex flex-col justify-between h-full group relative overflow-hidden",
-            isInstallable ? "bg-primary/5 border-primary/20 scale-105 shadow-2xl shadow-primary/10" : "bg-white/5 border-white/5 opacity-80"
-          )}>
-            <div className="space-y-4">
-              <div className="w-14 h-14 rounded-2xl bg-primary/20 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
-                <Monitor size={28} />
+        {/* ── Primary CTA ── */}
+        {!installed ? (
+          <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-primary/20 via-primary/5 to-purple-500/10 border border-primary/30 p-8 text-center space-y-5">
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
+            <div className="relative">
+              <div className="w-16 h-16 rounded-2xl bg-primary/20 border border-primary/30 flex items-center justify-center mx-auto mb-4">
+                <Download size={28} className="text-primary" />
               </div>
-              <h3 className="text-2xl font-black uppercase tracking-tight italic">Install via Browser</h3>
-              <p className="text-sm text-gray-500 font-bold leading-relaxed">
-                Install NoteStandard directly from your browser as a PWA. No downloads, no storage waste, just instant access.
+              <h2 className="text-2xl font-black mb-2">
+                {canInstall ? '✅ Ready to Install!' : 'Install the Web App'}
+              </h2>
+              <p className="text-gray-400 text-sm max-w-md mx-auto leading-relaxed">
+                {platform === 'android' && 'Tap the button below. Chrome will ask you to add NoteStandard to your home screen.'}
+                {platform === 'ios'     && 'Tap below for step-by-step instructions to add NoteStandard to your iPhone home screen via Safari.'}
+                {platform === 'desktop' && 'Click below to install NoteStandard as a desktop app (Chrome/Edge required).'}
               </p>
-            </div>
-            <div className="pt-8">
-              <Button 
-                onClick={handleInstallPWA}
-                disabled={!isInstallable}
-                fullWidth 
-                variant={isInstallable ? 'primary' : 'ghost'}
-                className="h-14 rounded-xl font-black uppercase tracking-widest text-xs"
+              <button
+                onClick={handleInstall}
+                className="mt-6 inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-primary hover:bg-primary/90 text-white font-black text-sm shadow-xl shadow-primary/30 transition-all hover:scale-105 active:scale-100"
               >
-                {isInstallable ? 'Install Now' : 'Not Supported on this Browser'}
-              </Button>
+                {platform === 'ios' ? (
+                  <><Apple size={18} /> Install on iPhone / iPad</>
+                ) : platform === 'android' ? (
+                  <><Smartphone size={18} /> {canInstall ? 'Install Now — 1 Tap' : 'How to Install on Android'}</>
+                ) : (
+                  <><Globe size={18} /> {canInstall ? 'Install Desktop App' : 'How to Install on Desktop'}</>
+                )}
+              </button>
+              {!canInstall && platform !== 'ios' && (
+                <p className="mt-3 text-xs text-gray-500">
+                  If the button above doesn't trigger a prompt, follow the step-by-step guide below.
+                </p>
+              )}
             </div>
-            {isInstallable && (
-               <div className="absolute top-4 right-4">
-                  <div className="px-2 py-1 bg-primary text-[8px] font-black rounded-lg uppercase">Recommended</div>
-               </div>
-            )}
+          </div>
+        ) : (
+          <div className="rounded-3xl bg-green-500/5 border border-green-500/20 p-8 text-center space-y-3">
+            <CheckCircle2 size={40} className="text-green-400 mx-auto" />
+            <h2 className="text-2xl font-black">App Already Installed!</h2>
+            <p className="text-gray-400 text-sm">
+              You're running NoteStandard as an installed app. You'll receive push notifications and the app works offline.
+            </p>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="mt-4 inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 font-bold text-sm hover:bg-green-500/20 transition-all"
+            >
+              Back to Dashboard <ArrowRight size={15} />
+            </button>
+          </div>
+        )}
+
+        {/* ── Step-by-step guide ── */}
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-black">Step-by-step Guide</h2>
+            {/* Guide switcher */}
+            <div className="flex gap-1 bg-white/5 rounded-xl p-1 border border-white/10">
+              {(['android', 'ios', 'desktop'] as const).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setActiveGuide(p)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    activeGuide === p
+                      ? 'bg-primary text-white shadow-lg shadow-primary/20'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {p === 'android' ? '🤖 Android' : p === 'ios' ? '🍎 iPhone' : '💻 Desktop'}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Quick Connect / QR Code */}
-          <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/5 flex flex-col justify-between group">
-             <div className="space-y-4">
-                <div className="w-14 h-14 rounded-2xl bg-purple-500/20 flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform">
-                   <QrCode size={28} />
+          <div className="space-y-3">
+            {steps.map((step, i) => {
+              const Icon = step.icon;
+              return (
+                <div key={i} className="flex gap-4 p-5 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05] transition-all group">
+                  <div className="flex-shrink-0 flex flex-col items-center gap-2">
+                    <div className={`w-10 h-10 rounded-xl ${step.color} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                      <Icon size={18} />
+                    </div>
+                    {i < steps.length - 1 && (
+                      <div className="w-px flex-1 min-h-[20px] bg-white/10" />
+                    )}
+                  </div>
+                  <div className="pt-1 pb-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest">Step {i + 1}</span>
+                    </div>
+                    <h3 className="font-bold text-sm text-white mb-1">{step.title}</h3>
+                    <p className="text-xs text-gray-400 leading-relaxed">{step.desc}</p>
+                  </div>
                 </div>
-                <h3 className="text-2xl font-black uppercase tracking-tight italic">Scan to download</h3>
-                <p className="text-sm text-gray-500 font-bold leading-relaxed">
-                   Scan this code with your phone camera to download the installer directly to your mobile device.
-                </p>
-             </div>
-             <div className="pt-8 flex justify-center">
-                <div className="bg-white p-6 rounded-[2.5rem] shadow-2xl shadow-white/5 border border-white/10 group-hover:scale-105 transition-transform duration-500">
-                   <QRCodeSVG 
-                     value={window.location.origin + '/download'} 
-                     size={160}
-                     bgColor="#ffffff"
-                     fgColor="#000000"
-                     level="H"
-                     includeMargin={false}
-                   />
-                </div>
-             </div>
+              );
+            })}
           </div>
-
-          {/* Website / Web App */}
-          <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/5 flex flex-col justify-between group">
-             <div className="space-y-4">
-                <div className="w-14 h-14 rounded-2xl bg-blue-500/20 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
-                   <Globe size={28} />
-                </div>
-                <h3 className="text-2xl font-black uppercase tracking-tight italic">Web Dashboard</h3>
-                <p className="text-sm text-gray-500 font-bold leading-relaxed">
-                   Already using the perfect platform. Your current browser experience is fully responsive and desktop-ready.
-                </p>
-             </div>
-             <div className="pt-8 text-center text-[10px] font-black text-gray-700 uppercase tracking-[0.3em]">
-                Current active session
-             </div>
-          </div>
-
         </div>
 
-        {/* Installation Guides */}
-        <div className="space-y-8 pt-6">
-           <h2 className="text-3xl font-black uppercase tracking-tighter italic border-l-4 border-primary pl-6">Installation Guides</h2>
-           
-           <div className="grid md:grid-cols-2 gap-8">
-              
-              {/* Android Guide */}
-              <div className="space-y-6 bg-white/5 p-8 rounded-[2.5rem] border border-white/5">
-                 <div className="flex items-center gap-3">
-                    <Smartphone className="text-[#3DDC84]" size={24} />
-                    <h4 className="text-xl font-black uppercase italic tracking-tight">Android Installation</h4>
-                 </div>
-                 <div className="space-y-4">
-                    <div className="flex items-start gap-4">
-                       <span className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-[10px] font-black flex-shrink-0">01</span>
-                       <p className="text-sm text-gray-400 font-bold">Download the APK file above to your device.</p>
-                    </div>
-                    <div className="flex items-start gap-4">
-                       <span className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-[10px] font-black flex-shrink-0">02</span>
-                       <p className="text-sm text-gray-400 font-bold">Go to <span className="text-white">Settings &gt; Security</span> and enable "Unknown Sources".</p>
-                    </div>
-                    <div className="flex items-start gap-4">
-                       <span className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-[10px] font-black flex-shrink-0">03</span>
-                       <p className="text-sm text-gray-400 font-bold">Open the APK file from your Downloads folder and tap "Install".</p>
-                    </div>
-                 </div>
+        {/* ── What you get ── */}
+        <div className="rounded-3xl bg-white/[0.03] border border-white/[0.07] p-8 space-y-5">
+          <h2 className="text-xl font-black">What You Get After Installing</h2>
+          <div className="grid sm:grid-cols-2 gap-4">
+            {[
+              { emoji: '🔔', title: 'Push Notifications',    desc: 'Get notified instantly when someone messages or mentions you — even when the browser is closed.' },
+              { emoji: '📱', title: 'Home Screen Icon',      desc: 'NoteStandard opens from your home screen just like WhatsApp or Instagram.' },
+              { emoji: '⚡', title: 'Faster Load Times',     desc: 'The app loads instantly from cache, even on slow connections.' },
+              { emoji: '🌐', title: 'Works Offline',          desc: 'Read your saved notes and view conversations even without internet.' },
+              { emoji: '🔒', title: 'Same Secure Account',   desc: 'Your account, notes, and chats are synced — nothing is lost.' },
+              { emoji: '🚀', title: 'No App Store Needed',   desc: 'Install directly from the browser — no approval wait, no store fees.' },
+            ].map(({ emoji, title, desc }) => (
+              <div key={title} className="flex gap-3 p-4 rounded-2xl bg-white/[0.03] border border-white/[0.05]">
+                <span className="text-2xl flex-shrink-0">{emoji}</span>
+                <div>
+                  <p className="font-bold text-sm text-white mb-0.5">{title}</p>
+                  <p className="text-xs text-gray-500 leading-relaxed">{desc}</p>
+                </div>
               </div>
-
-              {/* iOS Guide */}
-              <div className="space-y-6 bg-white/5 p-8 rounded-[2.5rem] border border-white/5">
-                 <div className="flex items-center gap-3">
-                    <Apple className="text-white" size={24} />
-                    <h4 className="text-xl font-black uppercase italic tracking-tight">iOS Installation</h4>
-                 </div>
-                 <div className="space-y-4">
-                    <div className="flex items-start gap-4">
-                       <span className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-[10px] font-black flex-shrink-0">01</span>
-                       <p className="text-sm text-gray-400 font-bold">Download the .IPA file. Note: This requires an enterprise certificate or alt-store.</p>
-                    </div>
-                    <div className="flex items-start gap-4">
-                       <span className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-[10px] font-black flex-shrink-0">02</span>
-                       <p className="text-sm text-gray-400 font-bold">Recommended: Use <span className="text-white italic">PWA (Install via Browser)</span> for iOS for the best experience.</p>
-                    </div>
-                    <div className="flex items-start gap-4">
-                       <span className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-[10px] font-black flex-shrink-0">03</span>
-                       <p className="text-sm text-gray-400 font-bold">To use PWA: Tap the <span className="text-primary font-black">Share icon</span> in Safari and select "Add to Home Screen".</p>
-                    </div>
-                 </div>
-              </div>
-
-           </div>
+            ))}
+          </div>
         </div>
 
-        {/* Support Section */}
-        <div className="text-center bg-gray-900/50 p-12 rounded-[3rem] border border-dashed border-white/10">
-           <AlertCircle className="mx-auto text-gray-600 mb-4" size={40} />
-           <p className="text-gray-500 font-bold text-sm max-w-lg mx-auto leading-relaxed">
-              If you encounter any issues during installation, please contact our support team or check your device's security settings.
-           </p>
-           <button className="mt-6 text-primary text-xs font-black uppercase tracking-[0.3em] hover:opacity-80 flex items-center gap-2 mx-auto transition-all">
-              Technical Support <ArrowRight size={14} />
-           </button>
+        {/* ── QR code (useful on desktop to send link to phone) ── */}
+        <div className="rounded-3xl bg-white/[0.03] border border-white/[0.07] p-8 flex flex-col md:flex-row items-center gap-8">
+          <div className="flex-shrink-0">
+            <div className="bg-white p-4 rounded-2xl shadow-2xl">
+              <QRCodeSVG
+                value={`${window.location.origin}/dashboard/download`}
+                size={140}
+                bgColor="#ffffff"
+                fgColor="#000000"
+                level="H"
+                includeMargin={false}
+              />
+            </div>
+          </div>
+          <div className="text-center md:text-left space-y-2">
+            <div className="flex items-center gap-2 justify-center md:justify-start">
+              <QrCode size={18} className="text-purple-400" />
+              <h3 className="font-black text-lg">Install on Your Phone</h3>
+            </div>
+            <p className="text-sm text-gray-400 leading-relaxed max-w-sm">
+              On desktop? Scan this QR code with your phone camera to open NoteStandard on your phone — then follow the install guide above to add it to your home screen.
+            </p>
+            <p className="text-xs text-gray-600 font-mono pt-1">{window.location.origin}/dashboard/download</p>
+          </div>
+        </div>
+
+        {/* ── FAQ / Info box ── */}
+        <div className="rounded-3xl bg-blue-500/5 border border-blue-500/15 p-7 flex gap-4">
+          <Info size={20} className="text-blue-400 flex-shrink-0 mt-0.5" />
+          <div className="space-y-2">
+            <h3 className="font-bold text-blue-300 text-sm">Why is there no Play Store or App Store version yet?</h3>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              We are actively working on getting NoteStandard listed on both the Google Play Store and Apple App Store.
+              In the meantime, the Web App (PWA) version gives you <strong className="text-white">identical features</strong> — including push notifications, offline access,
+              and a home screen icon — without needing a store listing. It's the recommended way to use NoteStandard on mobile right now.
+            </p>
+          </div>
+        </div>
+
+        {/* ── Support ── */}
+        <div className="text-center pb-8">
+          <p className="text-gray-600 text-xs">
+            Having trouble installing? Contact us at{' '}
+            <a href="mailto:support@notestandard.com" className="text-primary hover:underline">
+              support@notestandard.com
+            </a>
+          </p>
         </div>
 
       </div>

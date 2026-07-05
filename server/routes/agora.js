@@ -7,7 +7,7 @@ const logger = require("../utils/logger");
  * @route GET /api/agora/token
  * @desc Generate Agora RTC token for a channel
  */
-router.get("/", (req, res) => {
+router.get("/token", (req, res) => {
   try {
     const { channel, uid } = req.query;
 

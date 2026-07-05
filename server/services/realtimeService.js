@@ -2,12 +2,23 @@ const { Pool } = require('pg');
 require('dotenv').config();
 const eventSigner = require('../utils/eventSigner');
 const logger = require('../utils/logger');
+const diagnosticLogger = require('../utils/diagnosticLogger');
+const replayGuard = require('../utils/replayGuard');
 
+// Single pg pool shared with the rest of the server for pg_notify dispatch.
+// HTTP fallback removed — it leaked the internal gateway URL and was unreliable
+// under load. pg_notify is the authoritative, secure dispatch path.
 let pgPool;
 
 if (process.env.DATABASE_URL) {
+    let notifyUrl = process.env.DATABASE_URL;
+    if (notifyUrl.includes(':6543')) {
+        console.warn('[RealtimeService] ⚠ DATABASE_URL uses port 6543. NOTIFY requires session mode. Auto-switching to port 5432...');
+        notifyUrl = notifyUrl.replace(':6543', ':5432');
+    }
+
     pgPool = new Pool({
-        connectionString: process.env.DATABASE_URL,
+        connectionString: notifyUrl,
         ssl: { rejectUnauthorized: false },
         max: 10,
         idleTimeoutMillis: 30000,
@@ -16,9 +27,9 @@ if (process.env.DATABASE_URL) {
     pgPool.on('error', (err) => {
         logger.error('[RealtimeService] PostgreSQL Pool Error', { error: err.message });
     });
+} else {
+    logger.warn('[RealtimeService] DATABASE_URL not set — realtime events will be silently dropped');
 }
-
-const fetch = require('node-fetch');
 
 /**
  * REALTIME EVENT FIREWALL
@@ -90,6 +101,7 @@ const validateEventPayload = (payload, isFinancial) => {
 const emit = async (type, room, event, payload, options = {}) => {
     try {
         const isFinancial = options.isFinancial === true;
+        const excludeUserId = options.excludeUserId || null;
 
         // 1. Firewall validation
         const validation = validateEventPayload(payload, isFinancial);
@@ -109,6 +121,16 @@ const emit = async (type, room, event, payload, options = {}) => {
         }
 
         const envelope = { type, room: targetRoom, event, payload: protectedPayload };
+        // Pass the sender exclusion hint to the gateway dispatcher
+        if (excludeUserId) {
+            envelope.exclude_user_id = excludeUserId;
+        }
+        if (options.users) {
+            envelope.users = options.users;
+        }
+        if (options.correlationId) {
+            envelope.correlation_id = options.correlationId;
+        }
         const payloadString = JSON.stringify(envelope);
 
         // 3. Size guard — prevent oversized payloads
@@ -117,16 +139,34 @@ const emit = async (type, room, event, payload, options = {}) => {
             return;
         }
 
-        // 4. Dispatch
+        // 3a. Replay protection guard — WARN ONLY for chat:message so delivery is never silently dropped.
+        // Dropping on sequence mismatch caused real messages to be lost when DB sequence was behind.
+        if (payload && typeof payload.sequence_number === 'number' && event !== 'chat:message') {
+            const convId = payload.conversation_id || payload.conversationId;
+            const replayCheck = replayGuard.check(convId, payload.sequence_number);
+            if (!replayCheck.allowed) {
+                logger.warn('[RealtimeService] Replay guard triggered (non-fatal for chat)', {
+                    event,
+                    conversation_id: convId,
+                    reason: replayCheck.reason
+                });
+                // Do NOT return — continue dispatch so the client always receives the message
+            }
+        }
+
+        // 4. Dispatch via pg_notify (the single authoritative path)
         if (pgPool) {
+            // DIAGNOSTICS LOGGING
+            diagnosticLogger.logEvent(event, payload, { 
+                room: targetRoom, 
+                isFinancial,
+                platform: 'server-gateway'
+            });
+
+            console.log(`[RealtimeService] 📤 Dispatching ${event} via pg_notify → type=${type} room=${targetRoom || 'N/A'} users=${options.users?.length ?? 0}`);
             await pgPool.query('SELECT pg_notify($1, $2)', ['realtime_events', payloadString]);
         } else {
-            const gatewayUrl = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
-            await fetch(`${gatewayUrl}/internal/emit`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: payloadString
-            });
+            logger.warn('[RealtimeService] pgPool unavailable — realtime event dropped', { event });
         }
     } catch (err) {
         // Fail-closed — never propagate emit errors to caller
@@ -137,8 +177,12 @@ const emit = async (type, room, event, payload, options = {}) => {
 const emitToUser = (userId, event, payload, options = {}) =>
     emit('to_user', userId, event, payload, options);
 
+const emitToUsers = (userIds, event, payload, options = {}) =>
+    emit('to_users', null, event, payload, { ...options, users: userIds });
+
 const emitToConversation = (conversationId, event, payload, options = {}) =>
     emit('to_room', conversationId, event, payload, options);
+
 
 const emitToAdmin = (event, payload, options = {}) =>
     emit('to_room', 'admin', event, payload, options);
@@ -149,4 +193,4 @@ const emitFinancialUpdate = (userId, event, payload) =>
 const broadcast = (event, payload) =>
     emit('broadcast', '*', event, payload, { isFinancial: false });
 
-module.exports = { emit, emitToUser, emitToConversation, emitToAdmin, emitFinancialUpdate, broadcast };
+module.exports = { emit, emitToUser, emitToUsers, emitToConversation, emitToAdmin, emitFinancialUpdate, broadcast };

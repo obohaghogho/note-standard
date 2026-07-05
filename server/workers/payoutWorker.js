@@ -72,6 +72,54 @@ class PayoutWorker {
         logger.info(`[PayoutWorker] Dispatching payout ${payout.id} (Amount: ${payout.amount} ${payout.currency})`);
 
         try {
+            // ── KERNEL SAFEGUARD: LIQUID RESERVE VALIDATION ──────────────────
+            const currency = payout.currency;
+            const requiredAmount = Number(payout.amount);
+
+            const { data: treasuryWallet } = await supabase
+                .from("wallets_store")
+                .select("id, balance, user_id")
+                .eq("address", `TREASURY_${currency}`)
+                .maybeSingle();
+
+            const treasuryBalance = treasuryWallet ? Math.abs(Number(treasuryWallet.balance) || 0) : 0;
+
+            if (treasuryBalance < requiredAmount) {
+                const errMsg = `LIQUID_RESERVE_BREACH: Available treasury settled reserves for ${currency} (${treasuryBalance}) are insufficient to cover this withdrawal of ${requiredAmount}. Dispatch aborted.`;
+                logger.error(`[Payout_Guard] [CRITICAL_RESERVE_BREACH] ${errMsg}`);
+                
+                await payoutService.updatePayoutState(payout.id, 'FAILED_FINAL', {
+                    error: "Insufficient settled reserves in treasury.",
+                    message: errMsg,
+                    failure_code: "TREASURY_RESERVE_BREACH"
+                });
+
+                // Automated Reversal: Refund the user's ledger and wallet
+                try {
+                    await supabase.rpc('reverse_failed_payout_v6', { p_payout_id: payout.id });
+                } catch (revErr) {
+                    logger.error(`[PayoutWorker] Failed to apply reversal for payout ${payout.id}:`, revErr.message);
+                }
+
+                const adminId = treasuryWallet ? treasuryWallet.user_id : payout.user_id;
+
+                await supabase.from("security_audit_logs").insert({
+                    user_id: adminId,
+                    event_type: "TREASURY_RESERVE_BREACH",
+                    severity: "CRITICAL",
+                    description: `Payout dispatcher blocked withdrawal ${payout.id} due to treasury reserve breach on ${currency}. Required: ${requiredAmount}, Settled Treasury: ${treasuryBalance}.`,
+                    payload: {
+                        payout_id: payout.id,
+                        currency: currency,
+                        required_amount: requiredAmount,
+                        treasury_balance: treasuryBalance,
+                        alert_level: "HIGH"
+                    }
+                });
+
+                return;
+            }
+
             // 2. STEP A: INTENT LOGGING (Transition to PROCESSING)
             await payoutService.updatePayoutState(payout.id, 'PROCESSING', {
                 retry_count: (payout.retry_count || 0) + 1
@@ -81,15 +129,31 @@ class PayoutWorker {
             let result;
             if (payout.payout_method === 'bank_transfer') {
                 const dest = payout.destination || {};
-                result = await payoutService.createFincraTransfer(
-                    dest.bankCode,
-                    dest.accountNumber,
-                    payout.amount,
-                    payout.currency,
-                    payout.id, // Reference = payout_id (Institutional Determinism)
-                    `Withdrawal-${payout.id.substring(0,8)}`,
-                    { accountName: dest.accountName, email: dest.email }
-                );
+                
+                if (payout.currency === 'NGN') {
+                    // Automated Paystack NGN Payout
+                    result = await payoutService.createPaystackTransfer(
+                        dest.bankCode,
+                        dest.accountNumber,
+                        dest.accountName,
+                        payout.amount,
+                        payout.currency,
+                        payout.id,
+                        `Withdrawal-${payout.id.substring(0,8)}`
+                    );
+                } else {
+                    // Manual queue for Grey (USD, EUR, GBP, JPY)
+                    logger.info(`[PayoutWorker] Routing ${payout.currency} withdrawal ${payout.id} to manual queue for Grey processing.`);
+                    
+                    result = {
+                        success: true,
+                        payoutId: payout.id,
+                        status: 'MANUAL_PENDING',
+                        provider: 'GREY_MANUAL',
+                        latency: 0,
+                        rawResponse: { message: "Routed to manual Grey processing queue." }
+                    };
+                }
             } else if (payout.payout_method === 'crypto') {
                 const dest = payout.destination || {};
                 result = await payoutService.createNowPaymentsPayout(
@@ -112,6 +176,8 @@ class PayoutWorker {
                 } else if (result.status === 'WAITING_FOR_VERIFICATION') {
                     logger.warn(`[PayoutWorker] Payout ${payout.id} requires 2FA Verification at NOWPayments Dashboard.`);
                     await payoutService.updatePayoutState(payout.id, 'CONFIRMING', { ...result, message: '2FA Verification Required at NOWPayments' });
+                } else if (result.status === 'MANUAL_PENDING') {
+                    await payoutService.updatePayoutState(payout.id, 'MANUAL_PENDING', result);
                 } else {
                     await payoutService.updatePayoutState(payout.id, 'SENT', result);
                 }
@@ -130,6 +196,13 @@ class PayoutWorker {
                     latency: result.latency,
                     rawResponse: result.rawResponse
                 });
+                
+                // Automated Reversal: Refund the user's ledger and wallet
+                try {
+                    await supabase.rpc('reverse_failed_payout_v6', { p_payout_id: payout.id });
+                } catch (revErr) {
+                    logger.error(`[PayoutWorker] Failed to apply reversal for payout ${payout.id}:`, revErr.message);
+                }
                 logger.error(`[PayoutWorker] Payout ${payout.id} REJECTED by provider: ${result.error}`);
             }
 

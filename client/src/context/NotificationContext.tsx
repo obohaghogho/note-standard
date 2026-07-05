@@ -6,6 +6,7 @@ import { API_URL } from '../lib/api';
 import { AnimatePresence } from 'framer-motion';
 import NotificationToast, { type NotificationToastData } from '../components/common/NotificationToast';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { getDeviceId, getDeviceMetadata } from '../utils/deviceId';
 
 interface Notification {
     id: string;
@@ -32,6 +33,8 @@ export interface NotificationContextValue {
     markAllAsRead: () => Promise<void>;
     deleteNotification: (id: string) => Promise<void>;
     clearAllNotifications: () => Promise<void>;
+    clearState: () => void;
+    reinitialize: () => Promise<void>;
 }
 
 export const NotificationContext = createContext<NotificationContextValue | null>(null);
@@ -145,10 +148,32 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         pushSubscribeRef.current = true;
         try {
             const registration = await navigator.serviceWorker.ready;
-            
+            const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+            if (!vapidKey) {
+                console.error('[Notifications] Missing VITE_VAPID_PUBLIC_KEY');
+                return;
+            }
+
             // Check for existing subscription first
             let subscription = await registration.pushManager.getSubscription();
             
+            if (subscription) {
+                // VAPID key validation: check if the existing subscription was created
+                // with the current VAPID key. If not, it will always return 403 from
+                // the push server, so we must unsubscribe and create a fresh one.
+                const existingKey = subscription.options?.applicationServerKey;
+                if (existingKey) {
+                    const existingKeyB64 = btoa(String.fromCharCode(...new Uint8Array(existingKey)));
+                    const normalizedExisting = existingKeyB64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+                    const normalizedCurrent = vapidKey.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+                    if (normalizedExisting !== normalizedCurrent) {
+                        console.warn('[Notifications] VAPID key mismatch detected — unsubscribing stale subscription and re-registering.');
+                        await subscription.unsubscribe();
+                        subscription = null;
+                    }
+                }
+            }
+
             if (!subscription) {
                 // We MUST NOT request permission automatically on load, especially on iOS.
                 // iOS strictly requires Notification.requestPermission() to be called from a direct user gesture (e.g., button click).
@@ -157,26 +182,43 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                     return;
                 }
 
-                const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
-                if (!vapidKey) {
-                    console.error('[Notifications] Missing VITE_VAPID_PUBLIC_KEY');
-                    return;
-                }
-
                 subscription = await registration.pushManager.subscribe({
                     userVisibleOnly: true,
                     applicationServerKey: urlBase64ToUint8Array(vapidKey)
                 });
+                console.log('[Notifications] ✅ Created fresh push subscription with current VAPID key.');
             }
 
             console.log('[Notifications] Syncing push subscription with backend...');
+            const deviceId = await getDeviceId();
+            const { device_name, platform } = getDeviceMetadata();
+
             await fetch(`${API_URL}/api/notifications/subscribe`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${session.access_token}`
                 },
-                body: JSON.stringify({ subscription })
+                body: JSON.stringify({ 
+                    subscription,
+                    vapidKeyVersion: import.meta.env.VITE_VAPID_PUBLIC_KEY,
+                    deviceId,
+                    deviceName: device_name,
+                    platform
+                })
+            });
+
+            console.log('[Notifications] Cleaning up stale endpoints for this device...');
+            await fetch(`${API_URL}/api/notifications/sync-endpoint`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`
+                },
+                body: JSON.stringify({ 
+                    currentEndpoint: subscription.endpoint,
+                    deviceId
+                })
             });
 
             if (isIOSPWA) {
@@ -214,7 +256,9 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         return () => { 
             isMounted.current = false; 
         };
-    }, [authReady, session, user, fetchNotifications, subscribeToPush]);
+    // NOTE: Intentionally excluded `session` and callbacks to prevent token-refresh loops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [authReady, user?.id]);
 
     const markAsRead = useCallback(async (id: string) => {
         if (!session) return;
@@ -353,6 +397,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             setQueue(prev => [...prev, toastData]);
         };
 
+        socket.off('notification', onNotification);
         socket.on('notification', onNotification);
         return () => {
             socket.off('notification', onNotification);
@@ -378,6 +423,28 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         }
     }, [session]);
 
+    const clearState = useCallback(() => {
+        console.log(`[ACCOUNT_FORENSIC] NOTIFICATION_CLEAR_STATE - Dropping notifications cache at ${Date.now()}`);
+        setNotifications([]);
+        setLoading(true);
+        setCurrentToast(null);
+        setQueue([]);
+        if (dismissTimerRef.current) {
+            clearTimeout(dismissTimerRef.current);
+            dismissTimerRef.current = null;
+        }
+    }, []);
+
+    const reinitialize = useCallback(async () => {
+        console.log(`[ACCOUNT_FORENSIC] NOTIFICATIONS_REINITIALIZE - Fetching for new account at ${Date.now()}`);
+        clearState();
+        await Promise.all([
+            fetchNotifications(),
+            subscribeToPush()
+        ]);
+        console.log(`[ACCOUNT_FORENSIC] NOTIFICATIONS_READY - Notifications ready at ${Date.now()}`);
+    }, [clearState, fetchNotifications, subscribeToPush]);
+
     return (
         <NotificationContext.Provider value={{ 
             notifications, 
@@ -386,7 +453,9 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             markAllAsRead, 
             deleteNotification,
             clearAllNotifications,
-            loading 
+            loading,
+            clearState,
+            reinitialize
         }}>
             {children}
             <AnimatePresence>

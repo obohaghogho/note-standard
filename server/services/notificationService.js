@@ -1,17 +1,8 @@
 const supabase = require("../config/database");
-const webpush = require("web-push");
-// Configure web-push (keys must be present in .env or .env.development)
-if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails(
-    `mailto:${process.env.EMAIL_FROM || "noreply@notestandard.com"}`,
-    process.env.VAPID_PUBLIC_KEY,
-    process.env.VAPID_PRIVATE_KEY,
-  );
-} else {
-  console.warn("[NotificationService] VAPID keys missing. Push notifications will be disabled.");
-}
+// Gateway is authoritative for all push notifications.
 
 const realtime = require("./realtimeService");
+const eventBus = require("./eventBus");
 
 /**
  * Creates a notification and emits it via Gateway
@@ -32,6 +23,8 @@ const createNotification = async ({
   link,
   messageId,
   conversationId,
+  trace,
+  skipPush = false,
 }) => {
   try {
     // 1. Persist to Database
@@ -63,32 +56,87 @@ const createNotification = async ({
       is_read: false,
     });
 
-    // 3. Web Push (PWA — VAPID — works for installed PWA on iOS 16.4+ and all desktop browsers)
-    await sendPushNotification(receiverId, { title, message, link, type, messageId, conversationId });
+    // If skipPush is true, we stop here (push was already dispatched fast-path)
+    if (skipPush) {
+      return true;
+    }
+
+    // 3. Web Push (PWA — VAPID) is now handled entirely by the Realtime Gateway.
+    //    All push routing goes through /internal/push below.
 
     // 4. Native Push (FCM for Android, APNs for iOS) via the realtime-gateway.
-    //    The gateway already holds Firebase Admin and APNs credentials (used for call push).
-    //    For chat messages, we route through the gateway's /internal/push endpoint.
-    //    This ensures iOS users receive push notifications even when the PWA is closed.
-    if (type === 'chat_message' || type === 'mention') {
-      const gatewayUrl = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
-      const body = message || title;
-      fetch(`${gatewayUrl}/internal/push`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: receiverId,
-          title,
-          body,
-          payload: {
-            type,
-            conversationId: conversationId || null,
-            messageId: messageId || null,
-            url: link || '/dashboard/chat',
-          },
-        }),
-      }).catch(err => console.error('[NotificationService] Native push via gateway failed:', err.message));
+    //    The gateway holds Firebase Admin and APNs credentials.
+    //    We route through the gateway's /internal/push for all native push notifications.
+
+    const gatewayUrlStr = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
+    const bodyStr = message || title;
+    
+    // Temporary: Disable KeepAlive to test if Render is tearing down long-lived sockets
+    // and causing the push request to fail silently.
+    if (!global.__pushHttpAgent) {
+      const http = require('http');
+      const https = require('https');
+      global.__pushHttpAgent = new http.Agent({ keepAlive: false });
+      global.__pushHttpsAgent = new https.Agent({ keepAlive: false });
     }
+    
+    const targetUrl = new URL('/internal/push', gatewayUrlStr);
+    const payloadBody = JSON.stringify({
+      userId: receiverId,
+      title,
+      body: bodyStr,
+      payload: {
+        type,
+        conversationId: conversationId || null,
+        messageId: messageId || null,
+        url: link || '/dashboard/notifications',
+        recipientId: receiverId,        // legacy compat
+        targetUserId: receiverId,       // explicit
+        targetAccountId: receiverId,    // explicit (same as userId in this app)
+        deliveryWebhookUrl: messageId ? `${gatewayUrlStr}/deliver/${messageId}` : undefined,
+        trace,
+      },
+    });
+
+    const lib = targetUrl.protocol === 'https:' ? require('https') : require('http');
+    const agent = targetUrl.protocol === 'https:' ? global.__pushHttpsAgent : global.__pushHttpAgent;
+
+    const req = lib.request({
+      hostname: targetUrl.hostname,
+      port: targetUrl.port || (targetUrl.protocol === 'https:' ? 443 : 80),
+      path: targetUrl.pathname,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payloadBody) },
+      agent: agent,
+      timeout: 10000 // 10 seconds timeout
+    }, (res) => {
+      let responseBody = '';
+      res.on('data', chunk => responseBody += chunk);
+      res.on('end', () => {
+        console.log(`[NotificationService] Gateway push response status: ${res.statusCode}`);
+        console.log(`[NotificationService] Gateway push response body: ${responseBody}`);
+      });
+    });
+
+    req.on('error', (err) => {
+      console.error('[NotificationService] ❌ Native push via gateway failed.');
+      console.error(`[NotificationService] Target URL: ${gatewayUrlStr}/internal/push`);
+      console.error(`[NotificationService] Error Code: ${err.code}`);
+      console.error(`[NotificationService] Errno: ${err.errno}`);
+      console.error(`[NotificationService] Hostname: ${err.hostname}`);
+      console.error(`[NotificationService] Stack: ${err.stack}`);
+    });
+    
+    req.on('timeout', () => {
+      console.error('[NotificationService] ❌ Gateway push request timed out.');
+      req.destroy();
+    });
+
+    console.log(`[NotificationService] 📤 Dispatching HTTP push request to Gateway: ${gatewayUrlStr}/internal/push`);
+    console.log(`[NotificationService] Payload: ${payloadBody.substring(0, 150)}...`);
+    
+    req.write(payloadBody);
+    req.end();
 
     return true;
   } catch (err) {
@@ -97,58 +145,64 @@ const createNotification = async ({
   }
 };
 
+
 /**
- * Sends a push notification to all subscribed devices of a user
+ * Sends a push notification immediately, bypassing the notification table write.
  */
-const sendPushNotification = async (userId, payload) => {
+const dispatchFastPush = async ({
+  receiverId,
+  type,
+  title,
+  message,
+  link,
+  messageId,
+  conversationId,
+  trace,
+}) => {
   try {
-    const { data: subscriptions, error } = await supabase
-      .from("push_subscriptions")
-      .select("endpoint, p256dh, auth")
-      .eq("user_id", userId);
-
-    if (error || !subscriptions) return;
-
-    const pushPayload = JSON.stringify({
-      title: payload.title,
-      body: payload.message,
-      icon: "/icon-192.png", // Default icon
-      data: {
-        url: payload.link,
-        type: payload.type,
-        messageId: payload.messageId,
-        conversationId: payload.conversationId || null,
-        apiUrl: process.env.BACKEND_URL || (process.env.NODE_ENV === 'production' ? 'https://note-standard-api.onrender.com' : 'http://127.0.0.1:5001')
+    const axios = require('axios');
+    const gatewayUrlStr = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
+    const bodyStr = message || title;
+    
+    // Normalize Gateway URL
+    const baseUrl = gatewayUrlStr.endsWith('/') ? gatewayUrlStr.slice(0, -1) : gatewayUrlStr;
+    const targetUrl = `${baseUrl}/internal/push`;
+    
+    const payloadBody = {
+      userId: receiverId,
+      title,
+      body: bodyStr,
+      payload: {
+        type,
+        conversationId: conversationId || null,
+        messageId: messageId || null,
+        url: link || '/dashboard/notifications',
+        recipientId: receiverId,
+        targetUserId: receiverId,
+        targetAccountId: receiverId,
+        deliveryWebhookUrl: messageId ? `${baseUrl}/deliver/${messageId}` : undefined,
+        trace,
       },
-    });
+    };
 
-    const sendPromises = subscriptions.map((sub) => {
-      // Reconstruct the subscription object required by web-push
-      const pushSubscription = {
-        endpoint: sub.endpoint,
-        keys: {
-          p256dh: sub.p256dh,
-          auth: sub.auth,
-        },
-      };
+    console.log(`[NotificationService][FastPush] 📤 Dispatching axios push request to Gateway: ${targetUrl}`);
 
-      return webpush.sendNotification(pushSubscription, pushPayload)
-        .catch((err) => {
-          if (err.statusCode === 410 || err.statusCode === 404) {
-            // Subscription has expired or is no longer valid, delete it
-            return supabase.from("push_subscriptions")
-              .delete()
-              .match({ user_id: userId, endpoint: sub.endpoint });
-          }
-          console.error("Push error:", err);
-        });
-    });
-
-    await Promise.all(sendPromises);
+    // Fire-and-forget but return a promise to allow awaiting if needed
+    return axios.post(targetUrl, payloadBody, { timeout: 10000 })
+      .then(res => {
+        console.log(`[NotificationService][FastPush] Gateway push response status: ${res.status}`);
+        return true;
+      })
+      .catch(err => {
+        console.error('[NotificationService][FastPush] ❌ Native push via gateway failed.', err.message);
+        return false;
+      });
   } catch (err) {
-    console.error("Failed to send push notification:", err);
+    console.error("Error in dispatchFastPush:", err.message);
+    return false;
   }
 };
+
 
 /**
  * Broadcasts a notification to all users
@@ -202,42 +256,34 @@ const broadcastNotification = async ({
       is_read: false,
     });
 
-    // 4. Send Push Notifications to everyone in safe chunks
-    const pushPayload = JSON.stringify({
+    // 4. Send Push Notifications to everyone via Gateway
+    const gatewayUrl = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
+    const lib = gatewayUrl.startsWith('https') ? require('https') : require('http');
+    
+    // Broadcast via Gateway handles BOTH native tokens and web push subscriptions natively
+    const payloadBody = JSON.stringify({
       title,
       body: message,
-      icon: "/logo192.png",
-      data: { url: link, type },
+      payload: {
+        type,
+        url: link || '/dashboard/notifications',
+      },
     });
 
-    // Fetch ALL subscriptions
-    const { data: allSubscriptions } = await supabase
-      .from("push_subscriptions")
-      .select("endpoint, p256dh, auth, user_id");
+    const req = lib.request({
+      hostname: new URL(gatewayUrl).hostname,
+      port: new URL(gatewayUrl).port || (gatewayUrl.startsWith('https') ? 443 : 80),
+      path: '/internal/push/broadcast',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payloadBody) }
+    }, (res) => {
+      res.on('data', () => {});
+      res.on('end', () => {});
+    });
 
-    if (allSubscriptions && allSubscriptions.length > 0) {
-      for (let i = 0; i < allSubscriptions.length; i += chunkSize) {
-        const subChunk = allSubscriptions.slice(i, i + chunkSize);
-        await Promise.all(
-          subChunk.map((sub) => {
-            const pushSubscription = {
-              endpoint: sub.endpoint,
-              keys: {
-                p256dh: sub.p256dh,
-                auth: sub.auth,
-              },
-            };
-            return webpush.sendNotification(pushSubscription, pushPayload).catch((err) => {
-              if (err.statusCode === 410 || err.statusCode === 404) {
-                return supabase.from("push_subscriptions")
-                  .delete()
-                  .match({ user_id: sub.user_id, endpoint: sub.endpoint });
-              }
-            });
-          })
-        );
-      }
-    }
+    req.on('error', (err) => console.error('[NotificationService] Broadcast push via gateway failed:', err.message));
+    req.write(payloadBody);
+    req.end();
 
     return true;
   } catch (err) {
@@ -249,4 +295,100 @@ const broadcastNotification = async ({
 module.exports = {
   createNotification,
   broadcastNotification,
+  dispatchFastPush,
 };
+
+
+// --- Activity Bus Integration ---
+eventBus.on('activity_logged', async (activity) => {
+  // Translate specific activity types into notifications based on business logic
+  try {
+    const { user_id, action_type, entity_type, entity_id, metadata } = activity;
+
+    // Example mapping: A user earned a badge
+    if (action_type === 'earned_badge') {
+      await createNotification({
+        receiverId: user_id,
+        senderId: null, // System
+        type: 'achievement',
+        title: 'New Badge Earned!',
+        message: `Congratulations! You earned the ${metadata.badge_name || 'new'} badge.`,
+        link: '/dashboard/settings', // Or profile link
+      });
+    }
+
+    // Community: liked a post
+    if (action_type === 'liked_post' && metadata.post_owner_id && metadata.post_owner_id !== user_id) {
+      await createNotification({
+        receiverId: metadata.post_owner_id,
+        senderId: user_id,
+        type: 'like',
+        title: 'New Like',
+        message: `Someone liked your post.`,
+        link: `/dashboard/community/post/${entity_id}`,
+      });
+    }
+
+    // Community: commented on a post
+    if (action_type === 'commented_post' && metadata.post_owner_id && metadata.post_owner_id !== user_id) {
+      await createNotification({
+        receiverId: metadata.post_owner_id,
+        senderId: user_id,
+        type: 'comment',
+        title: 'New Comment',
+        message: metadata.snippet ? `"${metadata.snippet}"` : 'Someone commented on your post.',
+        link: `/dashboard/community/post/${entity_id}`,
+      });
+    }
+
+    // Community: replied to a comment
+    if (action_type === 'replied_comment' && metadata.comment_owner_id && metadata.comment_owner_id !== user_id) {
+      await createNotification({
+        receiverId: metadata.comment_owner_id,
+        senderId: user_id,
+        type: 'reply',
+        title: 'New Reply',
+        message: metadata.snippet ? `"${metadata.snippet}"` : 'Someone replied to your comment.',
+        link: `/dashboard/community/post/${metadata.post_id}`,
+      });
+    }
+
+    // Community: mentioned a user
+    if (action_type === 'mentioned_user' && metadata.mentioned_user_id && metadata.mentioned_user_id !== user_id) {
+      await createNotification({
+        receiverId: metadata.mentioned_user_id,
+        senderId: user_id,
+        type: 'mention',
+        title: 'You were mentioned',
+        message: metadata.snippet ? `"${metadata.snippet}"` : 'Someone mentioned you in a post.',
+        link: `/dashboard/community/post/${entity_id}`,
+      });
+    }
+
+    // Community: followed a user
+    if (action_type === 'followed_user' && metadata.followed_user_id && metadata.followed_user_id !== user_id) {
+      await createNotification({
+        receiverId: metadata.followed_user_id,
+        senderId: user_id,
+        type: 'follow',
+        title: 'New Follower',
+        message: 'Someone started following you.',
+        link: `/dashboard/community/profile/${user_id}`,
+      });
+    }
+
+    // Badge
+    if (action_type === 'earned_badge') {
+      await createNotification({
+        receiverId: user_id,
+        senderId: null,
+        type: 'achievement',
+        title: 'New Badge Earned!',
+        message: `Congratulations! You earned the ${metadata.badge_name || 'new'} badge.`,
+        link: '/dashboard/settings',
+      });
+    }
+  } catch (err) {
+    console.error('[NotificationService] Error processing activity event:', err);
+  }
+});

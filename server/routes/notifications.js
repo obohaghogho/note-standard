@@ -11,20 +11,24 @@ const {
   deleteAllNotifications,
   notifyLogin,
   registerNativeToken,
-  sendNotification,
+  registerInstallation,
   notifyTeam,
+  syncEndpoint,
+  getInstallationStatus,
 } = require("../controllers/notificationController");
 
 router.use(requireAuth);
 
+router.get("/installation-status/:deviceId", getInstallationStatus);
 router.get("/", getNotifications);
 router.get("/unread-count", getUnreadCount);
 router.patch("/:id/read", markAsRead);
 router.patch("/read-all", markAllAsRead);
 router.post("/subscribe", subscribeToNotifications);
+router.post("/sync-endpoint", syncEndpoint);
 router.post("/register-native-token", registerNativeToken);
+router.post("/register-installation", registerInstallation);
 router.post("/login-notify", notifyLogin);
-router.post("/send", sendNotification);
 router.post("/notify-team", notifyTeam);
 router.delete("/:id", deleteNotification);
 router.delete("/", deleteAllNotifications);

@@ -1,15 +1,20 @@
 {
   "name": "client",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "scripts": {
     "start": "vite preview",
     "dev": "vite --host",
-    "build": "vite build",
+    "build": "node ../scripts/verify-apple-local.js && vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:report": "playwright show-report",
+    "ci": "npm run typecheck && npm run lint && npm run build && npm run test:e2e"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.89.0",
@@ -43,6 +48,7 @@
     "react-i18next": "^16.5.2",
     "react-quill-new": "^3.7.0",
     "react-router-dom": "^7.11.0",
+    "react-virtuoso": "^4.18.7",
     "socket.io-client": "^4.8.3",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.2.1",
@@ -52,8 +58,12 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
+    "@playwright/test": "^1.61.1",
+    "@prerenderer/renderer-jsdom": "^1.1.9",
+    "@prerenderer/rollup-plugin": "^0.3.12",
     "@tailwindcss/vite": "^4.2.1",
     "@types/uuid": "^10.0.0",
+    "jsdom": "^29.1.1",
     "terser": "^5.46.1",
     "vite": "^6.4.1"
   },

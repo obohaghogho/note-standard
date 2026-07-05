@@ -11,7 +11,23 @@ const NowPaymentsProvider = require(
 const GreyProvider = require(
   path.join(__dirname, "providers", "GreyProvider"),
 );
+const FlutterwaveProvider = require(
+  path.join(__dirname, "providers", "FlutterwaveProvider"),
+);
+const StripeProvider = require(
+  path.join(__dirname, "providers", "StripeProvider"),
+);
+const ZenithProvider = require(
+  path.join(__dirname, "providers", "ZenithProvider"),
+);
+const MoniepointProvider = require(
+  path.join(__dirname, "providers", "MoniepointProvider"),
+);
+const ProvidusProvider = require(
+  path.join(__dirname, "providers", "ProvidusProvider"),
+);
 const logger = require("../../utils/logger");
+const currencyConfig = require("../../config/currencyConfig");
 
 class PaymentFactory {
    /**
@@ -42,7 +58,6 @@ class PaymentFactory {
       switch (cryptoProvider) {
         case "nowpayments":
           return new NowPaymentsProvider();
-        // Future: case "coinbase": return new CoinbaseProvider();
         default:
           logger.warn(
             `Unknown crypto provider '${cryptoProvider}', falling back to NowPayments`,
@@ -51,42 +66,45 @@ class PaymentFactory {
       }
     }
 
-    // 2. Region & Currency logic for Fiat
+    // 2. NGN — always Paystack natively
     if (upCurrency === "NGN") {
       return new PaystackProvider();
     }
 
-    // Use Grey for core USD, EUR, GBP manual bank transfers
+    // 3. USD, EUR, GBP — method-dependent routing
     if (["USD", "EUR", "GBP"].includes(upCurrency)) {
       if (method === "bank_transfer" || method === "manual") {
         logger.info(`PaymentFactory: Selecting Grey provider for ${upCurrency} ${method}`);
         return new GreyProvider();
       }
-      
-      // Card / Checkout flow: Route to Paystack (will handle auto-conversion if needed)
-      logger.info(`PaymentFactory: Selecting Paystack for ${upCurrency} card payment`);
+      // Card / Checkout flow: Paystack
+      // USD, EUR and GBP will have been pre-converted to NGN by depositService via gatewayOptions.
+      // The transaction record still carries the original currency for ledger accuracy.
+      logger.info(`PaymentFactory: Selecting Paystack for ${upCurrency} card payment (pre-converted to NGN if needed)`);
       return new PaystackProvider();
     }
 
-    if (
-      [
-        "JPY",
-        "KES",
-        "GHS",
-        "UGX",
-        "ZAR",
-        "TZS",
-        "XAF",
-        "XOF",
-        "EGP",
-        "CAD",
-      ].includes(upCurrency)
-    ) {
-      // Route all supported cross-border fiat to Paystack (Fincra is deprecated)
+    // 4. JPY — card deposits are pre-converted to NGN by depositService before reaching here.
+    //    Bank transfers are blocked upstream in depositService with a friendly message.
+    //    The factory routes JPY card payments to Paystack, which will receive the NGN
+    //    amount/currency via gatewayOptions (not the raw JPY).
+    if (upCurrency === "JPY") {
+      if (method === "bank_transfer") {
+        // This case should already be blocked in depositService.
+        // If it reaches here, it means the caller bypassed the upstream guard.
+        logger.error(`[PaymentFactory] JPY bank_transfer reached factory — this should have been blocked in depositService.`);
+        throw new Error(
+          currencyConfig.getBankTransferSupport("JPY").message ||
+          "JPY bank transfers are not supported. Please use USD."
+        );
+      }
+      logger.info(`PaymentFactory: Routing JPY card payment via Paystack (pre-converted to NGN by depositService)`);
       return new PaystackProvider();
     }
 
-    // 3. Fallback for other cross-border flows
+    // 5. Other cross-border fiat (KES, GHS, etc.) — route via Paystack.
+    //    depositService is responsible for pre-converting these to NGN.
+    logger.info(`PaymentFactory: Fallback — routing ${upCurrency} to Paystack (caller must pre-convert via gatewayOptions)`);
     return new PaystackProvider();
   }
 
@@ -107,6 +125,16 @@ class PaymentFactory {
       case "grey":
       case "manual":
         return new GreyProvider();
+      case "flutterwave":
+        return new FlutterwaveProvider();
+      case "stripe":
+        return new StripeProvider();
+      case "zenith":
+        return new ZenithProvider();
+      case "moniepoint":
+        return new MoniepointProvider();
+      case "providus":
+        return new ProvidusProvider();
 
       default:
         throw new Error(`Unknown provider: ${name}`);

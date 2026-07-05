@@ -80,7 +80,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                 let fee = 0;
                 if (settings && settings.length > 0) {
                     const s = settings[0];
-                    if (s.commission_type === 'PERCENTAGE') fee = val * s.value;
+                    if (s.commission_type === 'PERCENTAGE') fee = val * (s.value / 100);
                     else fee = s.value;
                     if (s.min_fee && fee < s.min_fee) fee = s.min_fee;
                     if (s.max_fee && fee > s.max_fee) fee = s.max_fee;
@@ -152,7 +152,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
             
             if (settings && settings.length > 0) {
                 const s = settings[0];
-                const rateValue = s.value > 1 ? s.value / 100 : s.value;
+                const rateValue = s.commission_type === 'PERCENTAGE' ? s.value / 100 : s.value;
 
                 if (s.commission_type === 'PERCENTAGE') {
                     // amount + (amount * rate) = balance => amount = balance / (1 + rate)
@@ -201,7 +201,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
 
                 <h2 className="modal-header">
                     <ArrowUpRight size={20} className="text-orange-500" />
-                    Move Out {selectedCurrency} {selectedNetwork !== 'native' ? `(${selectedNetwork})` : ''}
+                    Withdraw {selectedCurrency} {selectedNetwork !== 'native' ? `(${selectedNetwork})` : ''}
                 </h2>
                 
                 <form onSubmit={handleWithdraw} className="modal-body flex flex-col gap-5">
@@ -453,7 +453,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                                 className="bg-orange-900/10 border border-orange-500/20 p-4 rounded-xl text-sm space-y-2"
                             >
                                 <div className="flex justify-between text-gray-400">
-                                    <span>Activity Processing Fee</span>
+                                    <span>Network Fee</span>
                                     <span>{formatCurrency(withdrawFee.fee, selectedCurrency)}</span>
                                 </div>
                                 <div className="flex justify-between font-bold text-white pt-2 border-t border-orange-500/20">
@@ -482,7 +482,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                         </Button>
                         <Button type="submit" disabled={isWithdrawing} className="bg-orange-600 hover:bg-orange-500 text-white border-none">
                             {isWithdrawing ? <Loader2 className="animate-spin mr-2" size={18} /> : <ArrowUpRight className="mr-2" size={18} />}
-                            {isWithdrawing ? 'Processing...' : 'Confirm Move Out'}
+                            {isWithdrawing ? 'Processing...' : 'Confirm Withdrawal'}
                         </Button>
                     </div>
                 </form>

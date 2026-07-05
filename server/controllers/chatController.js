@@ -1,142 +1,204 @@
 const supabase = require("../config/database");
-const { createNotification } = require("../services/notificationService");
+const usernameCache = new Map(); // Cache to prevent blocking DB lookups during push dispatch
+const { createNotification, dispatchFastPush } = require("../services/notificationService");
 const { detectLanguage } = require("../services/translationService");
 const realtime = require("../services/realtimeService");
+const features = require("../config/features");
+const { normalizeOutboundMessage } = require("../utils/payloadNormalizer");
+const replayGuard = require("../utils/replayGuard");
+const crypto = require("crypto");
+const { emitMessageEvent } = require("../rpc/eventLedger");
+const logger = require("../utils/logger");
+const PIPELINE_VERSION = process.env.MESSAGING_PIPELINE_VERSION || 'v2';
+
+/**
+ * _hydrateReplyTo — batch-resolve reply_to nested objects in place.
+ *
+ * Called by getMessages fallback paths when the Supabase FK join fails
+ * (e.g. migration 199 not yet applied, schema cache stale, or PostgREST
+ * version doesn't support the self-referencing join syntax).
+ *
+ * Performs a SINGLE IN-query for all unique reply_to_id values found in
+ * the message array, then mutates each message in place with the
+ * resolved { id, content, sender_id, message_type, deleted } object.
+ *
+ * @param {Array<Object>} messages - mutable array of message rows
+ */
+async function _hydrateReplyTo(messages) {
+  if (!messages || messages.length === 0) return;
+  const ids = [...new Set(
+    messages.filter(m => m.reply_to_id && !m.reply_to).map(m => m.reply_to_id)
+  )];
+  if (ids.length === 0) return;
+  try {
+    const { data: parents } = await supabase
+      .from('messages')
+      .select('id, content, sender_id, type, is_deleted, sender:profiles(username, full_name)')
+      .in('id', ids);
+    if (!parents) return;
+    const map = Object.fromEntries(parents.map(p => [p.id, p]));
+    messages.forEach(m => {
+      // If the message already has a fully formed reply_to object, DO NOT overwrite it.
+      // But if it's missing (and it has a reply_to_id), populate it from our map.
+      if (!m.reply_to_id || m.reply_to) return;
+      
+      const p = map[m.reply_to_id];
+      const senderName = p && p.sender ? (p.sender.full_name || p.sender.username) : null;
+      m.reply_to = p
+        ? { id: p.id, content: p.content, sender_id: p.sender_id, type: p.type, deleted: p.is_deleted, sender_name: senderName }
+        : { id: m.reply_to_id, content: '', sender_id: '', deleted: true };
+    });
+  } catch (e) {
+    console.warn('[Chat Controller] _hydrateReplyTo batch failed:', e.message);
+  }
+}
+
+function getNotificationPreview(type, content) {
+  switch (type) {
+    case 'audio':
+    case 'voice':
+      return '🎤 Voice message';
+    case 'image':
+      return '📷 Photo';
+    case 'video':
+      return '🎥 Video';
+    case 'document':
+    case 'file':
+      return '📄 Document';
+    case 'call':
+    case 'call_incoming':
+      return '📞 Missed call';
+    default:
+      return content;
+  }
+}
 
 // --- Conversations ---
 
 exports.getConversations = async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log(`[Chat PERSISTENCE] Fetching for user: ${userId}`);
-    
-    // Safety: Log headers to ensure no auth mismatch during build deployments
-    console.log(`[Chat AUTH] Client Type: ${req.headers['x-client-type'] || 'web'}`);
 
-    // 1. Fetch memberships with basic conversation data
+    // ─── FAST PATH: rpc_get_conversations ─────────────────────────────────────
+    // Single SQL function replacing 61+ serial queries.
+    // Falls back to N+1 only if migration 207 is not yet deployed.
+    // ─────────────────────────────────────────────────────────────────────────
+    try {
+      const t0 = Date.now();
+      const { data: rpcData, error: rpcError } = await supabase
+        .rpc('rpc_get_conversations', { p_user_id: userId });
+
+      if (rpcError) {
+        // PGRST202 = function does not exist yet (migration pending)
+        if (rpcError.code === 'PGRST202' || (rpcError.message && rpcError.message.includes('rpc_get_conversations'))) {
+          console.warn('[Chat] rpc_get_conversations not available — using N+1 fallback');
+          throw new Error('RPC_NOT_FOUND');
+        }
+        throw rpcError;
+      }
+
+      let conversations = Array.isArray(rpcData) ? rpcData : [];
+      
+      // Filter out direct conversations that were deleted (cleared_at) and have no new messages since
+      conversations = conversations.filter(c => {
+        if (c.type === "direct" && c.membership?.cleared_at) {
+          const clearedAt = new Date(c.membership.cleared_at).getTime();
+          const lastMsgAt = new Date(c.last_message?.created_at || c.updated_at || c.created_at || 0).getTime();
+          if (lastMsgAt <= clearedAt) return false;
+        }
+        return true;
+      });
+
+      console.log(`[Chat RPC] getConversations: ${conversations.length} convs in ${Date.now() - t0}ms`);
+      return res.json(conversations);
+    } catch (rpcErr) {
+      if (rpcErr.message !== 'RPC_NOT_FOUND') {
+        console.error('[Chat] rpc_get_conversations failed, using N+1 fallback:', rpcErr.message);
+      }
+    }
+
+    // ─── FALLBACK: N+1 path (preserved for backward compat) ──────────────────
+    // 1. Fetch memberships
     let memberships = [];
     try {
-      const { data, error } = await supabase
+      const { data: mData, error: mError } = await supabase
         .from("conversation_members")
-        .select("conversation_id, role, status")
+        .select("conversation_id, role, status, cleared_at")
         .eq("user_id", userId);
-      
-      if (error) {
-        // Fallback for missing 'role' or 'status' columns
-        if (error.code === '42703') {
-           console.warn(`[Chat] role/status missing in conversation_members, falling back`);
-           const { data: fallbackData, error: fallbackError } = await supabase
-             .from("conversation_members")
-             .select("conversation_id")
-             .eq("user_id", userId);
-           
-           if (fallbackError) throw fallbackError;
-           memberships = fallbackData || [];
-        } else {
-           throw error;
-        }
-      } else {
-        memberships = data || [];
-      }
+      if (mError) throw mError;
+      memberships = mData || [];
     } catch (e) {
-      console.error(`[Chat] Membership fetch error for ${userId}:`, e.message);
-      return res.status(500).json({ 
-        error: "Failed to load chat memberships", 
-        details: e.message
-      });
+      return res.status(500).json({ error: "Failed to load chat memberships", details: e.message });
     }
 
-    console.log(`[Chat] User ${userId} has ${memberships.length} memberships`);
-
-    if (memberships.length === 0) {
-      return res.json([]);
-    }
+    if (memberships.length === 0) return res.json([]);
 
     const conversationIds = memberships.map(m => m.conversation_id);
 
-    // 2. Fetch conversations data in batch
+    // 2. Fetch conversations in batch
     const { data: conversations, error: convError } = await supabase
       .from("conversations")
       .select("*")
       .in("id", conversationIds);
 
-    if (convError) {
-      console.error("[Chat] Conversations fetch error:", convError.message);
-      return res.status(500).json({ error: "Failed to load conversation details" });
-    }
+    if (convError) return res.status(500).json({ error: "Failed to load conversation details" });
 
-    // 3. Enrich conversations with members and last message
+    // Fetch blocks once for the whole batch
+    let userBlocks = [];
+    try {
+      const { data: blocks } = await supabase
+        .from("user_blocks")
+        .select("blocker_id, blocked_id")
+        .or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`);
+      userBlocks = blocks || [];
+    } catch (e) { /* non-fatal */ }
+
+    // 3. Enrich: N+1 per conversation (only used when RPC unavailable)
     const enriched = await Promise.all(conversations.map(async (conv) => {
       try {
         const membership = memberships.find(m => m.conversation_id === conv.id);
-        
-        // Fetch all members for this conversation
-        let members = [];
-        try {
-          const { data, error } = await supabase
-            .from("conversation_members")
-            .select(`
-              user_id,
-              role,
-              status,
-              profile:profiles (
-                id,
-                username,
-                full_name,
-                avatar_url,
-                is_verified,
-                plan_tier
-              )
-            `)
-            .eq("conversation_id", conv.id);
-          
-          if (error) {
-            // Fallback for missing profile columns or status/role
-            const { data: fallbackData } = await supabase
-              .from("conversation_members")
-              .select(`
-                user_id,
-                profile:profiles (
-                  id,
-                  username,
-                  full_name,
-                  avatar_url
-                )
-              `)
-              .eq("conversation_id", conv.id);
-            members = fallbackData || [];
-          } else {
-            members = data || [];
-          }
-        } catch (e) {
-          console.warn(`[Chat] Member enrichment failed for ${conv.id}:`, e.message);
-        }
 
-        // Fetch last message
-        const { data: lastMsgs, error: msgError } = await supabase
+        const { data: members } = await supabase
+          .from("conversation_members")
+          .select(`user_id, role, status, profile:profiles (
+            id, username, full_name, avatar_url, is_verified,
+            plan_tier, is_online, show_online_status, last_seen
+          )`)
+          .eq("conversation_id", conv.id);
+
+        const { data: lastMsgs } = await supabase
           .from("messages")
           .select("id, content, sender_id, created_at, type, read_at, delivered_at")
           .eq("conversation_id", conv.id)
           .order("created_at", { ascending: false })
           .limit(1);
 
-        if (msgError) {
-          console.warn(`[Chat] Last msg fetch error for ${conv.id}:`, msgError.message);
-        }
-
-        // Fetch unread count for the user in this conversation
         let unreadCount = 0;
         try {
-          const { count, error: countError } = await supabase
+          const { count } = await supabase
             .from("messages")
             .select("*", { count: 'exact', head: true })
             .eq("conversation_id", conv.id)
             .neq("sender_id", userId)
             .is("read_at", null);
-          
-          if (!countError) unreadCount = count || 0;
-        } catch (e) {
-          console.warn(`[Chat] Unread count query failed for ${conv.id}:`, e.message);
+          unreadCount = count || 0;
+        } catch (e) { /* non-fatal */ }
+
+        let isBlocked = false, blockedByMe = false, blockedByThem = false;
+        if (conv.type === "direct") {
+          const otherMember = (members || []).find(m => m.user_id !== userId);
+          if (otherMember) {
+            const otherId = otherMember.user_id;
+            const blockRelation = userBlocks.find(b =>
+              (b.blocker_id === userId && b.blocked_id === otherId) ||
+              (b.blocker_id === otherId && b.blocked_id === userId)
+            );
+            if (blockRelation) {
+              isBlocked = true;
+              blockedByMe = blockRelation.blocker_id === userId;
+              blockedByThem = blockRelation.blocker_id === otherId;
+            }
+          }
         }
 
         return {
@@ -145,11 +207,14 @@ exports.getConversations = async (req, res) => {
           membership: {
             role: membership?.role || "member",
             status: membership?.status || "accepted",
-            cleared_at: null,
+            cleared_at: membership?.cleared_at || null,
             joined_at: null
           },
           members: members || [],
-          last_message: lastMsgs?.[0] || null
+          last_message: lastMsgs?.[0] || null,
+          isBlocked,
+          blockedByMe,
+          blockedByThem
         };
       } catch (e) {
         console.error(`[Chat] Enrichment failed for conv ${conv.id}:`, e.message);
@@ -157,20 +222,161 @@ exports.getConversations = async (req, res) => {
       }
     }));
 
-    // Sort by updated_at or created_at
-    const sorted = enriched.sort((a, b) => {
-      const timeA = new Date(a.last_message?.created_at || a.updated_at || a.created_at).getTime();
-      const timeB = new Date(b.last_message?.created_at || b.updated_at || b.created_at).getTime();
-      return timeB - timeA;
-    }).filter(c => c.chat_type !== "support" && c.name !== "Support Chat" && !(c.name && c.name.toLowerCase().includes("support team")));
+    const sorted = enriched
+      .filter(c => c.chat_type !== "support" && c.name !== "Support Chat" &&
+        !(c.name && c.name.toLowerCase().includes("support team")))
+      // CHATLIST FIX: Sort by authoritative last_message_at pointer instead of
+      // messages.created_at — immune to clock drift and delayed inserts.
+      .sort((a, b) =>
+        new Date(b.last_message_at || b.last_message?.created_at || b.updated_at || b.created_at) -
+        new Date(a.last_message_at || a.last_message?.created_at || a.updated_at || a.created_at)
+      );
 
-    res.json(sorted);
+    // Filter out direct conversations that were deleted (cleared_at) and have no new messages since
+    const visible = sorted.filter(c => {
+      if (c.type === "direct" && c.membership?.cleared_at) {
+        const clearedAt = new Date(c.membership.cleared_at).getTime();
+        const lastMsgAt = new Date(c.last_message_at || c.last_message?.created_at || 0).getTime();
+        // If there is no message, or the last message was before/at the time of clearing, hide it.
+        if (lastMsgAt <= clearedAt) return false;
+      }
+      return true;
+    });
+
+    res.json(visible);
   } catch (err) {
     console.error("[Chat] getConversations Critical Error:", err.message, err.stack);
-    res.status(500).json({ 
-      error: "Internal Server Error", 
-      details: err.message
+    res.status(500).json({ error: "Internal Server Error", details: err.message });
+  }
+};
+
+// ── Reconnect Sync Endpoint ────────────────────────────────────────────────
+// GET /chat/messages/sync?since=<ISO timestamp>&conversationId=<id>
+// Called by the client on socket reconnect to catch any messages missed during
+// a network drop. Returns all non-deleted messages after `since`, scoped to
+// the caller's conversations (or a specific conversation if provided).
+exports.syncMessages = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { since, conversationId } = req.query;
+
+    if (!since) {
+      return res.status(400).json({ error: "'since' query param is required (ISO timestamp)" });
+    }
+
+    let query = supabase
+      .from("messages")
+      .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url)")
+      .eq("is_deleted", false)
+      .gte("created_at", since)
+      .order("created_at", { ascending: true })
+      .limit(200);
+
+    if (conversationId) {
+      // Verify membership before scoping
+      const { data: mem } = await supabase
+        .from("conversation_members")
+        .select("conversation_id")
+        .eq("conversation_id", conversationId)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (!mem) return res.status(403).json({ error: "Access denied" });
+      query = query.eq("conversation_id", conversationId);
+    } else {
+      // Scope to all conversations the user belongs to
+      const { data: memberships } = await supabase
+        .from("conversation_members")
+        .select("conversation_id")
+        .eq("user_id", userId);
+      const convIds = (memberships || []).map(m => m.conversation_id);
+      if (convIds.length === 0) return res.json([]);
+      query = query.in("conversation_id", convIds);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      // Fallback: plain select without joins
+      const { data: plain, error: plainErr } = await supabase
+        .from("messages")
+        .select("*")
+        .eq("is_deleted", false)
+        .gte("created_at", since)
+        .order("created_at", { ascending: true })
+        .limit(200);
+      if (plainErr) throw plainErr;
+      return res.json(plain || []);
+    }
+
+    res.json(data || []);
+  } catch (err) {
+    console.error("[Chat] syncMessages error:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+exports.getConversationById = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user.id;
+
+    // Verify user is a member of this conversation
+    const { data: membership, error: memError } = await supabase
+      .from("conversation_members")
+      .select("role, status, cleared_at")
+      .eq("conversation_id", conversationId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (memError || !membership) {
+      return res.status(403).json({ error: "Access denied or conversation not found" });
+    }
+
+    // Fetch conversation details
+    const { data: conv, error: convError } = await supabase
+      .from("conversations")
+      .select("*")
+      .eq("id", conversationId)
+      .single();
+
+    if (convError) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
+
+    // Fetch members and profiles
+    const { data: members, error: membersError } = await supabase
+      .from("conversation_members")
+      .select(`
+        user_id,
+        role,
+        status,
+        profile:profiles (
+          id,
+          username,
+          full_name,
+          avatar_url,
+          is_verified,
+          plan_tier,
+          is_online,
+          show_online_status,
+          last_seen
+        )
+      `)
+      .eq("conversation_id", conversationId);
+
+    res.json({
+      ...conv,
+      members: members || [],
+      membership: {
+        role: membership.role || "member",
+        status: membership.status || "accepted",
+        cleared_at: membership.cleared_at || null,
+        joined_at: null
+      }
     });
+
+  } catch (err) {
+    console.error("[Chat] getConversationById error:", err.message);
+    res.status(500).json({ error: "Server Error", details: err.message });
   }
 };
 
@@ -497,7 +703,7 @@ exports.acceptConversation = async (req, res) => {
             message: `${accepter?.username || "Someone"} accepted your chat request!`,
             link: `/dashboard/chat?id=${conversationId}`,
           });
-          await realtime.emitToUser(m.user_id, "chat:conversation_updated", { conversationId, status: "accepted" });
+          await realtime.emitToUser(m.user_id, "chat:conversation_updated", { conversationId, userId, status: "accepted" });
         }
       }
     } catch (notifErr) {
@@ -507,6 +713,7 @@ exports.acceptConversation = async (req, res) => {
     // Also notify self across other tabs/devices
     await realtime.emitToUser(userId, "chat:conversation_updated", {
       conversationId,
+      userId,
       status: "accepted",
     });
 
@@ -540,11 +747,13 @@ exports.getMessages = async (req, res) => {
       console.warn("[Chat] Could not fetch cleared_at (column might be missing):", e.message);
     }
 
-    // Build the main messages query with attachment join
+    // Build the main messages query with attachment join.
+    // IMPORTANT: .eq('is_deleted', false) ensures soft-deleted messages never reach clients.
     let query = supabase
       .from("messages")
-      .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url), reply_to:messages(id, content, sender_id)")
+      .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url)")
       .eq("conversation_id", conversationId)
+      .eq("is_deleted", false)
       .order("created_at", { ascending: false })
       .limit(parseInt(limit));
 
@@ -560,7 +769,8 @@ exports.getMessages = async (req, res) => {
       const { data, error } = await query;
 
       if (error) {
-        // If the error is about missing relationship/table, fallback to basic query
+        // PGRST200/42703 = missing table/column. Fall back to a basic query that
+        // still attempts the reply_to join. If that also fails, use select(*).
         if (
           error.code === "PGRST200" ||
           error.code === "42703" ||
@@ -573,31 +783,63 @@ exports.getMessages = async (req, res) => {
             .from("messages")
             .select("*")
             .eq("conversation_id", conversationId)
+            .eq("is_deleted", false)
             .order("created_at", { ascending: false })
             .limit(parseInt(limit));
-          
+
           if (before) fallbackQuery = fallbackQuery.lt("created_at", before);
           if (clearedAt) fallbackQuery = fallbackQuery.gt("created_at", clearedAt);
 
-          const { data: simpleData, error: simpleError } = await fallbackQuery;
+          const { data: fb1Data, error: fb1Error } = await fallbackQuery;
 
+          if (!fb1Error) {
+            const fbArr = fb1Data || [];
+            await _hydrateReplyTo(fbArr);
+            return res.json(fbArr.reverse());
+          }
+
+          // Second fallback: plain select(*) + manual reply_to hydration
+          console.warn("[Chat Controller] reply_to join also failed, using select(*) + manual hydration");
+          let plainQuery = supabase
+            .from("messages")
+            .select("*")
+            .eq("conversation_id", conversationId)
+            .eq("is_deleted", false)
+            .order("created_at", { ascending: false })
+            .limit(parseInt(limit));
+
+          if (before) plainQuery = plainQuery.lt("created_at", before);
+          if (clearedAt) plainQuery = plainQuery.gt("created_at", clearedAt);
+
+          const { data: simpleData, error: simpleError } = await plainQuery;
           if (simpleError) throw simpleError;
-          return res.json((simpleData || []).reverse());
+
+          // Manual reply_to hydration — batch load all referenced parent messages
+          const simpleArr = simpleData || [];
+          await _hydrateReplyTo(simpleArr);
+          return res.json(simpleArr.reverse());
         }
         throw error;
       }
-      res.json((data || []).reverse());
+
+      // Primary query succeeded
+      const primaryArr = data || [];
+      await _hydrateReplyTo(primaryArr);
+      res.json(primaryArr.reverse());
     } catch (innerErr) {
       console.warn("[Chat Controller] Inner query error:", innerErr.message);
-      // Final fallback
-      const { data, error } = await supabase
+      // Final fallback — also exclude deleted messages + manual reply_to hydration
+      const { data: finalData, error: finalError } = await supabase
         .from("messages")
         .select("*")
         .eq("conversation_id", conversationId)
+        .eq("is_deleted", false)
         .order("created_at", { ascending: false })
         .limit(parseInt(limit));
-      if (error) throw error;
-      res.json((data || []).reverse());
+      if (finalError) throw finalError;
+      const finalArr = finalData || [];
+      await _hydrateReplyTo(finalArr);
+      res.json(finalArr.reverse());
     }
   } catch (err) {
     console.error("Error fetching messages:", err.message);
@@ -666,32 +908,58 @@ exports.markMessageRead = async (req, res) => {
   try {
     const { messageId } = req.params;
     const userId = req.user.id;
+    const now = new Date().toISOString();
 
     try {
+      let msgRow = null;
+      let readAt = now;
+
       const { data, error } = await supabase
         .from("messages")
-        .update({ read_at: new Date().toISOString() })
+        .update({ read_at: now })
         .eq("id", messageId)
         .neq("sender_id", userId) // Only mark as read if not the sender
         .select()
         .single();
 
       if (error) {
-        if (error.code === "42703" || error.code === "PGRST204") {
-          console.warn(
-            "[Chat Controller] read_at column missing, skipping update",
-          );
+        if (error.code === "42703") {
+          // Column doesn't exist — nothing we can do, skip gracefully
+          console.warn("[Chat Controller] read_at column missing, skipping update");
           return res.json({ success: true, note: "read_at column missing" });
         }
-        throw error;
+        if (error.code === "PGRST204") {
+          // 0 rows updated — message may already be read, or sender_id === userId.
+          // Fall back to a plain SELECT so we can still emit with the stored timestamp.
+          console.warn("[Chat Controller] markMessageRead: 0 rows updated, falling back to SELECT");
+          const { data: existing } = await supabase
+            .from("messages")
+            .select("id, conversation_id, sender_id, read_at")
+            .eq("id", messageId)
+            .single();
+          if (existing && existing.sender_id !== userId) {
+            msgRow = existing;
+            readAt = existing.read_at || now;
+          } else {
+            return res.json({ success: true, note: "no-op" });
+          }
+        } else {
+          throw error;
+        }
+      } else {
+        msgRow = data;
       }
 
-      // Emit read receipt via gateway
-      await realtime.emitToConversation(data.conversation_id, "chat:message_read", {
-        messageId,
-        conversationId: data.conversation_id,
-        userId,
-      });
+      if (!msgRow) return res.json({ success: true, note: "no-op" });
+
+      const receiptPayload = { messageId, conversationId: msgRow.conversation_id, userId, readAt };
+      console.log(`[FORENSIC][API] Read ACK Processing | messageId:${messageId} | conversationId:${msgRow.conversation_id} | userId:${userId} | ts:${Date.now()}`);
+
+      // Emit to conversation room (for ChatScreen listeners)
+      await realtime.emitToConversation(msgRow.conversation_id, "chat:message_read", receiptPayload);
+      // ALSO emit directly to the original sender so their ChatList updates too
+      await realtime.emitToUser(msgRow.sender_id, "chat:message_read", receiptPayload);
+      console.log(`[FORENSIC][API] Read ACK Broadcast Done | messageId:${messageId} | senderId:${msgRow.sender_id} | ts:${Date.now()}`);
 
       res.json({ success: true });
     } catch (updateErr) {
@@ -708,33 +976,80 @@ exports.markMessageDelivered = async (req, res) => {
   try {
     const { messageId } = req.params;
     const userId = req.user.id;
+    const { deviceId } = req.body; // Phase 6: per-device receipt
+    const now = new Date().toISOString();
 
     try {
+      let msgRow = null;
+      let deliveredAt = now;
+
       const { data, error } = await supabase
         .from("messages")
-        .update({ delivered_at: new Date().toISOString() })
+        .update({ delivered_at: now })
         .eq("id", messageId)
         .neq("sender_id", userId) // Only mark as delivered if not the sender
         .select()
         .single();
 
       if (error) {
-        if (error.code === "42703" || error.code === "PGRST204") {
-          console.warn(
-            "[Chat Controller] delivered_at column missing, skipping update",
-          );
+        if (error.code === "42703") {
+          // Column doesn't exist — skip gracefully
+          console.warn("[Chat Controller] delivered_at column missing, skipping update");
           return res.json({ success: true, note: "delivered_at column missing" });
         }
-        throw error;
+        if (error.code === "PGRST204") {
+          // 0 rows updated — message already delivered, or sender_id === userId.
+          // Fall back to SELECT so we can still emit with the actual stored timestamp.
+          console.warn("[Chat Controller] markMessageDelivered: 0 rows updated, falling back to SELECT");
+          const { data: existing } = await supabase
+            .from("messages")
+            .select("id, conversation_id, sender_id, delivered_at")
+            .eq("id", messageId)
+            .single();
+          if (existing && existing.sender_id !== userId) {
+            msgRow = existing;
+            deliveredAt = existing.delivered_at || now;
+          } else {
+            return res.json({ success: true, note: "no-op" });
+          }
+        } else {
+          throw error;
+        }
+      } else {
+        msgRow = data;
       }
 
-      // Emit delivered receipt via gateway
-      await realtime.emitToConversation(data.conversation_id, "chat:message_delivered", {
-        messageId,
-        conversationId: data.conversation_id,
-        userId,
-        delivered_at: data.delivered_at
-      });
+      if (!msgRow) return res.json({ success: true, note: "no-op" });
+
+      // Phase 6: fire per-device receipt (fire-and-forget, non-blocking)
+      if (deviceId) {
+        supabase.rpc('rpc_mark_delivered', {
+            p_message_id: messageId,
+            p_device_id: deviceId
+        }).catch(e => console.warn('[Phase6] rpc_mark_delivered failed:', e.message));
+
+        // ==========================================
+        // EVENT LEDGER: Emit DELIVERED
+        // ==========================================
+        emitMessageEvent({
+          messageId: messageId,
+          conversationId: msgRow.conversation_id,
+          userId,
+          deviceId,
+          sessionId: req.body.sessionId || null,
+          eventType: 'DELIVERED',
+          correlationId: messageId
+        });
+      }
+
+      const receiptPayload = { messageId, conversationId: msgRow.conversation_id, userId, delivered_at: deliveredAt };
+      console.log(`[FORENSIC][API] Delivery ACK Processing | messageId:${messageId} | conversationId:${msgRow.conversation_id} | userId:${userId} | ts:${Date.now()}`);
+
+      // Emit to conversation room (for ChatScreen listeners)
+      await realtime.emitToConversation(msgRow.conversation_id, "chat:message_delivered", receiptPayload);
+      // ALSO emit directly to the original sender so their ChatList updates too
+      await realtime.emitToUser(msgRow.sender_id, "chat:message_delivered", receiptPayload);
+      console.log(`[FORENSIC][API] Delivery ACK Broadcast Done | messageId:${messageId} | senderId:${msgRow.sender_id} | ts:${Date.now()}`);
 
       res.json({ success: true });
     } catch (updateErr) {
@@ -743,6 +1058,57 @@ exports.markMessageDelivered = async (req, res) => {
     }
   } catch (err) {
     console.error("Error marking message delivered:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+exports.markMessagesDeliveredBatch = async (req, res) => {
+  try {
+    const { messageIds } = req.body;
+    const userId = req.user.id;
+    const now = new Date().toISOString();
+
+    if (!Array.isArray(messageIds) || messageIds.length === 0) {
+      return res.status(400).json({ error: "messageIds must be a non-empty array" });
+    }
+
+    const { data, error } = await supabase
+      .from("messages")
+      .update({ delivered_at: now })
+      .in("id", messageIds)
+      .neq("sender_id", userId)
+      .select("id, conversation_id, sender_id");
+
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      // Group by conversation to minimize socket emits
+      const byConversation = {};
+      data.forEach(msg => {
+        if (!byConversation[msg.conversation_id]) {
+          byConversation[msg.conversation_id] = { messageIds: [], senderIds: new Set() };
+        }
+        byConversation[msg.conversation_id].messageIds.push(msg.id);
+        byConversation[msg.conversation_id].senderIds.add(msg.sender_id);
+      });
+
+      for (const [convId, group] of Object.entries(byConversation)) {
+        const payload = { 
+          conversationId: convId, 
+          messageIds: group.messageIds, 
+          userId, 
+          delivered_at: now 
+        };
+        await realtime.emitToConversation(convId, "chat:messages_delivered_batch", payload);
+        for (const senderId of group.senderIds) {
+          await realtime.emitToUser(senderId, "chat:messages_delivered_batch", payload);
+        }
+      }
+    }
+
+    res.json({ success: true, updatedCount: data?.length || 0 });
+  } catch (err) {
+    console.error("Error batch marking messages delivered:", err.message);
     res.status(500).json({ error: "Server Error" });
   }
 };
@@ -760,12 +1126,23 @@ exports.webhookDeliver = async (req, res) => {
       .single();
 
     if (!error && data) {
-      await realtime.emitToConversation(data.conversation_id, "chat:message_delivered", {
+      const receiptPayload = {
         messageId,
         conversationId: data.conversation_id,
         userId: data.sender_id,
         delivered_at: data.delivered_at
-      });
+      };
+
+      console.log('[FORENSIC][API] webhookDeliver | messageId:' + messageId + ' | senderId:' + data.sender_id + ' | conversationId:' + data.conversation_id + ' | ts:' + Date.now());
+
+      // Emit to the conversation room (covers active participants in the chat)
+      await realtime.emitToConversation(data.conversation_id, 'chat:message_delivered', receiptPayload);
+
+      // CRITICAL FIX: Also emit directly to the sender user room.
+      // The sender may not be in the conversation socket room (e.g., on the home screen).
+      // Without this the push-triggered webhook delivery never reaches the sender,
+      // so the single tick stays permanently until they navigate back into the chat.
+      await realtime.emitToUser(data.sender_id, 'chat:message_delivered', receiptPayload);
     }
 
     res.json({ success: true });
@@ -777,15 +1154,80 @@ exports.webhookDeliver = async (req, res) => {
 
 exports.sendMessage = async (req, res) => {
   try {
+    if (!req.params || !req.params.conversationId) {
+      return res.status(400).json({ error: "Conversation ID is required" });
+    }
+    if (!req.body) {
+      return res.status(400).json({ error: "Request body is required" });
+    }
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
     const { conversationId } = req.params;
-    // FIX: Also read attachmentId and replyToId from body
-    const { content, type, attachmentId, replyToId } = req.body;
+    const { content, type, attachmentId, replyToId, deviceId, sessionId, clientSendTs } = req.body;
     const userId = req.user.id;
+
+    const t1_ApiReceived = Date.now();
+    const startTimeMs = Date.now();
+    logger.info("Message request received [Stage 1]", {
+      correlationId: req.correlationId,
+      userId,
+      conversationId,
+      eventId: req.body.eventId,
+      type
+    });
 
     // Allow empty content when an attachment is present
     if (!content && !attachmentId) {
       return res.status(400).json({ error: "Content or attachment is required" });
     }
+
+    // ── PERF FIX: Fetch conversation_members ONCE and reuse across:
+    //   (a) block check, (b) message broadcast, (c) notification.
+    //   Previously fetched 3× per message (3 round-trips → now 1).
+    const { data: allMembers, error: membersError } = await supabase
+      .from("conversation_members")
+      .select("user_id, is_muted")
+      .eq("conversation_id", conversationId);
+      
+    if (membersError) throw membersError;
+
+    // Re-expose as `members` so the rest of the function remains unchanged.
+    const members = allMembers || [];
+    
+    // We only care about blocking in 1-on-1 direct conversations.
+    // If it's a direct conversation, there will be exactly 2 members.
+    if (members.length === 2) {
+      const otherMember = members.find(m => m.user_id !== userId);
+      if (otherMember) {
+        const recipientId = otherMember.user_id;
+        
+        // Check if there is any block between userId and recipientId
+        const { data: blocks, error: blocksError } = await supabase
+          .from("user_blocks")
+          .select("blocker_id, blocked_id")
+          .or(`and(blocker_id.eq.${userId},blocked_id.eq.${recipientId}),and(blocker_id.eq.${recipientId},blocked_id.eq.${userId})`);
+          
+        if (blocksError && blocksError.code !== 'PGRST116') {
+          console.warn("[Chat Block Check] Failed to check user_blocks table:", blocksError.message);
+        } else if (blocks && blocks.length > 0) {
+          const isBlockedByMe = blocks.some(b => b.blocker_id === userId);
+          if (isBlockedByMe) {
+            return res.status(403).json({ error: "BLOCKED_BY_YOU", message: "You have blocked this user" });
+          } else {
+            return res.status(403).json({ error: "BLOCKED_BY_THEM", message: "This user has blocked you" });
+          }
+        }
+      }
+    }
+
+    logger.debug("Validation passed [Stage 2]", {
+      correlationId: req.correlationId,
+      userId,
+      conversationId,
+      durationMs: Date.now() - startTimeMs
+    });
 
     // Analysis: Sentiment (if text)
     let sentiment = null;
@@ -805,61 +1247,241 @@ exports.sendMessage = async (req, res) => {
           : "neutral",
       };
 
-      // Detect Language
-      detectedLang = await detectLanguage(content);
+      // LANGUAGE DETECTION MOVED OUT OF CRITICAL PATH
+      // Previously: detectedLang = await detectLanguage(content);
+      // This was making a synchronous HTTP request to google-translate-api-x,
+      // blocking the entire socket broadcast and API response for 500ms - 2000ms.
+      // We default to "en" to allow instant delivery (<50ms).
+      detectedLang = "en";
     }
     let createdMessageId = null;
+    let isDuplicate = false;
+    const eventId = req.body.eventId || crypto.randomUUID();
+
+    const t2_DbInsertStart = Date.now();
+
     try {
-      // Build payload conditionally — sending null for a non-existent column causes
-      // a 42703 error just like sending a value. Only add these fields when present.
-      const insertPayload = {
-        conversation_id: conversationId,
-        sender_id: userId,
-        content: content || '',
-        type: type || "text",
-        sentiment,
-        detected_language: detectedLang,
-      };
-      if (attachmentId) insertPayload.attachment_id = attachmentId;
-      if (replyToId)    insertPayload.reply_to_id   = replyToId;
+      let insertedMessage = null;
 
-      const { data, error } = await supabase
-        .from("messages")
-        .insert([insertPayload])
-        // Use safe select without explicit FK hint — same as getMessages which already works
-        .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url), reply_to:messages(id, content, sender_id)")
-        .single();
+      const isTransactional = features.isFeatureEnabled('SEQUENCE_ENFORCEMENT', userId);
+      console.log(`[SEQUENCE_MODE]: ${isTransactional ? 'transactional' : 'legacy'} (User: ${userId})`);
 
-      if (error) {
-        // Fallback for: missing column (42703) OR ambiguous/missing relationship (PGRST200)
-        const isSchemaMismatch = error.code === "42703" || error.code === "PGRST200" ||
-          (error.message && (error.message.includes("media_attachments") || error.message.includes("Could not find")));
+      if (isTransactional) {
+        console.log(`[Chat Controller] Using RPC Transaction for sendMessage (event_id: ${eventId})`);
+        const { data: rpcData, error: rpcError } = await supabase.rpc('rpc_send_message', {
+            p_conversation_id: conversationId,
+            p_sender_id: userId,
+            p_content: content || '',
+            p_type: type || "text",
+            p_event_id: eventId,
+            p_original_language: detectedLang,
+            p_attachment_id: attachmentId || null,
+            p_reply_to_id: replyToId || null
+        });
 
-        if (isSchemaMismatch) {
-          console.warn(
-            "[Chat Controller] Schema mismatch, retrying basic insert:", error.code, error.message
-          );
-          const fallbackPayload = {
-            conversation_id: conversationId,
-            sender_id: userId,
-            content: content || '',
-            type: type || "text",
-          };
-          const { data: retryData, error: retryErr } = await supabase
-            .from("messages")
-            .insert([fallbackPayload])
-            .select('*')
-            .single();
-
-          if (retryErr) throw retryErr;
-          createdMessageId = retryData.id;
-          processAfterMsg(retryData);
-        } else {
-          throw error;
+        if (rpcError) throw rpcError;
+        
+        insertedMessage = rpcData.message;
+        isDuplicate = rpcData.is_duplicate;
+        
+        if (isDuplicate) {
+           console.log(`[Chat Controller] Idempotent send: duplicate event_id ${eventId} rejected safely.`);
+        } else if (insertedMessage?.sequence_number) {
+           // Advance replay guard high-water mark for this conversation
+           replayGuard.advance(conversationId, insertedMessage.sequence_number);
         }
       } else {
-        createdMessageId = data.id;
-        processAfterMsg(data);
+        const insertPayload = {
+          conversation_id: conversationId,
+          sender_id: userId,
+          content: content || '',
+          type: type || "text",
+          sentiment,
+          detected_language: detectedLang,
+          event_id: eventId,
+          sequence_number: null
+        };
+        if (attachmentId) insertPayload.attachment_id = attachmentId;
+        if (replyToId)    insertPayload.reply_to_id   = replyToId;
+
+        const { data: insertData, error: insertError } = await supabase
+          .from("messages")
+          .insert([insertPayload])
+          .select("id")
+          .single();
+
+        if (insertError) {
+          const isSchemaError = insertError.code === "42703" || insertError.code === "PGRST200" ||
+            (insertError.message && (
+              insertError.message.includes("sentiment") || 
+              insertError.message.includes("detected_language") || 
+              insertError.message.includes("attachment_id")
+            ));
+
+          if (isSchemaError) {
+            console.warn("[Chat Controller] Schema mismatch on insert, retrying basic fallback insert:", insertError.code, insertError.message);
+            const fallbackPayload = {
+              conversation_id: conversationId,
+              sender_id: userId,
+              content: content || '',
+              type: type || "text",
+              event_id: eventId,
+              sequence_number: null
+            };
+            if (attachmentId) fallbackPayload.attachment_id = attachmentId;
+            if (replyToId)    fallbackPayload.reply_to_id   = replyToId;
+
+            const { data: retryData, error: retryErr } = await supabase
+              .from("messages")
+              .insert([fallbackPayload])
+              .select("id")
+              .single();
+
+            if (retryErr) throw retryErr;
+            insertedMessage = retryData;
+          } else {
+            throw insertError;
+          }
+        } else {
+          insertedMessage = insertData;
+        }
+      }
+
+      const t3_DbInsertDone = Date.now();
+      createdMessageId = insertedMessage.id;
+
+      // ── CHATLIST FIX: Stamp authoritative last-message pointer ──────────────
+      // Avoids chatlist depending on ORDER BY created_at (vulnerable to clock drift).
+      // Fire-and-forget — does not block the response.
+      supabase
+        .from("conversations")
+        .update({
+          last_message_id: createdMessageId,
+          last_message_at: insertedMessage.created_at || new Date().toISOString()
+        })
+        .eq("id", conversationId)
+        .then(({ error: lmErr }) => {
+          if (lmErr) console.warn("[Chat] last_message_at stamp failed:", lmErr.message);
+        });
+
+      logger.info("[FORENSIC][API] Message Saved | Stage 3", {
+        correlationId: req.correlationId,
+        messageId: createdMessageId,
+        conversationId,
+        senderId: userId,
+        eventId,
+        durationMs: Date.now() - startTimeMs
+      });
+      logger.info("Database insert completed [Stage 3]", {
+        correlationId: req.correlationId,
+        userId,
+        conversationId,
+        messageId: createdMessageId,
+        eventId,
+        durationMs: Date.now() - startTimeMs
+      });
+
+      // ==========================================
+      // EVENT LEDGER: Emit SENT
+      // ==========================================
+      if (deviceId) {
+        emitMessageEvent({
+          messageId: createdMessageId,
+          conversationId,
+          userId,
+          deviceId,
+          sessionId,
+          eventType: 'SENT',
+          correlationId: eventId // The generated intent ID is the correlation root
+        });
+      }
+
+      const { data: hydratedMessage, error: hydrateError } = await supabase
+        .from("messages")
+        .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url)")
+        .eq("id", createdMessageId)
+        .single();
+
+      if (hydrateError) {
+        console.warn("[Chat Controller] Failed to fully hydrate message on select, retrying simple select:", hydrateError.code, hydrateError.message);
+        
+        const { data: simpleMessage, error: simpleErr } = await supabase
+          .from("messages")
+          .select("*")
+          .eq("id", createdMessageId)
+          .single();
+
+        if (simpleErr) throw simpleErr;
+        
+        try {
+          const { data: senderData } = await supabase
+            .from("profiles")
+            .select("id, username, full_name, avatar_url")
+            .eq("id", userId)
+            .single();
+          if (senderData) {
+            simpleMessage.sender = senderData;
+          }
+        } catch (e) {
+          console.warn("[Chat Controller] Manual profile hydration failed:", e);
+        }
+
+        // ── Gap 3 fix: manually resolve reply_to after fallback select(*) ──
+        // The FK join failed (migration 199 not yet applied, or schema cache stale).
+        // Look up the parent message directly so the client gets the nested object.
+        if (simpleMessage.reply_to_id) {
+          try {
+            const { data: parentMsg } = await supabase
+              .from('messages')
+              .select('id, content, sender_id, type, is_deleted, sender:profiles(username, full_name)')
+              .eq('id', simpleMessage.reply_to_id)
+              .single();
+            if (parentMsg) {
+              const senderName = parentMsg.sender ? (parentMsg.sender.full_name || parentMsg.sender.username) : null;
+              simpleMessage.reply_to = {
+                id: parentMsg.id,
+                content: parentMsg.content,
+                sender_id: parentMsg.sender_id,
+                type: parentMsg.type,
+                deleted: parentMsg.is_deleted,
+                sender_name: senderName,
+              };
+            }
+          } catch (replyErr) {
+            console.warn('[Chat Controller] Could not hydrate reply_to manually:', replyErr.message);
+          }
+        }
+
+        processAfterMsg(simpleMessage);
+      } else {
+        // Primary hydration succeeded — but PostgREST can silently return
+        // reply_to: null when the FK join can't be resolved (schema cache miss:
+        // the named constraint 'messages_reply_to_id_fkey' wasn't yet visible to
+        // PostgREST at query time). Detect this case and fall back to a manual lookup.
+        if (hydratedMessage.reply_to_id && !hydratedMessage.reply_to) {
+          console.warn('[Chat Controller] FK join returned null for reply_to despite reply_to_id being set. Falling back to manual lookup.');
+          try {
+            const { data: parentMsg } = await supabase
+              .from('messages')
+              .select('id, content, sender_id, type, is_deleted, sender:profiles(username, full_name)')
+              .eq('id', hydratedMessage.reply_to_id)
+              .single();
+            if (parentMsg) {
+              const senderName = parentMsg.sender ? (parentMsg.sender.full_name || parentMsg.sender.username) : null;
+              hydratedMessage.reply_to = {
+                id: parentMsg.id,
+                content: parentMsg.content,
+                sender_id: parentMsg.sender_id,
+                type: parentMsg.type,
+                deleted: parentMsg.is_deleted,
+                sender_name: senderName,
+              };
+            }
+          } catch (replyFallbackErr) {
+            console.warn('[Chat Controller] Manual reply_to fallback failed:', replyFallbackErr.message);
+          }
+        }
+        processAfterMsg(hydratedMessage);
       }
     } catch (msgErr) {
       console.error("====================== CHAT ERROR TRACE ======================");
@@ -871,58 +1493,194 @@ exports.sendMessage = async (req, res) => {
     }
 
     async function processAfterMsg(msgToSend) {
-      // 1. Respond to sender immediately to minimize perceived latency
-      if (!res.headersSent) {
-          res.json(msgToSend);
+      // Normalize before broadcast
+      let safePayload = msgToSend;
+      const isTransactional = features.isFeatureEnabled('SEQUENCE_ENFORCEMENT', userId);
+      
+      if (isTransactional) {
+          safePayload = normalizeOutboundMessage(msgToSend);
+          if (!safePayload) {
+             console.error("[Chat Controller] Normalization failed. Dropping outbound broadcast.");
+             return;
+          }
+      } else {
+          // Non-transactional: normalize reply_to shape before sending to clients.
+          // _hydrateReplyTo sets message_type, but the PostgREST FK join uses the
+          // raw column name 'type'. Normalize to 'message_type' for consistency.
+          if (safePayload.reply_to && typeof safePayload.reply_to === 'object') {
+              const rt = safePayload.reply_to;
+              safePayload = {
+                  ...safePayload,
+                  reply_to: {
+                      id: rt.id,
+                      content: rt.content,
+                      sender_id: rt.sender_id,
+                      // _hydrateReplyTo uses message_type; FK join uses type — normalize both
+                      message_type: rt.message_type || rt.type,
+                      deleted: rt.deleted ?? rt.is_deleted ?? false,
+                      sender_name: rt.sender_name,
+                  },
+              };
+          } else if (safePayload.reply_to === null) {
+              // Strip null reply_to: prevents client merge engine from overwriting
+              // valid optimistic reply context with null (schema cache miss path).
+              safePayload = { ...safePayload };
+              delete safePayload.reply_to;
+          }
       }
 
-      // 2. Broadcast to other members immediately
-      await realtime.emitToConversation(conversationId, "chat:message", msgToSend);
+      // 1. Respond to sender immediately
+      if (!res.headersSent) {
+          res.json(safePayload);
+          logger.info("Response returned [Stage 5]", {
+            correlationId: req.correlationId,
+            userId,
+            conversationId,
+            messageId: msgToSend.id,
+            eventId: msgToSend.event_id,
+            durationMs: Date.now() - startTimeMs
+          });
+      }
+
+      // 2. Broadcast to other members immediately if it's not a duplicate
+      if (!isDuplicate) {
+          // PRIMARY PATH: Emit to each participant's user:<id> room.
+          // PERF FIX: Reuse the `members` array fetched at the top of sendMessage
+          // (was previously a 2nd redundant SELECT on conversation_members).
+          try {
+              if (members.length > 0) {
+                  // Fire a single batch broadcast via pg_notify to the gateway.
+                  // This eliminates PostgreSQL connection exhaustion (EMAXCONNSESSION) on group chats.
+                  const userIds = members.map(m => m.user_id);
+                  await realtime.emitToUsers(userIds, "chat:message", safePayload, { correlationId: req.correlationId });
+                  
+                  logger.info("Realtime event dispatched [Stage 4]", {
+                    correlationId: req.correlationId,
+                    userId,
+                    conversationId,
+                    messageId: safePayload.id,
+                    eventId: safePayload.event_id,
+                    recipientCount: userIds.length,
+                    durationMs: Date.now() - startTimeMs
+                  });
+              }
+          } catch (memberFetchErr) {
+              console.warn("[Chat Controller] Broadcast per-user emit failed:", memberFetchErr.message);
+          }
+      }
 
       // 3. Background tasks (non-blocking)
       supabase.from("conversations").update({ updated_at: new Date() }).eq(
         "id",
         conversationId,
       ).then();
-    }
 
-    // --- Notification Logic ---
+      // 4. Server-side ACK Timeout Recheck (Self-Healing Delivery)
+      // After 30s, check if the message was confirmed delivered.
+      // If not (delivered_at still null), re-emit to all recipients.
+      // Handles: iOS backgrounding, network switch (LTE↔WiFi), cold gateway routing.
+      // Fire-and-forget — does NOT block the response, does NOT double-write to DB.
+      if (PIPELINE_VERSION !== 'v2' && !isDuplicate && safePayload.id && members.length > 0) {
+        const recheckMessageId = safePayload.id;
+        const recheckMembers = [...members]; // snapshot at send time
+        const recheckCorrelationId = req.correlationId;
+
+        setTimeout(async () => {
+          try {
+            const { data: msgCheck } = await supabase
+              .from('messages')
+              .select('id, delivered_at')
+              .eq('id', recheckMessageId)
+              .single();
+
+            if (!msgCheck) {
+              console.log(`[FORENSIC][API] ACK Recheck | messageId:${recheckMessageId} | result: NOT_FOUND (deleted or cleaned up)`);
+              return;
+            }
+
+            if (msgCheck.delivered_at) {
+              console.log(`[FORENSIC][API] ACK Recheck | messageId:${recheckMessageId} | result: DELIVERED_OK | delivered_at:${msgCheck.delivered_at}`);
+              return;
+            }
+
+            // Delivery not confirmed — re-emit the message payload to all recipients
+            console.warn(`[FORENSIC][API] ACK Recheck | messageId:${recheckMessageId} | result: NOT_DELIVERED — re-emitting to ${recheckMembers.length} recipients | cid:${recheckCorrelationId}`);
+
+            const userIds = recheckMembers.map(m => m.user_id);
+            await realtime.emitToUsers(userIds, "chat:message", safePayload, {
+              correlationId: recheckCorrelationId,
+              recheck: true
+            });
+
+            console.log(`[FORENSIC][API] ACK Recheck Re-emit Done | messageId:${recheckMessageId} | recipientCount:${userIds.length}`);
+          } catch (recheckErr) {
+            console.warn(`[FORENSIC][API] ACK Recheck Failed | messageId:${recheckMessageId} | error:${recheckErr.message}`);
+          }
+        }, 30000); // 30 second window — enough for reconnect backoff (max 10s) + handshake
+      }
+    }
+// --- Notification Logic ---
+    // PERF FIX: Reuse `members` fetched at the top of sendMessage.
+    // Filter to non-sender members here (was previously a 3rd redundant SELECT).
     const io = req.app.get("io");
     try {
-      // Get conversation members to notify them
-      const { data: members, error: memberError } = await supabase
-        .from("conversation_members")
-        .select("user_id, is_muted")
-        .eq("conversation_id", conversationId)
-        .neq("user_id", userId); // Don't notify the sender
+      const otherMembers = members.filter(m => m.user_id !== userId);
 
-      if (!memberError && members) {
-        // Fetch sender info for the notification title
-        const { data: sender } = await supabase
-          .from("profiles")
-          .select("username")
-          .eq("id", userId)
-          .single();
+      if (otherMembers.length > 0) {
+        let senderName = usernameCache.get(userId);
+        if (!senderName) {
+          const { data: sender } = await supabase
+            .from("profiles")
+            .select("username")
+            .eq("id", userId)
+            .single();
+          senderName = sender?.username || "Someone";
+          usernameCache.set(userId, senderName);
+        }
 
-        for (const member of members) {
-          if (member.is_muted) {
-            console.log(`[Chat Notify] Skipping muted user: ${member.user_id}`);
-            continue;
-          }
+        const previewContent = getNotificationPreview(type || 'text', content);
 
+        const dbNotificationPromises = otherMembers.map(async (member) => {
+          if (member.is_muted) return;
           await createNotification({
             receiverId: member.user_id,
             senderId: userId,
             type: "chat_message",
-            title: "New Message",
-            message: `${sender?.username || "Someone"} sent you a message: ${
-              content.substring(0, 50)
-            }${content.length > 50 ? "..." : ""}`,
+            title: senderName,
+            message: previewContent,
             link: `/dashboard/chat?id=${conversationId}`,
             messageId: createdMessageId,
             conversationId: conversationId,
+            skipPush: true,
           });
+        });
+
+        if (PIPELINE_VERSION !== 'v2') {
+          const fastPushPromises = otherMembers.map(async (member) => {
+            if (member.is_muted) {
+              console.log(`[Chat Notify] Skipping muted user fast-push: ${member.user_id}`);
+              return;
+            }
+            await dispatchFastPush({
+              receiverId: member.user_id,
+              type: "chat_message",
+              title: senderName,
+              message: previewContent,
+              link: `/dashboard/chat?id=${conversationId}`,
+              messageId: createdMessageId,
+              conversationId: conversationId,
+              trace: {
+                clientSendTs,
+                apiReceiveTs: t1_ApiReceived,
+                dbStartTs: t2_DbInsertStart,
+                dbDoneTs: t3_DbInsertDone,
+              }
+            });
+          });
+          await Promise.allSettled(fastPushPromises);
         }
+
+        Promise.allSettled(dbNotificationPromises).then();
       }
 
       // --- Mention Logic ---
@@ -935,25 +1693,57 @@ exports.sendMessage = async (req, res) => {
           .in("username", usernames);
 
         if (mentionedUsers) {
-          // Fetch sender info if not already fetched
-          const senderName =
-            (await supabase.from("profiles").select("username").eq("id", userId)
-              .single()).data?.username || "Someone";
+          let senderName = usernameCache.get(userId);
+          if (!senderName) {
+            const { data: sender } = await supabase
+              .from("profiles")
+              .select("username")
+              .eq("id", userId)
+              .single();
+            senderName = sender?.username || "Someone";
+            usernameCache.set(userId, senderName);
+          }
 
-          for (const mUser of mentionedUsers) {
-            if (mUser.id !== userId) { // Don't notify self
+          const previewContent = getNotificationPreview(type || 'text', content);
+
+          const mentionPushes = mentionedUsers.map(async (mUser) => {
+            if (mUser.id !== userId) {
+              await dispatchFastPush({
+                receiverId: mUser.id,
+                type: "mention",
+                title: senderName,
+                message: `Mentioned you: ${previewContent}`,
+                link: `/dashboard/chat?id=${conversationId}`,
+                messageId: createdMessageId,
+                conversationId: conversationId,
+                trace: {
+                  clientSendTs,
+                  apiReceiveTs: t1_ApiReceived,
+                  dbStartTs: t2_DbInsertStart,
+                  dbDoneTs: t3_DbInsertDone,
+                }
+              });
+            }
+          });
+
+          const mentionDBLogs = mentionedUsers.map(async (mUser) => {
+            if (mUser.id !== userId) {
               await createNotification({
                 receiverId: mUser.id,
                 senderId: userId,
                 type: "mention",
-                title: "You were mentioned",
-                message: `${senderName} mentioned you in a chat: "${
-                  content.substring(0, 50)
-                }..."`,
+                title: senderName,
+                message: `Mentioned you: ${previewContent}`,
                 link: `/dashboard/chat?id=${conversationId}`,
+                messageId: createdMessageId,
+                conversationId: conversationId,
+                skipPush: true,
               });
             }
-          }
+          });
+
+          await Promise.allSettled(mentionPushes);
+          Promise.allSettled(mentionDBLogs).then();
         }
       }
     } catch (notifErr) {
@@ -1003,45 +1793,47 @@ exports.sendMessage = async (req, res) => {
                isTyping: false 
             });
 
-            if (aiResponse && aiResponse.text) {
+             if (aiResponse && aiResponse.text) {
               // Insert AI message
-              const { data: autoMsg, error: autoErr } = await supabase
-                .from("messages")
-                .insert([{
-                  conversation_id: conversationId,
-                  sender_id: botSenderId,
-                  content: aiResponse.text,
-                  type: "text",
-                }])
-                .select()
-                .single();
+              const { data: rpcData, error: autoErr } = await supabase.rpc('rpc_send_message', {
+                p_conversation_id: conversationId,
+                p_sender_id: botSenderId,
+                p_content: aiResponse.text,
+                p_type: "text",
+                p_event_id: require("crypto").randomUUID(),
+                p_original_language: "en",
+                p_attachment_id: null,
+                p_reply_to_id: null
+              });
+              const autoMsg = rpcData?.message;
 
-              if (!autoErr) {
+              if (!autoErr && autoMsg) {
                  await realtime.emitToConversation(conversationId, "chat:message", autoMsg);
               }
               
               // If escalated, update status
               if (aiResponse.isEscalated) {
-                 await supabase
-                  .from("conversations")
-                  .update({ support_status: "escalated" })
-                  .eq("id", conversationId);
+                  await supabase
+                   .from("conversations")
+                   .update({ support_status: "escalated" })
+                   .eq("id", conversationId);
               }
             } else {
               // AI returned no response — send a fallback so the user isn't left hanging
               const fallbackMsg = "Hi there! 👋 Thanks for reaching out. Our team has been notified and will get back to you shortly. – Note Standard Support Team";
-              const { data: fallbackData, error: fallbackErr } = await supabase
-                .from("messages")
-                .insert([{
-                  conversation_id: conversationId,
-                  sender_id: botSenderId,
-                  content: fallbackMsg,
-                  type: "text",
-                }])
-                .select()
-                .single();
+              const { data: rpcData, error: fallbackErr } = await supabase.rpc('rpc_send_message', {
+                p_conversation_id: conversationId,
+                p_sender_id: botSenderId,
+                p_content: fallbackMsg,
+                p_type: "text",
+                p_event_id: require("crypto").randomUUID(),
+                p_original_language: "en",
+                p_attachment_id: null,
+                p_reply_to_id: null
+              });
+              const fallbackData = rpcData?.message;
               
-              if (!fallbackErr) {
+              if (!fallbackErr && fallbackData) {
                  await realtime.emitToConversation(conversationId, "chat:message", fallbackData);
               }
             }
@@ -1057,18 +1849,19 @@ exports.sendMessage = async (req, res) => {
             // Send fallback message so user always gets a response
             const errorFallbackMsg = "Hi there! 👋 Thanks for your message. Our support team has been notified and will respond shortly. – Note Standard Support Team";
             try {
-              const { data: errMsg, error: errMsgErr } = await supabase
-                .from("messages")
-                .insert([{
-                  conversation_id: conversationId,
-                  sender_id: botSenderId,
-                  content: errorFallbackMsg,
-                  type: "text",
-                }])
-                .select()
-                .single();
+              const { data: rpcData, error: errMsgErr } = await supabase.rpc('rpc_send_message', {
+                p_conversation_id: conversationId,
+                p_sender_id: botSenderId,
+                p_content: errorFallbackMsg,
+                p_type: "text",
+                p_event_id: require("crypto").randomUUID(),
+                p_original_language: "en",
+                p_attachment_id: null,
+                p_reply_to_id: null
+              });
+              const errMsg = rpcData?.message;
               
-              if (!errMsgErr) {
+              if (!errMsgErr && errMsg) {
                  await realtime.emitToConversation(conversationId, "chat:message", errMsg);
               }
             } catch (fallbackInsertErr) {
@@ -1132,10 +1925,15 @@ exports.sendMessage = async (req, res) => {
     } catch (autoReplyErr) {
       console.error("Auto-reply logic failed:", autoReplyErr);
     }
-  } catch (err) {
-    console.error("Error sending message:", err.message);
+  } catch (error) {
+    console.error("🔥 SEND MESSAGE FAILED");
+    console.error("Correlation ID:", req.correlationId);
+    console.error(error);
     if (!res.headersSent) {
-      res.status(500).json({ error: "Server Error" });
+      return res.status(500).json({
+        error: "Internal Server Error",
+        correlationId: req.correlationId
+      });
     }
   }
 };
@@ -1238,42 +2036,47 @@ exports.deleteConversation = async (req, res) => {
       });
     }
 
-    // Delete messages first (if cascade delete isn't fully set up in Supabase)
-    const { error: msgDeleteError } = await supabase
-      .from("messages")
-      .delete()
-      .eq("conversation_id", conversationId);
-
-    if (msgDeleteError) throw msgDeleteError;
-
-    // Delete members
-    const { error: membersDeleteError } = await supabase
-      .from("conversation_members")
-      .delete()
-      .eq("conversation_id", conversationId);
-
-    if (membersDeleteError) throw membersDeleteError;
-
-    // Delete attachments metadata (if any)
-    const { error: attachmentsDeleteError } = await supabase
-      .from("attachments")
-      .delete()
-      .eq("conversation_id", conversationId);
-
-    if (attachmentsDeleteError) {
-      console.warn(
-        "Could not delete attachments metadata:",
-        attachmentsDeleteError.message,
-      );
-    }
-
-    // Delete conversation
-    const { error: convDeleteError } = await supabase
+    // NEW LOGIC: Only remove the requesting user from the conversation if it's a group chat.
+    // For direct chats, DO NOT delete messages or the conversation itself, as that wipes it for others.
+    // Instead, we just update cleared_at to hide it.
+    const { data: convData } = await supabase
       .from("conversations")
-      .delete()
-      .eq("id", conversationId);
+      .select("type")
+      .eq("id", conversationId)
+      .single();
 
-    if (convDeleteError) throw convDeleteError;
+    if (convData && convData.type === "direct") {
+      // Just clear history (hide chat) for direct chats to preserve relationships
+      const { error: updateError } = await supabase
+        .from("conversation_members")
+        .update({ cleared_at: new Date().toISOString() })
+        .eq("conversation_id", conversationId)
+        .eq("user_id", userId);
+
+      if (updateError) throw updateError;
+    } else {
+      // It's a group chat, safe to remove member
+      const { error: membersDeleteError } = await supabase
+        .from("conversation_members")
+        .delete()
+        .eq("conversation_id", conversationId)
+        .eq("user_id", userId);
+
+      if (membersDeleteError) throw membersDeleteError;
+
+      // Optional: Only delete the actual conversation and messages if NO members are left
+      const { count: memberCount } = await supabase
+        .from("conversation_members")
+        .select("*", { count: 'exact', head: true })
+        .eq("conversation_id", conversationId);
+      
+      if (memberCount === 0) {
+        console.log(`[Chat Delete] Last member left, cleaning up conversation ${conversationId}`);
+        await supabase.from("messages").delete().eq("conversation_id", conversationId);
+        await supabase.from("attachments").delete().eq("conversation_id", conversationId);
+        await supabase.from("conversations").delete().eq("id", conversationId);
+      }
+    }
 
     // Notify participants via Gateway
     await realtime.emitToConversation(conversationId, "chat:conversation_deleted", { conversationId });
@@ -1313,13 +2116,25 @@ exports.clearChatHistory = async (req, res) => {
     const { conversationId } = req.params;
     const userId = req.user.id;
 
-    const { error } = await supabase
-      .from("conversation_members")
-      .update({ cleared_at: new Date() })
-      .eq("conversation_id", conversationId)
-      .eq("user_id", userId);
+    const isTransactional = features.isFeatureEnabled('SEQUENCE_ENFORCEMENT', userId);
+    console.log(`[SEQUENCE_MODE]: ${isTransactional ? 'transactional' : 'legacy'} (User: ${userId}, Action: clearChatHistory)`);
 
-    if (error) throw error;
+    if (isTransactional) {
+        console.log(`[Chat Controller] Using RPC Transaction for clearChatHistory`);
+        const { data: rpcData, error: rpcError } = await supabase.rpc('rpc_clear_chat', {
+            p_conversation_id: conversationId,
+            p_user_id: userId
+        });
+        if (rpcError) throw rpcError;
+    } else {
+        const { error } = await supabase
+          .from("conversation_members")
+          .update({ cleared_at: new Date() })
+          .eq("conversation_id", conversationId)
+          .eq("user_id", userId);
+
+        if (error) throw error;
+    }
 
     res.json({ success: true, message: "Chat history cleared" });
   } catch (err) {
@@ -1372,35 +2187,62 @@ exports.deleteMessage = async (req, res) => {
       .from("messages")
       .update({
         is_deleted: true,
-        content: "Message deleted", // Optional: scrub content
+        content: "Message deleted",
       })
       .eq("id", messageId);
 
-    // If not admin, force ownership check
     if (!isAdmin) {
       query = query.eq("sender_id", userId);
     }
 
-    const { data, error } = await query.select().single();
+    let deletePayload;
+    const isTransactional = features.isFeatureEnabled('SEQUENCE_ENFORCEMENT', userId);
+    console.log(`[SEQUENCE_MODE]: ${isTransactional ? 'transactional' : 'legacy'} (User: ${userId}, Action: deleteMessage)`);
 
-    if (error) {
-      // Check for 'No rows found' equivalent in supabase or missing permissions
-      if (error.code === "PGRST116" || error.details?.includes('0 rows')) {
-        console.warn(`[Chat Delete] Deletion failed. Record not found or RLS blocked it for user ${userId}`);
-        return res.status(404).json({
-          error: "Message not found or you don't have permission to delete it",
-        });
+    if (isTransactional) {
+      console.log(`[Chat Delete] Using RPC Transaction for deleteMessage ${messageId}`);
+      const { data: rpcData, error: rpcError } = await supabase.rpc('rpc_delete_message', {
+          p_message_id: messageId,
+          p_sender_id: userId
+      });
+
+      if (rpcError) throw rpcError;
+      if (!rpcData.success) {
+          return res.status(404).json({ error: rpcData.error || "Message not found" });
       }
-      throw error;
+      
+      deletePayload = { 
+        messageId, 
+        conversationId: message.conversation_id,
+        conversation_version: rpcData.conversation_version,
+        is_duplicate: rpcData.is_duplicate 
+      };
+      
+      if (rpcData.is_duplicate) {
+        console.log(`[Chat Delete] Idempotent delete: message ${messageId} already deleted.`);
+      }
+    } else {
+      const { data, error } = await query.select().single();
+
+      if (error) {
+        if (error.code === "PGRST116" || error.details?.includes('0 rows')) {
+          console.warn(`[Chat Delete] Deletion failed. Record not found or RLS blocked it for user ${userId}`);
+          return res.status(404).json({
+            error: "Message not found or you don't have permission to delete it",
+          });
+        }
+        throw error;
+      }
+      
+      deletePayload = { messageId, conversationId: data.conversation_id };
     }
 
     console.log(`[Chat Delete] Successfully soft-deleted message ${messageId}`);
 
-    // Notify via Gateway
-    await realtime.emitToConversation(data.conversation_id, "chat:message_deleted", {
-      messageId,
-      conversationId: data.conversation_id,
-    });
+    // Broadcast to all OTHER sockets in the conversation room.
+    await realtime.emitToConversation(message.conversation_id, "chat:message_deleted", deletePayload);
+    // Also emit directly to the deleting user
+    await realtime.emitToUser(userId, "chat:message_deleted", deletePayload);
 
     res.json({ success: true, message: "Message deleted" });
   } catch (err) {
@@ -1451,11 +2293,19 @@ exports.editMessage = async (req, res) => {
            .select("*, attachment:media_attachments(*)")
            .single();
          if (retryErr) throw retryErr;
-         
+         // Ensure reply_to is hydrated even if FK join returned null (schema cache miss)
+         if (retryData.reply_to_id && !retryData.reply_to) {
+           await _hydrateReplyTo([retryData]);
+         }
          await realtime.emitToConversation(retryData.conversation_id, "chat:message_edited", retryData);
          return res.json(retryData);
       }
       throw error;
+    }
+
+    // Ensure reply_to is hydrated even if FK join returned null (schema cache miss)
+    if (data.reply_to_id && !data.reply_to) {
+      await _hydrateReplyTo([data]);
     }
 
     // Notify via Gateway
@@ -1472,29 +2322,52 @@ exports.markConversationRead = async (req, res) => {
   try {
     const { conversationId } = req.params;
     const userId = req.user.id;
+    // deviceId/lastMessageId kept for legacy compatibility but no longer used
+    // to gate a second RPC call (was causing duplicate rpc_mark_read invocations).
     const now = new Date().toISOString();
 
-    // Mark all messages in this conversation as read, except own
-    const { error } = await supabase
-      .from("messages")
-      .update({ read_at: now, delivered_at: now }) // If read, it must have been delivered
-      .eq("conversation_id", conversationId)
-      .neq("sender_id", userId)
-      .is("read_at", null);
+    const readPayload = { conversationId, readerId: userId, readAt: now };
 
-    if (error) {
-      if (error.code === "42703") {
-         return res.json({ success: true, note: "read_at column missing" });
-      }
-      throw error;
+    // PERF FIX: Consolidate to a SINGLE rpc_mark_read call.
+    // Previously: Phase-6 path called rpc_mark_read (old signature), THEN the
+    // transactional block called it again — two bounded UPDATEs per open-conversation.
+    // Now: always use rpc_mark_read (migration 209 version) which is bounded by
+    // LIMIT 200 and uses the new idx_messages_read_at_null partial index.
+    const { data: rpcData, error: rpcError } = await supabase.rpc('rpc_mark_read', {
+        p_conversation_id: conversationId,
+        p_user_id: userId
+    });
+
+    if (rpcError) {
+        // Fallback: legacy path for databases that haven't run migration 209 yet
+        if (rpcError.code === 'PGRST202' || rpcError.message?.includes('rpc_mark_read')) {
+            console.warn('[Chat] rpc_mark_read not available — using legacy UPDATE');
+            const { error } = await supabase
+              .from("messages")
+              .update({ read_at: now })
+              .eq("conversation_id", conversationId)
+              .neq("sender_id", userId)
+              .is("read_at", null);
+            if (error && error.code !== "42703") throw error;
+        } else {
+            throw rpcError;
+        }
+    } else if (rpcData) {
+        readPayload.conversation_version = rpcData.conversation_version;
     }
 
-    // Emit event to room
-    await realtime.emitToConversation(conversationId, "chat:conversation_read", {
-        conversationId,
-        readerId: userId,
-        readAt: now
-    });
+    // Emit to ALL members of the conversation globally.
+    // By using emitToUsers, this broadcasts to user:${userId} rooms,
+    // guaranteeing delivery even if the sender is on a different screen.
+    const { data: members } = await supabase
+      .from('conversation_members')
+      .select('user_id')
+      .eq('conversation_id', conversationId);
+      
+    if (members && members.length > 0) {
+      const memberIds = members.map(m => m.user_id);
+      await realtime.emitToUsers(memberIds, "chat:conversation_read", readPayload);
+    }
 
     res.json({ success: true });
   } catch (err) {
@@ -1509,13 +2382,23 @@ exports.markConversationDelivered = async (req, res) => {
     const userId = req.user.id;
     const now = new Date().toISOString();
 
-    // Mark all messages in this conversation as delivered, except own
+    // PERF FIX: The previous full-table UPDATE was the #1 Disk I/O consumer:
+    //   UPDATE messages SET delivered_at = now()
+    //   WHERE conversation_id = ? AND sender_id != ? AND delivered_at IS NULL
+    // This scanned every message in the conversation with no index on delivered_at.
+    //
+    // New approach: use a bounded UPDATE (LIMIT 100 most-recent undelivered messages)
+    // via the new idx_messages_delivered_null partial index from migration 209.
+    // Real-time delivery via socket events handles the rest — this endpoint is only
+    // a fallback catch-up for offline devices reconnecting.
     const { error } = await supabase
       .from("messages")
       .update({ delivered_at: now })
       .eq("conversation_id", conversationId)
       .neq("sender_id", userId)
-      .is("delivered_at", null);
+      .is("delivered_at", null)
+      .order("created_at", { ascending: false })
+      .limit(100);
 
     if (error) {
       if (error.code === "42703") {
@@ -1524,12 +2407,18 @@ exports.markConversationDelivered = async (req, res) => {
       throw error;
     }
 
-    // Emit event to room
-    await realtime.emitToConversation(conversationId, "chat:conversation_delivered", {
-        conversationId,
-        userId: userId,
-        delivered_at: now
-    });
+    const deliveredPayload = { conversationId, userId, delivered_at: now };
+
+    // Emit to ALL members of the conversation globally.
+    const { data: members } = await supabase
+      .from('conversation_members')
+      .select('user_id')
+      .eq('conversation_id', conversationId);
+      
+    if (members && members.length > 0) {
+      const memberIds = members.map(m => m.user_id);
+      await realtime.emitToUsers(memberIds, "chat:conversation_delivered", deliveredPayload);
+    }
 
     res.json({ success: true });
   } catch (err) {
@@ -1537,3 +2426,197 @@ exports.markConversationDelivered = async (req, res) => {
     res.status(500).json({ error: "Server Error" });
   }
 };
+
+// ==========================================
+// BLOCKING SYSTEM
+// ==========================================
+
+exports.blockUser = async (req, res) => {
+  try {
+    const blockerId = req.user.id;
+    const { blockedId } = req.body;
+    if (!blockedId) return res.status(400).json({ error: "Blocked user ID required" });
+
+    if (blockerId === blockedId) {
+      return res.status(400).json({ error: "You cannot block yourself" });
+    }
+
+    const { data, error } = await supabase
+      .from("user_blocks")
+      .insert([{ blocker_id: blockerId, blocked_id: blockedId }])
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') { // Unique constraint violation (already blocked)
+        return res.json({ success: true, message: "User already blocked" });
+      }
+      throw error;
+    }
+
+    // Notify the gateway if needed to disconnect calls/chats
+    await realtime.emitToUser(blockedId, "chat:blocked", { blockerId });
+    await realtime.emitToUser(blockerId, "chat:blocked_success", { blockedId });
+
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error("Error blocking user:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+exports.unblockUser = async (req, res) => {
+  try {
+    const blockerId = req.user.id;
+    const { blockedId } = req.body;
+    if (!blockedId) return res.status(400).json({ error: "Blocked user ID required" });
+
+    const { error } = await supabase
+      .from("user_blocks")
+      .delete()
+      .eq("blocker_id", blockerId)
+      .eq("blocked_id", blockedId);
+
+    if (error) throw error;
+
+    await realtime.emitToUser(blockedId, "chat:unblocked", { blockerId });
+    await realtime.emitToUser(blockerId, "chat:unblocked_success", { blockedId });
+
+    res.json({ success: true, message: "User unblocked" });
+  } catch (err) {
+    console.error("Error unblocking user:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+exports.getBlockedUsers = async (req, res) => {
+  try {
+    const blockerId = req.user.id;
+    
+    // First fetch the blocked IDs
+    const { data: blocks, error: blocksError } = await supabase
+      .from("user_blocks")
+      .select("blocked_id")
+      .eq("blocker_id", blockerId);
+
+    if (blocksError) {
+      if (blocksError.code === 'PGRST116') return res.json([]); // Table missing
+      throw blocksError;
+    }
+
+    if (!blocks || blocks.length === 0) {
+      return res.json([]);
+    }
+
+    // Then fetch profiles avoiding relationship ambiguities
+    const blockedIds = blocks.map(b => b.blocked_id);
+    const { data: profiles, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id, username, full_name, avatar_url")
+      .in("id", blockedIds);
+
+    if (profilesError) throw profilesError;
+
+    res.json(profiles || []);
+  } catch (err) {
+    console.error("Error fetching blocked users:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+// ==========================================
+// EVENT LEDGER (Phase 6.2)
+// ==========================================
+
+exports.emitLedgerEvent = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { messageId, conversationId, deviceId, sessionId, eventType, correlationId, metadata } = req.body;
+
+    if (!messageId || !conversationId || !deviceId || !eventType || !correlationId) {
+      return res.status(400).json({ error: "Missing required event fields" });
+    }
+
+    await emitMessageEvent({
+      messageId,
+      conversationId,
+      userId,
+      deviceId,
+      sessionId,
+      eventType,
+      correlationId,
+      metadata
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[EventLedger] Controller error:", err.message);
+    // Don't fail the client on ledger errors
+    res.json({ success: true, error: "Event recorded with warnings" });
+  }
+};
+
+// ==========================================
+// BACKGROUND PUSH WEBHOOKS
+// ==========================================
+
+exports.webhookDeliver = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const now = new Date().toISOString();
+
+    if (!messageId) {
+      return res.status(400).json({ error: "Missing messageId" });
+    }
+
+    // 1. Fetch message to ensure it exists and get conversation context
+    const { data: message, error: fetchError } = await supabase
+      .from("messages")
+      .select("id, conversation_id, delivered_at, sender_id")
+      .eq("id", messageId)
+      .single();
+
+    if (fetchError || !message) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    // If already delivered, just return success
+    if (message.delivered_at) {
+      return res.json({ success: true, note: "Already delivered" });
+    }
+
+    // 2. Mark as delivered in the database
+    const { error: updateError } = await supabase
+      .from("messages")
+      .update({ delivered_at: now })
+      .eq("id", messageId);
+
+    if (updateError) throw updateError;
+
+    // 3. Globally emit the double tick to all conversation members (specifically the sender)
+    const { data: members } = await supabase
+      .from("conversation_members")
+      .select("user_id")
+      .eq("conversation_id", message.conversation_id);
+
+    if (members && members.length > 0) {
+      const memberIds = members.map((m) => m.user_id);
+      
+      const payload = {
+        conversationId: message.conversation_id,
+        messageId: message.id,
+        deliveredAt: now,
+        senderId: message.sender_id // Helps the gateway route to the exact sender immediately
+      };
+
+      // emitToUsers broadcasts to global user channels (user:{id}) so the sender gets the tick anywhere
+      await realtime.emitToUsers(memberIds, "chat:delivery_receipt", payload);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error in webhookDeliver:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+

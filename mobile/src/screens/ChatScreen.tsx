@@ -1,797 +1,409 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, FlatList,
-  StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Image,
-  Alert, Share,
+    View, Text, TouchableOpacity,
+    StyleSheet, Platform, Image,
+    Alert, Share, InteractionManager, ActivityIndicator
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { useAnimatedKeyboard, useAnimatedStyle } from 'react-native-reanimated';
+
+import { FlashList } from '@shopify/flash-list';
+const SafeFlashList = FlashList as any;
+import { initialWindowMetrics } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { io, Socket } from 'socket.io-client';
-import apiClient from '../api/apiClient';
 import { useAuth } from '../context/AuthContext';
-import { AuthService } from '../services/AuthService';
-import { Conversation } from '../services/ChatService';
-import { GATEWAY_URL } from '../Config';
+import { useMessages, useConversations } from '../context/ChatContext';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RouteProp } from '@react-navigation/native';
+import { RouteProp, useIsFocused } from '@react-navigation/native';
 import { ChatStackParamList } from '../navigation/ChatStack';
-import { MediaService } from '../services/MediaService';
-import VoiceService from '../services/VoiceService';
 import { Audio } from 'expo-av';
-import { useLongPressGesture } from '../hooks/useLongPressGesture';
 import SignalingService from '../services/SignalingService';
+import apiClient from '../api/apiClient';
+
+import { MessageComposer } from '../components/chat/MessageComposer';
+import { ChatMessageBubble, Message } from '../components/chat/ChatMessageBubble';
+import { MessageActionSheet } from '../components/chat/MessageActionSheet';
 
 type Props = {
-  navigation: NativeStackNavigationProp<ChatStackParamList, 'Chat'>;
-  route: RouteProp<ChatStackParamList, 'Chat'>;
+    navigation: NativeStackNavigationProp<ChatStackParamList, 'Chat'>;
+    route: RouteProp<ChatStackParamList, 'Chat'>;
 };
 
-interface Message {
-  id: string;
-  content: string;
-  sender_id: string;
-  created_at: string;
-  sender?: { full_name?: string; avatar_url?: string };
-  attachment?: {
-    id: string;
-    file_type: string;
-    storage_path: string;
-    file_name: string;
-  };
-  type?: string;
-  _optimistic?: boolean; 
-  is_edited?: boolean;
-  reply_to?: {
-    id: string;
-    content: string;
-    sender_id: string;
-  };
-}
-
-// ── ChatMessageBubble ────────────────────────────────────────────────────
-// Must live OUTSIDE ChatScreen so useLongPressGesture follows Rules of Hooks.
-const ChatMessageBubble = React.memo(({
-  item,
-  currentUserId,
-  recipientName,
-  onLongPress,
-  onPlayAudio,
-}: {
-  item: Message;
-  currentUserId: string;
-  recipientName: string;
-  onLongPress: (msg: Message) => void;
-  onSwipeRight?: (msg: Message) => void;
-  onPlayAudio: (path: string) => void;
-}) => {
-  const isMe = item.sender_id === currentUserId;
-
-  const longPressProps = useLongPressGesture({
-    onLongPress: () => onLongPress(item),
-    onSwipeRight: onSwipeRight ? () => onSwipeRight(item) : undefined,
-    delay: 500,
-    moveThreshold: 10,
-  });
-
-  // WhatsApp-style tick: ✓ sent, ✓✓ delivered, blue ✓✓ read
-  const renderTicks = (msg: Message & { delivered_at?: string; read_at?: string }) => {
-    if (!isMe) return null;
-    if (msg._optimistic) return <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>{'  ✓'}</Text>;
-    if ((msg as any).read_at) return <Text style={{ color: '#60a5fa', fontSize: 10 }}>{'  ✓✓'}</Text>;
-    if ((msg as any).delivered_at) return <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10 }}>{'  ✓✓'}</Text>;
-    return <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>{'  ✓'}</Text>;
-  };
-
-  return (
-    <View style={[styles.msgRow, isMe && styles.msgRowMe]}>
-      {!isMe && (
-        <LinearGradient colors={['#6366f1', '#4f46e5']} style={styles.msgAvatar}>
-          <Text style={styles.msgAvatarText}>{recipientName.charAt(0).toUpperCase()}</Text>
-        </LinearGradient>
-      )}
-      <TouchableOpacity
-        activeOpacity={0.85}
-        {...longPressProps}
-        style={[
-          styles.bubble,
-          isMe ? styles.bubbleMe : styles.bubbleThem,
-          item._optimistic && styles.bubbleOptimistic,
-        ]}
-      >
-        {item.reply_to && (
-          <View style={styles.replyContext}>
-            <Text style={styles.replyContextName}>
-              {item.reply_to.sender_id === currentUserId ? 'You' : 'Member'}
-            </Text>
-            <Text style={styles.replyContextText} numberOfLines={1}>
-              {item.reply_to.content}
-            </Text>
-          </View>
-        )}
-        {item.attachment && (
-          <View style={styles.attachmentContainer}>
-            {item.attachment.file_type.startsWith('image') ? (
-              <Image
-                source={{ uri: `https://tngcvgisfctggvivcnva.supabase.co/storage/v1/object/public/chat-media/${item.attachment.storage_path}` }}
-                style={styles.attachmentImage as any}
-              />
-            ) : item.attachment.file_type.startsWith('audio') ? (
-              <TouchableOpacity onPress={() => onPlayAudio(item.attachment!.storage_path)} style={styles.voiceNoteBtn}>
-                <Text style={styles.voiceNoteText}>▶ Voice Note</Text>
-              </TouchableOpacity>
-            ) : (
-              <Text style={styles.attachmentFile}>📎 {item.attachment.file_name}</Text>
-            )}
-          </View>
-        )}
-        <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.content}</Text>
-        <View style={styles.bubbleFooter}>
-          {item.is_edited && <Text style={styles.editedTag}>edited</Text>}
-          <Text style={styles.bubbleTime}>
-            {item._optimistic
-              ? 'Sending…'
-              : new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </Text>
-          {renderTicks(item as any)}
-        </View>
-      </TouchableOpacity>
-    </View>
-  );
-});
 
 export default function ChatScreen({ navigation, route }: Props) {
-  const { conversationId, conversation } = route.params;
-  const { user } = useAuth();
-  const insets = useSafeAreaInsets();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [text, setText] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [typingUser, setTypingUser] = useState<string | null>(null);
-  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const socketRef = useRef<Socket | null>(null);
-  const flatRef = useRef<FlatList>(null);
-  const initialLoadDoneRef = useRef(false);
-  const [audioPlayer, setAudioPlayer] = useState<Audio.Sound | null>(null);
-  const [replyTo, setReplyTo] = useState<Message | null>(null);
-  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+    const { conversationId, conversation: routeConversation } = route.params || {};
+    const { user, accountReady } = useAuth();
 
-  // Inverted FlatList auto-scrolls to latest message (offset 0) natively.
-  // No manual keyboard listener needed — KeyboardAvoidingView handles layout.
+    // Scoped selectors — each only subscribes to what it needs
+    const { sendMessage, editMessage, deleteMessage, onMessageVisible, messages } = useMessages();
+    const { setActiveConversationId, conversations } = useConversations();
 
-  // Safe member access — conversation.members may be partial (no profile) when coming from createConversation
-  const members = conversation?.members ?? [];
-  const otherMember = members.find(m => m.user_id !== user?.id);
-  const profile = otherMember?.profile;
-  const [isOtherOnline, setIsOtherOnline] = useState(profile?.is_online || false);
-  const recipientName = profile?.full_name || profile?.username || 'Chat';
+    // Self-healing: if conversation object wasn’t passed (e.g. from notification tap),
+    // look it up from already-loaded conversations, or fetch from API.
+    const [resolvedConversation, setResolvedConversation] = useState<any>(routeConversation ?? null);
 
-  const fetchMessages = useCallback(async () => {
-    try {
-      // Load from cache first (only on first load)
-      if (!initialLoadDoneRef.current) {
-        const cacheKey = `cache_messages_${conversationId}`;
-        const cached = await AsyncStorage.getItem(cacheKey);
-        if (cached) {
-          setMessages(JSON.parse(cached));
-          setLoading(false);
+    useEffect(() => {
+        if (resolvedConversation) return; // Already have it
+        if (!conversationId) return;
+
+        // 1. Try conversations already in ChatContext
+        const found = conversations.find((c: any) => c.id === conversationId);
+        if (found) {
+            setResolvedConversation(found);
+            return;
         }
-      }
 
-      const res = await apiClient.get(`/chat/conversations/${conversationId}/messages`);
-      const data = Array.isArray(res.data) ? res.data : [];
-      const newestFirst = [...data].reverse();
+        // 2. Fetch from API (notification cold-boot: context may still be loading)
+        apiClient.get('/chat/conversations')
+            .then(res => {
+                const list: any[] = res.data || [];
+                const match = list.find((c: any) => c.id === conversationId);
+                if (match) setResolvedConversation(match);
+            })
+            .catch(err => console.warn('[ChatScreen] Failed to self-heal conversation:', err));
+    }, [conversationId, resolvedConversation, conversations]);
 
-      setMessages(newestFirst);
-      initialLoadDoneRef.current = true;
-      // Save to cache
-      await AsyncStorage.setItem(`cache_messages_${conversationId}`, JSON.stringify(newestFirst));
+    const isFocused = useIsFocused();
+    const insets = initialWindowMetrics?.insets || { top: 0, bottom: 0, left: 0, right: 0 };
 
-      // Mark unread messages as read
-      const unread = data.filter((m: Message) => m.sender_id !== user?.id && !(m as any).read_at);
-      for (const m of unread) {
-        apiClient.post(`/chat/messages/${m.id}/read`).catch(() => {});
-      }
-    } catch (e) {
-      console.error('[ChatScreen] Failed to load messages:', e);
-    } finally {
-      setLoading(false);
-    }
-  // IMPORTANT: Do NOT include messages.length — it causes socket reconnect loop
-  }, [conversationId, user?.id]);
-
-  useEffect(() => {
-    fetchMessages();
-
-    // FIX: Use GATEWAY_URL (not API_URL) for the realtime socket connection
-    const initSocket = async () => {
-      try {
-        const token = await AuthService.getToken();
-        console.log('[ChatScreen] Connecting to gateway:', GATEWAY_URL);
-        const socket = io(GATEWAY_URL, {
-          auth: { token },
-          transports: ['websocket'],
-          reconnection: true,
-          reconnectionAttempts: 5,
-          reconnectionDelay: 2000,
-        });
-        socketRef.current = socket;
-
-        socket.on('connect', () => {
-          console.log('[ChatScreen] Socket connected to gateway successfully');
-          socket.emit('chat:join', conversationId);
-          
-          // Process outbox when connected
-          AsyncStorage.getItem(`chat_outbox_${conversationId}`).then(async (outboxJson) => {
-            if (!outboxJson) return;
-            const currentOutbox = JSON.parse(outboxJson);
-            if (currentOutbox.length === 0) return;
-            
-            const remainingOutbox = [];
-            for (const msg of currentOutbox) {
-                try {
-                    const res = await apiClient.post(`/chat/conversations/${conversationId}/messages`, {
-                        content: msg.content,
-                        attachmentId: msg.attachmentId,
-                        replyToId: msg.replyToId
-                    });
-                    setMessages(prev => prev.map(m => m.id === msg.id ? { ...res.data } : m));
-                } catch (e) {
-                    remainingOutbox.push(msg);
-                }
+    // ── NATIVE 60FPS KEYBOARD TRACKING ──────────────────────────────────────────
+    const keyboard = useAnimatedKeyboard();
+    const TAB_BAR_HEIGHT = 70; // From MainTabs.tsx
+    const animatedKeyboardStyle = useAnimatedStyle(() => {
+        const kbHeight = keyboard.height.value;
+        let offset = 0;
+        
+        if (kbHeight > 0) {
+            if (Platform.OS === 'ios') {
+                // iOS: ChatScreen is pushed 70px up by the tab bar.
+                // Subtract this 70px from the absolute keyboard height.
+                const rawOffset = kbHeight - TAB_BAR_HEIGHT;
+                offset = rawOffset > 0 ? rawOffset : 0;
+            } else {
+                // Android: Tab bar is hidden (tabBarHideOnKeyboard: true)
+                offset = kbHeight > insets.bottom ? kbHeight - insets.bottom : 0;
             }
-            if (remainingOutbox.length < currentOutbox.length) {
-                console.log('[ChatScreen] Outbox processed successfully');
-            }
-            await AsyncStorage.setItem(`chat_outbox_${conversationId}`, JSON.stringify(remainingOutbox));
-          });
-        });
-
-        socket.on('connect_error', (err) => {
-          console.error('[ChatScreen] Socket connection error:', err.message);
-        });
-
-        // Presence Update
-        socket.on('user_online', ({ userId, online }) => {
-          if (userId === otherMember?.user_id) {
-            console.log(`[ChatScreen] Presence change: ${userId} is now ${online ? 'ONLINE' : 'OFFLINE'}`);
-            setIsOtherOnline(online);
-          }
-        });
-
-        // Incoming real-time message from another user
-        socket.on('chat:message', (msg: Message) => {
-          console.log('[ChatScreen] Received realtime message:', msg.id);
-          setMessages(prev => {
-            const isDuplicate = prev.some(m => m.id === msg.id);
-            if (isDuplicate) return prev;
-            // Mark as read immediately since user is in the chat
-            if (msg.sender_id !== user?.id) {
-              apiClient.post(`/chat/messages/${msg.id}/read`).catch(() => {});
-            }
-            return [msg, ...prev];
-          });
-        });
-
-        socket.on('chat:message_edited', (editedMsg: Message) => {
-          setMessages(prev => prev.map(m => m.id === editedMsg.id ? { ...m, ...editedMsg } : m));
-        });
-
-        socket.on('chat:message_deleted', ({ messageId }: { messageId: string }) => {
-          setMessages(prev => prev.filter(m => m.id !== messageId));
-        });
-
-        // Message status updates
-        socket.on('chat:message_read', ({ messageId }: { messageId: string }) => {
-          setMessages(prev => prev.map(m =>
-            m.id === messageId ? { ...m, read_at: new Date().toISOString() } as any : m
-          ));
-        });
-
-        socket.on('chat:message_delivered', ({ messageId }: { messageId: string }) => {
-          setMessages(prev => prev.map(m =>
-            m.id === messageId ? { ...m, delivered_at: new Date().toISOString() } as any : m
-          ));
-        });
-
-        // Typing indicator
-        socket.on('chat:typing', ({ userId: typingId, username, isTyping }: { userId: string; username?: string; isTyping: boolean }) => {
-          if (typingId === user?.id) return;
-          if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
-          if (isTyping) {
-            setTypingUser(username || recipientName);
-            typingTimerRef.current = setTimeout(() => setTypingUser(null), 4000);
-          } else {
-            setTypingUser(null);
-          }
-        });
-
-        socket.on('disconnect', (reason) => {
-          console.warn('[ChatScreen] Socket disconnected:', reason);
-        });
-      } catch (err) {
-        console.error('[ChatScreen] Socket init error:', err);
-      }
-    };
-
-    initSocket();
-
-    return () => {
-      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
-      socketRef.current?.disconnect();
-      socketRef.current = null;
-    };
-  }, [conversationId, otherMember?.user_id]);
-
-  const deleteMessage = async (messageId: string) => {
-    try {
-      await apiClient.delete(`/chat/messages/${messageId}`);
-    } catch (e) {
-      Alert.alert('Error', 'Failed to delete message');
-    }
-  };
-
-  const sendMessage = async (overrideContent?: string, attachmentId?: string) => {
-    const contentToSend = overrideContent || text.trim();
-    if (!contentToSend && !attachmentId) return;
-    if (sending) return;
-    
-    if (!overrideContent) setText('');
-    setSending(true);
-
-    // FIX: Optimistic update
-    const optimisticId = `opt-${Date.now()}`;
-    const optimisticMsg: Message = {
-      id: optimisticId,
-      content: contentToSend,
-      sender_id: user?.id ?? '',
-      created_at: new Date().toISOString(),
-      _optimistic: true,
-    };
-    setMessages(prev => [optimisticMsg, ...prev]);
-
-    try {
-      if (editingMessage) {
-        await apiClient.patch(`/chat/messages/${editingMessage.id}`, { content: contentToSend });
-        setEditingMessage(null);
-      } else {
-        const res = await apiClient.post(
-          `/chat/conversations/${conversationId}/messages`,
-          { content: contentToSend, attachmentId, replyToId: replyTo?.id }
-        );
-
-        const serverMsg: Message = res.data;
-        if (serverMsg?.id) {
-          setMessages(prev =>
-            prev.map(m => m.id === optimisticId ? { ...serverMsg } : m)
-          );
         }
-        setReplyTo(null);
-      }
-    } catch (e: any) {
-      console.error('[ChatScreen] Send failed:', e);
-      // Change to failed state instead of deleting
-      setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, _optimistic: false, type: 'failed' } : m));
-      
-      if (!editingMessage) {
-        // Save to Outbox
-        const outboxMsg = { id: optimisticId, content: contentToSend, attachmentId, replyToId: replyTo?.id };
-        const currentOutbox = JSON.parse(await AsyncStorage.getItem(`chat_outbox_${conversationId}`) || '[]');
-        await AsyncStorage.setItem(`chat_outbox_${conversationId}`, JSON.stringify([...currentOutbox, outboxMsg]));
-      }
+        return { paddingBottom: offset };
+    });
 
-      if (!overrideContent) setText(contentToSend);
-      Alert.alert('Send Failed', 'Could not send your message. It will retry when reconnected.');
-    } finally {
-      setSending(false);
-    }
-  };
+    const [audioPlayer, setAudioPlayer] = useState<Audio.Sound | null>(null);
+    const [replyTo, setReplyTo] = useState<Message | null>(null);
+    const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+    const [actionSheetMessage, setActionSheetMessage] = useState<Message | null>(null);
 
-  const handlePickMedia = async () => {
-    try {
-      const asset = await MediaService.pickImage();
-      if (!asset) return;
+    // Stable refs — read in callbacks without stale closures
+    const editingMessageRef = useRef<Message | null>(null);
+    editingMessageRef.current = editingMessage;
+    const replyToRef = useRef<Message | null>(null);
+    replyToRef.current = replyTo;
 
-      setLoading(true);
-      const attachment = await MediaService.uploadMedia(
-        asset.uri,
-        asset.fileName || `upload_${Date.now()}.jpg`,
-        asset.mimeType || 'image/jpeg',
-        conversationId
-      );
+    const flatRef = useRef<any>(null);
 
-      // Determine the human-readable content label
-      const contentLabel = (asset.mimeType || '').startsWith('video') ? '📹 Video' : '🖼️ Image';
-      await sendMessage(contentLabel, attachment.id);
-    } catch (err: any) {
-      console.error('[ChatScreen] Media upload error:', err);
-      Alert.alert('Upload Error', err.message || 'Failed to upload media. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVoiceNote = async () => {
-    if (isRecording) {
-      // Stop recording
-      setIsRecording(false);
-      try {
-        setLoading(true);
-        const attachment = await VoiceService.stopRecording(conversationId);
-        if (attachment) {
-          await sendMessage('🎤 Voice Note', attachment.id);
-        } else {
-          Alert.alert('Voice Note Error', 'Recording was empty. Please try again.');
-        }
-      } catch (err: any) {
-        console.error('[ChatScreen] Voice note stop error:', err);
-        Alert.alert('Voice Note Error', err.message || 'Failed to process voice note.');
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      // Start recording
-      try {
-        await VoiceService.startRecording();
-        setIsRecording(true);
-      } catch (err: any) {
-        console.error('[ChatScreen] Voice note start error:', err);
-        setIsRecording(false);
-        Alert.alert('Recording Error', err.message || 'Could not start recording. Check microphone permission.');
-      }
-    }
-  };
-
-  const playVoiceNote = async (path: string) => {
-    try {
-      if (audioPlayer) {
-        await audioPlayer.unloadAsync();
-      }
-
-      // Get signed URL
-      const res = await apiClient.get(`/media/signed-url?path=${path}`);
-      const { sound } = await Audio.Sound.createAsync({ uri: res.data.url });
-      setAudioPlayer(sound);
-      await sound.playAsync();
-    } catch (err) {
-      console.error('Failed to play audio', err);
-    }
-  };
-
-  const handleLongPress = (msg: Message) => {
-    const isMe = msg.sender_id === user?.id;
-    const options = ['Reply', 'Copy', 'Share'];
-    if (isMe) options.push('Edit', 'Delete');
-    options.push('Cancel');
-
-    Alert.alert(
-      'Message Options',
-      undefined,
-      [
-        { text: 'Reply', onPress: () => setReplyTo(msg) },
-        { 
-          text: 'Copy', 
-          onPress: () => {
-            // In a real app we'd use Clipboard from expo-clipboard
-            Alert.alert('Copied', 'Message copied to clipboard');
-          } 
-        },
-        {
-          text: 'Share',
-          onPress: async () => {
-            try {
-              await Share.share({
-                message: msg.content,
-              });
-            } catch (error: any) {
-              Alert.alert('Error', error.message);
-            }
-          }
-        },
-        ...(isMe ? [
-          { text: 'Edit', onPress: () => {
-            setEditingMessage(msg);
-            setText(msg.content);
-          }},
-          { text: 'Delete', onPress: () => {
-            Alert.alert('Delete', 'Delete this message?', [
-              { text: 'Cancel', style: 'cancel' as const },
-              { text: 'Delete', style: 'destructive' as const, onPress: () => deleteMessage(msg.id) }
-            ]);
-          }, style: 'destructive' as const }
-        ] : []),
-        { text: 'Cancel', style: 'cancel' as const }
-      ]
+    // Derive messages for this conversation — memoized stable array
+    const conversationMessages = useMemo(
+        () => messages[conversationId] || EMPTY_ARRAY,
+        [messages, conversationId]
     );
-  };
 
-  const renderMessage = useCallback(({ item }: { item: Message }) => (
-    <ChatMessageBubble
-      item={item}
-      currentUserId={user?.id ?? ''}
-      recipientName={recipientName}
-      onLongPress={handleLongPress}
-      onSwipeRight={(msg) => setReplyTo(msg)}
-      onPlayAudio={playVoiceNote}
-    />
-  ), [user?.id, recipientName, handleLongPress, playVoiceNote]);
+    // Derive member/profile from resolved conversation
+    const members = resolvedConversation?.members ?? [];
+    const otherMember = members.find((m: any) => m.user_id !== user?.id);
+    const profile = otherMember?.profile;
+    const isOtherOnline = profile?.is_online || false;
+    const recipientName = profile?.full_name?.trim() || profile?.username?.trim() || 'Chat';
 
-  // ── Initiate VoIP call via SignalingService (no carrier/GSM) ──────────────
-  const startCall = useCallback(async (callType: 'audio' | 'video') => {
-    if (!otherMember?.user_id) return;
-    try {
-      await SignalingService.startCall(
-        otherMember.user_id,
-        recipientName,
-        callType,
-        conversationId
-      );
-      navigation.navigate('Call', {
-        type: callType,
-        conversationId,
-        targetUserId: otherMember.user_id,
-        targetName: recipientName,
-        isIncoming: false,
-      });
-    } catch (err) {
-      console.error('[ChatScreen] Call start error:', err);
-      Alert.alert('Call Failed', 'Could not start call. Please check your connection.');
-    }
-  }, [otherMember?.user_id, recipientName, conversationId, navigation]);
+    useEffect(() => {
+        if (isFocused) {
+            // CRITICAL: defer setActiveConversationId until AFTER the
+            // keyboard animation and screen transition completes.
+            const task = InteractionManager.runAfterInteractions(() => {
+                setActiveConversationId(conversationId);
+            });
+            return () => task.cancel();
+        } else {
+            setActiveConversationId(null);
+        }
+    }, [isFocused, conversationId, setActiveConversationId]);
 
-  return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 80}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backText}>‹</Text>
-        </TouchableOpacity>
-        {profile?.avatar_url ? (
-          <Image source={{ uri: profile.avatar_url }} style={styles.headerAvatar as any} />
-        ) : (
-          <LinearGradient colors={['#6366f1', '#4f46e5']} style={styles.headerAvatar}>
-            <Text style={styles.headerAvatarText}>{recipientName.charAt(0).toUpperCase()}</Text>
-          </LinearGradient>
-        )}
-        <View style={styles.headerInfo}>
-          <Text style={styles.headerName}>{recipientName}</Text>
-          <Text style={[styles.headerStatus, { color: isOtherOnline ? '#10b981' : '#666' }]}>
-            ● {isOtherOnline ? 'Online' : 'Offline'}
-          </Text>
-        </View>
 
-        {/* VoIP Call Buttons — in-app only, no GSM */}
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            onPress={() => startCall('audio')}
-            style={styles.headerActionBtn}
-          >
-            <Text style={styles.headerActionIcon}>📞</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => startCall('video')}
-            style={styles.headerActionBtn}
-          >
-            <Text style={styles.headerActionIcon}>📹</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+    // handleSend is synchronous — matches the new fire-and-forget MessageComposer API
+    const handleSend = useCallback((content: string, attachmentId?: string) => {
+        const editMsg = editingMessageRef.current;
+        const repTo = replyToRef.current;
+        if (editMsg) {
+            editMessage(conversationId, editMsg.id, content);
+            setEditingMessage(null);
+        } else {
+            // Fire and forget — no await
+            sendMessage(conversationId, content, attachmentId, repTo?.id);
+            setReplyTo(null);
+        }
+    }, [conversationId, editMessage, sendMessage]);
 
-      {/* Messages */}
-      {loading ? (
-        <View style={styles.center}><ActivityIndicator size="large" color="#6366f1" /></View>
-      ) : (
-        <>
-        {typingUser && (
-          <View style={styles.typingRow}>
-            <Text style={styles.typingText}>{typingUser} is typing</Text>
-            <Text style={styles.typingDots}>•••</Text>
-          </View>
-        )}
-        <FlatList
-          ref={flatRef}
-          data={messages}
-          keyExtractor={i => i.id}
-          renderItem={renderMessage}
-          inverted
-          keyboardDismissMode="interactive"
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          removeClippedSubviews
-          contentContainerStyle={styles.msgList}
-          ListEmptyComponent={
-            <View style={styles.emptyChat}>
-              <Text style={styles.emptyChatText}>No messages yet. Say hello! 👋</Text>
-            </View>
-          }
+    const handleDeleteMsg = useCallback((msg: Message) => {
+        Alert.alert('Delete Message', 'This message will be permanently deleted.', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete', style: 'destructive', onPress: () => deleteMessage(conversationId, msg.id) },
+        ]);
+    }, [conversationId, deleteMessage]);
+
+    const playVoiceNote = useCallback(async (path: string) => {
+        try {
+            if (audioPlayer) await audioPlayer.unloadAsync();
+            const res = await apiClient.get(`/media/signed-url?path=${path}`);
+            const { sound } = await Audio.Sound.createAsync({ uri: res.data.url });
+            setAudioPlayer(sound);
+            await sound.playAsync();
+        } catch (err) {
+            console.warn('Failed to play audio', err);
+        }
+    }, [audioPlayer]);    // playVoiceNote depends on audioPlayer state — wrap in ref so
+    // renderMessage does NOT need it as a dependency (avoids all-rows re-render
+    // every time audioPlayer changes).
+    const playVoiceNoteRef = useRef(playVoiceNote);
+    playVoiceNoteRef.current = playVoiceNote;
+    const stablePlayVoiceNote = useCallback((path: string) => {
+        playVoiceNoteRef.current(path);
+    }, []); // ← Empty deps: permanently stable
+
+
+    const handleCopy = useCallback((msg: Message) => {
+        try { Share.share({ message: msg.content }).catch(() => {}); } catch (_) {}
+    }, []);
+
+    const handleShare = useCallback(async (msg: Message) => {
+        try { await Share.share({ message: msg.content }); } catch (_) {}
+    }, []);
+
+    // recipientName ref — profile loads asynchronously after mount.
+    // By reading via ref inside renderMessage, we avoid making
+    // recipientName a dep that would invalidate all 200 bubbles on load.
+    const recipientNameRef = useRef(recipientName);
+    recipientNameRef.current = recipientName;
+
+    // ── renderMessage — PERMANENTLY STABLE (empty deps) ───────────────────────
+    // • recipientName → via ref (profile load doesn't trigger rerender)
+    // • playVoiceNote → via stablePlayVoiceNote proxy (audioPlayer changes safe)
+    // • setActionSheetMessage / setReplyTo → stable setState refs from useState
+    // Result: receiving 100 messages = 0 unnecessary bubble re-renders
+    const renderMessage = useCallback(({ item }: { item: Message }) => (
+        <ChatMessageBubble
+            item={item}
+            currentUserId={user?.id ?? ''}
+            recipientName={recipientNameRef.current}
+            onLongPress={setActionSheetMessage}
+            onSwipeRight={setReplyTo}
+            onPlayAudio={stablePlayVoiceNote}
         />
-        </>
-      )}
+    ), [user?.id, stablePlayVoiceNote]); // recipientName via ref — not a dep
 
-      {/* Action Previews */}
-      {editingMessage && (
-        <View style={styles.actionPreview}>
-          <View style={styles.actionInfo}>
-            <Text style={styles.actionTitle}>Editing Message</Text>
-            <Text style={styles.actionText} numberOfLines={1}>{editingMessage.content}</Text>
-          </View>
-          <TouchableOpacity onPress={() => { setEditingMessage(null); setText(''); }} style={styles.actionClose}>
-            <Text style={styles.actionCloseText}>✕</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+    // ── Viewability-based read receipts — OFF the render path ─────────────────
+    // Fires only when items enter/leave the viewport, not on every render.
+    const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 80 }).current;
+    const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
+        viewableItems.forEach(({ item }: { item: Message }) => {
+            if (!item.isOwn && item.status !== 'read' && !item.read_at) {
+                onMessageVisible(conversationId, item.id);
+            }
+        });
+    }, [conversationId, onMessageVisible]);
 
-      {replyTo && (
-        <View style={styles.actionPreview}>
-          <View style={styles.actionInfo}>
-            <Text style={styles.actionTitle}>Replying to {replyTo.sender_id === user?.id ? 'yourself' : 'Member'}</Text>
-            <Text style={styles.actionText} numberOfLines={1}>{replyTo.content}</Text>
-          </View>
-          <TouchableOpacity onPress={() => setReplyTo(null)} style={styles.actionClose}>
-            <Text style={styles.actionCloseText}>✕</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+    const startCall = useCallback(async (callType: 'audio' | 'video') => {
+        if (!otherMember?.user_id) return;
+        try {
+            await SignalingService.startCall(otherMember.user_id, recipientName, callType, conversationId);
+            navigation.navigate('Call', {
+                type: callType,
+                conversationId,
+                targetUserId: otherMember.user_id,
+                targetName: recipientName,
+                isIncoming: false,
+            });
+        } catch (err) {
+            Alert.alert('Call Failed', 'Could not start call. Please check your connection.');
+        }
+    }, [otherMember?.user_id, recipientName, conversationId, navigation]);
 
-      {/* Input */}
-      <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-        <View style={styles.inputRow}>
-          <TouchableOpacity style={styles.attachBtn} onPress={handlePickMedia}>
-            <Text style={styles.attachIcon}>📎</Text>
-          </TouchableOpacity>
+    const keyExtractor = useCallback((item: Message) =>
+        // Prefer event_id for stability across optimistic→canonical transitions
+        item.event_id ?? item.id ?? item.created_at
+    , []);
 
-          <TextInput
-            style={styles.input}
-            placeholder="Type a message..."
-            placeholderTextColor="#444"
-            value={text}
-            onChangeText={(t) => {
-              setText(t);
-              if (socketRef.current?.connected) {
-                socketRef.current.emit('typing', { conversationId });
-              }
-            }}
-            multiline
-            maxLength={2000}
-            returnKeyType="default"
-            textAlignVertical="center"
-          />
+    if (!conversationId) {
+        return <View style={styles.center}><Text style={{ color: '#fff' }}>No conversation selected.</Text></View>;
+    }
 
-          {text.trim() ? (
-            <TouchableOpacity
-              style={[styles.sendBtn, (!text.trim() || sending) && styles.sendBtnDisabled]}
-              onPress={() => sendMessage()}
-              disabled={sending || !text.trim()}
-            >
-              <LinearGradient
-                colors={sending ? ['#333', '#222'] : ['#6366f1', '#4f46e5']}
-                style={styles.sendGrad}
-              >
-                <Text style={styles.sendIcon}>{sending ? '…' : '➤'}</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity style={styles.micBtn} onPress={handleVoiceNote}>
-              <LinearGradient 
-                colors={isRecording ? ['#ef4444', '#dc2626'] : ['#6366f1', '#4f46e5']} 
-                style={styles.sendGrad}
-              >
-                <Text style={styles.sendIcon}>{isRecording ? '⏹' : '🎤'}</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-    </KeyboardAvoidingView>
-  );
+    // Show spinner while:
+    // 1. Account is switching (accountReady = false), OR
+    // 2. Conversation object not yet resolved (notification cold-boot)
+    if (!accountReady || !resolvedConversation) {
+        return (
+            <View style={styles.center}>
+                <ActivityIndicator size="large" color="#6366f1" />
+            </View>
+        );
+    }
+
+    return (
+        <Animated.View style={[styles.container, animatedKeyboardStyle]}>
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={styles.backText}>‹</Text>
+                </TouchableOpacity>
+                {profile?.avatar_url ? (
+                    <Image source={{ uri: profile.avatar_url }} style={styles.headerAvatar as any} />
+                ) : (
+                    <LinearGradient colors={['#6366f1', '#4f46e5']} style={styles.headerAvatar}>
+                        <Text style={styles.headerAvatarText}>{recipientName.charAt(0).toUpperCase()}</Text>
+                    </LinearGradient>
+                )}
+                <View style={styles.headerInfo}>
+                    <Text style={styles.headerName}>{recipientName}</Text>
+                    <Text style={[styles.headerStatus, { color: isOtherOnline ? '#10b981' : '#666' }]}>
+                        ● {isOtherOnline ? 'Online' : 'Offline'}
+                    </Text>
+                </View>
+                <View style={styles.headerActions}>
+                    <TouchableOpacity onPress={() => startCall('audio')} style={styles.headerActionBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Text style={styles.headerActionIcon}>📞</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => startCall('video')} style={styles.headerActionBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Text style={styles.headerActionIcon}>📹</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+
+            {/* Message list — fully isolated from composer height changes.
+                The flex:1 + overflow:hidden shell means when the composer
+                grows, the list SHRINKS from the bottom (not the top).
+                This prevents the scroll position from jumping. */}
+            <View style={styles.listShell}>
+                <SafeFlashList
+                    ref={flatRef}
+                    data={conversationMessages}
+                    keyExtractor={keyExtractor}
+                    renderItem={renderMessage}
+                    inverted
+                    // Interactive dismiss: swipe down on list dismisses keyboard (WhatsApp)
+                    keyboardDismissMode="interactive"
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                    // ── FlashList performance tuning ────────────────────────────
+                    estimatedItemSize={80}
+                    // drawDistance: pre-render 2 screens above/below viewport
+                    drawDistance={800}
+                    removeClippedSubviews={true}
+                    // windowSize: 5 = render 2 screens above + 2 below the viewport.
+                    // Higher = more memory. 5 is the WhatsApp sweet spot.
+                    // (FlatList default is 21 — way too high)
+                    windowSize={5}
+                    // Batch larger chunks less often = fewer interruptions to JS thread
+                    maxToRenderPerBatch={10}
+                    // 50ms batching: groups rapid scroll events into fewer renders
+                    updateCellsBatchingPeriod={50}
+                    // ── Read receipts — off render path ────────────────────────────
+                    onViewableItemsChanged={onViewableItemsChanged}
+                    viewabilityConfig={viewabilityConfig}
+                    contentContainerStyle={styles.msgList}
+                    ListEmptyComponent={
+                        <View style={styles.emptyChat}>
+                            <Text style={styles.emptyChatText}>No messages yet. Say hello! 👋</Text>
+                        </View>
+                    }
+                />
+            </View>
+
+            {actionSheetMessage && (
+                <MessageActionSheet
+                    message={actionSheetMessage}
+                    currentUserId={user?.id ?? ''}
+                    onClose={() => setActionSheetMessage(null)}
+                    onReply={setReplyTo}
+                    onCopy={handleCopy}
+                    onShare={handleShare}
+                    onEdit={setEditingMessage}
+                    onDelete={handleDeleteMsg}
+                />
+            )}
+
+            {editingMessage && (
+                <View style={styles.actionPreview}>
+                    <View style={styles.actionInfo}>
+                        <Text style={styles.actionTitle}>Editing Message</Text>
+                        <Text style={styles.actionText} numberOfLines={1}>{editingMessage.content}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => setEditingMessage(null)} style={styles.actionClose}>
+                        <Text style={styles.actionCloseText}>✕</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
+            {replyTo && (
+                <View style={styles.actionPreview}>
+                    <View style={styles.actionInfo}>
+                        <Text style={styles.actionTitle}>↩ Replying to {replyTo.sender_id === user?.id ? 'yourself' : recipientName}</Text>
+                        <Text style={styles.actionText} numberOfLines={1}>{replyTo.content}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => setReplyTo(null)} style={styles.actionClose}>
+                        <Text style={styles.actionCloseText}>✕</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
+            {/* MessageComposer never remounts — keyboard stays open */}
+            <MessageComposer
+                conversationId={conversationId}
+                onSend={handleSend}
+                insets={insets}
+            />
+        </Animated.View>
+    );
 }
 
+// Stable empty array — prevents unnecessary re-renders from `|| []`
+const EMPTY_ARRAY: Message[] = [];
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#060611' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingTop: 56, paddingBottom: 14, paddingHorizontal: 16,
-    borderBottomWidth: 1, borderColor: '#111133', backgroundColor: '#060611',
-  },
-  backBtn: { marginRight: 12, padding: 4 },
-  backText: { color: '#6366f1', fontSize: 32, lineHeight: 32 },
-  headerAvatar: {
-    width: 42, height: 42, borderRadius: 21,
-    justifyContent: 'center', alignItems: 'center', marginRight: 12,
-  },
-  headerAvatarText: { color: '#fff', fontSize: 16, fontWeight: '800' },
-  headerInfo: { flex: 1 },
-  headerName: { color: '#fff', fontSize: 17, fontWeight: '700' },
-  headerStatus: { color: '#10b981', fontSize: 12, marginTop: 2 },
-  headerActions: { flexDirection: 'row', gap: 12 },
-  headerActionBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#111133', justifyContent: 'center', alignItems: 'center' },
-  headerActionIcon: { fontSize: 18 },
-  msgList: { padding: 16, paddingBottom: 8 },
-  msgRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 12 },
-  msgRowMe: { justifyContent: 'flex-end' },
-  msgAvatar: {
-    width: 30, height: 30, borderRadius: 15,
-    justifyContent: 'center', alignItems: 'center', marginRight: 8,
-  },
-  msgAvatarText: { color: '#fff', fontSize: 12, fontWeight: '800' },
-  bubble: { maxWidth: '75%', borderRadius: 18, padding: 12, paddingHorizontal: 16 },
-  bubbleMe: { backgroundColor: '#4f46e5', borderBottomRightRadius: 4 },
-  bubbleThem: { backgroundColor: '#111133', borderBottomLeftRadius: 4 },
-  bubbleOptimistic: { opacity: 0.7 },
-  bubbleTextMe: { color: '#fff' },
-  bubbleText: { color: '#fff', fontSize: 16, lineHeight: 22 },
-  bubbleFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 4 },
-  editedTag: { color: 'rgba(255,255,255,0.4)', fontSize: 10, fontStyle: 'italic', marginRight: 4 },
-  bubbleTime: { color: 'rgba(255,255,255,0.4)', fontSize: 10 },
-  replyContext: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderLeftWidth: 3,
-    borderLeftColor: '#6366f1',
-    padding: 6,
-    borderRadius: 4,
-    marginBottom: 6,
-  },
-  replyContextName: { color: '#6366f1', fontSize: 12, fontWeight: '700', marginBottom: 2 },
-  replyContextText: { color: '#aaa', fontSize: 12 },
-  actionPreview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0d0d1e',
-    padding: 12,
-    borderTopWidth: 1,
-    borderColor: '#111133',
-  },
-  inputContainer: { backgroundColor: '#0d0d1e', borderTopWidth: 1, borderColor: '#111133' },
-  actionInfo: { flex: 1 },
-  actionTitle: { color: '#6366f1', fontSize: 12, fontWeight: '700', marginBottom: 2 },
-  actionText: { color: '#aaa', fontSize: 12 },
-  actionClose: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
-  actionCloseText: { color: '#666', fontSize: 18 },
-  attachmentContainer: { marginBottom: 8, borderRadius: 8, overflow: 'hidden' },
-  attachmentImage: { width: 200, height: 150, borderRadius: 8, backgroundColor: '#222' },
-  voiceNoteBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', padding: 8, borderRadius: 8 },
-  voiceNoteText: { color: '#fff', fontSize: 14 },
-  attachmentFile: { color: '#6366f1', fontSize: 14, textDecorationLine: 'underline' },
-  emptyChat: { alignItems: 'center', paddingTop: 60 },
-  emptyChatText: { color: '#444', fontSize: 14 },
-  typingRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 6, backgroundColor: '#060611' },
-  typingText: { color: '#6366f1', fontSize: 12, fontStyle: 'italic' },
-  typingDots: { color: '#6366f1', fontSize: 14, marginLeft: 4, letterSpacing: 2 },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderColor: '#111133',
-    backgroundColor: '#060611',
-    gap: 8,
-  },
-  attachBtn: { width: 44, height: 48, justifyContent: 'center', alignItems: 'center' },
-  attachIcon: { fontSize: 24, color: '#6366f1' },
-  input: {
-    flex: 1,
-    backgroundColor: '#0d0d1e',
-    borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    color: '#fff',
-    fontSize: 15,
-    borderWidth: 1,
-    borderColor: '#111133',
-    maxHeight: 120,
-    minHeight: 48,
-  },
-  micBtn: { borderRadius: 24, overflow: 'hidden' },
-  sendBtn: { borderRadius: 24, overflow: 'hidden' },
-  sendBtnDisabled: { opacity: 0.5 },
-  sendGrad: { width: 48, height: 48, justifyContent: 'center', alignItems: 'center', borderRadius: 24 },
-  sendIcon: { color: '#fff', fontSize: 18 },
+    container: { flex: 1, backgroundColor: '#060611' },
+    center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    // listShell: isolated flex container that owns all vertical space between
+    // header and composer. When composer grows, this shrinks — the list
+    // does NOT re-measure or re-render its items.
+    listShell: { flex: 1, overflow: 'hidden' },
+    header: {
+        flexDirection: 'row', alignItems: 'center',
+        paddingTop: 56, paddingBottom: 14, paddingHorizontal: 16,
+        borderBottomWidth: 1, borderColor: '#111133', backgroundColor: '#060611',
+        // zIndex keeps header above the list during fast scrolls
+        zIndex: 10,
+    },
+    backBtn: { marginRight: 12, padding: 4 },
+    backText: { color: '#6366f1', fontSize: 32, lineHeight: 32 },
+    headerAvatar: {
+        width: 42, height: 42, borderRadius: 21,
+        justifyContent: 'center', alignItems: 'center', marginRight: 12,
+    },
+    headerAvatarText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+    headerInfo: { flex: 1 },
+    headerName: { color: '#fff', fontSize: 17, fontWeight: '700' },
+    headerStatus: { color: '#10b981', fontSize: 12, marginTop: 2 },
+    headerActions: { flexDirection: 'row', gap: 12 },
+    headerActionBtn: {
+        width: 36, height: 36, borderRadius: 18,
+        backgroundColor: '#111133', justifyContent: 'center', alignItems: 'center',
+    },
+    headerActionIcon: { fontSize: 18 },
+    msgList: { padding: 16, paddingBottom: 8 },
+    emptyChat: { alignItems: 'center', paddingTop: 60 },
+    emptyChatText: { color: '#444', fontSize: 14 },
+    actionPreview: {
+        flexDirection: 'row', alignItems: 'center',
+        backgroundColor: '#0d0d1e', padding: 12,
+        borderTopWidth: 1, borderColor: '#111133',
+    },
+    actionInfo: { flex: 1 },
+    actionTitle: { color: '#6366f1', fontSize: 12, fontWeight: '700', marginBottom: 2 },
+    actionText: { color: '#aaa', fontSize: 12 },
+    actionClose: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
+    actionCloseText: { color: '#666', fontSize: 18 },
 });

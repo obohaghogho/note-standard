@@ -4,6 +4,7 @@ import { Sidebar } from './Sidebar';
 import { CreateNoteModal } from '../dashboard/CreateNoteModal';
 import { BroadcastBanner } from '../chat/BroadcastBanner';
 import { PushNotificationBanner } from '../common/PushNotificationBanner';
+import PWAAwarenessBanner from '../PWAAwarenessBanner';
 import { useAuth } from '../../context/AuthContext';
 import { NotificationBell } from '../dashboard/NotificationBell';
 import { Menu, Plus } from 'lucide-react';
@@ -92,6 +93,7 @@ export function DashboardLayout() {
         )}>
             {!isChatActiveOnMobile && <BroadcastBanner />}
             {!isChatActiveOnMobile && <PushNotificationBanner />}
+            {!isChatActiveOnMobile && <PWAAwarenessBanner />}
             
             {/* Inner ambient glow for dashboard depth */}
             {!isChatActiveOnMobile && <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 via-transparent to-purple-500/5 pointer-events-none -z-10" />}
@@ -102,11 +104,13 @@ export function DashboardLayout() {
                 onClose={() => setIsMobileMenuOpen(false)}
             />
             
-            <main className={cn(
-                "flex-1 transition-all duration-300 min-w-0 flex flex-col w-full h-full relative",
-                !isChatActiveOnMobile && "pb-safe md:ml-64",
-                isChatActiveOnMobile && "fixed inset-0 z-[60] bg-gray-950 h-[100dvh] w-screen m-0 p-0 md:relative md:inset-auto md:z-0 md:bg-transparent md:ml-64 overscroll-none"
-            )}>
+            <main
+                className={cn(
+                    "flex-1 transition-all duration-300 min-w-0 flex flex-col h-full relative",
+                    !isChatActiveOnMobile && "pb-safe md:ml-[16rem]",
+                    isChatActiveOnMobile && "absolute inset-0 z-[60] bg-gray-950 m-0 p-0 md:relative md:inset-auto md:z-0 md:bg-transparent md:ml-[16rem] overflow-hidden"
+                )}
+            >
                 {renderHeader()}
 
                 <div className={cn(

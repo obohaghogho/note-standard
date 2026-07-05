@@ -2,12 +2,14 @@ const axios = require("axios");
 const crypto = require("crypto");
 const math = require("../../../utils/mathUtils");
 const BaseProvider = require("./BaseProvider");
+const { isPaystackNative } = require("../../../config/currencyConfig");
 
 class PaystackProvider extends BaseProvider {
   constructor() {
     super();
     this.secretKey = process.env.PAYSTACK_SECRET_KEY;
     this.baseUrl = "https://api.paystack.co";
+    this.isTestKey = this.secretKey && this.secretKey.includes("_test_");
     this.client = axios.create({
       baseURL: this.baseUrl,
       headers: {
@@ -19,46 +21,33 @@ class PaystackProvider extends BaseProvider {
 
   async initialize(data) {
     let { email, amount, currency, reference, callbackUrl, metadata } = data;
+    const { normalizeToSmallestUnit } = require("../../../config/currencyMetadata");
 
-    // --- PAYSTACK MULTI-CURRENCY ROUTING (DFOS v6.3) ---
-    // Paystack (especially Nigerian accounts) primarily supports NGN and USD.
-    // If the currency is not NGN or USD, we convert it to USD to ensure a
-    // professional international experience for the user.
-    if (!["NGN", "USD"].includes(currency)) {
-      const fxService = require("../../fxService");
-      try {
-        const rate = await fxService.getRate(currency, "USD");
-        amount = amount * rate;
-        currency = "USD";
-        metadata = { ...metadata, paystack_converted: true, original_currency: data.currency };
-      } catch (fxErr) {
-        console.warn(`[Paystack] USD fallback failed: ${fxErr.message}. Attempting native initialization.`);
-      }
+    // ⚠️  ENVIRONMENT SANITY CHECK
+    // Test cards (e.g. 4242 4242 4242 4242) only work with sk_test_ keys.
+    // Using a live key (sk_live_) with test cards causes the Paystack gateway to
+    // hang on "please wait while we connect to your bank" indefinitely.
+    if (!this.isTestKey) {
+      console.warn('[PaystackProvider] ⚠️  LIVE KEY DETECTED. If you are testing with Paystack test cards (4242...), the payment WILL hang. Switch to sk_test_ keys in .env for sandbox testing.');
     }
 
-    // Sandbox Safety: Paystack Sandbox often only supports NGN.
-    // If we are in test mode and the currency is USD, we convert to NGN for testing stability.
-    const isTestKey = this.secretKey && this.secretKey.includes("test");
-    if (isTestKey && currency === "USD") {
-      const fxService = require("../../fxService");
-      try {
-        const rate = await fxService.getRate("USD", "NGN");
-        amount = amount * rate;
-        currency = "NGN";
-        metadata = { ...metadata, sandbox_converted: true };
-      } catch (fxErr) {
-        console.warn(`[Paystack] Sandbox NGN fallback failed: ${fxErr.message}`);
-      }
+    // Enforce currency presence
+    if (!currency) {
+      throw new Error("[PaystackProvider] Currency is strictly required for initialization");
     }
 
-    // Paystack uses smallest unit (kobo for NGN)
-    const amountInSmallestUnit = Math.round(amount * 100);
+    const upCurrency = String(currency).toUpperCase();
+
+    // Enforce precision-safe normalization to smallest unit (cents/kobo/etc)
+    const amountInSmallestUnit = normalizeToSmallestUnit(amount, upCurrency);
+
+    console.log(`[PaystackProvider] Initializing transaction: ${amount} ${upCurrency} (${amountInSmallestUnit} units) for ${email} [mode: ${this.isTestKey ? 'TEST' : 'LIVE'}]`);
 
     try {
       const response = await this.client.post("/transaction/initialize", {
         email,
         amount: amountInSmallestUnit,
-        currency,
+        currency: upCurrency,
         reference,
         callback_url: callbackUrl,
         plan: data.plan,
@@ -273,19 +262,118 @@ class PaystackProvider extends BaseProvider {
     // If it's a dedicated account payment, the metadata might be empty.
     // We can identify it by data.dedicated_account or data.customer.customer_code
     let userId = data.metadata?.userId || data.metadata?.user_id;
-    
+    const { formatFromSmallestUnit } = require("../../../config/currencyMetadata");
+
     return {
       type: type,
       display_label: data.metadata?.display_label || "Digital Assets Purchase",
       reference: data.reference,
       status: status,
-      amount: math.divide(data.amount, 100),
+      amount: formatFromSmallestUnit(data.amount, data.currency),
       currency: data.currency,
       userId: userId,
       customerCode: data.customer?.customer_code,
       accountNumber: data.dedicated_account?.account_number,
       raw: payload,
     };
+  }
+
+  async createVirtualAccount(data) {
+    return this.getDedicatedAccount(data.email, data.firstName, data.lastName, data.phone);
+  }
+
+  async transfer(data) {
+    const { amount, currency, destination } = data;
+    try {
+      if (!this.secretKey || this.secretKey === "paystack_test_placeholder") {
+        return { success: true, status: "success", reference: `tr_paystack_${Date.now()}` };
+      }
+      // Create transfer recipient
+      const recipientRes = await this.client.post("/transferrecipient", {
+        type: "nuban",
+        name: destination.accountName,
+        account_number: destination.accountNumber,
+        bank_code: destination.bankCode,
+        currency: currency.toUpperCase()
+      });
+      
+      const recipientCode = recipientRes.data.data.recipient_code;
+
+      // Initiate transfer
+      const transferRes = await this.client.post("/transfer", {
+        source: "balance",
+        reason: data.reason || "Wallet transfer",
+        amount: Math.round(amount * 100),
+        recipient: recipientCode
+      });
+
+      return {
+        success: true,
+        status: transferRes.data.data.status,
+        reference: transferRes.data.data.reference,
+        raw: transferRes.data.data
+      };
+    } catch (error) {
+      console.error("[PaystackProvider] Transfer error:", error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || "Paystack transfer failed");
+    }
+  }
+
+  async reverse(reference, reason) {
+    try {
+      if (!this.secretKey || this.secretKey === "paystack_test_placeholder") {
+        return { success: true, status: "reversed", reference: `re_paystack_${Date.now()}` };
+      }
+      const res = await this.client.post("/refund", {
+        transaction: reference,
+        merchant_note: reason
+      });
+      return {
+        success: true,
+        status: "reversed",
+        reference: res.data.data.reference,
+        raw: res.data.data
+      };
+    } catch (error) {
+      console.error("[PaystackProvider] Refund error:", error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || "Paystack refund failed");
+    }
+  }
+
+  async balanceInquiry(currency) {
+    try {
+      if (!this.secretKey || this.secretKey === "paystack_test_placeholder") {
+        return { balance: 150000.0, currency: currency.toUpperCase() };
+      }
+      const res = await this.client.get("/balance");
+      const balanceItem = res.data.data?.find(b => b.currency.toUpperCase() === currency.toUpperCase());
+      return {
+        balance: balanceItem ? balanceItem.balance / 100 : 0.0,
+        currency: currency.toUpperCase()
+      };
+    } catch (error) {
+      return { balance: 0.0, currency: currency.toUpperCase() };
+    }
+  }
+
+  async healthCheck() {
+    try {
+      const start = Date.now();
+      await this.client.get("/balance");
+      return { status: "healthy", latencyMs: Date.now() - start };
+    } catch {
+      return { status: "unhealthy", latencyMs: 999 };
+    }
+  }
+
+  async settlement(data) {
+    try {
+      if (!this.secretKey || this.secretKey === "paystack_test_placeholder") return [];
+      const res = await this.client.get("/settlement");
+      return res.data.data || [];
+    } catch {
+      return [];
+    }
   }
 }
 

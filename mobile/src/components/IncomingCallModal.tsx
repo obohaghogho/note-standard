@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   Animated,
   Easing,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import CallService, { CallData, CallState } from '../services/CallService';
@@ -124,6 +125,11 @@ export default function IncomingCallModal() {
     setCallData(null);
   };
 
+  // On iOS, CallKit (via RNCallKeep.displayIncomingCall) handles the native UI.
+  // However, if the app is in foreground and CallKit doesn't capture the screen
+  // (e.g. during development on simulator, or if the device doesn't support CallKit),
+  // we show the in-app modal as a safe fallback.
+  // We hide it only if we're NOT visible — the visible flag already gates rendering.
   if (!visible || !callData) return null;
 
   const initials = (callData.callerName || 'U').charAt(0).toUpperCase();

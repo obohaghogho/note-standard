@@ -25,104 +25,154 @@ exports.createCheckoutSession = async (req, res) => {
       .single();
 
     const customerName = profile?.full_name || email.split("@")[0] || "Standard User";
-    const reference = uuidv4();
 
-    // Use Paystack as the primary provider (Fincra is deprecated for these currencies)
+    // Fincra is completely cut off as requested by User. Paystack is the exclusive card payment provider.
     let usedMethod = "paystack";
-    
-    // Allow manual override but default to Paystack
-    if (paymentMethod === "paystack") {
-      usedMethod = "paystack";
-    } else if (paymentMethod === "fincra") {
-      // Only use Fincra if explicitly requested and keys exist, but warn it's deprecated
-      const hasFincra = !!(process.env.FINCRA_SECRET_KEY && process.env.FINCRA_PUBLIC_KEY);
-      if (hasFincra) usedMethod = "fincra";
-    }
 
-    // 2. Handle Currency Conversion
-    // For Paystack, we generally prefer NGN for settlement stability, 
-    // but PaystackProvider now handles auto-conversion for USD/EUR/GBP/JPY if needed.
+    // 2. Handle Currency Conversion with safe fallback rates
     let processedCurrency = upCurrency;
     let finalAmount = usdAmount;
     let exchangeRate = 1;
 
-    if (usedMethod === "paystack") {
-      // We now charge in the user's selected currency (EUR, USD, GBP, etc.) 
-      // instead of forcing a conversion to NGN. This ensures the user sees 
-      // the same currency in the gateway that they selected on the platform.
+    // Conservative static fallback rates (USD → X) used only if the live FX feed is unavailable
+    const FALLBACK_RATES = { USD: 1, NGN: 1600, EUR: 0.92, GBP: 0.79, JPY: 155 };
+
+    try {
       const conversion = await fxService.convert(usdAmount, "USD", upCurrency, true);
       finalAmount = conversion.amount;
       processedCurrency = upCurrency;
       exchangeRate = conversion.rate;
-    } else if (usedMethod === "fincra") {
-      // Legacy Fincra flow (usually USD)
-      processedCurrency = "USD";
-      finalAmount = usdAmount;
-      exchangeRate = 1;
+    } catch (fxErr) {
+      console.warn(`[Subscription] FX conversion failed for ${upCurrency}: ${fxErr.message}. Falling back to static rate.`);
+      exchangeRate = FALLBACK_RATES[upCurrency] ?? 1;
+      finalAmount = usdAmount * exchangeRate;
+      processedCurrency = upCurrency;
     }
 
     // Ensure finalAmount is rounded to 2 decimal places to avoid API errors
     finalAmount = Math.round(finalAmount * 100) / 100;
 
-    // 3. Metadata for the transaction
-    const metadata = {
-      userId,
-      email,
-      customerName,
-      type: "subscription",
-      plan: planType.toLowerCase(),
-      usdAmount,
-      targetAmount: finalAmount,
-      targetCurrency: processedCurrency, 
-      displayCurrency: upCurrency, // What the user chose
-      exchangeRate: exchangeRate,
-      reference: reference, // Store our internal ref in metadata too
-    };
-
-    const provider = PaymentFactory.getProviderByName(usedMethod);
-
-    const callbackUrl = getCallbackUrl("/dashboard/billing", {
-      payment_callback: "true",
-      method: usedMethod,
-      currency: upCurrency,
-      reference: reference,
-    }, usedMethod);
-
-    // 5. Provider Specific Logic (e.g. Paystack Plans)
+    // 3. Provider Specific Logic (e.g. Paystack Plans)
+    // IMPORTANT: Plan codes (PLN_xxx) only work in the environment they were created in.
+    // A live plan code will cause the gateway to hang forever if a test key is being used, and vice versa.
+    // We detect the key type at runtime and only attach the plan if the key matches the plan's environment.
     let providerPlan = null;
     if (usedMethod === 'paystack') {
+      const isTestKey = (process.env.PAYSTACK_SECRET_KEY || '').startsWith('sk_test_');
       const planId = planType.toUpperCase() === "BUSINESS" 
         ? process.env.PAYSTACK_PLAN_BUSINESS 
         : process.env.PAYSTACK_PLAN_PRO;
       
-      // Ensure the plan ID is valid and present
-      if (planId) {
+      // Only attach plan if:
+      // 1. The plan ID is set
+      // 2. The plan ID prefix matches the key type (test plan starts with PLN_ and created in test dashboard)
+      // 3. We're not in a cross-environment mismatch (live key + test card or test key + live plan)
+      if (planId && isTestKey) {
+        // Test key: only use plan if it exists (test plans are optional for basic sandbox testing)
+        // In many test setups there are no test plans — skip to avoid gateway hang
+        providerPlan = null;
+        console.log('[Subscription] Test key detected — plan code suppressed to prevent gateway hang. Charging as one-off.');
+      } else if (planId && !isTestKey) {
+        // Live key: attach the live plan code
         providerPlan = planId;
+      }
+      // If no planId at all, providerPlan stays null — one-off charge
+    }
+
+    // 4. Initialize Payment through PaymentService to pre-register transaction
+    const PaymentService = require("../services/payment/paymentService");
+    let initResult;
+    try {
+      initResult = await PaymentService.initializePayment(
+        userId,
+        email,
+        finalAmount,
+        processedCurrency,
+        {
+          type: "subscription",
+          plan: planType.toLowerCase(),
+          display_label: `${planType} Subscription`,
+          usdAmount,
+          targetAmount: finalAmount,
+          targetCurrency: processedCurrency, 
+          displayCurrency: upCurrency, // What the user chose originally
+          exchangeRate: exchangeRate,
+        },
+        {
+          provider: usedMethod,
+          plan: providerPlan,
+          gatewayAmount: finalAmount,
+          gatewayCurrency: processedCurrency,
+          callbackUrl: getCallbackUrl("/dashboard/billing", {
+            payment_callback: "true",
+            method: usedMethod,
+            currency: upCurrency,
+          }, usedMethod)
+        }
+      );
+    } catch (error) {
+      const isCurrencyError = error.message?.includes("Currency not supported") || 
+                              error.message?.includes("currency") || 
+                              error.message?.includes("merchant");
+
+      if (isCurrencyError && processedCurrency !== "NGN") {
+        console.warn(`[Subscription] Currency ${processedCurrency} not supported by merchant. Retrying subscription checkout in NGN fallback.`);
+        
+        // Convert to NGN fallback
+        let ngnRate = 1600; // static fallback rate
+        try {
+          const conversion = await fxService.convert(usdAmount, "USD", "NGN", true);
+          ngnRate = conversion.rate;
+        } catch (fxErr) {
+          console.warn(`[Subscription] Fallback FX conversion to NGN failed: ${fxErr.message}. Using static rate.`);
+        }
+
+        const ngnAmount = Math.round(usdAmount * ngnRate * 100) / 100;
+        processedCurrency = "NGN";
+
+        initResult = await PaymentService.initializePayment(
+          userId,
+          email,
+          ngnAmount,
+          "NGN",
+          {
+            type: "subscription",
+            plan: planType.toLowerCase(),
+            display_label: `${planType} Subscription`,
+            usdAmount,
+            targetAmount: ngnAmount,
+            targetCurrency: "NGN", 
+            displayCurrency: upCurrency, // Keep track of user's original selection
+            exchangeRate: ngnRate,
+            fallback_to_ngn: true
+          },
+          {
+            provider: usedMethod,
+            plan: providerPlan,
+            gatewayAmount: ngnAmount,
+            gatewayCurrency: "NGN",
+            callbackUrl: getCallbackUrl("/dashboard/billing", {
+              payment_callback: "true",
+              method: usedMethod,
+              currency: "NGN",
+            }, usedMethod)
+          }
+        );
+      } else {
+        throw error;
       }
     }
 
-    const checkoutData = {
-      email,
-      name: customerName,
-      amount: finalAmount,
-      currency: processedCurrency,
-      reference: reference,
-      callbackUrl,
-      metadata,
-      plan: providerPlan
-    };
-
-    const result = await provider.initialize(checkoutData);
-
     res.json({ 
-      url: result.checkoutUrl || result.url,
+      url: initResult.checkoutUrl || initResult.url,
       method: usedMethod,
-      currency: upCurrency
+      currency: processedCurrency
     });
   } catch (error) {
-    console.error("Error creating subscription checkout:", error);
-    console.error(error.stack);
-    res.status(500).json({ error: "Failed to create checkout session" });
+    console.error("Error creating subscription checkout:", error.message);
+    console.error("Stack:", error.stack);
+    if (error.details) console.error("Details:", JSON.stringify(error.details, null, 2));
+    res.status(500).json({ error: error.message || "Failed to create checkout session" });
   }
 };
 
@@ -170,98 +220,22 @@ exports.getSubscriptionStatus = async (req, res) => {
 // In production, rely on Webhooks! This is a fallback/visual sync.
 exports.syncSubscription = async (req, res) => {
   try {
-    const { reference, method = "paystack" } = req.body;
+    const { reference } = req.body;
     const userId = req.user.id;
 
-    console.log(`[Sync] Starting sync for user ${userId}, reference: ${reference}, method: ${method}`);
+    console.log(`[Sync] Starting subscription sync for user ${userId}, reference: ${reference}`);
 
     if (!reference) {
       return res.status(400).json({ error: "Reference required" });
     }
 
-    let usedMethod = method;
-    if (usedMethod === "auto") {
-      // If we got 'auto', fallback to a sensible default or try to detect
-      usedMethod = reference.startsWith("fcr") ? "fincra" : "paystack";
-      console.log(`[Sync] Method was auto, detected: ${usedMethod}`);
-    }
+    const PaymentService = require("../services/payment/paymentService");
+    const result = await PaymentService.verifyPaymentStatus(reference);
 
-    const provider = PaymentFactory.getProviderByName(usedMethod);
-    const verification = await provider.verify(reference);
-    
-    console.log(`[Sync] Transaction verified: success=${verification.success}`);
-
-    if (verification.success) {
-      // Extract metadata from provider response
-      let metadata = verification.raw?.metadata || verification.metadata;
-      if (typeof metadata === 'string') {
-        try {
-          metadata = JSON.parse(metadata);
-        } catch (e) {
-          metadata = {};
-        }
-      }
-      
-      const { exchangeRate, plan } = metadata || {};
-      const chargedAmountNgn = verification.amount; // verification.amount is already normalized in providers
-
-      console.log(`[Sync] Plan: ${plan}, Exchange Rate: ${exchangeRate}, Amount: ${chargedAmountNgn}`);
-
-      // Check if subscription exists
-      const { data: existing, error: fetchError } = await supabase
-        .from("subscriptions")
-        .select("id")
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      if (fetchError) throw fetchError;
-
-      const now = new Date();
-      const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
-
-      const subscriptionData = {
-        plan_tier: plan || "pro",
-        plan_type: plan ? plan.toUpperCase() : "PRO",
-        status: "active",
-        start_date: now.toISOString(),
-        end_date: endDate.toISOString(),
-        charged_amount_ngn: chargedAmountNgn,
-        exchange_rate: exchangeRate || 0,
-        // Provider specific fields
-        ...(usedMethod === 'paystack' ? {
-          paystack_customer_code: verification.raw?.customer?.customer_code,
-          paystack_subscription_code: verification.raw?.subscription_code,
-          paystack_transaction_reference: reference
-        } : {
-          fincra_reference: reference
-        })
-      };
-
-      let opError;
-      if (existing) {
-        const { error: updateError } = await supabase
-          .from("subscriptions")
-          .update(subscriptionData)
-          .eq("user_id", userId);
-        opError = updateError;
-      } else {
-        const { error: insertError } = await supabase
-          .from("subscriptions")
-          .insert({ user_id: userId, ...subscriptionData });
-        opError = insertError;
-      }
-
-      if (opError) throw opError;
-
-      // SYNC TO PROFILES TABLE
-      await supabase
-        .from("profiles")
-        .update({ plan_tier: plan || "pro" })
-        .eq("id", userId);
-
+    if (result && result.status === "COMPLETED") {
       res.json({ success: true });
     } else {
-      res.json({ success: false, message: "Payment not successful" });
+      res.json({ success: false, message: "Payment status not completed yet" });
     }
   } catch (error) {
     console.error("Error syncing subscription:", error);
@@ -434,5 +408,57 @@ exports.cancelSubscription = async (req, res) => {
   } catch (error) {
     console.error("Error canceling subscription:", error);
     res.status(500).json({ error: "Failed to cancel subscription" });
+  }
+};
+
+exports.getBillingHistory = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const { data: payments, error: paymentsError } = await supabase
+      .from("payments")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+
+    if (paymentsError) throw paymentsError;
+
+    if (!payments || payments.length === 0) {
+      return res.json({ history: [] });
+    }
+
+    const references = payments.map(p => p.reference).filter(Boolean);
+    const transactionsMap = {};
+
+    if (references.length > 0) {
+      const { data: txs, error: txsError } = await supabase
+        .from("transactions")
+        .select("id, reference_id")
+        .in("reference_id", references);
+
+      if (!txsError && txs) {
+        txs.forEach(tx => {
+          transactionsMap[tx.reference_id] = tx.id;
+        });
+      }
+    }
+
+    const history = payments.map(p => ({
+      id: p.id,
+      reference: p.reference,
+      provider: p.provider,
+      amount: p.amount,
+      currency: p.currency,
+      status: p.status,
+      created_at: p.created_at,
+      completed_at: p.completed_at,
+      metadata: p.metadata,
+      transactionId: transactionsMap[p.reference] || null
+    }));
+
+    res.json({ history });
+  } catch (error) {
+    console.error("Error fetching billing history:", error);
+    res.status(500).json({ error: "Failed to fetch billing history" });
   }
 };

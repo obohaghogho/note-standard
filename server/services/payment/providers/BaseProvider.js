@@ -194,6 +194,60 @@ class BaseProvider {
       }
     }
   }
+
+  /**
+   * Create a virtual account
+   * @param {Object} data - Account configuration data
+   * @returns {Promise<Object>} - Virtual account details { bankName, accountNumber, accountName, currency }
+   */
+  async createVirtualAccount(data) {
+    throw new Error("Method 'createVirtualAccount()' must be implemented.");
+  }
+
+  /**
+   * Process an outbound transfer
+   * @param {Object} data - Transfer request payload
+   * @returns {Promise<Object>} - Transfer response { success, status, reference }
+   */
+  async transfer(data) {
+    throw new Error("Method 'transfer()' must be implemented.");
+  }
+
+  /**
+   * Reverse a transaction
+   * @param {string} reference - Transaction reference
+   * @param {string} reason - Reversal reason
+   * @returns {Promise<Object>} - Reversal details { success, status, reference }
+   */
+  async reverse(reference, reason) {
+    throw new Error("Method 'reverse()' must be implemented.");
+  }
+
+  /**
+   * Inquiry of current provider balance
+   * @param {string} currency - Currency code
+   * @returns {Promise<Object>} - Balance details { balance, currency }
+   */
+  async balanceInquiry(currency) {
+    throw new Error("Method 'balanceInquiry()' must be implemented.");
+  }
+
+  /**
+   * Perform connector health check
+   * @returns {Promise<Object>} - Health status { status: 'healthy' | 'unhealthy', latencyMs }
+   */
+  async healthCheck() {
+    throw new Error("Method 'healthCheck()' must be implemented.");
+  }
+
+  /**
+   * Reconcile/query settlements from provider
+   * @param {Object} data - Search parameters
+   * @returns {Promise<Array>} - List of settlements
+   */
+  async settlement(data) {
+    throw new Error("Method 'settlement()' must be implemented.");
+  }
 }
 
 module.exports = BaseProvider;

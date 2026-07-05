@@ -133,7 +133,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
             
             if (settings && settings.length > 0) {
                 const s = settings[0];
-                const rateValue = s.value > 1 ? s.value / 100 : s.value;
+                const rateValue = s.commission_type === 'PERCENTAGE' ? s.value / 100 : s.value;
                 
                 if (s.commission_type === 'PERCENTAGE') {
                     let estimatedFee = bal * rateValue;

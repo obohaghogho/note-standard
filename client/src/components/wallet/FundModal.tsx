@@ -292,7 +292,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                 toNetwork: effectiveTargetNetwork,
             });
             setBankDetails(result);
-            toast.success('Service allocation details generated!');
+            toast.success('Deposit allocation details generated!');
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : 'Failed to generate bank details');
         } finally {
@@ -376,16 +376,16 @@ export const FundModal: React.FC<FundModalProps> = ({
                     <X size={20} />
                 </button>
                 
-                <h2 className="modal-header text-2xl">Activate Digital Services</h2>
+                <h2 className="modal-header text-2xl">Deposit Funds</h2>
                 <div className="modal-body">
                     <p className="text-gray-400 text-sm mb-4 flex items-center gap-2">
                         <ShieldCheck size={16} className="text-primary" />
-                        Secure Activity Protocol
+                        Secure Network Protocol
                     </p>
 
                 {/* Asset Selector */}
                 <div className="relative mb-6">
-                    <label htmlFor="funding-wallet-selector" className="text-xs text-gray-400 font-medium ml-1 mb-1 block">Service Account</label>
+                    <label htmlFor="funding-wallet-selector" className="text-xs text-gray-400 font-medium ml-1 mb-1 block">Funding Wallet</label>
                     <button 
                         id="funding-wallet-selector"
                         onClick={() => setShowAssetSelector(!showAssetSelector)}
@@ -448,7 +448,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                     <div className="flex justify-between items-center mb-1">
                         <span className="text-gray-400 text-xs uppercase tracking-wider">Target Action</span>
                         <span className="text-white text-sm font-medium">
-                            {isEffectivelyPurchase ? `Access ${effectiveTargetCurrency}` : `Allocate to ${activeCurrency}`}
+                            {isEffectivelyPurchase ? `Buy ${effectiveTargetCurrency}` : `Allocate to ${activeCurrency}`}
                         </span>
                     </div>
                     <div className="flex justify-between items-end">
@@ -467,7 +467,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                 {/* Purchase Mode Toggle (Only show if starting from Fiat wallet) */}
                 {isFiat && (
                     <div className="flex items-center justify-between mb-4 px-1">
-                        <span className="text-sm text-gray-400">Access Digital Assets Directly?</span>
+                        <span className="text-sm text-gray-400">Buy Digital Assets Directly?</span>
                         <button 
                             onClick={() => setIsPurchase(!isPurchase)}
                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${isPurchase ? 'bg-purple-600' : 'bg-gray-700'}`}
@@ -494,7 +494,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         onClick={() => setTargetCurrency(coin)}
                                         className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl min-w-[80px] flex-1 text-xs font-bold border transition-all duration-300 ${
                                             targetCurrency === coin 
-                                            ? 'bg-purple-600 border-purple-400 text-white shadow-lg shadow-purple-500/40 scale-[1.02]' 
+                                            ? 'bg-purple-600 border-red-500 ring-2 ring-red-500 text-white shadow-lg shadow-red-500/40 scale-[1.02]' 
                                             : 'bg-gray-900/50 border-gray-800 text-gray-400 hover:text-gray-200 hover:bg-gray-800 hover:border-gray-700'
                                         }`}
                                     >
@@ -523,13 +523,15 @@ export const FundModal: React.FC<FundModalProps> = ({
                         }}
                         className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg transition-all ${
                             method === 'card' 
-                                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' 
-                                : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                                ? 'bg-purple-600 border border-red-500 ring-2 ring-red-500 text-white shadow-lg shadow-red-500/20' 
+                                : 'border border-transparent text-gray-400 hover:text-white hover:bg-gray-800'
                         } ${['BTC', 'ETH'].includes(effectivePayCurrency.toUpperCase()) ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                         <CreditCard size={18} />
                         <div className="flex flex-col items-center">
-                            <span className="text-sm font-medium">Card</span>
+                            <span className="text-sm font-medium">
+                                {effectivePayCurrency === 'NGN' ? 'Paystack (Card/Transfer)' : 'Card'}
+                            </span>
                             {['BTC', 'ETH'].includes(effectivePayCurrency.toUpperCase()) && (
                                 <span className="text-[8px] opacity-70">Unavailable</span>
                             )}
@@ -539,20 +541,22 @@ export const FundModal: React.FC<FundModalProps> = ({
                         onClick={() => setMethod('bank')}
                         className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg transition-all ${
                             method === 'bank' 
-                                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' 
-                                : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                                ? 'bg-purple-600 border border-red-500 ring-2 ring-red-500 text-white shadow-lg shadow-red-500/20' 
+                                : 'border border-transparent text-gray-400 hover:text-white hover:bg-gray-800'
                         }`}
                     >
                         <Landmark size={18} />
-                        <span className="text-sm font-medium">Transfer</span>
+                        <span className="text-sm font-medium">
+                            {effectivePayCurrency === 'NGN' ? 'Direct Bank Transfer' : 'Transfer'}
+                        </span>
                     </button>
                     {isCrypto && (
                         <button
                             onClick={() => setMethod('crypto')}
                             className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg transition-all ${
                                 method === 'crypto' 
-                                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' 
-                                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                                    ? 'bg-purple-600 border border-red-500 ring-2 ring-red-500 text-white shadow-lg shadow-red-500/20' 
+                                    : 'border border-transparent text-gray-400 hover:text-white hover:bg-gray-800'
                             }`}
                         >
                             <Bitcoin size={18} />
@@ -578,7 +582,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         onClick={() => setPaymentFiat(fiat)}
                                         className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl min-w-[80px] flex-1 text-[10px] font-bold border transition-all duration-300 ${
                                             paymentFiat === fiat 
-                                            ? 'bg-purple-600 border-purple-400 text-white shadow-lg shadow-purple-500/40 scale-[1.02]' 
+                                            ? 'bg-purple-600 border-red-500 ring-2 ring-red-500 text-white shadow-lg shadow-red-500/40 scale-[1.02]' 
                                             : 'bg-gray-900/50 border-gray-800 text-gray-400 hover:text-gray-200 hover:bg-gray-800 hover:border-gray-700'
                                         }`}
                                     >
@@ -636,6 +640,14 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         </button>
                                     </div>
                                 </div>
+                                {effectivePayCurrency === 'NGN' && (
+                                    <div className="p-3 bg-purple-950/20 border border-purple-500/30 rounded-xl text-[11px] text-purple-300 flex items-start gap-2.5 mb-4 leading-relaxed">
+                                        <span className="text-sm select-none">ℹ️</span>
+                                        <span>
+                                            <strong>Paystack Secure Checkout:</strong> You will be redirected to a payment screen supporting <strong>Card, Bank Transfer, USSD, QR Code, and Bank App</strong> deposits.
+                                        </span>
+                                    </div>
+                                )}
                                 <Button onClick={handleCardDeposit} disabled={loading} className="w-full h-12 text-base font-bold">
                                     {loading ? <Loader2 className="animate-spin mr-2" size={20} /> : <Zap className="mr-2" size={20} />}
                                     Proceed to Checkout
@@ -673,6 +685,14 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         </button>
                                     </div>
                                 </div>
+                                {effectivePayCurrency === 'NGN' && (
+                                    <div className="p-3 bg-purple-950/20 border border-purple-500/30 rounded-xl text-[11px] text-purple-300 flex items-start gap-2.5 mb-4 leading-relaxed">
+                                        <span className="text-sm select-none">ℹ️</span>
+                                        <span>
+                                            <strong>Dedicated Account Transfer:</strong> Generate a unique NGN bank account assigned specifically to your wallet. Any bank app transfer made to this account will credit your balance instantly.
+                                        </span>
+                                    </div>
+                                )}
                                 <Button onClick={handleBankDeposit} disabled={loading} className="w-full h-12 text-base font-bold">
                                     {loading ? <Loader2 className="animate-spin mr-2" size={20} /> : <Landmark className="mr-2" size={20} />}
                                     Generate Transfer Details
@@ -756,7 +776,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                                     )}
                                 </div>
                                 <p className="text-sm text-yellow-400 text-center">
-                                    Include the reference in your activity description
+                                    Include the reference in your transfer description
                                 </p>
 
                                 <div className="mt-4 p-4 bg-purple-600/10 border border-purple-500/20 rounded-xl space-y-4">
