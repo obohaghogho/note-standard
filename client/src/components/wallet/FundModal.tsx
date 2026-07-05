@@ -448,7 +448,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                     <div className="flex justify-between items-center mb-1">
                         <span className="text-gray-400 text-xs uppercase tracking-wider">Target Action</span>
                         <span className="text-white text-sm font-medium">
-                            {isEffectivelyPurchase ? `Access ${effectiveTargetCurrency}` : `Allocate to ${activeCurrency}`}
+                            {isEffectivelyPurchase ? `Buy ${effectiveTargetCurrency}` : `Allocate to ${activeCurrency}`}
                         </span>
                     </div>
                     <div className="flex justify-between items-end">
@@ -467,7 +467,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                 {/* Purchase Mode Toggle (Only show if starting from Fiat wallet) */}
                 {isFiat && (
                     <div className="flex items-center justify-between mb-4 px-1">
-                        <span className="text-sm text-gray-400">Access Digital Assets Directly?</span>
+                        <span className="text-sm text-gray-400">Buy Digital Assets Directly?</span>
                         <button 
                             onClick={() => setIsPurchase(!isPurchase)}
                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${isPurchase ? 'bg-purple-600' : 'bg-gray-700'}`}

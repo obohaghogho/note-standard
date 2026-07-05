@@ -201,7 +201,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
 
                 <h2 className="modal-header">
                     <ArrowUpRight size={20} className="text-orange-500" />
-                    Move Out {selectedCurrency} {selectedNetwork !== 'native' ? `(${selectedNetwork})` : ''}
+                    Withdraw {selectedCurrency} {selectedNetwork !== 'native' ? `(${selectedNetwork})` : ''}
                 </h2>
                 
                 <form onSubmit={handleWithdraw} className="modal-body flex flex-col gap-5">
@@ -482,7 +482,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                         </Button>
                         <Button type="submit" disabled={isWithdrawing} className="bg-orange-600 hover:bg-orange-500 text-white border-none">
                             {isWithdrawing ? <Loader2 className="animate-spin mr-2" size={18} /> : <ArrowUpRight className="mr-2" size={18} />}
-                            {isWithdrawing ? 'Processing...' : 'Confirm Move Out'}
+                            {isWithdrawing ? 'Processing...' : 'Confirm Withdrawal'}
                         </Button>
                     </div>
                 </form>
