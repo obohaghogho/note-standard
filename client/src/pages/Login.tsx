@@ -58,6 +58,11 @@ export const Login = () => {
             };
             syncPrimaryId();
         }
+
+        // Handle session expiry redirect (e.g. after API key rotation)
+        if (params.get('reason') === 'session_expired') {
+            setError('Your session has expired. Please sign in again to continue.');
+        }
         
         return () => {
             mountedRef.current = false;

@@ -59,6 +59,26 @@ api.interceptors.response.use(
       return api(config);
     }
 
+    // 401: Session invalid or expired (e.g. after API key rotation)
+    // Clear all stale Supabase tokens and redirect to login.
+    if (error.response?.status === 401) {
+      // Avoid redirect loops if we're already on the login page
+      if (!window.location.pathname.includes('/login')) {
+        console.warn('[Axios] 401 received — clearing stale session and redirecting to login.');
+        // Clear all Supabase-related keys from localStorage
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.startsWith('sb-') || key.includes('supabase') || key === 'token')) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach(k => localStorage.removeItem(k));
+        // Small delay so any in-flight toasts can show before redirect
+        window.location.href = '/login?reason=session_expired';
+      }
+    }
+
     // For non-retryable errors, extract message from response
     if (error.response?.data?.error) {
       return Promise.reject(new Error(error.response.data.error));
