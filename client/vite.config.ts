@@ -47,6 +47,54 @@ export default defineConfig({
         keep_fnames: true,
       },
     },
+    rollupOptions: {
+      output: {
+        // Split large vendor libraries into separate cached chunks.
+        // After first download, returning users only re-download changed chunks.
+        manualChunks: (id) => {
+          // Core React — always needed
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+            return 'react-vendor';
+          }
+          // Routing
+          if (id.includes('node_modules/react-router')) {
+            return 'router-vendor';
+          }
+          // Supabase client (large)
+          if (id.includes('node_modules/@supabase')) {
+            return 'supabase-vendor';
+          }
+          // Socket.io client
+          if (id.includes('node_modules/socket.io-client') || id.includes('node_modules/engine.io-client')) {
+            return 'socket-vendor';
+          }
+          // Charts & data viz (heavy, only used in dashboards)
+          if (id.includes('node_modules/recharts') || id.includes('node_modules/chart.js') || id.includes('node_modules/d3')) {
+            return 'charts-vendor';
+          }
+          // PDF / document generation
+          if (id.includes('node_modules/pdfmake') || id.includes('node_modules/jspdf') || id.includes('node_modules/html2canvas')) {
+            return 'pdf-vendor';
+          }
+          // Agora video SDK (very large)
+          if (id.includes('node_modules/agora')) {
+            return 'agora-vendor';
+          }
+          // Framer motion (animation)
+          if (id.includes('node_modules/framer-motion')) {
+            return 'framer-vendor';
+          }
+          // UI icon libraries
+          if (id.includes('node_modules/lucide-react') || id.includes('node_modules/@heroicons')) {
+            return 'icons-vendor';
+          }
+          // Remaining large node_modules → vendor chunk (cached independently)
+          if (id.includes('node_modules')) {
+            return 'vendor';
+          }
+        },
+      },
+    },
   },
   esbuild: {
     pure: ['console.log'],

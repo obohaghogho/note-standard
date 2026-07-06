@@ -6,10 +6,24 @@ const cors = require("cors");
 const { corsOptions } = require("./utils/cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
+const compression = require("compression");
 const env = require("./config/env");
 const cloudinary = require("./config/cloudinary");
 
 const app = express();
+
+// ── Gzip Compression ─────────────────────────────────────────────────────────
+// Compresses all API responses and static assets. Reduces bandwidth 60-80%.
+app.use(compression({
+  // Only compress responses larger than 1KB (below that, overhead isn't worth it)
+  threshold: 1024,
+  // Compress everything except images/videos (already binary-compressed)
+  filter: (req, res) => {
+    const contentType = res.getHeader('Content-Type') || '';
+    if (/^(image|video|audio)/.test(String(contentType))) return false;
+    return compression.filter(req, res);
+  }
+}));
 
 // Configure CORS (Strict)
 app.use(cors(corsOptions));
@@ -346,24 +360,31 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.static(path.join(__dirname, "../client/dist")));
-
-// Temporary IP detection (Admin Only)
-app.get("/api/server-ip", requireAdmin, async (req, res) => {
-  const https = require("https");
-  https.get("https://api.ipify.org", (resp) => {
-    let data = "";
-    resp.on("data", chunk => data += chunk);
-    resp.on("end", () => res.send({ ip: data }));
-  }).on("error", (err) => {
-    res.status(500).json({ error: "Error fetching IP", details: err.message });
-  });
-});
+// ── Static Asset Caching Strategy ────────────────────────────────────────────
+// Vite hashes all JS/CSS/image filenames (e.g. index-CuzGqcYz.js).
+// Hash changes on every build → safe to cache for 1 year (immutable).
+// index.html must NOT be cached so browsers always get fresh asset hashes.
+app.use(express.static(path.join(__dirname, "../client/dist"), {
+  // 1 year cache for all hashed assets in /assets/
+  setHeaders: (res, filePath) => {
+    if (filePath.includes('/assets/')) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    } else if (filePath.endsWith('.html')) {
+      // HTML must always be fresh so asset hashes update
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    } else {
+      // Service worker, manifest, etc — short cache
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+    }
+  }
+}));
 
 app.get(/.*/, (req, res, next) => {
   if (req.path.startsWith("/api")) {
     return next();
   }
+  // Never cache the shell HTML
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.sendFile(path.join(__dirname, "../client/dist/index.html"));
 });
 

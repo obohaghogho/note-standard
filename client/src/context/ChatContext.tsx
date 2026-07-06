@@ -309,7 +309,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             } finally {
                 reconcilingRef.current = false;
             }
-        }, 60000);
+        }, 5 * 60 * 1000); // 5 min — WS handles real-time; this is just a drift safety net
         return () => clearInterval(interval);
     // loadMessages intentionally omitted — accessed via loadMessagesRef to avoid TDZ
      

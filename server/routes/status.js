@@ -157,6 +157,7 @@ router.get('/feed', requireAuth, async (req, res) => {
       return 0;
     });
 
+    res.set('Cache-Control', 'private, max-age=30'); // 30s browser cache
     res.json(feed);
   } catch (err) {
     logger.error('[Status] Feed error', { error: err.message });
