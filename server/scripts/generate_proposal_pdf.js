@@ -547,7 +547,7 @@ const pages = [
       doc.fillColor(GREY)
          .font('Helvetica')
          .fontSize(9)
-         .text('DOCUMENT REF: NST-ZBP-2026-001  |  DATE: JULY 2026', 50, doc.y, { align: 'center', width: 495 });
+         .text('DOCUMENT REF: NST-ZBP-2026-001  |  DATE: JULY 8, 2026', 50, doc.y, { align: 'center', width: 495 });
       doc.text('CLASSIFICATION: RESTRICTED / COMMERCIAL-IN-CONFIDENCE', 50, doc.y + 12, { align: 'center', width: 495 });
     }
   },
@@ -558,7 +558,7 @@ const pages = [
     render: (doc) => {
       doc.y = 80;
       doc.fillColor(DARK_TEXT).font('Helvetica').fontSize(10);
-      doc.text('July 7, 2026\n\nTo,\nThe eCommercial & Digital Banking Division,\nZenith Bank Plc,\nVictoria Island, Lagos, Nigeria.\n\nDear Sir/Ma,');
+      doc.text('July 8, 2026\n\nTo,\nThe eCommercial & Digital Banking Division,\nZenith Bank Plc,\nVictoria Island, Lagos, Nigeria.\n\nDear Sir/Ma,');
       
       doc.moveDown(1);
       doc.font('Helvetica-Bold').fillColor(NAVY).text('SUBJECT: PROPOSED STRATEGIC BANKING PARTNERSHIP & PAYMENT API INTEGRATION');
