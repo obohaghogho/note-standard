@@ -337,15 +337,24 @@ app.post("/api/verify-payment", requireAuth, paymentController.verifyPayment);
 // ─── Dynamic App Downloads ───────────────────────────────────
 const downloadService = require("./services/DownloadService");
 
-app.get("/api/app/latest-apk", (req, res) => {
-  const apk = downloadService.getLatestAPK();
-  if (!apk) {
-    return res.status(404).json({ error: "APK file not found" });
+app.get("/api/app/latest-apk", async (req, res) => {
+  try {
+    const apk = await downloadService.getLatestAPK();
+    if (!apk) {
+      return res.status(404).json({ error: "APK file not found" });
+    }
+    
+    if (apk.url) {
+      return res.redirect(apk.url);
+    }
+    
+    res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+    res.setHeader('Content-Disposition', `attachment; filename="${apk.filename}"`);
+    res.sendFile(apk.path);
+  } catch (err) {
+    logger.error('Error serving latest APK:', err.message);
+    res.status(500).json({ error: "Internal server error resolving latest APK" });
   }
-  
-  res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-  res.setHeader('Content-Disposition', `attachment; filename="${apk.filename}"`);
-  res.sendFile(apk.path);
 });
 
 // ─── Serve Frontend (Production) ──────────────────────────────
@@ -372,8 +381,18 @@ app.use(express.static(path.join(__dirname, "../client/dist"), {
     } else if (filePath.endsWith('.html')) {
       // HTML must always be fresh so asset hashes update
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    } else if (
+      filePath.includes('/sounds/') || 
+      filePath.includes('/images/') || 
+      filePath.endsWith('.png') || 
+      filePath.endsWith('.ico') || 
+      filePath.endsWith('.svg') || 
+      filePath.endsWith('.wav')
+    ) {
+      // Public static files (sounds, mockups, icons) — cache for 30 days
+      res.setHeader('Cache-Control', 'public, max-age=2592000');
     } else {
-      // Service worker, manifest, etc — short cache
+      // Service worker, manifest, etc — short cache (1 hour)
       res.setHeader('Cache-Control', 'public, max-age=3600');
     }
   }

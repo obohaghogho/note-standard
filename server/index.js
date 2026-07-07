@@ -113,11 +113,11 @@ server.listen(PORT, async () => {
 
       // ── D: Poll Gateway until alive ────────────────────────────
       logger.info("[Boot] Polling Gateway for readiness...");
-      const GATEWAY_URL = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
+      const GATEWAY_URL = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5001';
       let gatewayAlive = false;
       for (let attempt = 1; attempt <= 10; attempt++) {
         try {
-          const healthRes = await fetch(`${GATEWAY_URL}/health`);
+          const healthRes = await fetch(`${GATEWAY_URL}/health`, { timeout: 3000 });
           if (healthRes.ok) {
             gatewayAlive = true;
             logger.info(`[Boot] Gateway is alive (attempt ${attempt}).`);

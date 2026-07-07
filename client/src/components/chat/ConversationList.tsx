@@ -206,7 +206,7 @@ const ConversationList: React.FC = () => {
     }
 
     return (
-        <div className="flex flex-col h-full overflow-y-auto bg-gray-950 border-r border-white/5 scrollbar-hide pb-safe">
+        <div className="flex flex-col h-full min-h-0 overflow-y-auto bg-gray-950 border-r border-white/5 custom-scrollbar pb-safe">
             {sortedConversations.map((conv) => {
                 let isOnline = false;
                 

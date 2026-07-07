@@ -4,9 +4,57 @@ import { useAuth } from '../../context/AuthContext';
 import { Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
 
+function StatusRing({ count, viewedCount, size = 60 }: { count: number; viewedCount: number; size?: number }) {
+  if (count === 0) return null;
+  if (count === 1) {
+    const color = viewedCount === count ? 'stroke-gray-700' : 'stroke-blue-500';
+    return (
+      <svg width={size} height={size} className="absolute inset-0 -rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={(size - 4) / 2}
+          className={`${color} fill-none`}
+          strokeWidth="2.5"
+        />
+      </svg>
+    );
+  }
+
+  const radius = (size - 4) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const gap = 3; // Gap size in pixels
+  const segmentLength = (circumference - (count * gap)) / count;
+
+  return (
+    <svg width={size} height={size} className="absolute inset-0 -rotate-90">
+      {Array.from({ length: count }).map((_, i) => {
+        const isViewed = i < viewedCount;
+        const color = isViewed ? 'stroke-gray-700' : 'stroke-blue-500';
+        const offset = i * (segmentLength + gap);
+        return (
+          <circle
+            key={i}
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            className={`${color} fill-none transition-all duration-300`}
+            strokeWidth="2.5"
+            strokeDasharray={`${segmentLength} ${circumference - segmentLength}`}
+            strokeDashoffset={-offset}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
 export default function StatusTray() {
   const { feed, myStatuses, openViewer, openCreator } = useStatus();
   const { user, profile } = useAuth();
+
+  const myViewedCount = myStatuses ? myStatuses.filter(s => s.has_viewed).length : 0;
+  const myHasUnviewed = myStatuses ? myStatuses.some(s => !s.has_viewed) : false;
 
   // Construct own entry from myStatuses
   const myEntry = myStatuses && myStatuses.length > 0 ? {
@@ -14,7 +62,7 @@ export default function StatusTray() {
     display_name: 'My Status',
     avatar_url: profile?.avatar_url,
     statuses: myStatuses,
-    has_unviewed: false
+    has_unviewed: myHasUnviewed
   } : null;
 
   const others = feed.filter(u => u.user_id !== user?.id);
@@ -34,15 +82,29 @@ export default function StatusTray() {
         <div 
           className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 snap-start group"
           onClick={() => {
-            if (myEntry) openViewer(-1, 0);
+            if (myEntry) {
+              // Find the first unviewed own status, otherwise default to 0 (oldest)
+              const firstUnviewed = myStatuses.findIndex(s => !s.has_viewed);
+              const startIdx = firstUnviewed === -1 ? 0 : firstUnviewed;
+              openViewer(-1, startIdx);
+            }
             else openCreator();
           }}
         >
           <div className="relative">
-            <div className={`w-[60px] h-[60px] rounded-full p-[2px] ${myEntry ? 'bg-gradient-to-tr from-blue-500 to-indigo-500' : 'bg-gray-800'}`}>
-              <div className="w-full h-full rounded-full border-2 border-gray-950 overflow-hidden bg-gray-900 relative">
+            <div className="w-[60px] h-[60px] relative">
+              {myEntry ? (
+                <StatusRing 
+                  count={myEntry.statuses.length} 
+                  viewedCount={myViewedCount} 
+                  size={60} 
+                />
+              ) : (
+                <div className="absolute inset-0 rounded-full border-2 border-dashed border-gray-800" />
+              )}
+              <div className="absolute inset-[3px] rounded-full overflow-hidden bg-gray-900 flex items-center justify-center">
                 {myEntry ? (
-                  <StatusThumbnail status={myEntry.statuses[0]} />
+                  <StatusThumbnail status={myEntry.statuses[myEntry.statuses.length - 1]} />
                 ) : (
                   <img 
                     src={profile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.id}`} 
@@ -53,7 +115,13 @@ export default function StatusTray() {
               </div>
             </div>
             
-            <div className="absolute bottom-0 right-0 w-5 h-5 bg-blue-500 rounded-full border-2 border-gray-950 flex items-center justify-center shadow-sm">
+            <div 
+              className="absolute bottom-0 right-0 w-5 h-5 bg-blue-500 rounded-full border-2 border-gray-950 flex items-center justify-center shadow-sm hover:bg-blue-400 active:scale-95 transition-transform"
+              onClick={(e) => {
+                e.stopPropagation();
+                openCreator();
+              }}
+            >
               <Plus size={12} className="text-white" strokeWidth={3} />
             </div>
           </div>
@@ -63,8 +131,8 @@ export default function StatusTray() {
         {/* Contact Statuses */}
         {sorted.map((entry, idx) => {
           const feedIdx = feed.indexOf(entry);
-          const allViewed = !entry.has_unviewed;
-          const latestStatus = entry.statuses[0];
+          const latestStatus = entry.statuses[entry.statuses.length - 1];
+          const viewedCount = entry.statuses.filter(s => s.has_viewed).length;
           
           return (
             <motion.div
@@ -73,10 +141,19 @@ export default function StatusTray() {
               transition={{ delay: idx * 0.05 }}
               key={entry.user_id}
               className={`flex flex-col items-center gap-1.5 cursor-pointer shrink-0 snap-start group ${entry.is_muted ? 'opacity-50 grayscale' : ''}`}
-              onClick={() => openViewer(feedIdx, 0)}
+              onClick={() => {
+                const firstUnviewed = entry.statuses.findIndex(s => !s.has_viewed);
+                const startIdx = firstUnviewed === -1 ? 0 : firstUnviewed;
+                openViewer(feedIdx, startIdx);
+              }}
             >
-              <div className={`w-[60px] h-[60px] rounded-full p-[2px] transition-colors duration-300 ${allViewed ? 'bg-gray-700' : 'bg-gradient-to-tr from-blue-500 to-purple-500'}`}>
-                <div className="w-full h-full rounded-full border-2 border-gray-950 overflow-hidden bg-gray-900 relative group-active:scale-95 transition-transform">
+              <div className="w-[60px] h-[60px] relative">
+                <StatusRing 
+                  count={entry.statuses.length} 
+                  viewedCount={viewedCount} 
+                  size={60} 
+                />
+                <div className="absolute inset-[3px] rounded-full overflow-hidden bg-gray-900 group-active:scale-95 transition-transform">
                   <StatusThumbnail status={latestStatus} user={entry} />
                 </div>
               </div>

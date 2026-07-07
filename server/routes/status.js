@@ -100,14 +100,27 @@ router.get('/feed', requireAuth, async (req, res) => {
     const mutedSet = new Set((mutes || []).map(m => m.muted_user));
 
     // Fetch all active statuses for those users
+    // NOTE: statuses has no FK to profiles in Supabase schema cache,
+    // so we do a manual two-step lookup instead of a join.
     const { data: statuses, error } = await supabase
       .from('statuses')
-      .select('*, profiles:user_id (id, username, full_name, avatar_url)')
+      .select('*')
       .in('user_id', userIds)
       .eq('is_deleted', false)
       .eq('is_archived', false)
       .gt('expires_at', now)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: true });
+
+    // Batch-fetch profiles for all unique user IDs in the result
+    const statusUserIds = [...new Set((statuses || []).map(s => s.user_id))];
+    const { data: profilesData } = statusUserIds.length > 0
+      ? await supabase
+          .from('profiles')
+          .select('id, username, full_name, avatar_url')
+          .in('id', statusUserIds)
+      : { data: [] };
+    const profileMap = {};
+    (profilesData || []).forEach(p => { profileMap[p.id] = p; });
 
     if (error) throw error;
 
@@ -127,7 +140,7 @@ router.get('/feed', requireAuth, async (req, res) => {
     const grouped = {};
     for (const status of (statuses || [])) {
       if (!await canViewStatus(status, viewerId)) continue;
-      const profile = status.profiles || {};
+      const profile = profileMap[status.user_id] || {};
       const uid = status.user_id;
       const isMuted = mutedSet.has(uid);
       const hasViewed = viewedSet.has(status.id);
@@ -145,7 +158,7 @@ router.get('/feed', requireAuth, async (req, res) => {
       }
 
       if (!hasViewed && uid !== viewerId) grouped[uid].has_unviewed = true;
-      grouped[uid].statuses.push({ ...status, profiles: undefined, has_viewed: hasViewed });
+      grouped[uid].statuses.push({ ...status, has_viewed: hasViewed });
     }
 
     // Sort: own first, then unviewed, then muted
@@ -168,14 +181,28 @@ router.get('/feed', requireAuth, async (req, res) => {
 // ── GET /api/status/my ──────────────────────────────────────────────────────
 router.get('/my', requireAuth, async (req, res) => {
   try {
+    const now = new Date().toISOString();
     const { data: statuses, error } = await supabase
       .from('statuses')
       .select('*')
       .eq('user_id', req.user.id)
       .eq('is_deleted', false)
-      .order('created_at', { ascending: false });
+      .gt('expires_at', now)
+      .order('created_at', { ascending: true });
 
     if (error) throw error;
+
+    // Fetch owner's own views
+    const statusIds = (statuses || []).map(s => s.id);
+    let viewedSet = new Set();
+    if (statusIds.length > 0) {
+      const { data: views } = await supabase
+        .from('status_views')
+        .select('status_id')
+        .eq('viewer_id', req.user.id)
+        .in('status_id', statusIds);
+      viewedSet = new Set((views || []).map(v => v.status_id));
+    }
 
     // Enrich with viewers and reactions
     const enriched = await Promise.all((statuses || []).map(async (s) => {
@@ -183,6 +210,7 @@ router.get('/my', requireAuth, async (req, res) => {
         .from('status_views')
         .select('viewed_at, completed, viewer:viewer_id (id, full_name, avatar_url)')
         .eq('status_id', s.id)
+        .neq('viewer_id', req.user.id)
         .order('viewed_at', { ascending: false });
 
       const { data: reactions } = await supabase
@@ -193,10 +221,12 @@ router.get('/my', requireAuth, async (req, res) => {
       const { count } = await supabase
         .from('status_views')
         .select('id', { count: 'exact', head: true })
-        .eq('status_id', s.id);
+        .eq('status_id', s.id)
+        .neq('viewer_id', req.user.id);
 
       return {
         ...s,
+        has_viewed: viewedSet.has(s.id),
         view_count: count || 0,
         viewers: (viewers || []).map(v => ({
           id: v.viewer?.id,
@@ -332,8 +362,8 @@ router.post('/:id/view', requireAuth, async (req, res) => {
 
     if (error || !status) return res.status(404).json({ error: 'Not found' });
     if (!await canViewStatus(status, req.user.id)) return res.status(403).json({ error: 'Forbidden' });
-    if (status.user_id === req.user.id) return res.json({ success: true });
 
+    const isOwner = status.user_id === req.user.id;
     const { completed = false } = req.body;
 
     await supabase.from('status_views').upsert(
@@ -341,26 +371,29 @@ router.post('/:id/view', requireAuth, async (req, res) => {
       { onConflict: 'status_id,viewer_id' }
     );
 
-    // Sync exact unique view count
+    // Sync exact unique view count (excluding owner's self-views)
     const { count } = await supabase
       .from('status_views')
       .select('id', { count: 'exact', head: true })
-      .eq('status_id', status.id);
+      .eq('status_id', status.id)
+      .neq('viewer_id', status.user_id);
 
     await supabase.from('statuses').update({ view_count: count || 0 }).eq('id', status.id);
 
-    // Notify owner
-    const { data: viewer } = await supabase
-      .from('profiles')
-      .select('id, full_name, avatar_url')
-      .eq('id', req.user.id)
-      .single();
+    if (!isOwner) {
+      // Notify owner
+      const { data: viewer } = await supabase
+        .from('profiles')
+        .select('id, full_name, avatar_url')
+        .eq('id', req.user.id)
+        .single();
 
-    realtime.emitToUser(status.user_id, 'status:viewed', {
-      status_id: status.id,
-      view_count: count || 0,
-      viewer: { id: viewer?.id, display_name: viewer?.full_name, avatar_url: viewer?.avatar_url },
-    });
+      realtime.emitToUser(status.user_id, 'status:viewed', {
+        status_id: status.id,
+        view_count: count || 0,
+        viewer: { id: viewer?.id, display_name: viewer?.full_name, avatar_url: viewer?.avatar_url },
+      });
+    }
 
     res.json({ success: true });
   } catch (err) {

@@ -114,7 +114,7 @@ export function DashboardLayout() {
                 {renderHeader()}
 
                 <div className={cn(
-                    "flex-1 w-full flex flex-col min-w-0 relative h-full",
+                    "flex-1 min-h-0 w-full flex flex-col min-w-0 relative h-full",
                     isChatActiveOnMobile ? "p-0 overflow-hidden" : "p-4 md:p-8 max-w-7xl mx-auto overflow-y-auto"
                 )}>
                     <ErrorBoundary fallback={
@@ -124,7 +124,7 @@ export function DashboardLayout() {
                             <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-red-500 text-white rounded-lg text-sm">Refresh Now</button>
                         </div>
                     }>
-                        <div className="flex-1 flex flex-col min-w-0 h-full">
+                        <div className="flex-1 min-h-0 flex flex-col min-w-0 h-full">
                             <Outlet context={{ openCreateNoteModal: () => setIsCreateNoteModalOpen(true), openMobileMenu: () => setIsMobileMenuOpen(true) }} />
                         </div>
                     </ErrorBoundary>

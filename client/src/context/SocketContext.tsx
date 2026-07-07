@@ -8,7 +8,7 @@ import { getDeviceId } from '../utils/deviceId';
 
 // ─── Config ──────────────────────────────────────────────────────
 const rawSocketUrl = import.meta.env.VITE_SOCKET_URL;
-const SOCKET_URL = resolveLocalUrl(rawSocketUrl, 'http://localhost:5000');
+const SOCKET_URL = resolveLocalUrl(rawSocketUrl, 'http://localhost:5001');
 
 if (!SOCKET_URL && import.meta.env.PROD) {
     console.error('❌ CRITICAL: VITE_SOCKET_URL is not defined in production environment!');

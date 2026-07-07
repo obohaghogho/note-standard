@@ -142,8 +142,9 @@ export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       // Handle own statuses (userIndex === -1)
       if (userIndex === -1) {
-        // myStatuses is captured via closure — check length directly
-        // We can't access myStatuses here directly, so just close
+        if (statusIndex + 1 < myStatuses.length) {
+          return { userIndex, statusIndex: statusIndex + 1 };
+        }
         return null;
       }
 
@@ -156,7 +157,7 @@ export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
       return null;
     });
-  }, [feed]);
+  }, [feed, myStatuses]);
 
   const prevStatus = useCallback(() => {
     setViewerOpen(prev => {
@@ -187,6 +188,9 @@ export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         );
         return { ...u, statuses: updatedStatuses, has_unviewed: updatedStatuses.some(st => !st.has_viewed) };
       }));
+      setMyStatuses(m => m.map(st =>
+        st.id === statusId ? { ...st, has_viewed: true } : st
+      ));
     } catch (err) {
       console.error('[Status] markViewed error', err);
     }
@@ -246,8 +250,16 @@ export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
   }, []);
 
-  const updateViewCount = useCallback((statusId: string, viewCount: number) => {
-    setMyStatuses(m => m.map(st => st.id === statusId ? { ...st, view_count: viewCount } : st));
+  const updateViewCount = useCallback((statusId: string, viewCount: number, viewer?: Viewer) => {
+    setMyStatuses(m => m.map(st => {
+      if (st.id === statusId) {
+        const currentViewers = st.viewers || [];
+        const exists = viewer ? currentViewers.some(v => v.id === viewer.id) : false;
+        const updatedViewers = viewer && !exists ? [viewer, ...currentViewers] : currentViewers;
+        return { ...st, view_count: viewCount, viewers: updatedViewers };
+      }
+      return st;
+    }));
   }, []);
 
   const removeStatus = useCallback((statusId: string) => {
@@ -263,7 +275,7 @@ export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!socket) return;
     
     socket.on('status:new', receiveNewStatus);
-    socket.on('status:viewed', (data) => updateViewCount(data.status_id, data.view_count));
+    socket.on('status:viewed', (data) => updateViewCount(data.status_id, data.view_count, data.viewer));
     socket.on('status:deleted', (data) => removeStatus(data.status_id));
     socket.on('status:reaction', (data) => {
       // Could show a toast or update local state for reactions

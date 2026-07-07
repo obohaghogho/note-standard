@@ -21,23 +21,25 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { VersionGuard } from './components/common/VersionGuard';
 import { IOSInstallPrompt } from './components/common/IOSInstallPrompt';
 import { WebNotificationRouter } from './components/common/WebNotificationRouter';
-import DashboardHome from './pages/dashboard/DashboardHome';
-import Notes from './pages/dashboard/Notes';
-import Chat from './pages/dashboard/Chat';
-import Shared from './pages/dashboard/Shared';
-import Feed from './pages/dashboard/Feed';
-import Search from './pages/dashboard/Search';
-import Settings from './pages/dashboard/Settings';
-import Billing from './pages/dashboard/Billing';
-import Affiliates from './pages/dashboard/Affiliates';
-import Notifications from './pages/dashboard/Notifications';
-import Trends from './pages/dashboard/Trends';
-import WalletPage from './pages/WalletPage';
-import Transactions from './pages/dashboard/Transactions';
-import TeamsPage from './pages/teams/TeamsPage';
-import DepositPage from './pages/dashboard/DepositPage';
-import DownloadPage from './pages/dashboard/DownloadPage';
 import { lazyWithRetry } from './utils/lazyWithRetry';
+
+// ─── Lazy-loaded Dashboard Pages (Code Splitting) ───
+const DashboardHome = lazyWithRetry(() => import('./pages/dashboard/DashboardHome'), 'DashboardHome');
+const Notes = lazyWithRetry(() => import('./pages/dashboard/Notes'), 'Notes');
+const Chat = lazyWithRetry(() => import('./pages/dashboard/Chat'), 'Chat');
+const Shared = lazyWithRetry(() => import('./pages/dashboard/Shared'), 'Shared');
+const Feed = lazyWithRetry(() => import('./pages/dashboard/Feed'), 'Feed');
+const Search = lazyWithRetry(() => import('./pages/dashboard/Search'), 'Search');
+const Settings = lazyWithRetry(() => import('./pages/dashboard/Settings'), 'Settings');
+const Billing = lazyWithRetry(() => import('./pages/dashboard/Billing'), 'Billing');
+const Affiliates = lazyWithRetry(() => import('./pages/dashboard/Affiliates'), 'Affiliates');
+const Notifications = lazyWithRetry(() => import('./pages/dashboard/Notifications'), 'Notifications');
+const Trends = lazyWithRetry(() => import('./pages/dashboard/Trends'), 'Trends');
+const WalletPage = lazyWithRetry(() => import('./pages/WalletPage'), 'WalletPage');
+const Transactions = lazyWithRetry(() => import('./pages/dashboard/Transactions'), 'Transactions');
+const TeamsPage = lazyWithRetry(() => import('./pages/teams/TeamsPage'), 'TeamsPage');
+const DepositPage = lazyWithRetry(() => import('./pages/dashboard/DepositPage'), 'DepositPage');
+const DownloadPage = lazyWithRetry(() => import('./pages/dashboard/DownloadPage'), 'DownloadPage');
 
 // ─── Lazy-loaded pages (route-level code splitting) ───
 // Public pages

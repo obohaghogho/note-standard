@@ -85,7 +85,6 @@ const corsOptions = {
   exposedHeaders: ['X-Correlation-ID']
 };
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
 
 app.use(express.json());
 

@@ -43,14 +43,14 @@ export default function StatusViewer() {
 
   // Mark viewed on open
   useEffect(() => {
-    if (status && !isOwn && !status.has_viewed) {
+    if (status && !status.has_viewed) {
       markViewed(status.id);
     }
     elapsedRef.current = 0;
     setProgress(0);
     setReplyText('');
     setShowViewers(false);
-  }, [status, isOwn, markViewed]);
+  }, [status, markViewed]);
 
   const getDuration = useCallback(() => {
     if (status?.type === 'video' && videoRef.current?.duration) {
@@ -84,15 +84,35 @@ export default function StatusViewer() {
     if (timerRef.current) clearInterval(timerRef.current);
   }, []);
 
+  const handleTimeUpdate = () => {
+    if (status?.type === 'video' && videoRef.current) {
+      const current = videoRef.current.currentTime;
+      const duration = videoRef.current.duration || 1;
+      setProgress((current / duration) * 100);
+    }
+  };
+
   useEffect(() => {
     if (!status) return;
-    if (paused) {
+
+    if (status.type === 'video') {
       stopTimer();
-      videoRef.current?.pause();
+      const video = videoRef.current;
+      if (video) {
+        if (paused) {
+          video.pause();
+        } else {
+          video.play().catch(() => {});
+        }
+      }
     } else {
-      startTimer();
-      if (status.type === 'video') videoRef.current?.play().catch(() => {});
+      if (paused) {
+        stopTimer();
+      } else {
+        startTimer();
+      }
     }
+
     return () => stopTimer();
   }, [paused, status, startTimer, stopTimer]);
 
@@ -159,7 +179,7 @@ export default function StatusViewer() {
                 className="h-full bg-white rounded-full"
                 style={{
                   width: i < (statusIndex || 0) ? '100%' : i === statusIndex ? `${progress}%` : '0%',
-                  transitionDuration: i === statusIndex && !paused ? '50ms' : '0ms'
+                  transitionDuration: i === statusIndex && !paused && status?.type !== 'video' ? '50ms' : '0ms'
                 }}
               />
             </div>
@@ -224,7 +244,11 @@ export default function StatusViewer() {
               src={status.media_url} 
               className="w-full h-full object-contain"
               playsInline
-              onEnded={nextStatus}
+              onTimeUpdate={handleTimeUpdate}
+              onEnded={() => {
+                elapsedRef.current = 0;
+                nextStatus();
+              }}
             />
           )}
 

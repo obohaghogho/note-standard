@@ -1,8 +1,11 @@
-const admin = require('firebase-admin');
-const apn = require('apn');
+let admin = null;
+let apn = null;
+let webpush = null;
+try { admin = require('firebase-admin'); } catch (e) { console.warn('[PushService] Missing firebase-admin module'); }
+try { apn = require('apn'); } catch (e) { console.warn('[PushService] Missing apn module'); }
+try { webpush = require('web-push'); } catch (e) { console.warn('[PushService] Missing web-push module'); }
 const { createClient } = require('@supabase/supabase-js');
 const path = require('path');
-const webpush = require('web-push');
 const presence = require('../events/presence');
 
 // Initialize Supabase for fetching tokens with Keep-Alive to prevent TCP Port Exhaustion

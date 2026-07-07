@@ -14,11 +14,12 @@ import { useAuth } from '../../context/AuthContext';
 
 
 const StatusOverlays = () => {
-    const { viewerOpen, creatorOpen, fetchFeed } = useStatus();
+    const { viewerOpen, creatorOpen, fetchFeed, fetchMyStatuses } = useStatus();
     
     useEffect(() => {
         fetchFeed();
-    }, [fetchFeed]);
+        fetchMyStatuses();
+    }, [fetchFeed, fetchMyStatuses]);
 
     return (
         <>
@@ -85,7 +86,7 @@ function ChatContent() {
         <div className="flex h-full bg-gray-950 shadow-none rounded-none md:border md:border-gray-800 md:rounded-2xl overflow-hidden md:shadow-2xl relative">
             {/* Sidebar - Keeps state mounted always, uses CSS to hide on mobile when chat is active */}
             <div 
-                className={`${activeConversationId ? 'hidden md:flex' : 'flex'} w-full md:w-80 border-r border-gray-800 flex-col bg-gray-950 absolute md:relative inset-0 md:inset-auto z-10 transition-none`}
+                className={`${activeConversationId ? 'hidden md:flex' : 'flex'} w-full md:w-80 h-full border-r border-gray-800 flex-col bg-gray-950 absolute md:relative inset-0 md:inset-auto z-10 transition-none`}
             >
                 {/* Header with Safe Area Handling */}
                 <div className="pt-safe flex-shrink-0 bg-gray-950/80 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20">
@@ -117,7 +118,7 @@ function ChatContent() {
 
                 <StatusTray />
 
-                <div className="flex-1 overflow-hidden">
+                <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
                     <ConversationList />
                 </div>
             </div>
