@@ -661,7 +661,7 @@ const pages = [
       doc.moveDown(0.5);
       bullet(doc, 'Lagos, Nigeria', 'Headquarters: ');
       bullet(doc, 'Enterprise Productivity & Digital Communications', 'Primary Sector: ');
-      bullet(doc, 'Software-as-a-Service (SaaS) Subscriptions & API Licenses', 'Revenue Model: ');
+      bullet(doc, 'SaaS Subscriptions, API Licenses, and Sponsored Feed Advertisements', 'Revenue Model: ');
       bullet(doc, 'partnerships@notesstandard.com', 'Contact Email: ');
       bullet(doc, 'https://notesstandard.com', 'Website: ');
     }
@@ -936,13 +936,13 @@ const pages = [
       addSectionHeader(doc, '10', 'Merchant Collections Flow');
       doc.fillColor(DARK_TEXT).font('Helvetica').fontSize(10);
       
-      doc.text('NoteStandard plans to introduce B2B features, allowing professional merchants and corporate accounts to generate client invoices and collect payments directly within their shared document workspaces.', { align: 'justify' });
+      doc.text('NoteStandard plans to introduce B2B features, allowing professional merchants and corporate accounts to generate client invoices, configure targeted promotional placements, and collect payments directly within their shared document workspaces and team feeds.', { align: 'justify' });
       
       doc.moveDown(1);
-      doc.text('Under this planned structure, the merchant creates an invoice item within a shared notes node. The customer receives a notification and authorizes the payment through the Zenith Bank merchant collections gateway. Once Zenith Bank captures the funds, they are settled directly to the merchant’s account after platform fee deductions, all within Zenith Bank’s secure network.', { align: 'justify' });
+      doc.text('Under this planned structure, merchants can establish billing contracts or run feed advertisements. Invoice payments and ad budget balances are authorized through the Zenith Bank checkout gateway. Once Zenith Bank captures the funds, they are settled directly to the merchant’s account after platform fee deductions, all within Zenith Bank’s secure network.', { align: 'justify' });
       
       doc.moveDown(1);
-      drawScreenshotPlaceholder(doc, 'Merchant Invoice Generator & Payment Window');
+      drawScreenshotPlaceholder(doc, 'Merchant Invoice & Ad Campaign Generator');
     }
   },
   
@@ -961,6 +961,7 @@ const pages = [
       bullet(doc, 'Zenith Bank’s collections APIs process card payments and bank transfers.', '2. Multi-channel Payments: ');
       bullet(doc, 'Ledger updates notify both parties instantly when payments clear.', '3. Automated Status Sync: ');
       bullet(doc, 'Escrow settlement terms can be configured to hold funds until work milestones are confirmed.', '4. Flexible Clearing Rules: ');
+      bullet(doc, 'Businesses can purchase targeted ad spaces and sponsored slots directly in team feeds.', '5. Sponsored Feed Advertising: ');
     }
   },
   
@@ -984,6 +985,11 @@ const pages = [
       doc.font('Helvetica-Bold').fillColor(NAVY).text('Digital Wallet & Internal Ledger Flow:');
       doc.moveDown(0.5);
       doc.font('Helvetica').fillColor(DARK_TEXT).text('NoteStandard incorporates a digital wallet subsystem providing virtual ledger mappings for all active accounts. This wallet enables users to maintain an internal credit balance, funded directly via Zenith Bank cards or automated bank transfer webhooks. When a collaborative B2B invoice is approved within a workspace node, the transaction clears instantly from the buyer\'s wallet balance, logging a double-entry ledger event and settling funds directly to the merchant\'s corporate Zenith account.', { align: 'justify' });
+      
+      doc.moveDown(1);
+      doc.font('Helvetica-Bold').fillColor(NAVY).text('Sponsored Feeds & Advertisement Billing:');
+      doc.moveDown(0.5);
+      doc.font('Helvetica').fillColor(DARK_TEXT).text('NoteStandard supports targeted advertising campaigns directly within corporate and community feeds. Businesses can purchase sponsored post slots to launch advertising campaigns. The billing engine processes these advertising budgets via Zenith Bank’s API gateway or deducts them dynamically from the user\'s integrated wallet based on campaign metrics (e.g. cost-per-click or cost-per-impression), generating verified billing ledgers.', { align: 'justify' });
       
       doc.moveDown(1);
       drawScreenshotPlaceholder(doc, 'Subscription State Machine & Wallet Ledger Tables');
