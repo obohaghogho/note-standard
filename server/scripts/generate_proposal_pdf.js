@@ -131,7 +131,7 @@ function addSectionHeader(doc, num, title) {
 // Bullet point helper
 function bullet(doc, text, boldPrefix = '') {
   doc.save();
-  const currentX = doc.x;
+  const currentX = 50; // Align with the left margin (50)
   const currentY = doc.y;
   
   // Draw bullet circle
@@ -150,6 +150,7 @@ function bullet(doc, text, boldPrefix = '') {
     doc.font('Helvetica').text(text, { width: 480 });
   }
   doc.restore();
+  doc.x = 50; // Reset left margin cursor position
   doc.moveDown(0.4);
 }
 
@@ -158,9 +159,9 @@ function drawScreenshotPlaceholder(doc, labelText) {
   doc.save();
   const startY = doc.y + 10;
   
-  doc.rect(50, startY, 495, 140)
-     .fill(LIGHT_GREY)
-     .stroke(GREY);
+  // Correctly separate fill and stroke to prevent path consumption bugs
+  doc.rect(50, startY, 495, 140).fill(LIGHT_GREY);
+  doc.rect(50, startY, 495, 140).stroke(GREY);
      
   // Inner image icon
   doc.rect(275, startY + 35, 45, 30).lineWidth(1).stroke(GREY);
@@ -178,6 +179,7 @@ function drawScreenshotPlaceholder(doc, labelText) {
      .text('(Will display high-resolution application screen mockups in final render)', 50, startY + 95, { align: 'center', width: 495 });
      
   doc.restore();
+  doc.x = 50; // Reset left margin cursor position
   doc.y = startY + 160;
 }
 
@@ -219,6 +221,7 @@ function drawTable(doc, startY, tableHeaders, tableRows, columnWidths) {
   }
   
   doc.restore();
+  doc.x = 50; // Reset left margin cursor position
   doc.y = currentY + 15;
 }
 
@@ -978,7 +981,12 @@ const pages = [
       bullet(doc, 'The client app receives a socket event and updates the workspace view.', 'Step 5: Client Interface Update — ');
       
       doc.moveDown(1);
-      drawScreenshotPlaceholder(doc, 'Subscription State Machine & Ledger Tables');
+      doc.font('Helvetica-Bold').fillColor(NAVY).text('Digital Wallet & Internal Ledger Flow:');
+      doc.moveDown(0.5);
+      doc.font('Helvetica').fillColor(DARK_TEXT).text('NoteStandard incorporates a digital wallet subsystem providing virtual ledger mappings for all active accounts. This wallet enables users to maintain an internal credit balance, funded directly via Zenith Bank cards or automated bank transfer webhooks. When a collaborative B2B invoice is approved within a workspace node, the transaction clears instantly from the buyer\'s wallet balance, logging a double-entry ledger event and settling funds directly to the merchant\'s corporate Zenith account.', { align: 'justify' });
+      
+      doc.moveDown(1);
+      drawScreenshotPlaceholder(doc, 'Subscription State Machine & Wallet Ledger Tables');
     }
   },
   
