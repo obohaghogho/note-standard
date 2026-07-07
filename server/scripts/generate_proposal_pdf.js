@@ -134,14 +134,20 @@ function bullet(doc, text, boldPrefix = '') {
   const currentX = doc.x;
   const currentY = doc.y;
   
+  // Draw bullet circle
   doc.circle(currentX + 5, currentY + 6, 2.5).fill(RED);
   
-  doc.fillColor(DARK_TEXT).font('Helvetica').fontSize(10);
+  // Set cursor position explicitly to avoid PDFKit continued text width shriveling bug
+  doc.x = currentX + 15;
+  doc.y = currentY;
+  
+  doc.fillColor(DARK_TEXT).fontSize(10);
+  
   if (boldPrefix) {
-    doc.font('Helvetica-Bold').text(boldPrefix, currentX + 15, currentY, { continued: true });
-    doc.font('Helvetica').text(text);
+    doc.font('Helvetica-Bold').text(boldPrefix, { continued: true });
+    doc.font('Helvetica').text(text, { width: 480 });
   } else {
-    doc.text(text, currentX + 15, currentY);
+    doc.font('Helvetica').text(text, { width: 480 });
   }
   doc.restore();
   doc.moveDown(0.4);
