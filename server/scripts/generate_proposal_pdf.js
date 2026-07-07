@@ -12,7 +12,7 @@ const WHITE = '#FFFFFF';
 
 // Create target directory if it doesn't exist
 const outputDir = path.join(__dirname, '..', '..');
-const outputPath = path.join(outputDir, 'NoteStandard_Zenith_Bank_Proposal.pdf');
+const outputPath = path.join(outputDir, 'NoteStandard_Zenith_Bank_Proposal_v2.pdf');
 
 console.log(`Initializing PDF generation. Saving to: ${outputPath}`);
 
@@ -1377,8 +1377,29 @@ for (let i = 0; i < totalPages; i++) {
         }
       }
     }
+    
+    // Save original page margins
+    const origMargins = {
+      top: doc.page.margins.top,
+      bottom: doc.page.margins.bottom,
+      left: doc.page.margins.left,
+      right: doc.page.margins.right
+    };
+    
+    // Temporarily clear margins so headers/footers never trigger page breaks
+    doc.page.margins.top = 0;
+    doc.page.margins.bottom = 0;
+    doc.page.margins.left = 0;
+    doc.page.margins.right = 0;
+    
     drawHeader(doc, pageTitle);
     drawFooter(doc, i + 1, totalPages);
+    
+    // Restore original margins
+    doc.page.margins.top = origMargins.top;
+    doc.page.margins.bottom = origMargins.bottom;
+    doc.page.margins.left = origMargins.left;
+    doc.page.margins.right = origMargins.right;
   }
 }
 
