@@ -573,7 +573,7 @@ const pages = [
       doc.text('By partnering with Nigeria’s leading eCommercial bank, we gain access to robust settlement infrastructures while Zenith Bank captures high-frequency, secure transaction volumes from NoteStandard’s user base. We look forward to your positive review and are ready to initiate Sandbox API evaluations immediately.', { align: 'justify' });
       
       doc.moveDown(2);
-      doc.text('Yours faithfully,\n\nNoteStandard Technologies Team\nLagos, Nigeria.');
+      doc.text('Yours faithfully,\n\nNoteStandard Technologies Team\nDelta State, Nigeria.');
     }
   },
   
@@ -659,7 +659,7 @@ const pages = [
       doc.moveDown(2);
       doc.font('Helvetica-Bold').fillColor(NAVY).text('Company Details:');
       doc.moveDown(0.5);
-      bullet(doc, 'Lagos, Nigeria', 'Headquarters: ');
+      bullet(doc, 'Delta State, Nigeria', 'Headquarters: ');
       bullet(doc, 'Enterprise Productivity & Digital Communications', 'Primary Sector: ');
       bullet(doc, 'SaaS Subscriptions, API Licenses, and Sponsored Feed Advertisements', 'Revenue Model: ');
       bullet(doc, 'partnerships@notesstandard.com', 'Contact Email: ');
@@ -1345,7 +1345,7 @@ const pages = [
       bullet(doc, 'partnerships@notesstandard.com', 'Partnership Inquiries: ');
       bullet(doc, 'tech-integration@notesstandard.com', 'Technical API Team: ');
       bullet(doc, 'https://notesstandard.com/partnership', 'Official Partnership Portal: ');
-      bullet(doc, 'Lagos, Nigeria', 'Corporate Office: ');
+      bullet(doc, 'Delta State, Nigeria', 'Corporate Office: ');
       
       doc.moveDown(2);
       doc.rect(50, doc.y, 495, 60).fill(LIGHT_GREY);
