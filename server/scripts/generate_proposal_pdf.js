@@ -154,30 +154,194 @@ function bullet(doc, text, boldPrefix = '') {
   doc.moveDown(0.4);
 }
 
-// Screenshot Placeholder box
+// Screenshot Placeholder box with dynamic high-fidelity vector UI drawings
 function drawScreenshotPlaceholder(doc, labelText) {
   doc.save();
   const startY = doc.y + 10;
   
-  // Correctly separate fill and stroke to prevent path consumption bugs
-  doc.rect(50, startY, 495, 140).fill(LIGHT_GREY);
-  doc.rect(50, startY, 495, 140).stroke(GREY);
-     
-  // Inner image icon
-  doc.rect(275, startY + 35, 45, 30).lineWidth(1).stroke(GREY);
-  doc.circle(287, startY + 45, 4).stroke(GREY);
-  doc.moveTo(275, startY + 65).lineTo(290, startY + 50).lineTo(300, startY + 58).lineTo(310, startY + 45).lineTo(320, startY + 65).stroke(GREY);
+  // Draw simulated application window border & background
+  doc.rect(50, startY, 495, 140).fill(WHITE);
+  doc.rect(50, startY, 495, 140).lineWidth(0.5).stroke(GREY);
   
-  doc.fillColor(GREY)
-     .font('Helvetica-Bold')
-     .fontSize(10)
-     .text(`Screenshot Placeholder: ${labelText}`, 50, startY + 80, { align: 'center', width: 495 });
-     
-  doc.fillColor(GREY)
-     .font('Helvetica-Oblique')
-     .fontSize(8)
-     .text('(Will display high-resolution application screen mockups in final render)', 50, startY + 95, { align: 'center', width: 495 });
-     
+  // Header bar of the simulated application window
+  doc.rect(50, startY, 495, 20).fill(NAVY);
+  // Red close, yellow minimize, green maximize dots (Mac style window)
+  doc.circle(60, startY + 10, 3).fill(RED);
+  doc.circle(70, startY + 10, 3).fill('#FFCC00');
+  doc.circle(80, startY + 10, 3).fill('#00CC00');
+  // App Title text
+  doc.fillColor(WHITE).font('Helvetica-Bold').fontSize(7.5).text(labelText, 95, startY + 6.5);
+  
+  // Draw layout mockups depending on label type
+  const lowerLabel = labelText.toLowerCase();
+  
+  if (lowerLabel.includes('chat') || lowerLabel.includes('message')) {
+    // ─── CHAT INTERFACE MOCKUP ───
+    // Sidebar
+    doc.rect(50, startY + 20, 100, 120).fill(LIGHT_GREY);
+    doc.moveTo(150, startY + 20).lineTo(150, startY + 140).lineWidth(0.5).stroke(GREY);
+    // Sidebar list items (avatar + lines)
+    for (let i = 0; i < 4; i++) {
+      const iy = startY + 25 + (i * 25);
+      doc.circle(65, iy + 10, 8).fill(NAVY);
+      doc.rect(78, iy + 6, 60, 4).fill(GREY);
+      doc.rect(78, iy + 13, 40, 3).fill(GREY);
+      doc.moveTo(55, iy + 22).lineTo(145, iy + 22).lineWidth(0.2).stroke(GREY);
+    }
+    // Main chat feed area
+    doc.rect(150, startY + 20, 345, 120).fill(WHITE);
+    // Chat bubbles
+    // Left bubble (received)
+    doc.rect(160, startY + 30, 180, 22).fill(LIGHT_GREY);
+    doc.rect(170, startY + 36, 150, 4).fill(DARK_TEXT);
+    doc.rect(170, startY + 43, 100, 3).fill(DARK_TEXT);
+    // Right bubble (sent)
+    doc.rect(340, startY + 60, 145, 22).fill(RED);
+    doc.rect(350, startY + 66, 120, 4).fill(WHITE);
+    doc.rect(350, startY + 73, 80, 3).fill(WHITE);
+    // Left bubble 2
+    doc.rect(160, startY + 90, 160, 22).fill(LIGHT_GREY);
+    doc.rect(170, startY + 96, 140, 4).fill(DARK_TEXT);
+    doc.rect(170, startY + 103, 70, 3).fill(DARK_TEXT);
+    // Bottom input bar
+    doc.rect(150, startY + 120, 345, 20).fill(LIGHT_GREY);
+    doc.moveTo(150, startY + 120).lineTo(495, startY + 120).lineWidth(0.5).stroke(GREY);
+    doc.rect(160, startY + 124, 280, 12).fill(WHITE);
+    doc.rect(165, startY + 128, 60, 4).fill(GREY);
+    doc.rect(450, startY + 124, 35, 12).fill(NAVY);
+    
+  } else if (lowerLabel.includes('dashboard') || lowerLabel.includes('chart') || lowerLabel.includes('timeline') || lowerLabel.includes('roadmap')) {
+    // ─── ANALYTICS / CHART MOCKUP ───
+    // Left side filters panel
+    doc.rect(50, startY + 20, 80, 120).fill(LIGHT_GREY);
+    doc.moveTo(130, startY + 20).lineTo(130, startY + 140).lineWidth(0.5).stroke(GREY);
+    for (let i = 0; i < 3; i++) {
+      doc.rect(58, startY + 30 + (i * 20), 64, 10).fill(WHITE);
+      doc.rect(64, startY + 33 + (i * 20), 40, 4).fill(NAVY);
+    }
+    // Main chart area
+    // Axes
+    doc.moveTo(150, startY + 30).lineTo(150, startY + 120).lineTo(470, startY + 120).lineWidth(1).stroke(GREY);
+    // Grid lines
+    for (let i = 0; i < 4; i++) {
+      const gy = startY + 30 + (i * 30);
+      doc.moveTo(150, gy).lineTo(470, gy).lineWidth(0.3).stroke(GREY);
+    }
+    // Line chart path (Navy)
+    doc.moveTo(150, startY + 100)
+       .lineTo(200, startY + 90)
+       .lineTo(250, startY + 60)
+       .lineTo(300, startY + 80)
+       .lineTo(350, startY + 45)
+       .lineTo(400, startY + 70)
+       .lineTo(450, startY + 35)
+       .lineWidth(2)
+       .stroke(NAVY);
+    // Area fill below chart line
+    doc.moveTo(150, startY + 120)
+       .lineTo(150, startY + 100)
+       .lineTo(200, startY + 90)
+       .lineTo(250, startY + 60)
+       .lineTo(300, startY + 80)
+       .lineTo(350, startY + 45)
+       .lineTo(400, startY + 70)
+       .lineTo(450, startY + 35)
+       .lineTo(450, startY + 120)
+       .closePath()
+       .fillColor(NAVY).opacity(0.15).fill();
+    doc.opacity(1.0); // Reset opacity
+    // Key legend
+    doc.circle(160, startY + 130, 4).fill(NAVY);
+    doc.fillColor(DARK_TEXT).font('Helvetica').fontSize(6.5).text('Subscribers', 170, startY + 127.5);
+    doc.circle(230, startY + 130, 4).fill(RED);
+    doc.text('Transactions (x10)', 240, startY + 127.5);
+    
+  } else if (lowerLabel.includes('editor') || lowerLabel.includes('workspace') || lowerLabel.includes('notes')) {
+    // ─── DOCUMENT WORKSPACE MOCKUP ───
+    // Directory Tree Left Panel
+    doc.rect(50, startY + 20, 110, 120).fill(LIGHT_GREY);
+    doc.moveTo(160, startY + 20).lineTo(160, startY + 140).lineWidth(0.5).stroke(GREY);
+    for (let i = 0; i < 5; i++) {
+      const ty = startY + 28 + (i * 18);
+      // Small folder/file icon
+      doc.rect(60, ty + 1, 10, 8).fill(NAVY);
+      doc.rect(75, ty + 3, 60, 4).fill(GREY);
+    }
+    // Document workspace text body
+    doc.rect(160, startY + 20, 335, 120).fill(WHITE);
+    doc.rect(180, startY + 35, 200, 10).fill(NAVY); // Document Title
+    
+    // Formatting toolbar
+    doc.rect(160, startY + 20, 335, 12).fill(LIGHT_GREY);
+    doc.moveTo(160, startY + 32).lineTo(495, startY + 32).lineWidth(0.5).stroke(GREY);
+    for (let i = 0; i < 5; i++) {
+      doc.rect(170 + (i * 20), startY + 22, 14, 8).fill(WHITE);
+    }
+    
+    // Text body lines
+    for (let i = 0; i < 6; i++) {
+      doc.rect(180, startY + 55 + (i * 12), i === 5 ? 180 : 280, 4).fill(DARK_TEXT);
+    }
+    
+  } else if (lowerLabel.includes('invoice') || lowerLabel.includes('checkout') || lowerLabel.includes('billing') || lowerLabel.includes('receipt') || lowerLabel.includes('ledger')) {
+    // ─── CHECKOUT / LEDGER MOCKUP ───
+    // Checkout Card/Ledger Box
+    doc.rect(50, startY + 20, 495, 120).fill(LIGHT_GREY);
+    
+    // Virtual payment card mockup
+    doc.rect(70, startY + 35, 140, 85).fill(NAVY);
+    doc.fillColor(WHITE).font('Helvetica-Bold').fontSize(6).text('NOTESTANDARD CREDIT LEDGER', 80, startY + 45);
+    doc.rect(80, startY + 60, 20, 15).fill('#FFCC00'); // Chip
+    doc.font('Helvetica').fontSize(7.5).text('**** **** **** 8824', 80, startY + 85);
+    doc.fontSize(6).text('BALANCE: NGN 145,000.00', 80, startY + 98);
+    
+    // Billing form details (right side)
+    doc.rect(230, startY + 35, 240, 85).fill(WHITE);
+    doc.rect(230, startY + 35, 240, 85).lineWidth(0.5).stroke(GREY);
+    
+    doc.fillColor(NAVY).font('Helvetica-Bold').fontSize(8).text('Ledger Settlement Confirmation', 245, startY + 45);
+    doc.moveTo(245, startY + 56).lineTo(455, startY + 56).lineWidth(0.5).stroke(GREY);
+    
+    // Order info lines
+    doc.fillColor(DARK_TEXT).font('Helvetica').fontSize(6.5);
+    doc.text('Merchant Partner: NoteStandard Tech', 245, startY + 64);
+    doc.text('Description: Business Tier License', 245, startY + 74);
+    doc.text('Settlement Hub: Zenith Bank API v2', 245, startY + 84);
+    
+    doc.font('Helvetica-Bold').text('Amount Due: NGN 25,000.00', 245, startY + 96);
+    
+    // Pay button
+    doc.rect(380, startY + 93, 75, 16).fill(RED);
+    doc.fillColor(WHITE).font('Helvetica-Bold').fontSize(7).text('AUTHORIZE', 380, startY + 98, { width: 75, align: 'center' });
+    
+  } else if (lowerLabel.includes('log') || lowerLabel.includes('terminal') || lowerLabel.includes('security') || lowerLabel.includes('compliance')) {
+    // ─── TERMINAL/COMPLIANCE MOCKUP ───
+    doc.rect(50, startY + 20, 495, 120).fill('#1A1A1A'); // Black background
+    
+    doc.fillColor('#00FF00').font('Courier').fontSize(7); // Green monospace text
+    
+    const logs = [
+      'NST_SEC_KERN: Init Secure Session [AUTH_ROTATED] -- success',
+      'NST_COMPLIANCE: Check NDPR compliance hashes... Compliant.',
+      'NST_PAY_WEBHOOK: Received Zenith API callback event: REF_992384',
+      'NST_LEDGER_SYSTEM: Logged double-entry ledger event: +25,000 NGN',
+      'NST_REDIS_CACHE: Invalidated session JWT matching User_9924',
+      'NST_SOCKET_GATEWAY: Push event [LEDGER_UPDATE] to Client_9924',
+      'NST_SEC_KERN: Security Audit completed. Threat level: 0.00%'
+    ];
+    
+    for (let i = 0; i < logs.length; i++) {
+      doc.text(`> ${logs[i]}`, 65, startY + 30 + (i * 14));
+    }
+  } else {
+    // ─── DEFAULT MOCKUP ───
+    doc.rect(50, startY + 20, 495, 120).fill(LIGHT_GREY);
+    doc.fillColor(GREY)
+       .font('Helvetica-Bold')
+       .fontSize(10)
+       .text(`Screenshot Placeholder: ${labelText}`, 50, startY + 60, { align: 'center', width: 495 });
+  }
+  
   doc.restore();
   doc.x = 50; // Reset left margin cursor position
   doc.y = startY + 160;
@@ -859,6 +1023,34 @@ const pages = [
     }
   },
   
+  // ─── PAGE 15.5: NOTESTANDARD CURRENT OPERATIONAL STATUS ───
+  {
+    title: 'Current Operational Status',
+    render: (doc) => {
+      addSectionHeader(doc, '7.5', 'NoteStandard Current Operational Status');
+      doc.fillColor(DARK_TEXT).font('Helvetica').fontSize(10);
+      
+      doc.text('NoteStandard is a fully operational, live product with active user communications and documentation workspace sessions. To clarify our partnership requirements and technical scope, the matrix below details our current operational modules, implemented capabilities, and proposed integration points with Zenith Bank.', { align: 'justify' });
+      
+      doc.moveDown(1.5);
+      doc.font('Helvetica-Bold').fillColor(NAVY).text('Operational Status Matrix:');
+      doc.moveDown(0.5);
+      
+      const headers = ['Platform Module', 'Technical Status', 'Zenith Integration Role'];
+      const rows = [
+        ['User Authentication', 'Implemented & Live (JWT / Bcrypt / Redis)', 'None (Internal Security Gateway)'],
+        ['Real-time Messaging', 'Implemented & Live (Socket.io / Node.js)', 'None (Full-duplex Client Links)'],
+        ['Collaborative Notes', 'Implemented & Live (React Draft / PostgreSQL)', 'None (Relational Document Schemas)'],
+        ['Credit Ledger Engine', 'Implemented & Live (Internal Account Ledger)', 'None (Virtual Balance Tracking)'],
+        ['Subscription Billing', 'Implemented & Live (Billing Staging)', 'Proposed (Zenith Checkout SDK)'],
+        ['Payment Verification', 'Implemented & Live (Webhook Callback Staging)', 'Proposed (Zenith API Webhooks)'],
+        ['API Sandbox Testing', 'Requested from Zenith Bank', 'Staging & Sandbox Key Credentials']
+      ];
+      
+      drawTable(doc, doc.y, headers, rows, [140, 185, 170]);
+    }
+  },
+  
   // ─── PAGE 16: CURRENT PAYMENT FLOW (PAGE 1) ───
   {
     title: 'Current Payment Flow (1/2)',
@@ -969,10 +1161,10 @@ const pages = [
   {
     title: 'Subscription & Billing Flow',
     render: (doc) => {
-      addSectionHeader(doc, '11', 'Subscription & Billing Flow');
+      addSectionHeader(doc, '11', 'Subscription Lifecycle & Credit Ledger');
       doc.fillColor(DARK_TEXT).font('Helvetica').fontSize(10);
       
-      doc.text('NoteStandard manages subscription lifecycles using database ledgers. Rather than recalculating user permissions on every request, client privileges are governed by token states cached in Redis. When a subscription is renewed or modified:', { align: 'justify' });
+      doc.text('NoteStandard manages subscription lifecycles using database ledgers. NoteStandard does not store card information. Payment credentials are handled by the approved banking/payment gateway infrastructure. NoteStandard only receives verified transaction events through secure webhook communication. Rather than recalculating user permissions on every request, client privileges are governed by token states cached in Redis. When a subscription is renewed or modified:', { align: 'justify' });
       
       doc.moveDown(1.5);
       bullet(doc, 'The checkout gateway triggers a secure webhook event.', 'Step 1: Webhook Receipt — ');
@@ -982,17 +1174,17 @@ const pages = [
       bullet(doc, 'The client app receives a socket event and updates the workspace view.', 'Step 5: Client Interface Update — ');
       
       doc.moveDown(1);
-      doc.font('Helvetica-Bold').fillColor(NAVY).text('Digital Wallet & Internal Ledger Flow:');
+      doc.font('Helvetica-Bold').fillColor(NAVY).text('Internal Credit Ledger & Settlement Flow:');
       doc.moveDown(0.5);
-      doc.font('Helvetica').fillColor(DARK_TEXT).text('NoteStandard incorporates a digital wallet subsystem providing virtual ledger mappings for all active accounts. This wallet enables users to maintain an internal credit balance, funded directly via Zenith Bank cards or automated bank transfer webhooks. When a collaborative B2B invoice is approved within a workspace node, the transaction clears instantly from the buyer\'s wallet balance, logging a double-entry ledger event and settling funds directly to the merchant\'s corporate Zenith account.', { align: 'justify' });
+      doc.font('Helvetica').fillColor(DARK_TEXT).text('NoteStandard incorporates an internal account credit ledger subsystem providing virtual credit mappings for active accounts. This ledger enables users to maintain an internal credit balance, funded directly via Zenith Bank cards or automated bank transfer webhooks. When a collaborative B2B invoice is approved within a workspace node, the transaction clears instantly from the buyer\'s credit balance, logging a double-entry ledger event and settling funds directly to the merchant\'s corporate Zenith account.', { align: 'justify' });
       
       doc.moveDown(1);
       doc.font('Helvetica-Bold').fillColor(NAVY).text('Sponsored Feeds & Advertisement Billing:');
       doc.moveDown(0.5);
-      doc.font('Helvetica').fillColor(DARK_TEXT).text('NoteStandard supports targeted advertising campaigns directly within corporate and community feeds. Businesses can purchase sponsored post slots to launch advertising campaigns. The billing engine processes these advertising budgets via Zenith Bank’s API gateway or deducts them dynamically from the user\'s integrated wallet based on campaign metrics (e.g. cost-per-click or cost-per-impression), generating verified billing ledgers.', { align: 'justify' });
+      doc.font('Helvetica').fillColor(DARK_TEXT).text('NoteStandard supports targeted advertising campaigns directly within corporate and community feeds. Businesses can purchase sponsored post slots to launch advertising campaigns. The billing engine processes these advertising budgets via Zenith Bank’s API gateway or deducts them dynamically from the user\'s integrated credit ledger based on campaign metrics (e.g. cost-per-click or cost-per-impression), generating verified billing ledgers.', { align: 'justify' });
       
       doc.moveDown(1);
-      drawScreenshotPlaceholder(doc, 'Subscription State Machine & Wallet Ledger Tables');
+      drawScreenshotPlaceholder(doc, 'Subscription State Machine & Credit Ledger Tables');
     }
   },
   
@@ -1036,7 +1228,7 @@ const pages = [
       doc.text('The NoteStandard security framework protects user and transaction data at every level of the application stack. All communication with our servers is encrypted in transit using TLS 1.3, and database systems encrypt sensitive values at rest using AES-256.', { align: 'justify' });
       
       doc.moveDown(1);
-      doc.text('User authentication uses JSON Web Tokens (JWT) signed with rotating keys. Sockets and API endpoints require token checks before processing requests. Granular access controls are enforced at the database level, preventing users from accessing unauthorized documentation, messages, or payment data.', { align: 'justify' });
+      doc.text('User authentication uses JSON Web Tokens (JWT) signed with rotating keys. Sockets and API endpoints require token checks before processing requests. NoteStandard does not store card information. Payment credentials are handled by the approved banking/payment gateway infrastructure. NoteStandard only receives verified transaction events through secure webhook communication. Granular access controls are enforced at the database level, preventing users from accessing unauthorized documentation, messages, or payment data.', { align: 'justify' });
       
       doc.moveDown(1.5);
       doc.font('Helvetica-Bold').fillColor(NAVY).text('Our Security Objectives:');
@@ -1193,6 +1385,26 @@ const pages = [
       ];
       
       drawTable(doc, doc.y, headers, rows, [120, 220, 155]);
+    }
+  },
+  
+  // ─── PAGE 31.5: REQUESTED SUPPORT FROM ZENITH BANK ───
+  {
+    title: 'Requested Support From Zenith Bank',
+    render: (doc) => {
+      addSectionHeader(doc, '16.5', 'Requested Support From Zenith Bank');
+      doc.fillColor(DARK_TEXT).font('Helvetica').fontSize(10);
+      
+      doc.text('NoteStandard requires specific technical and operational support from Zenith Bank Plc to execute this integration plan. This summary provides a clear list of our requests to help guide our upcoming engineering and compliance discussions.', { align: 'justify' });
+      
+      doc.moveDown(1.5);
+      doc.font('Helvetica-Bold').fillColor(NAVY).text('Requested Support Checklist:');
+      doc.moveDown(0.5);
+      bullet(doc, 'Onboarding corporate banking lines, operating accounts, and treasury services.', '1. Corporate Onboarding: ');
+      bullet(doc, 'Providing sandbox testing keys and developer staging documentation for Zenith Checkout.', '2. Merchant Gateway Sandbox: ');
+      bullet(doc, 'Documenting webhook validation protocols, payload signatures, and SSL certificates.', '3. API Verification Specs: ');
+      bullet(doc, 'Direct engineering support channel (Slack, Microsoft Teams, or email) for API integration issues.', '4. Developer Support: ');
+      bullet(doc, 'Documenting settlement timelines, transaction limits, and bank statement export formats.', '5. Clearing & Reconciliation: ');
     }
   },
   
