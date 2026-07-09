@@ -16,27 +16,31 @@ const logger = require('../utils/logger');
 const STATUS_EXPIRY_HOURS = parseInt(process.env.STATUS_EXPIRY_HOURS || '24');
 
 // ── Privacy helper ──────────────────────────────────────────────────────────
-async function canViewStatus(status, viewerId) {
+async function canViewStatus(status, viewerId, peerIdsSet = null) {
   if (status.user_id === viewerId) return true;
   if (status.privacy === 'everyone') return true;
   if (status.privacy === 'private') return false;
 
-  // Check if they share a conversation (chat peer)
-  const { data: sharedConv } = await supabase
-    .from('conversation_members')
-    .select('conversation_id')
-    .eq('user_id', viewerId)
-    .in('conversation_id',
-      (await supabase
-        .from('conversation_members')
-        .select('conversation_id')
-        .eq('user_id', status.user_id)
-      ).data?.map(r => r.conversation_id) || []
-    )
-    .limit(1)
-    .maybeSingle();
-
-  const isPeer = !!sharedConv;
+  let isPeer = false;
+  if (peerIdsSet) {
+    isPeer = peerIdsSet.has(status.user_id);
+  } else {
+    // Check if they share a conversation (chat peer)
+    const { data: sharedConv } = await supabase
+      .from('conversation_members')
+      .select('conversation_id')
+      .eq('user_id', viewerId)
+      .in('conversation_id',
+        (await supabase
+          .from('conversation_members')
+          .select('conversation_id')
+          .eq('user_id', status.user_id)
+        ).data?.map(r => r.conversation_id) || []
+      )
+      .limit(1)
+      .maybeSingle();
+    isPeer = !!sharedConv;
+  }
 
   if (status.privacy === 'contacts') return isPeer;
 
@@ -122,9 +126,10 @@ router.get('/feed', requireAuth, async (req, res) => {
     }
 
     // Group by user, apply privacy filter
+    const peerIdsSet = new Set(peerIds);
     const grouped = {};
     for (const status of (statuses || [])) {
-      if (!await canViewStatus(status, viewerId)) continue;
+      if (!await canViewStatus(status, viewerId, peerIdsSet)) continue;
       const profile = profileMap[status.user_id] || {};
       const uid = status.user_id;
       const isMuted = mutedSet.has(uid);
