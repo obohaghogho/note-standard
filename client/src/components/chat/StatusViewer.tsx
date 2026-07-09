@@ -402,6 +402,8 @@ export default function StatusViewer() {
               <div className="flex gap-2 items-center bg-black/40 backdrop-blur-md rounded-full px-4 py-2 border border-white/10 focus-within:border-white/40 focus-within:bg-black/60 transition-colors">
                 <input
                   type="text"
+                  id="status-reply-input"
+                  name="status-reply-input"
                   placeholder="Reply..."
                   className="flex-1 bg-transparent text-white placeholder-white/50 focus:outline-none text-sm"
                   value={replyText}

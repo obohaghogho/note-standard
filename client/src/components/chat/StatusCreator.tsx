@@ -501,6 +501,8 @@ export default function StatusCreator() {
                   <textarea
                     ref={textareaRef}
                     autoFocus
+                    id="status-text-input"
+                    name="status-text-input"
                     placeholder="Type a status"
                     value={textContent}
                     onChange={e => setTextContent(e.target.value)}
@@ -563,6 +565,8 @@ export default function StatusCreator() {
               )}
               <input 
                 type="file" 
+                id="status-media-file"
+                name="status-media-file"
                 ref={fileInputRef} 
                 onChange={handleFileSelect} 
                 accept="image/*,video/*" 
@@ -570,6 +574,8 @@ export default function StatusCreator() {
               />
               <input
                 type="text"
+                id="status-media-caption"
+                name="status-media-caption"
                 placeholder="Add a caption..."
                 value={caption}
                 onChange={e => setCaption(e.target.value)}
@@ -587,6 +593,8 @@ export default function StatusCreator() {
                 
                 <input
                   type="url"
+                  id="status-link-url"
+                  name="status-link-url"
                   placeholder="https://example.com"
                   value={linkUrl}
                   onChange={e => setLinkUrl(e.target.value)}
@@ -595,6 +603,8 @@ export default function StatusCreator() {
 
                 <input
                   type="text"
+                  id="status-link-caption"
+                  name="status-link-caption"
                   placeholder="Optional caption..."
                   value={caption}
                   onChange={e => setCaption(e.target.value)}
@@ -649,6 +659,8 @@ export default function StatusCreator() {
             <div className="p-3 border-b border-gray-800">
               <input
                 type="text"
+                id="status-music-search"
+                name="status-music-search"
                 placeholder="Search music, artists..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
@@ -724,6 +736,8 @@ export default function StatusCreator() {
               </button>
               <input 
                 type="file" 
+                id="status-music-file"
+                name="status-music-file"
                 ref={audioInputRef} 
                 onChange={handleAudioSelect} 
                 accept="audio/*" 
