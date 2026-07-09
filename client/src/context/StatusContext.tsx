@@ -6,6 +6,7 @@ import React, { createContext, useContext, useState, useCallback, useRef, useEff
 import api from '../api/axiosInstance';
 import toast from 'react-hot-toast';
 import { useSocket } from './SocketContext';
+import { useAuth } from './AuthContext';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export interface StatusItem {
@@ -100,11 +101,20 @@ export const useStatus = () => {
 };
 
 export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
   const [feed, setFeed] = useState<StatusFeedEntry[]>([]);
   const [myStatuses, setMyStatuses] = useState<StatusItem[]>([]);
   const [viewerOpen, setViewerOpen] = useState<ViewerState | null>(null);
   const [creatorOpen, setCreatorOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Reset state when user changes or logs out
+  useEffect(() => {
+    setFeed([]);
+    setMyStatuses([]);
+    setViewerOpen(null);
+    setCreatorOpen(false);
+  }, [user?.id]);
 
   const fetchFeed = useCallback(async () => {
     setLoading(true);

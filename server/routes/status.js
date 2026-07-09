@@ -21,22 +21,14 @@ async function canViewStatus(status, viewerId) {
   if (status.privacy === 'everyone') return true;
   if (status.privacy === 'private') return false;
 
-  // Check if viewer is a contact or shares a conversation with the status owner
-  const { data: contact } = await supabase
-    .from('contacts')
-    .select('id')
-    .eq('user_id', viewerId)
-    .eq('contact_id', status.user_id)
-    .maybeSingle();
-
   // Check if they share a conversation (chat peer)
   const { data: sharedConv } = await supabase
-    .from('conversation_participants')
+    .from('conversation_members')
     .select('conversation_id')
     .eq('user_id', viewerId)
     .in('conversation_id',
       (await supabase
-        .from('conversation_participants')
+        .from('conversation_members')
         .select('conversation_id')
         .eq('user_id', status.user_id)
       ).data?.map(r => r.conversation_id) || []
@@ -44,10 +36,9 @@ async function canViewStatus(status, viewerId) {
     .limit(1)
     .maybeSingle();
 
-  const isContact = !!contact;
   const isPeer = !!sharedConv;
 
-  if (status.privacy === 'contacts') return isContact || isPeer;
+  if (status.privacy === 'contacts') return isPeer;
 
   const { data: rule } = await supabase
     .from('status_privacy_rules')
@@ -56,7 +47,7 @@ async function canViewStatus(status, viewerId) {
     .eq('user_id', viewerId)
     .maybeSingle();
 
-  if (status.privacy === 'except') return (isContact || isPeer) && !rule;
+  if (status.privacy === 'except') return isPeer && !rule;
   if (status.privacy === 'only') return !!rule;
   return false;
 }
@@ -67,14 +58,9 @@ router.get('/feed', requireAuth, async (req, res) => {
     const viewerId = req.user.id;
     const now = new Date().toISOString();
 
-    // Gather peer user IDs (contacts + conversation peers)
-    const { data: contacts } = await supabase
-      .from('contacts')
-      .select('contact_id')
-      .eq('user_id', viewerId);
-
+    // Gather peer user IDs (conversation peers)
     const { data: myConvs } = await supabase
-      .from('conversation_participants')
+      .from('conversation_members')
       .select('conversation_id')
       .eq('user_id', viewerId);
 
@@ -82,15 +68,14 @@ router.get('/feed', requireAuth, async (req, res) => {
     let peerIds = [];
     if (convIds.length > 0) {
       const { data: peers } = await supabase
-        .from('conversation_participants')
+        .from('conversation_members')
         .select('user_id')
         .in('conversation_id', convIds)
         .neq('user_id', viewerId);
       peerIds = (peers || []).map(r => r.user_id);
     }
 
-    const contactIds = (contacts || []).map(r => r.contact_id);
-    const userIds = [...new Set([viewerId, ...contactIds, ...peerIds])];
+    const userIds = [...new Set([viewerId, ...peerIds])];
 
     // Get muted users
     const { data: mutes } = await supabase
@@ -177,7 +162,7 @@ router.get('/feed', requireAuth, async (req, res) => {
       return 0;
     });
 
-    res.set('Cache-Control', 'private, max-age=30'); // 30s browser cache
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.json(feed);
   } catch (err) {
     logger.error('[Status] Feed error', { error: err.message });
@@ -351,14 +336,14 @@ router.post('/',
 
       // Notify all conversation peers via realtimeService
       const { data: myConvs } = await supabase
-        .from('conversation_participants')
+        .from('conversation_members')
         .select('conversation_id')
         .eq('user_id', req.user.id);
 
       const convIds = (myConvs || []).map(r => r.conversation_id);
       if (convIds.length > 0) {
         const { data: peers } = await supabase
-          .from('conversation_participants')
+          .from('conversation_members')
           .select('user_id')
           .in('conversation_id', convIds)
           .neq('user_id', req.user.id);
@@ -482,13 +467,13 @@ router.post('/:id/reply', requireAuth, async (req, res) => {
 
     // Find or create direct conversation
     const { data: myConvs } = await supabase
-      .from('conversation_participants').select('conversation_id').eq('user_id', req.user.id);
+      .from('conversation_members').select('conversation_id').eq('user_id', req.user.id);
     const myConvIds = (myConvs || []).map(r => r.conversation_id);
 
     let convId = null;
     if (myConvIds.length > 0) {
       const { data: shared } = await supabase
-        .from('conversation_participants')
+        .from('conversation_members')
         .select('conversation_id')
         .in('conversation_id', myConvIds)
         .eq('user_id', status.user_id)
@@ -500,7 +485,7 @@ router.post('/:id/reply', requireAuth, async (req, res) => {
       const { data: newConv } = await supabase
         .from('conversations').insert({ type: 'direct', created_by: req.user.id }).select('id').single();
       convId = newConv.id;
-      await supabase.from('conversation_participants').insert([
+      await supabase.from('conversation_members').insert([
         { conversation_id: convId, user_id: req.user.id },
         { conversation_id: convId, user_id: status.user_id },
       ]);
