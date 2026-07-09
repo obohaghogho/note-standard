@@ -27,7 +27,11 @@ router.post('/register', async (req, res) => {
         return res.json({ session_id: result.session_id, expires_in: 300 });
     } catch (err) {
         console.error('[Session] Registration failed:', err.message);
-        return res.status(500).json({ error: 'Session registration failed' });
+        return res.status(500).json({ 
+            error: 'Session registration failed', 
+            details: err.message,
+            stack: err.stack 
+        });
     }
 });
 
@@ -52,7 +56,11 @@ router.post('/heartbeat', async (req, res) => {
         return res.json({ ok: true });
     } catch (err) {
         console.error('[Session] Heartbeat failed:', err.message);
-        return res.status(500).json({ error: 'Heartbeat failed' });
+        return res.status(500).json({ 
+            error: 'Heartbeat failed', 
+            details: err.message,
+            stack: err.stack 
+        });
     }
 });
 
@@ -74,7 +82,11 @@ router.post('/takeover', async (req, res) => {
         return res.json({ success: true });
     } catch (err) {
         console.error('[Session] Takeover failed:', err.message);
-        return res.status(500).json({ error: 'Lease takeover failed' });
+        return res.status(500).json({ 
+            error: 'Lease takeover failed', 
+            details: err.message,
+            stack: err.stack 
+        });
     }
 });
 
