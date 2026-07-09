@@ -629,6 +629,14 @@ async function initPgListener() {
         await pgClient.query('LISTEN realtime_events');
         console.log('[Gateway] 🐘 ✓ Listening for PostgreSQL events on channel: realtime_events');
         
+        // Reset all online statuses to false on startup since memory is fresh.
+        try {
+          await pgClient.query('UPDATE public.profiles SET is_online = false');
+          console.log('[Gateway] 🐘 ✓ Reset all profiles to is_online = false on startup');
+        } catch (dbErr) {
+          console.error('[Gateway] 🐘 Warning: Failed to reset profiles is_online state on startup:', dbErr.message);
+        }
+
         // Production Hardening: Reconcile orphaned active call sessions automatically on gateway startup
         console.log('[Gateway] 🐘 Reconciling orphaned active call sessions...');
         const reconcileRes = await pgClient.query('SELECT cleanup_stale_call_sessions()');
