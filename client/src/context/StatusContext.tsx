@@ -131,14 +131,15 @@ export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Auto-fetch/reset when user logs in or out
   useEffect(() => {
+    // Instantly wipe old session status data to prevent temporary UI leaks while fetching
+    setFeed([]);
+    setMyStatuses([]);
+    setViewerOpen(null);
+    setCreatorOpen(false);
+
     if (user?.id) {
       fetchFeed();
       fetchMyStatuses();
-    } else {
-      setFeed([]);
-      setMyStatuses([]);
-      setViewerOpen(null);
-      setCreatorOpen(false);
     }
   }, [user?.id, fetchFeed, fetchMyStatuses]);
 
