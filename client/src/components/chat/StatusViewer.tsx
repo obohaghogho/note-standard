@@ -3,12 +3,20 @@ import { useStatus } from '../../context/StatusContext';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
 import { formatDistanceToNowStrict } from 'date-fns';
-import { X, Play, Pause, Eye, Trash2, Send } from 'lucide-react';
+import { X, Play, Pause, Eye, Trash2, Send, Music } from 'lucide-react';
 import toast from 'react-hot-toast';
-
+import { parseFormattedText } from '../../lib/formatParser';
 
 const QUICK_REACTIONS = ['😂', '😍', '😢', '👏', '🔥', '🎉'];
 const STATUS_DURATION = 5000;
+
+const FONT_PRESETS = [
+  { id: 'sans', name: 'Default', family: `system-ui, -apple-system, sans-serif` },
+  { id: 'serif', name: 'Serif', family: `Georgia, serif` },
+  { id: 'cursive', name: 'Cursive', family: `"Comic Sans MS", cursive` },
+  { id: 'mono', name: 'Mono', family: `monospace` },
+  { id: 'impact', name: 'Impact', family: `'Impact', sans-serif` },
+];
 
 export default function StatusViewer() {
   const { feed, myStatuses, viewerOpen, closeViewer, nextStatus, prevStatus, markViewed, react, reply, deleteStatus } = useStatus();
@@ -24,7 +32,10 @@ export default function StatusViewer() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const elapsedRef = useRef(0);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  
+  // Single ref for both video and audio status nodes
+  const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement>(null);
+  const musicAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const { userIndex, statusIndex } = viewerOpen || {};
   
@@ -41,20 +52,44 @@ export default function StatusViewer() {
   const status = userEntry && statusIndex !== undefined ? userEntry.statuses[statusIndex] : null;
   const isOwn = status?.user_id === user?.id;
 
+  // Sync background music with play/pause state
+  useEffect(() => {
+    const audio = musicAudioRef.current;
+    if (!audio) return;
+    
+    // Safety check: Pause background music if status is paused, closed, OR is video/audio type status
+    const shouldPlayMusic = status && !paused && status.bg_music_url && status.type !== 'video' && status.type !== 'audio';
+    
+    if (shouldPlayMusic) {
+      audio.play().catch(() => {});
+    } else {
+      audio.pause();
+    }
+  }, [status?.id, paused, status?.type, status?.bg_music_url]);
+
+  // Clean up audio on unmount
+  useEffect(() => {
+    return () => {
+      if (musicAudioRef.current) {
+        musicAudioRef.current.pause();
+      }
+    };
+  }, []);
+
   // Mark viewed on open
   useEffect(() => {
-    if (status && !status.has_viewed) {
+    if (status && !status.has_viewed && !isOwn) {
       markViewed(status.id);
     }
     elapsedRef.current = 0;
     setProgress(0);
     setReplyText('');
     setShowViewers(false);
-  }, [status, markViewed]);
+  }, [status?.id, markViewed, isOwn]);
 
   const getDuration = useCallback(() => {
-    if (status?.type === 'video' && videoRef.current?.duration) {
-      return videoRef.current.duration * 1000;
+    if ((status?.type === 'video' || status?.type === 'audio') && mediaRef.current?.duration) {
+      return mediaRef.current.duration * 1000;
     }
     return STATUS_DURATION;
   }, [status?.type]);
@@ -85,9 +120,9 @@ export default function StatusViewer() {
   }, []);
 
   const handleTimeUpdate = () => {
-    if (status?.type === 'video' && videoRef.current) {
-      const current = videoRef.current.currentTime;
-      const duration = videoRef.current.duration || 1;
+    if ((status?.type === 'video' || status?.type === 'audio') && mediaRef.current) {
+      const current = mediaRef.current.currentTime;
+      const duration = mediaRef.current.duration || 1;
       setProgress((current / duration) * 100);
     }
   };
@@ -95,14 +130,14 @@ export default function StatusViewer() {
   useEffect(() => {
     if (!status) return;
 
-    if (status.type === 'video') {
+    if (status.type === 'video' || status.type === 'audio') {
       stopTimer();
-      const video = videoRef.current;
-      if (video) {
+      const media = mediaRef.current;
+      if (media) {
         if (paused) {
-          video.pause();
+          media.pause();
         } else {
-          video.play().catch(() => {});
+          media.play().catch(() => {});
         }
       }
     } else {
@@ -114,14 +149,17 @@ export default function StatusViewer() {
     }
 
     return () => stopTimer();
-  }, [paused, status, startTimer, stopTimer]);
+  }, [paused, status?.id, startTimer, stopTimer]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'ArrowRight') nextStatus();
       if (e.key === 'ArrowLeft') prevStatus();
       if (e.key === 'Escape') closeViewer();
-      if (e.key === ' ') setPaused(p => !p);
+      if (e.key === ' ') {
+        e.preventDefault();
+        setPaused(p => !p);
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -169,6 +207,17 @@ export default function StatusViewer() {
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-xl flex flex-col md:flex-row items-center justify-center">
+      
+      {/* Background music playing node */}
+      {status.bg_music_url && (
+        <audio 
+          ref={musicAudioRef}
+          src={status.bg_music_url} 
+          loop
+          className="hidden"
+        />
+      )}
+
       <div className="w-full h-full md:w-[400px] md:h-[800px] md:max-h-[90vh] bg-black relative md:rounded-3xl overflow-hidden flex flex-col shadow-2xl">
         
         {/* Progress Bars */}
@@ -179,7 +228,7 @@ export default function StatusViewer() {
                 className="h-full bg-white rounded-full"
                 style={{
                   width: i < (statusIndex || 0) ? '100%' : i === statusIndex ? `${progress}%` : '0%',
-                  transitionDuration: i === statusIndex && !paused && status?.type !== 'video' ? '50ms' : '0ms'
+                  transitionDuration: i === statusIndex && !paused && status?.type !== 'video' && status?.type !== 'audio' ? '50ms' : '0ms'
                 }}
               />
             </div>
@@ -188,23 +237,28 @@ export default function StatusViewer() {
 
         {/* Header */}
         <div className="absolute top-4 left-0 right-0 px-4 flex items-center justify-between z-20">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <img 
               src={userEntry.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userEntry.user_id}`} 
               alt="Avatar" 
-              className="w-10 h-10 rounded-full border border-white/20 object-cover bg-gray-800"
+              className="w-10 h-10 rounded-full border border-white/20 object-cover bg-gray-800 shrink-0"
             />
-            <div>
-              <div className="text-white font-semibold text-sm shadow-black/50 drop-shadow-md">
+            <div className="min-w-0">
+              <div className="text-white font-semibold text-sm shadow-black/50 drop-shadow-md truncate">
                 {userEntry.display_name}
               </div>
-              <div className="text-white/70 text-xs shadow-black/50 drop-shadow-md">
-                {formatDistanceToNowStrict(new Date(status.created_at), { addSuffix: true })}
+              <div className="text-white/70 text-xs shadow-black/50 drop-shadow-md flex items-center gap-1.5 mt-0.5">
+                <span>{formatDistanceToNowStrict(new Date(status.created_at), { addSuffix: true })}</span>
+                {status.bg_music_url && (
+                  <span className="bg-blue-600/30 text-blue-300 border border-blue-500/20 text-[9px] px-2 py-0.5 rounded-full truncate max-w-[120px] flex items-center gap-1" title={status.bg_music_title}>
+                    <Music size={10} /> {status.bg_music_title}
+                  </span>
+                )}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 shrink-0">
             <button onClick={() => setPaused(p => !p)} className="text-white drop-shadow-md active:scale-90 transition-transform">
               {paused ? <Play size={20} fill="currentColor" /> : <Pause size={20} fill="currentColor" />}
             </button>
@@ -217,20 +271,19 @@ export default function StatusViewer() {
         {/* Content Area */}
         <div 
           className="flex-1 relative w-full h-full flex items-center justify-center select-none"
-          style={bgStyle}
+          style={status.type === 'text' ? bgStyle : undefined}
         >
           {status.type === 'text' && (
             <div 
-              className="w-full px-6 flex items-center justify-center text-center text-white font-medium break-words whitespace-pre-wrap" 
+              className="w-full px-6 flex items-center justify-center text-white font-medium break-words overflow-y-auto max-h-full" 
               style={{ 
-                fontFamily: status.font_style || 'system-ui, sans-serif', 
+                fontFamily: FONT_PRESETS.find(f => f.id === status.font_style)?.family || 'system-ui, sans-serif', 
                 fontSize: `${status.font_size || 28}px`,
-                lineHeight: '1.3',
-                maxHeight: '100%',
-                overflowY: 'auto'
+                textAlign: (status.text_align || 'center') as 'center' | 'left' | 'right',
+                lineHeight: '1.3'
               }}
             >
-              {status.content}
+              {parseFormattedText(status.content || '')}
             </div>
           )}
 
@@ -240,7 +293,7 @@ export default function StatusViewer() {
 
           {status.type === 'video' && status.media_url && (
             <video 
-              ref={videoRef}
+              ref={mediaRef as React.RefObject<HTMLVideoElement>}
               src={status.media_url} 
               className="w-full h-full object-contain"
               playsInline
@@ -250,6 +303,50 @@ export default function StatusViewer() {
                 nextStatus();
               }}
             />
+          )}
+
+          {status.type === 'audio' && status.media_url && (
+            <div className="flex flex-col items-center gap-4 bg-gray-900/80 border border-gray-800 rounded-3xl p-8 max-w-[300px]">
+              <div className="w-16 h-16 rounded-full bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                <Music size={32} className={paused ? '' : 'animate-spin'} style={{ animationDuration: '6s' }} />
+              </div>
+              <audio 
+                ref={mediaRef as React.RefObject<HTMLAudioElement>}
+                src={status.media_url}
+                className="w-full mt-2"
+                onTimeUpdate={handleTimeUpdate}
+                onEnded={() => {
+                  elapsedRef.current = 0;
+                  nextStatus();
+                }}
+              />
+              {status.content && (
+                <p className="text-gray-300 text-sm text-center font-medium mt-2 leading-relaxed max-h-[100px] overflow-y-auto no-scrollbar">
+                  {status.content}
+                </p>
+              )}
+            </div>
+          )}
+
+          {status.type === 'link' && status.link_url && (
+            <div className="flex flex-col items-center gap-4 bg-indigo-950/40 border border-indigo-500/20 rounded-3xl p-6 max-w-[300px] text-center shadow-lg">
+              <div className="w-16 h-16 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+                <Send size={28} />
+              </div>
+              <a 
+                href={status.link_url} 
+                target="_blank" 
+                rel="noreferrer" 
+                className="text-blue-400 hover:text-blue-300 font-semibold text-base break-all hover:underline line-clamp-2"
+              >
+                {status.link_title || status.link_url}
+              </a>
+              {status.content && (
+                <p className="text-gray-300 text-xs leading-relaxed max-h-[80px] overflow-y-auto no-scrollbar">
+                  {status.content}
+                </p>
+              )}
+            </div>
           )}
 
           {/* Tap Zones */}

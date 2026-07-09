@@ -158,7 +158,14 @@ router.get('/feed', requireAuth, async (req, res) => {
       }
 
       if (!hasViewed && uid !== viewerId) grouped[uid].has_unviewed = true;
-      grouped[uid].statuses.push({ ...status, has_viewed: hasViewed });
+      const statusPayload = { ...status, has_viewed: hasViewed };
+      if (statusPayload.type !== 'link') {
+        statusPayload.bg_music_url = statusPayload.link_url;
+        statusPayload.bg_music_title = statusPayload.link_title;
+        statusPayload.link_url = null;
+        statusPayload.link_title = null;
+      }
+      grouped[uid].statuses.push(statusPayload);
     }
 
     // Sort: own first, then unviewed, then muted
@@ -224,7 +231,7 @@ router.get('/my', requireAuth, async (req, res) => {
         .eq('status_id', s.id)
         .neq('viewer_id', req.user.id);
 
-      return {
+      const enrichedStatus = {
         ...s,
         has_viewed: viewedSet.has(s.id),
         view_count: count || 0,
@@ -242,6 +249,15 @@ router.get('/my', requireAuth, async (req, res) => {
           emoji: r.emoji,
         })),
       };
+
+      if (enrichedStatus.type !== 'link') {
+        enrichedStatus.bg_music_url = enrichedStatus.link_url;
+        enrichedStatus.bg_music_title = enrichedStatus.link_title;
+        enrichedStatus.link_url = null;
+        enrichedStatus.link_title = null;
+      }
+
+      return enrichedStatus;
     }));
 
     res.json(enriched);
@@ -265,6 +281,7 @@ router.post('/',
         type, content, media_url, media_thumbnail, media_size, media_duration,
         bg_color, bg_gradient, font_style, font_size, text_align,
         link_url, link_title, link_description, link_image,
+        bg_music_url, bg_music_title,
         privacy = 'contacts', privacy_rules = [],
       } = req.body;
 
@@ -274,6 +291,9 @@ router.post('/',
         return res.status(400).json({ error: 'media_url required for this status type' });
 
       const expiresAt = new Date(Date.now() + STATUS_EXPIRY_HOURS * 3600 * 1000).toISOString();
+
+      const finalLinkUrl = type !== 'link' ? (bg_music_url || null) : (link_url || null);
+      const finalLinkTitle = type !== 'link' ? (bg_music_title || null) : (link_title || null);
 
       const { data: status, error } = await supabase
         .from('statuses')
@@ -289,8 +309,8 @@ router.post('/',
           font_style: font_style || 'inter',
           font_size: font_size || 24,
           text_align: text_align || 'center',
-          link_url: link_url || null,
-          link_title: link_title || null,
+          link_url: finalLinkUrl,
+          link_title: finalLinkTitle,
           link_description: link_description || null,
           link_image: link_image || null,
           privacy,
@@ -322,6 +342,13 @@ router.post('/',
         avatar_url: profile?.avatar_url,
       };
 
+      if (realtimePayload.type !== 'link') {
+        realtimePayload.bg_music_url = realtimePayload.link_url;
+        realtimePayload.bg_music_title = realtimePayload.link_title;
+        realtimePayload.link_url = null;
+        realtimePayload.link_title = null;
+      }
+
       // Notify all conversation peers via realtimeService
       const { data: myConvs } = await supabase
         .from('conversation_participants')
@@ -342,7 +369,15 @@ router.post('/',
         }
       }
 
-      res.status(201).json(status);
+      const clientStatus = { ...status };
+      if (clientStatus.type !== 'link') {
+        clientStatus.bg_music_url = clientStatus.link_url;
+        clientStatus.bg_music_title = clientStatus.link_title;
+        clientStatus.link_url = null;
+        clientStatus.link_title = null;
+      }
+
+      res.status(201).json(clientStatus);
     } catch (err) {
       logger.error('[Status] Create error', { error: err.message });
       res.status(500).json({ error: 'Failed to create status' });
