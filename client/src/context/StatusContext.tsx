@@ -108,14 +108,6 @@ export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [creatorOpen, setCreatorOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Reset state when user changes or logs out
-  useEffect(() => {
-    setFeed([]);
-    setMyStatuses([]);
-    setViewerOpen(null);
-    setCreatorOpen(false);
-  }, [user?.id]);
-
   const fetchFeed = useCallback(async () => {
     setLoading(true);
     try {
@@ -136,6 +128,19 @@ export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       console.error('[Status] My statuses fetch error', err);
     }
   }, []);
+
+  // Auto-fetch/reset when user logs in or out
+  useEffect(() => {
+    if (user?.id) {
+      fetchFeed();
+      fetchMyStatuses();
+    } else {
+      setFeed([]);
+      setMyStatuses([]);
+      setViewerOpen(null);
+      setCreatorOpen(false);
+    }
+  }, [user?.id, fetchFeed, fetchMyStatuses]);
 
   const openViewer = useCallback((userIndex: number, statusIndex = 0) => {
     setViewerOpen({ userIndex, statusIndex });
