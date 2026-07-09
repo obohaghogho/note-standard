@@ -2,7 +2,7 @@ const supabase = require('../../config/database');
 const graphService = require('../graph/GraphService');
 const Groq = require('groq-sdk');
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const groq = (process.env.GROQ_API_KEY) ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
 const MODEL = 'llama-3.1-8b-instant';
 
 // Builds the standard AI metadata payload attached to every artifact
@@ -21,6 +21,7 @@ class LearningEngine {
 
   // ─── Flashcard Generation ────────────────────────────────
   async generateFlashcards(nodeId, nodeType, spaceId, count = 5) {
+    if (!groq) throw new Error("AI service is currently unavailable. Groq API key is not configured.");
     const content = await this._fetchNodeContent(nodeId, nodeType);
     if (!content) throw new Error(`Cannot fetch content for node ${nodeType}:${nodeId}`);
 
@@ -92,6 +93,7 @@ ${content.substring(0, 3000)}`;
 
   // ─── Quiz Generation ─────────────────────────────────────
   async generateQuiz(nodeId, nodeType, spaceId, questionCount = 5) {
+    if (!groq) throw new Error("AI service is currently unavailable. Groq API key is not configured.");
     const content = await this._fetchNodeContent(nodeId, nodeType);
     if (!content) throw new Error(`Cannot fetch content for node ${nodeType}:${nodeId}`);
 
@@ -146,6 +148,7 @@ ${content.substring(0, 3000)}`;
 
   // ─── Summary Generation ──────────────────────────────────
   async generateSummary(nodeId, nodeType, complexityLevel = 'standard') {
+    if (!groq) throw new Error("AI service is currently unavailable. Groq API key is not configured.");
     const content = await this._fetchNodeContent(nodeId, nodeType);
     if (!content) throw new Error(`Cannot fetch content for ${nodeType}:${nodeId}`);
 

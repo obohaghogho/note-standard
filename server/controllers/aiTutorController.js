@@ -3,8 +3,7 @@ const Groq = require('groq-sdk');
 const graphService = require('../services/graph/GraphService');
 const memoryEngine = require('../services/learning/MemoryEngine');
 const learningEngine = require('../services/learning/LearningEngine');
-
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const groq = (process.env.GROQ_API_KEY) ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
 
 const TUTOR_MODES = {
   teach:          'Provide a thorough, well-structured explanation of the topic. Use examples and analogies.',
@@ -20,6 +19,9 @@ const TUTOR_MODES = {
 
 exports.tutorChat = async (req, res, next) => {
   try {
+    if (!groq) {
+      return res.status(503).json({ error: "AI Tutor is currently unavailable. Groq API key is not configured." });
+    }
     const { spaceId } = req.params;
     const { query, mode = 'teach', nodeId, nodeType, conversationHistory = [] } = req.body;
     const userId = req.user.id;

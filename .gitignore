@@ -81,3 +81,8 @@ server/scripts/live_payment_verify.js
 server/scripts/add_enum_values.js
 *.apk
 .vercel
+
+# Runtime / Data / Build directories
+server/data/
+server/public/
+client/dist/

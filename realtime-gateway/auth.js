@@ -1,16 +1,19 @@
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
+  ? createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    )
+  : null;
 
 /**
  * Helper to fetch user with retry logic for Supabase Auth
  * Mitigates transient network/service availability issues
  */
 const getUserWithRetry = async (token, maxAttempts = 3) => {
+  if (!supabase) return { data: { user: null }, error: { message: "Supabase client not initialized" } };
   let lastError = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -47,6 +50,10 @@ const getUserWithRetry = async (token, maxAttempts = 3) => {
 
 const authMiddleware = async (socket, next) => {
   try {
+    if (!supabase) {
+      console.warn(`[Auth] ✗ Connection rejected: Supabase client not initialized`);
+      return next(new Error('Authentication error: Supabase client not initialized'));
+    }
     const token = socket.handshake.auth.token;
     const sessionId = socket.handshake.auth.sessionId;
     const deviceId = socket.handshake.auth.deviceId;
