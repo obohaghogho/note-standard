@@ -497,7 +497,7 @@ router.post('/:id/reply', requireAuth, async (req, res) => {
     }
 
     // Send message referencing the status
-    const { data: msg } = await supabase
+    const { data: msg, error: msgError } = await supabase
       .from('messages')
       .insert({
         conversation_id: convId,
@@ -507,6 +507,36 @@ router.post('/:id/reply', requireAuth, async (req, res) => {
         metadata: { status_ref_id: status.id },
       })
       .select().single();
+
+    if (msgError) throw msgError;
+
+    // Stamp authoritative last-message pointer on the conversation to update chatlist preview and ordering
+    await supabase
+      .from('conversations')
+      .update({
+        last_message_id: msg.id,
+        last_message_at: msg.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', convId);
+
+    // Hydrate message with sender profile details needed by the chat client
+    const { data: hydratedMessage } = await supabase
+      .from('messages')
+      .select('*, sender:profiles(id, username, full_name, avatar_url)')
+      .eq('id', msg.id)
+      .single();
+
+    // Broadcast the new message via real-time sockets to both participants
+    const { data: members } = await supabase
+      .from('conversation_members')
+      .select('user_id')
+      .eq('conversation_id', convId);
+
+    if (members && members.length > 0) {
+      const userIds = members.map(m => m.user_id);
+      await realtime.emitToUsers(userIds, 'chat:message', hydratedMessage || msg);
+    }
 
     res.status(201).json({ success: true, conversation_id: convId, message_id: msg?.id });
   } catch (err) {
