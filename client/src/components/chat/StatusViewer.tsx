@@ -368,16 +368,16 @@ export default function StatusViewer() {
             </div>
           )}
 
-          {/* Tap Zones */}
+          {/* Tap Zones - limited vertical height to prevent overlapping top header and bottom footer controls */}
           <div 
-            className="absolute inset-y-0 left-0 w-1/3 z-10" 
+            className="absolute top-20 bottom-36 left-0 w-1/3 z-10" 
             onMouseDown={handlePressStart}
             onMouseUp={(e) => handlePressEnd(e, 'prev')}
             onTouchStart={handlePressStart}
             onTouchEnd={(e) => handlePressEnd(e, 'prev')}
           />
           <div 
-            className="absolute inset-y-0 right-0 w-2/3 z-10" 
+            className="absolute top-20 bottom-36 right-0 w-2/3 z-10" 
             onMouseDown={handlePressStart}
             onMouseUp={(e) => handlePressEnd(e, 'next')}
             onTouchStart={handlePressStart}
