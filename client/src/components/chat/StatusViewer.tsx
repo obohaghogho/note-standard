@@ -256,7 +256,7 @@ export default function StatusViewer() {
         </div>
 
         {/* Header */}
-        <div className="absolute top-4 left-0 right-0 px-4 flex items-center justify-between z-20">
+        <div className="absolute top-8 left-0 right-0 px-4 flex items-center justify-between z-20">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-[46px] h-[46px] relative flex items-center justify-center shrink-0">
               <StatusRing 
