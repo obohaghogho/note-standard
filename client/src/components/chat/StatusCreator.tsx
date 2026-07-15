@@ -275,6 +275,7 @@ export default function StatusCreator() {
         
         const { data: upload } = await api.post('/upload/media', form, {
           headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 300000, // 5 minutes timeout for audio uploads
         });
         payload.bg_music_url = upload.secure_url || upload.url;
         payload.bg_music_title = musicFile.name;
@@ -303,6 +304,7 @@ export default function StatusCreator() {
         
         const { data: upload } = await api.post('/upload/media', form, {
           headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 300000, // 5 minutes timeout for status media uploads
           onUploadProgress: (e) => {
             if (e.total) setUploadProgress(Math.round((e.loaded / e.total) * 100));
           },

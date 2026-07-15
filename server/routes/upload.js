@@ -22,10 +22,15 @@ const uploadMedia = multer({
     storage,
     limits: { fileSize: 15 * 1024 * 1024 }, // 15MB limit
     fileFilter: (req, file, cb) => {
-        if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
+        const allowedExtensions = /jpeg|jpg|png|gif|webp|mp4|mov|avi|webm|quicktime/i;
+        const extension = file.originalname.split('.').pop().toLowerCase();
+        const isMimeMatch = file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/');
+        const isExtMatch = allowedExtensions.test(extension);
+
+        if (isMimeMatch || isExtMatch) {
             cb(null, true);
         } else {
-            cb(new Error('Only image and video files are allowed'), false);
+            cb(new Error('Only image and video files are allowed (detected: ' + file.mimetype + ')'), false);
         }
     }
 });
