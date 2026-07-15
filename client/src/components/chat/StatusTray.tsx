@@ -4,10 +4,10 @@ import { useAuth } from '../../context/AuthContext';
 import { Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-function StatusRing({ count, viewedCount, size = 60 }: { count: number; viewedCount: number; size?: number }) {
+export function StatusRing({ count, viewedCount, size = 60 }: { count: number; viewedCount: number; size?: number }) {
   if (count === 0) return null;
   if (count === 1) {
-    const color = viewedCount === count ? 'stroke-gray-700' : 'stroke-blue-500';
+    const color = viewedCount === count ? 'stroke-gray-700' : 'stroke-[#25D366]';
     return (
       <svg width={size} height={size} className="absolute inset-0 -rotate-90">
         <circle
@@ -30,7 +30,7 @@ function StatusRing({ count, viewedCount, size = 60 }: { count: number; viewedCo
     <svg width={size} height={size} className="absolute inset-0 -rotate-90">
       {Array.from({ length: count }).map((_, i) => {
         const isViewed = i < viewedCount;
-        const color = isViewed ? 'stroke-gray-700' : 'stroke-blue-500';
+        const color = isViewed ? 'stroke-gray-700' : 'stroke-[#25D366]';
         const offset = i * (segmentLength + gap);
         return (
           <circle

@@ -6,9 +6,10 @@ import { formatDistanceToNowStrict } from 'date-fns';
 import { X, Play, Pause, Eye, Trash2, Send, Music } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { parseFormattedText } from '../../lib/formatParser';
+import { StatusRing } from './StatusTray';
 
 const QUICK_REACTIONS = ['😂', '😍', '😢', '👏', '🔥', '🎉'];
-const STATUS_DURATION = 5000;
+const STATUS_DURATION = 30000; // WhatsApp 30 seconds default
 
 const FONT_PRESETS = [
   { id: 'sans', name: 'Default', family: `system-ui, -apple-system, sans-serif` },
@@ -36,6 +37,37 @@ export default function StatusViewer() {
   // Single ref for both video and audio status nodes
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement>(null);
   const musicAudioRef = useRef<HTMLAudioElement | null>(null);
+  const pressStartRef = useRef<number>(0);
+  const touchActiveRef = useRef(false);
+
+  const handlePressStart = (e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation();
+    if (e.type === 'touchstart') {
+      touchActiveRef.current = true;
+    } else if (e.type === 'mousedown' && touchActiveRef.current) {
+      return;
+    }
+    pressStartRef.current = Date.now();
+    setPaused(true);
+  };
+
+  const handlePressEnd = (e: React.MouseEvent | React.TouchEvent, action: 'next' | 'prev') => {
+    e.stopPropagation();
+    if (e.type === 'touchend') {
+      setTimeout(() => {
+        touchActiveRef.current = false;
+      }, 500);
+    } else if (e.type === 'mouseup' && touchActiveRef.current) {
+      return;
+    }
+
+    const duration = Date.now() - pressStartRef.current;
+    setPaused(false);
+    if (duration < 250) {
+      if (action === 'next') nextStatus();
+      else prevStatus();
+    }
+  };
 
   const { userIndex, statusIndex } = viewerOpen || {};
   
@@ -88,11 +120,8 @@ export default function StatusViewer() {
   }, [status?.id, markViewed, isOwn]);
 
   const getDuration = useCallback(() => {
-    if ((status?.type === 'video' || status?.type === 'audio') && mediaRef.current?.duration) {
-      return mediaRef.current.duration * 1000;
-    }
     return STATUS_DURATION;
-  }, [status?.type]);
+  }, []);
 
   const startTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -119,19 +148,10 @@ export default function StatusViewer() {
     if (timerRef.current) clearInterval(timerRef.current);
   }, []);
 
-  const handleTimeUpdate = () => {
-    if ((status?.type === 'video' || status?.type === 'audio') && mediaRef.current) {
-      const current = mediaRef.current.currentTime;
-      const duration = mediaRef.current.duration || 1;
-      setProgress((current / duration) * 100);
-    }
-  };
-
   useEffect(() => {
     if (!status) return;
 
     if (status.type === 'video' || status.type === 'audio') {
-      stopTimer();
       const media = mediaRef.current;
       if (media) {
         if (paused) {
@@ -140,12 +160,12 @@ export default function StatusViewer() {
           media.play().catch(() => {});
         }
       }
+    }
+
+    if (paused) {
+      stopTimer();
     } else {
-      if (paused) {
-        stopTimer();
-      } else {
-        startTimer();
-      }
+      startTimer();
     }
 
     return () => stopTimer();
@@ -228,7 +248,7 @@ export default function StatusViewer() {
                 className="h-full bg-white rounded-full"
                 style={{
                   width: i < (statusIndex || 0) ? '100%' : i === statusIndex ? `${progress}%` : '0%',
-                  transitionDuration: i === statusIndex && !paused && status?.type !== 'video' && status?.type !== 'audio' ? '50ms' : '0ms'
+                  transitionDuration: i === statusIndex && !paused ? '50ms' : '0ms'
                 }}
               />
             </div>
@@ -238,11 +258,20 @@ export default function StatusViewer() {
         {/* Header */}
         <div className="absolute top-4 left-0 right-0 px-4 flex items-center justify-between z-20">
           <div className="flex items-center gap-3 min-w-0">
-            <img 
-              src={userEntry.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userEntry.user_id}`} 
-              alt="Avatar" 
-              className="w-10 h-10 rounded-full border border-white/20 object-cover bg-gray-800 shrink-0"
-            />
+            <div className="w-[46px] h-[46px] relative flex items-center justify-center shrink-0">
+              <StatusRing 
+                count={userEntry.statuses.length} 
+                viewedCount={statusIndex || 0} 
+                size={46} 
+              />
+              <div className="absolute inset-[3px] rounded-full overflow-hidden bg-gray-800">
+                <img 
+                  src={userEntry.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userEntry.user_id}`} 
+                  alt="Avatar" 
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </div>
             <div className="min-w-0">
               <div className="text-white font-semibold text-sm shadow-black/50 drop-shadow-md truncate">
                 {userEntry.display_name}
@@ -297,11 +326,6 @@ export default function StatusViewer() {
               src={status.media_url} 
               className="w-full h-full object-contain"
               playsInline
-              onTimeUpdate={handleTimeUpdate}
-              onEnded={() => {
-                elapsedRef.current = 0;
-                nextStatus();
-              }}
             />
           )}
 
@@ -314,11 +338,6 @@ export default function StatusViewer() {
                 ref={mediaRef as React.RefObject<HTMLAudioElement>}
                 src={status.media_url}
                 className="w-full mt-2"
-                onTimeUpdate={handleTimeUpdate}
-                onEnded={() => {
-                  elapsedRef.current = 0;
-                  nextStatus();
-                }}
               />
               {status.content && (
                 <p className="text-gray-300 text-sm text-center font-medium mt-2 leading-relaxed max-h-[100px] overflow-y-auto no-scrollbar">
@@ -352,19 +371,17 @@ export default function StatusViewer() {
           {/* Tap Zones */}
           <div 
             className="absolute inset-y-0 left-0 w-1/3 z-10" 
-            onClick={(e) => { e.stopPropagation(); prevStatus(); }}
-            onMouseDown={() => setPaused(true)}
-            onMouseUp={() => setPaused(false)}
-            onTouchStart={() => setPaused(true)}
-            onTouchEnd={() => setPaused(false)}
+            onMouseDown={handlePressStart}
+            onMouseUp={(e) => handlePressEnd(e, 'prev')}
+            onTouchStart={handlePressStart}
+            onTouchEnd={(e) => handlePressEnd(e, 'prev')}
           />
           <div 
             className="absolute inset-y-0 right-0 w-2/3 z-10" 
-            onClick={(e) => { e.stopPropagation(); nextStatus(); }}
-            onMouseDown={() => setPaused(true)}
-            onMouseUp={() => setPaused(false)}
-            onTouchStart={() => setPaused(true)}
-            onTouchEnd={() => setPaused(false)}
+            onMouseDown={handlePressStart}
+            onMouseUp={(e) => handlePressEnd(e, 'next')}
+            onTouchStart={handlePressStart}
+            onTouchEnd={(e) => handlePressEnd(e, 'next')}
           />
         </div>
 
