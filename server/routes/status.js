@@ -487,28 +487,33 @@ router.post('/:id/reply', requireAuth, async (req, res) => {
     }
 
     if (!convId) {
-      const { data: newConv } = await supabase
-        .from('conversations').insert({ type: 'direct', created_by: req.user.id }).select('id').single();
+      const { data: newConv, error: newConvError } = await supabase
+        .from('conversations').insert({ type: 'direct' }).select('id').single();
+      if (newConvError) throw newConvError;
+      
       convId = newConv.id;
-      await supabase.from('conversation_members').insert([
+      const { error: membersError } = await supabase.from('conversation_members').insert([
         { conversation_id: convId, user_id: req.user.id },
         { conversation_id: convId, user_id: status.user_id },
       ]);
+      if (membersError) throw membersError;
     }
 
-    // Send message referencing the status
-    const { data: msg, error: msgError } = await supabase
-      .from('messages')
-      .insert({
-        conversation_id: convId,
-        sender_id: req.user.id,
-        type: 'text',
-        content: content || '',
-        metadata: { status_ref_id: status.id },
-      })
-      .select().single();
+    // Send message referencing the status using RPC to satisfy database check constraints (messages_seq_positive)
+    const crypto = require('crypto');
+    const { data: rpcData, error: rpcError } = await supabase.rpc('rpc_send_message', {
+      p_conversation_id: convId,
+      p_sender_id: req.user.id,
+      p_content: content || '',
+      p_type: 'text',
+      p_event_id: crypto.randomUUID(),
+      p_original_language: 'en',
+      p_attachment_id: null,
+      p_reply_to_id: null
+    });
 
-    if (msgError) throw msgError;
+    if (rpcError) throw rpcError;
+    const msg = rpcData.message;
 
     // Stamp authoritative last-message pointer on the conversation to update chatlist preview and ordering
     await supabase
