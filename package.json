@@ -67,5 +67,8 @@
     "@rollup/rollup-linux-x64-gnu": "4.24.0",
     "lightningcss-linux-arm64-gnu": "1.31.1",
     "lightningcss-linux-x64-gnu": "1.31.1"
+  },
+  "overrides": {
+    "ajv": "^8.12.0"
   }
 }
