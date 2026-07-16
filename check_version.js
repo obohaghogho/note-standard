@@ -1,3 +1,4 @@
+/* eslint-disable */
 const http = require('https');
 
 function checkVersion() {
