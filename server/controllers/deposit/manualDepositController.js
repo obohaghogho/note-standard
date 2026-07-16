@@ -1,0 +1,416 @@
+const path = require("path");
+const supabase = require(path.join(__dirname, "..", "..", "config", "database"));
+const sendgridEmailService = require("../../services/sendgridEmailService");
+const logger = require("../../utils/logger");
+const { createClient } = require("@supabase/supabase-js");
+
+// Service role Supabase client for admin actions (balance updates)
+const getServiceSupabase = () => {
+  return createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+};
+
+/**
+ * Manual Deposit Controller
+ */
+class ManualDepositController {
+  /**
+   * GET /api/deposit/initiate
+   * Get Grey account details and generate reference
+   */
+  async initiateDeposit(req, res) {
+    try {
+      const { currency } = req.query;
+      if (!currency) {
+        return res.status(400).json({ error: "Currency is required" });
+      }
+
+      // Fetch Grey instructions
+      const { data: instructions, error } = await supabase
+        .from("grey_instructions")
+        .select("*")
+        .eq("currency", currency.toUpperCase())
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!instructions) {
+        return res.status(404).json({ error: `No deposit instructions found for ${currency}` });
+      }
+
+      // Generate unique reference
+      const timestamp = Date.now();
+      const shortUserId = req.user.id.split("-")[0].toUpperCase();
+      const reference = `NS-${shortUserId}-${timestamp}`;
+
+      res.json({
+        instructions,
+        reference,
+      });
+    } catch (err) {
+      logger.error("[ManualDeposit] Initiate Error:", err.message);
+      res.status(500).json({ error: "Failed to initiate deposit" });
+    }
+  }
+
+  /**
+   * POST /api/deposit/submit
+   * User submits proof and reference
+   */
+  async submitDeposit(req, res) {
+    try {
+      const { amount, currency, reference, proofUrl } = req.body;
+
+      if (!amount || amount <= 0 || !currency || !reference) {
+        return res.status(400).json({ error: "Invalid deposit details" });
+      }
+
+      // Check for duplicate reference
+      const { data: existing } = await supabase
+        .from("manual_deposits")
+        .select("id")
+        .eq("reference", reference)
+        .maybeSingle();
+
+      if (existing) {
+        return res.status(400).json({ error: "This reference has already been submitted" });
+      }
+
+      // Save deposit
+      const { data: deposit, error } = await supabase
+        .from("manual_deposits")
+        .insert([{
+          user_id: req.user.id,
+          amount: parseFloat(amount),
+          currency: currency.toUpperCase(),
+          reference,
+          proof_url: proofUrl,
+          status: "pending"
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Send confirmation email
+      await sendgridEmailService.sendDepositSubmittedEmail(req.user.email, {
+        amount,
+        currency: currency.toUpperCase(),
+        reference
+      });
+
+      res.status(201).json({
+        message: "Deposit submitted successfully. Waiting for admin approval.",
+        deposit
+      });
+    } catch (err) {
+      logger.error("[ManualDeposit] Submit Error:", err.message);
+      res.status(500).json({ error: "Failed to submit deposit" });
+    }
+  }
+
+  /**
+   * GET /api/deposit/user
+   * List user's manual deposits
+   */
+  async getUserDeposits(req, res) {
+    try {
+      const { data, error } = await supabase
+        .from("manual_deposits")
+        .select("*")
+        .eq("user_id", req.user.id)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      res.json(data);
+    } catch (err) {
+      logger.error("[ManualDeposit] GetUserDeposits Error:", err.message);
+      res.status(500).json({ error: "Failed to fetch deposits" });
+    }
+  }
+
+  /**
+   * GET /api/deposit/admin/pending (ADMIN ONLY)
+   * Fetches pending manual deposits from BOTH legacy table and unified transactions table.
+   */
+  async getPendingDeposits(req, res) {
+    try {
+      // 1. Fetch from legacy manual_deposits table
+      const { data: legacy, error: legacyError } = await supabase
+        .from("manual_deposits")
+        .select("id, user_id, amount, currency, reference, proof_url, status, admin_notes, created_at, updated_at")
+        .eq("status", "pending")
+        .order("created_at", { ascending: true });
+
+      if (legacyError) throw legacyError;
+
+      // 2. Fetch from unified transactions table (New Flow)
+      const { data: unified, error: unifiedError } = await supabase
+        .from("transactions")
+        .select("id, user_id, amount, currency, reference_id, metadata, status, type, created_at, updated_at")
+        .eq("status", "PROCESSING")
+        .eq("type", "DEPOSIT")
+        .order("created_at", { ascending: true });
+
+      if (unifiedError) throw unifiedError;
+
+      // Extract unique user IDs
+      const userIds = new Set();
+      (legacy || []).forEach(d => userIds.add(d.user_id));
+      (unified || []).forEach(d => userIds.add(d.user_id));
+
+      // Fetch profiles
+      let profilesMap = {};
+      if (userIds.size > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, email, full_name, username")
+          .in("id", Array.from(userIds));
+          
+        if (profiles) {
+          profiles.forEach(p => profilesMap[p.id] = p);
+        }
+      }
+
+      // Add profiles to legacy
+      const legacyWithProfiles = (legacy || []).map(d => ({
+        ...d,
+        profile: profilesMap[d.user_id]
+      }));
+
+      // 3. Normalize unified transactions to match ManualDeposit interface for UI
+      const normalizedUnified = (unified || []).map(tx => ({
+        id: tx.id,
+        isUnified: true, // Flag for approval logic
+        user_id: tx.user_id,
+        amount: tx.amount,
+        currency: tx.currency,
+        reference: tx.metadata?.display_ref || tx.reference_id || tx.id,
+        proof_url: tx.metadata?.proof_url,
+        status: "pending",
+        admin_notes: tx.metadata?.status_note,
+        created_at: tx.created_at,
+        updated_at: tx.updated_at,
+        profile: profilesMap[tx.user_id]
+      }));
+
+      // Combine both sources
+      const allPending = [...legacyWithProfiles, ...normalizedUnified];
+      
+      res.json(allPending);
+    } catch (err) {
+      logger.error("[ManualDeposit] Admin Pending Error:", err.message);
+      res.status(500).json({ error: "Failed to fetch pending deposits" });
+    }
+  }
+
+  /**
+   * PATCH /api/deposit/:id/approve (ADMIN ONLY)
+   */
+  async approveDeposit(req, res) {
+    const serviceSupabase = getServiceSupabase();
+    try {
+      const { id } = req.params;
+      const { adminNotes, isUnified } = req.body;
+
+      // 1. Fetch deposit details from the correct table
+      let deposit = null;
+      if (!isUnified) {
+        const { data, error } = await serviceSupabase
+          .from("manual_deposits")
+          .select("id, user_id, amount, currency, reference, status")
+          .eq("id", id)
+          .single();
+        if (error) throw error;
+        deposit = data;
+      } else {
+        const { data, error } = await serviceSupabase
+          .from("transactions")
+          .select("id, user_id, amount, currency, reference_id, metadata, status")
+          .eq("id", id)
+          .single();
+        if (error) throw error;
+        deposit = data;
+      }
+
+      if (deposit) {
+        const { data: pData } = await serviceSupabase.from("profiles").select("email").eq("id", deposit.user_id).single();
+        deposit.profile = pData || { email: "" };
+      }
+
+      if (!deposit) {
+        return res.status(404).json({ error: "Deposit not found" });
+      }
+
+      const currentStatus = isUnified ? deposit.status : deposit.status;
+      const pendingStatus = isUnified ? "PROCESSING" : "pending";
+
+      if (currentStatus !== pendingStatus && currentStatus !== "pending") {
+        return res.status(400).json({ error: `Cannot approve a deposit with status: ${currentStatus}` });
+      }
+
+      // 2. Mark as approved (If not unified, we update legacy table)
+      if (!isUnified) {
+        const { error: updateError } = await serviceSupabase
+          .from("manual_deposits")
+          .update({
+            status: "approved",
+            admin_notes: adminNotes,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", id);
+        if (updateError) throw updateError;
+      }
+
+      // 3. Credit User Wallet
+      const walletService = require("../../services/walletService");
+      const wallet = await walletService.createWallet(deposit.user_id, deposit.currency, 'native');
+
+      if (!wallet) throw new Error("Could not find or create user wallet");
+
+      let finalTxId = id;
+
+      if (!isUnified) {
+        // Legacy flow: create a new transaction record
+        const { data: tx, error: txError } = await serviceSupabase
+          .from("transactions")
+          .insert([{
+            wallet_id: wallet.id,
+            user_id: deposit.user_id,
+            type: "DEPOSIT",
+            display_label: "Manual Bank Deposit",
+            category: "funding",
+            description: `Manual deposit approval for reference ${deposit.reference}`,
+            amount: deposit.amount,
+            currency: deposit.currency,
+            status: "COMPLETED",
+            reference_id: deposit.id,
+            metadata: {
+              manual_deposit_id: deposit.id,
+              reference: deposit.reference,
+              approved_by: req.user.id
+            },
+            completed_at: new Date().toISOString()
+          }])
+          .select()
+          .single();
+
+        if (txError) throw txError;
+        finalTxId = tx.id;
+      } else {
+        // Unified flow: Transaction already exists, update its status
+        const { error: txUpdateError } = await serviceSupabase
+          .from("transactions")
+          .update({
+            status: "COMPLETED",
+            completed_at: new Date().toISOString(),
+            metadata: {
+              ...(deposit.metadata || {}),
+              approved_by: req.user.id,
+              admin_notes: adminNotes
+            }
+          })
+          .eq("id", id);
+        
+        if (txUpdateError) throw txUpdateError;
+      }
+
+      // Update wallet balance via RPC
+      const { error: balError } = await serviceSupabase.rpc("confirm_deposit", {
+        p_transaction_id: finalTxId,
+        p_wallet_id: wallet.id,
+        p_amount: deposit.amount
+      });
+
+      if (balError) throw balError;
+
+      // 4. Send Approval Email
+      await sendgridEmailService.sendDepositApprovedEmail(deposit.profile.email, {
+        amount: deposit.amount,
+        currency: deposit.currency
+      });
+
+      res.json({ message: "Deposit approved and wallet credited successfully" });
+    } catch (err) {
+      logger.error("[ManualDeposit] Admin Approve Error:", err.message);
+      res.status(500).json({ error: "Failed to approve deposit" });
+    }
+  }
+
+  /**
+   * PATCH /api/deposit/:id/reject (ADMIN ONLY)
+   */
+  async rejectDeposit(req, res) {
+    const serviceSupabase = getServiceSupabase();
+    try {
+      const { id } = req.params;
+      const { adminNotes, isUnified } = req.body;
+
+      let deposit = null;
+      if (!isUnified) {
+        const { data, error } = await serviceSupabase
+          .from("manual_deposits")
+          .select("id, user_id, amount, currency, status")
+          .eq("id", id)
+          .single();
+        if (error) throw error;
+        deposit = data;
+      } else {
+        const { data, error } = await serviceSupabase
+          .from("transactions")
+          .select("id, user_id, amount, currency, metadata, status")
+          .eq("id", id)
+          .single();
+        if (error) throw error;
+        deposit = data;
+      }
+
+      if (deposit) {
+        const { data: pData } = await serviceSupabase.from("profiles").select("email").eq("id", deposit.user_id).single();
+        deposit.profile = pData || { email: "" };
+      }
+
+      if (!deposit) {
+        return res.status(404).json({ error: "Deposit not found" });
+      }
+
+      if (!isUnified) {
+        await serviceSupabase
+          .from("manual_deposits")
+          .update({
+            status: "rejected",
+            admin_notes: adminNotes,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", id);
+      } else {
+        await serviceSupabase
+          .from("transactions")
+          .update({
+            status: "FAILED",
+            metadata: {
+              ...(deposit.metadata || {}),
+              rejection_reason: adminNotes,
+              rejected_at: new Date().toISOString()
+            }
+          })
+          .eq("id", id);
+      }
+
+      // Send Rejection Email
+      await sendgridEmailService.sendDepositRejectedEmail(deposit.profile.email, {
+        amount: deposit.amount,
+        currency: deposit.currency,
+        reason: adminNotes
+      });
+
+      res.json({ message: "Deposit rejected successfully" });
+    } catch (err) {
+      logger.error("[ManualDeposit] Admin Reject Error:", err.message);
+      res.status(500).json({ error: "Failed to reject deposit" });
+    }
+  }
+}
+
+module.exports = new ManualDepositController();

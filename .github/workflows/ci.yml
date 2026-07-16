@@ -1,0 +1,88 @@
+name: Verify Build
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CI: true
+  HUSKY: 0
+
+jobs:
+  quality:
+    name: Lint and Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Lint (All Workspaces)
+        run: npm run lint
+
+      - name: Typecheck (Client)
+        run: npm run typecheck
+
+  build-client:
+    name: Build Client
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Create dummy .env
+        run: |
+          if [ -f client/.env.example ]; then
+            cp client/.env.example client/.env
+          fi
+
+      - name: Build Client
+        run: npm run build:client
+
+  verify-backend:
+    name: Verify Backend Services
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Check Server Syntax
+        run: node --check server/index.js
+
+      - name: Check Gateway Syntax
+        run: node --check realtime-gateway/server.js

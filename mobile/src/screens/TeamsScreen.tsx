@@ -1,0 +1,936 @@
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import {
+  View, Text, TextInput, TouchableOpacity, FlatList,
+  StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Image,
+  Alert, Modal, RefreshControl, Share,
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { TeamsService, Team } from '../services/TeamsService';
+import { AuthService } from '../services/AuthService';
+import apiClient from '../api/apiClient';
+import { MediaService } from '../services/MediaService';
+import VoiceService from '../services/VoiceService';
+import { Audio } from 'expo-av';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { ChatStackParamList } from '../navigation/ChatStack';
+import { io, Socket } from 'socket.io-client';
+import { GATEWAY_URL } from '../Config';
+import { useLongPressGesture } from '../hooks/useLongPressGesture';
+
+interface TeamMessage {
+  id: string;
+  content: string;
+  created_at: string;
+  sender_id: string;
+  profiles?: {
+    username: string;
+    full_name?: string;
+    avatar_url?: string;
+  };
+  is_edited?: boolean;
+  reply_to?: {
+    id: string;
+    content: string;
+    sender_id: string;
+  };
+}
+
+// ── TeamMessageBubble ─────────────────────────────────────────────────────
+const TeamMessageBubble = React.memo(({
+  item,
+  currentUserId,
+  onLongPress,
+  playVoiceNote,
+}: {
+  item: TeamMessage;
+  currentUserId: string;
+  onLongPress: (msg: TeamMessage) => void;
+  playVoiceNote: (path: string) => Promise<void>;
+}) => {
+  if (!item) return null;
+  const isMe = item.sender_id === currentUserId;
+  const senderName = item.profiles?.full_name || item.profiles?.username || 'Unknown';
+  const attachment = (item as any).attachment;
+
+  const longPressProps = useLongPressGesture({
+    onLongPress: () => onLongPress(item),
+    delay: 500,
+    moveThreshold: 10,
+  });
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      {...longPressProps}
+      style={[styles.messageBubble, isMe ? styles.myBubble : styles.theirBubble]}
+    >
+      {!isMe && <Text style={styles.senderName}>{senderName}</Text>}
+
+      {item.reply_to && (
+        <View style={styles.replyContext}>
+          <Text style={styles.replyContextName}>
+            {item.reply_to.sender_id === currentUserId ? 'You' : 'Member'}
+          </Text>
+          <Text style={styles.replyContextText} numberOfLines={1}>
+            {item.reply_to.content}
+          </Text>
+        </View>
+      )}
+
+      {attachment && (
+        <View style={styles.attachmentContainer}>
+          {attachment.file_type?.startsWith('image') ? (
+            <Image
+              source={{ uri: `https://tngcvgisfctggvivcnva.supabase.co/storage/v1/object/public/chat-media/${attachment.storage_path}` }}
+              style={styles.attachmentImage as any}
+            />
+          ) : attachment.file_type?.startsWith('audio') ? (
+            <TouchableOpacity style={styles.voiceNoteBtn} onPress={() => playVoiceNote(attachment.storage_path)}>
+              <Text style={styles.voiceNoteText}>▶ Voice Note</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.attachmentFile}>📎 {attachment.file_name}</Text>
+          )}
+        </View>
+      )}
+
+      <Text style={styles.messageText}>{item.content}</Text>
+      <View style={styles.bubbleFooter}>
+        {item.is_edited && <Text style={styles.editedTag}>edited</Text>}
+        <Text style={styles.messageTime}>
+          {item.created_at && !isNaN(new Date(item.created_at).getTime()) 
+            ? new Date(item.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) 
+            : ''}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
+// ── TeamChatModal ─────────────────────────────────────────────────────────
+function TeamChatModal({
+  team,
+  onClose,
+  currentUserId,
+  messages,
+  onSendMessage,
+  loading,
+  playVoiceNote,
+  handlePickMedia,
+  handleVoiceNote,
+  isRecording,
+  onDeleteMessage,
+  onEditMessage,
+  onRemoveMember,
+}: {
+  team: Team;
+  onClose: () => void;
+  currentUserId: string;
+  messages: TeamMessage[];
+  onSendMessage: (content?: string, attachmentId?: string, replyToId?: string) => Promise<void>;
+  loading: boolean;
+  playVoiceNote: (path: string) => Promise<void>;
+  handlePickMedia: () => Promise<void>;
+  handleVoiceNote: () => Promise<void>;
+  isRecording: boolean;
+  onDeleteMessage: (id: string) => Promise<void>;
+  onEditMessage: (id: string, content: string) => Promise<void>;
+  onRemoveMember: (userId: string) => Promise<void>;
+}) {
+  const insets = useSafeAreaInsets();
+  const [newMessage, setNewMessage] = useState('');
+  const [sending, setSending] = useState(false);
+  const [replyTo, setReplyTo] = useState<TeamMessage | null>(null);
+  const [editingMessage, setEditingMessage] = useState<TeamMessage | null>(null);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showMembersList, setShowMembersList] = useState(false);
+  const [members, setMembers] = useState<any[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  
+  // Search states for invitation
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<any | null>(null);
+  const [inviteRole, setInviteRole] = useState<'member'|'admin'>('member');
+  
+  const flatListRef = useRef<FlatList>(null);
+
+  const loadMembers = async () => {
+    setMembersLoading(true);
+    try {
+      const res = await apiClient.get(`/teams/${team.id}/members`);
+      setMembers(Array.isArray(res.data) ? res.data : []);
+    } catch (e) {
+      console.error('[Members] Load Error:', e);
+    } finally {
+      setMembersLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadMembers();
+  }, [team.id]);
+
+  // Inverted FlatList auto-scrolls to newest messages natively.
+  // KeyboardAvoidingView + 'height' behavior handles the rest on Android.
+
+  const handleUserSearch = async (q: string) => {
+    setSearchQuery(q);
+    if (!q.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    setSearchLoading(true);
+    try {
+      const res = await apiClient.get(`/users/search?q=${encodeURIComponent(q)}`);
+      setSearchResults(Array.isArray(res.data) ? res.data : []);
+    } catch (e) {
+      console.error('[InviteSearch] Error:', e);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleInvite = async () => {
+    if (!selectedUser) {
+      Alert.alert('Error', 'Please select a user to invite');
+      return;
+    }
+    try {
+      const payload = { 
+        username: selectedUser.username,
+        role: inviteRole 
+      };
+      
+      const res = await TeamsService.inviteMember(team.id, payload);
+      Alert.alert('Success', `${selectedUser.username} has been invited to the team`);
+      setMembers(prev => [...prev, res]);
+      setShowInviteModal(false);
+      setSearchQuery('');
+      setSearchResults([]);
+      setSelectedUser(null);
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to send invitation');
+    }
+  };
+
+  const handleSend = async () => {
+    if (!newMessage.trim() || sending) return;
+    setSending(true);
+    if (editingMessage) {
+      await onEditMessage(editingMessage.id, newMessage.trim());
+      setEditingMessage(null);
+    } else {
+      await onSendMessage(newMessage.trim(), undefined, replyTo?.id);
+      setReplyTo(null);
+    }
+    setNewMessage('');
+    setSending(false);
+  };
+
+  const handleLongPress = (msg: TeamMessage) => {
+    const isMe = msg.sender_id === currentUserId;
+    Alert.alert(
+      'Message Options',
+      undefined,
+      [
+        { text: 'Reply', onPress: () => setReplyTo(msg) },
+        { text: 'Copy', onPress: () => Alert.alert('Copied', 'Message copied to clipboard') },
+        {
+          text: 'Share',
+          onPress: async () => {
+            try {
+              await Share.share({ message: msg.content });
+            } catch (error: any) {
+              Alert.alert('Error', error.message);
+            }
+          }
+        },
+        ...(isMe ? [
+          { text: 'Edit', onPress: () => {
+            setEditingMessage(msg);
+            setNewMessage(msg.content);
+          }},
+          { text: 'Delete', onPress: () => {
+            Alert.alert('Delete', 'Delete this message?', [
+              { text: 'Cancel', style: 'cancel' as const },
+              { text: 'Delete', style: 'destructive' as const, onPress: () => onDeleteMessage(msg.id) }
+            ]);
+          }, style: 'destructive' as const }
+        ] : []),
+        { text: 'Cancel', style: 'cancel' as const }
+      ]
+    );
+  };
+
+  return (
+    <Modal visible animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+      <KeyboardAvoidingView
+        style={styles.chatContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        <View style={styles.chatHeader}>
+          <TouchableOpacity onPress={onClose} style={styles.chatBackBtn}>
+            <Text style={styles.chatBackText}>← Back</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowMembersList(!showMembersList)} style={styles.chatHeaderInfo}>
+            <Text style={styles.chatHeaderTitle} numberOfLines={1}>{team.name || 'Team Chat'}</Text>
+            <Text style={styles.chatHeaderSub}>{members.length} MEMBERS • {team.my_role?.toUpperCase() || 'MEMBER'}</Text>
+          </TouchableOpacity>
+          {(team.my_role === 'owner' || team.my_role === 'admin') && (
+            <TouchableOpacity onPress={() => setShowInviteModal(true)} style={styles.headerActionBtn}>
+              <Text style={styles.headerActionIcon}>➕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {showMembersList && (
+          <View style={styles.membersDropdown}>
+            <View style={styles.dropdownHeader}>
+              <Text style={styles.dropdownTitle}>Team Members</Text>
+              <TouchableOpacity onPress={() => setShowMembersList(false)}>
+                <Text style={styles.dropdownClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={members}
+              keyExtractor={m => m.id}
+              style={styles.membersFlatList}
+              renderItem={({ item }) => (
+                <View style={styles.memberItem}>
+                  <View style={styles.memberAvatar}>
+                    <Text style={styles.memberAvatarText}>{(item.profiles?.username || 'U').charAt(0).toUpperCase()}</Text>
+                  </View>
+                  <View style={styles.memberInfo}>
+                    <Text style={styles.memberName}>@{item.profiles?.username}</Text>
+                    <Text style={styles.memberRole}>{item.role.toUpperCase()}</Text>
+                  </View>
+                  {item.profiles?.id === currentUserId ? (
+                    <Text style={styles.youBadge}>You</Text>
+                  ) : (team.my_role === 'owner' || team.my_role === 'admin') && item.role !== 'owner' ? (
+                    <TouchableOpacity style={styles.removeMemberBtn} onPress={() => {
+                      Alert.alert('Remove Member', `Are you sure you want to remove @${item.profiles?.username}?`, [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Remove', style: 'destructive', onPress: async () => {
+                            await onRemoveMember(item.profiles?.id);
+                            setMembers(prev => prev.filter(m => m.profiles?.id !== item.profiles?.id));
+                          } 
+                        }
+                      ]);
+                    }}>
+                      <Text style={styles.removeMemberIcon}>🗑️</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              )}
+            />
+          </View>
+        )}
+
+        <Modal visible={showInviteModal} animationType="slide" transparent onRequestClose={() => setShowInviteModal(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.inviteModalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Add Team Member</Text>
+                <TouchableOpacity onPress={() => { setShowInviteModal(false); setSelectedUser(null); }}>
+                  <Text style={styles.modalCloseIcon}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.searchContainer}>
+                <TextInput
+                  style={styles.modalSearchInput}
+                  placeholder="Search by username..."
+                  placeholderTextColor="#666"
+                  value={searchQuery}
+                  onChangeText={handleUserSearch}
+                  autoCapitalize="none"
+                  autoFocus
+                />
+                {searchLoading && <ActivityIndicator size="small" color="#f59e0b" style={styles.searchLoader} />}
+              </View>
+
+              <View style={styles.resultsContainer}>
+                {selectedUser ? (
+                  <View style={styles.selectedUserCard}>
+                    <View style={styles.selectedUserRow}>
+                      <View style={styles.avatarSmall}>
+                        <Text style={styles.avatarTextSmall}>{selectedUser.username.charAt(0).toUpperCase()}</Text>
+                      </View>
+                      <View style={styles.selectedUserInfo}>
+                        <Text style={styles.selectedUserName}>@{selectedUser.username}</Text>
+                        <Text style={styles.selectedUserEmail}>{selectedUser.email || 'NoteStandard User'}</Text>
+                      </View>
+                      <TouchableOpacity onPress={() => setSelectedUser(null)}>
+                        <Text style={styles.removeUser}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                    
+                    <View style={styles.rolePicker}>
+                      <Text style={styles.roleLabel}>Assign Role:</Text>
+                      <View style={styles.roleOptions}>
+                        <TouchableOpacity 
+                          style={[styles.roleOption, inviteRole === 'member' && styles.roleOptionActive]}
+                          onPress={() => setInviteRole('member')}
+                        >
+                          <Text style={[styles.roleOptionText, inviteRole === 'member' && styles.roleOptionTextActive]}>Member</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                          style={[styles.roleOption, inviteRole === 'admin' && styles.roleOptionActive]}
+                          onPress={() => setInviteRole('admin')}
+                        >
+                          <Text style={[styles.roleOptionText, inviteRole === 'admin' && styles.roleOptionTextActive]}>Admin</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    <TouchableOpacity style={styles.inviteConfirmBtn} onPress={handleInvite}>
+                      <Text style={styles.inviteConfirmText}>Add to Team</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <FlatList
+                    data={searchResults}
+                    keyExtractor={item => item.id}
+                    style={styles.resultsList}
+                    keyboardShouldPersistTaps="handled"
+                    renderItem={({ item }) => (
+                      <TouchableOpacity style={styles.resultItem} onPress={() => setSelectedUser(item)}>
+                        <View style={styles.avatarTiny}>
+                          <Text style={styles.avatarTextTiny}>{item.username.charAt(0).toUpperCase()}</Text>
+                        </View>
+                        <Text style={styles.resultText}>@{item.username}</Text>
+                        <Text style={styles.plusIcon}>＋</Text>
+                      </TouchableOpacity>
+                    )}
+                    ListEmptyComponent={
+                      searchQuery.length > 0 && !searchLoading ? (
+                        <Text style={styles.noResultsText}>No users found</Text>
+                      ) : null
+                    }
+                  />
+                )}
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <View style={styles.messagesContainer}>
+          {loading && messages.length === 0 ? (
+            <View style={styles.center}>
+              <ActivityIndicator color="#f59e0b" />
+            </View>
+          ) : (
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              keyExtractor={m => m?.id || Math.random().toString()}
+              contentContainerStyle={styles.messagesList}
+              keyboardDismissMode="interactive"
+              keyboardShouldPersistTaps="handled"
+              inverted
+              showsVerticalScrollIndicator={false}
+              removeClippedSubviews
+              renderItem={({ item }) => (
+                <TeamMessageBubble
+                  item={item}
+                  currentUserId={currentUserId}
+                  onLongPress={handleLongPress}
+                  playVoiceNote={playVoiceNote}
+                />
+              )}
+              ListEmptyComponent={
+                !loading ? (
+                  <View style={styles.emptyMsg}>
+                    <Text style={styles.emptyMsgText}>No messages yet. Start the conversation!</Text>
+                  </View>
+                ) : null
+              }
+            />
+          )}
+        </View>
+
+        {editingMessage && (
+          <View style={styles.actionPreview}>
+            <View style={styles.actionInfo}>
+              <Text style={styles.actionTitle}>Editing Message</Text>
+              <Text style={styles.actionText} numberOfLines={1}>{editingMessage.content}</Text>
+            </View>
+            <TouchableOpacity onPress={() => { setEditingMessage(null); setNewMessage(''); }} style={styles.actionClose}>
+              <Text style={styles.actionCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {replyTo && (
+          <View style={styles.actionPreview}>
+            <View style={styles.actionInfo}>
+              <Text style={styles.actionTitle}>Replying to {replyTo.sender_id === currentUserId ? 'yourself' : 'Member'}</Text>
+              <Text style={styles.actionText} numberOfLines={1}>{replyTo.content}</Text>
+            </View>
+            <TouchableOpacity onPress={() => setReplyTo(null)} style={styles.actionClose}>
+              <Text style={styles.actionCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          <View style={styles.inputRow}>
+            <TouchableOpacity style={styles.attachBtn} onPress={handlePickMedia}>
+              <Text style={styles.attachIcon}>📎</Text>
+            </TouchableOpacity>
+            <TextInput
+              style={styles.messageInput}
+              placeholder="Type a message..."
+              placeholderTextColor="#555"
+              value={newMessage}
+              onChangeText={setNewMessage}
+              multiline
+              maxLength={4000}
+              textAlignVertical="center"
+            />
+            {newMessage.trim() ? (
+              <TouchableOpacity style={styles.sendBtn} onPress={handleSend} disabled={sending}>
+                {sending ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.sendBtnText}>↑</Text>}
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.micBtn} onPress={handleVoiceNote}>
+                <LinearGradient 
+                  colors={isRecording ? ['#ef4444', '#dc2626'] : ['#6366f1', '#4f46e5']} 
+                  style={styles.micGrad}
+                >
+                  <Text style={styles.micIcon}>{isRecording ? '⏹' : '🎤'}</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+// ── TeamsScreen ───────────────────────────────────────────────────────────
+export default function TeamsScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<ChatStackParamList>>();
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeTeam, setActiveTeam] = useState<Team | null>(null);
+  const [currentUserId, setCurrentUserId] = useState('');
+  const [teamMessages, setTeamMessages] = useState<Record<string, TeamMessage[]>>({});
+  const [chatLoading, setChatLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioPlayer, setAudioPlayer] = useState<Audio.Sound | null>(null);
+  const socketRef = useRef<Socket | null>(null);
+
+  const loadData = useCallback(async () => {
+    try {
+      const user = await AuthService.getUser();
+      setCurrentUserId(user?.id || '');
+      const data = await TeamsService.getMyTeams();
+      setTeams(data);
+    } catch (e) {
+      console.error('Failed to load teams', e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const loadTeamMessages = async (teamId: string) => {
+    setChatLoading(true);
+    try {
+      const cacheKey = `cache_team_messages_${teamId}`;
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached && !teamMessages[teamId]) {
+        setTeamMessages(prev => ({ ...prev, [teamId]: JSON.parse(cached) }));
+      }
+      const res = await apiClient.get(`/teams/${teamId}/messages`);
+      const data = Array.isArray(res.data) ? res.data : [];
+      setTeamMessages(prev => ({ ...prev, [teamId]: data }));
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(data));
+    } catch (e) {
+      console.error('Load messages error:', e);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTeam) {
+      loadTeamMessages(activeTeam.id);
+      const initSocket = async () => {
+        const token = await AuthService.getToken();
+        const socket = io(GATEWAY_URL, { auth: { token }, transports: ['websocket'] });
+        socketRef.current = socket;
+        socket.on('connect', () => socket.emit('team:join', activeTeam.id));
+        socket.on('team:message', (msg: TeamMessage) => {
+          setTeamMessages(prev => {
+            const current = prev[activeTeam.id] || [];
+            if (current.some(m => m.id === msg.id)) return prev;
+            return { ...prev, [activeTeam.id]: [...current, msg] };
+          });
+        });
+        socket.on('team:message_edited', (editedMsg: TeamMessage) => {
+          setTeamMessages(prev => {
+            const current = prev[activeTeam.id] || [];
+            return { ...prev, [activeTeam.id]: current.map(m => m.id === editedMsg.id ? { ...m, ...editedMsg } : m) };
+          });
+        });
+        socket.on('team:message_deleted', ({ messageId }: { messageId: string }) => {
+          setTeamMessages(prev => {
+            const current = prev[activeTeam.id] || [];
+            return { ...prev, [activeTeam.id]: current.filter(m => m.id !== messageId) };
+          });
+        });
+        socket.on('team:member_added', (newMember: any) => {
+          // This will be picked up by the TeamChatModal's local state via parent if we passed it,
+          // but TeamChatModal has its own fetch. Let's make it simpler and just fetch or emit.
+          // For now, modal handles its own. But socket can trigger a refresh if we wanted.
+        });
+      };
+      initSocket();
+      return () => {
+        socketRef.current?.removeAllListeners();
+        socketRef.current?.disconnect();
+        socketRef.current = null;
+      };
+    }
+  }, [activeTeam]);
+
+  const handleSendMessage = async (content?: string, attachmentId?: string, replyToId?: string) => {
+    if (!activeTeam) return;
+
+    // Optimistic update — add message instantly before API responds
+    const optimisticId = `opt-team-${Date.now()}`;
+    if (content) {
+      const optimisticMsg: TeamMessage = {
+        id: optimisticId,
+        content,
+        created_at: new Date().toISOString(),
+        sender_id: currentUserId,
+      };
+      setTeamMessages(prev => ({
+        ...prev,
+        [activeTeam.id]: [...(prev[activeTeam.id] || []), optimisticMsg],
+      }));
+    }
+
+    try {
+      await apiClient.post(`/teams/${activeTeam.id}/messages`, { content, attachmentId, replyToId });
+      // Socket will deliver confirmed message; optimistic will be deduplicated
+    } catch (e) {
+      // Rollback optimistic on failure
+      setTeamMessages(prev => ({
+        ...prev,
+        [activeTeam.id]: (prev[activeTeam.id] || []).filter(m => m.id !== optimisticId),
+      }));
+      Alert.alert('Error', 'Failed to send message');
+    }
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    if (!activeTeam) return;
+    try { 
+      // Use the correct team message delete endpoint
+      await apiClient.delete(`/teams/${activeTeam.id}/messages/${messageId}`); 
+    }
+    catch (e) { Alert.alert('Error', 'Failed to delete message'); }
+  };
+
+  const handleEditMessage = async (messageId: string, content: string) => {
+    if (!activeTeam) return;
+    try { 
+      await apiClient.patch(`/teams/${activeTeam.id}/messages/${messageId}`, { content }); 
+    }
+    catch (e) { Alert.alert('Error', 'Failed to edit message'); }
+  };
+
+  const handlePickMedia = async () => {
+    if (!activeTeam) return;
+    try {
+      const asset = await MediaService.pickImage();
+      if (!asset) return;
+      setChatLoading(true);
+      const attachment = await MediaService.uploadMedia(
+        asset.uri,
+        asset.fileName || `team_upload_${Date.now()}.jpg`,
+        asset.mimeType || 'image/jpeg',
+        activeTeam.id
+      );
+      const contentLabel = (asset.mimeType || '').startsWith('video') ? '📹 Video' : '🖼️ Image';
+      await handleSendMessage(contentLabel, attachment.id);
+    } catch (err: any) { 
+      console.error('[TeamsScreen] Media upload error:', err);
+      Alert.alert('Upload Error', err.message || 'Failed to upload media.');
+    }
+    finally { setChatLoading(false); }
+  };
+
+  const handleVoiceNote = async () => {
+    if (!activeTeam) return;
+    if (isRecording) {
+      setIsRecording(false);
+      try {
+        setChatLoading(true);
+        const attachment = await VoiceService.stopRecording(activeTeam.id);
+        if (attachment) {
+          await handleSendMessage('🎤 Voice Note', attachment.id);
+        } else {
+          Alert.alert('Voice Note Error', 'Recording was empty. Please try again.');
+        }
+      } catch (err: any) { 
+        console.error('[TeamsScreen] Voice note error:', err);
+        Alert.alert('Voice Note Error', err.message || 'Failed to process voice note.'); 
+      }
+      finally { setChatLoading(false); }
+    } else {
+      try { 
+        await VoiceService.startRecording(); 
+        setIsRecording(true); 
+      }
+      catch (err: any) { 
+        console.error('[TeamsScreen] Recording error:', err);
+        setIsRecording(false);
+        Alert.alert('Recording Error', err.message || 'Could not start recording.'); 
+      }
+    }
+  };
+
+  const playVoiceNote = async (path: string) => {
+    try {
+      if (audioPlayer) await audioPlayer.unloadAsync();
+      const res = await apiClient.get(`/media/signed-url?path=${path}`);
+      const { sound } = await Audio.Sound.createAsync({ uri: res.data.url });
+      setAudioPlayer(sound);
+      await sound.playAsync();
+    } catch (err) { console.error('Failed to play audio', err); }
+  };
+
+  const handleRemoveMember = async (userId: string) => {
+    if (!activeTeam) return;
+    try {
+      await TeamsService.removeMember(activeTeam.id, userId);
+      // Optional: Show toast or rely on socket
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to remove member');
+      throw e;
+    }
+  };
+
+  const handleSupport = async () => {
+    try {
+      const res = await apiClient.post('/chat/support', { subject: 'Support Request' });
+      if (res.data?.conversation) {
+        navigation.navigate('Chat', { 
+            conversationId: res.data.conversation.id,
+            conversation: res.data.conversation 
+        });
+      } else if (res.data?.existingChatId) {
+        try {
+          const convRes = await apiClient.get(`/chat/conversations/${res.data.existingChatId}`);
+          navigation.navigate('Chat', { conversationId: res.data.existingChatId, conversation: convRes.data });
+        } catch {
+          navigation.navigate('Chat', { 
+              conversationId: res.data.existingChatId,
+              conversation: { id: res.data.existingChatId, name: 'Support', type: 'direct', support_status: 'open', members: [] } as any 
+          });
+        }
+      }
+    } catch (error) { Alert.alert('Error', 'Failed to connect to Support. Please check your connection.'); }
+  };
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Teams</Text>
+        <View style={styles.countBadge}>
+          <Text style={styles.countText}>{teams.length} Hubs</Text>
+        </View>
+      </View>
+
+      <FlatList
+        data={teams}
+        keyExtractor={item => item.id}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor="#f59e0b" />}
+        contentContainerStyle={styles.list}
+        renderItem={({ item }) => (
+          <TouchableOpacity style={styles.card} activeOpacity={0.8} onPress={() => setActiveTeam(item)}>
+            <View style={styles.avatarWrap}>
+              {item.avatar_url ? (
+                <Image source={{ uri: `https://tngcvgisfctggvivcnva.supabase.co/storage/v1/object/public/team-avatars/${item.avatar_url}` }} style={styles.avatar} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Text style={styles.avatarText}>{(item.name || 'T').charAt(0).toUpperCase()}</Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.info}>
+              <Text style={styles.name}>{item.name}</Text>
+              <Text style={styles.role}>{item.my_role.toUpperCase()}</Text>
+              {item.description && <Text style={styles.desc} numberOfLines={1}>{item.description}</Text>}
+            </View>
+            <Text style={styles.chatHint}>💬</Text>
+          </TouchableOpacity>
+        )}
+        ListEmptyComponent={!loading ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyIcon}>🏢</Text>
+            <Text style={styles.emptyTitle}>No Teams Yet</Text>
+            <Text style={styles.emptySub}>Create one or ask for an invite.</Text>
+          </View>
+        ) : <ActivityIndicator style={{ marginTop: 20 }} color="#f59e0b" />}
+      />
+
+      {activeTeam && (
+        <TeamChatModal
+          team={activeTeam}
+          onClose={() => setActiveTeam(null)}
+          currentUserId={currentUserId}
+          messages={teamMessages[activeTeam.id] || []}
+          onSendMessage={handleSendMessage}
+          loading={chatLoading}
+          playVoiceNote={playVoiceNote}
+          handlePickMedia={handlePickMedia}
+          handleVoiceNote={handleVoiceNote}
+          isRecording={isRecording}
+          onDeleteMessage={handleDeleteMessage}
+          onEditMessage={handleEditMessage}
+          onRemoveMember={handleRemoveMember}
+        />
+      )}
+
+      <TouchableOpacity style={styles.fabSupport} onPress={handleSupport}>
+        <Text style={styles.fabSupportIcon}>💬</Text>
+        <Text style={styles.fabSupportText}>Need Help?</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#060611' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16, borderBottomWidth: 1, borderColor: '#111133' },
+  title: { color: '#fff', fontSize: 26, fontWeight: '800', flex: 1 },
+  countBadge: { backgroundColor: '#f59e0b22', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 4, borderWidth: 1, borderColor: '#f59e0b44' },
+  countText: { color: '#f59e0b', fontWeight: '700', fontSize: 14 },
+  list: { padding: 16 },
+  card: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0d0d1e', borderRadius: 18, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#111133' },
+  avatarWrap: { marginRight: 16 },
+  avatar: { width: 52, height: 52, borderRadius: 16 },
+  avatarPlaceholder: { width: 52, height: 52, borderRadius: 16, backgroundColor: '#f59e0b22', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#f59e0b44' },
+  avatarText: { color: '#f59e0b', fontSize: 20, fontWeight: '800' },
+  info: { flex: 1 },
+  name: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  role: { color: '#f59e0b', fontSize: 10, fontWeight: '800', marginTop: 2 },
+  desc: { color: '#666', fontSize: 12, marginTop: 4 },
+  chatHint: { fontSize: 20, marginLeft: 8 },
+  empty: { alignItems: 'center', paddingTop: 80, paddingHorizontal: 32 },
+  emptyIcon: { fontSize: 48, marginBottom: 16 },
+  emptyTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  emptySub: { color: '#666', fontSize: 14, marginTop: 6, textAlign: 'center', lineHeight: 22 },
+  fabSupport: { position: 'absolute', bottom: 20, right: 20, backgroundColor: '#3b82f6', flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, borderRadius: 30, elevation: 8 },
+  fabSupportIcon: { fontSize: 18, marginRight: 6 },
+  fabSupportText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
+  chatContainer: { flex: 1, backgroundColor: '#060611' },
+  messagesContainer: { flex: 1 },
+  chatHeader: { flexDirection: 'row', alignItems: 'center', paddingTop: 56, paddingBottom: 16, paddingHorizontal: 16, borderBottomWidth: 1, borderColor: '#111133' },
+  chatBackBtn: { marginRight: 16, padding: 4 },
+  chatBackText: { color: '#f59e0b', fontSize: 15, fontWeight: '600' },
+  chatHeaderInfo: { flex: 1 },
+  chatHeaderTitle: { color: '#fff', fontSize: 17, fontWeight: '800' },
+  chatHeaderSub: { color: '#f59e0b', fontSize: 10, fontWeight: '700', marginTop: 2 },
+  headerActionBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#111133', justifyContent: 'center', alignItems: 'center' },
+  headerActionIcon: { fontSize: 16 },
+  messagesList: { padding: 16, paddingBottom: 8 },
+  messageBubble: { maxWidth: '80%', padding: 12, borderRadius: 18, marginBottom: 10 },
+  myBubble: { backgroundColor: '#6366f1', alignSelf: 'flex-end', borderBottomRightRadius: 4 },
+  theirBubble: { backgroundColor: '#1a1a2e', alignSelf: 'flex-start', borderBottomLeftRadius: 4, borderWidth: 1, borderColor: '#2a2a4e' },
+  senderName: { color: '#f59e0b', fontSize: 11, fontWeight: '700', marginBottom: 4 },
+  messageText: { color: '#fff', fontSize: 15, lineHeight: 20 },
+  bubbleFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 4 },
+  editedTag: { color: 'rgba(255,255,255,0.3)', fontSize: 9, fontStyle: 'italic', marginRight: 4 },
+  messageTime: { color: 'rgba(255,255,255,0.4)', fontSize: 10 },
+  attachmentContainer: { marginBottom: 8, borderRadius: 12, overflow: 'hidden' },
+  attachmentImage: { width: 200, height: 150, borderRadius: 12 },
+  voiceNoteBtn: { backgroundColor: '#f59e0b22', padding: 10, borderRadius: 12, borderWidth: 1, borderColor: '#f59e0b44' },
+  voiceNoteText: { color: '#f59e0b', fontWeight: 'bold' },
+  attachmentFile: { color: '#f59e0b', fontSize: 13, textDecorationLine: 'underline' },
+  replyContext: { backgroundColor: 'rgba(255,255,255,0.05)', borderLeftWidth: 3, borderLeftColor: '#f59e0b', padding: 6, borderRadius: 4, marginBottom: 6 },
+  replyContextName: { color: '#f59e0b', fontSize: 11, fontWeight: '700', marginBottom: 2 },
+  replyContextText: { color: '#aaa', fontSize: 11 },
+  actionPreview: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0d0d1e', padding: 10, borderTopWidth: 1, borderColor: '#111133' },
+  actionInfo: { flex: 1 },
+  actionTitle: { color: '#f59e0b', fontSize: 11, fontWeight: '700', marginBottom: 2 },
+  actionText: { color: '#aaa', fontSize: 11 },
+  actionClose: { width: 30, height: 30, justifyContent: 'center', alignItems: 'center' },
+  actionCloseText: { color: '#666', fontSize: 16 },
+  emptyMsg: { alignItems: 'center', paddingTop: 80 },
+  emptyMsgText: { color: '#555', fontSize: 14 },
+  inputContainer: { backgroundColor: '#0d0d1e', borderTopWidth: 1, borderColor: '#111133' },
+  inputRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 10, gap: 8 },
+  attachBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  attachIcon: { fontSize: 22, color: '#f59e0b' },
+  messageInput: { flex: 1, backgroundColor: '#16162a', color: '#fff', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24, maxHeight: 120, fontSize: 15, borderWidth: 1, borderColor: '#1e1e3a' },
+  micBtn: { width: 46, height: 46, borderRadius: 23, overflow: 'hidden' },
+  micGrad: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
+  micIcon: { color: '#fff', fontSize: 18 },
+  sendBtn: { width: 46, height: 46, borderRadius: 23, backgroundColor: '#f59e0b', justifyContent: 'center', alignItems: 'center' },
+  sendBtnText: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center' },
+  inviteModalContent: { width: '90%', backgroundColor: '#0d0d1e', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#1e1e3a', maxHeight: '80%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  modalCloseIcon: { color: '#666', fontSize: 20, padding: 4 },
+  searchContainer: { position: 'relative', marginBottom: 16 },
+  modalSearchInput: { backgroundColor: '#16162a', color: '#fff', padding: 14, paddingRight: 40, borderRadius: 14, borderWidth: 1, borderColor: '#1e1e3a', fontSize: 15 },
+  searchLoader: { position: 'absolute', right: 14, top: 16 },
+  resultsContainer: { minHeight: 100 },
+  resultsList: { maxHeight: 300 },
+  resultItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, marginBottom: 8, backgroundColor: '#16162a' },
+  avatarTiny: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#f59e0b22', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  avatarTextTiny: { color: '#f59e0b', fontSize: 14, fontWeight: '800' },
+  resultText: { color: '#fff', fontSize: 15, flex: 1, fontWeight: '600' },
+  plusIcon: { color: '#f59e0b', fontSize: 18, fontWeight: '800' },
+  noResultsText: { color: '#666', textAlign: 'center', marginTop: 20, fontSize: 14 },
+  selectedUserCard: { backgroundColor: '#16162a', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#f59e0b44' },
+  selectedUserRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  avatarSmall: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#f59e0b22', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  avatarTextSmall: { color: '#f59e0b', fontSize: 18, fontWeight: '800' },
+  selectedUserInfo: { flex: 1 },
+  selectedUserName: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  selectedUserEmail: { color: '#666', fontSize: 12, marginTop: 2 },
+  removeUser: { color: '#ef4444', fontSize: 20, padding: 4 },
+  rolePicker: { marginBottom: 20 },
+  roleLabel: { color: '#aaa', fontSize: 13, marginBottom: 10, fontWeight: '600' },
+  roleOptions: { flexDirection: 'row', gap: 10 },
+  roleOption: { flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#1e1e3a', alignItems: 'center', backgroundColor: '#0d0d1e' },
+  roleOptionActive: { backgroundColor: '#f59e0b22', borderColor: '#f59e0b' },
+  roleOptionText: { color: '#666', fontWeight: '700' },
+  roleOptionTextActive: { color: '#f59e0b' },
+  inviteConfirmBtn: { backgroundColor: '#f59e0b', padding: 16, borderRadius: 14, alignItems: 'center' },
+  inviteConfirmText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  membersDropdown: { backgroundColor: '#0d0d1e', borderBottomWidth: 1, borderColor: '#111133', maxHeight: 300, padding: 16 },
+  dropdownHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  dropdownTitle: { color: '#f59e0b', fontSize: 14, fontWeight: '800' },
+  dropdownClose: { color: '#666', fontSize: 16 },
+  membersFlatList: { width: '100%' },
+  memberItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  memberAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#111133', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  memberAvatarText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  memberInfo: { flex: 1 },
+  memberName: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  memberRole: { color: '#666', fontSize: 10, fontWeight: '800', marginTop: 2 },
+  youBadge: { color: '#f59e0b', fontSize: 10, fontWeight: '800', backgroundColor: '#f59e0b22', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  removeMemberBtn: { padding: 4, marginLeft: 8 },
+  removeMemberIcon: { fontSize: 16 },
+});

@@ -1,0 +1,444 @@
+import { useState, useEffect, useCallback } from 'react';
+import { toast } from 'react-hot-toast';
+import { useAuth } from '../../context/AuthContext';
+import {
+    Search,
+    UserCheck,
+    UserX,
+    ChevronLeft,
+    ChevronRight,
+    FileText,
+    Filter,
+    Loader2,
+    Zap,
+    X
+} from 'lucide-react';
+import { API_URL } from '../../lib/api';
+import SecureImage from '../../components/common/SecureImage';
+import './UserManagement.css';
+
+interface User {
+    id: string;
+    username: string;
+    email: string;
+    full_name: string;
+    avatar_url: string;
+    role: string;
+    status: string;
+    is_online: boolean;
+    last_seen: string;
+    created_at: string;
+    notesCount: number;
+    daily_deposit_limit: number | null;
+    plan_tier: string;
+    last_ip: string | null;
+    country_code: string | null;
+}
+
+interface Pagination {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+}
+
+export const UserManagement = () => {
+    const { session } = useAuth();
+    const [users, setUsers] = useState<User[]>([]);
+    const [pagination, setPagination] = useState<Pagination>({
+        page: 1,
+        limit: 20,
+        total: 0,
+        totalPages: 0
+    });
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState<string>('');
+    const [loading, setLoading] = useState(true);
+    const [actionLoading, setActionLoading] = useState<string | null>(null);
+    const [selectedUser, setSelectedUser] = useState<User | null>(null);
+    const [isLimitModalOpen, setIsLimitModalOpen] = useState(false);
+    const [newLimit, setNewLimit] = useState<string>('');
+
+    const fetchUsers = useCallback(async () => {
+        if (!session?.access_token) return;
+        setLoading(true);
+
+        try {
+            const params = new URLSearchParams({
+                page: pagination.page.toString(),
+                limit: pagination.limit.toString(),
+                ...(search && { search }),
+                ...(statusFilter && { status: statusFilter })
+            });
+
+            const res = await fetch(`${API_URL}/api/admin/users?${params}`, {
+                headers: { 
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (!res.ok) throw new Error('Failed to fetch users');
+
+            const data = await res.json() || {};
+            setUsers(data.users || []);
+            setPagination(data.pagination || {
+                page: 1,
+                limit: 20,
+                total: 0,
+                totalPages: 0
+            });
+        } catch (err) {
+            console.error('Failed to fetch users:', err);
+            toast.error('Failed to load users');
+        } finally {
+            setLoading(false);
+        }
+    }, [session?.access_token, pagination.page, pagination.limit, search, statusFilter]);
+
+    useEffect(() => {
+        fetchUsers();
+    }, [fetchUsers]);
+
+    useEffect(() => {
+        const debounce = setTimeout(() => {
+            if (pagination.page !== 1 && search) {
+                setPagination(prev => ({ ...prev, page: 1 }));
+            }
+        }, 300);
+        return () => clearTimeout(debounce);
+    }, [search, pagination.page]);
+
+    const updateUserStatus = async (userId: string, newStatus: 'active' | 'suspended') => {
+        if (!session?.access_token) return;
+        setActionLoading(userId);
+
+        try {
+            const res = await fetch(`${API_URL}/api/admin/users/${userId}/status`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ status: newStatus })
+            });
+
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.error || 'Failed to update user');
+            }
+
+            // Update local state
+            setUsers(prev => prev.map(u =>
+                u.id === userId ? { ...u, status: newStatus } : u
+            ));
+        } catch (err) {
+            console.error('Failed to update user:', err);
+            toast.error(err instanceof Error ? err.message : 'Failed to update user');
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleUpdateLimit = async () => {
+        if (!selectedUser || !session?.access_token) return;
+        setActionLoading(selectedUser.id);
+
+        try {
+            const res = await fetch(`${API_URL}/api/admin/users/${selectedUser.id}/limit`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`
+                },
+                body: JSON.stringify({ daily_limit: parseFloat(newLimit) })
+            });
+
+            if (!res.ok) throw new Error('Failed to update limit');
+
+            setUsers(prev => prev.map(u =>
+                u.id === selectedUser.id ? { ...u, daily_deposit_limit: parseFloat(newLimit) } : u
+            ));
+            toast.success('Limit updated successfully');
+            setIsLimitModalOpen(false);
+        } catch {
+            toast.error('Failed to update limit');
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const formatDate = (dateStr: string) => {
+        return new Date(dateStr).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+    };
+
+    return (
+        <div className="user-management">
+            <div className="page-header">
+                <h2>User Management</h2>
+                <span className="total-count">{pagination.total} users</span>
+            </div>
+
+            {/* Filters */}
+            <div className="filters-bar">
+                <div className="search-box">
+                    <Search size={18} />
+                    <input
+                        id="user-search"
+                        name="search"
+                        type="text"
+                        placeholder="Search by username, email, or name..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        aria-label="Search users by username, email, or name"
+                    />
+                </div>
+                <div className="filter-group">
+                    <Filter size={18} />
+                    <select
+                        id="user-status-filter"
+                        name="status"
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        aria-label="Filter by status"
+                    >
+                        <option value="">All Status</option>
+                        <option value="active">Active</option>
+                        <option value="suspended">Suspended</option>
+                    </select>
+                </div>
+            </div>
+
+            {/* Users Table */}
+            <div className="users-table-container">
+                <table className="users-table">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Email</th>
+                            <th>IP Address</th>
+                            <th>Country</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Notes</th>
+                            <th>Joined</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {loading ? (
+                            <tr>
+                                <td colSpan={9} className="loading-row">
+                                    <div className="loader-small" />
+                                    Loading users...
+                                </td>
+                            </tr>
+                        ) : users.length === 0 ? (
+                            <tr>
+                                <td colSpan={9} className="empty-row">
+                                    No users found
+                                </td>
+                            </tr>
+                        ) : (
+                            users?.map(user => {
+                                const isProxy = user.last_ip?.includes('(Proxy)');
+                                const cleanIp = user.last_ip?.replace('(Proxy)', '').trim();
+                                
+                                return (
+                                <tr key={user.id}>
+                                    <td className="user-cell">
+                                        <div className="user-info">
+                                            {user.avatar_url ? (
+                                                <SecureImage src={user.avatar_url} alt={user.username} fallbackType="profile" />
+                                            ) : (
+                                                <div className="avatar-placeholder">
+                                                    {user.username?.[0]?.toUpperCase() || '?'}
+                                                </div>
+                                            )}
+                                            <div className="user-details min-w-0">
+                                                <span className="username truncate">
+                                                    {user.username}
+                                                    {user.is_online && <span className="online-dot flex-shrink-0" />}
+                                                </span>
+                                                <span className="fullname truncate text-xs text-gray-500">{user.full_name}</span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="max-w-[150px] md:max-w-[200px]">
+                                        <div className="truncate" title={user.email}>{user.email}</div>
+                                    </td>
+                                    <td>
+                                        <div className="flex flex-col items-start gap-1">
+                                            <span className="font-mono text-xs">{cleanIp || 'Unknown'}</span>
+                                            {isProxy && (
+                                                <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded border border-red-500/30">
+                                                    PROXY/VPN
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div className="flex items-center gap-2">
+                                            {user.country_code ? (
+                                                <>
+                                                    <span className="text-lg" title={user.country_code}>
+                                                        {String.fromCodePoint(...[...user.country_code.toUpperCase()].map(c => 0x1F1E6 - 65 + c.charCodeAt(0)))}
+                                                    </span>
+                                                    <span className="text-xs text-gray-400">{user.country_code}</span>
+                                                </>
+                                            ) : (
+                                                <span className="text-xs text-gray-500">N/A</span>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span className={`role-badge ${user.role}`}>
+                                            {user.role}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span className={`status-badge ${user.status}`}>
+                                            {user.status}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span className="notes-count">
+                                            <FileText size={14} />
+                                            {user.notesCount}
+                                        </span>
+                                    </td>
+                                    <td className="date-cell">{formatDate(user.created_at)}</td>
+                                    <td className="actions-cell">
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                className="action-btn limit"
+                                                onClick={() => {
+                                                    setSelectedUser(user);
+                                                    setNewLimit(user.daily_deposit_limit?.toString() || '');
+                                                    setIsLimitModalOpen(true);
+                                                }}
+                                                title="Manage Limits"
+                                            >
+                                                <Zap size={16} />
+                                            </button>
+                                            
+                                            {user.role !== 'admin' && (
+                                                <>
+                                                    {user.status === 'active' ? (
+                                                        <button
+                                                            className="action-btn suspend"
+                                                            onClick={() => updateUserStatus(user.id, 'suspended')}
+                                                            disabled={actionLoading === user.id}
+                                                            title="Suspend user"
+                                                        >
+                                                            {actionLoading === user.id ? <Loader2 size={16} className="animate-spin" /> : <UserX size={16} />}
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            className="action-btn activate"
+                                                            onClick={() => updateUserStatus(user.id, 'active')}
+                                                            disabled={actionLoading === user.id}
+                                                            title="Reactivate user"
+                                                        >
+                                                            {actionLoading === user.id ? <Loader2 size={16} className="animate-spin" /> : <UserCheck size={16} />}
+                                                        </button>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                                );
+                            })
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Pagination */}
+            {pagination.totalPages > 1 && (
+                <div className="pagination">
+                    <button
+                        className="page-btn"
+                        onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
+                        disabled={pagination.page <= 1}
+                    >
+                        <ChevronLeft size={18} />
+                        Previous
+                    </button>
+                    <span className="page-info">
+                        Page {pagination.page} of {pagination.totalPages}
+                    </span>
+                    <button
+                        className="page-btn"
+                        onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
+                        disabled={pagination.page >= pagination.totalPages}
+                    >
+                        Next
+                        <ChevronRight size={18} />
+                    </button>
+                </div>
+            )}
+
+            {/* Limit Edit Modal */}
+            {isLimitModalOpen && selectedUser && (
+                <div className="modal-overlay" onClick={() => setIsLimitModalOpen(false)}>
+                    <div className="modal-content limit-modal" onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3>Manage Limits: {selectedUser.username}</h3>
+                            <button className="close-btn" onClick={() => setIsLimitModalOpen(false)}>
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="modal-body">
+                            <div className="current-info mb-4 text-sm text-gray-400">
+                                <p>Current Plan: <span className="capitalize text-white">{selectedUser.plan_tier}</span></p>
+                                <p>Current Limit: <span className="text-white">${selectedUser.daily_deposit_limit?.toLocaleString() || 'Default'}</span></p>
+                            </div>
+                            
+                            <div className="form-group mb-6">
+                                <label className="block text-xs uppercase tracking-wider text-gray-500 mb-2">Daily Deposit Limit (USD)</label>
+                                <div className="relative">
+                                    <input
+                                        id="daily-limit-input"
+                                        name="dailyLimit"
+                                        type="number"
+                                        value={newLimit}
+                                        onChange={e => setNewLimit(e.target.value)}
+                                        placeholder="e.g. 5000"
+                                        className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-primary"
+                                    />
+                                    <span className="absolute right-3 top-3 text-gray-400">$</span>
+                                </div>
+                                <p className="text-[10px] text-gray-500 mt-2 italic">Setting a custom limit will override the default plan limits for this user.</p>
+                            </div>
+
+                            <div className="modal-actions flex gap-3">
+                                <button 
+                                    className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+                                    onClick={() => setIsLimitModalOpen(false)}
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    className="flex-1 py-3 bg-primary hover:bg-primary-dark rounded-lg font-bold transition-colors disabled:opacity-50"
+                                    onClick={handleUpdateLimit}
+                                    disabled={actionLoading === selectedUser.id}
+                                >
+                                    {actionLoading === selectedUser.id ? <Loader2 className="animate-spin mx-auto" size={20} /> : 'Save Changes'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default UserManagement;

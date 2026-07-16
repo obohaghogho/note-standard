@@ -1,0 +1,23 @@
+# Logs and temporary files
+*.log
+*.error.log
+error.txt
+err_stack.txt
+*plan*.md
+*task*.md
+*walkthrough*.md
+*debug*.txt
+result.txt
+
+# Environment variables
+.env
+.env.development
+
+# Credentials
+*.json
+!package.json
+!package-lock.json
+!tsconfig*.json
+
+# Dependencies
+node_modules/

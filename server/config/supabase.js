@@ -1,0 +1,58 @@
+const { createClient } = require("@supabase/supabase-js");
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  const errorMsg = "❌ Supabase environment variables are missing (SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY)";
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(errorMsg);
+  } else {
+    console.error(`\x1b[31m%s\x1b[0m`, errorMsg);
+  }
+}
+
+// FIX: TCP Ephemeral Port Exhaustion
+// We must inject an HTTP keep-alive agent into Supabase's cross-fetch.
+// Without this, every single DB query opens a new connection, exhausting local ports
+// after a few hours of uptime, which causes severe request queuing and latency.
+const http = require('http');
+const https = require('https');
+const nodeFetch = require('node-fetch');
+
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 100 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 100 });
+
+const customFetch = (url, options) => {
+  return nodeFetch(url, {
+    ...options,
+    agent: (parsedUrl) => parsedUrl.protocol === 'http:' ? httpAgent : httpsAgent
+  });
+};
+
+const supabase = (supabaseUrl && supabaseServiceKey) 
+  ? createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      },
+      global: {
+        fetch: customFetch
+      }
+    })
+  : { 
+      from: () => ({ 
+        select: () => ({ 
+          order: () => ({ limit: () => ({ data: null, error: null }) }),
+          limit: () => ({ data: null, error: null }),
+          eq: () => ({ 
+            single: () => ({ data: null, error: new Error('Supabase not initialized') }),
+            maybeSingle: () => ({ data: null, error: new Error('Supabase not initialized') }) 
+          }),
+          maybeSingle: () => ({ data: null, error: new Error('Supabase not initialized') })
+        }) 
+      }) 
+    }; 
+
+
+module.exports = supabase;

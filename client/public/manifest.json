@@ -1,0 +1,23 @@
+{
+  "id": "/",
+  "short_name": "NoteStandard",
+  "name": "NoteStandard | Professional Digital Solutions & Asset Management",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#1E40AF",
+  "background_color": "#0a0a0a"
+}

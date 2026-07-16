@@ -1,0 +1,573 @@
+/* ═══════════════════════════════════════════════════════════════
+   GreyTransferDetails — Bank Transfer Payment UI
+   ═══════════════════════════════════════════════════════════════ */
+
+.gt-container {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 20px 16px;
+  font-family: "Inter", "Segoe UI", sans-serif;
+}
+
+/* ─── Header ──────────────────────────────────────────────── */
+
+.gt-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.gt-back-btn {
+  background: none;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.gt-back-btn:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.gt-title {
+  flex: 1;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e1b4b;
+  margin: 0;
+}
+
+.gt-timer {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f59e0b;
+  background: #fffbeb;
+  padding: 4px 12px;
+  border-radius: 20px;
+  white-space: nowrap;
+  animation: gt-pulse 2s ease-in-out infinite;
+}
+
+.gt-timer-expired {
+  color: #ef4444;
+  background: #fef2f2;
+  animation: none;
+}
+
+@keyframes gt-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* ─── Amount Banner ───────────────────────────────────────── */
+
+.gt-amount-banner {
+  background: linear-gradient(135deg, #1e1b4b, #312e81);
+  border-radius: 16px;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.gt-amount-banner::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  right: -30%;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.2), transparent);
+  border-radius: 50%;
+}
+
+.gt-amount-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  flex-shrink: 0;
+}
+
+.gt-amount-value {
+  flex: 1;
+  font-size: 26px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.5px;
+  text-align: right;
+  position: relative;
+  z-index: 1;
+}
+
+.gt-copy-amount {
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: white;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+  position: relative;
+  z-index: 1;
+}
+
+.gt-copy-amount:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ─── Details Card ────────────────────────────────────────── */
+
+.gt-details-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.gt-detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.gt-detail-row:last-child {
+  border-bottom: none;
+}
+
+.gt-detail-row.gt-highlight {
+  background: linear-gradient(135deg, #faf5ff, #f5f3ff);
+}
+
+.gt-detail-label {
+  font-size: 13px;
+  color: #6b7280;
+  flex-shrink: 0;
+  min-width: 110px;
+}
+
+.gt-detail-value-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.gt-detail-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e1b4b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gt-mono {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 16px;
+  color: #7c3aed;
+  letter-spacing: 0.5px;
+}
+
+.gt-copy-btn {
+  background: none;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #6b7280;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  font-family: inherit;
+}
+
+.gt-copy-btn:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+/* ─── Reference Card ──────────────────────────────────────── */
+
+.gt-reference-card {
+  background: linear-gradient(135deg, #faf5ff, #ede9fe);
+  border: 2px solid #c4b5fd;
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+
+.gt-ref-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #6d28d9;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.gt-ref-required {
+  color: #a78bfa;
+  font-weight: 400;
+}
+
+.gt-ref-value-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.gt-ref-value {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 22px;
+  font-weight: 700;
+  color: #4c1d95;
+  letter-spacing: 1.5px;
+  flex: 1;
+}
+
+.gt-copy-ref {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.gt-copy-ref:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+}
+
+/* ─── Instructions ────────────────────────────────────────── */
+
+.gt-instructions {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+}
+
+.gt-instructions h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+  margin: 0 0 12px 0;
+}
+
+.gt-instructions ol {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.8;
+}
+
+.gt-instructions strong {
+  color: #1e1b4b;
+}
+
+.gt-extra-info {
+  margin: 12px 0 0;
+  padding: 10px 14px;
+  background: #eff6ff;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #1e40af;
+}
+
+/* ─── Action Buttons ──────────────────────────────────────── */
+
+.gt-actions {
+  margin-top: 8px;
+}
+
+.gt-confirm-btn {
+  width: 100%;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  font-family: inherit;
+}
+
+.gt-confirm-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3);
+}
+
+.gt-confirm-btn:active {
+  transform: translateY(0);
+}
+
+/* ─── Polling Status ──────────────────────────────────────── */
+
+.gt-polling-status {
+  text-align: center;
+  padding: 24px 16px;
+  background: #f8fafc;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+}
+
+.gt-poll-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #8b5cf6;
+  border-radius: 50%;
+  animation: gt-spin 0.8s linear infinite;
+  margin: 0 auto 16px;
+}
+
+@keyframes gt-spin {
+  to { transform: rotate(360deg); }
+}
+
+.gt-polling-status p {
+  font-size: 14px;
+  color: #374151;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.gt-polling-status small {
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.gt-poll-success {
+  animation: gt-fadeIn 0.4s ease;
+}
+
+.gt-poll-success span {
+  font-size: 40px;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.gt-poll-success p {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.gt-poll-failed span {
+  font-size: 32px;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.gt-poll-failed p {
+  color: #6b7280;
+  margin-bottom: 16px;
+}
+
+.gt-retry-poll-btn {
+  padding: 8px 20px;
+  background: #8b5cf6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.gt-retry-poll-btn:hover {
+  background: #7c3aed;
+}
+
+/* ─── Expired Notice ──────────────────────────────────────── */
+
+.gt-expired-notice {
+  text-align: center;
+  padding: 24px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 14px;
+}
+
+.gt-expired-notice p {
+  font-size: 14px;
+  color: #991b1b;
+  margin: 0 0 16px 0;
+}
+
+.gt-new-deposit-btn {
+  padding: 10px 24px;
+  background: linear-gradient(135deg, #8b5cf6, #6366f1);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.gt-new-deposit-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+/* ─── Animations ──────────────────────────────────────────── */
+
+@keyframes gt-fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Dark Mode ───────────────────────────────────────────── */
+
+@media (prefers-color-scheme: dark) {
+  .gt-title {
+    color: #e5e7eb;
+  }
+
+  .gt-back-btn {
+    border-color: #374151;
+    color: #9ca3af;
+  }
+
+  .gt-back-btn:hover {
+    background: #1f2937;
+    color: #e5e7eb;
+  }
+
+  .gt-details-card {
+    background: #1f2937;
+    border-color: #374151;
+  }
+
+  .gt-detail-row {
+    border-bottom-color: #2d3748;
+  }
+
+  .gt-detail-row.gt-highlight {
+    background: linear-gradient(135deg, #1e1b4b33, #312e8133);
+  }
+
+  .gt-detail-value {
+    color: #f3f4f6;
+  }
+
+  .gt-copy-btn {
+    border-color: #4b5563;
+    color: #9ca3af;
+  }
+
+  .gt-copy-btn:hover {
+    background: #374151;
+  }
+
+  .gt-reference-card {
+    background: linear-gradient(135deg, #1e1b4b, #312e81);
+    border-color: #6d28d9;
+  }
+
+  .gt-ref-label {
+    color: #c4b5fd;
+  }
+
+  .gt-ref-required {
+    color: #8b5cf6;
+  }
+
+  .gt-ref-value {
+    color: #e9d5ff;
+  }
+
+  .gt-instructions {
+    background: #1a1d23;
+    border-color: #2d3748;
+  }
+
+  .gt-instructions h4 {
+    color: #e5e7eb;
+  }
+
+  .gt-instructions ol {
+    color: #9ca3af;
+  }
+
+  .gt-instructions strong {
+    color: #e5e7eb;
+  }
+
+  .gt-extra-info {
+    background: #1e3a5f;
+    color: #93c5fd;
+  }
+
+  .gt-polling-status {
+    background: #1a1d23;
+    border-color: #2d3748;
+  }
+
+  .gt-polling-status p {
+    color: #d1d5db;
+  }
+
+  .gt-expired-notice {
+    background: #2d1b1b;
+    border-color: #7f1d1d;
+  }
+
+  .gt-expired-notice p {
+    color: #fca5a5;
+  }
+}
+
+/* ─── Responsive ──────────────────────────────────────────── */
+
+@media (max-width: 480px) {
+  .gt-amount-value {
+    font-size: 22px;
+  }
+
+  .gt-ref-value {
+    font-size: 18px;
+    letter-spacing: 1px;
+  }
+
+  .gt-ref-value-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .gt-copy-ref {
+    width: 100%;
+    text-align: center;
+  }
+
+  .gt-detail-label {
+    min-width: 90px;
+    font-size: 12px;
+  }
+}

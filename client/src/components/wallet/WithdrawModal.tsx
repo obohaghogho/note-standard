@@ -1,0 +1,492 @@
+import React, { useState, useEffect } from 'react';
+import { X, ArrowUpRight, Loader2, Building2, AlertTriangle, Clock, ShieldCheck } from 'lucide-react';
+import { Button } from '../common/Button';
+import { useWallet } from '../../hooks/useWallet';
+import { formatCurrency } from '../../lib/CurrencyFormatter';
+import type { Currency } from '@/types/wallet';
+import { POPULAR_BANKS, COUNTRIES } from '../../lib/bankList';
+import { motion, AnimatePresence } from 'framer-motion';
+import ReCAPTCHA from 'react-google-recaptcha';
+
+interface WithdrawModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    selectedCurrency: Currency;
+    selectedNetwork?: string;
+    onSuccess: () => void;
+}
+
+export const WithdrawModal: React.FC<WithdrawModalProps> = ({ 
+    isOpen, 
+    onClose, 
+    selectedCurrency, 
+    selectedNetwork = 'native',
+    onSuccess 
+}) => {
+    const { withdraw, getCommissionRate, wallets } = useWallet();
+    const [address, setAddress] = useState('');
+    const [amount, setAmount] = useState('');
+    const [isWithdrawing, setIsWithdrawing] = useState(false);
+    const [withdrawFee, setWithdrawFee] = useState<{ fee: number, net: number } | null>(null);
+
+    // Fiat State
+    const [selectedCountry, setSelectedCountry] = useState('Nigeria'); // Default or detect
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedBank, setSelectedBank] = useState<{ name: string, code: string } | null>(null);
+    const [accountNumber, setAccountNumber] = useState('');
+    const [accountName, setAccountName] = useState('');
+    const [swiftCode, setSwiftCode] = useState('');
+    const [branchCode, setBranchCode] = useState('');
+    const [showBankList, setShowBankList] = useState(false);
+    const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+    const recaptchaRef = React.useRef<ReCAPTCHA>(null);
+
+    const isFiat = selectedCurrency === 'USD' || selectedCurrency === 'NGN' || selectedCurrency === 'EUR' || selectedCurrency === 'GBP';
+
+    const filteredBanks = POPULAR_BANKS.filter(b => 
+        b.country === selectedCountry && 
+        b.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const wallet = wallets.find(w => w.asset === selectedCurrency && w.network === selectedNetwork);
+    const availableBalance = wallet ? (wallet.available ?? wallet.balance) : 0;
+
+    useEffect(() => {
+        if (isOpen) {
+            setAddress('');
+            setAmount('');
+            setAddress('');
+            setAmount('');
+            setWithdrawFee(null);
+            setSelectedBank(null);
+            setAccountNumber('');
+            setAccountName('');
+            setSwiftCode('');
+            setBranchCode('');
+            setSearchTerm('');
+        }
+    }, [isOpen]);
+
+    useEffect(() => {
+        const timer = setTimeout(async () => {
+            if (!amount || isNaN(parseFloat(amount))) {
+                setWithdrawFee(null);
+                return;
+            }
+            try {
+                const val = parseFloat(amount);
+                const settings = await getCommissionRate('WITHDRAWAL', selectedCurrency);
+                
+                let fee = 0;
+                if (settings && settings.length > 0) {
+                    const s = settings[0];
+                    if (s.commission_type === 'PERCENTAGE') fee = val * (s.value / 100);
+                    else fee = s.value;
+                    if (s.min_fee && fee < s.min_fee) fee = s.min_fee;
+                    if (s.max_fee && fee > s.max_fee) fee = s.max_fee;
+                }
+                setWithdrawFee({ fee, net: val - fee });
+            } catch (err) {
+                console.error("Withdraw fee calculation failed:", err);
+            }
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [amount, selectedCurrency, getCommissionRate]);
+
+    const handleWithdraw = async (e: React.FormEvent) => {
+        e.preventDefault();
+        
+        if (isFiat) {
+             if (!amount || !accountNumber || !accountName) return;
+             // For non-NG, we might not have a selectedBank from the list, check searchTerm
+             if (!selectedBank && !searchTerm) return;
+        } else {
+             if (!amount || !address) return;
+        }
+
+        if (parseFloat(amount) > availableBalance) return;
+
+        // reCAPTCHA check
+        if (!captchaToken && import.meta.env.PROD) {
+            return;
+        }
+
+        setIsWithdrawing(true);
+        try {
+            await withdraw({
+                currency: selectedCurrency,
+                amount: parseFloat(amount),
+                address: isFiat ? undefined : address,
+                bank_code: isFiat ? (selectedBank?.code || 'OTHER') : undefined,
+                bank_name: isFiat ? (selectedBank?.name || searchTerm) : undefined,
+                account_number: isFiat ? accountNumber : undefined,
+                account_name: isFiat ? accountName : undefined,
+                swift_code: isFiat ? swiftCode : undefined,
+                branch_code: isFiat ? branchCode : undefined,
+                country: isFiat ? selectedCountry : undefined,
+                network: isFiat ? undefined : selectedNetwork,
+                captchaToken: captchaToken || undefined
+            });
+            onSuccess();
+            onClose();
+        } catch {
+            setCaptchaToken(null);
+            recaptchaRef.current?.reset();
+        } finally {
+            setIsWithdrawing(false);
+        }
+    };
+
+    const handleMax = async () => {
+        const bal = parseFloat(String(availableBalance || 0));
+        if (bal <= 0) {
+            setAmount('0');
+            return;
+        }
+
+        const SAFETY_BUFFER = 0.000001;
+        try {
+            const settings = await getCommissionRate('WITHDRAWAL', selectedCurrency);
+            let maxAmount = bal;
+            
+            if (settings && settings.length > 0) {
+                const s = settings[0];
+                const rateValue = s.commission_type === 'PERCENTAGE' ? s.value / 100 : s.value;
+
+                if (s.commission_type === 'PERCENTAGE') {
+                    // amount + (amount * rate) = balance => amount = balance / (1 + rate)
+                    maxAmount = bal / (1 + rateValue) - SAFETY_BUFFER;
+                } else {
+                    maxAmount = Math.max(0, bal - s.value - SAFETY_BUFFER);
+                }
+
+                // Check for min/max fee constraints
+                const estimatedFee = bal - maxAmount;
+                if (s.min_fee && estimatedFee < s.min_fee) {
+                    maxAmount = bal - s.min_fee - SAFETY_BUFFER;
+                } else if (s.max_fee && estimatedFee > s.max_fee) {
+                    maxAmount = bal - s.max_fee - SAFETY_BUFFER;
+                }
+            } else {
+                maxAmount = bal - SAFETY_BUFFER;
+            }
+
+            // Professional precision: 8 decimals for all crypto tokens
+            const isCrypto = ['BTC', 'ETH', 'USDT', 'USDC', 'TRC20', 'ERC20', 'BEP20', 'POLYGON'].some(c => selectedCurrency.includes(c));
+            const precision = isCrypto ? 8 : 2;
+            const factor = Math.pow(10, precision);
+            const flooredMax = Math.floor(maxAmount * factor) / factor;
+            
+            setAmount(flooredMax > 0 ? flooredMax.toFixed(precision).replace(/\.?0+$/, '') : '0');
+        } catch (err) {
+            console.error('Error calculating max withdrawal:', err);
+            setAmount(bal.toString());
+        }
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="modal-overlay">
+            <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="modal-content max-w-[480px]"
+            >
+                <button onClick={onClose} className="modal-close">
+                    <X size={20} />
+                </button>
+
+                <h2 className="modal-header">
+                    <ArrowUpRight size={20} className="text-orange-500" />
+                    Withdraw {selectedCurrency} {selectedNetwork !== 'native' ? `(${selectedNetwork})` : ''}
+                </h2>
+                
+                <form onSubmit={handleWithdraw} className="modal-body flex flex-col gap-5">
+                    {isFiat ? (
+                        <div className="space-y-4">
+                            {/* Country Selector */}
+                            <div className="space-y-1">
+                                <span className="text-xs text-gray-400 font-medium ml-1">Country</span>
+                                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-800">
+                                    {COUNTRIES.map(c => (
+                                        <button
+                                            key={c.code}
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedCountry(c.name);
+                                                setSelectedBank(null);
+                                                setSearchTerm('');
+                                            }}
+                                            className={`px-3 py-1.5 rounded-full text-xs font-medium border whitespace-nowrap transition-colors ${
+                                                selectedCountry === c.name 
+                                                ? 'bg-orange-500/10 border-orange-500 text-orange-400' 
+                                                : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
+                                            }`}
+                                        >
+                                            {c.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Bank Search & Select */}
+                            <div className="space-y-1 relative">
+                                <label htmlFor="bank-search-input" className="text-xs text-gray-400 font-medium ml-1">Bank Name</label>
+                                <div className="relative">
+                                    <input 
+                                        id="bank-search-input"
+                                        name="bankSearch"
+                                        type="text" 
+                                        value={searchTerm}
+                                        onChange={(e) => {
+                                            setSearchTerm(e.target.value);
+                                            setShowBankList(true);
+                                            if (selectedBank && e.target.value !== selectedBank.name) setSelectedBank(null);
+                                        }}
+                                        onFocus={() => setShowBankList(true)}
+                                        className="w-full bg-gray-800 border border-gray-700 rounded-xl p-3.5 pl-10 text-white focus:border-orange-500 outline-none transition-all"
+                                        placeholder="Search bank..."
+                                        autoComplete="off"
+                                    />
+                                    <Building2 className="absolute left-3.5 top-3.5 text-gray-500" size={18} />
+                                    {selectedBank && (
+                                        <button 
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedBank(null);
+                                                setSearchTerm('');
+                                            }}
+                                            className="absolute right-3 top-3.5 text-gray-500 hover:text-white"
+                                        >
+                                            <X size={16} />
+                                        </button>
+                                    )}
+                                </div>
+                                
+                                {/* Dropdown */}
+                                <AnimatePresence>
+                                    {showBankList && searchTerm && !selectedBank && (
+                                        <motion.div 
+                                            initial={{ opacity: 0, y: -10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -10 }}
+                                            className="absolute left-0 right-0 top-full mt-1 bg-gray-900 border border-gray-700 rounded-xl shadow-xl max-h-48 overflow-y-auto z-20"
+                                        >
+                                            {filteredBanks.length > 0 ? (
+                                                filteredBanks.map(bank => (
+                                                    <button
+                                                        key={bank.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedBank({ name: bank.name, code: bank.code });
+                                                            setSearchTerm(bank.name);
+                                                            setShowBankList(false);
+                                                        }}
+                                                        className="w-full text-left p-3 hover:bg-gray-800 text-sm text-gray-300 border-b border-gray-800 last:border-0"
+                                                    >
+                                                        {bank.name}
+                                                    </button>
+                                                ))
+                                            ) : (
+                                                <div className="p-3 text-sm text-gray-500 text-center">No banks found</div>
+                                            )}
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label htmlFor="withdraw-account-number" className="text-xs text-gray-400 font-medium ml-1">Account Number</label>
+                                    <input 
+                                        id="withdraw-account-number"
+                                        name="accountNumber"
+                                        type="text" 
+                                        value={accountNumber}
+                                        onChange={(e) => setAccountNumber(e.target.value)}
+                                        className="w-full bg-gray-800 border border-gray-700 rounded-xl p-3.5 text-white focus:border-orange-500 outline-none transition-all"
+                                        placeholder={selectedCountry === 'Nigeria' ? "0123456789" : "IBAN / Account No"}
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label htmlFor="withdraw-account-name" className="text-xs text-gray-400 font-medium ml-1">Account Holder Name</label>
+                                    <input 
+                                        id="withdraw-account-name"
+                                        name="accountName"
+                                        type="text" 
+                                        value={accountName}
+                                        onChange={(e) => setAccountName(e.target.value)}
+                                        className="w-full bg-gray-800 border border-gray-700 rounded-xl p-3.5 text-white focus:border-orange-500 outline-none transition-all"
+                                        placeholder="Full Name"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* International Details */}
+                            {selectedCountry !== 'Nigeria' && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <label htmlFor="withdraw-swift" className="text-xs text-gray-400 font-medium ml-1">SWIFT / BIC</label>
+                                        <input 
+                                            id="withdraw-swift"
+                                            name="swiftCode"
+                                            type="text" 
+                                            value={swiftCode}
+                                            onChange={(e) => setSwiftCode(e.target.value)}
+                                            className="w-full bg-gray-800 border border-gray-700 rounded-xl p-3.5 text-white focus:border-orange-500 outline-none transition-all"
+                                            placeholder="SWIFT Code"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label htmlFor="withdraw-branch" className="text-xs text-gray-400 font-medium ml-1">Branch Code (Optional)</label>
+                                        <input 
+                                            id="withdraw-branch"
+                                            name="branchCode"
+                                            type="text" 
+                                            value={branchCode}
+                                            onChange={(e) => setBranchCode(e.target.value)}
+                                            className="w-full bg-gray-800 border border-gray-700 rounded-xl p-3.5 text-white focus:border-orange-500 outline-none transition-all"
+                                            placeholder="Branch Code"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                          <div className="space-y-4">
+                            {/* Network Warning & Info */}
+                            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 space-y-3">
+                                <div className="flex gap-3 text-red-400">
+                                    <AlertTriangle size={20} className="shrink-0" />
+                                    <div className="text-xs space-y-1">
+                                        <p className="font-bold uppercase tracking-wider">Network Warning</p>
+                                        <p>Send only <strong>{selectedCurrency} ({selectedNetwork?.toUpperCase()})</strong> to this address. Sending via other networks will result in permanent loss of funds.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-3 space-y-1">
+                                    <div className="flex items-center gap-2 text-gray-400 text-[10px] uppercase font-bold tracking-widest">
+                                        <ShieldCheck size={12} />
+                                        <span>Min. Interaction</span>
+                                    </div>
+                                    <p className="text-sm font-medium text-white">0.001 {selectedCurrency}</p>
+                                </div>
+                                <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-3 space-y-1">
+                                    <div className="flex items-center gap-2 text-gray-400 text-[10px] uppercase font-bold tracking-widest">
+                                        <Clock size={12} />
+                                        <span>Est. Arrival</span>
+                                    </div>
+                                    <p className="text-sm font-medium text-white">10 - 30 Mins</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label htmlFor="withdraw-destination-address" className="text-sm text-gray-400 font-medium ml-1">
+                                    Destination Address
+                                </label>
+                                <div className="relative">
+                                    <input 
+                                        id="withdraw-destination-address"
+                                        name="address"
+                                        type="text" 
+                                        value={address}
+                                        onChange={(e) => setAddress(e.target.value)}
+                                        className="w-full bg-gray-800 border border-gray-700 rounded-xl p-3.5 pl-10 text-white focus:border-orange-500 outline-none transition-all"
+                                        placeholder={
+                                            selectedNetwork === 'trc20' ? "TRC20 Address (T...)" : 
+                                            selectedNetwork === 'polygon' ? "Polygon Address (0x...)" :
+                                            selectedNetwork === 'bep20' ? "BEP20 Address (0x...)" :
+                                            "Wallet Address (0x...)"
+                                        }
+                                        required
+                                        autoComplete="off"
+                                    />
+                                    <Building2 className="absolute left-3.5 top-3.5 text-gray-500" size={18} />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    <div className="space-y-1">
+                        <div className="flex justify-between ml-1">
+                            <label htmlFor="withdraw-amount" className="text-sm text-gray-400 font-medium">Amount</label>
+                            <span className="text-xs text-gray-400">Available: {formatCurrency(availableBalance, selectedCurrency)}</span>
+                        </div>
+                        <div className="relative flex items-center">
+                            <input 
+                                id="withdraw-amount"
+                                name="amount"
+                                type="number" 
+                                step="any"
+                                value={amount}
+                                onChange={(e) => setAmount(e.target.value)}
+                                className="w-full bg-gray-800 border border-gray-700 rounded-xl p-3.5 text-white focus:border-orange-500 outline-none transition-all pr-[100px]"
+                                placeholder="0.00"
+                                required
+                                autoComplete="off"
+                            />
+                            <div className="absolute right-3 flex items-center gap-2">
+                                <span className="text-gray-400 font-bold text-sm bg-gray-800">{selectedCurrency}</span>
+                                <div className="h-4 w-px bg-gray-700"></div>
+                                <button 
+                                    type="button"
+                                    onClick={handleMax}
+                                    className="text-xs font-bold text-orange-500 hover:text-orange-400 bg-gray-800 px-1"
+                                >
+                                    MAX
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <AnimatePresence>
+                        {withdrawFee && (
+                            <motion.div 
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                className="bg-orange-900/10 border border-orange-500/20 p-4 rounded-xl text-sm space-y-2"
+                            >
+                                <div className="flex justify-between text-gray-400">
+                                    <span>Network Fee</span>
+                                    <span>{formatCurrency(withdrawFee.fee, selectedCurrency)}</span>
+                                </div>
+                                <div className="flex justify-between font-bold text-white pt-2 border-t border-orange-500/20">
+                                    <span>You Receive (Est.)</span>
+                                    <span>{formatCurrency(withdrawFee.net, selectedCurrency)}</span>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* reCAPTCHA for Financial Security */}
+                    {import.meta.env.PROD && (
+                        <div className="flex justify-center p-2 bg-gray-800/30 rounded-xl border border-gray-800">
+                            <ReCAPTCHA
+                                ref={recaptchaRef}
+                                sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI'}
+                                onChange={(token) => setCaptchaToken(token)}
+                                theme="dark"
+                            />
+                        </div>
+                    )}
+
+                    <div className="flex gap-3 justify-end mt-2">
+                        <Button variant="ghost" onClick={onClose} type="button">
+                            Cancel
+                        </Button>
+                        <Button type="submit" disabled={isWithdrawing} className="bg-orange-600 hover:bg-orange-500 text-white border-none">
+                            {isWithdrawing ? <Loader2 className="animate-spin mr-2" size={18} /> : <ArrowUpRight className="mr-2" size={18} />}
+                            {isWithdrawing ? 'Processing...' : 'Confirm Withdrawal'}
+                        </Button>
+                    </div>
+                </form>
+            </motion.div>
+        </div>
+    );
+};

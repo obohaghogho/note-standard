@@ -1,0 +1,13 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "routes": [
+    { "src": "/(sitemap\\.xml)", "dest": "/$1" },
+    { "src": "/(robots\\.txt)", "dest": "/$1" },
+    { "src": "/(fincra-verification\\.txt)", "dest": "/$1" },
+    { "src": "/.well-known/(.*)", "dest": "/.well-known/$1" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
+}

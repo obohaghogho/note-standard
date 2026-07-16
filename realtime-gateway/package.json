@@ -1,0 +1,29 @@
+{
+  "name": "note-standard-realtime",
+  "version": "1.0.6",
+  "description": "Centralized Realtime Gateway for NoteStandard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "apn": "^2.2.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "firebase-admin": "^13.10.0",
+    "generic-pool": "^3.9.0",
+    "node-fetch": "^2.7.0",
+    "peer": "^1.0.2",
+    "pg": "^8.20.0",
+    "redis": "^5.11.0",
+    "socket.io": "^4.7.2",
+    "socket.io-redis": "^6.1.1",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

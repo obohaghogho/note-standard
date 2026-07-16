@@ -1,0 +1,222 @@
+const supabase = require('../config/database');
+const logger = require('../utils/logger');
+const payoutService = require('../services/payment/payoutService');
+const SystemState = require('../config/SystemState');
+
+let intervalId = null;
+const RUN_INTERVAL = 30000; // 30 seconds
+const currentJobs = new Set();
+
+/**
+ * Payout Dispatcher Worker (Autonomous)
+ * Institutional-grade autonomous dispatcher for approved withdrawal requests.
+ * Implements Execution Intent Logging and SLA-aware error handling.
+ */
+class PayoutWorker {
+    static start() {
+        if (intervalId) return;
+        logger.info("[PayoutWorker] Autonomous Dispatcher active. Monitoring approved payouts...");
+        intervalId = setInterval(() => this.dispatchPendingPayouts(), RUN_INTERVAL);
+        setTimeout(() => this.dispatchPendingPayouts(), 5000); // Quick start
+    }
+
+    static async dispatchPendingPayouts() {
+        // Governance Check: Emergency Kill Switch
+        if (SystemState.mode === "SAFE") {
+            return; // Absolute Mutation Halt
+        }
+
+        const mode = SystemState.getWithdrawalMode();
+        if (mode === "FROZEN") {
+            return; // Absolute Withdrawal Halt
+        }
+
+        try {
+            // 1. Fetch Approved Payouts
+            const { data: pending, error } = await supabase
+                .from('payout_requests')
+                .select('*')
+                .eq('status', 'approved')
+                .limit(10); // Batch size to prevent memory spikes
+
+            if (error) throw error;
+            if (!pending || pending.length === 0) {
+                // logger.info("[PayoutWorker] No approved payouts to dispatch.");
+                return;
+            }
+
+            logger.info(`[PayoutWorker] Found ${pending.length} approved payouts to dispatch.`);
+            
+            for (const payout of pending) {
+                if (currentJobs.has(payout.id)) continue;
+                
+                // DEGRADED Mode Check: Limit to low-risk payouts
+                if (mode === "DEGRADED" && (payout.amount > 100 || payout.risk_score >= 40)) {
+                    continue; 
+                }
+
+                currentJobs.add(payout.id);
+                await this.executeDispatch(payout).finally(() => {
+                    currentJobs.delete(payout.id);
+                });
+            }
+        } catch (err) {
+            logger.error("[PayoutWorker] Dispatch cycle failed:", err.message);
+        }
+    }
+
+    /**
+     * Execution Intent Logging & Provider Dispatch
+     */
+    static async executeDispatch(payout) {
+        logger.info(`[PayoutWorker] Dispatching payout ${payout.id} (Amount: ${payout.amount} ${payout.currency})`);
+
+        try {
+            // ── KERNEL SAFEGUARD: LIQUID RESERVE VALIDATION ──────────────────
+            const currency = payout.currency;
+            const requiredAmount = Number(payout.amount);
+
+            const { data: treasuryWallet } = await supabase
+                .from("wallets_store")
+                .select("id, balance, user_id")
+                .eq("address", `TREASURY_${currency}`)
+                .maybeSingle();
+
+            const treasuryBalance = treasuryWallet ? Math.abs(Number(treasuryWallet.balance) || 0) : 0;
+
+            if (treasuryBalance < requiredAmount) {
+                const errMsg = `LIQUID_RESERVE_BREACH: Available treasury settled reserves for ${currency} (${treasuryBalance}) are insufficient to cover this withdrawal of ${requiredAmount}. Dispatch aborted.`;
+                logger.error(`[Payout_Guard] [CRITICAL_RESERVE_BREACH] ${errMsg}`);
+                
+                await payoutService.updatePayoutState(payout.id, 'FAILED_FINAL', {
+                    error: "Insufficient settled reserves in treasury.",
+                    message: errMsg,
+                    failure_code: "TREASURY_RESERVE_BREACH"
+                });
+
+                // Automated Reversal: Refund the user's ledger and wallet
+                try {
+                    await supabase.rpc('reverse_failed_payout_v6', { p_payout_id: payout.id });
+                } catch (revErr) {
+                    logger.error(`[PayoutWorker] Failed to apply reversal for payout ${payout.id}:`, revErr.message);
+                }
+
+                const adminId = treasuryWallet ? treasuryWallet.user_id : payout.user_id;
+
+                await supabase.from("security_audit_logs").insert({
+                    user_id: adminId,
+                    event_type: "TREASURY_RESERVE_BREACH",
+                    severity: "CRITICAL",
+                    description: `Payout dispatcher blocked withdrawal ${payout.id} due to treasury reserve breach on ${currency}. Required: ${requiredAmount}, Settled Treasury: ${treasuryBalance}.`,
+                    payload: {
+                        payout_id: payout.id,
+                        currency: currency,
+                        required_amount: requiredAmount,
+                        treasury_balance: treasuryBalance,
+                        alert_level: "HIGH"
+                    }
+                });
+
+                return;
+            }
+
+            // 2. STEP A: INTENT LOGGING (Transition to PROCESSING)
+            await payoutService.updatePayoutState(payout.id, 'PROCESSING', {
+                retry_count: (payout.retry_count || 0) + 1
+            });
+
+            // 3. STEP B: PROVIDER DISPATCH
+            let result;
+            if (payout.payout_method === 'bank_transfer') {
+                const dest = payout.destination || {};
+                
+                if (payout.currency === 'NGN') {
+                    // Automated Paystack NGN Payout
+                    result = await payoutService.createPaystackTransfer(
+                        dest.bankCode,
+                        dest.accountNumber,
+                        dest.accountName,
+                        payout.amount,
+                        payout.currency,
+                        payout.id,
+                        `Withdrawal-${payout.id.substring(0,8)}`
+                    );
+                } else {
+                    // Manual queue for Grey (USD, EUR, GBP, JPY)
+                    logger.info(`[PayoutWorker] Routing ${payout.currency} withdrawal ${payout.id} to manual queue for Grey processing.`);
+                    
+                    result = {
+                        success: true,
+                        payoutId: payout.id,
+                        status: 'MANUAL_PENDING',
+                        provider: 'GREY_MANUAL',
+                        latency: 0,
+                        rawResponse: { message: "Routed to manual Grey processing queue." }
+                    };
+                }
+            } else if (payout.payout_method === 'crypto') {
+                const dest = payout.destination || {};
+                result = await payoutService.createNowPaymentsPayout(
+                    dest.address,
+                    payout.amount,
+                    payout.currency,
+                    payout.id,
+                    dest.network
+                );
+            } else {
+                throw new Error(`Unsupported payout method: ${payout.payout_method}`);
+            }
+
+            // 4. STEP C: FINALITY PROMOTION (SENT -> CONFIRMING)
+            if (result.success) {
+                if (result.status === 'FINISHED' || result.status === 'COMPLETED') {
+                    await payoutService.updatePayoutState(payout.id, 'COMPLETED', result);
+                } else if (result.status === 'PROCESSING' || result.status === 'SENDING') {
+                    await payoutService.updatePayoutState(payout.id, 'SENT', result);
+                } else if (result.status === 'WAITING_FOR_VERIFICATION') {
+                    logger.warn(`[PayoutWorker] Payout ${payout.id} requires 2FA Verification at NOWPayments Dashboard.`);
+                    await payoutService.updatePayoutState(payout.id, 'CONFIRMING', { ...result, message: '2FA Verification Required at NOWPayments' });
+                } else if (result.status === 'MANUAL_PENDING') {
+                    await payoutService.updatePayoutState(payout.id, 'MANUAL_PENDING', result);
+                } else {
+                    await payoutService.updatePayoutState(payout.id, 'SENT', result);
+                }
+                
+                // Immediate promotion to CONFIRMING for deep finality sweep if not already completed
+                const { data: current } = await supabase.from('payout_requests').select('status').eq('id', payout.id).single();
+                if (current && current.status !== 'COMPLETED') {
+                    await payoutService.updatePayoutState(payout.id, 'CONFIRMING');
+                }
+                
+                logger.info(`[PayoutWorker] Payout ${payout.id} successfully processed. Final Status: ${current?.status || 'SENT'}`);
+            } else {
+                // If API rejected the call (e.g. 400 Bad Request)
+                await payoutService.updatePayoutState(payout.id, 'FAILED_FINAL', {
+                    error: result.error,
+                    latency: result.latency,
+                    rawResponse: result.rawResponse
+                });
+                
+                // Automated Reversal: Refund the user's ledger and wallet
+                try {
+                    await supabase.rpc('reverse_failed_payout_v6', { p_payout_id: payout.id });
+                } catch (revErr) {
+                    logger.error(`[PayoutWorker] Failed to apply reversal for payout ${payout.id}:`, revErr.message);
+                }
+                logger.error(`[PayoutWorker] Payout ${payout.id} REJECTED by provider: ${result.error}`);
+            }
+
+        } catch (err) {
+            // 5. UNCERTAINTY HANDLING (Timeout/Crash)
+            // If we caught an exception during the API call, we mark as UNCERTAIN.
+            logger.warn(`[PayoutWorker] Execution Ambiguity for ${payout.id}: ${err.message}`);
+            
+            await payoutService.updatePayoutState(payout.id, 'PROCESSING_UNCERTAIN', {
+                error: err.message,
+                uncertain: true
+            });
+        }
+    }
+}
+
+module.exports = PayoutWorker;

@@ -1,0 +1,214 @@
+/* Broadcast Manager Styles - Mobile First */
+
+.broadcast-manager {
+    padding: 1rem;
+    width: 100%;
+}
+
+@media (min-width: 768px) {
+    .broadcast-manager {
+        padding: 2rem;
+    }
+}
+
+.broadcast-manager .page-header {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+@media (min-width: 768px) {
+    .broadcast-manager .page-header {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+}
+
+.broadcast-manager .header-title {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.broadcast-manager .header-icon {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    padding: 8px;
+    background: rgba(var(--accent-rgb), 0.1);
+    color: var(--accent-color);
+    border-radius: 10px;
+}
+
+@media (min-width: 768px) {
+    .broadcast-manager .header-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+    }
+}
+
+.broadcast-manager .create-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: var(--accent-color);
+    color: #fff;
+    border: none;
+    padding: 0.75rem 1.25rem;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+@media (min-width: 768px) {
+    .broadcast-manager .create-btn {
+        width: auto;
+    }
+}
+
+.broadcast-manager .broadcast-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+}
+
+@media (min-width: 640px) {
+    .broadcast-manager .broadcast-grid {
+        grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+        gap: 1.5rem;
+    }
+}
+
+.broadcast-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+@media (min-width: 768px) {
+    .broadcast-card {
+        padding: 1.5rem;
+    }
+}
+
+/* Modal Styles - Mobile First */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    display: flex;
+    justify-content: center;
+    align-items: flex-end; /* Mobile: slide from bottom */
+    z-index: 1000;
+}
+
+@media (min-width: 768px) {
+    .modal-overlay {
+        align-items: center; /* Desktop: center */
+    }
+}
+
+.modal-content {
+    background: #1a1a1a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px 20px 0 0; /* Mobile: top rounding only */
+    padding: 1.5rem;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: modalSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (min-width: 768px) {
+    .modal-content {
+        border-radius: 20px;
+        width: min(90%, 800px);
+        max-height: 85vh;
+        margin: 2rem;
+        animation: modalFadeIn 0.3s ease-out;
+    }
+}
+
+.modal-content .form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+@media (min-width: 640px) {
+    .modal-content .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.modal-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 2rem;
+}
+
+@media (min-width: 640px) {
+    .modal-actions {
+        flex-direction: row;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+}
+
+.modal-actions button {
+    width: 100%;
+}
+
+@media (min-width: 640px) {
+    .modal-actions button {
+        width: auto;
+    }
+}
+
+@keyframes modalSlideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+
+@keyframes modalFadeIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+/* Form Styles */
+.modal-content label {
+    display: block;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 0.5rem;
+}
+
+.modal-content input,
+.modal-content select {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    color: #fff;
+    outline: none;
+    font-size: 1rem; /* Prevent zoom on iOS */
+}

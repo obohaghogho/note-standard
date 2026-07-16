@@ -1,0 +1,1960 @@
+const path = require("path");
+const supabase = require(path.join(__dirname, "..", "config", "supabase"));
+const { Parser } = require("json2csv");
+const PDFDocument = require("pdfkit");
+const { createNotification, broadcastNotification } = require(
+  "../services/notificationService",
+);
+const SystemState = require("../config/SystemState");
+const logger = require("../utils/logger");
+const realtime = require("../services/realtimeService");
+const { createClient } = require("@supabase/supabase-js");
+
+// Create a Supabase client with service role for admin operations
+const getServiceSupabase = () => {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+  
+  if (!url || !key) {
+    throw new Error("[Admin] Missing Supabase credentials in environment");
+  }
+
+  return createClient(url, key);
+};
+
+const os = require("os");
+
+/**
+ * Helper to log admin actions
+ */
+const logAdminAction = async (
+  req,
+  action,
+  targetType,
+  targetId,
+  details = {},
+) => {
+  try {
+    const adminId = req.user.id;
+    const ipAddress = req.ip || req.headers["x-forwarded-for"] ||
+      req.connection.remoteAddress;
+
+    await supabase
+      .from("admin_audit_logs")
+      .insert([{
+        admin_id: adminId,
+        action,
+        target_type: targetType,
+        target_id: targetId,
+        details,
+        ip_address: ipAddress,
+      }]);
+  } catch (err) {
+    console.error("Failed to log admin action:", err.message);
+  }
+};
+
+// GET /api/admin/stats - Dashboard analytics
+exports.getStats = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+
+    // Parallelize initial simple counts
+    const [
+      { count: totalUsers },
+      { count: totalNotes },
+      { count: openChats },
+      { count: pendingChats },
+      { count: onlineUsers },
+      { count: totalMessages },
+    ] = await Promise.all([
+      serviceSupabase.from("profiles").select("*", {
+        count: "exact",
+        head: true,
+      }),
+      serviceSupabase.from("notes").select("*", { count: "exact", head: true }),
+      serviceSupabase.from("conversations").select("*", {
+        count: "exact",
+        head: true,
+      }).eq("chat_type", "support").eq("support_status", "open"),
+      serviceSupabase.from("conversations").select("*", {
+        count: "exact",
+        head: true,
+      }).eq("chat_type", "support").eq("support_status", "pending"),
+      serviceSupabase.from("profiles").select("*", {
+        count: "exact",
+        head: true,
+      }).eq("is_online", true),
+      serviceSupabase.from("messages").select("*", {
+        count: "exact",
+        head: true,
+      }),
+    ]);
+
+    // Active users (24h)
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+      .toISOString();
+    const { count: activeUsers } = await serviceSupabase
+      .from("profiles")
+      .select("*", { count: "exact", head: true })
+      .or(`is_online.eq.true,last_seen.gte.${twentyFourHoursAgo}`);
+
+    // --- NEW: Top Creators (SQL Optimized) ---
+    const { data: topCreators } = await serviceSupabase.rpc('get_top_creators', { limit_count: 3 });
+
+    // --- NEW: Usage Trends (SQL Optimized) ---
+    const { data: usageTrends } = await serviceSupabase.rpc('get_usage_trends', { days_limit: 7 });
+
+    // --- NEW: System Load ---
+    const cpuLoad = os.loadavg()[0]; // 1 min avg
+    const cpuCount = os.cpus().length;
+    const cpuPercent = Math.min(Math.round((cpuLoad / cpuCount) * 100), 100);
+
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const memPercent = Math.round(((totalMem - freeMem) / totalMem) * 100);
+
+    const responseData = {
+      totalUsers: totalUsers || 0,
+      activeUsers: activeUsers || 0,
+      totalNotes: totalNotes || 0,
+      openChats: openChats || 0,
+      pendingChats: pendingChats || 0,
+      onlineUsers: onlineUsers || 0,
+      totalMessages: totalMessages || 0,
+      serverStatus: "healthy",
+      topCreators: topCreators || [],
+      usageTrends: usageTrends || [],
+      systemLoad: {
+        cpu: cpuPercent,
+        memory: memPercent,
+      },
+    };
+
+    // --- NEW: Growth & Metrics (Real Data) ---
+    const today = new Date();
+    const sevenDaysAgoDate = new Date(today);
+    sevenDaysAgoDate.setDate(today.getDate() - 7);
+    const fourteenDaysAgoDate = new Date(today);
+    fourteenDaysAgoDate.setDate(today.getDate() - 14);
+
+    // Parallelize growth queries
+    try {
+      const [
+        { count: usersLast7 },
+        { count: usersPrior7 },
+        { count: notesLast7 },
+        { count: notesPrior7 },
+        { count: resolvedChats },
+        { count: totalSupportChats },
+      ] = await Promise.all([
+        serviceSupabase.from("profiles").select("*", {
+          count: "exact",
+          head: true,
+        }).gte("created_at", sevenDaysAgoDate.toISOString()),
+        serviceSupabase.from("profiles").select("*", {
+          count: "exact",
+          head: true,
+        }).gte("created_at", fourteenDaysAgoDate.toISOString()).lt(
+          "created_at",
+          sevenDaysAgoDate.toISOString(),
+        ),
+        serviceSupabase.from("notes").select("*", {
+          count: "exact",
+          head: true,
+        }).gte("created_at", sevenDaysAgoDate.toISOString()),
+        serviceSupabase.from("notes").select("*", {
+          count: "exact",
+          head: true,
+        }).gte("created_at", fourteenDaysAgoDate.toISOString()).lt(
+          "created_at",
+          sevenDaysAgoDate.toISOString(),
+        ),
+        serviceSupabase.from("conversations").select("*", {
+          count: "exact",
+          head: true,
+        }).eq("chat_type", "support").eq("support_status", "resolved"),
+        serviceSupabase.from("conversations").select("*", {
+          count: "exact",
+          head: true,
+        }).eq("chat_type", "support"),
+      ]);
+
+      const calculateGrowth = (current, previous) => {
+        if (!previous || previous === 0) return current > 0 ? "+100%" : "0%";
+        const growth = ((current - previous) / previous) * 100;
+        return (growth > 0 ? "+" : "") + growth.toFixed(1) + "%";
+      };
+
+      responseData.growthRate = calculateGrowth(
+        usersLast7 || 0,
+        usersPrior7 || 0,
+      );
+      responseData.noteGrowth = calculateGrowth(
+        notesLast7 || 0,
+        notesPrior7 || 0,
+      );
+      responseData.chatRetention = (totalSupportChats
+        ? Math.round((resolvedChats / totalSupportChats) * 100)
+        : 0) + "%";
+    } catch (e) {
+      console.error("Growth stats error:", e);
+    }
+
+
+    res.json(responseData);
+  } catch (err) {
+    console.error("Error fetching stats:", err);
+    res.status(500).json({ error: "Failed to fetch stats" });
+  }
+};
+
+// GET /api/admin/users - List all users with pagination
+exports.getUsers = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const search = req.query.search || "";
+    const status = req.query.status; // 'active', 'suspended', or undefined for all
+
+    const offset = (page - 1) * limit;
+
+    let query = serviceSupabase
+      .from("profiles")
+      .select(
+        "id, username, email, full_name, avatar_url, role, status, is_online, last_seen, created_at, last_ip, country_code, notesCount:notes(count)",
+        { count: "exact" },
+      );
+
+    // Search filter
+    if (search) {
+      query = query.or(
+        `username.ilike.%${search}%,email.ilike.%${search}%,full_name.ilike.%${search}%`,
+      );
+    }
+
+    // Status filter
+    if (status) {
+      query = query.eq("status", status);
+    }
+
+    // Pagination
+    query = query
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    const { data: users, error, count } = await query;
+
+    if (error) throw error;
+
+    // notesCount comes as an array with current Supabase syntax for count
+    const usersWithNotes = users.map(user => ({
+        ...user,
+        notesCount: user.notesCount?.[0]?.count || 0
+    }));
+
+    res.json({
+      users: usersWithNotes,
+      pagination: {
+        page,
+        limit,
+        total: count || 0,
+        totalPages: Math.ceil((count || 0) / limit),
+      },
+    });
+  } catch (err) {
+    console.error("Error fetching users:", err);
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+};
+
+// PUT /api/admin/users/:id/status - Suspend or reactivate user
+exports.updateUserStatus = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    const { id } = req.params;
+    const { status } = req.body; // 'active' or 'suspended'
+
+    if (!["active", "suspended"].includes(status)) {
+      return res.status(400).json({
+        error: 'Invalid status. Must be "active" or "suspended"',
+      });
+    }
+
+    // Prevent admins from suspending themselves
+    if (id === req.user.id) {
+      return res.status(400).json({ error: "Cannot change your own status" });
+    }
+
+    // Check if target user is an admin (prevent suspending other admins unless superadmin)
+    const { data: targetProfile } = await serviceSupabase
+      .from("profiles")
+      .select("role")
+      .eq("id", id)
+      .single();
+
+    if (targetProfile?.role === "admin" && req.userProfile.role !== "admin") {
+      return res.status(403).json({ error: "Cannot modify admin accounts" });
+    }
+
+    const { data, error } = await serviceSupabase
+      .from("profiles")
+      .update({ status })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Log the action
+    await logAdminAction(req, "update_user_status", "user", id, { status });
+
+      await createNotification({
+        receiverId: id,
+        type: "account_status",
+        title: status === "active"
+          ? "Account Reactivated"
+          : "Account Suspended",
+        message: status === "active"
+          ? "Your account has been reactivated. You can now access all features."
+          : "Your account has been suspended by an administrator.",
+        link: "/dashboard",
+      });
+
+    res.json({ message: `User ${status} successfully` });
+  } catch (err) {
+    console.error("Error updating user status:", err);
+    res.status(500).json({ error: "Failed to update user status" });
+  }
+};
+
+// GET /api/admin/users/:id/notes - Get user's notes metadata (not full content)
+exports.getUserNotes = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    const { id } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    const { data: notes, error, count } = await serviceSupabase
+      .from("notes")
+      .select(
+        "id, title, is_private, is_favorite, tags, created_at, updated_at",
+        { count: "exact" },
+      )
+      .eq("owner_id", id)
+      .order("updated_at", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) throw error;
+
+    res.json({
+      notes,
+      pagination: {
+        page,
+        limit,
+        total: count || 0,
+        totalPages: Math.ceil((count || 0) / limit),
+      },
+    });
+  } catch (err) {
+    console.error("Error fetching user notes:", err);
+    res.status(500).json({ error: "Failed to fetch user notes" });
+  }
+};
+
+// GET /api/admin/support-chats - Get all support conversations
+exports.getSupportChats = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    const status = req.query.status; // 'open', 'pending', 'resolved', or undefined for all
+
+    let query = serviceSupabase
+      .from("conversations")
+      .select(`
+                id,
+                name,
+                support_status,
+                chat_type,
+                updated_at,
+                created_at,
+                members:conversation_members (
+                    user_id,
+                    role,
+                    status,
+                    profile:profiles (
+                        username,
+                        full_name,
+                        avatar_url,
+                        is_online
+                    )
+                ),
+                lastMessage:messages(content, created_at, sender_id, read_at, delivered_at)
+            `)
+      .eq("chat_type", "support")
+      .order("updated_at", { ascending: false });
+
+    if (status) {
+      query = query.eq("support_status", status);
+    }
+
+    const { data: chats, error } = await query;
+
+    if (error) throw error;
+
+    // messages will be an array, we only want the most recent one
+    const chatsWithLastMessage = chats.map((chat) => {
+        const sortedMsgs = (chat.lastMessage || []).sort((a, b) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        return {
+            ...chat,
+            lastMessage: sortedMsgs[0] || null,
+        };
+    });
+
+    res.json(chatsWithLastMessage);
+  } catch (err) {
+    console.error("Error fetching support chats:", err);
+    res.status(500).json({ error: "Failed to fetch support chats" });
+  }
+};
+
+// PUT /api/admin/support-chats/:id/status - Update support chat status
+exports.updateChatStatus = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    const { id } = req.params;
+    const { support_status } = req.body;
+
+    if (!["open", "pending", "resolved"].includes(support_status)) {
+      return res.status(400).json({ error: "Invalid status" });
+    }
+
+    const { data, error } = await serviceSupabase
+      .from("conversations")
+      .update({ support_status })
+      .eq("id", id)
+      .eq("chat_type", "support")
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Log the action
+    await logAdminAction(req, "update_support_status", "conversation", id, {
+      status: support_status,
+    });
+
+    // Notify user if resolved
+    if (support_status === "resolved") {
+      // Find the user in the conversation
+      const { data: member } = await serviceSupabase
+        .from("conversation_members")
+        .select("user_id")
+        .eq("conversation_id", id)
+        .neq("role", "admin")
+        .maybeSingle();
+
+      if (member) {
+        await createNotification({
+          receiverId: member.user_id,
+          type: "support_resolved",
+          title: "Support Session Resolved",
+          message:
+            "Your support session has been marked as resolved. We hope we could help!",
+          link: `/dashboard/chat?id=${id}`,
+        });
+      }
+    }
+
+    res.json({ success: true, conversation: data });
+  } catch (err) {
+    console.error("Error updating chat status:", err);
+    res.status(500).json({ error: "Failed to update chat status" });
+  }
+};
+
+// POST /api/admin/support-chats/:id/join - Admin joins a support chat
+exports.joinSupportChat = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    const { id } = req.params;
+    const adminId = req.user.id;
+
+    // Check if already a member
+    const { data: existingMember } = await serviceSupabase
+      .from("conversation_members")
+      .select("*")
+      .eq("conversation_id", id)
+      .eq("user_id", adminId)
+      .single();
+
+    if (existingMember) {
+      return res.json({ success: true, message: "Already a member" });
+    }
+
+    // Add admin as member
+    const { error } = await serviceSupabase
+      .from("conversation_members")
+      .insert({
+        conversation_id: id,
+        user_id: adminId,
+        role: "admin",
+        status: "accepted",
+      });
+
+    if (error) throw error;
+
+    // Update chat status to pending (being handled)
+    await serviceSupabase
+      .from("conversations")
+      .update({ support_status: "pending" })
+      .eq("id", id);
+
+    // Log the action
+    await logAdminAction(req, "join_support_chat", "conversation", id, {
+      role: "admin",
+    });
+
+    // Notify user that admin joined
+    const { data: member } = await serviceSupabase
+      .from("conversation_members")
+      .select("user_id")
+      .eq("conversation_id", id)
+      .neq("user_id", adminId)
+      .maybeSingle();
+
+    if (member) {
+      const { data: admin } = await serviceSupabase.from("profiles").select(
+        "username",
+      ).eq("id", adminId).single();
+      await createNotification({
+        receiverId: member.user_id,
+        senderId: adminId,
+        type: "support_joined",
+        title: "Support Agent Joined",
+        message: `Support agent ${
+          admin?.username || "assigned"
+        } has joined the chat to assist you.`,
+        link: `/dashboard/chat?id=${id}`,
+      });
+    }
+
+    res.json({ success: true, message: "Joined support chat" });
+  } catch (err) {
+    console.error("Error joining support chat:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+/**
+ * Export chat transcript
+ */
+exports.exportChatTranscript = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { format = "csv" } = req.query;
+
+    // 1. Fetch conversation details
+    const { data: conversation, error: convError } = await supabase
+      .from("conversations")
+      .select(`
+                *,
+                members:conversation_members (
+                    user_id,
+                    role,
+                    profile:profiles (username, full_name)
+                )
+            `)
+      .eq("id", id)
+      .single();
+
+    if (convError || !conversation) throw new Error("Conversation not found");
+
+    // 2. Fetch all messages
+    const { data: messages, error: msgError } = await supabase
+      .from("messages")
+      .select(`
+                *,
+                sender:profiles!sender_id (username)
+            `)
+      .eq("conversation_id", id)
+      .order("created_at", { ascending: true });
+
+    if (msgError) throw msgError;
+
+    const fileName = `transcript-${id.slice(0, 8)}-${
+      new Date().toISOString().split("T")[0]
+    }`;
+
+    // 3. Export based on format
+    if (format === "csv") {
+      const fields = [
+        { label: "Time", value: "created_at" },
+        { label: "Sender", value: "sender.username" },
+        { label: "Message", value: "content" },
+        { label: "Type", value: "type" },
+      ];
+      const parser = new Parser({ fields });
+      const csv = parser.parse(messages);
+
+      res.header("Content-Type", "text/csv");
+      res.attachment(`${fileName}.csv`);
+      return res.send(csv);
+    }
+
+    if (format === "pdf") {
+      const doc = new PDFDocument();
+      res.header("Content-Type", "application/pdf");
+      res.attachment(`${fileName}.pdf`);
+      doc.pipe(res);
+
+      // PDF Header
+      doc.fontSize(20).text("Chat Transcript", { align: "center" });
+      doc.moveDown();
+      doc.fontSize(12).text(`Conversation ID: ${id}`);
+      doc.text(`Exported On: ${new Date().toLocaleString()}`);
+      doc.text(
+        `Participants: ${
+          conversation.members.map((m) => m.profile.username).join(", ")
+        }`,
+      );
+      doc.moveDown();
+      doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke();
+      doc.moveDown();
+
+      // Messages
+      messages.forEach((msg) => {
+        const time = new Date(msg.created_at).toLocaleString();
+        doc.fontSize(10).fillColor("gray").text(
+          `${time} - ${msg.sender.username}:`,
+          { continued: true },
+        );
+        doc.fillColor("black").text(` ${msg.content}`);
+        doc.moveDown(0.5);
+      });
+
+      doc.end();
+      return;
+    }
+
+    res.status(400).json({ error: "Invalid format" });
+  } catch (err) {
+    console.error("Error exporting transcript:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+/**
+ * Get audit logs
+ */
+exports.getAuditLogs = async (req, res) => {
+  try {
+    const { action, admin_id, target_type, page = 1, limit = 20 } = req.query;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    let query = supabase
+      .from("admin_audit_logs")
+      .select(
+        `
+                *,
+                admin:profiles!admin_id (username, full_name, avatar_url)
+            `,
+        { count: "exact" },
+      );
+
+    if (action) query = query.eq("action", action);
+    if (admin_id) query = query.eq("admin_id", admin_id);
+    if (target_type) query = query.eq("target_type", target_type);
+
+    const { data, error, count } = await query
+      .order("created_at", { ascending: false })
+      .range(from, to);
+
+    if (error) throw error;
+
+    res.json({
+      logs: data,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: count,
+        totalPages: Math.ceil(count / limit),
+      },
+    });
+  } catch (err) {
+    console.error("Error fetching audit logs:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+// GET /api/admin/me - Get current admin profile
+exports.getAdminProfile = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+
+    const { data: profile, error } = await serviceSupabase
+      .from("profiles")
+      .select("*")
+      .eq("id", req.user.id)
+      .single();
+
+    if (error) throw error;
+
+    res.json(profile);
+  } catch (err) {
+    console.error("Error fetching admin profile:", err);
+    res.status(500).json({ error: "Failed to fetch profile" });
+  }
+};
+
+/**
+ * Get auto-reply settings
+ */
+exports.getAutoReplySettings = async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("auto_reply_settings")
+      .select("*")
+      .single();
+
+    if (error && error.code !== "PGRST116") throw error;
+    res.json(data || {
+      enabled: false,
+      message: "Our support team is currently offline. We will get back to you during business hours.",
+      start_hour: "18:00",
+      end_hour: "09:00",
+      timezone: "UTC"
+    });
+  } catch (err) {
+    console.error("Error fetching auto-reply settings:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+/**
+ * Update auto-reply settings
+ */
+exports.updateAutoReplySettings = async (req, res) => {
+  try {
+    const { enabled, message, start_hour, end_hour, timezone } = req.body;
+
+    const { data, error } = await supabase
+      .from("auto_reply_settings")
+      .upsert([{
+        id: "00000000-0000-0000-0000-000000000000", // Enforce single canonical row
+        enabled,
+        message,
+        start_hour,
+        end_hour,
+        timezone,
+        updated_at: new Date().toISOString(),
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    await logAdminAction(req, "update_auto_reply", "settings", data.id, {
+      enabled,
+    });
+
+    res.json(data);
+  } catch (err) {
+    console.error("Error updating auto-reply settings:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+/**
+ * Get all broadcasts
+ */
+exports.getBroadcasts = async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("broadcasts")
+      .select(`
+                *,
+                admin:profiles!admin_id (username, full_name, avatar_url)
+            `)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    console.error("Error fetching broadcasts:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+/**
+ * Create a new broadcast
+ */
+exports.createBroadcast = async (req, res) => {
+  try {
+    const { title, content, target_audience, expires_at } = req.body;
+    const adminId = req.user.id;
+
+    const { data, error } = await supabase
+      .from("broadcasts")
+      .insert([{
+        admin_id: adminId,
+        title,
+        content,
+        target_audience,
+        expires_at,
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Log the action
+    await logAdminAction(req, "create_broadcast", "broadcast", data.id, {
+      title,
+    });
+
+    // Notify all clients via Socket.io and Notification System
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("new_broadcast", data);
+      await broadcastNotification({
+        senderId: adminId,
+        type: "system_broadcast",
+        title: "New System Announcement",
+        message: title,
+        link: "/dashboard",
+        io,
+      });
+    }
+
+    res.json(data);
+  } catch (err) {
+    console.error("Error creating broadcast:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+/**
+ * Delete a broadcast
+ */
+exports.deleteBroadcast = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Get info for logging before deletion
+    const { data: broadcast } = await supabase
+      .from("broadcasts")
+      .select("title")
+      .eq("id", id)
+      .single();
+
+    const { error } = await supabase
+      .from("broadcasts")
+      .delete()
+      .eq("id", id);
+
+    if (error) throw error;
+
+    // Log the action
+    if (broadcast) {
+      await logAdminAction(req, "delete_broadcast", "broadcast", id, {
+        title: broadcast.title,
+      });
+    }
+
+    res.json({ success: true, message: "Broadcast deleted" });
+  } catch (err) {
+    console.error("Error deleting broadcast:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+/**
+ * Get system settings
+ */
+exports.getSystemSettings = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    const { data, error } = await serviceSupabase
+      .from("system_settings")
+      .select("*")
+      .single();
+
+    // Handle missing table error (42P01 is Postgres code for undefined_table)
+    // PostgREST might return it as a 404 or specific code depending on version
+    if (error) {
+      if (error.code === "PGRST116") {
+        return res.status(404).json({ error: "System settings not found" });
+      }
+
+      // If table doesn't exist, return defaults to allow admin UI to load
+      if (error.message?.includes("does not exist") || error.code === "42P01") {
+        console.warn(
+          "[Admin] system_settings table missing, returning defaults",
+        );
+        return res.json({
+          system_name: "Note Standard",
+          maintenance_mode: false,
+          registration_status: "public",
+          admin_2fa_enabled: false,
+        });
+      }
+
+      throw error;
+    }
+
+    if (!data) {
+      return res.status(404).json({ error: "System settings not found" });
+    }
+
+    res.json(data);
+  } catch (err) {
+    console.error("Error fetching system settings:", err);
+    res.status(404).json({ error: "Failed to retrieve system settings" });
+  }
+};
+
+/**
+ * Update system settings
+ */
+exports.updateSystemSettings = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    const {
+      system_name,
+      maintenance_mode,
+      registration_status,
+      admin_2fa_enabled,
+    } = req.body;
+
+    // Validation
+    if (!system_name) {
+      return res.status(400).json({ error: "System name is required" });
+    }
+
+    const { data, error } = await serviceSupabase
+      .from("system_settings")
+      .upsert([{
+        id: "00000000-0000-0000-0000-000000000000", // Single row
+        system_name,
+        maintenance_mode: !!maintenance_mode,
+        registration_status: registration_status || "public",
+        admin_2fa_enabled: !!admin_2fa_enabled,
+        updated_at: new Date().toISOString(),
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error updating system settings in DB:", error.message);
+      return res.status(400).json({
+        error: "Failed to update settings: " + error.message,
+      });
+    }
+
+    await logAdminAction(req, "update_system_settings", "settings", data.id, {
+      system_name,
+      maintenance_mode,
+      registration_status,
+    });
+
+    res.json(data);
+  } catch (err) {
+    console.error("CRITICAL: Error updating system settings:", err.message);
+    res.status(400).json({
+      error: "System error during update: " + err.message,
+    });
+  }
+};
+
+/**
+ * Get Monetization Analytics
+ */
+exports.getMonetizationStats = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+
+    // Total Revenue by Type
+    const { data: revenueByType, error: revError } = await serviceSupabase
+      .from("revenue_logs")
+      .select("revenue_type, amount, currency");
+
+    if (revError) throw revError;
+
+    // Monthly revenue trend
+    const { data: trendData } = await serviceSupabase
+      .rpc("get_revenue_trend"); // We might need to add this SQL function
+
+    res.json({
+      revenueByType: revenueByType || [],
+      trends: trendData || [],
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch monetization stats" });
+  }
+};
+
+/**
+ * Get Admin settings (Spread, Fees, etc)
+ */
+exports.getMonetizationSettings = async (req, res) => {
+  try {
+    const { data, error } = await supabase.from("admin_settings").select("*");
+    if (error) throw error;
+
+    // Format as key-value pairs
+    const settings = {};
+    data.forEach((item) => {
+      settings[item.key] = item.value;
+    });
+
+    res.json(settings);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch settings" });
+  }
+};
+
+/**
+ * Update Admin Settings
+ */
+exports.updateMonetizationSettings = async (req, res) => {
+  try {
+    const settings = req.body; // { spread_percentage: 1.0, withdrawal_fee: { flat: 5, percentage: 1 } }
+
+    const updates = Object.entries(settings).map(([key, value]) => ({
+      key,
+      value,
+      updated_at: new Date().toISOString(),
+    }));
+
+    const { error } = await supabase.from("admin_settings").upsert(updates);
+    if (error) throw error;
+
+    await logAdminAction(
+      req,
+      "update_monetization_settings",
+      "settings",
+      "global",
+      settings,
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update settings" });
+  }
+};
+
+/**
+ * Get Affiliate stats
+ */
+exports.getAffiliateStats = async (req, res) => {
+  try {
+    const { data: referrals, error } = await supabase
+      .from("affiliate_referrals")
+      .select(`
+        *,
+        referrer:profiles!referrer_user_id(username, email),
+        referred:profiles!referred_user_id(username, email)
+      `)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    res.json(referrals);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch affiliate stats" });
+  }
+};
+
+/**
+ * Debug: Force confirm a transaction
+ */
+exports.debugForceConfirm = async (req, res) => {
+  try {
+    const { transactionId } = req.body;
+    const serviceSupabase = getServiceSupabase();
+
+    // 1. Update transaction status
+    const { data: tx, error } = await serviceSupabase
+      .from("transactions")
+      .update({
+        status: "COMPLETED",
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", transactionId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // 2. Manually confirm the ledger entry if it exists
+    await serviceSupabase
+      .from("ledger_entries")
+      .update({ status: "confirmed" })
+      .eq("reference", transactionId);
+
+    // 3. Log Admin Action
+    await logAdminAction(
+      req,
+      "debug_force_confirm",
+      "transaction",
+      transactionId,
+      tx,
+    );
+
+    res.json({ success: true, transaction: tx });
+  } catch (err) {
+    console.error("Debug error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+/**
+ * Debug: Simulate Swap
+ */
+exports.debugSimulateSwap = async (req, res) => {
+  try {
+    const { walletId, fromCurrency, toCurrency, amount, rate, fee } = req.body;
+    const serviceSupabase = getServiceSupabase();
+
+    // 1. Get User ID from wallet
+    const { data: wallet } = await serviceSupabase
+      .from("wallets_store")
+      .select("user_id")
+      .eq("id", walletId)
+      .single();
+
+    if (!wallet) throw new Error("Wallet not found");
+
+    // 2. Find/Create destination wallet
+    let { data: toWallet } = await serviceSupabase
+      .from("wallets_store")
+      .select("id")
+      .eq("user_id", wallet.user_id)
+      .eq("currency", toCurrency)
+      .single();
+
+    if (!toWallet) {
+      const { data: newW } = await serviceSupabase
+        .from("wallets_store")
+        .insert({
+          user_id: wallet.user_id,
+          currency: toCurrency,
+          address: `debug-${Date.now()}`,
+        })
+        .select("id")
+        .single();
+      toWallet = newW;
+    }
+
+    const { data: txId, error } = await serviceSupabase.rpc(
+      "execute_swap_atomic",
+      {
+        p_user_id: wallet.user_id,
+        p_from_wallet_id: walletId,
+        p_to_wallet_id: toWallet.id,
+        p_from_amount: amount,
+        p_to_amount: amount * rate,
+        p_from_currency: fromCurrency,
+        p_to_currency: toCurrency,
+        p_rate: rate,
+        p_fee: fee,
+        p_idempotency_key: `debug-swap-${Date.now()}`,
+      },
+    );
+
+    if (error) throw error;
+
+    await logAdminAction(req, "debug_simulate_swap", "wallet", walletId, {
+      amount,
+      fromCurrency,
+      toCurrency,
+    });
+
+    res.json({ success: true, transactionId: txId });
+  } catch (err) {
+    console.error("Debug swap error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+/**
+ * Debug: Simulate Webhook
+ */
+exports.debugSimulateWebhook = async (req, res) => {
+  try {
+    const { provider, reference, status } = req.body;
+    const paymentService = require("../services/payment/paymentService");
+
+    // We bypass provider-specific verification since this is an admin debug action
+    let result;
+    if (status === "success") {
+      result = await paymentService.finalizeTransaction(reference, {
+        provider,
+        status,
+        debug: true,
+      });
+    } else {
+      result = await paymentService.failTransaction(
+        reference,
+        "Simulated failure",
+      );
+    }
+
+    await logAdminAction(req, "debug_simulate_webhook", "payment", reference, {
+      provider,
+      status,
+    });
+
+    res.json({
+      success: true,
+      message: `Simulated ${status} for ${reference}`,
+      result,
+    });
+  } catch (err) {
+    console.error("Debug webhook error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+/**
+ * PUT /api/admin/users/:id/limit - Update a user's daily deposit limit
+ */
+exports.updateUserLimit = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    const { id } = req.params;
+    const { daily_limit } = req.body;
+
+    if (isNaN(daily_limit) || daily_limit < 0) {
+      return res.status(400).json({ error: "Invalid limit value" });
+    }
+
+    const { data, error } = await serviceSupabase
+      .from("profiles")
+      .update({ daily_deposit_limit: daily_limit })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    await logAdminAction(req, "update_user_limit", "user", id, { daily_limit });
+
+    await createNotification({
+      receiverId: id,
+      type: "limit_update",
+      title: "Transaction Limit Updated",
+      message: `Your daily transaction limit has been updated to $${daily_limit.toLocaleString()}.`,
+      link: "/dashboard/billing",
+    });
+
+    res.json({ success: true, user: data });
+  } catch (err) {
+    console.error("Error updating user limit:", err);
+    res.status(500).json({ error: "Failed to update user limit" });
+  }
+};
+
+/**
+ * GET /api/admin/limit-requests - List all limit increase requests
+ */
+exports.getLimitRequests = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    const { status = "pending" } = req.query;
+
+    const { data, error } = await serviceSupabase
+      .from("limit_requests")
+      .select(`
+        *,
+        user:profiles!user_id (username, email, full_name, plan_tier, daily_deposit_limit)
+      `)
+      .eq("status", status)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("[Admin] Error fetching limit requests:", error);
+      // Fallback for missing table
+      if (error.code === "PGRST116" || error.message.includes("does not exist") || error.code === "42P01") {
+        return res.json([]);
+      }
+      
+      // Fallback for joining issues (try without profile if join fails)
+      if (error.message.includes("relationship") || error.message.includes("join")) {
+        const { data: rawData, error: retryError } = await serviceSupabase
+          .from("limit_requests")
+          .select("*")
+          .eq("status", status)
+          .order("created_at", { ascending: false });
+        
+        if (retryError) throw retryError;
+        return res.json(rawData.map(req => ({ ...req, user: null })));
+      }
+      
+      throw error;
+    }
+
+    res.json(data);
+  } catch (err) {
+    console.error("Error fetching limit requests:", err);
+    res.status(500).json({ error: "Failed to fetch limit requests" });
+  }
+};
+
+/**
+ * PUT /api/admin/limit-requests/:id - Approve or reject a limit request
+ */
+exports.updateLimitRequest = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    const { id } = req.params;
+    const { status, admin_note } = req.body; // 'approved' or 'rejected'
+
+    if (!["approved", "rejected"].includes(status)) {
+      return res.status(400).json({ error: "Invalid status" });
+    }
+
+    // 1. Fetch request to get user_id and requested_limit
+    const { data: request, error: fetchErr } = await serviceSupabase
+      .from("limit_requests")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (fetchErr || !request) throw new Error("Request not found");
+
+    // 2. Update request status
+    const { error: updateErr } = await serviceSupabase
+      .from("limit_requests")
+      .update({ 
+        status, 
+        admin_note,
+        updated_at: new Date().toISOString() 
+      })
+      .eq("id", id);
+
+    if (updateErr) throw updateErr;
+
+    // 3. If approved, update user's profile
+    if (status === "approved") {
+      const { error: profileErr } = await serviceSupabase
+        .from("profiles")
+        .update({ daily_deposit_limit: request.requested_limit })
+        .eq("id", request.user_id);
+      
+      if (profileErr) throw profileErr;
+    }
+
+    // 4. Notify user
+    await createNotification({
+      receiverId: request.user_id,
+      type: "limit_request_update",
+      title: status === "approved" ? "Limit Increase Approved" : "Limit Increase Rejected",
+      message: status === "approved" 
+        ? `Your request for a $${request.requested_limit.toLocaleString()} limit has been approved.`
+        : `Your limit increase request was rejected. Note: ${admin_note || "No reason provided."}`,
+      link: "/dashboard/billing",
+    });
+
+    await logAdminAction(req, "process_limit_request", "limit_request", id, { status });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error processing limit request:", err);
+    res.status(500).json({ error: "Failed to process limit request" });
+  }
+};
+
+/**
+ * Get Unmatched Payments
+ * GET /api/admin/unmatched-payments
+ */
+exports.getUnmatchedPayments = async (req, res) => {
+  try {
+    const { page = 1, limit = 20, is_resolved = false } = req.query;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    const { data, error, count } = await supabase
+      .from("unmatched_payments")
+      .select("*", { count: "exact" })
+      .eq("is_resolved", is_resolved === "true")
+      .order("created_at", { ascending: false })
+      .range(from, to);
+
+    if (error) throw error;
+
+    res.json({
+      payments: data,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: count,
+        totalPages: Math.ceil(count / limit),
+      },
+    });
+  } catch (err) {
+    console.error("Error fetching unmatched payments:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+/**
+ * Resolve Unmatched Payment
+ * POST /api/admin/resolve-unmatched
+ */
+exports.resolveUnmatchedPayment = async (req, res) => {
+  try {
+    const { unmatchedId, reference, resolutionType } = req.body;
+    const adminId = req.user.id;
+
+    if (!unmatchedId || !resolutionType) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    // 1. Fetch raw unmatched record
+    const { data: unmatched, error: fetchErr } = await supabase
+      .from("unmatched_payments")
+      .select("*")
+      .eq("id", unmatchedId)
+      .single();
+
+    if (fetchErr || !unmatched) throw new Error("Record not found");
+    if (unmatched.is_resolved) throw new Error("Already resolved");
+
+    // 2. Business Logic based on Resolution Type
+    let result;
+    if (resolutionType === "linked") {
+      if (!reference) return res.status(400).json({ error: "Reference required for linking" });
+      
+      const paymentService = require("../services/payment/paymentService");
+      const event = {
+        type: "deposit",
+        reference,
+        status: "success",
+        amount: unmatched.amount,
+        currency: unmatched.currency,
+        raw: { source: "admin_resolution", unmatched_id: unmatchedId, ...unmatched.metadata }
+      };
+
+      result = await paymentService.executeWebhookAction(event, event.raw, "grey");
+      if (result?.error) throw new Error(result.error);
+    }
+
+    // 3. Mark as resolved
+    await supabase.from("unmatched_payments").update({
+      is_resolved: true,
+      resolved_by: adminId,
+      resolution_type: resolutionType,
+      resolution_reference: reference || null,
+      resolved_at: new Date().toISOString()
+    }).eq("id", unmatchedId);
+
+    // 4. Audit Log
+    await supabase.from("payment_audit_logs").insert({
+      admin_id: adminId,
+      payment_reference: reference || "N/A",
+      action: resolutionType === "linked" ? "LINK_UNMATCHED" : `RESOLVE_${resolutionType.toUpperCase()}`,
+      new_status: "SUCCESS",
+      reason: `Manual resolution of unmatched payment ID: ${unmatchedId}`,
+      metadata: { unmatched_id: unmatchedId, resolution_type: resolutionType }
+    });
+
+    // 5. Admin General Audit Log
+    await logAdminAction(req, "resolve_unmatched", "payment", unmatchedId, { resolutionType, reference });
+
+    res.json({ success: true, result });
+  } catch (err) {
+    console.error("Error resolving unmatched payment:", err.message);
+    res.status(500).json({ error: err.message || "Failed to resolve" });
+  }
+};
+
+/**
+ * Get Payment Audit Logs
+ * GET /api/admin/payment-audit-logs
+ */
+exports.getPaymentAuditLogs = async (req, res) => {
+  try {
+    const { reference, page = 1, limit = 20 } = req.query;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    let query = supabase
+      .from("payment_audit_logs")
+      .select(`
+        *,
+        admin:profiles!admin_id (username, full_name)
+      `, { count: "exact" });
+
+    if (reference) query = query.eq("payment_reference", reference);
+
+    const { data, error, count } = await query
+      .order("created_at", { ascending: false })
+      .range(from, to);
+
+    if (error) throw error;
+
+    res.json({
+      logs: data,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: count,
+        totalPages: Math.ceil(count / limit),
+      },
+    });
+  } catch (err) {
+    console.error("Error fetching payment audit logs:", err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+/**
+ * POST /api/admin/system/state - Manual System State Override
+ */
+exports.updateSystemState = async (req, res) => {
+  try {
+    const { mode, reason, manualMode = true } = req.body;
+    const adminId = req.user.id;
+
+    if (!["NORMAL", "SAFE", "RECOVERY"].includes(mode)) {
+      return res.status(400).json({ error: "Invalid system mode" });
+    }
+
+    if (!reason || reason.length < 5) {
+      return res.status(400).json({ error: "A valid reason (min 5 chars) is required for system state overrides." });
+    }
+
+    const oldMode = SystemState.mode;
+
+    // 1. Update In-Memory Kernel
+    SystemState.manualMode = manualMode;
+    SystemState.transition(mode, `ADMIN_OVERRIDE: ${reason} (Admin ID: ${adminId})`);
+
+    // 2. Persistent Audit Log
+    const { data: admin } = await supabase.from("profiles").select("username").eq("id", adminId).single();
+
+    await logAdminAction(req, "SYSTEM_STATE_OVERRIDE", "SYSTEM_KERNEL", "GLOBAL", {
+      old_mode: oldMode,
+      new_mode: mode,
+      reason: reason,
+      manual_mode: manualMode,
+      admin_username: admin?.username
+    });
+
+    // 3. Notify via Realtime
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("system_state_update", SystemState.getStatusData());
+    }
+
+    res.json({ success: true, state: SystemState.getStatusData() });
+  } catch (err) {
+    logger.error("[Admin] System state update failed", { error: err.message });
+    res.status(500).json({ error: "Failed to update system state" });
+  }
+};
+
+/**
+ * GET /api/admin/system/status - Detailed Internal Metrics
+ */
+exports.getSystemStatus = async (req, res) => {
+  try {
+    res.json(SystemState.getStatusData());
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch system status" });
+  }
+};
+
+/**
+ * GET /api/admin/withdrawals/pending - Get MANUAL_PENDING withdrawals
+ */
+exports.getPendingWithdrawals = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    
+    const { data, error } = await serviceSupabase
+      .from("payout_requests")
+      .select("*")
+      .eq("status", "MANUAL_PENDING")
+      .order("created_at", { ascending: false });
+
+    // Fetch profiles manually
+    if (data && data.length > 0) {
+      const userIds = [...new Set(data.map(d => d.user_id))];
+      const { data: profiles } = await serviceSupabase
+        .from("profiles")
+        .select("id, email, full_name, username")
+        .in("id", userIds);
+        
+      const profilesMap = {};
+      (profiles || []).forEach(p => profilesMap[p.id] = p);
+      
+      data.forEach(d => {
+        d.profile = profilesMap[d.user_id] || null;
+      });
+    }
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    logger.error("[Admin] Error fetching pending withdrawals:", err.message);
+    res.status(500).json({ error: "Failed to fetch pending withdrawals" });
+  }
+};
+
+/**
+ * PUT /api/admin/withdrawals/:id/approve - Approve a manual withdrawal
+ */
+exports.approveWithdrawal = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adminNotes } = req.body;
+    const payoutService = require("../services/payment/payoutService");
+    
+    const serviceSupabase = getServiceSupabase();
+    const { data: request, error: reqErr } = await serviceSupabase
+      .from("payout_requests")
+      .select("status")
+      .eq("id", id)
+      .single();
+
+    if (reqErr || !request) {
+      return res.status(404).json({ error: "Withdrawal not found" });
+    }
+
+    if (request.status !== "MANUAL_PENDING") {
+      return res.status(400).json({ error: `Withdrawal is not pending manual fulfillment (Current Status: ${request.status})` });
+    }
+
+    const updated = await payoutService.updatePayoutState(id, "COMPLETED", {
+      metadata: { admin_approved: true, approved_at: new Date().toISOString(), approved_by: req.user.id, admin_notes: adminNotes }
+    });
+
+    await logAdminAction(req, "APPROVE_MANUAL_WITHDRAWAL", "payout_requests", id);
+    res.json({ success: true, message: "Withdrawal marked as completed", request: updated });
+  } catch (err) {
+    logger.error("[Admin] Error approving withdrawal:", err.message);
+    res.status(500).json({ error: "Failed to approve withdrawal" });
+  }
+};
+
+/**
+ * PUT /api/admin/withdrawals/:id/reject - Reject manual withdrawal and refund wallet
+ */
+exports.rejectWithdrawal = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adminNotes } = req.body;
+    
+    if (!adminNotes) return res.status(400).json({ error: "Rejection reason is required" });
+
+    const serviceSupabase = getServiceSupabase();
+    
+    // 1. Fetch withdrawal details
+    const { data: request, error: reqErr } = await serviceSupabase
+      .from("payout_requests")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (request) {
+      const { data: pData } = await serviceSupabase.from("profiles").select("email").eq("id", request.user_id).single();
+      request.profile = pData || { email: "" };
+    }
+
+    if (reqErr || !request) {
+      return res.status(404).json({ error: "Withdrawal not found" });
+    }
+
+    if (request.status !== "MANUAL_PENDING") {
+      return res.status(400).json({ error: `Cannot reject. Withdrawal status is ${request.status}` });
+    }
+
+    // 2. Fetch or create Wallet for Refund
+    const walletService = require("../services/walletService");
+    const wallet = await walletService.createWallet(request.user_id, request.currency, "native");
+    if (!wallet) throw new Error("Could not find user wallet for refund");
+
+    // 3. Create Refund Transaction Record
+    const { data: tx, error: txError } = await serviceSupabase
+      .from("transactions")
+      .insert([{
+        wallet_id: wallet.id,
+        user_id: request.user_id,
+        type: "DEPOSIT", // A refund acts as a deposit back to the wallet
+        display_label: "Withdrawal Refund",
+        category: "refund",
+        description: `Refund for rejected withdrawal. Reason: ${adminNotes}`,
+        amount: request.amount, // Total amount initially requested
+        currency: request.currency,
+        status: "COMPLETED",
+        reference_id: `refnd-${id.substring(0,8)}`,
+        metadata: {
+            original_payout_id: id,
+            reason: adminNotes,
+            rejected_by: req.user.id
+        },
+        completed_at: new Date().toISOString()
+      }])
+      .select()
+      .single();
+
+    if (txError) throw txError;
+
+    // 4. Update Wallet Balance (Refund)
+    const { error: balError } = await serviceSupabase.rpc("confirm_deposit", {
+      p_transaction_id: tx.id,
+      p_wallet_id: wallet.id,
+      p_amount: request.amount
+    });
+
+    if (balError) throw balError;
+
+    // 5. Mark payout as FAILED_FINAL
+    const payoutService = require("../services/payment/payoutService");
+    const updated = await payoutService.updatePayoutState(id, "FAILED_FINAL", {
+      error: adminNotes,
+      metadata: { admin_rejected: true, rejected_at: new Date().toISOString(), rejected_by: req.user.id, reason: adminNotes }
+    });
+
+    // 6. Notify user
+    await createNotification({
+        receiverId: request.user_id,
+        type: "withdrawal_rejected",
+        title: "Withdrawal Rejected",
+        message: `Your withdrawal of ${request.currency} ${request.amount} was rejected. Funds have been returned to your wallet. Reason: ${adminNotes}`,
+        link: "/dashboard/activity",
+    });
+
+    await logAdminAction(req, "REJECT_MANUAL_WITHDRAWAL", "payout_requests", id, { reason: adminNotes });
+    
+    res.json({ success: true, message: "Withdrawal rejected and funds refunded", request: updated });
+  } catch (err) {
+    logger.error("[Admin] Error rejecting withdrawal:", err.message);
+    res.status(500).json({ error: err.message || "Failed to reject withdrawal" });
+  }
+};
+
+/**
+ * GET /api/admin/financial-stats
+ * Premium institutional dashboard analytics showing backing ratios and liabilities vs reserves.
+ */
+exports.getFinancialStats = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+
+    const { data: wallets, error } = await serviceSupabase
+      .from("wallets_store")
+      .select("address, currency, balance");
+
+    if (error) throw error;
+
+    const stats = {};
+    const currencies = ["NGN", "USD", "EUR", "GBP", "JPY"];
+    
+    currencies.forEach(curr => {
+      stats[curr] = {
+        currency: curr,
+        liabilities: 0,
+        treasury_reserves: 0,
+        unsettled_balances: 0,
+        fx_pool: 0,
+        revenue: 0,
+        net_exposure: 0,
+        collateral_ratio_percent: 100
+      };
+    });
+
+    (wallets || []).forEach(w => {
+      const curr = w.currency;
+      if (!stats[curr]) return;
+
+      const addr = w.address || "";
+      const val = Number(w.balance) || 0;
+
+      if (addr.startsWith("TREASURY_")) {
+        stats[curr].treasury_reserves = Math.abs(val);
+      } else if (addr.startsWith("SETTLEMENT_PAYSTACK_")) {
+        stats[curr].unsettled_balances = Math.abs(val);
+      } else if (addr.startsWith("FX_POOL_")) {
+        stats[curr].fx_pool = Math.abs(val);
+      } else if (addr.startsWith("REVENUE_")) {
+        stats[curr].revenue = val;
+      } else if (
+        !addr.startsWith("SETTLEMENT_") &&
+        !addr.startsWith("TREASURY_") &&
+        !addr.startsWith("FX_POOL_") &&
+        !addr.startsWith("RECONCILIATION_") &&
+        !addr.startsWith("PENDING_")
+      ) {
+        stats[curr].liabilities += val;
+      }
+    });
+
+    currencies.forEach(curr => {
+      const s = stats[curr];
+      const backingAssets = s.treasury_reserves + s.unsettled_balances;
+      
+      s.net_exposure = Math.max(0, s.liabilities - backingAssets);
+      s.collateral_ratio_percent = s.liabilities > 0 
+        ? Math.round((backingAssets / s.liabilities) * 100) 
+        : 100;
+    });
+
+    const { count: anomalyAlertsCount } = await serviceSupabase
+      .from("security_audit_logs")
+      .select("*", { count: "exact", head: true })
+      .in("event_type", ["TREASURY_RESERVE_BREACH", "TREASURY_BACKSTOP_TAPPED", "LEDGER_DRIFT_DETECTED"]);
+
+    res.json({
+      success: true,
+      stats: Object.values(stats),
+      anomaly_alerts_count: anomalyAlertsCount || 0,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    logger.error("[AdminStats] Error fetching financial stats:", err.message);
+    res.status(500).json({ error: "Failed to load financial statistics" });
+  }
+};
+
+/**
+ * POST /api/admin/settlements/sweep
+ * Triggers manual Paystack settlement sweeps with optional age constraint override.
+ */
+exports.sweepSettlements = async (req, res) => {
+  try {
+    const { override = false } = req.body;
+    const ReconciliationWorker = require("../workers/reconciliationWorker");
+
+    logger.info(`[AdminSweep] Admin ${req.user.id} triggered manual settlement sweep. Override: ${override}`);
+    
+    const results = await ReconciliationWorker.sweepAllCurrencies(override);
+
+    await logAdminAction(req, "TRIGGER_SETTLEMENT_SWEEP", "settlements", "all", {
+      manual_override: override,
+      sweep_results: results
+    });
+
+    res.json({
+      success: true,
+      message: "Settlement sweep executed successfully",
+      swept_currencies: results
+    });
+  } catch (err) {
+    logger.error("[AdminSweep] Manual settlement sweep failed:", err.message);
+    res.status(500).json({ error: err.message || "Failed to execute manual settlement sweep" });
+  }
+};
+
+/**
+ * GET /api/admin/calls
+ * Get all system call sessions with pagination and filters
+ */
+exports.getCallSessions = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const status = req.query.status;
+    const callType = req.query.callType;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    let query = serviceSupabase
+      .from("call_sessions")
+      .select(`
+        *,
+        caller:profiles!caller_id (username, full_name, avatar_url),
+        callee:profiles!callee_id (username, full_name, avatar_url)
+      `, { count: "exact" });
+
+    if (status) query = query.eq("status", status);
+    if (callType) query = query.eq("call_type", callType);
+
+    const { data: calls, error, count } = await query
+      .order("started_at", { ascending: false })
+      .range(from, to);
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      calls: calls || [],
+      pagination: {
+        page,
+        limit,
+        total: count || 0,
+        totalPages: Math.ceil((count || 0) / limit),
+      },
+    });
+  } catch (err) {
+    logger.error("[AdminCalls] Failed to load call sessions:", err.message);
+    res.status(500).json({ error: "Failed to fetch call sessions" });
+  }
+};
+
+// ============================================================
+// v2.5 Operations Dashboard Endpoints
+// ============================================================
+
+const operationsService = require("../services/admin/OperationsService");
+
+/**
+ * Middleware to ensure the user has one of the allowed admin roles.
+ */
+exports.requireAdminRole = (allowedRoles = []) => {
+  return (req, res, next) => {
+    const userRole = req.user?.admin_role;
+    if (!userRole) {
+      return res.status(403).json({ error: 'Access denied: Requires admin privileges.' });
+    }
+    if (allowedRoles.length > 0 && !allowedRoles.includes(userRole)) {
+      return res.status(403).json({ error: `Access denied: Requires one of [${allowedRoles.join(', ')}]` });
+    }
+    next();
+  };
+};
+
+exports.getHealthDashboard = async (req, res, next) => {
+  try {
+    const [latest, history] = await Promise.all([
+      operationsService.getLatestHealth(),
+      operationsService.getHealthHistory(24) // last 24 hours
+    ]);
+    
+    res.json({ latest, history });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getFeatureFlags = async (req, res, next) => {
+  try {
+    const flags = await operationsService.getFeatureFlags();
+    res.json({ flags });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.updateFeatureFlag = async (req, res, next) => {
+  try {
+    const { flagKey } = req.params;
+    const { isEnabled } = req.body;
+    const adminId = req.user.id;
+
+    const flag = await operationsService.toggleFeatureFlag(flagKey, isEnabled, adminId);
+    res.json({ flag });
+  } catch (err) {
+    next(err);
+  }
+};

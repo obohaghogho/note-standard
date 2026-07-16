@@ -1,0 +1,536 @@
+const axios = require("axios");
+const crypto = require("crypto");
+const BaseProvider = require("./BaseProvider");
+const logger = require("../../../utils/logger");
+
+/**
+ * FincraProvider — Production-Grade Checkout & Webhook Integration
+ *
+ * Architecture:
+ *  - initialize()  → Creates a Fincra checkout session and returns a validated checkoutUrl
+ *  - verify()      → Polls Fincra API to confirm payment status by merchantReference
+ *  - verifyWebhookSignature() → HMAC-validates incoming Fincra webhooks
+ *  - parseWebhookEvent()     → Normalizes raw Fincra payload into our unified event schema
+ *
+ * Environment:
+ *  - FINCRA_ENV=sandbox → sandboxapi.fincra.com
+ *  - FINCRA_ENV=live    → api.fincra.com
+ *
+ * Fincra Sandbox Card Activation:
+ *  Card collection must be manually enabled at https://app.fincra.com (toggle to Sandbox)
+ *  Settings → Collections → Enable "Card". Without this, checkout pages show an error.
+ */
+
+class FincraProvider extends BaseProvider {
+  constructor() {
+    super();
+    this.secretKey   = (process.env.FINCRA_SECRET_KEY   || "").trim();
+    this.publicKey   = (process.env.FINCRA_PUBLIC_KEY   || "").trim();
+    this.businessId  = (process.env.FINCRA_BUSINESS_ID  || "").trim();
+    this.webhookSecret = (process.env.FINCRA_WEBHOOK_SECRET || "").trim();
+
+    if (!this.secretKey || !this.publicKey || !this.businessId) {
+      throw new Error("[Fincra] Missing required environment variables");
+    }
+
+    let rawEnv = (process.env.FINCRA_ENV || "sandbox").toLowerCase().trim();
+    const envFlag = rawEnv || "sandbox";
+
+    if (envFlag === "production" || envFlag === "live") {
+      this.baseUrl = "https://api.fincra.com";
+      this.isSandbox = false;
+    } else if (envFlag === "sandbox" || envFlag === "test") {
+      this.baseUrl = "https://sandboxapi.fincra.com";
+      this.isSandbox = true;
+    } else {
+      const configError = `[Fincra] CRITICAL CONFIG ERROR: Invalid FINCRA_ENV ("${envFlag}"). Must be 'live' or 'sandbox'.`;
+      logger.error(configError);
+      throw new Error(configError);
+    }
+
+    logger.info(`[Fincra] Initialized — ENV: ${envFlag.toUpperCase()}, BaseURL: ${this.baseUrl}`);
+
+    this.client = axios.create({
+      baseURL: this.baseUrl,
+      timeout: 30000,
+      headers: {
+        "api-key":       this.secretKey,
+        "apiKey":        this.secretKey,
+        "x-pub-key":     this.publicKey,
+        "x-business-id": this.businessId,
+        "Content-Type":  "application/json",
+        "Accept":        "application/json",
+      },
+      maxRedirects: 0,
+    });
+
+    // Axios interceptors for unified logging
+    this.client.interceptors.request.use((config) => {
+      logger.info(`[Fincra] → ${config.method?.toUpperCase()} ${config.url}`, {
+        body: config.data ? JSON.stringify(config.data).substring(0, 500) : "none",
+      });
+      return config;
+    });
+
+    this.client.interceptors.response.use(
+      (response) => {
+        logger.info(`[Fincra] API Success: ${response.config.method.toUpperCase()} ${response.config.url}`, {
+          status: response.status
+        });
+        return response;
+      },
+      (error) => {
+        logger.error(`[Fincra] API Error: ${error.config?.method?.toUpperCase()} ${error.config?.url}`, {
+          status: error.response?.status,
+          message: error.message
+        });
+        return Promise.reject(error);
+      }
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CHECKOUT INITIALIZATION
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async initialize(data) {
+    const { email, amount, currency, reference, callbackUrl, metadata, name } = data;
+
+    if (!email || !amount || !currency || !reference || !callbackUrl) {
+      throw new Error("[Fincra] initialize() called with missing required fields: email, amount, currency, reference, callbackUrl");
+    }
+
+    if (typeof callbackUrl !== "string" || !callbackUrl.trim()) {
+      throw new Error("[Fincra] callbackUrl must be a valid non-empty string");
+    }
+
+    // Fincra requires full name (First Last)
+    const safeEmail = (email || "").trim();
+    let safeName    = (name || metadata?.customerName || safeEmail.split("@")[0] || "Standard User").trim();
+    if (!safeName.includes(" ")) safeName = `${safeName} User`;
+
+    // Build safe metadata — all values must be strings for Fincra compatibility
+    const safeMetadata = {
+      userId:        String(metadata?.userId        || ""),
+      transactionId: String(metadata?.transactionId || ""),
+      type:          String(metadata?.type          || "DEPOSIT"),
+      method:        String(metadata?.method        || "card"),
+      source:        "note_standard_v2",
+    };
+
+    const payload = {
+      customer: {
+        name:  safeName,
+        email: safeEmail,
+      },
+      amount:         Number(Number(amount).toFixed(2)),
+      currency:       String(currency).toUpperCase(),
+      reference:      String(reference),
+      redirectUrl:    String(callbackUrl),
+      description:    metadata.description || "Digital Assets Purchase",
+      feeBearer:      "business", // Matched with scratch scripts for stability
+      settlementDestination: "wallet",
+      paymentMethods: ["card"],
+      business:       this.businessId,
+      metadata:       safeMetadata,
+    };
+
+    logger.info(`[Fincra] Creating checkout session`, {
+      reference,
+      amount,
+      currency: payload.currency,
+      email: safeEmail,
+      redirectUrl: callbackUrl,
+      sandbox: this.isSandbox,
+    });
+
+    try {
+      const response = await this.client.post("/checkout/payments", payload);
+
+      const resp = response.data || {};
+      const checkoutUrl = resp.link || resp.data?.link;
+
+      // ── STRICT VALIDATION: Reject if no checkout URL ──────────────────
+      if (!checkoutUrl) {
+        logger.error("[Fincra] API returned 200 but checkout URL is missing", {
+          reference,
+        });
+        const missingUrlError = new Error(
+          `[Fincra] Checkout URL missing from API response for reference ${reference}.`
+        );
+        missingUrlError.statusCode = 502;
+        throw missingUrlError;
+      }
+
+      logger.info(`[Fincra] ✅ Checkout session created`, {
+        reference,
+        checkoutUrl,
+        payCode:   resp.payCode   || resp.reference,
+        providerRef: resp.reference || reference,
+      });
+
+      return {
+        success:           true,
+        link:              checkoutUrl,
+        providerReference: resp.reference || reference,
+        payCode:           resp.payCode   || null,
+      };
+
+    } catch (error) {
+      // Re-throw if already our structured error
+      if (error.fincraResponse) throw error;
+
+      const status    = error.response?.status || 500;
+      const errorData = error.response?.data   || {};
+      const message   = errorData.message || errorData.error || error.message || "Fincra initialization failed";
+      const requestId = error.response?.headers?.['x-request-id'] || error.response?.headers?.['request-id'] || "unknown";
+
+      logger.error(`[Fincra] ❌ Checkout creation failed`, {
+        reference,
+        status,
+        message,
+        currency,
+        amount,
+        fincraRequestId: requestId,
+        requestPayload: JSON.stringify(payload),
+        errorData: JSON.stringify(errorData),
+      });
+
+      const structuredError        = new Error(message);
+      structuredError.success      = false;
+      structuredError.statusCode   = status;
+      structuredError.fincra       = { status, response: errorData };
+      structuredError.details      = errorData;
+      throw structuredError;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PAYMENT VERIFICATION
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async verify(reference) {
+    logger.info(`[Fincra] Verifying payment`, { reference });
+
+    try {
+      const response = await this.client.get(
+        `/checkout/payments/merchant-reference/${reference}`
+      );
+
+      const d = response.data?.data || {};
+      const rawStatus = d.status;
+
+      // Normalize Fincra status to our internal status contract
+      let normalizedStatus = "pending";
+      if (["success", "successful", "paid"].includes(rawStatus)) {
+        normalizedStatus = "success";
+      } else if (["failed", "cancelled", "canceled"].includes(rawStatus)) {
+        normalizedStatus = "failed";
+      } else if (rawStatus === "expired") {
+        normalizedStatus = "failed"; // treat expired as failed
+      }
+
+      logger.info(`[Fincra] Verification result`, {
+        reference,
+        rawStatus,
+        normalizedStatus,
+        amount:   d.amount,
+        currency: d.currency,
+      });
+
+      return {
+        success:   normalizedStatus === "success",
+        status:    normalizedStatus,
+        amount:    d.amount      ? Number(d.amount)       : 0,
+        currency:  d.currency    || null,
+        reference: d.merchantReference || d.reference || reference,
+        provider:  "fincra",
+        metadata:  d.metadata    || {},
+        raw:       d,
+      };
+    } catch (error) {
+      const msg = error.response?.data?.message || error.message || "Fincra verification failed";
+      logger.error(`[Fincra] Verification error`, { reference, error: msg });
+      throw new Error(msg);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // WEBHOOK SIGNATURE VERIFICATION
+  // ─────────────────────────────────────────────────────────────────────────
+
+  verifyWebhookSignature(headers, body, rawBody = null) {
+    const signature    = headers["signature"] || headers["x-fincra-signature"] || headers["x-webhook-signature"];
+    const webhookSecret = this.webhookSecret || process.env.FINCRA_WEBHOOK_SECRET;
+
+    // ── Sandbox bypass: In sandbox with no secret configured, log and allow ──
+    if (this.isSandbox && !webhookSecret) {
+      logger.warn("[Fincra] Sandbox mode — FINCRA_WEBHOOK_SECRET not set. Bypassing signature check. SET THIS FOR PRODUCTION.");
+      return true;
+    }
+
+    if (!signature) {
+      logger.warn("[Fincra] No signature header in webhook request", {
+        availableHeaders: Object.keys(headers).join(", "),
+      });
+      // In sandbox, allow through without signature to ease testing
+      if (this.isSandbox) {
+        logger.warn("[Fincra] Sandbox: accepting webhook without signature header.");
+        return true;
+      }
+      return false;
+    }
+
+    if (!webhookSecret) {
+      logger.error("[Fincra] FINCRA_WEBHOOK_SECRET is not configured — all webhooks will be rejected.");
+      return false;
+    }
+
+    // Use rawBody if available (most accurate for HMAC)
+    const dataToHash = rawBody
+      ? (Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody))
+      : Buffer.from(typeof body === "string" ? body : JSON.stringify(body));
+
+    // Try SHA-512 (Fincra primary)
+    const hash512 = crypto.createHmac("sha512", webhookSecret).update(dataToHash).digest("hex");
+    if (hash512 === signature) {
+      logger.info("[Fincra] ✅ Webhook signature verified (sha512)");
+      return true;
+    }
+
+    // Try SHA-256 (fallback)
+    const hash256 = crypto.createHmac("sha256", webhookSecret).update(dataToHash).digest("hex");
+    if (hash256 === signature) {
+      logger.info("[Fincra] ✅ Webhook signature verified (sha256)");
+      return true;
+    }
+
+    logger.error("[Fincra] ❌ Webhook signature MISMATCH", {
+      receivedSig:    signature?.substring(0, 16) + "...",
+      expected512:    hash512?.substring(0, 16) + "...",
+      secretPrefix:   webhookSecret?.substring(0, 6) + "...",
+      bodyLength:     dataToHash.length,
+      usingRawBody:   !!rawBody,
+    });
+
+    return false;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // WEBHOOK PAYLOAD NORMALIZATION
+  // ─────────────────────────────────────────────────────────────────────────
+
+  parseWebhookEvent(payload) {
+    const event = payload.event || payload.type || "";
+    const data  = payload.data || {};
+
+    logger.info(`[Fincra] Parsing webhook event`, {
+      event,
+      dataKeys:    Object.keys(data).join(", "),
+      reference:   data.merchantReference || data.reference,
+      rawStatus:   data.status,
+    });
+
+    // ── Status Mapping ──────────────────────────────────────────────────────
+    let status = "pending";
+    const rawStatus = (data.status || "").toLowerCase();
+    const isSuccess = rawStatus === "success" || rawStatus === "successful" || rawStatus === "paid";
+    const isFailed  = rawStatus === "failed"  || rawStatus === "cancelled"  || rawStatus === "canceled";
+
+    if (isSuccess || event === "charge.successful" || event === "checkout.paid") {
+      status = "success";
+    } else if (isFailed || event === "charge.failed" || event === "checkout.failed") {
+      status = "failed";
+    }
+
+    // ── Reference Extraction ────────────────────────────────────────────────
+    // Fincra sends merchantReference (our reference) and reference (their payCode)
+    const ourReference      = data.merchantReference || data.reference || null;
+    const providerReference = data.chargeReference   || data.reference || null;
+
+    if (!ourReference) {
+      logger.error("[Fincra] Webhook missing merchantReference — cannot match transaction!", {
+        event,
+        dataKeys: Object.keys(data).join(", "),
+      });
+    }
+
+    // ── Transaction Type from Metadata ──────────────────────────────────────
+    const metaType = (data.metadata?.type || "DEPOSIT").toUpperCase();
+    let type = "DEPOSIT";
+    if (metaType === "AD_PAYMENT" || metaType === "ADS") {
+      type = "AD_PAYMENT";
+    } else if (metaType === "SUBSCRIPTION" || metaType === "SUBSCRIPTION_PAYMENT") {
+      type = "SUBSCRIPTION_PAYMENT";
+    }
+
+    // ── Amount Normalization ────────────────────────────────────────────────
+    const amount = Number(data.amountToSettle || data.amount || data.chargeAmount || 0);
+
+    logger.info(`[Fincra] ✅ Webhook parsed`, {
+      type,
+      status,
+      ourReference,
+      providerReference,
+      amount,
+      currency: data.currency,
+      userId:   data.metadata?.userId,
+    });
+
+    return {
+      type,
+      display_label:     type === "SUBSCRIPTION_PAYMENT" ? "Subscription Upgrade" : "Fincra Card Payment",
+      reference:         ourReference,
+      providerReference: providerReference,
+      status,
+      amount,
+      currency:   data.currency  || null,
+      userId:     data.metadata?.userId || data.metadata?.user_id || null,
+      metadata:   data.metadata  || {},
+      raw:        payload,
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // VIRTUAL ACCOUNT (USD/EUR/GBP bank transfers)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async createVirtualAccount(data) {
+    const { currency, email, firstName, lastName, phone, dob, occupation, address, documentUrls } = data;
+    const isFcy = ["USD", "EUR", "GBP"].includes((currency || "").toUpperCase());
+
+    const payload = {
+      currency,
+      accountType:    "individual",
+      KYCInformation: {
+        firstName,
+        lastName,
+        email,
+        phoneNumber: phone,
+      },
+      business: this.businessId,
+    };
+
+    if (isFcy) {
+      Object.assign(payload.KYCInformation, {
+        birthDate:  dob          || "1990-01-01",
+        occupation: occupation   || "Professional",
+        address: {
+          street:     address?.street     || "No 1 Main St",
+          city:       address?.city       || "Lagos",
+          state:      address?.state      || "Lagos State",
+          country:    address?.country    || "NG",
+          postalCode: address?.postalCode || "100001",
+        },
+        documents: {
+          idCard:      documentUrls?.idCard,
+          utilityBill: documentUrls?.utilityBill,
+        },
+      });
+
+      if (!payload.KYCInformation.documents.idCard || !payload.KYCInformation.documents.utilityBill) {
+        const err = new Error("MISSING_KYC_DOCUMENTS: USD/EUR/GBP accounts require ID card and Utility Bill URLs.");
+        err.statusCode = 400;
+        throw err;
+      }
+    }
+
+    if (currency === "NGN") payload.channel = "wema";
+
+    try {
+      const response = await this.client.post("/profile/virtual-accounts/requests", payload);
+      const d = response.data.data;
+      return {
+        bankName:      d.bankName,
+        accountNumber: d.accountNumber,
+        accountName:   d.accountName,
+        currency:      d.currency,
+        reference:     d.reference,
+        provider:      "fincra",
+      };
+    } catch (error) {
+      const msg = error.response?.data?.message || error.response?.data?.error || "Failed to generate virtual account";
+      logger.error("[Fincra] Virtual Account Error", { currency, error: msg });
+      throw new Error(msg);
+    }
+  }
+
+  async transfer(data) {
+    const { amount, currency, destination } = data;
+    try {
+      const res = await this.client.post("/disbursements/transfers", {
+        amount: amount,
+        currency: currency.toUpperCase(),
+        destination: {
+          accountNumber: destination.accountNumber,
+          bankCode: destination.bankCode,
+        },
+        business: this.businessId,
+        reference: `tr_fincra_${Date.now()}`
+      });
+      return {
+        success: true,
+        status: res.data.data.status,
+        reference: res.data.data.reference,
+        raw: res.data.data
+      };
+    } catch (error) {
+      logger.error("[Fincra] Transfer disbursement error:", error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || "Fincra disbursement transfer failed");
+    }
+  }
+
+  async reverse(reference, reason) {
+    try {
+      // Fincra refunds/reversals
+      const res = await this.client.post(`/disbursements/refunds`, {
+        reference: reference,
+        reason: reason,
+        business: this.businessId
+      });
+      return {
+        success: true,
+        status: "reversed",
+        reference: res.data.data.reference || `re_fincra_${Date.now()}`,
+        raw: res.data.data
+      };
+    } catch (error) {
+      logger.error("[Fincra] Refund error:", error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || "Fincra refund initiation failed");
+    }
+  }
+
+  async balanceInquiry(currency) {
+    try {
+      const res = await this.client.get(`/wallets/business/${this.businessId}`);
+      const wallet = res.data.data?.find(w => w.currency.toUpperCase() === currency.toUpperCase());
+      return {
+        balance: wallet ? Number(wallet.availableBalance) : 0.0,
+        currency: currency.toUpperCase()
+      };
+    } catch {
+      return { balance: 0.0, currency: currency.toUpperCase() };
+    }
+  }
+
+  async healthCheck() {
+    try {
+      const start = Date.now();
+      await this.client.get(`/wallets/business/${this.businessId}`);
+      return { status: "healthy", latencyMs: Date.now() - start };
+    } catch {
+      return { status: "unhealthy", latencyMs: 999 };
+    }
+  }
+
+  async settlement(data) {
+    try {
+      const res = await this.client.get(`/settlements/business/${this.businessId}`);
+      return res.data.data || [];
+    } catch {
+      return [];
+    }
+  }
+}
+
+module.exports = FincraProvider;

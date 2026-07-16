@@ -1,0 +1,32 @@
+{
+    "common": {
+        "search": "Căutare globală...",
+        "language": "Limbă",
+        "settings": "Setări",
+        "profile": "Profil",
+        "logout": "Deconectare",
+        "notifications": "Notificări",
+        "new_note": "Notă nouă",
+        "search_language": "Caută limba...",
+        "available_languages": "Limbi disponibile",
+        "auto_save": "Modificările sunt salvate automat"
+    },
+    "nav": {
+        "home": "Acasă",
+        "notes": "Note",
+        "chat": "Chat",
+        "shared": "Partajat",
+        "feed": "Flux",
+        "favorites": "Favorite",
+        "billing": "Facturare",
+        "trends": "Tendințe",
+        "search_item": "Căutare",
+        "teams": "Echipe",
+        "wallet": "Portofel"
+    },
+    "auth": {
+        "login": "Autentificare",
+        "signup": "Înregistrare",
+        "welcome": "Bine ai revenit"
+    }
+}

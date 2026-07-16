@@ -1,0 +1,224 @@
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { supabase, supabaseSafe, resetRateLimiters } from '../lib/supabaseSafe';
+import { useAuth } from './AuthContext';
+import { useSocket } from './SocketContext';
+import toast from 'react-hot-toast';
+import type { Note } from '../types/note';
+
+interface NotesContextType {
+    notes: Note[];
+    stats: { totalBy: number; favorites: number };
+    loading: boolean;
+    canCreateNote: boolean;
+    refreshNotes: (searchTerm?: string, sortBy?: string) => Promise<void>;
+    setNotes: React.Dispatch<React.SetStateAction<Note[]>>;
+}
+
+const NotesContext = createContext<NotesContextType | undefined>(undefined);
+
+export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const { user, isPro } = useAuth();
+    const { socket, connected } = useSocket();
+    const [notes, setNotes] = useState<Note[]>([]);
+    const [stats, setStats] = useState({ totalBy: 0, favorites: 0 });
+    const [loading, setLoading] = useState(true);
+
+    const canCreateNote = isPro || stats.totalBy < 100;
+
+    /**
+     * Fetch notes from the database with caching and rate-limiting.
+     */
+    const fetchNotes = useCallback(async (searchTerm = '', sortBy = 'latest') => {
+        if (!user) return;
+        
+        try {
+            // Using a unique key per user/search/sort configuration for the cache
+            const results = await supabaseSafe<Note[]>(
+                `notes-list-${user.id}-${searchTerm}-${sortBy}`,
+                async () => {
+                    let query = supabase
+                        .from('notes')
+                        .select('*')
+                        .eq('owner_id', user.id)
+                        .is('deleted_at', null);
+
+                    if (sortBy === 'latest') query = query.order('updated_at', { ascending: false });
+                    else if (sortBy === 'oldest') query = query.order('updated_at', { ascending: true });
+                    else if (sortBy === 'title') query = query.order('title', { ascending: true });
+
+                    if (searchTerm) {
+                        query.ilike('title', `%${searchTerm}%`);
+                    }
+                    return query;
+                },
+                { fallback: [] }
+            );
+            
+            setNotes(results || []);
+
+            // Also update stats if it's the main list fetch
+            if (!searchTerm) {
+                const [totalRes, favRes] = await Promise.all([
+                    supabase
+                      .from('notes')
+                      .select('id', { count: 'exact', head: true })
+                      .eq('owner_id', user.id)
+                      .is('deleted_at', null),
+                    supabase
+                      .from('notes')
+                      .select('id', { count: 'exact', head: true })
+                      .eq('owner_id', user.id)
+                      .eq('is_favorite', true)
+                      .is('deleted_at', null)
+                ]);
+                setStats({
+                    totalBy: totalRes.count || 0,
+                    favorites: favRes.count || 0
+                });
+            }
+        } catch (error) {
+            console.error('[NotesContext] Error fetching notes:', error);
+        } finally {
+            setLoading(false);
+        }
+    }, [user]);
+
+    /**
+     * Real-time Synchronization
+     * Listens for changes to the 'notes' table for the current user.
+     */
+    useEffect(() => {
+        if (!user) {
+            setNotes([]);
+            setStats({ totalBy: 0, favorites: 0 });
+            setLoading(false);
+            return;
+        }
+
+        // Fetch whenever the user changes
+        fetchNotes();
+
+        // 1. Subscribe to changes for this user's notes
+        const channel = supabase
+            .channel(`notes-sync-${user.id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'notes',
+                    filter: `owner_id=eq.${user.id}`
+                },
+                (payload) => {
+                    console.log('[NotesContext] Real-time activity detected:', payload.eventType);
+                    
+                    // 2. Invalidate relevant caches in supabaseSafe
+                    // This ensures the NEXT fetchNotes and dashboard stats get fresh data.
+                    resetRateLimiters('notes-list-');
+                    resetRateLimiters(`dashboard-stats-${user.id}`);
+
+                    // 3. Update local state immediately (Optimistic UI)
+                    if (payload.eventType === 'INSERT') {
+                        const newNote = payload.new as Note;
+                        setNotes(prev => {
+                            if (prev.some(n => n.id === newNote.id)) return prev;
+                            return [newNote, ...prev];
+                        });
+                        setStats(prev => ({ ...prev, totalBy: prev.totalBy + 1 }));
+                    } else if (payload.eventType === 'UPDATE') {
+                        const updatedNote = payload.new as Note;
+
+                        // Soft-delete: deleted_at was set — treat it as a removal
+                        if (updatedNote.deleted_at && !payload.old.deleted_at) {
+                            setNotes(prev => prev.filter(n => n.id !== updatedNote.id));
+                            setStats(prev => ({
+                                totalBy: Math.max(0, prev.totalBy - 1),
+                                favorites: updatedNote.is_favorite
+                                    ? Math.max(0, prev.favorites - 1)
+                                    : prev.favorites
+                            }));
+                        // Restore from trash: deleted_at was cleared — treat as an insert
+                        } else if (!updatedNote.deleted_at && payload.old.deleted_at) {
+                            setNotes(prev => {
+                                if (prev.some(n => n.id === updatedNote.id)) return prev;
+                                return [updatedNote, ...prev];
+                            });
+                            setStats(prev => ({ ...prev, totalBy: prev.totalBy + 1 }));
+                        // Regular update (title/content/favorites change)
+                        } else {
+                            setNotes(prev => prev.map(n => n.id === updatedNote.id ? updatedNote : n));
+                            // Recalculate favorites if changed
+                            if (payload.old.is_favorite !== payload.new.is_favorite) {
+                                setStats(prev => ({
+                                    ...prev,
+                                    favorites: payload.new.is_favorite ? prev.favorites + 1 : prev.favorites - 1
+                                }));
+                            }
+                        }
+                    } else if (payload.eventType === 'DELETE') {
+                        const deletedId = payload.old.id;
+                        setNotes(prev => {
+                            const wasFavorite = prev.find(n => n.id === deletedId)?.is_favorite;
+                            if (wasFavorite !== undefined) {
+                                setStats(s => ({ 
+                                    totalBy: Math.max(0, s.totalBy - 1),
+                                    favorites: wasFavorite ? Math.max(0, s.favorites - 1) : s.favorites
+                                }));
+                            }
+                            return prev.filter(n => n.id !== deletedId);
+                        });
+                    }
+                }
+            )
+            .subscribe((status) => {
+               if (status === 'SUBSCRIBED') {
+                   console.log('[NotesContext] Real-time subscription active.');
+               }
+            });
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [user, fetchNotes]);
+
+    /**
+     * Socket.io Real-time (for Shared Notes)
+     */
+    useEffect(() => {
+        if (!socket || !connected) return;
+
+        const onNoteUpdated = (data: { noteId: string; note: Note }) => {
+            console.log('[NotesContext] Real-time note update via Socket:', data.noteId);
+            setNotes(prev => prev.map(n => n.id === data.noteId ? { ...data.note, id: data.noteId } : n));
+            // toast.success('A shared note was updated', { icon: '📝' });
+        };
+
+        const onSharedNoteReceived = (data: { noteId: string; sharedBy: string; noteTitle: string }) => {
+            console.log('[NotesContext] New shared note received:', data.noteId);
+            fetchNotes(); // Fetch the full new note
+            toast.success(`New note shared with you: ${data.noteTitle}`, { icon: '🤝' });
+        };
+
+        socket.on('note_updated', onNoteUpdated);
+        socket.on('shared_note_received', onSharedNoteReceived);
+
+        return () => {
+            socket.off('note_updated', onNoteUpdated);
+            socket.off('shared_note_received', onSharedNoteReceived);
+        };
+    }, [socket, connected, fetchNotes]);
+
+    return (
+        <NotesContext.Provider value={{ notes, stats, loading, canCreateNote, refreshNotes: fetchNotes, setNotes }}>
+            {children}
+        </NotesContext.Provider>
+    );
+};
+
+export const useNotes = () => {
+    const context = useContext(NotesContext);
+    if (context === undefined) {
+        throw new Error('useNotes must be used within a NotesProvider');
+    }
+    return context;
+};

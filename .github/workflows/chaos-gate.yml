@@ -1,0 +1,41 @@
+name: Chaos Gate
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+
+
+jobs:
+  chaos:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install Dependencies
+        run: npm install
+
+      # ── Phase 8.2 + 8.3 (standalone — no live server needed) ──────
+      # Runs ACC War-Game and Replay Certification against an in-memory mock.
+      # These are the hard invariant gates: zero violations, P95 ≤ 5ms, certified.
+      - name: Run ACC War-Game + Certification Gate (standalone)
+        run: npm run chaos:ci
+        env:
+          # Skip the live-server Phase 6.3 check in CI (no DB available)
+          CI_SKIP_LIVE_SERVER: true
+
+      # ── Upload report artifact ────────────────────────────────────
+      - name: Upload Chaos Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acc-chaos-report
+          path: acc_chaos_report.json
+          if-no-files-found: warn

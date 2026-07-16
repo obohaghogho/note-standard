@@ -1,0 +1,156 @@
+import { useState, useRef } from 'react';
+import { toast } from 'react-hot-toast';
+import { Mic, Square, Trash2, Send } from 'lucide-react';
+import { Button } from '../common/Button';
+
+interface VoiceRecorderProps {
+    onSend: (audioBlob: Blob) => void;
+    onCancel: () => void;
+}
+
+export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }) => {
+    const [isRecording, setIsRecording] = useState(false);
+    const [audioUrl, setAudioUrl] = useState<string | null>(null);
+    const [recordingTime, setRecordingTime] = useState(0);
+
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioChunksRef = useRef<Blob[]>([]);
+    const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
+    const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const startRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: true // Relaxed constraints to prevent Windows silent audio driver bugs
+            });
+            
+            // Prioritize mp4 for robust Safari iOS compatibility, followed by WebM for Chrome/Android
+            const types = [
+                'audio/mp4',
+                'audio/webm;codecs=opus',
+                'audio/webm',
+                'audio/mpeg',
+                'audio/ogg;codecs=opus',
+            ];
+            
+            const mimeType = types.find(type => typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(type)) || '';
+            console.log('[VoiceRecorder] Selected MIME type:', mimeType);
+            
+            mediaRecorderRef.current = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+            audioChunksRef.current = [];
+
+            mediaRecorderRef.current.ondataavailable = (event) => {
+                if (event.data && event.data.size > 0) {
+                    audioChunksRef.current.push(event.data);
+                }
+            };
+
+            mediaRecorderRef.current.onstop = () => {
+                const finalMime = mediaRecorderRef.current?.mimeType || mimeType || 'audio/mp4';
+                const audioBlob = new Blob(audioChunksRef.current, { type: finalMime });
+                audioChunksRef.current = [audioBlob]; 
+                const url = URL.createObjectURL(audioBlob);
+                setAudioUrl(url);
+            };
+
+            mediaRecorderRef.current.start();
+            setIsRecording(true);
+
+            // Start Timer
+            setRecordingTime(0);
+            timerRef.current = setInterval(() => {
+                setRecordingTime((prev) => prev + 1);
+            }, 1000);
+
+        } catch (error: unknown) {
+            const e = error instanceof Error ? error : new Error('Microphone error');
+            const errName = (error as { name?: string }).name || '';
+            console.error('Error accessing microphone:', errName, e.message);
+            if (errName === 'NotAllowedError' || errName === 'SecurityError') {
+                toast.error('Microphone access denied. Please enable permissions in your browser settings.');
+            } else if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
+                toast.error('Microphone not found. Please connect a microphone and try again.');
+            } else {
+                toast.error('Could not access microphone. Ensure permissions are granted.');
+            }
+        }
+    };
+
+    const stopRecording = () => {
+        if (mediaRecorderRef.current && isRecording) {
+            mediaRecorderRef.current.stop();
+            if (timerRef.current) clearInterval(timerRef.current);
+            setIsRecording(false);
+
+            // Wait a brief moment to allow onstop to fire before destroying the stream
+            setTimeout(() => {
+                if (mediaRecorderRef.current?.stream) {
+                    mediaRecorderRef.current.stream.getTracks().forEach(track => {
+                        track.stop();
+                    });
+                }
+                mediaRecorderRef.current = null;
+            }, 100);
+        }
+    };
+
+
+
+    const formatTime = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const handleSend = () => {
+        if (audioChunksRef.current.length > 0) {
+            // The audio chunks ref was swapped to hold the final precise Blob during onstop!
+            const audioBlob = audioChunksRef.current[0];
+            onSend(audioBlob);
+        }
+    };
+
+    return (
+        <div className="flex items-center gap-3 bg-white/5 p-2 rounded-lg animate-in fade-in slide-in-from-bottom-2 duration-200">
+            {audioUrl ? (
+                // Preview Mode
+                <>
+                    <audio
+                        ref={audioPlayerRef}
+                        src={audioUrl}
+                        controls
+                        className="h-10 w-48 rounded"
+                    />
+                    <button onClick={() => { setAudioUrl(null); audioChunksRef.current = []; }} className="p-2 text-red-400 hover:text-red-300">
+                        <Trash2 size={18} />
+                    </button>
+                    <Button size="sm" onClick={handleSend} className="rounded-full px-4">
+                        Send Voice <Send size={14} className="ml-2" />
+                    </Button>
+                </>
+            ) : (
+                // Recording Mode
+                <>
+                    {isRecording ? (
+                        <>
+                            <div className="flex items-center gap-2 mr-2">
+                                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                                <span className="text-sm font-mono text-red-400">{formatTime(recordingTime)}</span>
+                            </div>
+                            <button onClick={stopRecording} className="p-2 rounded-full bg-red-500/20 text-red-500 hover:bg-red-500/30 transition-colors">
+                                <Square size={18} fill="currentColor" />
+                            </button>
+                        </>
+                    ) : (
+                        <button onClick={startRecording} className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors text-primary">
+                            <Mic size={20} />
+                        </button>
+                    )}
+                    <Button variant="ghost" size="sm" onClick={onCancel}>
+                        Cancel
+                    </Button>
+                </>
+            )}
+        </div>
+    );
+};

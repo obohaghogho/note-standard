@@ -1,0 +1,238 @@
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
+import { useEffect, Suspense } from 'react';
+
+// Layout & structural components (eagerly loaded — needed immediately)
+import { DashboardLayout } from './components/layout/DashboardLayout';
+import { AdminLayout } from './components/layout/AdminLayout';
+import { AuthProvider } from './context/AuthContext';
+import { SocketProvider } from './context/SocketContext';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { ChatProvider } from './context/ChatContext';
+import { NotificationProvider } from './context/NotificationContext';
+import { WalletProvider } from './context/WalletContext';
+import { WebRTCProvider } from './context/WebRTCContext';
+import { PresenceProvider } from './context/PresenceContext';
+import { NotesProvider } from './context/NotesContext';
+import { NotesDashboardProvider } from './context/NotesDashboardContext';
+// import { ChatWidget } from './components/chat/ChatWidget'; // already handled by Route
+import { ChatWidget } from './components/chat/ChatWidget';
+import { ErrorBoundary } from 'react-error-boundary';
+import { VersionGuard } from './components/common/VersionGuard';
+import { IOSInstallPrompt } from './components/common/IOSInstallPrompt';
+import { WebNotificationRouter } from './components/common/WebNotificationRouter';
+import { lazyWithRetry } from './utils/lazyWithRetry';
+
+// ─── Lazy-loaded Dashboard Pages (Code Splitting) ───
+const DashboardHome = lazyWithRetry(() => import('./pages/dashboard/DashboardHome'), 'DashboardHome');
+const Notes = lazyWithRetry(() => import('./pages/dashboard/Notes'), 'Notes');
+const Chat = lazyWithRetry(() => import('./pages/dashboard/Chat'), 'Chat');
+const Shared = lazyWithRetry(() => import('./pages/dashboard/Shared'), 'Shared');
+const Feed = lazyWithRetry(() => import('./pages/dashboard/Feed'), 'Feed');
+const Search = lazyWithRetry(() => import('./pages/dashboard/Search'), 'Search');
+const Settings = lazyWithRetry(() => import('./pages/dashboard/Settings'), 'Settings');
+const Billing = lazyWithRetry(() => import('./pages/dashboard/Billing'), 'Billing');
+const Affiliates = lazyWithRetry(() => import('./pages/dashboard/Affiliates'), 'Affiliates');
+const Notifications = lazyWithRetry(() => import('./pages/dashboard/Notifications'), 'Notifications');
+const Trends = lazyWithRetry(() => import('./pages/dashboard/Trends'), 'Trends');
+const WalletPage = lazyWithRetry(() => import('./pages/WalletPage'), 'WalletPage');
+const Transactions = lazyWithRetry(() => import('./pages/dashboard/Transactions'), 'Transactions');
+const TeamsPage = lazyWithRetry(() => import('./pages/teams/TeamsPage'), 'TeamsPage');
+const DepositPage = lazyWithRetry(() => import('./pages/dashboard/DepositPage'), 'DepositPage');
+const DownloadPage = lazyWithRetry(() => import('./pages/dashboard/DownloadPage'), 'DownloadPage');
+
+// ─── Lazy-loaded pages (route-level code splitting) ───
+// Public pages
+const LandingPage = lazyWithRetry(() => import('./pages/LandingPage'), 'LandingPage');
+const Login = lazyWithRetry(() => import('./pages/Login'), 'Login');
+const Signup = lazyWithRetry(() => import('./pages/Signup'), 'Signup');
+const TermsPage = lazyWithRetry(() => import('./pages/TermsPage'), 'TermsPage');
+const PrivacyPage = lazyWithRetry(() => import('./pages/PrivacyPage'), 'PrivacyPage');
+const RefundPage = lazyWithRetry(() => import('./pages/RefundPage'), 'RefundPage');
+const AboutPage = lazyWithRetry(() => import('./pages/AboutPage'), 'AboutPage');
+const ContactPage = lazyWithRetry(() => import('./pages/ContactPage'), 'ContactPage');
+const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword'), 'ResetPassword');
+const ActivitySuccess = lazyWithRetry(() => import('./pages/ActivitySuccess'), 'ActivitySuccess');
+const ActivityCancel = lazyWithRetry(() => import('./pages/ActivityCancel'), 'ActivityCancel');
+
+// Dashboard pages are now static for performance and reliability
+
+const AdminDashboard = lazyWithRetry(() => import('./pages/admin/AdminDashboard'), 'AdminDashboard');
+const UserManagement = lazyWithRetry(() => import('./pages/admin/UserManagement'), 'UserManagement');
+const AdminChat = lazyWithRetry(() => import('./pages/admin/AdminChat'), 'AdminChat');
+const AuditLogs = lazyWithRetry(() => import('./pages/admin/AuditLogs'), 'AuditLogs');
+const BroadcastManager = lazyWithRetry(() => import('./pages/admin/BroadcastManager'), 'BroadcastManager');
+const AutoReplySettings = lazyWithRetry(() => import('./pages/admin/AutoReplySettings'), 'AutoReplySettings');
+const Analytics = lazyWithRetry(() => import('./pages/admin/Analytics'), 'Analytics');
+const AdminSettings = lazyWithRetry(() => import('./pages/admin/AdminSettings'), 'AdminSettings');
+const ManageAds = lazyWithRetry(() => import('./pages/admin/ManageAds'), 'ManageAds');
+const LimitRequestsPage = lazyWithRetry(() => import('./pages/admin/LimitRequestsPage'), 'LimitRequestsPage');
+const ManualDeposits = lazyWithRetry(() => import('./pages/admin/ManualDeposits'), 'ManualDeposits');
+const ManualWithdrawals = lazyWithRetry(() => import('./pages/admin/ManualWithdrawals'), 'ManualWithdrawals');
+const ReconciliationDashboard = lazyWithRetry(() => import('./pages/admin/ReconciliationDashboard').then(m => ({ default: m.ReconciliationDashboard })), 'ReconciliationDashboard');
+const PushHealthDashboard = lazyWithRetry(() => import('./pages/admin/PushHealthDashboard'), 'PushHealthDashboard');
+
+
+const ChatRedirect = () => {
+  const { id } = useParams();
+  return <Navigate to={`/dashboard/chat?id=${id}`} replace />;
+};
+
+// Phase 6.2: Replay Debugger UI
+const ReplayPage = lazyWithRetry(() => import('./debug/replay/ReplayPage'), 'ReplayPage');
+
+function App() {
+  useEffect(() => {
+    // Global error handler for uncaught errors
+    const handleError = (event: ErrorEvent) => {
+      console.error('Global error caught:', event.error);
+      toast.error(`Error: ${event.error?.message || 'An unexpected error occurred'}`);
+      event.preventDefault(); // Prevent default browser error handling
+    };
+
+    // Global handler for unhandled promise rejections
+    const handler = (e: PromiseRejectionEvent) => {
+      console.error('[Unhandled Promise]', e.reason);
+      if (e.reason instanceof Error && e.reason.stack) {
+        console.error('[Stack Trace]', e.reason.stack);
+      }
+    };
+
+    // Online/offline toasts removed — they were getting stuck on screen
+
+    // Attach global error handlers
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handler);
+
+    // Cleanup on unmount
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handler);
+    };
+  }, []);
+
+  return (
+    <Router>
+      <ErrorBoundary 
+        fallbackRender={({ error }) => (
+          <div style={{ padding: '2rem', textAlign: 'center', color: '#ef4444' }}>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Something went wrong</h2>
+            <p style={{ marginTop: '0.5rem', color: '#9ca3af' }}>{error?.message || 'Unknown error'}</p>
+            <p style={{ marginTop: '0.5rem', color: '#ef4444', fontSize: '0.8rem', textAlign: 'left', whiteSpace: 'pre-wrap' }}>{error?.stack}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              style={{ marginTop: '1rem', padding: '0.5rem 1rem', background: '#3b82f6', color: 'white', borderRadius: '0.5rem', border: 'none', cursor: 'pointer' }}
+            >
+              Reload Page
+            </button>
+          </div>
+        )}
+      >
+        <Suspense fallback={
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#0a0a0a' }}>
+            <div style={{ width: 36, height: 36, border: '3px solid rgba(255,255,255,0.1)', borderTopColor: '#10b981', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+          </div>
+        }>
+          <AuthProvider>
+            <VersionGuard>
+            <SocketProvider>
+              <PresenceProvider>
+                <NotificationProvider>
+                  <ChatProvider>
+                    <WebRTCProvider>
+                      <WalletProvider>
+                        <NotesProvider>
+                          <NotesDashboardProvider>
+                            <WebNotificationRouter />
+                            <Routes>
+                            <Route path="/" element={<LandingPage />} />
+                            <Route path="/login" element={<Login />} />
+                            <Route path="/signup" element={<Signup />} />
+                            <Route path="/terms" element={<TermsPage />} />
+                            <Route path="/privacy" element={<PrivacyPage />} />
+                            <Route path="/refund" element={<RefundPage />} />
+                            <Route path="/about" element={<AboutPage />} />
+                            <Route path="/contact" element={<ContactPage />} />
+                            <Route path="/reset-password" element={<ResetPassword />} />
+                            <Route path="/download" element={<DownloadPage />} />
+                            
+                            <Route path="/chat/:id" element={<ChatRedirect />} />
+
+                            {/* Phase 6.2: Replay Debugger UI */}
+                            <Route path="/debug/replay" element={<ReplayPage />} />
+
+                            <Route path="/wallet/success" element={<ActivitySuccess />} />
+                            <Route path="/wallet/cancel" element={<ActivityCancel />} />
+                            <Route path="/wallet" element={<Navigate to="/dashboard/wallet" replace />} />
+                            
+                            <Route path="/" element={<LandingPage />} />
+                            
+                            {/* High-priority Payment Redirects (Move before catch-alls) */}
+                            <Route path="/payment/success/*" element={<Navigate to="/wallet/success" replace />} />
+                            <Route path="/payment/cancel/*" element={<Navigate to="/wallet/cancel" replace />} />
+                            
+                            <Route path="/login" element={<Login />} />
+
+                            <Route element={<ProtectedRoute />}>
+                              <Route path="/dashboard" element={<DashboardLayout />}>
+                                <Route index element={<DashboardHome />} />
+                                <Route path="notes" element={<Notes />} />
+                                <Route path="chat" element={<Chat />} />
+                                <Route path="shared" element={<Shared />} />
+                                <Route path="feed" element={<Feed />} />
+                                <Route path="favorites" element={<Notes />} />
+                                <Route path="search" element={<Search />} />
+                                <Route path="billing" element={<Billing />} />
+                                <Route path="wallet" element={<WalletPage />} />
+                                <Route path="history" element={<Transactions />} />
+                                <Route path="affiliates" element={<Affiliates />} />
+                                <Route path="deposit" element={<DepositPage />} />
+                                <Route path="settings" element={<Settings />} />
+                                <Route path="notifications" element={<Notifications />} />
+                                <Route path="trends" element={<Trends />} />
+                                <Route path="teams" element={<TeamsPage />} />
+                                {/* Download page is now at /download */}
+                              </Route>
+                            </Route>
+
+                            <Route element={<ProtectedRoute allowedRoles={['admin', 'support']} />}>
+                              <Route path="/admin" element={<AdminLayout />}>
+                                <Route index element={<AdminDashboard />} />
+                                <Route path="users" element={<UserManagement />} />
+                                <Route path="chats" element={<AdminChat />} />
+                                <Route path="audit-logs" element={<AuditLogs />} />
+                                <Route path="broadcasts" element={<BroadcastManager />} />
+                                <Route path="auto-reply" element={<AutoReplySettings />} />
+                                <Route path="analytics" element={<Analytics />} />
+                                <Route path="reconciliation" element={<ReconciliationDashboard />} />
+                                <Route path="ads" element={<ManageAds />} />
+                                <Route path="deposits" element={<ManualDeposits />} />
+                                <Route path="withdrawals" element={<ManualWithdrawals />} />
+                                <Route path="limit-requests" element={<LimitRequestsPage />} />
+                                <Route path="settings" element={<AdminSettings />} />
+                                <Route path="push-health" element={<PushHealthDashboard />} />
+                              </Route>
+                            </Route>
+                          </Routes>
+                          {/* Global Chat Widget - visible on all authenticated pages */}
+                          <ChatWidget />
+                          {/* iOS install prompt — shown after 8s to iOS Safari users not running as PWA */}
+                          <IOSInstallPrompt />
+                          </NotesDashboardProvider>
+                        </NotesProvider>
+                      </WalletProvider>
+                    </WebRTCProvider>
+                  </ChatProvider>
+                </NotificationProvider>
+              </PresenceProvider>
+            </SocketProvider>
+            </VersionGuard>
+          </AuthProvider>
+        </Suspense>
+      </ErrorBoundary>
+    </Router>
+  );
+}
+
+export default App;

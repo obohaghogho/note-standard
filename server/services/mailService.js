@@ -1,0 +1,271 @@
+const nodemailer = require("nodemailer");
+const logger = require("../utils/logger");
+const env = require("../config/env");
+
+// Configure Nodemailer transporter with validation
+const getTransporter = () => {
+  const host = process.env.SMTP_HOST;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+
+  if (!host || !user || !pass) {
+    logger.error("SMTP Configuration missing", {
+      host: !!host,
+      user: !!user,
+      pass: !!pass,
+    });
+    // Return a dummy transporter that logs errors instead of crashing
+    return {
+      sendMail: () => {
+        throw new Error(
+          "SMTP not configured. Please check environment variables.",
+        );
+      },
+    };
+  }
+
+  return nodemailer.createTransport({
+    host,
+    port: process.env.SMTP_PORT || 587,
+    secure: process.env.SMTP_SECURE !== undefined
+      ? process.env.SMTP_SECURE === "true"
+      : process.env.SMTP_PORT == 465,
+    auth: { user, pass },
+    pool: true,
+    maxConnections: 5,
+    maxMessages: 100,
+  });
+};
+
+const transporter = getTransporter();
+
+/**
+ * Send Verification Email
+ * @param {string} email - Recipient email
+ * @param {string} fullName - Recipient name
+ * @param {string} token - Verification token (OTP)
+ * @param {string} clientUrl - Base URL for the link
+ */
+exports.sendVerificationEmail = async (email, fullName, token, clientUrl) => {
+  try {
+    const verificationLink = `${clientUrl}/verify?email=${
+      encodeURIComponent(email)
+    }&token=${token}`;
+
+    const mailOptions = {
+      from: `"Note Standard" <${env.EMAIL_FROM}>`,
+      to: email,
+      subject: "Verify your Note Standard account",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+          <h2 style="color: #6366f1;">Welcome to Note Standard, ${fullName}!</h2>
+          <p>Thank you for signing up. To complete your registration and secure your account, please verify your email address.</p>
+          <div style="margin: 30px 0; text-align: center;">
+            <a href="${verificationLink}" style="background-color: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Verify Email Address</a>
+          </div>
+          <p>Alternatively, you can enter this code in the app:</p>
+          <h1 style="letter-spacing: 5px; color: #333; text-align: center;">${token}</h1>
+          <p style="font-size: 12px; color: #777;">This link and code will expire in 15 minutes.</p>
+          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+          <p style="font-size: 10px; color: #999;">If you didn't create an account, you can safely ignore this email.</p>
+        </div>
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    logger.info("Verification email sent", {
+      messageId: info.messageId,
+      email,
+    });
+    return true;
+  } catch (error) {
+    logger.error("Failed to send verification email", {
+      error: error.message,
+      email,
+    });
+    return false;
+  }
+};
+
+/**
+ * Send Payment Receipt
+ * @param {string} email - Recipient email
+ * @param {Object} transaction - Transaction details
+ */
+exports.sendPaymentReceipt = async (email, transaction) => {
+  try {
+    const displayLabel = transaction.display_label || "Digital Assets Purchase";
+
+    const mailOptions = {
+      from: `"Note Standard" <${env.EMAIL_FROM}>`,
+      to: email,
+      subject: `Receipt for your ${displayLabel}`,
+      text: `
+        Hello, 
+        Your payment for ${displayLabel} was successful.
+        
+        Amount: ${transaction.currency} ${transaction.amount}
+        Date: ${new Date(transaction.created_at).toLocaleString()}
+        Reference: ${transaction.reference_id || transaction.id}
+        
+        Thank you for choosing NoteStandard.
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    logger.info("Payment receipt sent", {
+      email,
+      reference: transaction.reference_id,
+    });
+
+    return true;
+  } catch (error) {
+    logger.error("Failed to send payment receipt", {
+      error: error.message,
+      email,
+    });
+    return false;
+  }
+};
+
+/**
+ * Send Password Reset link
+ * @param {string} email - Recipient email
+ * @param {string} resetLink - The secure reset link from Supabase
+ */
+exports.sendPasswordResetEmail = async (email, resetLink) => {
+  try {
+    const mailOptions = {
+      from: `"Note Standard" <${env.EMAIL_FROM}>`,
+      to: email,
+      subject: "Reset your Note Standard password",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+          <h2 style="color: #6366f1;">Password Reset Request</h2>
+          <p>We received a request to reset your password for your Note Standard account.</p>
+          <div style="margin: 30px 0; text-align: center;">
+            <a href="${resetLink}" style="background-color: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Reset Password</a>
+          </div>
+          <p>This link will expire soon. If you didn't request a password reset, you can safely ignore this email.</p>
+          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+          <p style="font-size: 10px; color: #999;">Note: For your security, never share this link with anyone else.</p>
+        </div>
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    logger.info("Password reset email sent", {
+      messageId: info.messageId,
+      email,
+    });
+    return true;
+  } catch (error) {
+    logger.error("Failed to send password reset email", {
+      error: error.message,
+      email,
+    });
+    return false;
+  }
+};
+
+/**
+ * Send Welcome Email after registration
+ * @param {string} email - Recipient email
+ * @param {string} fullName - Recipient name
+ */
+exports.sendWelcomeEmail = async (email, fullName) => {
+  try {
+    const mailOptions = {
+      from: `"Note Standard" <${env.EMAIL_FROM}>`,
+      to: email,
+      subject: "Welcome to Note Standard!",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+          <h2 style="color: #6366f1;">Welcome to the family, ${fullName}!</h2>
+          <p>Your account has been successfully created and verified. You're all set to start using Note Standard.</p>
+          <div style="margin: 30px 0; text-align: center;">
+            <a href="${process.env.CLIENT_URL || 'https://notestandard.com'}/login" style="background-color: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Login to your Dashboard</a>
+          </div>
+          <p>If you have any questions, feel free to reach out to our support team.</p>
+          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+          <p style="font-size: 10px; color: #999;">Welcome aboard!</p>
+        </div>
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    logger.info("Welcome email sent", {
+      messageId: info.messageId,
+      email,
+    });
+    return true;
+  } catch (error) {
+    logger.error("Failed to send welcome email", {
+      error: error.message,
+      email,
+    });
+    return false;
+  }
+};
+
+/**
+ * Send Admin Alert on New Registration
+ * @param {string} email - User email
+ * @param {string} fullName - User full name
+ * @param {string} username - Username
+ * @param {string} ip - IP address
+ * @param {string} country - Country code
+ */
+exports.sendNewRegistrationAdminAlert = async (email, fullName, username, ip, country) => {
+  try {
+    const adminEmail = "obohoboh107@gmail.com";
+    
+    const mailOptions = {
+      from: `"Note Standard Admin" <${env.EMAIL_FROM}>`,
+      to: adminEmail,
+      subject: `🚨 New User Registration: ${username}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+          <h2 style="color: #6366f1;">New User Registered</h2>
+          <p>A new user has just registered on Note Standard.</p>
+          <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+            <tr>
+              <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Full Name:</strong></td>
+              <td style="padding: 10px; border-bottom: 1px solid #eee;">${fullName || 'N/A'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Username:</strong></td>
+              <td style="padding: 10px; border-bottom: 1px solid #eee;">${username || 'N/A'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Email:</strong></td>
+              <td style="padding: 10px; border-bottom: 1px solid #eee;">${email}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>IP Address:</strong></td>
+              <td style="padding: 10px; border-bottom: 1px solid #eee; font-family: monospace;">${ip || 'Unknown'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Country:</strong></td>
+              <td style="padding: 10px; border-bottom: 1px solid #eee;">${country || 'N/A'}</td>
+            </tr>
+          </table>
+          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+          <p style="font-size: 10px; color: #999;">This is an automated system notification.</p>
+        </div>
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    logger.info("Admin registration alert sent", {
+      messageId: info.messageId,
+      adminEmail
+    });
+    return true;
+  } catch (error) {
+    logger.error("Failed to send admin registration alert", {
+      error: error.message
+    });
+    return false;
+  }
+};

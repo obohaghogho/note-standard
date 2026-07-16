@@ -1,0 +1,39 @@
+export interface Profile {
+  id: string;
+  email: string;
+  username?: string;
+  full_name?: string;
+  avatar_url?: string;
+  role?: string;
+  preferred_language?: string;
+  user_consent?: boolean;
+  consent_at?: string;
+  preferences?: {
+    analytics?: boolean;
+    offers?: boolean;
+    partners?: boolean;
+    [key: string]: boolean | string | number | null | undefined;
+  };
+  is_verified?: boolean;
+  plan_tier?: 'free' | 'pro' | 'team' | 'business' | 'enterprise';
+  daily_deposit_limit?: number | null;
+  show_online_status?: boolean;
+  email_notifications?: 'immediate' | 'daily' | 'none';
+  updated_at?: string;
+  cover_url?: string;
+  bio?: string;
+  website?: string;
+  country_code?: string;
+}
+
+export interface Subscription {
+  id: string;
+  user_id: string;
+  status: 'active' | 'canceled' | 'past_due' | 'trialing' | 'incomplete';
+  plan: string;
+  plan_tier: 'free' | 'pro' | 'team' | 'business' | 'enterprise';
+  daily_deposit_limit?: number | null;
+  current_period_end: string;
+  stripe_customer_id?: string;
+  created_at?: string;
+}

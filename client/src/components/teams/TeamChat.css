@@ -1,0 +1,671 @@
+/* ====================================
+   TEAM CHAT STYLES
+   Premium, modern, glass morphism design
+   ==================================== */
+
+.team-chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.9) 100%);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* ====================================
+   HEADER
+   ==================================== */
+
+.team-chat__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
+}
+
+.team-chat__header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.team-chat__header-title h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #a78bfa 0%, #ec4899 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.team-chat__header-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.team-chat__header-members {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  transition: all 0.2s ease;
+}
+
+.team-chat__header-members:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* ====================================
+   MESSAGES CONTAINER
+   ==================================== */
+
+.team-chat__messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  scroll-behavior: smooth;
+}
+
+.team-chat__messages::-webkit-scrollbar {
+  width: 8px;
+}
+
+.team-chat__messages::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.team-chat__messages::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.team-chat__messages::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* ====================================
+   LOADING & EMPTY STATES
+   ==================================== */
+
+.team-chat__loading,
+.team-chat__empty,
+.team-chat__error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 48px 24px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.team-chat__loading svg,
+.team-chat__empty svg,
+.team-chat__error svg {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.team-chat__empty h3,
+.team-chat__error h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.team-chat__empty p,
+.team-chat__error p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.team-chat__load-more {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
+}
+
+/* ====================================
+   MESSAGE ITEM
+   ==================================== */
+
+.team-chat__message {
+  display: flex;
+  gap: 12px;
+  animation: messageSlideIn 0.3s ease;
+}
+
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.team-chat__message--own {
+  flex-direction: row-reverse;
+}
+
+.team-chat__message--optimistic {
+  opacity: 0.7;
+}
+
+.team-chat__message--failed {
+  opacity: 0.5;
+}
+
+.team-chat__message--grouped {
+  margin-top: -12px;
+  animation: none;
+}
+
+.team-chat__message--grouped .team-chat__message-bubble {
+  border-top-left-radius: 4px;
+}
+
+.team-chat__message--own.team-chat__message--grouped .team-chat__message-bubble {
+  border-top-left-radius: 16px;
+  border-top-right-radius: 4px;
+}
+
+/* ====================================
+   MESSAGE ACTIONS
+   ==================================== */
+
+.team-chat__message-actions {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  opacity: 1; /* Make it more discoverable */
+}
+
+.team-chat__message-action-trigger {
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+}
+
+.team-chat__message-menu {
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+  min-width: 160px;
+  overflow: hidden;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.team-chat__message-menu button {
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.team-chat__message-menu button:last-child {
+  border-bottom: none;
+}
+
+@media (max-width: 768px) {
+  .team-chat__message-action-trigger {
+    opacity: 0.7 !important; /* Always semi-visible on mobile */
+  }
+}
+
+/* ====================================
+   AVATAR
+   ==================================== */
+
+.team-chat__message-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.team-chat__message-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.team-chat__message-avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+/* ====================================
+   MESSAGE CONTENT
+   ==================================== */
+
+.team-chat__message-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 70%;
+}
+
+.team-chat__message--own .team-chat__message-content {
+  align-items: flex-end;
+}
+
+.team-chat__message-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 2px;
+  padding: 0 12px;
+}
+
+/* ====================================
+   MESSAGE BUBBLE
+   ==================================== */
+
+.team-chat__message-bubble {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+}
+
+.team-chat__message--own .team-chat__message-bubble {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(168, 85, 247, 0.3) 100%);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.team-chat__message-text {
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.95);
+  word-wrap: break-word;
+}
+
+.team-chat__message-time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.6875rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 2px;
+}
+
+/* ====================================
+   SYSTEM MESSAGES
+   ==================================== */
+
+.team-chat__message--system {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  margin: 4px auto;
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.team-chat__message-system-text {
+  font-weight: 500;
+}
+
+/* ====================================
+   NOTE SHARE CARD
+   ==================================== */
+
+.team-chat__message-note-card {
+  padding: 16px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(147, 51, 234, 0.1) 100%);
+  border: 1px solid rgba(147, 51, 234, 0.3);
+  backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+}
+
+.team-chat__message-note-card:hover {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(147, 51, 234, 0.15) 100%);
+  border-color: rgba(147, 51, 234, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(147, 51, 234, 0.2);
+}
+
+.team-chat__message-note-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(147, 51, 234, 1);
+  margin-bottom: 8px;
+}
+
+.team-chat__message-note-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  margin-bottom: 8px;
+}
+
+.team-chat__message-note-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* ====================================
+   SCROLL TO BOTTOM BUTTON
+   ==================================== */
+
+.team-chat__scroll-button {
+  position: absolute;
+  bottom: 100px;
+  right: 32px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+  animation: fadeIn 0.3s ease;
+}
+
+.team-chat__scroll-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.team-chat__scroll-button:active {
+  transform: translateY(0);
+}
+
+/* ====================================
+   INPUT AREA
+   ==================================== */
+
+.team-chat__input-container {
+  position: relative;
+  padding: 16px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+.team-chat__input {
+  width: 100%;
+  min-height: 44px;
+  max-height: 120px;
+  padding: 12px 16px;
+  padding-right: 135px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 0.9375rem;
+  font-family: inherit;
+  resize: none;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.team-chat__input:focus {
+  border-color: rgba(168, 85, 247, 0.5);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.1);
+}
+
+.team-chat__input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.team-chat__input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.team-chat__input-actions {
+  position: absolute;
+  right: 32px;
+  bottom: 22px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ====================================
+   RESPONSIVE
+   ==================================== */
+
+@media (max-width: 768px) {
+  .team-chat__header {
+    padding: 12px 16px;
+  }
+
+  .team-chat__messages {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .team-chat__message-content {
+    max-width: 85%;
+  }
+
+  .team-chat__input-container {
+    padding: 10px 12px;
+  }
+
+  .team-chat__input {
+    padding: 10px 12px;
+    padding-right: 105px;
+    font-size: 0.875rem;
+    min-height: 40px;
+  }
+
+  .team-chat__input-actions {
+    right: 16px;
+    bottom: 16px;
+    gap: 2px;
+  }
+
+  .team-chat__scroll-button {
+    bottom: 70px;
+    right: 16px;
+    width: 36px;
+    height: 36px;
+  }
+
+  .team-chat__header-title h2 {
+    font-size: 1rem;
+  }
+
+  .team-chat__header-members {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+  }
+}
+
+/* ====================================
+   ANIMATIONS
+   ==================================== */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Pulse animation for realtime indicator */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.team-chat__header-status svg {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* ====================================
+   IMAGE MESSAGES
+   ==================================== */
+
+.team-chat__message-image-container {
+  margin: 4px 0 8px 0;
+  border-radius: 12px;
+  overflow: hidden;
+  max-width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.team-chat__message-image-container:hover {
+  transform: scale(1.02);
+}
+
+.team-chat__message-image {
+  width: 100%;
+  height: auto;
+  max-height: 300px;
+  object-fit: cover;
+  display: block;
+}
+.team-chat__message-audio-container {
+  margin: 4px 0 8px 0;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+/* Removed old audio filters since we use premium AudioPlayer component now */
+
+/* ====================================
+   MESSAGE SELECTION STATE
+   (WhatsApp-style long-press selection)
+   ==================================== */
+
+.team-chat__message--selected {
+  background: rgba(59, 130, 246, 0.08);
+  border-radius: 12px;
+  margin-left: -8px;
+  margin-right: -8px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.team-chat__message--selected .team-chat__message-bubble {
+  background: rgba(59, 130, 246, 0.15) !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+/* ====================================
+   GESTURE & SCROLL QUALITY
+   WhatsApp/Messenger-style interaction
+   ==================================== */
+
+/* Messages container: let browser handle scroll BEFORE JS fires */
+.team-chat__messages {
+  touch-action: pan-y;           /* native vertical scroll, no JS interception */
+  overscroll-behavior: contain;  /* prevent page bounce-through on mobile */
+  will-change: scroll-position;  /* GPU-accelerate scroll layer */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Every message item: prevent text highlight during press-and-drag */
+.team-chat__message {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: pan-y;           /* inherit scroll priority */
+  cursor: default;
+}
+
+/* Allow text select ONLY inside bubble text (not the outer wrapper) */
+.team-chat__message-text {
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
+}
+
+/* Selected state: smooth background transition, no jitter */
+.team-chat__message--selected {
+  transition: background 0.15s ease;
+}
+
+/* Input: restore normal text selection */
+.team-chat__input {
+  -webkit-user-select: text;
+  user-select: text;
+  touch-action: auto;
+}
+
+/* Scroll button: no highlight on tap */
+.team-chat__scroll-button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}

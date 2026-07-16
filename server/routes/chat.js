@@ -1,0 +1,83 @@
+const express = require("express");
+const router = express.Router();
+const chatController = require("../controllers/chatController");
+const translationController = require("../controllers/translationController");
+const { requireAuth } = require("../middleware/auth");
+const { accMiddleware } = require("../tools/acc");
+
+// Public Webhooks
+router.post("/messages/:messageId/webhook-deliver", chatController.webhookDeliver);
+
+// All chat routes require authentication
+router.use(requireAuth);
+
+// Translations
+router.post("/translate", translationController.translateMessage);
+router.post("/preference", translationController.updatePreferredLanguage);
+router.post(
+  "/report-translation",
+  translationController.reportTranslationError,
+);
+
+// Conversations
+router.get("/conversations", chatController.getConversations);
+router.get("/conversations/:conversationId", chatController.getConversationById);
+router.post("/conversations", chatController.createConversation);
+router.post("/support", chatController.createSupportChat); // NEW: User creates support chat
+router.put(
+  "/conversations/:conversationId/accept",
+  chatController.acceptConversation,
+);
+router.delete(
+  "/conversations/:conversationId",
+  chatController.deleteConversation,
+);
+router.put(
+  "/conversations/:conversationId/read",
+  accMiddleware,
+  chatController.markConversationRead,
+);
+router.put(
+  "/conversations/:conversationId/deliver",
+  accMiddleware,
+  chatController.markConversationDelivered,
+);
+
+// Messages
+router.get("/messages/sync", chatController.syncMessages); // Reconnect recovery
+router.get(
+  "/conversations/:conversationId/messages",
+  chatController.getMessages,
+);
+router.get(
+  "/conversations/:conversationId/search",
+  chatController.searchMessages,
+);
+router.post(
+  "/conversations/:conversationId/messages",
+  accMiddleware,
+  chatController.sendMessage,
+);
+router.put(
+  "/conversations/:conversationId/mute",
+  chatController.muteConversation,
+);
+router.delete(
+  "/conversations/:conversationId/messages",
+  chatController.clearChatHistory,
+);
+router.put("/messages/:messageId/read", chatController.markMessageRead);
+router.put("/messages/:messageId/deliver", chatController.markMessageDelivered);
+router.patch("/messages/ack:batch", chatController.markMessagesDeliveredBatch);
+router.delete("/messages/:messageId", chatController.deleteMessage);
+router.patch("/messages/:messageId", chatController.editMessage);
+
+// Event Ledger (Phase 6.2)
+router.post("/events", chatController.emitLedgerEvent);
+
+// User Blocking
+router.post("/block", chatController.blockUser);
+router.post("/unblock", chatController.unblockUser);
+router.get("/blocked", chatController.getBlockedUsers);
+
+module.exports = router;

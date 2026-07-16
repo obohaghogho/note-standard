@@ -1,0 +1,306 @@
+import React, { useState } from 'react';
+import {
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useAuth } from '../context/AuthContext';
+import { AuthStackParamList } from '../navigation/AuthStack';
+
+type Props = { navigation: NativeStackNavigationProp<AuthStackParamList, 'Login'> };
+
+export default function LoginScreen({ navigation }: Props) {
+  const { login, accounts } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
+
+  const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      Alert.alert('Missing Fields', 'Please enter your email and password.');
+      return;
+    }
+    setLoading(true);
+    const result = await login(email.trim().toLowerCase(), password);
+    setLoading(false);
+    if (!result.success) {
+      Alert.alert('Login Failed', result.error || 'Please check your credentials.');
+    }
+  };
+
+  return (
+    <LinearGradient colors={['#060611', '#0d0d1a', '#060611']} style={styles.gradient}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        style={styles.flex}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : -20}
+      >
+        <ScrollView 
+          contentContainerStyle={styles.scroll} 
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Logo / Brand */}
+          <View style={styles.brand}>
+            <View style={styles.logoCircle}>
+              <Text style={styles.logoText}>N</Text>
+            </View>
+            <Text style={styles.appName}>NoteStandard</Text>
+            <Text style={styles.tagline}>Connect. Chat. Create.</Text>
+          </View>
+
+          {/* Card */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Welcome Back</Text>
+            <Text style={styles.cardSubtitle}>Sign in to your account</Text>
+
+            {accounts.length > 0 && (
+              <View style={styles.quickSwitchContainer}>
+                <Text style={styles.quickSwitchLabel}>Quick Switch</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickSwitchScroll}>
+                  {accounts.map(acc => (
+                    <TouchableOpacity 
+                      key={acc.id} 
+                      style={styles.quickSwitchItem} 
+                      onPress={() => setEmail(acc.email)}
+                    >
+                      <LinearGradient colors={['#6366f1', '#4f46e5']} style={styles.quickSwitchAvatar}>
+                        <Text style={styles.quickSwitchAvatarText}>
+                          {acc.full_name?.charAt(0) || acc.username.charAt(0)}
+                        </Text>
+                      </LinearGradient>
+                      <Text style={styles.quickSwitchName} numberOfLines={1}>
+                        {acc.full_name || acc.username}
+                      </Text>
+                      <Text style={styles.quickSwitchEmail} numberOfLines={1}>
+                        {acc.email}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Email</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="you@example.com"
+                placeholderTextColor="#444"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Password</Text>
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="••••••••"
+                  placeholderTextColor="#444"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                />
+                <TouchableOpacity 
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={styles.eyeBtn}
+                >
+                  <Text style={styles.eyeIcon}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.authOptions}>
+              <TouchableOpacity 
+                style={styles.rememberMe} 
+                onPress={() => setRememberMe(!rememberMe)}
+              >
+                <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+                  {rememberMe && <Text style={styles.checkboxTick}>✓</Text>}
+                </View>
+                <Text style={styles.rememberMeText}>Remember me</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword' as any)}>
+                <Text style={styles.forgotText}>Forgot Password?</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={styles.loginBtn} onPress={handleLogin} disabled={loading}>
+              <LinearGradient colors={['#6366f1', '#4f46e5']} style={styles.loginGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.loginBtnText}>Sign In</Text>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.registerLink} onPress={() => navigation.navigate('Register')}>
+              <Text style={styles.registerLinkText}>
+                Don't have an account? <Text style={styles.registerLinkAccent}>Sign Up</Text>
+              </Text>
+            </TouchableOpacity>
+
+            <Text style={styles.versionText}>v1.5.9.1</Text>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </LinearGradient>
+  );
+}
+
+const styles = StyleSheet.create({
+  gradient: { flex: 1 },
+  flex: { flex: 1 },
+  scroll: { flexGrow: 1, justifyContent: 'center', padding: 24 },
+  brand: { alignItems: 'center', marginBottom: 40 },
+  logoCircle: {
+    width: 72, height: 72, borderRadius: 36,
+    backgroundColor: '#6366f1', justifyContent: 'center', alignItems: 'center',
+    marginBottom: 12, shadowColor: '#6366f1', shadowOpacity: 0.6, shadowRadius: 20,
+  },
+  logoText: { color: '#fff', fontSize: 32, fontWeight: '900' },
+  appName: { color: '#fff', fontSize: 28, fontWeight: '800', letterSpacing: 0.5 },
+  tagline: { color: '#666', fontSize: 14, marginTop: 4 },
+  card: {
+    backgroundColor: '#111122', borderRadius: 24, padding: 28,
+    borderWidth: 1, borderColor: '#1e1e3a',
+  },
+  cardTitle: { color: '#fff', fontSize: 24, fontWeight: '700', marginBottom: 4 },
+  cardSubtitle: { color: '#666', fontSize: 14, marginBottom: 28 },
+  inputGroup: { marginBottom: 18 },
+  label: { color: '#aaa', fontSize: 13, fontWeight: '600', marginBottom: 8 },
+  input: {
+    backgroundColor: '#0a0a16', borderWidth: 1, borderColor: '#1e1e3a',
+    borderRadius: 14, padding: 16, color: '#fff', fontSize: 15,
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0a0a16',
+    borderWidth: 1,
+    borderColor: '#1e1e3a',
+    borderRadius: 14,
+  },
+  passwordInput: {
+    flex: 1,
+    padding: 16,
+    color: '#fff',
+    fontSize: 15,
+  },
+  eyeBtn: {
+    padding: 12,
+  },
+  eyeIcon: {
+    fontSize: 20,
+    color: '#6366f1',
+  },
+  versionText: {
+    textAlign: 'center',
+    color: '#444',
+    fontSize: 12,
+    marginTop: 20,
+  },
+  loginBtn: { borderRadius: 14, overflow: 'hidden', marginTop: 8 },
+  loginGrad: { padding: 16, alignItems: 'center' },
+  loginBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  registerLink: { marginTop: 24, alignItems: 'center' },
+  registerLinkText: { color: '#666', fontSize: 14 },
+  registerLinkAccent: { color: '#6366f1', fontWeight: '700' },
+  authOptions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    marginTop: 4,
+  },
+  rememberMe: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: '#333',
+    backgroundColor: '#0a0a16',
+    marginRight: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#6366f1',
+    borderColor: '#6366f1',
+  },
+  checkboxTick: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  rememberMeText: {
+    color: '#666',
+    fontSize: 13,
+  },
+  forgotText: {
+    color: '#6366f1',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  quickSwitchContainer: {
+    marginBottom: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e1e3a',
+  },
+  quickSwitchLabel: {
+    color: '#aaa',
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    marginBottom: 12,
+    letterSpacing: 1,
+  },
+  quickSwitchScroll: {
+    flexDirection: 'row',
+  },
+  quickSwitchItem: {
+    alignItems: 'center',
+    marginRight: 16,
+    width: 72,
+  },
+  quickSwitchAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  quickSwitchAvatarText: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  quickSwitchName: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  quickSwitchEmail: {
+    color: '#666',
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+});
