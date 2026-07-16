@@ -1,27 +1,71 @@
 {
-  "name": "payment-platform",
-  "version": "0.1.0",
+  "name": "note-standard",
+  "version": "1.0.5",
+  "description": "Root package for note-standard monorepo",
   "private": true,
+  "workspaces": [
+    "client",
+    "server",
+    "realtime-gateway"
+  ],
+  "engines": {
+    "node": "24.x",
+    "npm": ">=10"
+  },
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "install:all": "npm install && npm install -w client && npm install -w server && npm install -w realtime-gateway",
+    "build": "npm run build --workspace=client",
+    "build:all": "npm run build -w client",
+    "start": "node server/index.js",
+    "dev": "concurrently \"npm run server\" \"npm run client\" \"npm run realtime\"",
+    "client": "npm run dev -w client",
+    "server": "npm run dev -w server",
+    "realtime": "npm run dev -w realtime-gateway",
+    "build:client": "npm run build -w client",
+    "lint": "eslint .",
+    "typecheck": "npm run typecheck -w client",
+    "prepare": "echo 'Skipping husky in production'",
+    "chaos:ci": "node server/tools/ciChaosGate/ciRunner.js",
+    "dev:payments": "next dev",
+    "build:payments": "next build",
+    "start:payments": "next start"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.6",
+    "bip39": "^3.1.0",
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
+    "husky": "^9.1.7",
     "nanoid": "^6.0.0",
     "next": "16.2.10",
+    "node-fetch": "^2.7.0",
+    "node-forge": "^1.4.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "whatwg-url": "^16.0.1"
   },
   "devDependencies": {
+    "@eslint/js": "^9.14.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^9",
+    "concurrently": "^8.2.2",
+    "eslint": "^9.14.0",
     "eslint-config-next": "16.2.10",
-    "typescript": "^5"
+    "eslint-import-resolver-typescript": "^3.6.3",
+    "eslint-plugin-import-x": "^4.4.2",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.14",
+    "globals": "^15.11.0",
+    "is-ci": "^4.1.0",
+    "typescript": "^5",
+    "typescript-eslint": "^8.12.1"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-arm64-gnu": "4.24.0",
+    "@rollup/rollup-linux-x64-gnu": "4.24.0",
+    "lightningcss-linux-arm64-gnu": "1.31.1",
+    "lightningcss-linux-x64-gnu": "1.31.1"
   }
 }
