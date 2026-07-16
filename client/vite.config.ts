@@ -4,6 +4,10 @@ import tailwindxml from '@tailwindcss/vite'
 import path from 'path'
 import prerender from '@prerenderer/rollup-plugin'
 import JSDOMRenderer from '@prerenderer/renderer-jsdom'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 // https://vite.dev/config/
 export default defineConfig({
