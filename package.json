@@ -60,20 +60,13 @@
     "globals": "^15.11.0",
     "is-ci": "^4.1.0",
     "typescript": "^5",
-    "typescript-eslint": "^8.12.1"
+    "typescript-eslint": "^8.12.1",
+    "ajv": "^8.12.0"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-arm64-gnu": "4.24.0",
     "@rollup/rollup-linux-x64-gnu": "4.24.0",
     "lightningcss-linux-arm64-gnu": "1.31.1",
     "lightningcss-linux-x64-gnu": "1.31.1"
-  },
-  "overrides": {
-    "schema-utils": {
-      "ajv": "^8.12.0"
-    },
-    "ajv-keywords": {
-      "ajv": "^8.12.0"
-    }
   }
 }
