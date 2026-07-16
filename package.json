@@ -69,6 +69,11 @@
     "lightningcss-linux-x64-gnu": "1.31.1"
   },
   "overrides": {
-    "ajv": "^8.12.0"
+    "schema-utils": {
+      "ajv": "^8.12.0"
+    },
+    "ajv-keywords": {
+      "ajv": "^8.12.0"
+    }
   }
 }
