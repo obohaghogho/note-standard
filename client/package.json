@@ -6,7 +6,7 @@
   "scripts": {
     "start": "vite preview",
     "dev": "vite --host",
-    "build": "node -e \"const fs=require('fs'); if(fs.existsSync('../scripts/verify-apple-local.js')) { require('child_process').execSync('node ../scripts/verify-apple-local.js', {stdio: 'inherit'}); } else { console.log('Skipping Apple Pay verification: script not found'); }\" && vite build",
+    "build": "node verify-pay.js && vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "preview": "vite preview",
