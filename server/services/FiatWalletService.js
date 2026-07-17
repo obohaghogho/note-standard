@@ -17,7 +17,7 @@ class FiatWalletService {
       .from("wallets_v6")
       .select("*")
       .eq("user_id", userId)
-      .not("currency", "in", "('BTC','ETH','USDT','USDC')"); // Filter out crypto
+      .not("currency", "in", "(BTC,ETH,USDT,USDC)"); // Filter out crypto
 
     if (error) throw error;
     
