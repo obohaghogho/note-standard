@@ -1,4 +1,7 @@
-const walletService = require("../services/walletService");
+const FiatWalletService = require("../services/FiatWalletService");
+const CryptoWalletService = require("../services/CryptoWalletService");
+const FiatPaymentService = require("../services/FiatPaymentService");
+const TransferService = require("../services/TransferService");
 const supabase = require("../config/database");
 
 /**
@@ -7,8 +10,9 @@ const supabase = require("../config/database");
  */
 exports.getBalances = async (req, res, next) => {
   try {
-    const wallets = await walletService.getWallets(req.user.id);
-    res.json(wallets);
+    const fiatWallets = await FiatWalletService.getWallets(req.user.id);
+    const cryptoWallets = await CryptoWalletService.getWallets(req.user.id);
+    res.json([...fiatWallets, ...cryptoWallets]);
   } catch (err) {
     next(err);
   }
@@ -22,14 +26,30 @@ exports.deposit = async (req, res, next) => {
       return res.status(400).json({ error: "Amount and currency are required" });
     }
 
-    const depositService = require("../services/depositService");
-    const result = await depositService.initializeCryptoDeposit(
-      req.user.id,
-      currency,
-      amount,
-      req.userProfile?.plan || "FREE"
-    );
-    res.json(result);
+    // Isolate crypto deposits
+    const isCrypto = ["BTC", "ETH", "USDT", "USDC"].includes(String(currency).toUpperCase());
+    if (isCrypto) {
+      const result = await CryptoWalletService.deposit(
+        req.user.id,
+        currency,
+        amount,
+        req.userProfile?.plan || "FREE"
+      );
+      return res.json(result);
+    } else {
+      // Route fiat to the new FiatPaymentService
+      const result = await FiatPaymentService.initializeDeposit(
+        req.user.id,
+        amount,
+        currency,
+        provider || "paystack",
+        {
+          channel: "card",
+          plan: req.userProfile?.plan || "FREE"
+        }
+      );
+      return res.json(result);
+    }
   } catch (err) {
     next(err);
   }
@@ -47,15 +67,18 @@ exports.depositCard = async (req, res, next) => {
 
     currency = String(currency).replace(/"/g, "");
 
-    const result = await require("../services/depositService")
-      .createCardDeposit(
-        req.user.id,
-        currency,
-        amount,
-        req.userProfile?.plan || "FREE",
-        null,
-        { toCurrency, toNetwork }
-      );
+    const result = await FiatPaymentService.initializeDeposit(
+      req.user.id,
+      amount,
+      currency,
+      "paystack",
+      {
+        channel: "card",
+        plan: req.userProfile?.plan || "FREE",
+        toCurrency,
+        toNetwork
+      }
+    );
 
     // Return the structure expected by the frontend
     res.json({
@@ -77,7 +100,6 @@ exports.depositCard = async (req, res, next) => {
       return res.status(400).json({ error: error.message });
     }
 
-    // DEBUG: Return full error details to identify the 500 cause
     const statusCode = error.statusCode || 500;
     res.status(statusCode).json({
       error: error.message || "Internal Server Error",
@@ -99,20 +121,22 @@ exports.depositTransfer = async (req, res, next) => {
 
     currency = String(currency).replace(/"/g, "");
 
-    const result = await require("../services/depositService")
-      .createBankDeposit(
-        req.user.id,
-        currency,
-        amount,
-        req.userProfile?.plan || "FREE",
-        null,
-        { toCurrency, toNetwork }
-      );
+    const result = await FiatPaymentService.initializeDeposit(
+      req.user.id,
+      amount,
+      currency,
+      "paystack",
+      {
+        channel: "bank_transfer",
+        plan: req.userProfile?.plan || "FREE",
+        toCurrency,
+        toNetwork
+      }
+    );
 
-    // Return the structure expected by the frontend BankDepositResponse interface
     res.json({
       ...result,
-      success: true // Keep success for legacy catch-all checks
+      success: true 
     });
   } catch (error) {
     console.error("[WalletController] Bank Transfer Error:", error);
@@ -171,7 +195,6 @@ exports.submitDepositProof = async (req, res) => {
       throw updateError;
     }
 
-    // Notify Admin — look up the real admin user ID dynamically
     try {
       const { createNotification } = require("../services/notificationService");
       const { data: adminProfile } = await supabase
@@ -222,8 +245,6 @@ exports.withdraw = async (req, res) => {
 
     const isCrypto = ["BTC", "ETH", "USDT", "USDC", "TRX", "POLYGON"].includes(String(currency).toUpperCase());
 
-    // Build a structured destination object so payoutWorker can extract
-    // bankCode, accountNumber, accountName etc. correctly when dispatching.
     const destination = isCrypto
       ? { address: address, network: network || "native" }
       : {
@@ -239,8 +260,6 @@ exports.withdraw = async (req, res) => {
         };
 
     const mappedData = {
-      // 'method' is what payoutService.createPayoutRequest reads for payout_method.
-      // 'type' is kept for backward-compat in walletService.
       method: isCrypto ? "crypto" : "bank_transfer",
       type:   isCrypto ? "crypto" : "fiat",
       currency,
@@ -250,7 +269,12 @@ exports.withdraw = async (req, res) => {
       client_idempotency_key: idempotencyKey,
     };
 
-    const result = await walletService.withdraw(req.user.id, mappedData);
+    let result;
+    if (isCrypto) {
+      result = await CryptoWalletService.withdraw(req.user.id, mappedData);
+    } else {
+      result = await FiatWalletService.withdraw(req.user.id, mappedData);
+    }
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -259,7 +283,7 @@ exports.withdraw = async (req, res) => {
 
 exports.transfer = async (req, res) => {
   try {
-    const result = await walletService.transferInternal(
+    const result = await TransferService.transferInternal(
       req.user.id,
       req.userProfile?.plan,
       req.body,
@@ -273,11 +297,14 @@ exports.transfer = async (req, res) => {
 exports.createWallet = async (req, res) => {
   try {
     const { currency, network } = req.body;
-    const wallet = await walletService.createWallet(
-      req.user.id,
-      currency,
-      network,
-    );
+    const isCrypto = ["BTC", "ETH", "USDT", "USDC"].includes(String(currency).toUpperCase());
+    
+    let wallet;
+    if (isCrypto) {
+      wallet = await CryptoWalletService.createWallet(req.user.id, currency, network);
+    } else {
+      wallet = await FiatWalletService.createWallet(req.user.id, currency);
+    }
     res.json(wallet);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -291,12 +318,14 @@ exports.getAddress = async (req, res) => {
     
     if (!currency) throw new Error("Currency is required");
     
-    const result = await walletService.getAddress(
-      req.user.id,
-      currency,
-      network || "native",
-      isPost // forceNew if it's a POST request
-    );
+    const isCrypto = ["BTC", "ETH", "USDT", "USDC"].includes(String(currency).toUpperCase());
+    let result;
+    if (isCrypto) {
+      result = await CryptoWalletService.getAddress(req.user.id, currency, network || "native", isPost);
+    } else {
+      const wallet = await FiatWalletService.createWallet(req.user.id, currency);
+      result = { address: wallet.address, currency: wallet.currency, network: "NATIVE" };
+    }
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -361,13 +390,18 @@ exports.getDepositStatus = async (req, res) => {
   try {
     const { reference } = req.query;
     if (!reference) throw new Error("Reference is required");
-    const status = await require("../services/depositService").getDepositStatus(
-      reference,
-    );
-    if (!status) {
+    
+    const { data: tx, error } = await supabase
+      .from("transactions")
+      .select("status")
+      .or(`reference_id.eq.${reference},metadata->>display_ref.eq.${reference}`)
+      .single();
+
+    if (error || !tx) {
       return res.status(404).json({ error: "Transaction not found" });
     }
-    res.json(status);
+    
+    res.json({ status: tx.status });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

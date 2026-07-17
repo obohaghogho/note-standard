@@ -481,8 +481,11 @@ class FXService {
 
       // Calculate total valuation mismatch for this wallet/user
       // This is the core 'Comparison Symmetry' anchor
-      const walletService = require("./walletService");
-      const wallets = await walletService.getWallets(walletId); // Use getWallets for array
+      const FiatWalletService = require("./FiatWalletService");
+      const CryptoWalletService = require("./CryptoWalletService");
+      const fiatWallets = await FiatWalletService.getWallets(walletId); 
+      const cryptoWallets = await CryptoWalletService.getWallets(walletId);
+      const wallets = [...fiatWallets, ...cryptoWallets];
       logger.info("[FXService] Wallet fetched successfully");
       
       let legacyTotal = 0;

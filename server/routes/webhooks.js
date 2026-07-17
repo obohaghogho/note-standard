@@ -10,9 +10,8 @@
 
 const express = require("express");
 const router = express.Router();
-const webhookController = require("../controllers/payment/webhookController");
-const depositService = require("../services/depositService");
 const paymentService = require("../services/payment/paymentService");
+
 const supabase = require("../config/database");
 const logger = require("../utils/logger");
 const rateLimit = require("express-rate-limit");
@@ -29,25 +28,27 @@ const webhookLimiter = rateLimit({
   },
 });
 
+const WebhookService = require("../services/WebhookService");
+
 // ─── Provider Webhooks ────────────────────────────────────────
 
 /**
  * POST /webhooks/paystack
  * Primary payment gateway webhook
  */
-router.post("/paystack", webhookController.handlePaystack);
+router.post("/paystack", WebhookService.processPaystackWebhook.bind(WebhookService));
 
 /**
  * POST /api/webhooks/grey
  * Direct Grey webhook (for future API support)
  */
-router.post("/grey", webhookLimiter, webhookController.handleGrey);
+router.post("/grey", webhookLimiter, (req, res) => res.status(200).json({ received: true, status: "disabled" }));
 
 /**
  * POST /webhooks/flutterwave
  * Flutterwave webhook (deprecated, routes to Fincra)
  */
-router.post("/flutterwave", webhookController.handleFlutterwave);
+router.post("/flutterwave", (req, res) => res.status(200).json({ received: true, status: "disabled" }));
 router.get("/flutterwave", (req, res) =>
   res.status(200).send("Webhook endpoint only accepts POST requests")
 );
@@ -56,15 +57,15 @@ router.get("/flutterwave", (req, res) =>
  * POST /webhooks/fincra
  * Fincra virtual account webhook
  */
-router.post("/fincra", webhookController.handleFincra);
+router.post("/fincra", (req, res) => res.status(200).json({ received: true, status: "disabled" }));
 
 /**
  * POST /webhooks/nowpayments
  * POST /webhooks/crypto
  * Crypto payment webhooks
  */
-router.post("/nowpayments", webhookController.handleNowPayments);
-router.post("/crypto", webhookController.handleCrypto);
+router.post("/nowpayments", (req, res) => res.status(200).json({ received: true, status: "not_implemented" }));
+router.post("/crypto", (req, res) => res.status(200).json({ received: true, status: "not_implemented" }));
 
 // ─── Admin Endpoints ──────────────────────────────────────────
 
@@ -89,7 +90,6 @@ router.post("/manual-confirm", async (req, res) => {
   }
 
   try {
-    // Record audit log
     try {
       await supabase.from("payment_audit_logs").insert({
         admin_id: req.user?.id || "00000000-0000-0000-0000-000000000000",
@@ -104,11 +104,18 @@ router.post("/manual-confirm", async (req, res) => {
         },
       });
     } catch (auditErr) {
-      // Non-critical - don't block the confirmation
       console.error("[Webhook] Audit log failed:", auditErr.message);
     }
 
-    const result = await depositService.confirmDeposit(reference, externalHash);
+    const { data: tx } = await supabase.from('transactions').select('*').eq('reference_id', reference).single();
+    if (!tx) throw new Error("Transaction not found");
+
+    const WebhookService = require('../services/WebhookService');
+    const result = await WebhookService.processPaystackEvent({
+        event: 'charge.success',
+        data: { reference: reference, amount: tx.amount, currency: tx.currency }
+    });
+    
     res.json(result);
   } catch (err) {
     console.error("[Webhook] Manual confirm error:", err);

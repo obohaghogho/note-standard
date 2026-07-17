@@ -1,4 +1,4 @@
-/* eslint-disable */
+ 
 /**
  * NoteStandard — Service Worker (Safe-Mode)
  * 

@@ -375,19 +375,28 @@ class ReconciliationWorker {
                 );
 
                 if (validation.valid) {
-                    logger.info(`[ReconciliationWorker] Proposal ${proposal.id} PASSED audit. Applying correction...`);
+                    logger.info(`[ReconciliationWorker] Proposal ${proposal.id} PASSED audit. Alerting admins (auto-correction disabled).`);
                     
-                    await settlementEngine.processEvent({
-                        transactionId: proposal.id,
-                        status: 'LEDGER_COMMITTED',
-                        providerId: 'SYSTEM_GOVERNANCE',
-                        payload: { drift: proposal.drift_amount },
-                        eventAt: now
+                    const AuditLogService = require('../services/AuditLogService');
+                    await AuditLogService.log({
+                        user_id: 'SYSTEM',
+                        action: 'RECONCILIATION_ALERT',
+                        ip: '127.0.0.1',
+                        device: 'ReconciliationWorker',
+                        provider: 'system',
+                        reference: proposal.id,
+                        amount: proposal.drift_amount,
+                        currency: 'NGN',
+                        status: 'alerted',
+                        metadata: {
+                            wallet_id: proposal.wallet_id,
+                            message: `Drift of ${proposal.drift_amount} detected and validated. Manual intervention required.`
+                        }
                     });
 
                     await supabase
                         .from('reconciliation_proposals')
-                        .update({ status: 'APPLIED', applied_at: now })
+                        .update({ status: 'ALERTED', applied_at: now })
                         .eq('id', proposal.id);
 
                 } else {

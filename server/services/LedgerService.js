@@ -1,5 +1,6 @@
 const supabase = require("../config/database");
 const validator = require("./LedgerValidator");
+const FinancialSafetyService = require("./FinancialSafetyService");
 const logger = require("../utils/logger");
 
 /**
@@ -13,7 +14,7 @@ class LedgerService {
    * @param {Object} intent 
    * {
    *   idempotencyKey: string,
-   *   type: 'SWAP' | 'TRANSFER' | 'WITHDRAWAL' | 'NORMALIZATION',
+   *   type: 'SWAP' | 'TRANSFER' | 'WITHDRAWAL' | 'NORMALIZATION' | 'DEPOSIT',
    *   entries: Array<{wallet_id, user_id, currency, amount, side}>,
    *   metadata: Object,
    *   status: 'PENDING' | 'SETTLED'
@@ -26,6 +27,7 @@ class LedgerService {
 
     try {
       // 1. Layer A Protection: Application-level validation
+      await FinancialSafetyService.validateIntent(intent);
       validator.validateBalancedSet(entries);
       validator.validateCurrencyAlignment(entries, type);
 

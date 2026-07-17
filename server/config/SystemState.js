@@ -22,6 +22,17 @@ class SystemStateController {
             priceHealth: 1.0, // 0.0 to 1.0
             lastUpdated: Date.now()
         };
+        this.featureFlags = {
+            feature_new_webhook: true,
+            feature_new_deposit: true,
+            feature_new_withdrawal: true,
+            feature_new_subscription: true
+        };
+        this.transactionLimits = {
+            maxDailyDepositNGN: 5000000, // 5M NGN
+            maxDailyWithdrawalNGN: 1000000,
+            maxSingleTransactionNGN: 1000000
+        };
         this.stableSince = Date.now();
         this.enterSafeTime = null; // Timestamp when SAFE mode was activated
         this.minSafeModeDuration = 10; // Hard dwell floor in seconds
@@ -110,6 +121,18 @@ class SystemStateController {
         }
     }
 
+    getFeatureFlag(flagName) {
+        return this.featureFlags[flagName] !== false; // Default true if not explicitly false
+    }
+
+    setFeatureFlag(flagName, value) {
+        this.featureFlags[flagName] = !!value;
+        logger.info(`[FEATURE_FLAG_UPDATE] ${flagName} set to ${this.featureFlags[flagName]}`);
+    }
+
+    getTransactionLimit(limitName) {
+        return this.transactionLimits[limitName] || Infinity;
+    }
 
     isSafe() {
         return this.mode === "SAFE" || this.mode === "RECOVERY";
