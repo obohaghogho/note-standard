@@ -113,8 +113,8 @@ exports.depositCard = async (req, res, next) => {
       {
         channel: "card",
         plan: req.userProfile?.plan || "FREE",
-        toCurrency,
-        toNetwork
+        targetCurrency: toCurrency,
+        targetNetwork: toNetwork
       },
       { provider: "paystack" }
     );
@@ -172,8 +172,8 @@ exports.depositTransfer = async (req, res, next) => {
       {
         channel: "bank_transfer",
         plan: req.userProfile?.plan || "FREE",
-        toCurrency,
-        toNetwork
+        targetCurrency: toCurrency,
+        targetNetwork: toNetwork
       },
       { provider: "paystack" }
     );
