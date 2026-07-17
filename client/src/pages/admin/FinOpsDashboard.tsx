@@ -101,7 +101,7 @@ export const FinOpsDashboard: React.FC = () => {
             <span className="value">{crypto.pending_confirmations}</span>
           </div>
           <div className="metric">
-            <span className="label">Stuck Transactions (>15m)</span>
+            <span className="label">Stuck Transactions (&gt;15m)</span>
             <span className={`value ${crypto.stuck_transactions > 0 ? 'alert' : 'ok'}`}>
               {crypto.stuck_transactions}
             </span>
