@@ -84,10 +84,17 @@ export const Login = () => {
         try {
             console.log('Initiating Supabase sign in...');
             
-            const { data, error: authError } = await supabase.auth.signInWithPassword({
-                email,
-                password,
+            const timeoutPromise = new Promise<never>((_, reject) => {
+                setTimeout(() => reject(new Error('Network timeout. Please check your connection and try again.')), 15000);
             });
+
+            const { data, error: authError } = await Promise.race([
+                supabase.auth.signInWithPassword({
+                    email,
+                    password,
+                }),
+                timeoutPromise
+            ]) as Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>;
 
             if (authError) {
                 if (authError.message.includes('Email not confirmed')) {
@@ -201,11 +208,17 @@ export const Login = () => {
         setResetLoading(true);
         
         try {
-            const response = await fetch(`${API_URL}/api/auth/forgot-password`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email })
+            const timeoutPromise = new Promise<never>((_, reject) => {
+                setTimeout(() => reject(new Error('Network request timed out. Please try again.')), 15000);
             });
+            const response = await Promise.race([
+                fetch(`${API_URL}/api/auth/forgot-password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                }),
+                timeoutPromise
+            ]) as Response;
 
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || 'Failed to send reset email');

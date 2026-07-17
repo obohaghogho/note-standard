@@ -83,18 +83,24 @@ export const Signup = () => {
         setError('');
 
         try {
-            const response = await fetch(`${API_URL}/api/auth/register`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    fullName,
-                    username,
-                    email,
-                    password,
-                    captchaToken,
-                    referrerId: localStorage.getItem('referrer_id')
-                })
+            const timeoutPromise = new Promise<never>((_, reject) => {
+                setTimeout(() => reject(new Error('Network timeout. Please check your connection and try again.')), 15000);
             });
+            const response = await Promise.race([
+                fetch(`${API_URL}/api/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        fullName,
+                        username,
+                        email,
+                        password,
+                        captchaToken,
+                        referrerId: localStorage.getItem('referrer_id')
+                    })
+                }),
+                timeoutPromise
+            ]) as Response;
 
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || 'Registration failed');

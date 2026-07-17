@@ -45,6 +45,8 @@ const register = async (req, res) => {
       }
       const verify = await axios.post(
         `https://www.google.com/recaptcha/api/siteverify?secret=${env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`,
+        null,
+        { timeout: 15000 }
       );
       if (!verify.data.success) {
         const errorCodes = verify.data['error-codes'] || [];
