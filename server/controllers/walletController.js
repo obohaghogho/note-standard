@@ -67,16 +67,20 @@ exports.deposit = async (req, res, next) => {
       );
       return res.json(result);
     } else {
-      // Route fiat to the new FiatPaymentService
-      const result = await FiatPaymentService.initializeDeposit(
+      const paymentService = require("../services/payment/paymentService");
+      const { data: profile } = await supabase.from('profiles').select('email').eq('id', req.user.id).single();
+      const email = profile?.email || 'user@example.com';
+
+      const result = await paymentService.initializePayment(
         req.user.id,
+        email,
         amount,
         currency,
-        provider || "paystack",
         {
           channel: "card",
           plan: req.userProfile?.plan || "FREE"
-        }
+        },
+        { provider: provider || "paystack" }
       );
       return res.json(result);
     }
@@ -97,17 +101,22 @@ exports.depositCard = async (req, res, next) => {
 
     currency = String(currency).replace(/"/g, "");
 
-    const result = await FiatPaymentService.initializeDeposit(
+    const paymentService = require("../services/payment/paymentService");
+    const { data: profile } = await supabase.from('profiles').select('email').eq('id', req.user.id).single();
+    const email = profile?.email || 'user@example.com';
+
+    const result = await paymentService.initializePayment(
       req.user.id,
+      email,
       amount,
       currency,
-      "paystack",
       {
         channel: "card",
         plan: req.userProfile?.plan || "FREE",
         toCurrency,
         toNetwork
-      }
+      },
+      { provider: "paystack" }
     );
 
     // Return the structure expected by the frontend
@@ -151,17 +160,22 @@ exports.depositTransfer = async (req, res, next) => {
 
     currency = String(currency).replace(/"/g, "");
 
-    const result = await FiatPaymentService.initializeDeposit(
+    const paymentService = require("../services/payment/paymentService");
+    const { data: profile } = await supabase.from('profiles').select('email').eq('id', req.user.id).single();
+    const email = profile?.email || 'user@example.com';
+
+    const result = await paymentService.initializePayment(
       req.user.id,
+      email,
       amount,
       currency,
-      "paystack",
       {
         channel: "bank_transfer",
         plan: req.userProfile?.plan || "FREE",
         toCurrency,
         toNetwork
-      }
+      },
+      { provider: "paystack" }
     );
 
     res.json({
