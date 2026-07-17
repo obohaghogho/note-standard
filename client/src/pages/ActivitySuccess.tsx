@@ -194,7 +194,7 @@ export const ActivitySuccess: React.FC = () => {
 
     const handleGoToActivity = async () => {
         if (walletContext) await walletContext.refresh();
-        navigate('/dashboard/activity');
+        navigate('/dashboard/history');
     };
 
     const pollingRef = resolveRef();
