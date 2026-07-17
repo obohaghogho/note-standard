@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axiosInstance from '../../../api/axiosInstance';
+import axiosInstance from '../../api/axiosInstance';
 import './FinOpsDashboard.css';
 import { toast } from 'react-hot-toast';
 import { Link } from 'react-router-dom';
