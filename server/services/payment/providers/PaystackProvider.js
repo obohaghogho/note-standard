@@ -14,6 +14,39 @@ class PaystackProvider extends PaymentProvider {
     };
   }
 
+  async initialize(data) {
+    const { email, amount, currency, reference, callbackUrl, plan, metadata } = data;
+    try {
+      const startTime = Date.now();
+      const payload = {
+        email,
+        amount: Math.round(amount * 100), // Paystack uses kobo/cents
+        currency: String(currency).toUpperCase(),
+        callback_url: callbackUrl,
+        metadata: JSON.stringify(metadata),
+      };
+
+      if (reference) payload.reference = reference;
+      if (plan) payload.plan = plan;
+
+      const response = await axios.post(
+        `${PAYSTACK_BASE_URL}/transaction/initialize`,
+        payload,
+        { headers: this.getHeaders() }
+      );
+      HealthMonitorService.recordLatency('paystack', Date.now() - startTime);
+
+      return {
+        checkoutUrl: response.data.data.authorization_url,
+        providerReference: response.data.data.reference,
+        link: response.data.data.authorization_url
+      };
+    } catch (error) {
+      logger.error("[PaystackProvider] Init error", error.response?.data || error.message);
+      throw new Error(`Paystack Init Failed: ${error.message}`);
+    }
+  }
+
   async initializeSubscription({ userId, email, amount, currency, planId }) {
     try {
       const startTime = Date.now();
