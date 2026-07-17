@@ -71,6 +71,7 @@ const ManualDeposits = lazyWithRetry(() => import('./pages/admin/ManualDeposits'
 const ManualWithdrawals = lazyWithRetry(() => import('./pages/admin/ManualWithdrawals'), 'ManualWithdrawals');
 const ReconciliationDashboard = lazyWithRetry(() => import('./pages/admin/ReconciliationDashboard').then(m => ({ default: m.ReconciliationDashboard })), 'ReconciliationDashboard');
 const PushHealthDashboard = lazyWithRetry(() => import('./pages/admin/PushHealthDashboard'), 'PushHealthDashboard');
+const FinOpsDashboard = lazyWithRetry(() => import('./pages/admin/FinOpsDashboard').then(m => ({ default: m.FinOpsDashboard })), 'FinOpsDashboard');
 
 
 const ChatRedirect = () => {
@@ -212,6 +213,7 @@ function App() {
                                 <Route path="limit-requests" element={<LimitRequestsPage />} />
                                 <Route path="settings" element={<AdminSettings />} />
                                 <Route path="push-health" element={<PushHealthDashboard />} />
+                                <Route path="finops" element={<FinOpsDashboard />} />
                               </Route>
                             </Route>
                           </Routes>

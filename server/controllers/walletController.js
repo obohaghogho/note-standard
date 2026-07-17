@@ -12,7 +12,37 @@ exports.getBalances = async (req, res, next) => {
   try {
     const fiatWallets = await FiatWalletService.getWallets(req.user.id);
     const cryptoWallets = await CryptoWalletService.getWallets(req.user.id);
-    res.json([...fiatWallets, ...cryptoWallets]);
+    
+    // Ensure fiat list doesn't accidentally contain crypto due to case sensitivity
+    const cryptoCurrencies = ["BTC", "ETH", "USDT", "USDC"];
+    const filteredFiat = fiatWallets.filter(w => !cryptoCurrencies.includes(String(w.currency).toUpperCase()));
+    
+    const allWallets = [...filteredFiat, ...cryptoWallets];
+    
+    // Deduplicate by currency and network
+    const uniqueWallets = [];
+    const seen = new Set();
+    
+    for (const w of allWallets) {
+      const key = `${String(w.currency).toUpperCase()}_${String(w.network || 'NATIVE').toUpperCase()}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueWallets.push(w);
+      } else {
+        // If we see a duplicate, prefer the one with a higher balance or actual address
+        const existingIdx = uniqueWallets.findIndex(ew => `${String(ew.currency).toUpperCase()}_${String(ew.network || 'NATIVE').toUpperCase()}` === key);
+        if (existingIdx >= 0) {
+           const existing = uniqueWallets[existingIdx];
+           const existingBal = existing.balances?.available || existing.balance || 0;
+           const newBal = w.balances?.available || w.balance || 0;
+           if (newBal > existingBal) {
+               uniqueWallets[existingIdx] = w;
+           }
+        }
+      }
+    }
+    
+    res.json(uniqueWallets);
   } catch (err) {
     next(err);
   }

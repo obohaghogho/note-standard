@@ -64,7 +64,7 @@ router.post("/fincra", (req, res) => res.status(200).json({ received: true, stat
  * POST /webhooks/crypto
  * Crypto payment webhooks
  */
-router.post("/nowpayments", (req, res) => res.status(200).json({ received: true, status: "not_implemented" }));
+router.post("/nowpayments", WebhookService.processNowPaymentsWebhook.bind(WebhookService));
 router.post("/crypto", (req, res) => res.status(200).json({ received: true, status: "not_implemented" }));
 
 // ─── Admin Endpoints ──────────────────────────────────────────

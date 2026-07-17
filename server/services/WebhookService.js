@@ -6,6 +6,9 @@ const { createNotification } = require("./notificationService");
 const realtime = require("./realtimeService");
 const AuditLogService = require("./AuditLogService");
 const HealthMonitorService = require("./HealthMonitorService");
+const WebhookSignatureService = require("./payment/WebhookSignatureService");
+const PaymentFactory = require("./payment/PaymentFactory");
+const paymentService = require("./payment/paymentService");
 
 /**
  * WebhookService
@@ -138,6 +141,91 @@ class WebhookService {
       logger.error("[WebhookService] Error processing webhook:", error);
       // Return 200 to prevent Paystack from spamming if it's our internal error
       // Or 500 if we want retries. Usually 200 is safer if we queue.
+      return res.status(200).send("Internal processing error");
+    }
+  }
+
+  /**
+   * Process incoming NOWPayments webhook completely atomically
+   */
+  async processNowPaymentsWebhook(req, res) {
+    try {
+      // 1. Verify signature
+      if (!WebhookSignatureService.verifyNowPayments(req.headers, req.body)) {
+        logger.warn("[WebhookService] Invalid NOWPayments signature");
+        return res.status(401).send("Unauthorized");
+      }
+
+      const payload = req.body;
+      const provider = PaymentFactory.getProviderByName("nowpayments");
+      const event = provider.parseWebhookEvent(payload);
+
+      // Enhance event with DB context
+      const { data: tx } = await supabase
+        .from("transactions")
+        .select("id, wallet_id")
+        .eq("reference_id", event.reference)
+        .maybeSingle();
+
+      if (tx) {
+        event.transactionId = tx.id;
+        event.walletId = tx.wallet_id;
+      } else {
+        // Check if it's a payout
+        const { data: payout } = await supabase
+          .from("payout_requests")
+          .select("id, wallet_id")
+          .eq("id", event.reference)
+          .maybeSingle();
+          
+        if (payout) {
+          event.transactionId = payout.id;
+          event.walletId = payout.wallet_id;
+          event.type = "payout"; // Force payout type
+        }
+      }
+
+      const result = await paymentService.executeWebhookAction(event, payload, "nowpayments");
+
+      if (result && result.status === "success") {
+        const userId = event.userId;
+        if (userId) {
+          // Audit Log
+          await AuditLogService.log({
+            user_id: userId,
+            action: event.type === "payout" ? "crypto_withdrawal_webhook" : "crypto_deposit_webhook",
+            ip: req.headers["x-forwarded-for"] || req.socket?.remoteAddress || 'unknown',
+            device: req.headers["user-agent"],
+            provider: "nowpayments",
+            reference: event.reference,
+            amount: event.amount,
+            currency: event.currency,
+            status: "success",
+            webhook_id: payload.payment_id
+          });
+
+          // Notification
+          await createNotification({
+            receiverId: userId,
+            type: event.type === "payout" ? "wallet_withdrawal" : "wallet_deposit",
+            title: event.type === "payout" ? "Withdrawal Successful" : "Deposit Successful",
+            message: `Your ${event.type === "payout" ? "withdrawal" : "deposit"} of ${event.amount} ${event.currency} was successful.`,
+            link: "/dashboard/wallet",
+          });
+
+          // Realtime Emit
+          await realtime.emitToUser(userId, "wallet_update", {
+            currency: event.currency,
+            amount: event.amount,
+            type: event.type === "payout" ? "withdrawal" : "deposit",
+            status: "COMPLETED"
+          });
+        }
+      }
+
+      return res.status(200).send("OK");
+    } catch (error) {
+      logger.error("[WebhookService] Error processing NOWPayments webhook:", error);
       return res.status(200).send("Internal processing error");
     }
   }

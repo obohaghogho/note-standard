@@ -10,6 +10,9 @@ router.use(adminController.requireAdminRole(['super_admin', 'platform_admin', 's
 // GET /api/ops/health — Platform health dashboard
 router.get('/health', adminController.getHealthDashboard);
 
+// GET /api/ops/finops - Financial Operations Dashboard
+router.get('/finops', adminController.getFinOpsDashboard);
+
 // GET /api/ops/flags — List all feature flags
 router.get('/flags', adminController.getFeatureFlags);
 

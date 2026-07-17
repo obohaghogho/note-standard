@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require("uuid");
 const logger = require("../utils/logger");
 const nowpaymentsService = require("./nowpaymentsService");
 const { checkDailyLimit } = require("../utils/limitCheck");
+const SystemState = require("../config/SystemState");
 
 /**
  * CryptoWalletService
@@ -71,7 +72,8 @@ class CryptoWalletService {
   /**
    * Get or create crypto address
    */
-  async getAddress(userId, currency, network = "native", forceNew = false) {
+  async getAddress(userId, currency, network, forceNew = false) {
+    if (!network) throw new Error("Explicit network selection is required.");
     const wallet = await this.createWallet(userId, currency, network, forceNew);
     return {
       address: wallet.address,
@@ -83,14 +85,15 @@ class CryptoWalletService {
   /**
    * Create or fetch a crypto wallet
    */
-  async createWallet(userId, currency, network = "native", forceNew = false) {
+  async createWallet(userId, currency, network, forceNew = false) {
+    if (!network) throw new Error("Explicit network selection is required.");
     const upCurrency = currency.toUpperCase();
 
     if (!["BTC", "ETH", "USDT", "USDC"].includes(upCurrency)) {
       throw new Error("Fiat currencies are strictly forbidden in CryptoWalletService.");
     }
 
-    let normNetwork = (network || "native").toLowerCase();
+    let normNetwork = network.toLowerCase();
     if (["erc20", "trc20", "bep20", "polygon"].includes(normNetwork)) {
       normNetwork = normNetwork.toUpperCase();
     }
@@ -158,7 +161,12 @@ class CryptoWalletService {
   /**
    * Initialize a crypto deposit
    */
-  async deposit(userId, currency, amount = 10, userPlan = "FREE", idempotencyKey = null) {
+  async deposit(userId, currency, network, amount = 10, userPlan = "FREE", idempotencyKey = null) {
+    if (!SystemState.getFeatureFlag('CRYPTO_DEPOSITS_ENABLED')) {
+      throw new Error("Crypto deposits are currently disabled.");
+    }
+    if (!network) throw new Error("Explicit network selection is required.");
+
     const upCurrency = String(currency).toUpperCase();
     if (!["BTC", "ETH", "USDT", "USDC"].includes(upCurrency)) {
         throw new Error("CryptoWalletService only supports crypto deposits.");
@@ -178,7 +186,13 @@ class CryptoWalletService {
    * Withdraw crypto
    */
   async withdraw(userId, data) {
+    if (!SystemState.getFeatureFlag('CRYPTO_WITHDRAWALS_ENABLED')) {
+      throw new Error("Crypto withdrawals are currently disabled.");
+    }
+
     const { currency, amount, network, address, client_idempotency_key } = data;
+    if (!network) throw new Error("Explicit network selection is required.");
+
     const upCurrency = String(currency).toUpperCase();
     
     if (!["BTC", "ETH", "USDT", "USDC"].includes(upCurrency)) {
@@ -198,7 +212,7 @@ class CryptoWalletService {
       net_amount: parseFloat(amount),
       fee: 0,
       status: 'pending_review',
-      destination: { address, network: network || 'native' },
+      destination: { address, network },
       client_idempotency_key
     });
 

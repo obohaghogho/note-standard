@@ -22,7 +22,8 @@ import {
     ShieldAlert,
     ArrowDownToLine,
     ArrowUpFromLine,
-    ArrowLeft
+    ArrowLeft,
+    Activity
 } from 'lucide-react';
 import { LanguageSelector } from '../common/LanguageSelector';
 import SecureImage from '../common/SecureImage';
@@ -100,6 +101,7 @@ export const AdminLayout = () => {
         { to: '/admin/withdrawals', icon: ArrowUpFromLine, label: 'Manual Withdrawals' },
         { to: '/admin/auto-reply', icon: Bot, label: 'Auto-Reply' },
         { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
+        { to: '/admin/finops', icon: Activity, label: 'FinOps Dashboard' },
         { to: '/admin/push-health', icon: Bell, label: 'Push Health' },
         { to: '/admin/settings', icon: Settings, label: 'Settings' },
     ];

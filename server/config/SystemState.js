@@ -28,6 +28,22 @@ class SystemStateController {
             feature_new_withdrawal: true,
             feature_new_subscription: true
         };
+
+        // Crypto Global Controls (Read from env if available, default to true)
+        this.CRYPTO_DEPOSITS_ENABLED = process.env.CRYPTO_DEPOSITS_ENABLED ? process.env.CRYPTO_DEPOSITS_ENABLED === 'true' : true;
+        this.CRYPTO_WITHDRAWALS_ENABLED = process.env.CRYPTO_WITHDRAWALS_ENABLED ? process.env.CRYPTO_WITHDRAWALS_ENABLED === 'true' : true;
+
+        // Operational Expectations (Thresholds & Minimums)
+        this.CRYPTO_THRESHOLDS = {
+          BTC_BTC: { confirmations: 2, min_deposit: "0.0005", time: "20m" },
+          ETH_ETH: { confirmations: 12, min_deposit: "0.01", time: "5m" },
+          USDT_TRC20: { confirmations: 20, min_deposit: "5.00", time: "2m" },
+          USDT_ERC20: { confirmations: 12, min_deposit: "10.00", time: "5m" },
+          USDT_BEP20: { confirmations: 15, min_deposit: "5.00", time: "1m" },
+          USDC_ERC20: { confirmations: 12, min_deposit: "10.00", time: "5m" },
+          USDC_POLYGON: { confirmations: 60, min_deposit: "5.00", time: "4m" }
+        };
+
         this.transactionLimits = {
             maxDailyDepositNGN: 5000000, // 5M NGN
             maxDailyWithdrawalNGN: 1000000,
@@ -122,7 +138,14 @@ class SystemStateController {
     }
 
     getFeatureFlag(flagName) {
-        return this.featureFlags[flagName] !== false; // Default true if not explicitly false
+        if (flagName in this.featureFlags) {
+            return this.featureFlags[flagName] !== false; // Default true if not explicitly false
+        }
+        return !!this[flagName];
+    }
+
+    getCryptoThresholds() {
+        return this.CRYPTO_THRESHOLDS;
     }
 
     setFeatureFlag(flagName, value) {

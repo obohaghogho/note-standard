@@ -1958,3 +1958,218 @@ exports.updateFeatureFlag = async (req, res, next) => {
     next(err);
   }
 };
+
+// GET /api/ops/finops
+exports.getFinOpsDashboard = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    const SystemState = require("../config/SystemState");
+    
+    // Configurable time ranges: 'today' (default), '24h', '7d'
+    const range = req.query.range || 'today';
+    let startDate = new Date();
+    if (range === 'today') {
+      startDate.setUTCHours(0, 0, 0, 0);
+    } else if (range === '24h') {
+      startDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    } else if (range === '7d') {
+      startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    }
+    const startTimeISO = startDate.toISOString();
+    const staleTimeISO = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const cryptoAssets = ["BTC", "ETH", "USDT", "USDC"];
+
+    const [
+      { data: fiatDepositsData },
+      { data: cryptoDepositsData },
+      { data: cryptoWithdrawalsData },
+      { count: pendingConfirmationsCount },
+      { count: stuckTransactionsCount },
+      { count: reconciliationAlertsCount },
+      { count: duplicateWebhookCount },
+      { count: pollingRecoveriesCount },
+      { data: treasuryWallets },
+      { data: userWallets },
+      { data: recentCryptoTxs },
+      { data: recentDuplicates },
+      { data: recentRecoveries }
+    ] = await Promise.all([
+      // Fiat funding
+      serviceSupabase.from("transactions")
+        .select("amount")
+        .eq("type", "DEPOSIT")
+        .eq("status", "COMPLETED")
+        .not("currency", "in", `(${cryptoAssets.join(',')})`)
+        .gte("created_at", startTimeISO),
+      
+      // Crypto deposits
+      serviceSupabase.from("transactions")
+        .select("amount, currency")
+        .eq("type", "DEPOSIT")
+        .eq("status", "COMPLETED")
+        .in("currency", cryptoAssets)
+        .gte("created_at", startTimeISO),
+        
+      // Crypto withdrawals (from payouts)
+      serviceSupabase.from("payout_requests")
+        .select("amount, currency")
+        .in("withdrawal_state", ["CONFIRMED", "COMPLETED", "SETTLED"]) // approx terminal states
+        .in("currency", cryptoAssets)
+        .gte("created_at", startTimeISO),
+        
+      // Pending confirmations
+      serviceSupabase.from("transactions")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "PENDING")
+        .in("currency", cryptoAssets),
+        
+      // Stuck transactions (PENDING and older than 15 mins)
+      serviceSupabase.from("transactions")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "PENDING")
+        .lte("created_at", staleTimeISO),
+        
+      // Reconciliation alerts
+      serviceSupabase.from("unmatched_payments")
+        .select("*", { count: "exact", head: true })
+        .eq("is_resolved", false),
+        
+      // Duplicate webhooks (attempting a fuzzy match as logs could be variable)
+      serviceSupabase.from("webhook_logs")
+        .select("*", { count: "exact", head: true })
+        .ilike("processing_error", "%duplicate%")
+        .gte("created_at", startTimeISO),
+        
+      // Polling recoveries
+      serviceSupabase.from("audit_logs")
+        .select("*", { count: "exact", head: true })
+        .in("action", ["crypto_deposit_recovered", "crypto_withdrawal_recovered"])
+        .gte("created_at", startTimeISO),
+        
+      // Treasury balances
+      serviceSupabase.from("wallets_store")
+        .select("currency, balance")
+        .or("network.eq.SYSTEM,address.ilike.SYSTEM_TRANSIT_%"),
+        
+      // Total user balances
+      serviceSupabase.from("wallets_v6")
+        .select("currency, balance, user_id"),
+        
+      // Recent Crypto Txs for Timeline
+      serviceSupabase.from("transactions")
+        .select("type, amount, currency, created_at, status")
+        .in("currency", cryptoAssets)
+        .order("created_at", { ascending: false })
+        .limit(10),
+        
+      // Recent duplicate webhooks for Timeline
+      serviceSupabase.from("webhook_logs")
+        .select("provider, processing_error, created_at")
+        .ilike("processing_error", "%duplicate%")
+        .order("created_at", { ascending: false })
+        .limit(10),
+        
+      // Recent recoveries for Timeline
+      serviceSupabase.from("audit_logs")
+        .select("action, amount, currency, created_at")
+        .in("action", ["crypto_deposit_recovered", "crypto_withdrawal_recovered"])
+        .order("created_at", { ascending: false })
+        .limit(10)
+    ]);
+    
+    // Aggregate Fiat
+    const fiatVolume = (fiatDepositsData || []).reduce((sum, tx) => sum + (parseFloat(tx.amount) || 0), 0);
+    
+    // Aggregate Crypto (Volume by Asset)
+    const cryptoDeposits = {};
+    (cryptoDepositsData || []).forEach(tx => {
+       const cur = tx.currency.toUpperCase();
+       cryptoDeposits[cur] = (cryptoDeposits[cur] || 0) + parseFloat(tx.amount);
+    });
+    
+    const cryptoWithdrawals = {};
+    (cryptoWithdrawalsData || []).forEach(tx => {
+       const cur = tx.currency.toUpperCase();
+       cryptoWithdrawals[cur] = (cryptoWithdrawals[cur] || 0) + parseFloat(tx.amount);
+    });
+
+    // Treasury & Reserves
+    const treasuryBalances = {};
+    (treasuryWallets || []).forEach(w => {
+       const cur = w.currency.toUpperCase();
+       treasuryBalances[cur] = (treasuryBalances[cur] || 0) + parseFloat(w.balance || 0);
+    });
+
+    const userBalances = {};
+    (userWallets || []).forEach(w => {
+       // Filter out system wallets if they leaked in
+       const cur = w.currency.toUpperCase();
+       userBalances[cur] = (userBalances[cur] || 0) + parseFloat(w.balance || 0);
+    });
+
+    // Build Timeline
+    const timelineEvents = [];
+    (recentCryptoTxs || []).forEach(tx => {
+       timelineEvents.push({
+           time: tx.created_at,
+           message: `${tx.currency} ${tx.type === 'DEPOSIT' ? 'Deposit' : 'Withdrawal'} ${tx.status === 'COMPLETED' ? 'Settled' : tx.status}`
+       });
+    });
+    (recentDuplicates || []).forEach(log => {
+       timelineEvents.push({
+           time: log.created_at,
+           message: `Webhook Duplicate Ignored (${log.provider})`
+       });
+    });
+    (recentRecoveries || []).forEach(log => {
+       timelineEvents.push({
+           time: log.created_at,
+           message: `Polling Recovery Completed (${log.action})`
+       });
+    });
+    
+    // Sort timeline chronologically (newest first)
+    timelineEvents.sort((a, b) => new Date(b.time) - new Date(a.time));
+    const finalTimeline = timelineEvents.slice(0, 15); // limit to 15 items
+
+    // Log this authorized access
+    await logAdminAction(req, "read_finops_dashboard", "dashboard", "finops", { range });
+
+    res.json({
+      overview: {
+        fiat_funding_volume: fiatVolume,
+        time_range: range
+      },
+      crypto: {
+        deposits_volume: cryptoDeposits,
+        withdrawals_volume: cryptoWithdrawals,
+        pending_confirmations: pendingConfirmationsCount || 0,
+        stuck_transactions: stuckTransactionsCount || 0
+      },
+      reconciliation: {
+        active_alerts: reconciliationAlertsCount || 0,
+        duplicate_webhooks: duplicateWebhookCount || 0,
+        polling_recoveries: pollingRecoveriesCount || 0
+      },
+      treasury: {
+        system_balances: treasuryBalances,
+        total_user_liabilities: userBalances
+      },
+      system: {
+        health: SystemState.getStatusData(),
+        provider_latency: SystemState.metrics.queueLag,
+        queue_lengths: SystemState.metrics.queueLag
+      },
+      feature_flags: {
+        CRYPTO_DEPOSITS_ENABLED: SystemState.getFeatureFlag('CRYPTO_DEPOSITS_ENABLED'),
+        CRYPTO_WITHDRAWALS_ENABLED: SystemState.getFeatureFlag('CRYPTO_WITHDRAWALS_ENABLED'),
+        featureFlags: SystemState.featureFlags
+      },
+      timeline: finalTimeline
+    });
+
+  } catch (err) {
+    console.error("[FinOps] Error generating dashboard data:", err);
+    res.status(500).json({ error: "Failed to generate FinOps dashboard" });
+  }
+};
