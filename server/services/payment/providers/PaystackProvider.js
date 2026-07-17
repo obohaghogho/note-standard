@@ -27,7 +27,9 @@ class PaystackProvider extends PaymentProvider {
       };
 
       if (reference) payload.reference = reference;
-      if (plan) payload.plan = plan;
+      // Paystack returns 404 if plan is provided but invalid (e.g. "FREE").
+      // Only pass plan if it looks like a valid Paystack plan code (PLN_...)
+      if (plan && plan.startsWith('PLN_')) payload.plan = plan;
 
       const response = await axios.post(
         `${PAYSTACK_BASE_URL}/transaction/initialize`,
