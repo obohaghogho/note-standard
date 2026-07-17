@@ -9,7 +9,7 @@ const SystemState = require("../config/SystemState");
  */
 class SubscriptionService {
   constructor() {
-    this.defaultProvider = PaystackProvider;
+    this.defaultProvider = new PaystackProvider();
   }
 
   async initializeSubscription({ userId, email, amount, currency, planId }) {

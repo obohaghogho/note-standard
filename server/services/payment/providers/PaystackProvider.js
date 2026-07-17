@@ -115,4 +115,4 @@ class PaystackProvider extends PaymentProvider {
   }
 }
 
-module.exports = new PaystackProvider();
+module.exports = PaystackProvider;
