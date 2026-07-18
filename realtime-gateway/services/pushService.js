@@ -133,33 +133,60 @@ if (apnsKey && process.env.APNS_KEY_ID && process.env.APNS_TEAM_ID) {
 }
 
 // ─── Startup validation summary ──────────────────────────────────────────────
-// Runs once at module load so every deployment has an unambiguous log line.
+// Runs once at module load. Logs a clear status for EVERY push channel.
+// Any ❌ line here means that push channel is DEAD for all users.
 (function logStartupState() {
   const pushEnabled = process.env.PUSH_ENABLED !== 'false';
-  if (pushEnabled) {
-    console.log('[PushService] ✅ Native push ENABLED (default or PUSH_ENABLED=true)');
+  const separator = '─'.repeat(60);
+  console.log(`[PushService] ${separator}`);
+  console.log('[PushService] 🔔 PUSH NOTIFICATION STARTUP CHECK');
+  console.log(`[PushService] ${separator}`);
+
+  if (!pushEnabled) {
+    console.error('[PushService] ❌ PUSH_ENABLED=false — ALL push notifications disabled. Set to true or remove the variable.');
   } else {
-    console.warn('[PushService] ⚠️  Native push explicitly DISABLED (PUSH_ENABLED=false) — all FCM/APNs delivery will be skipped.');
+    console.log('[PushService] ✅ Push globally ENABLED (PUSH_ENABLED != false)');
   }
 
+  // FCM (Android)
   if (firebaseApp) {
-    console.log('[PushService] ✅ Firebase Admin (FCM) initialized — Android push ready.');
+    console.log('[PushService] ✅ FCM (Android): Firebase Admin initialized — Android push READY.');
   } else {
-    console.warn('[PushService] ⚠️  Firebase Admin NOT initialized — Android FCM push will be skipped.');
+    console.error('[PushService] ❌ FCM (Android): Firebase Admin NOT initialized.');
+    console.error('[PushService]    → Set FIREBASE_SERVICE_ACCOUNT (JSON blob) OR');
+    console.error('[PushService]    → Set FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY');
+    console.error('[PushService]    → Android users will receive NO push notifications until this is fixed.');
   }
 
+  // APNs (iOS)
   if (apnProviderProd) {
-    console.log('[PushService] ✅ APNs provider (Prod + Sandbox) initialized — iOS push ready.');
+    console.log('[PushService] ✅ APNs (iOS): Provider (Prod + Sandbox) initialized — iOS push READY.');
   } else {
-    console.warn('[PushService] ⚠️  APNs provider NOT initialized — iOS native push will be skipped (web push still works).');
+    console.warn('[PushService] ⚠️  APNs (iOS): Provider NOT initialized — iOS native push SKIPPED.');
+    console.warn('[PushService]    → Set APNS_KEY + APNS_KEY_ID + APNS_TEAM_ID to enable.');
   }
 
-  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
-    const fingerprint = require('crypto').createHash('sha256').update(process.env.VAPID_PUBLIC_KEY).digest('hex').substring(0, 16);
-    console.log(`[PushService] ✅ Web Push (VAPID) configured — PWA push ready. Fingerprint: ${fingerprint}`);
+  // VAPID (Web/PWA)
+  if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+    const missingKey = !process.env.VAPID_PUBLIC_KEY ? 'VAPID_PUBLIC_KEY' : 'VAPID_PRIVATE_KEY';
+    console.error(`[PushService] ❌ Web Push (PWA): ${missingKey} is MISSING or EMPTY.`);
+    console.error('[PushService]    → Browser/PWA users will receive NO push notifications until this is fixed.');
+    console.error('[PushService]    → Generate keys with: npx web-push generate-vapid-keys');
   } else {
-    console.warn('[PushService] ⚠️  VAPID keys missing — PWA web push will be skipped.');
+    const fingerprint = require('crypto').createHash('sha256').update(process.env.VAPID_PUBLIC_KEY).digest('hex').substring(0, 16);
+    console.log(`[PushService] ✅ Web Push (PWA): VAPID configured — PWA push READY. Fingerprint: ${fingerprint}`);
   }
+
+  // V2 routing
+  const useV2 = process.env.USE_V2_PUSH_ROUTING === 'true';
+  const allowFallback = process.env.ALLOW_V2_FALLBACK !== 'false';
+  if (useV2) {
+    console.log(`[PushService] ✅ V2 Push Routing: ACTIVE (fallback=${allowFallback ? 'enabled' : 'disabled'})`);
+  } else {
+    console.log('[PushService] ℹ️  V2 Push Routing: Shadow mode (USE_V2_PUSH_ROUTING != true). Legacy routing active.');
+  }
+
+  console.log(`[PushService] ${separator}`);
 })();
 
 /**

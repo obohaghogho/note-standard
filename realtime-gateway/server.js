@@ -127,6 +127,52 @@ app.get('/internal/debug-env', async (req, res) => {
   });
 });
 
+// ✅ Push health check — returns JSON status of every push channel
+// Hit this on Render to instantly diagnose push issues without reading logs
+app.get('/internal/push/health', async (req, res) => {
+  const pushService = require('./services/pushService');
+  const admin = (() => { try { return require('firebase-admin'); } catch { return null; } })();
+  
+  const vapidOk = !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
+  const fcmOk = !!(admin && admin.apps && admin.apps.length > 0);
+  const supabaseOk = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+  
+  const channels = {
+    web_push_vapid: {
+      ok: vapidOk,
+      reason: vapidOk ? 'VAPID keys present' : (!process.env.VAPID_PUBLIC_KEY ? 'VAPID_PUBLIC_KEY missing' : 'VAPID_PRIVATE_KEY missing or empty'),
+    },
+    fcm_android: {
+      ok: fcmOk,
+      reason: fcmOk ? `Firebase initialized (${admin.apps.length} app(s))` : 'Firebase Admin not initialized — add FIREBASE_SERVICE_ACCOUNT or FIREBASE_PROJECT_ID+CLIENT_EMAIL+PRIVATE_KEY',
+    },
+    apns_ios: {
+      ok: !!(process.env.APNS_KEY && process.env.APNS_KEY_ID && process.env.APNS_TEAM_ID),
+      reason: (process.env.APNS_KEY && process.env.APNS_KEY_ID && process.env.APNS_TEAM_ID) ? 'APNs keys present' : 'Missing APNS_KEY / APNS_KEY_ID / APNS_TEAM_ID',
+    },
+    supabase: {
+      ok: supabaseOk,
+      reason: supabaseOk ? 'SUPABASE_URL + SERVICE_ROLE_KEY present' : 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY',
+    },
+    v2_routing: {
+      ok: process.env.USE_V2_PUSH_ROUTING === 'true',
+      fallback_enabled: process.env.ALLOW_V2_FALLBACK !== 'false',
+    },
+  };
+
+  const allOk = channels.web_push_vapid.ok && channels.fcm_android.ok && channels.supabase.ok;
+
+  res.status(allOk ? 200 : 503).json({
+    status: allOk ? 'healthy' : 'degraded',
+    push_globally_enabled: process.env.PUSH_ENABLED !== 'false',
+    channels,
+    gateway_boot_ready: global.__GATEWAY_BOOT_READY__,
+    pipeline_version: process.env.MESSAGING_PIPELINE_VERSION || 'v2',
+    self_url: process.env.SELF_URL || '(not set — delivery webhooks will use hardcoded Render URL)',
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // ✅ 3b. BOOT-READY SIGNAL ENDPOINT
 // Called by the API BootManager when ALL services are ready.
 // This is the ONLY event that unlocks socket acceptance.
