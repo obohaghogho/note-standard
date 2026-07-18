@@ -447,8 +447,8 @@ exports.getDepositStatus = async (req, res) => {
       return res.status(404).json({ error: "Transaction not found" });
     }
 
-    // Proactively verify pending paystack transactions in case webhook was missed
-    if (tx.status === "PENDING" && tx.provider === "paystack") {
+    // Proactively verify pending/failed paystack transactions in case webhook was missed
+    if (["PENDING", "FAILED"].includes(tx.status) && tx.provider === "paystack") {
       try {
         const PaystackProvider = require("../services/payment/providers/PaystackProvider");
         const provider = new PaystackProvider();

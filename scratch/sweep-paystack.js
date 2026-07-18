@@ -8,7 +8,7 @@ async function sweep() {
     .from('transactions')
     .select('*')
     .eq('provider', 'paystack')
-    .eq('status', 'PENDING');
+    .in('status', ['PENDING', 'FAILED']);
 
   if (error) return console.error(error);
   
