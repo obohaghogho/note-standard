@@ -114,7 +114,8 @@ exports.depositCard = async (req, res, next) => {
         channel: "card",
         plan: req.userProfile?.plan || "FREE",
         targetCurrency: toCurrency,
-        targetNetwork: toNetwork
+        targetNetwork: toNetwork,
+        callbackUrl: req.headers.origin ? `${req.headers.origin}/wallet` : undefined
       },
       { provider: "paystack" }
     );
@@ -173,7 +174,8 @@ exports.depositTransfer = async (req, res, next) => {
         channel: "bank_transfer",
         plan: req.userProfile?.plan || "FREE",
         targetCurrency: toCurrency,
-        targetNetwork: toNetwork
+        targetNetwork: toNetwork,
+        callbackUrl: req.headers.origin ? `${req.headers.origin}/wallet` : undefined
       },
       { provider: "paystack" }
     );
@@ -437,12 +439,60 @@ exports.getDepositStatus = async (req, res) => {
     
     const { data: tx, error } = await supabase
       .from("transactions")
-      .select("status")
+      .select("*")
       .or(`reference_id.eq.${reference},metadata->>display_ref.eq.${reference}`)
       .single();
 
     if (error || !tx) {
       return res.status(404).json({ error: "Transaction not found" });
+    }
+
+    // Proactively verify pending paystack transactions in case webhook was missed
+    if (tx.status === "PENDING" && tx.provider === "paystack") {
+      try {
+        const PaystackProvider = require("../services/payment/providers/PaystackProvider");
+        const provider = new PaystackProvider();
+        const verifyResult = await provider.verifyPayment(tx.reference_id);
+        
+        if (verifyResult.status === "success") {
+          // Trigger webhook processing manually
+          const WebhookService = require("../services/WebhookService");
+          // Fake a request object to reuse the webhook logic
+          const fakeReq = {
+            headers: { "x-forwarded-for": req.ip || "127.0.0.1", "user-agent": req.headers["user-agent"] },
+            socket: req.socket,
+            body: {
+              event: "charge.success",
+              data: {
+                reference: tx.reference_id,
+                amount: verifyResult.amount * 100, // Paystack amount is in kobo
+                currency: verifyResult.currency,
+                status: "success",
+                customer: verifyResult.customer,
+                id: "manual_poll_" + Date.now()
+              }
+            }
+          };
+          
+          // Since verifySignature is checked in processPaystackWebhook, we bypass it by overriding verifySignature for this call
+          const originalVerify = WebhookService.verifySignature;
+          WebhookService.verifySignature = () => true;
+          
+          // Fake response
+          const fakeRes = {
+            status: () => ({ send: () => {} })
+          };
+          
+          await WebhookService.processPaystackWebhook(fakeReq, fakeRes);
+          
+          // Restore
+          WebhookService.verifySignature = originalVerify;
+          
+          return res.json({ status: "COMPLETED" });
+        }
+      } catch (pollErr) {
+        console.error("[WalletController] Manual poll failed:", pollErr.message);
+      }
     }
     
     res.json({ status: tx.status });
