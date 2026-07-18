@@ -475,7 +475,7 @@ class PaymentService {
 
       if (verification.status === "success") {
         return await this.finalizeTransaction(reference, verification);
-      } else if (["failed", "abandoned", "expired"].includes(verification.status)) {
+      } else if (verification.status === "failed") {
         return await this.failTransaction(reference, `Provider reported failure: ${verification.status}`);
       }
 

@@ -13,6 +13,10 @@ interface VerificationStatus {
 
 type UIState = 'verifying' | 'success' | 'failed' | 'timeout';
 
+const logger_debug = (tag: string, ...args: any[]) => {
+    console.log(`[Telemetry] ${tag}`, ...args);
+};
+
 export const PaymentCallback: React.FC = () => {
     const navigate = useNavigate();
     const walletContext = React.useContext(WalletContext);
@@ -132,10 +136,6 @@ export const PaymentCallback: React.FC = () => {
         setErrorMsg(null);
         pollCountRef.current = 0;
         pollStatus();
-    };
-
-    const logger_debug = (tag: string, ...args: any[]) => {
-        console.log(`[Telemetry] ${tag}`, ...args);
     };
 
     return (

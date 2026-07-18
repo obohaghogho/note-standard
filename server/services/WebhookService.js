@@ -70,12 +70,17 @@ class WebhookService {
 
       // 5. Verify amount/currency
       const expectedKobo = Math.round(txRecord.amount * 100);
+      const difference = amount - expectedKobo;
+      // Allow actual amount to be equal to expected, or slightly higher (up to 10% + 200 units for gateway fees)
+      const maxAllowedFees = Math.round(expectedKobo * 0.10) + 20000;
+
       if (
         status !== "success" ||
         txRecord.currency.toUpperCase() !== currency.toUpperCase() ||
-        expectedKobo !== amount
+        amount < expectedKobo ||
+        difference > maxAllowedFees
       ) {
-        logger.error(`[WebhookService] Verification mismatch for reference: ${reference}. Expected: ${expectedKobo} kobo, Got: ${amount} kobo. Expected Currency: ${txRecord.currency}, Got: ${currency}`);
+        logger.error(`[WebhookService] Verification mismatch for reference: ${reference}. Expected min: ${expectedKobo} kobo, Got: ${amount} kobo. Expected Currency: ${txRecord.currency}, Got: ${currency}`);
         return res.status(200).send("Verification mismatch");
       }
       logger.info(`[WebhookService] Amount verified. Reference: ${reference}`);
