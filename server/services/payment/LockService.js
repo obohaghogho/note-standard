@@ -17,14 +17,19 @@ class LockService {
         const token = uuidv4();
         const lockKey = `lock:payment:${key}`;
         
-        // Atomic Acquire: SET NX PX
-        const result = await redis.set(lockKey, token, 'PX', ttlMs, 'NX');
-        
-        if (result === 'OK') {
-            return { success: true, token, key: lockKey };
+        try {
+            // Atomic Acquire: SET NX PX
+            const result = await redis.set(lockKey, token, 'PX', ttlMs, 'NX');
+            
+            if (result === 'OK') {
+                return { success: true, token, key: lockKey };
+            }
+            
+            return { success: false };
+        } catch (err) {
+            logger.warn(`[LockService] Redis connection error during acquire. Falling back to database-only safety.`, { error: err.message });
+            return { success: false, degradedMode: true };
         }
-        
-        return { success: false };
     }
 
     /**
@@ -34,16 +39,21 @@ class LockService {
     async extend(lockKey, token, ttlMs = 30000) {
         if (!redis || token === 'redis_disabled') return true;
 
-        const lua = `
-            if redis.call("get", KEYS[1]) == ARGV[1] then
-                return redis.call("pexpire", KEYS[1], ARGV[2])
-            else
-                return 0
-            end
-        `;
-        
-        const result = await redis.eval(lua, 1, lockKey, token, ttlMs);
-        return result === 1;
+        try {
+            const lua = `
+                if redis.call("get", KEYS[1]) == ARGV[1] then
+                    return redis.call("pexpire", KEYS[1], ARGV[2])
+                else
+                    return 0
+                end
+            `;
+            
+            const result = await redis.eval(lua, 1, lockKey, token, ttlMs);
+            return result === 1;
+        } catch (err) {
+            logger.warn(`[LockService] Redis connection error during extend:`, { error: err.message });
+            return true;
+        }
     }
 
     /**
@@ -53,19 +63,24 @@ class LockService {
     async release(lockKey, token) {
         if (!redis || token === 'redis_disabled') return true;
 
-        const lua = `
-            if redis.call("get", KEYS[1]) == ARGV[1] then
-                return redis.call("del", KEYS[1])
-            else
-                return 0
-            end
-        `;
+        try {
+            const lua = `
+                if redis.call("get", KEYS[1]) == ARGV[1] then
+                    return redis.call("del", KEYS[1])
+                else
+                    return 0
+                end
+            `;
 
-        const result = await redis.eval(lua, 1, lockKey, token);
-        if (result !== 1) {
-            logger.warn(`[LockService] Failed to release lock or not owner`, { lockKey });
+            const result = await redis.eval(lua, 1, lockKey, token);
+            if (result !== 1) {
+                logger.warn(`[LockService] Failed to release lock or not owner`, { lockKey });
+            }
+            return result === 1;
+        } catch (err) {
+            logger.warn(`[LockService] Redis connection error during release:`, { error: err.message });
+            return true;
         }
-        return result === 1;
     }
 
     /**
@@ -86,11 +101,17 @@ class LockService {
         // 1. Acquisition with Exponential Backoff
         while (Date.now() - startTime < retryWindow) {
             acquired = await this.acquire(entityId, ttl);
-            if (acquired.success) break;
+            if (acquired.success || acquired.degradedMode) break;
             
             attempts++;
             const backoff = Math.min(50 * Math.pow(2, attempts), 500); // 50ms -> 100ms -> ... up to 500ms
             await new Promise(r => setTimeout(r, backoff));
+        }
+
+        // If Redis failed completely (degraded mode), proceed directly without lock
+        if (acquired && acquired.degradedMode) {
+            logger.warn(`[LockService] Redis is offline/limited. Bypassing lock for ${entityId}. Relying on database idempotency.`);
+            return await fn();
         }
 
         if (!acquired || !acquired.success) {
@@ -107,7 +128,6 @@ class LockService {
                 const refreshed = await this.extend(key, token, ttl);
                 if (!refreshed) {
                     logger.error(`[LockService] Heartbeat failed - Ownership lost for ${entityId}`);
-                    // Critical: The worker should ideally stop, but we at least log it.
                 }
             }, 10000);
 

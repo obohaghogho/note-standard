@@ -54,6 +54,7 @@ const ContactPage = lazyWithRetry(() => import('./pages/ContactPage'), 'ContactP
 const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword'), 'ResetPassword');
 const ActivitySuccess = lazyWithRetry(() => import('./pages/ActivitySuccess'), 'ActivitySuccess');
 const ActivityCancel = lazyWithRetry(() => import('./pages/ActivityCancel'), 'ActivityCancel');
+const PaymentCallback = lazyWithRetry(() => import('./pages/PaymentCallback'), 'PaymentCallback');
 
 // Dashboard pages are now static for performance and reliability
 
@@ -165,6 +166,7 @@ function App() {
 
                             <Route path="/wallet/success" element={<ActivitySuccess />} />
                             <Route path="/wallet/cancel" element={<ActivityCancel />} />
+                            <Route path="/payment/callback" element={<PaymentCallback />} />
                             <Route path="/wallet" element={<Navigate to="/dashboard/wallet" replace />} />
                             
                             <Route path="/" element={<LandingPage />} />

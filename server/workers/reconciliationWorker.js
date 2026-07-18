@@ -156,6 +156,7 @@ class ReconciliationWorker {
         await this.syncSentPayouts();
         await this.cleanupStaleReservations();
         await this.checkAndSweepSettlements();
+        await this.sweepStuckPendingTransactions();
         await this.assertLedgerIntegrity();
     }
 
@@ -172,6 +173,37 @@ class ReconciliationWorker {
             await this.sweepAllCurrencies(false);
         } catch (err) {
             logger.error("[ReconciliationWorker] Paystack Settlement Sweep check failed:", err.message);
+        }
+    }
+
+    static async sweepStuckPendingTransactions() {
+        try {
+            logger.info("[ReconciliationWorker] Running stuck PENDING transaction sweep...");
+            // Find PENDING Paystack transactions older than 2 minutes
+            const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+            const { data: stuckTxs, error } = await supabase
+                .from("transactions")
+                .select("reference_id, provider_reference, status")
+                .eq("status", "PENDING")
+                .eq("provider", "paystack")
+                .lte("created_at", twoMinutesAgo);
+
+            if (error) throw error;
+            if (!stuckTxs || stuckTxs.length === 0) return;
+
+            logger.info(`[ReconciliationWorker] Found ${stuckTxs.length} stuck PENDING transactions. Resolving...`);
+            const paymentService = require("../services/payment/paymentService");
+
+            for (const tx of stuckTxs) {
+                try {
+                    // This will check status and finalize (fund wallet) if completed
+                    await paymentService.verifyPaymentStatus(tx.reference_id, tx.provider_reference);
+                } catch (err) {
+                    logger.error(`[ReconciliationWorker] Failed to verify stuck transaction ${tx.reference_id}: ${err.message}`);
+                }
+            }
+        } catch (err) {
+            logger.error("[ReconciliationWorker] Stuck transaction sweep failed:", err.message);
         }
     }
 
