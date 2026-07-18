@@ -105,7 +105,9 @@ exports.depositCard = async (req, res, next) => {
     const { data: profile } = await supabase.from('profiles').select('email').eq('id', req.user.id).single();
     const email = profile?.email || 'user@example.com';
     const defaultOrigin = process.env.FRONTEND_URL || 'https://notestandard.com';
-    const callbackUrl = req.headers.origin ? `${req.headers.origin}/dashboard/wallet` : `${defaultOrigin}/dashboard/wallet`;
+    const callbackUrl = (req.headers.origin && req.headers.origin !== 'undefined') 
+      ? `${req.headers.origin}/dashboard/wallet` 
+      : `${defaultOrigin}/dashboard/wallet`;
 
     const result = await paymentService.initializePayment(
       req.user.id,
@@ -167,6 +169,10 @@ exports.depositTransfer = async (req, res, next) => {
     const { data: profile } = await supabase.from('profiles').select('email').eq('id', req.user.id).single();
     const email = profile?.email || 'user@example.com';
 
+    const callbackUrl = (req.headers.origin && req.headers.origin !== 'undefined') 
+      ? `${req.headers.origin}/dashboard/wallet` 
+      : undefined;
+
     const result = await paymentService.initializePayment(
       req.user.id,
       email,
@@ -177,7 +183,7 @@ exports.depositTransfer = async (req, res, next) => {
         plan: req.userProfile?.plan || "FREE",
         targetCurrency: toCurrency,
         targetNetwork: toNetwork,
-        callbackUrl: req.headers.origin ? `${req.headers.origin}/dashboard/wallet` : undefined
+        callbackUrl: callbackUrl
       },
       { provider: "paystack" }
     );
