@@ -115,7 +115,7 @@ exports.depositCard = async (req, res, next) => {
         plan: req.userProfile?.plan || "FREE",
         targetCurrency: toCurrency,
         targetNetwork: toNetwork,
-        callbackUrl: req.headers.origin ? `${req.headers.origin}/wallet` : undefined
+        callbackUrl: req.headers.origin ? `${req.headers.origin}/dashboard/wallet` : undefined
       },
       { provider: "paystack" }
     );
@@ -175,7 +175,7 @@ exports.depositTransfer = async (req, res, next) => {
         plan: req.userProfile?.plan || "FREE",
         targetCurrency: toCurrency,
         targetNetwork: toNetwork,
-        callbackUrl: req.headers.origin ? `${req.headers.origin}/wallet` : undefined
+        callbackUrl: req.headers.origin ? `${req.headers.origin}/dashboard/wallet` : undefined
       },
       { provider: "paystack" }
     );
