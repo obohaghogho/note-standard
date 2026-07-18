@@ -234,11 +234,14 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
                                                     {['PENDING', 'PROCESSING'].includes(tx.status?.toUpperCase() || '') && (
                                                         <button 
                                                             onClick={async () => {
-                                                                const ref = tx.txn_reference || tx.reference || tx.id;
+                                                                // Extract the original Paystack transaction reference
+                                                                const txAny = tx as any;
+                                                                const ref = txAny.reference_id || txAny.provider_reference || tx.txn_reference || (tx as any).reference || tx.id;
+                                                                
                                                                 const toastId = toast.loading('Verifying payment...');
                                                                 try {
                                                                     const res = await walletApi.proactiveVerifyPayment(ref);
-                                                                    if (res && (res.status === 'COMPLETED' || res.status === 'SUCCESS')) {
+                                                                    if (res && (res.status === 'COMPLETED' || res.status === 'SUCCESS' || res.status === 'SUCCESSFUL')) {
                                                                         toast.success('Payment verified successfully!', { id: toastId });
                                                                         window.location.reload();
                                                                     } else {
