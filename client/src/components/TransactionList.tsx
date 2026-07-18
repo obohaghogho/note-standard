@@ -231,6 +231,28 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
                                                         {getStatusIcon(tx.status)}
                                                         <span>{tx.status}</span>
                                                     </div>
+                                                    {['PENDING', 'PROCESSING'].includes(tx.status?.toUpperCase() || '') && (
+                                                        <button 
+                                                            onClick={async () => {
+                                                                const ref = tx.txn_reference || tx.reference || tx.id;
+                                                                const toastId = toast.loading('Verifying payment...');
+                                                                try {
+                                                                    const res = await walletApi.proactiveVerifyPayment(ref);
+                                                                    if (res && (res.status === 'COMPLETED' || res.status === 'SUCCESS')) {
+                                                                        toast.success('Payment verified successfully!', { id: toastId });
+                                                                        window.location.reload();
+                                                                    } else {
+                                                                        toast.error('Payment is still pending.', { id: toastId });
+                                                                    }
+                                                                } catch (err) {
+                                                                    toast.error('Could not verify payment.', { id: toastId });
+                                                                }
+                                                            }}
+                                                            className="px-2 py-1 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded text-[9px] font-bold hover:bg-purple-500/40 transition-all ml-2"
+                                                        >
+                                                            VERIFY
+                                                        </button>
+                                                    )}
                                                     {tx.status === 'COMPLETED' && (
                                                         <button 
                                                             onClick={() => {
