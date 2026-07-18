@@ -139,6 +139,16 @@ console.log('🚀 NoteStandard Booting...');
 // Handles both iOS Safari and Android Chrome keyboard viewports.
 // We strictly emit --kb-height so the CSS can hardware-accelerate the translation.
 (() => {
+  // Device/platform detection for mobile rendering optimizations
+  const ua = navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+  const isAndroid = /android/i.test(ua);
+  if (isAndroid) {
+    document.documentElement.classList.add('platform-android');
+  } else if (isIOS) {
+    document.documentElement.classList.add('platform-ios');
+  }
+
   const applyViewportVars = () => {
     const vp = window.visualViewport;
     if (vp) {

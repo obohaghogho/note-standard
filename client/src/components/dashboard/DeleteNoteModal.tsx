@@ -12,8 +12,9 @@ export const DeleteNoteModal = ({ isOpen, onClose, onConfirm, loading }: DeleteN
     if (!isOpen) return null;
 
     return (
-        <div className="modal-overlay">
-            <div className="modal-content max-w-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
+            <div className="modal-content max-w-sm relative z-10 animate-in fade-in zoom-in-95 duration-200">
                 <div className="flex flex-col items-center text-center space-y-4">
                     <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center text-red-500">
                         <AlertTriangle size={24} />

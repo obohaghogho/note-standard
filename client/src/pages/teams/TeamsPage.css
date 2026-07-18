@@ -3,23 +3,12 @@
    ==================================== */
 
 .teams-page {
-  display: grid;
-  grid-template-columns: 320px 1fr 300px;
-  gap: 0px;
+  display: flex;
   height: 100dvh;
   width: 100%;
   max-width: 100%;
   overflow: hidden;
-  background: rgba(0, 0, 0, 0.4);
-}
-
-/* Sidebar Toggle for Desktop Info */
-.teams-page--info-closed {
-  grid-template-columns: 320px 1fr 0px;
-}
-
-.teams-page--info-closed .teams-page__info {
-  display: none;
+  background: #000000;
 }
 
 /* ====================================

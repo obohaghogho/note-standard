@@ -686,3 +686,53 @@ img, picture, video, canvas, iframe {
   max-width: 100% !important;
 }
 
+/* ======================================================
+   MOBILE RENDERING OPTIMIZATIONS (ANDROID / IOS)
+   ====================================================== */
+.platform-android *,
+.platform-ios * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Fallback for overlays to use flat semi-transparent overlay instead of blurs */
+.platform-android .modal-overlay,
+.platform-ios .modal-overlay,
+.platform-android [class*="modal-overlay"],
+.platform-ios [class*="modal-overlay"],
+.platform-android .teams-page__modal-overlay,
+.platform-ios .teams-page__modal-overlay {
+  background-color: rgba(0, 0, 0, 0.85) !important;
+}
+
+/* Modern flat-color card fallback for glassmorphism classes */
+.platform-android .glass,
+.platform-ios .glass,
+.platform-android .glass-card,
+.platform-ios .glass-card,
+.platform-android [class*="glass"],
+.platform-ios [class*="glass"] {
+  background-color: #121215 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Force reduction of heavy/complex shadows on mobile */
+.platform-android .modal-content,
+.platform-ios .modal-content,
+.platform-android [class*="Card"],
+.platform-ios [class*="Card"],
+.platform-android [class*="modal-content"],
+.platform-ios [class*="modal-content"] {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Disable expensive animations behind modal */
+.platform-android .animate-pulse,
+.platform-ios .animate-pulse,
+.platform-android .animate-ping,
+.platform-ios .animate-ping {
+  animation: none !important;
+}
+
+

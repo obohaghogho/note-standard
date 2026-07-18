@@ -263,8 +263,9 @@ export const EditNoteModal = ({ isOpen, onClose, onNoteUpdated, note }: EditNote
     const PRESET_COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#EF4444", "#06B6D4", "#F97316"];
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <Card className="w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col" variant="glass">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" />
+            <Card className="w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col relative z-10 animate-in fade-in zoom-in-95 duration-200" variant="glass">
                 {/* Header */}
                 <div className="p-5 border-b border-white/10 flex items-center justify-between bg-neutral-900/40">
                     <div className="flex items-center gap-3">

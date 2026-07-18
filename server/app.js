@@ -200,6 +200,7 @@ const statusRoutes = require('./routes/status');
 const manualDepositRoutes = require("./routes/manualDepositRoutes");
 const bankAccountRoutes = require("./routes/bankAccountRoutes");
 const teamRoutes = require("./routes/teamRoutes");
+const collaborationRoutes = require("./routes/collaborationRoutes");
 const sessionRoutes = require("./routes/session");
 const agoraRoutes = require("./routes/agora");
 
@@ -242,6 +243,7 @@ app.use("/api/bank-account", bankAccountRoutes);
 app.use("/api/limit-requests", requireAuth, require("./routes/limitRequests"));
 app.use("/api/webrtc", require("./routes/webrtc"));
 app.use("/api/teams", teamRoutes);
+app.use("/api/collaboration", collaborationRoutes);
 app.use("/api/agora", requireAuth, agoraRoutes);
 app.use("/api/system", require("./routes/system"));
 app.use("/api/session", sessionRoutes);
