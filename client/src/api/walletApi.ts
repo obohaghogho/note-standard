@@ -253,7 +253,8 @@ export const walletApi = {
     // Handle the "no account yet" envelope
     if (response.data?.found === false || response.data?.data === null) return null;
     return response.data;
-  }
+  },
+
   // ── Wallet Hub API ────────────────────────────────────────────────────────
 
   /** GET /wallet/hub — combined fiat wallets + crypto wallets + catalog + recent activity */
