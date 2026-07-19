@@ -14,6 +14,7 @@ ALTER TABLE supported_currencies ADD COLUMN IF NOT EXISTS buy_enabled         BO
 ALTER TABLE supported_currencies ADD COLUMN IF NOT EXISTS sell_enabled        BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE supported_currencies ADD COLUMN IF NOT EXISTS swap_enabled        BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE supported_currencies ADD COLUMN IF NOT EXISTS convert_enabled     BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE supported_currencies ADD COLUMN IF NOT EXISTS virtual_account_enabled BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE supported_currencies ADD COLUMN IF NOT EXISTS minimum_deposit     NUMERIC NOT NULL DEFAULT 0;
 ALTER TABLE supported_currencies ADD COLUMN IF NOT EXISTS minimum_withdrawal  NUMERIC NOT NULL DEFAULT 0;
 ALTER TABLE supported_currencies ADD COLUMN IF NOT EXISTS maximum_deposit     NUMERIC NOT NULL DEFAULT 999999999;
@@ -58,33 +59,45 @@ CREATE TRIGGER trg_supported_currencies_updated_at
 INSERT INTO supported_currencies (
   code, type, name, symbol, flag, color, status,
   deposit_enabled, withdraw_enabled, transfer_enabled,
-  buy_enabled, sell_enabled, swap_enabled, convert_enabled,
+  buy_enabled, sell_enabled, swap_enabled, convert_enabled, virtual_account_enabled,
   minimum_deposit, minimum_withdrawal, maximum_deposit, maximum_withdrawal,
   decimal_places, provider, deposit_methods, display_order
 ) VALUES
   (
     'NGN', 'fiat', 'Nigerian Naira', '₦', '🇳🇬', '#6366f1', 'active',
-    true, true, true, true, true, false, false,
+    true, true, true, true, true, false, false, true,
     100, 500, 5000000, 1000000,
     2, 'paystack', ARRAY['card', 'bank_transfer'], 1
   ),
   (
     'USD', 'fiat', 'US Dollar', '$', '🇺🇸', '#10b981', 'coming_soon',
-    false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, true,
     1, 5, 50000, 10000,
-    2, 'paystack_international', ARRAY['card', 'apple_pay', 'google_pay'], 2
+    2, 'fincra', ARRAY['card', 'apple_pay', 'google_pay'], 2
   ),
   (
     'EUR', 'fiat', 'Euro', '€', '🇪🇺', '#3b82f6', 'coming_soon',
-    false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, true,
     1, 5, 50000, 10000,
-    2, 'paystack_international', ARRAY['card', 'bank_transfer'], 3
+    2, 'fincra', ARRAY['card', 'bank_transfer'], 3
   ),
   (
     'GBP', 'fiat', 'British Pound', '£', '🇬🇧', '#ec4899', 'coming_soon',
-    false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, true,
     1, 5, 50000, 10000,
-    2, 'paystack_international', ARRAY['card', 'bank_transfer'], 4
+    2, 'fincra', ARRAY['card', 'bank_transfer'], 4
+  ),
+  (
+    'CAD', 'fiat', 'Canadian Dollar', 'C$', '🇨🇦', '#ff4d4d', 'coming_soon',
+    false, false, false, false, false, false, false, true,
+    1, 5, 50000, 10000,
+    2, 'fincra', ARRAY['card', 'bank_transfer'], 5
+  ),
+  (
+    'AUD', 'fiat', 'Australian Dollar', 'A$', '🇦🇺', '#000080', 'coming_soon',
+    false, false, false, false, false, false, false, true,
+    1, 5, 50000, 10000,
+    2, 'fincra', ARRAY['card', 'bank_transfer'], 6
   )
 ON CONFLICT (code) DO UPDATE SET
   symbol            = EXCLUDED.symbol,
@@ -98,6 +111,7 @@ ON CONFLICT (code) DO UPDATE SET
   sell_enabled      = EXCLUDED.sell_enabled,
   swap_enabled      = EXCLUDED.swap_enabled,
   convert_enabled   = EXCLUDED.convert_enabled,
+  virtual_account_enabled = EXCLUDED.virtual_account_enabled,
   minimum_deposit   = EXCLUDED.minimum_deposit,
   minimum_withdrawal= EXCLUDED.minimum_withdrawal,
   maximum_deposit   = EXCLUDED.maximum_deposit,
@@ -112,33 +126,33 @@ ON CONFLICT (code) DO UPDATE SET
 INSERT INTO supported_currencies (
   code, type, name, symbol, flag, color, status,
   deposit_enabled, withdraw_enabled, transfer_enabled,
-  buy_enabled, sell_enabled, swap_enabled, convert_enabled,
+  buy_enabled, sell_enabled, swap_enabled, convert_enabled, virtual_account_enabled,
   minimum_deposit, minimum_withdrawal, maximum_deposit, maximum_withdrawal,
   decimal_places, provider, networks, display_order
 ) VALUES
   (
     'BTC', 'crypto', 'Bitcoin', '₿', '🟠', '#f59e0b', 'active',
-    true, true, false, true, true, true, false,
+    true, true, false, true, true, true, false, false,
     0.00001, 0.0001, 10, 5,
-    8, 'nowpayments', ARRAY['bitcoin', 'BEP20'], 1
+    8, 'nowpayments', ARRAY['bitcoin', 'BEP20'], 7
   ),
   (
     'ETH', 'crypto', 'Ethereum', 'Ξ', '🔷', '#8b5cf6', 'active',
-    true, true, false, true, true, true, false,
+    true, true, false, true, true, true, false, false,
     0.001, 0.005, 100, 50,
-    6, 'nowpayments', ARRAY['ERC20', 'BEP20'], 2
+    6, 'nowpayments', ARRAY['ERC20', 'BEP20'], 8
   ),
   (
     'USDT', 'crypto', 'Tether', '₮', '🟢', '#26a17b', 'active',
-    true, true, false, true, true, true, false,
+    true, true, false, true, true, true, false, false,
     1, 5, 100000, 50000,
-    2, 'nowpayments', ARRAY['TRC20', 'ERC20', 'BEP20'], 3
+    2, 'nowpayments', ARRAY['TRC20', 'ERC20', 'BEP20'], 9
   ),
   (
     'USDC', 'crypto', 'USD Coin', '●', '🔵', '#2775ca', 'active',
-    true, true, false, true, true, true, false,
+    true, true, false, true, true, true, false, false,
     1, 5, 100000, 50000,
-    2, 'nowpayments', ARRAY['ERC20', 'BEP20', 'polygon'], 4
+    2, 'nowpayments', ARRAY['ERC20', 'BEP20', 'polygon'], 10
   )
 ON CONFLICT (code) DO UPDATE SET
   symbol            = EXCLUDED.symbol,
@@ -152,6 +166,7 @@ ON CONFLICT (code) DO UPDATE SET
   sell_enabled      = EXCLUDED.sell_enabled,
   swap_enabled      = EXCLUDED.swap_enabled,
   convert_enabled   = EXCLUDED.convert_enabled,
+  virtual_account_enabled = EXCLUDED.virtual_account_enabled,
   minimum_deposit   = EXCLUDED.minimum_deposit,
   minimum_withdrawal= EXCLUDED.minimum_withdrawal,
   maximum_deposit   = EXCLUDED.maximum_deposit,

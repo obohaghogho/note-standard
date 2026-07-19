@@ -9,6 +9,7 @@ import { FiatWalletCard } from '../components/wallet/FiatWalletCard';
 import { CryptoWalletCard } from '../components/wallet/CryptoWalletCard';
 import { ExchangeHub } from '../components/wallet/ExchangeHub';
 import { RecentActivity } from '../components/wallet/RecentActivity';
+import { VirtualAccountDetails } from '../components/wallet/VirtualAccountDetails';
 import { FundModal } from '../components/wallet/FundModal';
 import { TransferModal } from '../components/wallet/TransferModal';
 import { WithdrawModal } from '../components/wallet/WithdrawModal';
@@ -265,28 +266,37 @@ function WalletHubContent() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -12 }}
               transition={{ duration: 0.25 }}
-              className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+              className="space-y-6"
             >
-              {fiatCatalog.map(currency => {
-                const balData = getWalletBalance(currency.code);
-                return (
-                  <FiatWalletCard
-                    key={currency.code}
-                    currency={currency as any}
-                    balance={balData.balance}
-                    availableBalance={balData.available}
-                    pendingBalance={balData.pending}
-                    showBalance={showBalances}
-                    isSelected={selectedAsset.currency === currency.code}
-                    onSelect={() => setSelectedAsset({ currency: currency.code, network: 'native' })}
-                    onDeposit={() => openModal('fund', currency.code)}
-                    onWithdraw={() => openModal('withdraw', currency.code)}
-                    onTransfer={() => openModal('transfer', currency.code)}
-                    onConvert={() => { setActiveTab('exchange'); }}
-                    onBuyCrypto={() => { setActiveTab('exchange'); }}
-                  />
-                );
-              })}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {fiatCatalog.map(currency => {
+                  const balData = getWalletBalance(currency.code);
+                  return (
+                    <FiatWalletCard
+                      key={currency.code}
+                      currency={currency as any}
+                      balance={balData.balance}
+                      availableBalance={balData.available}
+                      pendingBalance={balData.pending}
+                      showBalance={showBalances}
+                      isSelected={selectedAsset.currency === currency.code}
+                      onSelect={() => setSelectedAsset({ currency: currency.code, network: 'native' })}
+                      onDeposit={() => openModal('fund', currency.code)}
+                      onWithdraw={() => openModal('withdraw', currency.code)}
+                      onTransfer={() => openModal('transfer', currency.code)}
+                      onConvert={() => { setActiveTab('exchange'); }}
+                      onBuyCrypto={() => { setActiveTab('exchange'); }}
+                    />
+                  );
+                })}
+              </div>
+
+              {selectedAsset.currency && ['NGN', 'USD', 'EUR', 'GBP', 'CAD', 'AUD'].includes(selectedAsset.currency) && (
+                <VirtualAccountDetails 
+                  currency={selectedAsset.currency} 
+                  onAccountCreated={handleRefresh}
+                />
+              )}
             </motion.div>
           )}
 

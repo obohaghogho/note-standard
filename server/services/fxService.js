@@ -82,6 +82,8 @@ class FXService {
       JPY: 0.0067,  
       EUR: 1.08,    
       GBP: 1.27,    
+      CAD: 0.73,
+      AUD: 0.66,
     };
     for (const [sym, price] of Object.entries(FALLBACK_SEEDS)) {
       const key = `lkg_price_${sym}`;

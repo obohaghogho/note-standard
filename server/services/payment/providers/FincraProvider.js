@@ -397,10 +397,11 @@ class FincraProvider extends BaseProvider {
 
   async createVirtualAccount(data) {
     const { currency, email, firstName, lastName, phone, dob, occupation, address, documentUrls } = data;
-    const isFcy = ["USD", "EUR", "GBP"].includes((currency || "").toUpperCase());
+    const upperCurrency = (currency || "").toUpperCase();
+    const isFcy = ["USD", "EUR", "GBP", "CAD", "AUD"].includes(upperCurrency);
 
     const payload = {
-      currency,
+      currency: upperCurrency,
       accountType:    "individual",
       KYCInformation: {
         firstName,
@@ -429,17 +430,27 @@ class FincraProvider extends BaseProvider {
       });
 
       if (!payload.KYCInformation.documents.idCard || !payload.KYCInformation.documents.utilityBill) {
-        const err = new Error("MISSING_KYC_DOCUMENTS: USD/EUR/GBP accounts require ID card and Utility Bill URLs.");
+        const err = new Error(`MISSING_KYC_DOCUMENTS: ${upperCurrency} accounts require ID card and Utility Bill URLs.`);
         err.statusCode = 400;
         throw err;
       }
     }
 
-    if (currency === "NGN") payload.channel = "wema";
+    if (upperCurrency === "NGN") payload.channel = "wema";
 
     try {
       const response = await this.client.post("/profile/virtual-accounts/requests", payload);
       const d = response.data.data;
+      
+      // Map currency-specific routing fields dynamically from Fincra response
+      const metadata = {};
+      if (upperCurrency === "EUR") metadata.iban = d.iban || d.accountNumber;
+      if (upperCurrency === "GBP") metadata.sortCode = d.sortCode || d.routingNumber;
+      if (upperCurrency === "USD") metadata.routingNumber = d.routingNumber;
+      if (upperCurrency === "CAD") metadata.transitNumber = d.transitNumber || d.institutionNumber;
+      if (upperCurrency === "AUD") metadata.bsbNumber = d.bsbNumber || d.routingNumber;
+      if (d.swiftCode || d.bic) metadata.swift = d.swiftCode || d.bic;
+
       return {
         bankName:      d.bankName,
         accountNumber: d.accountNumber,
@@ -447,10 +458,12 @@ class FincraProvider extends BaseProvider {
         currency:      d.currency,
         reference:     d.reference,
         provider:      "fincra",
+        metadata,
+        rawResponse:   response.data.data,
       };
     } catch (error) {
       const msg = error.response?.data?.message || error.response?.data?.error || "Failed to generate virtual account";
-      logger.error("[Fincra] Virtual Account Error", { currency, error: msg });
+      logger.error("[Fincra] Virtual Account Error", { currency: upperCurrency, error: msg });
       throw new Error(msg);
     }
   }

@@ -115,6 +115,77 @@ class PaystackProvider extends PaymentProvider {
       throw new Error(`Paystack Cancel Failed: ${error.message}`);
     }
   }
+  async createVirtualAccount(data) {
+    const { email, firstName, lastName, phone } = data;
+    try {
+      const startTime = Date.now();
+      
+      // Step 1: Create or Fetch Paystack Customer
+      logger.info(`[PaystackProvider] Resolving customer code for ${email}`);
+      let customerCode = "";
+      try {
+        const customerResponse = await axios.post(
+          `${PAYSTACK_BASE_URL}/customer`,
+          {
+            email,
+            first_name: firstName || email.split("@")[0],
+            last_name: lastName || "User",
+            phone: phone || "",
+          },
+          { headers: this.getHeaders() }
+        );
+        customerCode = customerResponse.data.data.customer_code;
+      } catch (custErr) {
+        // If customer already exists, fetch the details
+        if (custErr.response?.status === 400 || custErr.response?.data?.message?.includes("exists")) {
+          const fetchResponse = await axios.get(
+            `${PAYSTACK_BASE_URL}/customer/${encodeURIComponent(email)}`,
+            { headers: this.getHeaders() }
+          );
+          customerCode = fetchResponse.data.data.customer_code;
+        } else {
+          throw custErr;
+        }
+      }
+
+      if (!customerCode) {
+        throw new Error("Failed to resolve Paystack customer code");
+      }
+
+      // Step 2: Create Dedicated Virtual Account
+      logger.info(`[PaystackProvider] Creating dedicated virtual account for customer: ${customerCode}`);
+      const dvaResponse = await axios.post(
+        `${PAYSTACK_BASE_URL}/dedicated_account`,
+        {
+          customer: customerCode,
+          preferred_bank: "wema-bank",
+        },
+        { headers: this.getHeaders() }
+      );
+      
+      HealthMonitorService.recordLatency('paystack', Date.now() - startTime);
+      
+      const accountDetails = dvaResponse.data.data;
+      // Dedicated virtual account response has bank name, account number, account name, etc.
+      // Paystack response structure includes wema-bank or similar in banks list
+      const primaryBank = accountDetails.bank || (accountDetails.banks && accountDetails.banks[0]) || {};
+      
+      return {
+        bankName: primaryBank.name || "Wema Bank",
+        accountNumber: accountDetails.account_number || primaryBank.account_number,
+        accountName: accountDetails.account_name,
+        currency: "NGN",
+        reference: `va_paystack_${Date.now()}`,
+        provider: "paystack",
+        providerCustomerCode: customerCode,
+        providerAccountId: String(accountDetails.id),
+        rawResponse: dvaResponse.data.data,
+      };
+    } catch (error) {
+      logger.error("[PaystackProvider] Dedicated Virtual Account creation failed:", error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || "Paystack DVA generation failed");
+    }
+  }
 }
 
 module.exports = PaystackProvider;

@@ -354,6 +354,27 @@ export const walletApi = {
     });
     return response.data;
   },
+
+  /** GET /wallet/virtual-account/:currency — fetch dedicated virtual account */
+  async getVirtualAccount(currency: string): Promise<{ account: any | null; status: string }> {
+    const response = await api.get(`/wallet/virtual-account/${encodeURIComponent(currency)}`);
+    return response.data;
+  },
+
+  /** POST /wallet/virtual-account — provision new dedicated virtual account */
+  async createVirtualAccount(currency: string, kycData?: any): Promise<{ success: boolean; account: any }> {
+    const response = await api.post('/wallet/virtual-account', {
+      currency,
+      kycData,
+    });
+    return response.data;
+  },
+
+  /** POST /wallet/virtual-account/:currency/refresh — sync virtual account status */
+  async refreshVirtualAccount(currency: string): Promise<{ success: boolean; account: any }> {
+    const response = await api.post(`/wallet/virtual-account/${encodeURIComponent(currency)}/refresh`);
+    return response.data;
+  },
 };
 
 export default walletApi;

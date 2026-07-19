@@ -70,7 +70,7 @@ const CURRENCY_COLORS: Record<string, [string, string]> = {
   default: ['#64748b', '#475569'],
 };
 
-const FIAT_CODES  = ['NGN', 'USD', 'EUR', 'GBP'];
+const FIAT_CODES  = ['NGN', 'USD', 'EUR', 'GBP', 'CAD', 'AUD'];
 const CRYPTO_CODES = ['BTC', 'ETH', 'USDT', 'USDC'];
 
 // ── Default catalog ───────────────────────────────────────────────────────────
@@ -79,6 +79,8 @@ const DEFAULT_FIAT: CurrencyMeta[] = [
   { code: 'USD', name: 'US Dollar',       symbol: '$', flag: '🇺🇸', color: '#10b981', status: 'coming_soon' },
   { code: 'EUR', name: 'Euro',            symbol: '€', flag: '🇪🇺', color: '#3b82f6', status: 'coming_soon' },
   { code: 'GBP', name: 'British Pound',   symbol: '£', flag: '🇬🇧', color: '#ec4899', status: 'coming_soon' },
+  { code: 'CAD', name: 'Canadian Dollar', symbol: 'C$', flag: '🇨🇦', color: '#ff4d4d', status: 'coming_soon' },
+  { code: 'AUD', name: 'Australian Dollar', symbol: 'A$', flag: '🇦🇺', color: '#000080', status: 'coming_soon' },
 ];
 
 const DEFAULT_CRYPTO: CurrencyMeta[] = [

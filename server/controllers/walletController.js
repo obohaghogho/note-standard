@@ -978,3 +978,54 @@ exports.adminUpdateCurrency = async (req, res, next) => {
   }
 };
 
+/**
+ * GET /wallet/virtual-account/:currency
+ */
+exports.getVirtualAccount = async (req, res) => {
+  try {
+    const { currency } = req.params;
+    const VirtualAccountService = require("../services/VirtualAccountService");
+    const account = await VirtualAccountService.getVirtualAccount(req.user.id, currency);
+    if (!account) {
+      return res.json({ account: null, status: 'NOT_REQUESTED' });
+    }
+    res.json({ account, status: account.status });
+  } catch (err) {
+    console.error("[WalletController] getVirtualAccount Error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+/**
+ * POST /wallet/virtual-account
+ */
+exports.createVirtualAccount = async (req, res) => {
+  try {
+    const { currency, kycData } = req.body;
+    const VirtualAccountService = require("../services/VirtualAccountService");
+    const account = await VirtualAccountService.createVirtualAccount(req.user.id, currency, kycData || {});
+    res.json({ success: true, account });
+  } catch (err) {
+    console.error("[WalletController] createVirtualAccount Error:", err);
+    if (err.message.includes("MISSING_KYC_DOCUMENTS")) {
+      return res.status(400).json({ error: err.message, code: "MISSING_KYC_DOCUMENTS" });
+    }
+    res.status(500).json({ error: err.message });
+  }
+};
+
+/**
+ * POST /wallet/virtual-account/:currency/refresh
+ */
+exports.refreshVirtualAccount = async (req, res) => {
+  try {
+    const { currency } = req.params;
+    const VirtualAccountService = require("../services/VirtualAccountService");
+    const account = await VirtualAccountService.refreshAccountStatus(req.user.id, currency);
+    res.json({ success: true, account });
+  } catch (err) {
+    console.error("[WalletController] refreshVirtualAccount Error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+

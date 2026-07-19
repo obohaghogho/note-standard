@@ -43,10 +43,10 @@ section('walletCurrencyCatalog — Currency Completeness');
 
 const catalog = require('../config/walletCurrencyCatalog');
 
-const REQUIRED_FIAT   = ['NGN', 'USD', 'EUR', 'GBP'];
+const REQUIRED_FIAT   = ['NGN', 'USD', 'EUR', 'GBP', 'CAD', 'AUD'];
 const REQUIRED_CRYPTO = ['BTC', 'ETH', 'USDT', 'USDC'];
 
-test('FIAT_CATALOG contains all 4 required currencies', () => {
+test('FIAT_CATALOG contains all 6 required currencies', () => {
   const codes = catalog.FIAT_CATALOG.map(c => c.code);
   for (const req of REQUIRED_FIAT) {
     assert.ok(codes.includes(req), `Missing fiat currency: ${req}`);
@@ -68,10 +68,10 @@ test('NGN is status=active with deposit/withdraw enabled', () => {
   assert.strictEqual(ngn.withdraw_enabled, true);
 });
 
-test('USD/EUR/GBP are status=coming_soon when INTERNATIONAL_FIAT_ENABLED is false', () => {
+test('USD/EUR/GBP/CAD/AUD are status=coming_soon when INTERNATIONAL_FIAT_ENABLED is false', () => {
   // In test env, INTERNATIONAL_FIAT_ENABLED is not set → should be coming_soon
   if (process.env.INTERNATIONAL_FIAT_ENABLED !== 'true') {
-    for (const code of ['USD', 'EUR', 'GBP']) {
+    for (const code of ['USD', 'EUR', 'GBP', 'CAD', 'AUD']) {
       const cur = catalog.FIAT_CATALOG.find(c => c.code === code);
       assert.ok(cur, `${code} not found`);
       assert.strictEqual(cur.status, 'coming_soon', `${code} should be coming_soon`);
@@ -112,9 +112,9 @@ test('BTC has 8 decimal places, ETH has 6', () => {
   assert.strictEqual(eth.decimal_places, 6, 'ETH should have 6 decimal places');
 });
 
-test('getAllCurrencies() returns all 8 currencies', () => {
+test('getAllCurrencies() returns all 10 currencies', () => {
   const all = catalog.getAllCurrencies();
-  assert.strictEqual(all.length, 8, `Expected 8 currencies, got ${all.length}`);
+  assert.strictEqual(all.length, 10, `Expected 10 currencies, got ${all.length}`);
 });
 
 test('getCatalogEntry() works for all 8 currencies', () => {
@@ -285,11 +285,11 @@ test('NGN has provider=paystack', () => {
   assert.strictEqual(ngn.provider, 'paystack');
 });
 
-test('International fiats have provider=paystack_international', () => {
-  for (const code of ['USD', 'EUR', 'GBP']) {
+test('International fiats have provider=fincra', () => {
+  for (const code of ['USD', 'EUR', 'GBP', 'CAD', 'AUD']) {
     const cur = catalog.FIAT_CATALOG.find(c => c.code === code);
-    assert.strictEqual(cur.provider, 'paystack_international',
-      `${code} should use paystack_international`);
+    assert.strictEqual(cur.provider, 'fincra',
+      `${code} should use fincra`);
   }
 });
 
@@ -656,6 +656,29 @@ test('ProviderRouter.js exists and is non-empty', () => {
   const p = path.join(__dirname, '../services/ProviderRouter.js');
   assert.ok(fs.existsSync(p), 'ProviderRouter.js not found');
   assert.ok(fs.statSync(p).size > 3000, 'ProviderRouter.js suspiciously small');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Virtual Account System Tests
+// ─────────────────────────────────────────────────────────────────────────────
+section('Virtual Account Funding System — Unit Verification');
+
+test('VirtualAccountService.js module exists', () => {
+  const p = path.join(__dirname, '../services/VirtualAccountService.js');
+  assert.ok(fs.existsSync(p), 'VirtualAccountService.js not found');
+});
+
+test('ProviderRouter returns correct default virtual account providers', () => {
+  // NGN virtual account should route to paystack (or custom config if set)
+  const ngnProvider = router.getProvider('NGN', 'virtual_account');
+  assert.strictEqual(ngnProvider, process.env.NGN_VIRTUAL_ACCOUNT_PROVIDER || 'paystack');
+
+  // If international fiat is disabled, USD/EUR/GBP/CAD/AUD should route to coming_soon
+  if (process.env.INTERNATIONAL_FIAT_ENABLED !== 'true') {
+    for (const code of ['USD', 'EUR', 'GBP', 'CAD', 'AUD']) {
+      assert.strictEqual(router.getProvider(code, 'virtual_account'), 'coming_soon', `${code} should be coming_soon when intl VA disabled`);
+    }
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

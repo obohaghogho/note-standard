@@ -84,4 +84,9 @@ router.post(
 router.get('/admin/currencies', walletController.adminGetCurrencies);
 router.patch('/admin/currencies/:code', walletController.adminUpdateCurrency);
 
+// Virtual Accounts Endpoints
+router.get("/virtual-account/:currency", walletController.getVirtualAccount);
+router.post("/virtual-account", transactionLimiter, walletController.createVirtualAccount);
+router.post("/virtual-account/:currency/refresh", walletController.refreshVirtualAccount);
+
 module.exports = router;
