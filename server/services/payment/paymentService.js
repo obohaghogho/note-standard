@@ -349,7 +349,13 @@ class PaymentService {
     logger.info(`[DEBUG] Step 6: Initializing with provider ${providerName}`);
     let initData = {};
     
-    const callbackUrl = options.callbackUrl || getCallbackUrl("/activity/success", { reference }, providerName);
+    // BUG FIX: the fallback path was "/activity/success" which is a non-existent
+    // React route. After Paystack payment, it redirected to a dead page → white screen.
+    // The correct route is "/payment/callback" (see App.tsx <Route path="/payment/callback">).
+    // walletController.js now always passes options.callbackUrl, so this fallback is
+    // only reached if called from other code paths (subscriptions, etc.).
+    const callbackUrl = options.callbackUrl || getCallbackUrl("/payment/callback", { reference }, providerName);
+
 
     console.time(`[PaymentService] ProviderInit:${providerName}`);
     try {
