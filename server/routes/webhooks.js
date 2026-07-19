@@ -30,6 +30,41 @@ const webhookLimiter = rateLimit({
 
 const WebhookService = require("../services/WebhookService");
 
+// ── Safe proactive-credit helper
+// Uses an idempotency key so concurrent polls never double-credit a wallet.
+// This replaces the previous dangerous singleton monkey-patch pattern:
+//   WebhookService.verifySignature = () => true  ← race condition
+async function safeProactiveCredit(tx) {
+  const FiatWalletService = require("../services/FiatWalletService");
+  const AuditLogService   = require("../services/AuditLogService");
+  const idempotencyKey = `paystack_proactive_${tx.reference_id}_${tx.id}`;
+
+  const ledgerTxId = await FiatWalletService.fundWallet(
+    tx.user_id,
+    tx.currency,
+    tx.amount,
+    idempotencyKey,
+    { provider: "paystack", reference: tx.reference_id, proactive: true }
+  );
+
+  await supabase
+    .from("transactions")
+    .update({ status: "COMPLETED", updated_at: new Date().toISOString() })
+    .eq("id", tx.id);
+
+  AuditLogService.log({
+    user_id:   tx.user_id,
+    action:    "fiat_deposit_proactive_verify",
+    provider:  "paystack",
+    reference: tx.reference_id,
+    amount:    tx.amount,
+    currency:  tx.currency,
+    ledger_id: ledgerTxId
+  }).catch(err => logger.warn("[safeProactiveCredit] Audit log failed:", err.message));
+
+  return ledgerTxId;
+}
+
 // ─── Provider Webhooks ────────────────────────────────────────
 
 /**
@@ -159,7 +194,11 @@ router.get("/status/:reference", async (req, res) => {
       return res.status(404).json({ error: "Deposit not found" });
     }
 
-    // Proactively verify pending/failed paystack transactions in case webhook was missed
+    // Proactively verify pending/failed paystack transactions in case webhook was missed.
+    // BUG FIX: replaced the global singleton monkey-patch
+    // (WebhookService.verifySignature = () => true) — a race condition that
+    // caused double-credits and silent failures under concurrent poll requests.
+    // Now calls FiatWalletService.fundWallet directly with an idempotency key.
     if (["PENDING", "FAILED"].includes(tx.status) && tx.provider === "paystack") {
       try {
         const PaystackProvider = require("../services/payment/providers/PaystackProvider");
@@ -167,44 +206,12 @@ router.get("/status/:reference", async (req, res) => {
         const verifyResult = await provider.verifyPayment(tx.reference_id);
         
         if (verifyResult.status === "success") {
-          // Trigger webhook processing manually
-          const WebhookService = require("../services/WebhookService");
-          // Fake a request object to reuse the webhook logic
-          const fakeReq = {
-            headers: { "x-forwarded-for": req.ip || "127.0.0.1", "user-agent": req.headers["user-agent"] },
-            socket: req.socket,
-            body: {
-              event: "charge.success",
-              data: {
-                reference: tx.reference_id,
-                amount: verifyResult.amount * 100, // Paystack amount is in kobo
-                currency: verifyResult.currency,
-                status: "success",
-                customer: verifyResult.customer,
-                id: "manual_poll_" + Date.now()
-              }
-            }
-          };
-          
-          // Since verifySignature is checked in processPaystackWebhook, we bypass it by overriding verifySignature for this call
-          const originalVerify = WebhookService.verifySignature;
-          WebhookService.verifySignature = () => true;
-          
-          // Fake response
-          const fakeRes = {
-            status: () => ({ send: () => {} })
-          };
-          
-          await WebhookService.processPaystackWebhook(fakeReq, fakeRes);
-          
-          // Restore
-          WebhookService.verifySignature = originalVerify;
-          
+          await safeProactiveCredit(tx);
           // Update local status for the response
           tx.status = "COMPLETED";
         }
       } catch (pollErr) {
-        console.error("[WebhookStatus] Manual poll failed:", pollErr.message);
+        console.error("[WebhookStatus] Proactive verify failed:", pollErr.message);
       }
     }
 

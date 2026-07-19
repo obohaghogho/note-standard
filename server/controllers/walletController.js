@@ -89,6 +89,57 @@ exports.deposit = async (req, res, next) => {
   }
 };
 
+// ── Shared helper: sanitise an HTTP Origin header value
+// Mobile WebViews and some Android browsers send origin=null or the literal
+// string "null" / "undefined" — treat all of these as missing.
+function sanitiseOrigin(rawOrigin, fallback) {
+  if (
+    !rawOrigin ||
+    rawOrigin === 'null' ||
+    rawOrigin === 'undefined' ||
+    !rawOrigin.startsWith('http')
+  ) {
+    return fallback;
+  }
+  return rawOrigin;
+}
+
+// ── Shared helper: safely credit a wallet for a verified Paystack payment
+// This replaces the previous dangerous global singleton monkey-patch.
+async function safeProactiveCredit(tx, verifyResult) {
+  const FiatWalletService = require('../services/FiatWalletService');
+  const AuditLogService   = require('../services/AuditLogService');
+  const idempotencyKey = `paystack_proactive_${tx.reference_id}_${tx.id}`;
+
+  // Credit the wallet atomically (idempotency key prevents double-credit)
+  const ledgerTxId = await FiatWalletService.fundWallet(
+    tx.user_id,
+    tx.currency,
+    tx.amount,
+    idempotencyKey,
+    { provider: 'paystack', reference: tx.reference_id, proactive: true }
+  );
+
+  // Mark the transaction COMPLETED
+  await supabase
+    .from('transactions')
+    .update({ status: 'COMPLETED', updated_at: new Date().toISOString() })
+    .eq('id', tx.id);
+
+  // Fire-and-forget audit log
+  AuditLogService.log({
+    user_id:   tx.user_id,
+    action:    'fiat_deposit_proactive_verify',
+    provider:  'paystack',
+    reference: tx.reference_id,
+    amount:    tx.amount,
+    currency:  tx.currency,
+    ledger_id: ledgerTxId
+  }).catch(err => console.warn('[safeProactiveCredit] Audit log failed:', err.message));
+
+  return ledgerTxId;
+}
+
 exports.depositCard = async (req, res, next) => {
   try {
     let { amount, currency, toCurrency, toNetwork } = req.body;
@@ -104,10 +155,12 @@ exports.depositCard = async (req, res, next) => {
     const paymentService = require("../services/payment/paymentService");
     const { data: profile } = await supabase.from('profiles').select('email').eq('id', req.user.id).single();
     const email = profile?.email || 'user@example.com';
+
+    // BUG FIX: sanitise origin — mobile WebViews send null/"null"/"undefined".
+    // Previously used req.headers.origin !== 'undefined' which only caught the
+    // literal string 'undefined', not JS-null or the string 'null'.
     const defaultOrigin = process.env.FRONTEND_URL || 'https://notestandard.com';
-    const callbackUrl = (req.headers.origin && req.headers.origin !== 'undefined') 
-      ? `${req.headers.origin}/payment/callback` 
-      : `${defaultOrigin}/payment/callback`;
+    const callbackUrl = `${sanitiseOrigin(req.headers.origin, defaultOrigin)}/payment/callback`;
 
     const result = await paymentService.initializePayment(
       req.user.id,
@@ -169,9 +222,11 @@ exports.depositTransfer = async (req, res, next) => {
     const { data: profile } = await supabase.from('profiles').select('email').eq('id', req.user.id).single();
     const email = profile?.email || 'user@example.com';
 
-    const callbackUrl = (req.headers.origin && req.headers.origin !== 'undefined') 
-      ? `${req.headers.origin}/payment/callback` 
-      : undefined;
+    // BUG FIX: same origin-sanitisation as depositCard.
+    // Previously fell back to `undefined` which Paystack ignores — meaning
+    // no redirect after bank transfer completes.
+    const defaultOrigin = process.env.FRONTEND_URL || 'https://notestandard.com';
+    const callbackUrl = `${sanitiseOrigin(req.headers.origin, defaultOrigin)}/payment/callback`;
 
     const result = await paymentService.initializePayment(
       req.user.id,
@@ -455,7 +510,12 @@ exports.getDepositStatus = async (req, res) => {
       return res.status(404).json({ error: "Transaction not found" });
     }
 
-    // Proactively verify pending/failed paystack transactions in case webhook was missed
+    // Proactively verify pending/failed paystack transactions in case webhook was missed.
+    // BUG FIX: replaced the previous global singleton monkey-patch
+    // (WebhookService.verifySignature = () => true) which was a race condition
+    // that could cause double-credits or silent failures under concurrent requests.
+    // Now uses safeProactiveCredit() which calls FiatWalletService.fundWallet directly
+    // with an idempotency key that prevents any double-credit.
     if (["PENDING", "FAILED"].includes(tx.status) && tx.provider === "paystack") {
       try {
         const PaystackProvider = require("../services/payment/providers/PaystackProvider");
@@ -463,43 +523,11 @@ exports.getDepositStatus = async (req, res) => {
         const verifyResult = await provider.verifyPayment(tx.reference_id);
         
         if (verifyResult.status === "success") {
-          // Trigger webhook processing manually
-          const WebhookService = require("../services/WebhookService");
-          // Fake a request object to reuse the webhook logic
-          const fakeReq = {
-            headers: { "x-forwarded-for": req.ip || "127.0.0.1", "user-agent": req.headers["user-agent"] },
-            socket: req.socket,
-            body: {
-              event: "charge.success",
-              data: {
-                reference: tx.reference_id,
-                amount: verifyResult.amount * 100, // Paystack amount is in kobo
-                currency: verifyResult.currency,
-                status: "success",
-                customer: verifyResult.customer,
-                id: "manual_poll_" + Date.now()
-              }
-            }
-          };
-          
-          // Since verifySignature is checked in processPaystackWebhook, we bypass it by overriding verifySignature for this call
-          const originalVerify = WebhookService.verifySignature;
-          WebhookService.verifySignature = () => true;
-          
-          // Fake response
-          const fakeRes = {
-            status: () => ({ send: () => {} })
-          };
-          
-          await WebhookService.processPaystackWebhook(fakeReq, fakeRes);
-          
-          // Restore
-          WebhookService.verifySignature = originalVerify;
-          
+          await safeProactiveCredit(tx, verifyResult);
           return res.json({ status: "COMPLETED" });
         }
       } catch (pollErr) {
-        console.error("[WalletController] Manual poll failed:", pollErr.message);
+        console.error("[WalletController] Proactive verify failed:", pollErr.message);
       }
     }
     

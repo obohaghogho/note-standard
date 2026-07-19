@@ -26,7 +26,11 @@ export const PaymentCallback: React.FC = () => {
     const [statusMessage, setStatusMessage] = useState<string>('Verifying transaction...');
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-    const reference = searchParams.get('reference') || searchParams.get('trxref');
+    const reference = searchParams.get('reference')
+        || searchParams.get('trxref')
+        // Fallback: some Android WebViews strip query params on Paystack redirect.
+        // FundModal stores the reference in localStorage before redirecting.
+        || localStorage.getItem('pendingDepositReference');
     const pollCountRef = useRef(0);
     const maxPolls = 30; // 60 seconds total polling (30 * 2s)
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -36,6 +40,10 @@ export const PaymentCallback: React.FC = () => {
         isStoppedRef.current = true;
         if (timerRef.current) clearTimeout(timerRef.current);
         
+        // Clear any stored pending reference so WalletPage doesn't re-verify
+        localStorage.removeItem('pendingDepositReference');
+        localStorage.removeItem('pendingDepositTime');
+
         setStatusData(data);
         setUiState('success');
         setStatusMessage('Payment verified successfully!');

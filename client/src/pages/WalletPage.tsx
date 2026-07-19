@@ -53,7 +53,46 @@ function WalletContent() {
     useEffect(() => {
         refresh();
     }, [refresh]);
-    
+
+    // ── Auto-verify pending deposit on mount ──────────────────────────────────
+    // Safety net: if Paystack redirected to /dashboard/wallet instead of
+    // /payment/callback (e.g. user hit Back, or redirect URL was wrong),
+    // we auto-verify the stored reference and credit the wallet silently.
+    useEffect(() => {
+        const pendingRef  = localStorage.getItem('pendingDepositReference');
+        const pendingTime = localStorage.getItem('pendingDepositTime');
+        if (!pendingRef || !pendingTime) return;
+
+        const ageMs = Date.now() - parseInt(pendingTime, 10);
+        const thirtyMinutes = 30 * 60 * 1000;
+
+        if (ageMs > thirtyMinutes) {
+            // Stale entry — clean up silently
+            localStorage.removeItem('pendingDepositReference');
+            localStorage.removeItem('pendingDepositTime');
+            return;
+        }
+
+        // Attempt verification
+        walletApi.proactiveVerifyPayment(pendingRef).then(res => {
+            const status = (res?.status || '').toUpperCase();
+            if (['COMPLETED', 'SUCCESS', 'SUCCESSFUL'].includes(status)) {
+                localStorage.removeItem('pendingDepositReference');
+                localStorage.removeItem('pendingDepositTime');
+                refresh();
+                toast.success('Deposit confirmed! Your NGN wallet has been credited.');
+            } else if (['FAILED', 'CANCELLED', 'REJECTED'].includes(status)) {
+                localStorage.removeItem('pendingDepositReference');
+                localStorage.removeItem('pendingDepositTime');
+                toast.error('Your last payment could not be confirmed. Please contact support if funds were deducted.');
+            }
+            // If still PENDING, leave the localStorage entry for the next visit
+        }).catch(err => {
+            console.warn('[WalletPage] Auto-verify failed silently:', err?.message);
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Run only once on mount — intentional empty deps
+
     const safeTransactions = Array.isArray(transactions) ? transactions : [];
     const [refreshKey, setRefreshKey] = useState(0);
     const [showBalances, setShowBalances] = useState(true);
