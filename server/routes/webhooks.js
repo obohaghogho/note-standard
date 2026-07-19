@@ -172,7 +172,7 @@ router.get("/status/:reference", async (req, res) => {
 
     // ── Task 4.e: O(1) Webhook Status Bridge ──────────────────────
     // Resolve directly from DB. NEVER block on External Providers or FX here.
-    let query = supabase.from("transactions").select("id, status, amount, currency, provider, reference_id");
+    let query = supabase.from("transactions").select("id, status, amount, currency, provider, reference_id, user_id");
     
     // Build a safe OR filter
     const filters = [
