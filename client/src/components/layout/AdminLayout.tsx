@@ -102,6 +102,7 @@ export const AdminLayout = () => {
         { to: '/admin/auto-reply', icon: Bot, label: 'Auto-Reply' },
         { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
         { to: '/admin/finops', icon: Activity, label: 'FinOps Dashboard' },
+        { to: '/admin/currencies', icon: Settings, label: 'Currency Management' },
         { to: '/admin/push-health', icon: Bell, label: 'Push Health' },
         { to: '/admin/settings', icon: Settings, label: 'Settings' },
     ];

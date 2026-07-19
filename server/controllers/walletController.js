@@ -906,3 +906,75 @@ exports.internalTransfer = async (req, res, next) => {
   }
 };
 
+/**
+ * GET /wallet/admin/currencies
+ */
+exports.adminGetCurrencies = async (req, res, next) => {
+  try {
+    if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
+      return res.status(403).json({ error: 'Forbidden: Admins only' });
+    }
+    const { data, error } = await supabase
+      .from('supported_currencies')
+      .select('*')
+      .order('type', { ascending: true })
+      .order('display_order', { ascending: true });
+
+    if (error) {
+      console.warn('[AdminCurrency] DB error, using fallback', error);
+      const allCurrencies = typeof walletCurrencyCatalog.getAllCurrencies === 'function' 
+        ? walletCurrencyCatalog.getAllCurrencies() 
+        : [...(walletCurrencyCatalog.FIAT_CATALOG || []), ...(walletCurrencyCatalog.CRYPTO_CATALOG || [])];
+      return res.json({ currencies: allCurrencies, source: 'fallback' });
+    }
+    res.json({ currencies: data });
+  } catch (err) {
+    console.error('[AdminCurrency] Error', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+/**
+ * PATCH /wallet/admin/currencies/:code
+ */
+exports.adminUpdateCurrency = async (req, res, next) => {
+  try {
+    if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
+      return res.status(403).json({ error: 'Forbidden: Admins only' });
+    }
+    const { code } = req.params;
+    
+    const validKeys = [
+      'status', 'deposit_enabled', 'withdraw_enabled', 
+      'transfer_enabled', 'buy_enabled', 'sell_enabled', 
+      'swap_enabled', 'convert_enabled'
+    ];
+    
+    const validFields = {};
+    for (const key of validKeys) {
+      if (req.body[key] !== undefined) {
+        validFields[key] = req.body[key];
+      }
+    }
+    
+    validFields.updated_at = new Date().toISOString();
+
+    const { data, error } = await supabase
+      .from('supported_currencies')
+      .update(validFields)
+      .eq('code', code.toUpperCase())
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+    
+    console.log('[AdminCurrency] Updated', code, 'by', req.user.id, validFields);
+    res.json(data);
+  } catch (err) {
+    console.error('[AdminCurrency] Error updating', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+

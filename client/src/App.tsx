@@ -73,7 +73,7 @@ const ManualWithdrawals = lazyWithRetry(() => import('./pages/admin/ManualWithdr
 const ReconciliationDashboard = lazyWithRetry(() => import('./pages/admin/ReconciliationDashboard').then(m => ({ default: m.ReconciliationDashboard })), 'ReconciliationDashboard');
 const PushHealthDashboard = lazyWithRetry(() => import('./pages/admin/PushHealthDashboard'), 'PushHealthDashboard');
 const FinOpsDashboard = lazyWithRetry(() => import('./pages/admin/FinOpsDashboard').then(m => ({ default: m.FinOpsDashboard })), 'FinOpsDashboard');
-
+const CurrencyManagement = lazyWithRetry(() => import('./pages/admin/CurrencyManagement'), 'CurrencyManagement');
 
 const ChatRedirect = () => {
   const { id } = useParams();
@@ -216,6 +216,7 @@ function App() {
                                 <Route path="settings" element={<AdminSettings />} />
                                 <Route path="push-health" element={<PushHealthDashboard />} />
                                 <Route path="finops" element={<FinOpsDashboard />} />
+                                <Route path="currencies" element={<CurrencyManagement />} />
                               </Route>
                             </Route>
                           </Routes>

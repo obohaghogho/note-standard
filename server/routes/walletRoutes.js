@@ -80,5 +80,8 @@ router.post(
   walletController.internalTransfer,
 );
 
-module.exports = router;
+// Admin Currency Management
+router.get('/admin/currencies', walletController.adminGetCurrencies);
+router.patch('/admin/currencies/:code', walletController.adminUpdateCurrency);
 
+module.exports = router;
