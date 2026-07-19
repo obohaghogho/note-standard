@@ -689,23 +689,55 @@ img, picture, video, canvas, iframe {
 /* ======================================================
    MOBILE RENDERING OPTIMIZATIONS (ANDROID / IOS)
    ====================================================== */
+
+/*
+ * PRIMARY GPU GLITCH FIX
+ * backdrop-filter / -webkit-backdrop-filter creates separate GPU
+ * compositor layers. On Android WebView and iOS Safari, multiple
+ * stacked layers with blur produce the scanline / static / noise
+ * rendering artifact seen in the team dashboard screenshots.
+ *
+ * Solution: disable ALL backdrop-filter on mobile platforms.
+ * This covers both explicit CSS classes AND Tailwind utility classes
+ * like backdrop-blur-sm, backdrop-blur-md, backdrop-blur-xl, etc.
+ */
 .platform-android *,
 .platform-ios * {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
 
-/* Fallback for overlays to use flat semi-transparent overlay instead of blurs */
+/* Flat solid background fallbacks for overlay/modal elements
+   that previously relied on blur for legibility */
 .platform-android .modal-overlay,
 .platform-ios .modal-overlay,
 .platform-android [class*="modal-overlay"],
 .platform-ios [class*="modal-overlay"],
+.platform-android .teams-modal-overlay,
+.platform-ios .teams-modal-overlay,
 .platform-android .teams-page__modal-overlay,
 .platform-ios .teams-page__modal-overlay {
-  background-color: rgba(0, 0, 0, 0.85) !important;
+  background-color: rgba(0, 0, 0, 0.92) !important;
 }
 
-/* Modern flat-color card fallback for glassmorphism classes */
+/* Teams page specific panels: force solid, opaque backgrounds
+   The Tailwind 'bg-gray-950/80' class on the sidebars causes
+   GPU layer bleed which creates the scanline artifact */
+.platform-android .teams-icon-rail,
+.platform-ios .teams-icon-rail,
+.platform-android .teams-tab-nav,
+.platform-ios .teams-tab-nav,
+.platform-android .teams-content,
+.platform-ios .teams-content,
+.platform-android .teams-content__bottom-tabs,
+.platform-ios .teams-content__bottom-tabs,
+.platform-android .teams-content__mobile-header,
+.platform-ios .teams-content__mobile-header {
+  background-color: #000 !important;
+  background: #000 !important;
+}
+
+/* Flat-color card fallback for glassmorphism utility classes */
 .platform-android .glass,
 .platform-ios .glass,
 .platform-android .glass-card,
@@ -727,7 +759,7 @@ img, picture, video, canvas, iframe {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6) !important;
 }
 
-/* Disable expensive animations behind modal */
+/* Disable expensive animations on mobile to prevent frame drops */
 .platform-android .animate-pulse,
 .platform-ios .animate-pulse,
 .platform-android .animate-ping,

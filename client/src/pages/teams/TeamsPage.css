@@ -1,846 +1,665 @@
-/* ====================================
-   TEAMS PAGE STYLES
-   ==================================== */
+/* ====================================================
+   TEAMS PAGE — COMPLETE RESPONSIVE LAYOUT SYSTEM
+   Fixes: GPU backdrop-filter glitch + mobile layout
+   ==================================================== */
 
+/* ──────────────────────────────────────────────────
+   ROOT CONTAINER
+   Full viewport, no overflow, no transforms
+   ────────────────────────────────────────────────── */
 .teams-page {
   display: flex;
-  height: 100dvh;
   width: 100%;
+  height: 100%;
   max-width: 100%;
   overflow: hidden;
-  background: #000000;
+  background: #000;
+  color: #fff;
+  position: relative;
+  /* CRITICAL: isolation:isolate prevents stacking context
+     conflicts that cause the scanline/glitch artifacts */
+  isolation: isolate;
 }
 
-/* ====================================
-   SIDEBAR - TEAMS LIST
-   ==================================== */
-
-.teams-page__sidebar {
+/* ──────────────────────────────────────────────────
+   COLUMN 1: ICON RAIL  (team switcher sidebar)
+   Desktop: 64px fixed left column
+   Mobile:  full-screen panel (shown when mobilePanel='teams')
+   ────────────────────────────────────────────────── */
+.teams-icon-rail {
+  width: 72px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 0;
-  overflow: hidden;
+  align-items: center;
+  padding: 20px 0;
+  gap: 20px;
   border-right: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(15, 23, 42, 0.5);
-  backdrop-filter: blur(10px);
-}
-
-.teams-page__sidebar-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.teams-page__sidebar-header h2 {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 800;
-  letter-spacing: -0.025em;
-  background: gradient-to-br from-white to-gray-400;
-  -webkit-background-clip: text;
-  background-clip: text;
-}
-
-.teams-page__teams-list {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  padding: 12px;
-  gap: 8px;
-}
-
-.teams-page__teams-list::-webkit-scrollbar {
-  width: 4px;
-}
-
-.teams-page__teams-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-}
-
-.teams-page__team-card {
-  padding: 16px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: 2px solid transparent;
-}
-
-.teams-page__team-card:hover {
-  border-color: rgba(168, 85, 247, 0.3);
-  transform: translateY(-2px);
-}
-
-.teams-page__team-card--active {
-  border-color: rgba(168, 85, 247, 0.6);
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
-}
-
-.teams-page__team-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  position: relative;
-}
-
-.teams-page__team-avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: 700;
-  font-size: 1.25rem;
-  flex-shrink: 0;
-  overflow: hidden;
-}
-
-.teams-page__team-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.teams-page__team-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.teams-page__team-info h3 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.teams-page__team-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.6);
-  margin-top: 4px;
-}
-
-.teams-page__unread-badge {
-  position: absolute;
-  top: 0;
-  right: 0;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  color: white;
-  font-size: 0.75rem;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.teams-page__last-message {
-  margin: 8px 0 0 0;
-  font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.5);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ====================================
-   MAIN CONTENT - CHAT
-   ==================================== */
-
-.teams-page__main {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: rgba(0, 0, 0, 0.2);
-  position: relative;
-}
-
-.teams-page__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(15, 23, 42, 0.8);
-  backdrop-filter: blur(20px);
+  background: #050508;
   z-index: 20;
+  overflow: hidden;
+  /* NO backdrop-filter — primary glitch source on mobile */
 }
 
-.teams-page__header-left {
+.teams-icon-rail__mobile-header {
+  display: none; /* hidden on desktop */
+}
+
+.teams-icon-rail__btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-width: 0;
+  justify-content: center;
+  color: #6b7280;
+  background: transparent;
+  border: none;
   cursor: pointer;
-}
-
-.teams-page__header-left:hover h1 {
-  color: #3b82f6;
-}
-
-.teams-page__header-left h1 {
-  margin: 0;
-  font-size: 1.125rem;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: color 0.2s ease;
-}
-
-.teams-page__header-left p {
-  margin: 0;
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.4);
-  font-weight: 500;
-}
-
-.teams-page__header-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: 800;
-  font-size: 1.125rem;
+  transition: color 0.2s ease, background 0.2s ease, transform 0.15s ease;
   flex-shrink: 0;
-  overflow: hidden;
   position: relative;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.teams-icon-rail__btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.07);
+}
+.teams-icon-rail__btn:active {
+  transform: scale(0.93);
+}
+.teams-icon-rail__btn--active {
+  background: var(--primary, #6366f1);
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);
+}
+.teams-icon-rail__btn--avatar {
+  overflow: hidden;
+  padding: 0;
+}
+.teams-icon-rail__btn--selected {
+  outline: 2px solid var(--primary, #6366f1);
+  outline-offset: 2px;
+  opacity: 1 !important;
+}
+.teams-icon-rail__btn--create {
+  color: #6b7280;
+  background: rgba(255, 255, 255, 0.04);
+}
+.teams-icon-rail__btn--create:hover {
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--primary, #6366f1);
 }
 
-.teams-page__header-avatar img {
+.teams-icon-rail__avatar-letter {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-}
-
-.teams-page__avatar-edit-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  backdrop-filter: blur(2px);
+  color: #fff;
+  font-weight: 900;
+  font-size: 1.1rem;
 }
 
-.teams-page__header-avatar:hover .teams-page__avatar-edit-overlay {
-  opacity: 1;
-}
-
-.teams-page__avatar-edit-overlay svg {
-  color: white;
-  transform: scale(0.8);
-  transition: transform 0.2s ease;
-}
-
-.teams-page__avatar-edit-overlay:hover svg {
-  transform: scale(1);
-}
-
-.teams-page__header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.teams-page__chat {
+.teams-icon-rail__scroll {
   flex: 1;
-  overflow: hidden;
-}
-
-.teams-page__no-selection {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  gap: 16px;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.teams-page__no-selection h2 {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.teams-page__no-selection p {
-  margin: 0;
-  font-size: 0.9375rem;
-}
-
-/* ====================================
-   RIGHT SIDEBAR - INFO (BENTO STYLE)
-   ==================================== */
-
-.teams-page__info {
-  display: flex;
-  flex-direction: column;
+  width: 100%;
   overflow-y: auto;
-  border-left: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(15, 23, 42, 0.9);
-  padding: 24px;
-  gap: 24px;
-}
-
-.teams-page__info h3 {
-  margin: 0;
-  font-size: 1.125rem;
-  font-weight: 800;
-  color: white;
-  letter-spacing: -0.01em;
-}
-
-/* BENTO STATS GRID */
-.teams-page__stats-bento {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-}
-
-.teams-page__stat {
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  padding: 16px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  align-items: center;
+  gap: 14px;
+  padding: 0 14px;
+  scrollbar-width: none;
 }
+.teams-icon-rail__scroll::-webkit-scrollbar { display: none; }
 
-.teams-page__stat:hover {
-  background: rgba(255, 255, 255, 0.07);
-  transform: translateY(-2px);
-  border-color: rgba(59, 130, 246, 0.3);
-}
-
-.teams-page__stat-icon {
+.teams-icon-rail__divider {
   width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 12px;
-}
-
-.teams-page__stat-value {
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: white;
-  line-height: 1;
-}
-
-.teams-page__stat-label {
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.4);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-top: 4px;
-}
-
-.teams-page__members-preview h4 {
-  margin: 0 0 12px 0;
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.teams-page__members-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.teams-page__member-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  transition: all 0.2s ease;
-}
-
-.teams-page__member-item:hover {
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.teams-page__member-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: 600;
-  font-size: 0.875rem;
-  overflow: hidden;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.05);
   flex-shrink: 0;
 }
 
-.teams-page__member-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.teams-icon-rail__unread-dot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 10px;
+  height: 10px;
+  background: #ef4444;
+  border-radius: 50%;
+  border: 2px solid #000;
 }
 
-.teams-page__member-info {
+/* ──────────────────────────────────────────────────
+   MAIN AREA (columns 2 + 3)
+   ────────────────────────────────────────────────── */
+.teams-main {
   flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* ──────────────────────────────────────────────────
+   COLUMN 2: TAB NAVIGATION SIDEBAR
+   Desktop: 220px fixed sidebar
+   Mobile: full-screen panel (visible when mobilePanel='tabs')
+   ────────────────────────────────────────────────── */
+.teams-tab-nav {
+  width: 220px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  background: #040406;
+  /* NO backdrop-filter here */
+  overflow: hidden;
+  z-index: 10;
+}
+
+.teams-tab-nav__mobile-back {
+  display: none; /* hidden on desktop */
+}
+
+.teams-tab-nav__header {
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+}
+
+.teams-tab-nav__list {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 10px;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  scrollbar-width: none;
 }
+.teams-tab-nav__list::-webkit-scrollbar { display: none; }
 
-.teams-page__member-info span:first-child {
-  font-size: 0.875rem;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.teams-page__member-role {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.6);
-  text-transform: capitalize;
-}
-
-/* ====================================
-   MODALS
-   ==================================== */
-
-.teams-page__modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 24px;
-  animation: fadeIn 0.2s ease;
-}
-
-.teams-page__modal {
+.teams-tab-nav__item {
   width: 100%;
-  max-width: 500px;
-  padding: 32px;
-  animation: slideUp 0.3s ease;
-}
-
-.teams-page__modal--large {
-  max-width: 700px;
-}
-
-.teams-page__modal h2 {
-  margin: 0 0 24px 0;
-  font-size: 1.5rem;
-  font-weight: 700;
-}
-
-.teams-page__form {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.teams-page__form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.teams-page__form-group label {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.teams-page__form-group input,
-.teams-page__form-group textarea,
-.teams-page__form-group select {
-  padding: 12px 16px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: white;
-  font-size: 0.9375rem;
-  font-family: inherit;
-  outline: none;
-  transition: all 0.2s ease;
-}
-
-.teams-page__form-group input:focus,
-.teams-page__form-group textarea:focus,
-.teams-page__form-group select:focus {
-  border-color: rgba(168, 85, 247, 0.5);
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.1);
-}
-
-.teams-page__form-actions {
-  display: flex;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 8px;
-}
-
-.teams-page__members-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 16px;
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.teams-page__member-card {
-  padding: 20px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  text-align: center;
-  transition: all 0.2s ease;
-}
-
-.teams-page__member-card:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(168, 85, 247, 0.3);
-}
-
-.teams-page__member-avatar-large {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   display: flex;
   align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: 700;
-  font-size: 1.5rem;
-  margin: 0 auto 12px;
-  overflow: hidden;
-}
-
-.teams-page__member-avatar-large img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.teams-page__member-card h4 {
-  margin: 0 0 4px 0;
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.teams-page__member-card p {
-  margin: 0 0 8px 0;
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.teams-page__member-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
+  gap: 10px;
+  padding: 10px 14px;
   border-radius: 12px;
-  background: rgba(168, 85, 247, 0.2);
-  font-size: 0.75rem;
-  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 0.72rem;
+  font-weight: 700;
   text-transform: uppercase;
+  letter-spacing: 0.07em;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+.teams-tab-nav__item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+.teams-tab-nav__item--active {
+  background: var(--primary, #6366f1);
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.25);
 }
 
-/* ====================================
-   LOADING & EMPTY STATES
-   ==================================== */
+.teams-tab-nav__back-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.teams-tab-nav__back-btn:hover { color: #fff; }
 
+/* ──────────────────────────────────────────────────
+   COLUMN 3: CONTENT PANEL
+   Desktop: flex-1, always visible
+   Mobile: full-screen panel (visible when mobilePanel='content')
+   ────────────────────────────────────────────────── */
+.teams-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  background: #000;
+  position: relative;
+}
+
+.teams-content__mobile-header {
+  display: none; /* hidden on desktop */
+}
+
+.teams-content__bottom-tabs {
+  display: none; /* hidden on desktop */
+}
+
+/* Executive overview wrapper */
+.teams-executive {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ──────────────────────────────────────────────────
+   MODALS
+   Flat background (no backdrop-filter) for mobile compat
+   ────────────────────────────────────────────────── */
+.teams-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 16px;
+  animation: teamsModalFadeIn 0.18s ease;
+}
+
+.teams-modal {
+  width: 100%;
+  max-width: 420px;
+  background: #111116;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px;
+  padding: 32px 28px;
+  position: relative;
+  overflow: hidden;
+  animation: teamsModalSlideUp 0.22s ease;
+}
+
+.teams-modal--upgrade {
+  max-width: 360px;
+  text-align: center;
+}
+
+@keyframes teamsModalFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes teamsModalSlideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* Loading screen */
 .teams-page__loading {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100dvh;
+  height: 100%;
   gap: 16px;
-  color: rgba(255, 255, 255, 0.6);
+  background: #000;
+  color: rgba(255, 255, 255, 0.5);
 }
 
-.teams-page__empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  padding: 48px 24px;
-  text-align: center;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.teams-page__empty h3 {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.teams-page__empty p {
-  margin: 0;
-  font-size: 0.875rem;
-}
-
-/* ====================================
+/* ──────────────────────────────────────────────────
    ANIMATIONS
-   ==================================== */
-
+   ────────────────────────────────────────────────── */
 @keyframes fadeIn {
   from { opacity: 0; }
-  to { opacity: 1; }
+  to   { opacity: 1; }
 }
-
 @keyframes slideUp {
   from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  to   { transform: translateY(0);    opacity: 1; }
 }
 
-.teams-page__back-button {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.8);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-}
-
-.teams-page__back-button:hover {
-  background: rgba(168, 85, 247, 0.2);
-  border-color: rgba(168, 85, 247, 0.4);
-  color: white;
-}
-
-/* ====================================
-   RESPONSIVE
-   ==================================== */
-
-@media (max-width: 1280px) {
-  .teams-page {
-    grid-template-columns: 280px 1fr;
-  }
-
-  .teams-page__info {
-    display: none;
-  }
-}
-
+/* ====================================================
+   MOBILE RESPONSIVE LAYOUT  (≤ 768px)
+   
+   Strategy:
+   - Icon Rail → full-screen team-list panel  (mobilePanel='teams')
+   - Tab Nav   → full-screen tab-list panel   (mobilePanel='tabs')
+   - Content   → full-screen content panel    (mobilePanel='content')
+   
+   Controlled via data-mobile-panel attribute on .teams-page
+   ==================================================== */
 @media (max-width: 768px) {
+
+  /* Root: stack all columns absolutely so only one is visible */
   .teams-page {
-    grid-template-columns: 1fr;
+    position: relative;
+    /* Remove GPU-expensive isolation on mobile — use simpler stacking */
+    isolation: auto;
+  }
+
+  /* ── Icon Rail ── */
+  .teams-icon-rail {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    flex-direction: column;
+    align-items: stretch;
     padding: 0;
     gap: 0;
-    height: 100dvh;
+    border-right: none;
+    background: #000;
+    z-index: 10;
+    overflow-y: auto;
+    /* GPU glitch fix: NO backdrop-filter, NO blur, solid bg */
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    transform: translateZ(0); /* own compositor layer, prevents bleed */
+    will-change: auto;
   }
 
-  /* ---- Mobile view toggle: list vs chat ---- */
+  /* Show/hide panels via data attribute */
+  .teams-page[data-mobile-panel="teams"] .teams-icon-rail  { display: flex; }
+  .teams-page[data-mobile-panel="tabs"]  .teams-icon-rail  { display: none; }
+  .teams-page[data-mobile-panel="content"] .teams-icon-rail { display: none; }
 
-  /* When viewing the list */
-  .teams-page--mobile-list .teams-page__sidebar {
+  /* Mobile top header in icon rail */
+  .teams-icon-rail__mobile-header {
     display: flex;
-    height: 100%;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    flex-shrink: 0;
   }
 
-  .teams-page--mobile-list .teams-page__main {
-    display: none;
-  }
-
-  .teams-page--mobile-list .teams-page__info {
-    display: none;
-  }
-
-  /* When viewing the chat */
-  .teams-page--mobile-chat .teams-page__sidebar {
-    display: none;
-  }
-
-  .teams-page--mobile-chat .teams-page__main {
-    display: flex;
-    height: 100%;
-  }
-
-  .teams-page--mobile-chat .teams-page__info {
-    display: none;
-  }
-
-  /* ---- Back button visible on mobile ---- */
-  .teams-page__back-button {
-    display: flex;
-  }
-
-  /* ---- Sidebar adjustments ---- */
-  .teams-page__sidebar {
-    padding: 16px;
-  }
-
-  .teams-page__sidebar-header h2 {
-    font-size: 1.25rem;
-  }
-
-  .teams-page__teams-list {
-    padding: 2px;
-  }
-
-  .teams-page__team-card {
-    padding: 12px;
-  }
-
-  .teams-page__team-avatar {
-    width: 40px;
-    height: 40px;
-    font-size: 1rem;
-  }
-
-  .teams-page__team-info h3 {
-    font-size: 0.9375rem;
-  }
-
-  /* ---- Header adjustments ---- */
-  .teams-page__header {
+  /* On mobile, teams in icon rail become full-width list items */
+  .teams-icon-rail__scroll {
+    flex: 1;
     padding: 12px 16px;
-    flex-wrap: wrap;
+    align-items: stretch;
     gap: 8px;
+    overflow-y: auto;
   }
 
-  .teams-page__header-left {
+  .teams-icon-rail__btn {
+    width: 100%;
+    height: auto;
+    border-radius: 16px;
+    padding: 14px 18px;
+    justify-content: flex-start;
+    gap: 14px;
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
+
+  /* Overview button gets a label on mobile */
+  .teams-icon-rail__btn--avatar {
+    height: 60px;
+    padding: 0;
+    border-radius: 16px;
+    overflow: hidden;
+    justify-content: center;
+  }
+
+  /* Hide the desktop-only create button; mobile has it in header */
+  .teams-icon-rail__btn--create {
+    display: none;
+  }
+
+  .teams-icon-rail__divider {
+    width: calc(100% - 32px);
+    margin: 0 16px;
+  }
+
+  /* ── Main area fills all remaining space ── */
+  .teams-main {
+    position: absolute;
+    inset: 0;
+    flex-direction: column;
+    background: #000;
+  }
+
+  /* ── Tab Nav Panel ── */
+  .teams-tab-nav {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border-right: none;
+    background: #000;
+    z-index: 10;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    transform: translateZ(0);
+    will-change: auto;
+    overflow-y: auto;
+  }
+
+  /* Show/hide tab nav */
+  .teams-page[data-mobile-panel="teams"]   .teams-tab-nav { display: none; }
+  .teams-page[data-mobile-panel="tabs"]    .teams-tab-nav { display: flex; }
+  .teams-page[data-mobile-panel="content"] .teams-tab-nav { display: none; }
+
+  /* Hide via class too (for when no team selected) */
+  .teams-tab-nav--mobile-hidden { display: none !important; }
+
+  /* Mobile back button at top of tab nav */
+  .teams-tab-nav__mobile-back {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    flex-shrink: 0;
+  }
+
+  .teams-tab-nav__header {
+    padding: 16px 20px 14px;
+  }
+
+  .teams-tab-nav__list {
+    padding: 10px 12px;
+    gap: 4px;
+  }
+
+  .teams-tab-nav__item {
+    padding: 14px 16px;
+    font-size: 0.8rem;
+    border-radius: 14px;
+  }
+
+  /* ── Content Panel ── */
+  .teams-content {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    z-index: 10;
+    /* CRITICAL GPU GLITCH FIX:
+       - No backdrop-filter whatsoever
+       - translateZ(0) gives the element its own compositor layer
+         which prevents sibling/parent layer bleeding (the scanlines)
+       - will-change: auto prevents speculative layer promotion */
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    transform: translateZ(0);
+    will-change: auto;
+    /* Fix: explicit background so nothing bleeds through */
+    background-color: #000 !important;
+  }
+
+  /* Show/hide content panel */
+  .teams-page[data-mobile-panel="teams"]   .teams-content { display: none; }
+  .teams-page[data-mobile-panel="tabs"]    .teams-content { display: none; }
+  .teams-page[data-mobile-panel="content"] .teams-content { display: flex; }
+  .teams-content--mobile-hidden { display: none !important; }
+
+  /* Mobile top header inside content panel */
+  .teams-content__mobile-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background: #050508;
+    flex-shrink: 0;
+    min-height: 52px;
+  }
+
+  .teams-content__back-btn,
+  .teams-content__close-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    color: #9ca3af;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+  .teams-content__back-btn:hover,
+  .teams-content__close-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+  .teams-content__back-btn:active,
+  .teams-content__close-btn:active {
+    transform: scale(0.9);
+  }
+
+  .teams-content__mobile-title {
     flex: 1;
     min-width: 0;
-  }
-
-  .teams-page__header-left h1 {
-    font-size: 1.125rem;
-  }
-
-  .teams-page__header-left p {
-    font-size: 0.75rem;
-  }
-
-  .teams-page__header-actions {
-    flex-wrap: wrap;
-    gap: 4px;
-    width: 100%;
-    justify-content: flex-end;
-  }
-
-  .teams-page__header-actions button {
-    font-size: 0.75rem;
-    padding: 6px 10px;
-  }
-
-  /* ---- Chat area ---- */
-  .teams-page__chat {
-    flex: 1;
-    min-height: 0;
-  }
-
-  /* ---- Modals ---- */
-  .teams-page__modal-overlay {
-    padding: 16px;
-  }
-
-  .teams-page__modal {
-    padding: 20px;
-    max-width: 100%;
-  }
-
-  .teams-page__modal--large {
-    max-width: 100%;
-  }
-
-  .teams-page__modal h2 {
-    font-size: 1.25rem;
-    margin-bottom: 16px;
-  }
-
-  .teams-page__members-grid {
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 12px;
-    max-height: 60vh;
-  }
-
-  .teams-page__member-avatar-large {
-    width: 48px;
-    height: 48px;
-    font-size: 1.125rem;
-  }
-
-  .teams-page__form-group input,
-  .teams-page__form-group textarea,
-  .teams-page__form-group select {
-    padding: 10px 12px;
-    font-size: 0.875rem;
-  }
-}
-
-/* Extra small screens (iPhone SE etc.) */
-@media (max-width: 375px) {
-  .teams-page__header-left h1 {
-    font-size: 1rem;
-  }
-
-  .teams-page__header-actions {
+    display: flex;
+    flex-direction: column;
     gap: 2px;
   }
 
-  .teams-page__header-actions button {
-    padding: 4px 8px;
-    font-size: 0.6875rem;
+  /* Executive overview on mobile */
+  .teams-executive {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+  }
+  .teams-page[data-mobile-panel="tabs"]    .teams-executive { display: none; }
+  .teams-page[data-mobile-panel="content"] .teams-executive { display: none; }
+
+  /* Bottom tab bar on mobile content view */
+  .teams-content__bottom-tabs {
+    display: flex;
+    align-items: center;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    background: #050508;
+    flex-shrink: 0;
+    padding: 4px 4px;
+    /* Safe area for notch phones */
+    padding-bottom: max(4px, env(safe-area-inset-bottom, 4px));
+    gap: 2px;
+    /* GPU glitch fix: no blur, solid background */
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .teams-content__bottom-tabs::-webkit-scrollbar { display: none; }
+
+  .teams-content__bottom-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 6px 12px;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    color: #4b5563;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+    min-width: 60px;
+  }
+  .teams-content__bottom-tab span {
+    font-size: 0.55rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+  .teams-content__bottom-tab:active {
+    transform: scale(0.9);
+  }
+  .teams-content__bottom-tab--active {
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--primary, #6366f1);
   }
 
-  .teams-page__team-avatar {
-    width: 36px;
-    height: 36px;
+  /* GLOBAL GPU GLITCH FIX FOR MOBILE:
+     Nuke ALL backdrop-filter usage inside the teams page on mobile.
+     This is the primary cause of the scanline/static rendering artifact.
+     The browser's GPU compositor cannot handle stacked semi-transparent
+     blur layers correctly on most Android WebView/Chrome versions. */
+  .teams-page * {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
 
-  .teams-page__members-grid {
-    grid-template-columns: 1fr 1fr;
+  /* Ensure modals still look good without blur */
+  .teams-modal-overlay {
+    background: rgba(0, 0, 0, 0.92) !important;
+  }
+  .teams-modal {
+    background: #111116 !important;
+  }
+}
+
+/* ── Small phones (≤ 480px) ── */
+@media (max-width: 480px) {
+  .teams-tab-nav__item {
+    font-size: 0.75rem;
+    padding: 12px 14px;
+  }
+
+  .teams-content__bottom-tab {
+    padding: 6px 8px;
+    min-width: 52px;
+  }
+
+  .teams-modal {
+    padding: 24px 20px;
+    border-radius: 22px;
+  }
+}
+
+/* ── Medium screens: hide tab label text at 900-1024px ── */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .teams-tab-nav {
+    width: 180px;
+  }
+  .teams-tab-nav__item {
+    font-size: 0.67rem;
+    padding: 9px 12px;
+    gap: 8px;
+  }
+}
+
+/* ── Large screens: wider tab nav ── */
+@media (min-width: 1280px) {
+  .teams-icon-rail {
+    width: 80px;
+  }
+  .teams-tab-nav {
+    width: 240px;
   }
 }
