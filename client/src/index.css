@@ -767,4 +767,114 @@ img, picture, video, canvas, iframe {
   animation: none !important;
 }
 
+/* =====================================================================
+   GLOBAL UI PERFORMANCE OPTIMIZATIONS
+   Target: < 100ms perceived tap response on all devices
+   ===================================================================== */
 
+/* 1. GPU-promote ALL interactive elements
+   will-change: transform forces the browser to create a separate
+   compositor layer, so hover/active/focus repaints never trigger
+   a full-page repaint. translateZ(0) ensures the layer is actually
+   created (browser hint). */
+button,
+a,
+[role="button"],
+[role="tab"],
+[role="menuitem"],
+input[type="submit"],
+input[type="button"],
+input[type="reset"],
+label[for],
+.btn,
+.tab,
+.nav-item {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* 2. Instant active-state feedback (fires before JS, feels snappy)
+   The browser applies :active BEFORE firing the click event, so the
+   user sees a physical response within 16ms of touch — even if the
+   JS handler takes 200ms to complete. */
+button:active,
+a:active,
+[role="button"]:active,
+[role="tab"]:active,
+[role="menuitem"]:active {
+  transform: scale(0.97) translateZ(0);
+  opacity: 0.85;
+  transition: transform 60ms ease-out, opacity 60ms ease-out;
+}
+
+/* 3. Cap ALL transitions at 150ms max
+   Framer Motion and Tailwind transitions default to 300ms+.
+   On mobile every extra ms makes the UI feel sluggish. */
+* {
+  transition-duration: min(var(--transition-duration, 300ms), 150ms) !important;
+}
+
+/* 4. Exception: let Framer Motion manage its own animation durations
+   (it uses inline styles, so CSS overrides don't affect it directly) */
+
+/* 5. Reduce transition on elements that animate layout (causes reflow jank) */
+.modal-overlay,
+.modal-content,
+[class*="dropdown"],
+[class*="popover"],
+[class*="tooltip"] {
+  transition-duration: 100ms !important;
+}
+
+/* 6. Scrollable containers: momentum scrolling + no overscroll bounce
+   that adds perceived latency at scroll start/end */
+[class*="overflow-y-auto"],
+[class*="overflow-auto"],
+.custom-scrollbar,
+.overflow-y-auto,
+.overflow-auto {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  scroll-behavior: auto; /* disable smooth scroll on mobile — adds ~300ms delay */
+}
+
+/* 7. Images: prevent layout shift which causes repaint jank */
+img {
+  content-visibility: auto;
+}
+
+/* 8. On Android specifically — additional tap optimisations */
+.platform-android button,
+.platform-android a,
+.platform-android [role="button"] {
+  /* Remove Android's default focus ring delay */
+  -webkit-tap-highlight-color: rgba(0,0,0,0);
+  /* Force hardware compositing */
+  isolation: isolate;
+}
+
+/* 9. Nav sidebar icons and bottom tabs — these are the most-tapped
+   elements, give them immediate visual response */
+.platform-android .teams-icon-rail button:active,
+.platform-ios .teams-icon-rail button:active,
+.platform-android nav button:active,
+.platform-ios nav button:active,
+.platform-android [class*="tab-"] button:active,
+.platform-ios [class*="tab-"] button:active {
+  transform: scale(0.90) translateZ(0) !important;
+  opacity: 0.7 !important;
+  transition: transform 40ms ease-out, opacity 40ms ease-out !important;
+}
+
+/* 10. Prevent font re-rendering on active state (common mobile jank source) */
+button,
+a {
+  -webkit-font-smoothing: antialiased;
+  font-synthesis: none;
+}

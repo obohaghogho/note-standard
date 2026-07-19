@@ -4,7 +4,7 @@ import { API_URL } from "../lib/api"
 
 const api = axios.create({
   baseURL: `${API_URL}/api`,
-  timeout: 15000, // 15s global timeout
+  timeout: 10000, // 10s — was 15s; long timeouts make failed requests feel frozen
   headers: {
     "Content-Type": "application/json",
   },
