@@ -391,7 +391,15 @@ class FXService {
     // ── Step 2: NON-NEGOTIABLE Ticker Integrity Check ────────────
     // Guarantee major assets are never zero. If legacy returned 0 for
     // BTC or ETH (e.g. circuit breaker active), force-fill from LKG cache.
-    const SEEDS = { BTC: 65000, ETH: 3500, USD: 1, NGN: 0.00066 };
+    // SEEDS covers all 8 wallet currencies — ensures no rate is ever 0 on a cold cache.
+    // Stablecoins are pegged at 1.0 USD; fiat rates are conservative approximations.
+    // These are LAST RESORT fallbacks only; LKG cache is preferred.
+    const SEEDS = {
+      BTC: 65000, ETH: 3500,
+      USDT: 1.0, USDC: 1.0,            // stablecoin pegs
+      USD: 1.0,  NGN: 0.00066,          // NGN ≈ 1/1500 USD
+      EUR: 1.08, GBP: 1.27,             // conservative EUR/GBP vs USD
+    };
     for (const [ticker, seedPrice] of Object.entries(SEEDS)) {
       if (!rates[ticker] || rates[ticker] <= 0) {
         // Try LKG cache first (has real market data from before rate-limit)

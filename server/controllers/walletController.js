@@ -643,3 +643,266 @@ exports.createLimitRequest = async (req, res) => {
     res.status(500).json({ error: err.message || "Internal server error" });
   }
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WALLET HUB ENDPOINTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+const walletCurrencyCatalog = require('../config/walletCurrencyCatalog');
+
+/**
+ * GET /wallet/hub
+ * Returns a unified view of the user's wallet hub:
+ *   - Fiat wallets with balances + catalog metadata
+ *   - Crypto wallets with balances + catalog metadata
+ *   - Currency catalog (for UI rendering)
+ *   - Recent activity (last 10 ledger entries)
+ *   - Portfolio summary totals
+ */
+exports.getHubView = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    // Fetch wallets in parallel
+    const [fiatWallets, cryptoWallets, ledgerRes] = await Promise.allSettled([
+      FiatWalletService.getWallets(userId),
+      CryptoWalletService.getWallets(userId),
+      supabase
+        .from('ledger_entries')
+        .select('id, amount, currency, activity_type, status, reference, created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(10),
+    ]);
+
+    const fiat   = fiatWallets.status   === 'fulfilled' ? fiatWallets.value   : [];
+    const crypto = cryptoWallets.status === 'fulfilled' ? cryptoWallets.value : [];
+    const ledger = ledgerRes.status     === 'fulfilled' ? (ledgerRes.value?.data || []) : [];
+
+    // Load catalog (DB-first, static fallback)
+    let catalogFiat   = walletCurrencyCatalog.FIAT_CATALOG;
+    let catalogCrypto = walletCurrencyCatalog.CRYPTO_CATALOG;
+
+    try {
+      const { data: dbCatalog } = await supabase
+        .from('supported_currencies')
+        .select('*')
+        .order('display_order', { ascending: true });
+
+      if (dbCatalog && dbCatalog.length > 0) {
+        catalogFiat   = dbCatalog.filter(c => c.type === 'fiat');
+        catalogCrypto = dbCatalog.filter(c => c.type === 'crypto');
+      }
+    } catch {
+      // Use static defaults above
+    }
+
+    // Merge catalog metadata into wallet rows
+    const cryptoCurrencies = new Set(['BTC', 'ETH', 'USDT', 'USDC']);
+
+    const enrichedFiat = catalogFiat.map(meta => {
+      const wallet = fiat.find(w => w.currency?.toUpperCase() === meta.code) || {};
+      return {
+        ...meta,
+        balance:           parseFloat(wallet.balance)                           || 0,
+        available_balance: parseFloat(wallet.balances?.available ?? wallet.balance) || 0,
+        pending_balance:   parseFloat(wallet.balances?.pending   ?? 0)          || 0,
+        locked_balance:    parseFloat(wallet.balances?.locked    ?? 0)          || 0,
+        wallet_exists:     !!wallet.id,
+        wallet_id:         wallet.id || null,
+      };
+    });
+
+    const enrichedCrypto = catalogCrypto.map(meta => {
+      const wallet = crypto.find(w => w.currency?.toUpperCase() === meta.code) || {};
+      return {
+        ...meta,
+        balance:           parseFloat(wallet.balance)                           || 0,
+        available_balance: parseFloat(wallet.balances?.available ?? wallet.balance) || 0,
+        pending_balance:   parseFloat(wallet.balances?.pending   ?? 0)          || 0,
+        address:           wallet.address   || null,
+        network:           wallet.network   || 'native',
+        wallet_exists:     !!wallet.id,
+        wallet_id:         wallet.id || null,
+      };
+    });
+
+    res.json({
+      fiatWallets:    enrichedFiat,
+      cryptoWallets:  enrichedCrypto,
+      currencyCatalog: { fiat: catalogFiat, crypto: catalogCrypto },
+      recentActivity: ledger,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * GET /wallet/currencies
+ * Returns the currency catalog. DB-first, static fallback if DB is empty.
+ * Used by the frontend to determine UI capabilities per currency.
+ */
+exports.getCurrencyCatalog = async (req, res, next) => {
+  try {
+    // Try DB first
+    const { data: dbCatalog, error } = await supabase
+      .from('supported_currencies')
+      .select('*')
+      .order('display_order', { ascending: true });
+
+    if (!error && dbCatalog && dbCatalog.length > 0) {
+      return res.json({
+        fiat:   dbCatalog.filter(c => c.type === 'fiat'),
+        crypto: dbCatalog.filter(c => c.type === 'crypto'),
+        source: 'database',
+      });
+    }
+
+    // Env-var / static fallback
+    res.json({
+      fiat:   walletCurrencyCatalog.FIAT_CATALOG,
+      crypto: walletCurrencyCatalog.CRYPTO_CATALOG,
+      source: 'static',
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * GET /wallet/portfolio
+ * Returns a portfolio summary: total value in USD, fiat vs crypto split,
+ * available/locked/pending breakdown.
+ * Note: 24h change is a best-effort estimate using cached rate snapshots.
+ */
+exports.getPortfolioSummary = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    const [fiatWallets, cryptoWallets] = await Promise.all([
+      FiatWalletService.getWallets(userId).catch(() => []),
+      CryptoWalletService.getWallets(userId).catch(() => []),
+    ]);
+
+    const allWallets = [...fiatWallets, ...cryptoWallets];
+
+    // Fetch exchange rates
+    let rates = {};
+    try {
+      const { data } = await supabase
+        .from('exchange_rate_cache')
+        .select('currency, rate_usd')
+        .limit(50);
+      if (data) {
+        for (const row of data) rates[row.currency] = parseFloat(row.rate_usd);
+      }
+    } catch {
+      // rates will be empty — totals will be 0 but no crash
+    }
+
+    const toUSD = (amount, currency) => {
+      const c = currency?.toUpperCase();
+      if (c === 'USD') return parseFloat(amount) || 0;
+      const r = rates[c];
+      if (!r || r <= 0) return 0;
+      return (parseFloat(amount) || 0) * r;
+    };
+
+    let fiatTotalUSD = 0;
+    let cryptoTotalUSD = 0;
+    let available = 0;
+    let locked = 0;
+    let pending = 0;
+
+    const cryptoCodes = new Set(['BTC', 'ETH', 'USDT', 'USDC']);
+
+    for (const w of allWallets) {
+      const currency = (w.currency || '').toUpperCase();
+      const bal      = parseFloat(w.balance || 0);
+      const avail    = parseFloat(w.balances?.available ?? w.balance ?? 0);
+      const pend     = parseFloat(w.balances?.pending ?? 0);
+      const lck      = parseFloat(w.balances?.locked  ?? 0);
+      const usdVal   = toUSD(bal, currency);
+
+      if (cryptoCodes.has(currency)) cryptoTotalUSD += usdVal;
+      else fiatTotalUSD += usdVal;
+
+      available += toUSD(avail, currency);
+      pending   += toUSD(pend,  currency);
+      locked    += toUSD(lck,   currency);
+    }
+
+    const totalUSD = fiatTotalUSD + cryptoTotalUSD;
+
+    res.json({
+      totalUSD:      Math.round(totalUSD    * 100) / 100,
+      fiatTotalUSD:  Math.round(fiatTotalUSD  * 100) / 100,
+      cryptoTotalUSD:Math.round(cryptoTotalUSD* 100) / 100,
+      available:     Math.round(available   * 100) / 100,
+      locked:        Math.round(locked      * 100) / 100,
+      pending:       Math.round(pending     * 100) / 100,
+      change24h:     null, // populated by a snapshot job in future
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * POST /wallet/internal-transfer
+ * Moves funds between a user's own wallets using SwapService.
+ * Supports: fiat→crypto, crypto→fiat, fiat→fiat, crypto→crypto.
+ *
+ * Body: { fromCurrency, toCurrency, amount, idempotencyKey }
+ */
+exports.internalTransfer = async (req, res, next) => {
+  try {
+    const { fromCurrency, toCurrency, amount, idempotencyKey } = req.body;
+    const userId = req.user.id;
+
+    if (!fromCurrency || !toCurrency || !amount) {
+      return res.status(400).json({ error: 'fromCurrency, toCurrency, and amount are required.' });
+    }
+    if (fromCurrency.toUpperCase() === toCurrency.toUpperCase()) {
+      return res.status(400).json({ error: 'Source and destination currencies must differ.' });
+    }
+    if (parseFloat(amount) <= 0) {
+      return res.status(400).json({ error: 'Amount must be greater than zero.' });
+    }
+
+    const key = idempotencyKey || `int_${userId}_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+
+    // Delegate to SwapService — it handles the atomic ledger mutation
+    const SwapService = require('../services/swapService');
+    const preview = await SwapService.calculateSwap({
+      userId,
+      fromCurrency: fromCurrency.toUpperCase(),
+      toCurrency:   toCurrency.toUpperCase(),
+      fromAmount:   parseFloat(amount),
+      fromNetwork:  'native',
+      toNetwork:    'native',
+    });
+
+    const result = await SwapService.executeSwap({
+      userId,
+      lockId:        preview.lockId,
+      idempotencyKey: key,
+    });
+
+    res.json({
+      success: true,
+      fromCurrency: fromCurrency.toUpperCase(),
+      toCurrency:   toCurrency.toUpperCase(),
+      fromAmount:   parseFloat(amount),
+      toAmount:     result.to_amount,
+      rate:         result.rate,
+      fee:          result.fee,
+      transactionId: result.transaction_id,
+    });
+  } catch (err) {
+    console.error('[WalletController] internalTransfer error:', err);
+    next(err);
+  }
+};
+

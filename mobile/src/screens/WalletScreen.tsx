@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, RefreshControl, Modal, TextInput, Alert, FlatList
+  ActivityIndicator, RefreshControl, FlatList, Alert, Platform
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import apiClient from '../api/apiClient';
@@ -10,370 +10,583 @@ import { useIsFocused } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList } from '../navigation/MainStack';
 
+// ── Types ────────────────────────────────────────────────────────────────────
 interface Wallet {
   id: string;
   currency: string;
   balance: number;
   available_balance: number;
   network?: string;
+  address?: string;
   asset?: string;
+}
+
+interface CurrencyMeta {
+  code: string;
+  name: string;
+  symbol: string;
+  flag: string;
+  color: string;
+  status: 'active' | 'coming_soon' | 'disabled';
+  deposit_enabled?: boolean;
+  withdraw_enabled?: boolean;
+  buy_enabled?: boolean;
+  sell_enabled?: boolean;
+  swap_enabled?: boolean;
+  decimal_places?: number;
+  networks?: string[];
 }
 
 interface LedgerEntry {
   id: string;
   amount: number;
   currency: string;
-  type: string;
+  type?: string;
+  activity_type?: string;
   status: string;
-  description?: string;
   created_at: string;
 }
 
+// ── Currency metadata ─────────────────────────────────────────────────────────
 const CURRENCY_ICONS: Record<string, string> = {
-  BTC: '₿', ETH: 'Ξ', USD: '$', NGN: '₦', EUR: '€', GBP: '£', JPY: '¥',
-  USDT: '₮', USDC: '🔵', default: '◎'
+  BTC: '₿', ETH: 'Ξ', USD: '$', NGN: '₦',
+  EUR: '€', GBP: '£', USDT: '₮', USDC: '●', default: '◎',
+};
+
+const CURRENCY_FLAGS: Record<string, string> = {
+  NGN: '🇳🇬', USD: '🇺🇸', EUR: '🇪🇺', GBP: '🇬🇧',
+  BTC: '🟠', ETH: '🔷', USDT: '🟢', USDC: '🔵',
 };
 
 const CURRENCY_COLORS: Record<string, [string, string]> = {
-  BTC: ['#f59e0b', '#d97706'],
-  ETH: ['#8b5cf6', '#6d28d9'],
-  USD: ['#10b981', '#059669'],
-  NGN: ['#6366f1', '#4f46e5'],
-  EUR: ['#3b82f6', '#2563eb'],
-  GBP: ['#ec4899', '#db2777'],
+  BTC:  ['#f59e0b', '#d97706'],
+  ETH:  ['#8b5cf6', '#6d28d9'],
+  USD:  ['#10b981', '#059669'],
+  NGN:  ['#6366f1', '#4f46e5'],
+  EUR:  ['#3b82f6', '#2563eb'],
+  GBP:  ['#ec4899', '#db2777'],
   USDT: ['#26a17b', '#1a7a5e'],
+  USDC: ['#2775ca', '#1a5aad'],
   default: ['#64748b', '#475569'],
 };
 
+const FIAT_CODES  = ['NGN', 'USD', 'EUR', 'GBP'];
+const CRYPTO_CODES = ['BTC', 'ETH', 'USDT', 'USDC'];
+
+// ── Default catalog ───────────────────────────────────────────────────────────
+const DEFAULT_FIAT: CurrencyMeta[] = [
+  { code: 'NGN', name: 'Nigerian Naira',  symbol: '₦', flag: '🇳🇬', color: '#6366f1', status: 'active' },
+  { code: 'USD', name: 'US Dollar',       symbol: '$', flag: '🇺🇸', color: '#10b981', status: 'coming_soon' },
+  { code: 'EUR', name: 'Euro',            symbol: '€', flag: '🇪🇺', color: '#3b82f6', status: 'coming_soon' },
+  { code: 'GBP', name: 'British Pound',   symbol: '£', flag: '🇬🇧', color: '#ec4899', status: 'coming_soon' },
+];
+
+const DEFAULT_CRYPTO: CurrencyMeta[] = [
+  { code: 'BTC',  name: 'Bitcoin',  symbol: '₿', flag: '🟠', color: '#f59e0b', status: 'active', networks: ['bitcoin', 'BEP20'] },
+  { code: 'ETH',  name: 'Ethereum', symbol: 'Ξ', flag: '🔷', color: '#8b5cf6', status: 'active', networks: ['ERC20', 'BEP20'] },
+  { code: 'USDT', name: 'Tether',   symbol: '₮', flag: '🟢', color: '#26a17b', status: 'active', networks: ['TRC20', 'ERC20'] },
+  { code: 'USDC', name: 'USD Coin', symbol: '●', flag: '🔵', color: '#2775ca', status: 'active', networks: ['ERC20', 'BEP20'] },
+];
+
+// ── Tab type ──────────────────────────────────────────────────────────────────
+type HubTab = 'fiat' | 'crypto' | 'exchange';
+
+// ─────────────────────────────────────────────────────────────────────────────
 export default function WalletScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
-  const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [ledger, setLedger] = useState<LedgerEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const isFocused = useIsFocused();
+
+  const [activeTab, setActiveTab]   = useState<HubTab>('fiat');
+  const [wallets,  setWallets]      = useState<Wallet[]>([]);
+  const [ledger,   setLedger]       = useState<LedgerEntry[]>([]);
+  const [fiatCatalog,   setFiatCatalog]   = useState<CurrencyMeta[]>(DEFAULT_FIAT);
+  const [cryptoCatalog, setCryptoCatalog] = useState<CurrencyMeta[]>(DEFAULT_CRYPTO);
+  const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedWallet, setSelectedWallet] = useState<Wallet | null>(null);
+  const [showBalances, setShowBalances] = useState(true);
+  const [rates, setRates] = useState<Record<string, number>>({});
 
-  // Transfer Modal
-  const [showTransfer, setShowTransfer] = useState(false);
-  const [recipient, setRecipient] = useState('');
-  const [transferAmount, setTransferAmount] = useState('');
-  const [transferLoading, setTransferLoading] = useState(false);
-
+  // ── Data loading ─────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
     try {
-      const [wRes, lRes] = await Promise.all([
-        apiClient.get(`/wallet`),
-        apiClient.get(`/wallet/ledger`),
+      const [wRes, lRes, rRes, cRes] = await Promise.allSettled([
+        apiClient.get('/wallet'),
+        apiClient.get('/wallet/ledger', { params: { limit: 15 } }),
+        apiClient.get('/wallet/exchange-rates'),
+        apiClient.get('/wallet/currencies'),
       ]);
 
-      const rawWallets = wRes.data || [];
-      const walletsData = rawWallets.map((w: any) => ({
-        ...w,
-        balance: typeof w.balance === 'string' ? parseFloat(w.balance) : (Number(w.balance) || 0),
-        available_balance: typeof w.available_balance === 'string' ? parseFloat(w.available_balance) : (Number(w.available_balance) || 0),
-        reserved_balance: typeof w.reserved_balance === 'string' ? parseFloat(w.reserved_balance) : (Number(w.reserved_balance) || 0),
-      }));
-
-      setWallets(walletsData);
-
-      if (walletsData.length > 0) {
-        setSelectedWallet((prev: Wallet | null) => {
-          if (!prev) return walletsData[0];
-          const updated = walletsData.find((w: any) => w.id === prev.id);
-          return updated || walletsData[0];
-        });
+      if (wRes.status === 'fulfilled') {
+        const raw = wRes.value.data || [];
+        setWallets(raw.map((w: any) => ({
+          ...w,
+          balance: parseFloat(w.balance) || 0,
+          available_balance: parseFloat(w.available_balance ?? w.balances?.available ?? w.balance) || 0,
+        })));
       }
 
-      setLedger(lRes.data?.entries || lRes.data || []);
-    } catch (e: any) {
-      console.error('[WalletScreen] Failed to load wallet data:', e?.message || e);
+      if (lRes.status === 'fulfilled') {
+        setLedger(lRes.value.data?.entries || lRes.value.data || []);
+      }
+
+      if (rRes.status === 'fulfilled') {
+        setRates(rRes.value.data?.rates || {});
+      }
+
+      if (cRes.status === 'fulfilled') {
+        const catalog = cRes.value.data;
+        if (catalog?.fiat?.length  > 0) setFiatCatalog(catalog.fiat);
+        if (catalog?.crypto?.length > 0) setCryptoCatalog(catalog.crypto);
+      }
+    } catch (e) {
+      console.error('[WalletScreen] loadData error:', e);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
-  const isFocused = useIsFocused();
-
-  useEffect(() => { loadData(); }, [loadData]);
-
-  // Re-fetch every time user navigates back to wallet (e.g. after a transfer or deposit)
   useEffect(() => {
-    if (isFocused) loadData();
-  }, [isFocused]);
+    if (isFocused) { setLoading(true); loadData(); }
+  }, [isFocused, loadData]);
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadData();
-    setRefreshing(false);
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  const getWallet = (code: string) =>
+    wallets.find(w => (w.currency || w.asset || '').toUpperCase() === code.toUpperCase());
+
+  const formatBalance = (amount: number, code: string, decimals = 2) => {
+    if (!showBalances) return '••••';
+    const abs = Math.abs(amount);
+    if (abs === 0) return '0.00';
+    if (['BTC', 'ETH'].includes(code)) return abs.toFixed(6);
+    return abs.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   };
 
-  const handleTransfer = async () => {
-    if (!recipient.trim() || !transferAmount) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
-    setTransferLoading(true);
-    try {
-      const payload = {
-        recipientId: recipient.trim(),
-        amount: parseFloat(transferAmount),
-        currency: selectedWallet?.currency || selectedWallet?.asset || 'USD',
-      };
-      const res = await apiClient.post(`/wallet/transfer`, payload);
-      Alert.alert('✅ Success', res.data?.message || 'Transfer completed successfully');
-      setShowTransfer(false);
-      setRecipient('');
-      setTransferAmount('');
-      loadData();
-    } catch (e: any) {
-      Alert.alert('Error', e.response?.data?.error || 'Transfer failed');
-    } finally {
-      setTransferLoading(false);
-    }
+  const toUSD = (amount: number, code: string) => {
+    if (code === 'USD') return amount;
+    const r = rates[code];
+    return r && r > 0 ? amount * r : 0;
   };
 
-  const primaryCurrency = selectedWallet?.currency || selectedWallet?.asset || 'USD';
-  const currentBalance = selectedWallet?.balance || 0;
+  const totalFiatUSD   = fiatCatalog.reduce((s, c)   => s + toUSD(getWallet(c.code)?.balance || 0, c.code), 0);
+  const totalCryptoUSD = cryptoCatalog.reduce((s, c) => s + toUSD(getWallet(c.code)?.balance || 0, c.code), 0);
+  const totalUSD       = totalFiatUSD + totalCryptoUSD;
+  const ngnRate        = rates['NGN'] || 0.00066;
+  const totalNGN       = totalUSD / ngnRate;
 
+  const onRefresh = () => { setRefreshing(true); loadData(); };
+
+  // ── Navigate to action ───────────────────────────────────────────────────
+  const goToAction = (type: string, currency: string) => {
+    (navigation as any).navigate('WalletAction', { type, currency });
+  };
+
+  const goToExchange = (mode?: string) => {
+    (navigation as any).navigate('Exchange', { mode: mode || 'buy' });
+  };
+
+  // ── Tab bar ───────────────────────────────────────────────────────────────
+  const renderTabs = () => (
+    <View style={styles.tabBar}>
+      {(['fiat', 'crypto', 'exchange'] as HubTab[]).map(tab => (
+        <TouchableOpacity
+          key={tab}
+          style={[styles.tabBtn, activeTab === tab && styles.tabBtnActive]}
+          onPress={() => setActiveTab(tab)}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.tabLabel, activeTab === tab && styles.tabLabelActive]}>
+            {tab === 'fiat' ? '🏦 Fiat' : tab === 'crypto' ? '₿ Crypto' : '⇄ Exchange'}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+
+  // ── Portfolio summary card ────────────────────────────────────────────────
+  const renderPortfolio = () => (
+    <LinearGradient
+      colors={['#0f0f23', '#1a1a3a', '#0f0f23']}
+      style={styles.portfolioCard}
+      start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+    >
+      <View style={styles.portfolioHeader}>
+        <Text style={styles.portfolioLabel}>Portfolio Value</Text>
+        <TouchableOpacity onPress={() => setShowBalances(b => !b)}>
+          <Text style={styles.eyeBtn}>{showBalances ? '👁' : '🙈'}</Text>
+        </TouchableOpacity>
+      </View>
+      <Text style={styles.portfolioTotal}>
+        {showBalances ? `₦${totalNGN.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '₦ ••••••'}
+      </Text>
+      <Text style={styles.portfolioUSD}>
+        {showBalances ? `≈ $${totalUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '≈ $ ••••'}
+      </Text>
+
+      <View style={styles.portfolioRow}>
+        <View style={styles.portfolioChip}>
+          <View style={[styles.dot, { backgroundColor: '#6366f1' }]} />
+          <Text style={styles.chipLabel}>Fiat</Text>
+          <Text style={styles.chipValue}>
+            {showBalances ? `$${totalFiatUSD.toFixed(2)}` : '••••'}
+          </Text>
+        </View>
+        <View style={styles.portfolioChip}>
+          <View style={[styles.dot, { backgroundColor: '#f59e0b' }]} />
+          <Text style={styles.chipLabel}>Crypto</Text>
+          <Text style={styles.chipValue}>
+            {showBalances ? `$${totalCryptoUSD.toFixed(2)}` : '••••'}
+          </Text>
+        </View>
+      </View>
+    </LinearGradient>
+  );
+
+  // ── Fiat wallet card ──────────────────────────────────────────────────────
+  const renderFiatCard = ({ item: meta }: { item: CurrencyMeta }) => {
+    const wallet   = getWallet(meta.code);
+    const balance  = wallet?.balance || 0;
+    const isActive = meta.status === 'active';
+    const colors   = CURRENCY_COLORS[meta.code] || CURRENCY_COLORS.default;
+
+    return (
+      <TouchableOpacity
+        style={[styles.walletCard, !isActive && styles.walletCardLocked]}
+        activeOpacity={isActive ? 0.8 : 0.95}
+        onPress={() => {
+          if (!isActive) {
+            Alert.alert(
+              'International Wallet',
+              `${meta.name} (${meta.code}) international deposits and payments will be available soon. Your wallet will automatically become active once this feature is enabled.`,
+              [{ text: 'Got it', style: 'default' }]
+            );
+          }
+        }}
+      >
+        <LinearGradient
+          colors={isActive ? [`${colors[0]}22`, `${colors[1]}11`] : ['#111122', '#0d0d1a']}
+          style={styles.walletCardGradient}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        >
+          {/* Header */}
+          <View style={styles.cardHeader}>
+            <View style={[styles.currencyIcon, { backgroundColor: `${colors[0]}20`, borderColor: `${colors[0]}40` }]}>
+              <Text style={styles.currencyIconText}>{meta.flag}</Text>
+            </View>
+            <View style={styles.cardHeaderText}>
+              <Text style={styles.currencyCode}>{meta.code}</Text>
+              <Text style={styles.currencyName}>{meta.name}</Text>
+            </View>
+            {!isActive && (
+              <View style={styles.lockedBadge}>
+                <Text style={styles.lockedText}>🔒 Soon</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Balance */}
+          <Text style={styles.balanceAmount}>
+            {isActive ? `${meta.symbol}${formatBalance(balance, meta.code)}` : '—'}
+          </Text>
+
+          {/* Actions */}
+          {isActive && (
+            <View style={styles.actionRow}>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => goToAction('deposit', meta.code)}>
+                <Text style={styles.actionBtnText}>⬇ Deposit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => goToAction('withdraw', meta.code)}>
+                <Text style={styles.actionBtnText}>⬆ Withdraw</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.actionBtn, styles.actionBtnAccent]} onPress={() => goToExchange('buy')}>
+                <Text style={[styles.actionBtnText, { color: '#a78bfa' }]}>⇄ Buy Crypto</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  };
+
+  // ── Crypto wallet card ────────────────────────────────────────────────────
+  const renderCryptoCard = ({ item: meta }: { item: CurrencyMeta }) => {
+    const wallet  = getWallet(meta.code);
+    const balance = wallet?.balance || 0;
+    const usdVal  = toUSD(balance, meta.code);
+    const colors  = CURRENCY_COLORS[meta.code] || CURRENCY_COLORS.default;
+
+    return (
+      <View style={styles.walletCard}>
+        <LinearGradient
+          colors={[`${colors[0]}22`, `${colors[1]}11`]}
+          style={styles.walletCardGradient}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        >
+          {/* Header */}
+          <View style={styles.cardHeader}>
+            <View style={[styles.currencyIcon, { backgroundColor: `${colors[0]}20`, borderColor: `${colors[0]}40` }]}>
+              <Text style={[styles.currencyIconText, { color: colors[0] }]}>{meta.symbol}</Text>
+            </View>
+            <View style={styles.cardHeaderText}>
+              <Text style={styles.currencyCode}>{meta.code}</Text>
+              <Text style={styles.currencyName}>{meta.name}</Text>
+            </View>
+            {/* Network badges */}
+            <View style={{ flexDirection: 'row', gap: 4 }}>
+              {(meta.networks || []).slice(0, 1).map(net => (
+                <View key={net} style={styles.networkBadge}>
+                  <Text style={styles.networkBadgeText}>{net}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Balance */}
+          <View style={styles.cryptoBalanceRow}>
+            <Text style={styles.balanceAmount}>
+              {showBalances ? `${meta.symbol}${formatBalance(balance, meta.code, meta.decimal_places)}` : '••••••'}
+            </Text>
+            <Text style={styles.usdEquiv}>
+              {showBalances ? `≈ $${usdVal.toFixed(2)}` : ''}
+            </Text>
+          </View>
+
+          {/* Actions */}
+          <View style={styles.actionRow}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => goToAction('deposit', meta.code)}>
+              <Text style={styles.actionBtnText}>⬇ Deposit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => goToAction('withdraw', meta.code)}>
+              <Text style={styles.actionBtnText}>⬆ Withdraw</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.actionBtn, styles.actionBtnAccent]} onPress={() => goToExchange('swap')}>
+              <Text style={[styles.actionBtnText, { color: '#a78bfa' }]}>⇄ Swap</Text>
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+      </View>
+    );
+  };
+
+  // ── Exchange tab ──────────────────────────────────────────────────────────
+  const renderExchangeTab = () => {
+    const EXCHANGE_ACTIONS = [
+      { mode: 'convert', label: 'Convert Fiat',  desc: 'Fiat ↔ Fiat',   icon: '⇄', color: '#3b82f6' },
+      { mode: 'buy',     label: 'Buy Crypto',    desc: 'Fiat → Crypto', icon: '🛒', color: '#10b981' },
+      { mode: 'sell',    label: 'Sell Crypto',   desc: 'Crypto → Fiat', icon: '💵', color: '#f97316' },
+      { mode: 'swap',    label: 'Swap Crypto',   desc: 'Crypto ↔ Crypto', icon: '🔄', color: '#8b5cf6' },
+    ];
+
+    const QUICK_PAIRS = [
+      { from: 'NGN', to: 'BTC', label: 'NGN → BTC' },
+      { from: 'BTC', to: 'NGN', label: 'BTC → NGN' },
+      { from: 'ETH', to: 'USDT', label: 'ETH → USDT' },
+      { from: 'NGN', to: 'USDT', label: 'NGN → USDT' },
+      { from: 'BTC', to: 'ETH', label: 'BTC → ETH' },
+    ];
+
+    return (
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 16 }}>
+        {/* Four action cards */}
+        <Text style={styles.sectionTitle}>Exchange Actions</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+          {EXCHANGE_ACTIONS.map(action => (
+            <TouchableOpacity
+              key={action.mode}
+              style={[styles.exchangeActionCard, { borderColor: `${action.color}40` }]}
+              onPress={() => goToExchange(action.mode)}
+              activeOpacity={0.7}
+            >
+              <Text style={{ fontSize: 28, marginBottom: 6 }}>{action.icon}</Text>
+              <Text style={[styles.exchangeActionLabel, { color: action.color }]}>{action.label}</Text>
+              <Text style={styles.exchangeActionDesc}>{action.desc}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Quick pairs */}
+        <Text style={styles.sectionTitle}>Quick Convert</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+          {QUICK_PAIRS.map(pair => (
+            <TouchableOpacity
+              key={pair.label}
+              style={styles.quickPairChip}
+              onPress={() => goToExchange(
+                CRYPTO_CODES.includes(pair.from) && FIAT_CODES.includes(pair.to) ? 'sell' :
+                FIAT_CODES.includes(pair.from) && CRYPTO_CODES.includes(pair.to) ? 'buy' : 'swap'
+              )}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.quickPairText}>{pair.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Recent activity preview */}
+        <Text style={styles.sectionTitle}>Recent Activity</Text>
+        {ledger.slice(0, 5).map(entry => {
+          const type = entry.activity_type || entry.type || 'TX';
+          const isCredit = entry.amount > 0;
+          return (
+            <View key={entry.id} style={styles.ledgerRow}>
+              <View style={[styles.ledgerIcon, { backgroundColor: isCredit ? '#10b98115' : '#ef444415' }]}>
+                <Text>{isCredit ? '⬇' : '⬆'}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.ledgerType}>{type.replace(/_/g, ' ')}</Text>
+                <Text style={styles.ledgerStatus}>{entry.status}</Text>
+              </View>
+              <Text style={[styles.ledgerAmount, { color: isCredit ? '#10b981' : '#ef4444' }]}>
+                {isCredit ? '+' : '-'}{Math.abs(entry.amount).toFixed(4)} {entry.currency}
+              </Text>
+            </View>
+          );
+        })}
+      </ScrollView>
+    );
+  };
+
+  // ── Activity section (shown under fiat/crypto tabs) ───────────────────────
+  const renderActivity = () => (
+    <View style={styles.activitySection}>
+      <Text style={styles.sectionTitle}>Recent Activity</Text>
+      {ledger.slice(0, 8).map(entry => {
+        const isCredit = entry.amount > 0;
+        return (
+          <View key={entry.id} style={styles.ledgerRow}>
+            <View style={[styles.ledgerIcon, { backgroundColor: isCredit ? '#10b98115' : '#ef444415' }]}>
+              <Text>{isCredit ? '⬇' : '⬆'}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.ledgerType}>
+                {(entry.activity_type || entry.type || 'Transaction').replace(/_/g, ' ')}
+              </Text>
+              <Text style={styles.ledgerStatus}>{entry.status}</Text>
+            </View>
+            <Text style={[styles.ledgerAmount, { color: isCredit ? '#10b981' : '#ef4444' }]}>
+              {isCredit ? '+' : '-'}{Math.abs(entry.amount).toFixed(4)} {entry.currency}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+
+  // ── Render ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#6366f1" />
+        <Text style={styles.loadingText}>Loading your wallets...</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Wallet</Text>
-        <TouchableOpacity style={styles.refreshBtn} onPress={onRefresh}>
-          <Text style={styles.refreshText}>↻</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Portfolio always visible */}
+      {renderPortfolio()}
+      {renderTabs()}
 
-      <ScrollView
-        style={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366f1" />}
-      >
-        {/* Balance Card */}
-        <LinearGradient colors={['#6366f1', '#4f46e5']} style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>{primaryCurrency} Wallet Balance</Text>
-          <Text 
-            style={styles.balanceValue} 
-            numberOfLines={1} 
-            adjustsFontSizeToFit
-          >
-            {currentBalance.toFixed(2)} {primaryCurrency}
-          </Text>
-          <Text style={styles.subBalance} numberOfLines={1} adjustsFontSizeToFit>
-            Available: {(selectedWallet?.available_balance || selectedWallet?.balance || 0).toFixed(2)} {primaryCurrency}
-          </Text>
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={styles.actionBtn}
-              onPress={() => navigation.navigate('WalletAction', { type: 'deposit', currency: primaryCurrency })}
-            >
-              <Text style={styles.actionEmoji}>📥</Text>
-              <Text style={styles.actionBtnText}>Deposit</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => setShowTransfer(true)}>
-              <Text style={styles.actionEmoji}>💸</Text>
-              <Text style={styles.actionBtnText}>Send</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionBtn}
-              onPress={() => navigation.navigate('WalletAction', { type: 'withdraw', currency: primaryCurrency })}
-            >
-              <Text style={styles.actionEmoji}>📤</Text>
-              <Text style={styles.actionBtnText}>Withdraw</Text>
-            </TouchableOpacity>
-          </View>
-        </LinearGradient>
-
-        {/* Assets */}
-        <Text style={styles.sectionTitle}>Your Assets</Text>
-        {wallets.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No wallets found. Create one from the web.</Text>
-          </View>
-        ) : (
-          wallets.map(w => {
-            const curr = w.currency || w.asset || 'USD';
-            const colors = CURRENCY_COLORS[curr] || CURRENCY_COLORS.default;
-            const icon = CURRENCY_ICONS[curr] || CURRENCY_ICONS.default;
-            const isSelected = selectedWallet?.id === w.id;
-
-            return (
-              <TouchableOpacity
-                key={w.id}
-                style={[styles.assetCard, isSelected && styles.assetCardSelected]}
-                onPress={() => setSelectedWallet(w)}
-                activeOpacity={0.8}
-              >
-                <LinearGradient colors={colors} style={styles.assetIcon}>
-                  <Text style={styles.assetIconText}>{icon}</Text>
-                </LinearGradient>
-                <View style={styles.assetInfo}>
-                  <Text style={styles.assetName}>{curr}</Text>
-                  <Text style={styles.assetNetwork}>{w.network || 'Mainnet'}</Text>
-                </View>
-                <View style={styles.assetBalanceWrap}>
-                  <Text style={styles.assetBalance} numberOfLines={1} adjustsFontSizeToFit>{(w.balance || 0).toFixed(2)}</Text>
-                  <Text style={styles.assetCurr}>{curr}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })
-        )}
-
-        {/* Transaction History */}
-        <Text style={styles.sectionTitle}>Recent Activity</Text>
-        {ledger.length > 0 ? (
-          ledger.slice(0, 20).map(item => (
-            <View key={item.id} style={styles.txItem}>
-              <View style={styles.txIconWrap}>
-                <Text style={{ fontSize: 20 }}>{item.amount > 0 ? '📥' : '📤'}</Text>
-              </View>
-              <View style={styles.txInfo}>
-                <Text style={styles.txType}>{item.type?.replace(/_/g, ' ') || 'Transaction'}</Text>
-                {item.description ? (
-                  <Text style={styles.txDesc} numberOfLines={1}>{item.description}</Text>
-                ) : null}
-                <Text style={styles.txDate}>{new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</Text>
-              </View>
-              <View style={styles.txAmountWrap}>
-                <Text style={[styles.txAmount, { color: item.amount > 0 ? '#10b981' : '#ef4444' }]}>
-                  {item.amount > 0 ? '+' : ''}{item.amount} {item.currency}
-                </Text>
-                <Text style={styles.txStatus}>{item.status}</Text>
-              </View>
-            </View>
-          ))
-        ) : (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No transactions yet</Text>
-          </View>
-        )}
-        <View style={{ height: 32 }} />
-      </ScrollView>
-
-      {/* Send Funds Modal */}
-      <Modal visible={showTransfer} transparent animationType="slide" onRequestClose={() => setShowTransfer(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Send Funds</Text>
-            <Text style={styles.modalHint}>Send to another NoteStandard user by username</Text>
-            <Text style={styles.modalLabel}>Recipient Username</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="e.g. johndoe"
-              placeholderTextColor="#555"
-              value={recipient}
-              onChangeText={setRecipient}
-              autoCapitalize="none"
-            />
-            <Text style={styles.modalLabel}>Amount ({primaryCurrency})</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="0.00"
-              placeholderTextColor="#555"
-              value={transferAmount}
-              onChangeText={setTransferAmount}
-              keyboardType="numeric"
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowTransfer(false)}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.confirmBtn} onPress={handleTransfer} disabled={transferLoading}>
-                {transferLoading
-                  ? <ActivityIndicator color="#fff" />
-                  : <Text style={styles.confirmBtnText}>Send Now</Text>
-                }
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {/* Tab content */}
+      {activeTab === 'exchange' ? (
+        renderExchangeTab()
+      ) : (
+        <FlatList
+          data={activeTab === 'fiat' ? fiatCatalog : cryptoCatalog}
+          keyExtractor={item => item.code}
+          renderItem={activeTab === 'fiat' ? renderFiatCard : renderCryptoCard}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366f1" />}
+          contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 40 }}
+          ListFooterComponent={renderActivity}
+        />
+      )}
     </View>
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#060611' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#060611' },
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingTop: 60, paddingHorizontal: 20, paddingBottom: 16,
+  loadingText: { color: '#6366f1', marginTop: 12, fontSize: 14 },
+
+  // Portfolio card
+  portfolioCard: { margin: 16, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: '#ffffff08' },
+  portfolioHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  portfolioLabel: { color: '#9ca3af', fontSize: 12, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase' },
+  eyeBtn: { fontSize: 18 },
+  portfolioTotal: { color: '#ffffff', fontSize: 34, fontWeight: '900', letterSpacing: -0.5 },
+  portfolioUSD: { color: '#6b7280', fontSize: 13, marginTop: 2, marginBottom: 16 },
+  portfolioRow: { flexDirection: 'row', gap: 10 },
+  portfolioChip: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#ffffff08', borderRadius: 12, padding: 10, borderWidth: 1, borderColor: '#ffffff08',
   },
-  title: { color: '#fff', fontSize: 28, fontWeight: '800' },
-  refreshBtn: { padding: 8 },
-  refreshText: { color: '#6366f1', fontSize: 22 },
-  scroll: { flex: 1, paddingHorizontal: 16 },
-  balanceCard: { borderRadius: 24, padding: 24, marginBottom: 24 },
-  balanceLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '600' },
-  balanceValue: { color: '#fff', fontSize: 36, fontWeight: '800', marginTop: 6 },
-  subBalance: { color: 'rgba(255,255,255,0.6)', fontSize: 13, marginTop: 4 },
-  actionRow: { flexDirection: 'row', gap: 10, marginTop: 20 },
-  actionBtn: {
-    flex: 1, backgroundColor: 'rgba(255,255,255,0.15)', paddingVertical: 12,
-    borderRadius: 14, alignItems: 'center',
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  chipLabel: { color: '#9ca3af', fontSize: 11, fontWeight: '600', flex: 1 },
+  chipValue: { color: '#ffffff', fontSize: 12, fontWeight: '700' },
+
+  // Tab bar
+  tabBar: {
+    flexDirection: 'row', marginHorizontal: 16, marginBottom: 4,
+    backgroundColor: '#ffffff08', borderRadius: 16, padding: 4,
+    borderWidth: 1, borderColor: '#ffffff08',
   },
-  actionEmoji: { fontSize: 20, marginBottom: 4 },
-  actionBtnText: { color: '#fff', fontWeight: '700', fontSize: 12 },
-  sectionTitle: {
-    color: '#555', fontSize: 12, fontWeight: '700', textTransform: 'uppercase',
-    letterSpacing: 1.5, marginBottom: 12, marginTop: 4,
+  tabBtn: { flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center' },
+  tabBtnActive: { backgroundColor: '#6366f1' },
+  tabLabel: { color: '#6b7280', fontSize: 12, fontWeight: '700' },
+  tabLabelActive: { color: '#ffffff' },
+
+  // Wallet card
+  walletCard: { borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: '#ffffff08' },
+  walletCardLocked: { opacity: 0.7 },
+  walletCardGradient: { padding: 18 },
+
+  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 14, gap: 12 },
+  currencyIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  currencyIconText: { fontSize: 22 },
+  cardHeaderText: { flex: 1 },
+  currencyCode: { color: '#ffffff', fontSize: 15, fontWeight: '800' },
+  currencyName: { color: '#6b7280', fontSize: 12 },
+
+  lockedBadge: { backgroundColor: '#374151', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  lockedText: { color: '#9ca3af', fontSize: 11, fontWeight: '600' },
+
+  balanceAmount: { color: '#ffffff', fontSize: 26, fontWeight: '900', letterSpacing: -0.5, marginBottom: 14 },
+
+  cryptoBalanceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 14 },
+  usdEquiv: { color: '#6b7280', fontSize: 13 },
+
+  networkBadge: { backgroundColor: '#ffffff10', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: '#ffffff08' },
+  networkBadgeText: { color: '#9ca3af', fontSize: 9, fontWeight: '700' },
+
+  actionRow: { flexDirection: 'row', gap: 8 },
+  actionBtn: { flex: 1, backgroundColor: '#ffffff0d', borderRadius: 10, paddingVertical: 9, alignItems: 'center', borderWidth: 1, borderColor: '#ffffff08' },
+  actionBtnAccent: { borderColor: '#6366f130' },
+  actionBtnText: { color: '#d1d5db', fontSize: 11, fontWeight: '700' },
+
+  // Exchange tab
+  exchangeActionCard: {
+    width: '47%', backgroundColor: '#0d0d1e', borderRadius: 16, padding: 16,
+    borderWidth: 1, alignItems: 'center',
   },
-  assetCard: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#0d0d1e',
-    padding: 16, borderRadius: 18, marginBottom: 10, borderWidth: 1, borderColor: '#111133',
+  exchangeActionLabel: { fontSize: 13, fontWeight: '800', marginBottom: 2 },
+  exchangeActionDesc: { color: '#6b7280', fontSize: 10 },
+
+  quickPairChip: {
+    backgroundColor: '#ffffff08', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8,
+    borderWidth: 1, borderColor: '#ffffff08',
   },
-  assetCardSelected: { borderColor: '#6366f1', backgroundColor: '#0d0d24' },
-  assetIcon: {
-    width: 44, height: 44, borderRadius: 14,
-    justifyContent: 'center', alignItems: 'center', marginRight: 14,
-  },
-  assetIconText: { fontSize: 18 },
-  assetInfo: { flex: 1 },
-  assetName: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  assetNetwork: { color: '#555', fontSize: 11, marginTop: 2 },
-  assetBalanceWrap: { alignItems: 'flex-end' },
-  assetBalance: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  assetCurr: { color: '#555', fontSize: 11 },
-  txItem: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#0d0d1e',
-    padding: 14, borderRadius: 16, marginBottom: 10, borderWidth: 1, borderColor: '#111133',
-  },
-  txIconWrap: {
-    width: 44, height: 44, borderRadius: 22, backgroundColor: '#111122',
-    justifyContent: 'center', alignItems: 'center', marginRight: 12,
-  },
-  txInfo: { flex: 1 },
-  txType: { color: '#fff', fontSize: 13, fontWeight: '600', textTransform: 'capitalize' },
-  txDesc: { color: '#666', fontSize: 11, marginTop: 1 },
-  txDate: { color: '#444', fontSize: 11, marginTop: 4 },
-  txAmountWrap: { alignItems: 'flex-end' },
-  txAmount: { fontSize: 13, fontWeight: '700' },
-  txStatus: { fontSize: 10, color: '#666', marginTop: 3, textTransform: 'capitalize' },
-  emptyCard: { backgroundColor: '#0d0d1e', borderRadius: 16, padding: 24, alignItems: 'center', marginBottom: 16 },
-  emptyText: { color: '#555', fontSize: 13 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
-  modalContent: {
-    backgroundColor: '#0d0d1e', borderTopLeftRadius: 28, borderTopRightRadius: 28,
-    padding: 28, borderWidth: 1, borderColor: '#1a1a3e',
-  },
-  modalTitle: { color: '#fff', fontSize: 20, fontWeight: '800' },
-  modalHint: { color: '#555', fontSize: 13, marginTop: 4, marginBottom: 16 },
-  modalLabel: { color: '#888', fontSize: 12, fontWeight: '600', marginBottom: 8, marginTop: 12 },
-  modalInput: {
-    backgroundColor: '#060611', color: '#fff', padding: 16,
-    borderRadius: 12, borderWidth: 1, borderColor: '#1a1a3e', fontSize: 15,
-  },
-  modalActions: { flexDirection: 'row', gap: 12, marginTop: 28, marginBottom: 8 },
-  cancelBtn: { flex: 1, padding: 16, alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#333' },
-  cancelBtnText: { color: '#888', fontWeight: '600' },
-  confirmBtn: { flex: 2, backgroundColor: '#6366f1', padding: 16, borderRadius: 12, alignItems: 'center' },
-  confirmBtnText: { color: '#fff', fontWeight: '700' },
+  quickPairText: { color: '#d1d5db', fontSize: 12, fontWeight: '600' },
+
+  // Activity
+  activitySection: { paddingHorizontal: 4, paddingTop: 8 },
+  sectionTitle: { color: '#9ca3af', fontSize: 12, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 },
+
+  ledgerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#ffffff05' },
+  ledgerIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  ledgerType: { color: '#e5e7eb', fontSize: 13, fontWeight: '600' },
+  ledgerStatus: { color: '#6b7280', fontSize: 11, marginTop: 1 },
+  ledgerAmount: { fontSize: 13, fontWeight: '700' },
 });

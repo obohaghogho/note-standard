@@ -7,11 +7,12 @@
 
 const PAYMENT_PROVIDER_CAPABILITIES = {
   paystack: {
-    // Paystack supports these natively if International Payments are enabled
-    supportedCurrencies: ["NGN", "USD", "ZAR", "GHS", "KES", "EGP"],
+    // Paystack supports NGN natively. EUR, GBP, USD are supported via International Payments.
+    // ZAR, GHS, KES, EGP are regional African currencies.
+    supportedCurrencies: ["NGN", "USD", "EUR", "GBP", "ZAR", "GHS", "KES", "EGP"],
     supportsInternational: true,
     requiresSmallestUnit: true, // Requires cents/kobo
-    settlementCurrencies: ["NGN", "USD"], // Configured on their dashboard
+    settlementCurrencies: ["NGN", "USD", "EUR", "GBP"], // Configured on their dashboard
   },
   grey: {
     supportedCurrencies: ["USD", "EUR", "GBP"],

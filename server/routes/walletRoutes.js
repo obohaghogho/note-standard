@@ -69,4 +69,16 @@ router.post(
 // Affiliate Endpoints
 router.get("/affiliates/my-stats", walletController.getMyAffiliateStats);
 
+// ── Wallet Hub Endpoints ─────────────────────────────────────────────────────
+// These aggregate and enrich existing data for the multi-currency Wallet Hub UI.
+router.get("/hub",               walletController.getHubView);
+router.get("/portfolio",         walletController.getPortfolioSummary);
+router.get("/currencies",        walletController.getCurrencyCatalog);
+router.post(
+  "/internal-transfer",
+  transactionLimiter,
+  walletController.internalTransfer,
+);
+
 module.exports = router;
+

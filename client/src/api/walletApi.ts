@@ -254,6 +254,105 @@ export const walletApi = {
     if (response.data?.found === false || response.data?.data === null) return null;
     return response.data;
   }
+  // ── Wallet Hub API ────────────────────────────────────────────────────────
+
+  /** GET /wallet/hub — combined fiat wallets + crypto wallets + catalog + recent activity */
+  async getHubView(): Promise<{
+    fiatWallets: any[];
+    cryptoWallets: any[];
+    portfolio: any;
+    currencyCatalog: { fiat: any[]; crypto: any[] };
+    recentActivity: any[];
+  }> {
+    try {
+      const response = await api.get('/wallet/hub');
+      return response.data;
+    } catch {
+      // Graceful fallback: use the existing endpoints individually
+      const [wallets, rates] = await Promise.all([
+        api.get('/wallet'),
+        api.get('/wallet/exchange-rates').catch(() => ({ data: { rates: {} } })),
+      ]);
+      const allWallets: any[] = wallets.data || [];
+      const fiatCodes = ['NGN', 'USD', 'EUR', 'GBP'];
+      const cryptoCodes = ['BTC', 'ETH', 'USDT', 'USDC'];
+      return {
+        fiatWallets: allWallets.filter(w => fiatCodes.includes(w.currency?.toUpperCase())),
+        cryptoWallets: allWallets.filter(w => cryptoCodes.includes(w.currency?.toUpperCase())),
+        portfolio: null,
+        currencyCatalog: { fiat: [], crypto: [] },
+        recentActivity: [],
+      };
+    }
+  },
+
+  /** GET /wallet/currencies — DB-first currency catalog with statuses */
+  async getCurrencies(): Promise<{ fiat: any[]; crypto: any[] }> {
+    try {
+      const response = await api.get('/wallet/currencies');
+      return response.data;
+    } catch {
+      return { fiat: [], crypto: [] };
+    }
+  },
+
+  /** GET /wallet/portfolio — portfolio summary with 24h change */
+  async getPortfolioSummary(): Promise<any> {
+    try {
+      const response = await api.get('/wallet/portfolio');
+      return response.data;
+    } catch {
+      return null;
+    }
+  },
+
+  /** POST /wallet/internal-transfer — move funds between own wallets */
+  async walletInternalTransfer(data: {
+    fromCurrency: string;
+    toCurrency: string;
+    amount: number;
+    idempotencyKey: string;
+  }): Promise<any> {
+    const response = await api.post('/wallet/internal-transfer', data);
+    return response.data;
+  },
+
+  /** Convenience shorthand for getLedgerEntries (used by RecentActivity) */
+  async getLedger(limit = 20): Promise<{ entries: any[] }> {
+    const response = await api.get('/wallet/ledger', { params: { limit } });
+    return response.data;
+  },
+
+  /**
+   * Hub-friendly swap preview — accepts object instead of positional args.
+   * Wraps the existing previewSwap endpoint.
+   */
+  async previewSwapHub(data: {
+    fromCurrency: string;
+    toCurrency: string;
+    amount: number;
+    slippage?: number;
+  }): Promise<any> {
+    const response = await api.post('/wallet/swap/preview', {
+      from: data.fromCurrency,
+      to: data.toCurrency,
+      amount: data.amount,
+      slippage: data.slippage ?? 0.005,
+    });
+    return response.data;
+  },
+
+  /**
+   * Hub-friendly swap execute — accepts object instead of positional args.
+   * Wraps the existing executeSwap endpoint.
+   */
+  async executeSwapHub(data: { lockId: string; idempotencyKey: string }): Promise<any> {
+    const response = await api.post('/wallet/swap', {
+      lockId: data.lockId,
+      idempotencyKey: data.idempotencyKey,
+    });
+    return response.data;
+  },
 };
 
 export default walletApi;
