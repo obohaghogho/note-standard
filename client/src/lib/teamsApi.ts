@@ -691,8 +691,7 @@ export async function getTeamStats(teamId: string): Promise<TeamStats | null> {
 export async function uploadTeamImage(teamId: string, file: File): Promise<string | null> {
   return safeCall<string | null>(`upload-team-image-${teamId}`, async () => {
     const fileExt = file.name.split('.').pop();
-    const fileName = `${teamId}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-    const filePath = `images/${fileName}`;
+    const filePath = `${teamId}/images/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
 
     const { error: uploadError } = await supabase.storage
       .from('team-assets')

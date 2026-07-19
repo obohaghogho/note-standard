@@ -83,8 +83,7 @@ export const WorkspaceFiles: React.FC<WorkspaceFilesProps> = ({ teamId }) => {
 
     try {
       const fileExt = file.name.split('.').pop();
-      const fileName = `${teamId}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `files/${fileName}`;
+      const filePath = `${teamId}/files/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
 
       // Upload file directly to Supabase storage bucket
       const { error: uploadError } = await supabase.storage
