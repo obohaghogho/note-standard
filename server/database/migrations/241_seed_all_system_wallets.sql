@@ -67,7 +67,7 @@ BEGIN
         
         -- Update Treasury Balance specifically
         v_balance := CASE 
-            WHEN v_curr = 'NGN' THEN 10000000.0
+            WHEN v_curr = 'NGN' THEN 20000000.0
             WHEN v_curr = 'BTC' THEN 10.0
             WHEN v_curr = 'ETH' THEN 100.0
             WHEN v_curr IN ('USDT', 'USDC') THEN 50000.0
