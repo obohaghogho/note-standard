@@ -199,6 +199,9 @@ class FiatWalletService {
     const commissionService = require("./commissionService");
     
     const wallet = await this.createWallet(userId, upCurrency);
+    if (Number(wallet.available_balance) < numAmount) {
+        throw new Error(`INSUFFICIENT_FUNDS: Available balance (${wallet.available_balance} ${upCurrency}) is less than requested amount (${numAmount} ${upCurrency}).`);
+    }
     const commission = await commissionService.calculateCommission("WITHDRAWAL", numAmount, upCurrency, data.userPlan || 'FREE');
     
     let initialStatus = 'pending_review';

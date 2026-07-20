@@ -201,6 +201,9 @@ class CryptoWalletService {
 
     const payoutService = require("./payment/payoutService");
     const wallet = await this.createWallet(userId, upCurrency, network);
+    if (Number(wallet.available_balance) < parseFloat(amount)) {
+        throw new Error(`INSUFFICIENT_FUNDS: Available balance (${wallet.available_balance} ${upCurrency}) is less than requested amount (${amount} ${upCurrency}).`);
+    }
     
     // Create payout request directly (assuming crypto doesn't go through fiat fraud engine for now, or use a separate one)
     const payoutIntent = await payoutService.createPayoutRequest(userId, wallet.id, {
