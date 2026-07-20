@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Roboto+Mono:wght@400;700&family=Outfit:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Roboto+Mono:wght@400;700&family=Outfit:wght@400;700&family=Cinzel:wght@400;700&family=Dancing+Script:wght@500;700&family=Orbitron:wght@500;800&family=Special+Elite&family=Pacifico&display=swap');
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
@@ -887,57 +887,194 @@ a {
   background-color: transparent;
 }
 
-/* Midnight Aurora - Moving cosmic gas style */
+/* Midnight Aurora - Deep cosmic mesh with moving colorful gas */
 .bg-theme-aurora {
-  background: linear-gradient(270deg, #090b16, #140d2d, #270636, #0e0220);
-  background-size: 600% 600%;
-  animation: theme-aurora-anim 16s ease infinite;
+  background: #05060f;
+  position: relative;
+  overflow: hidden;
 }
-@keyframes theme-aurora-anim {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+.bg-theme-aurora::before,
+.bg-theme-aurora::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.5;
+  mix-blend-mode: screen;
+  animation: aurora-mesh-anim 20s infinite alternate ease-in-out;
+  pointer-events: none;
+}
+.bg-theme-aurora::before {
+  width: 140%;
+  height: 140%;
+  background: radial-gradient(circle, #3b82f6 0%, #1e1b4b 60%, transparent 100%);
+  top: -40%;
+  left: -20%;
+}
+.bg-theme-aurora::after {
+  width: 120%;
+  height: 120%;
+  background: radial-gradient(circle, #a855f7 0%, #311042 60%, transparent 100%);
+  bottom: -30%;
+  right: -10%;
+  animation-duration: 26s;
+  animation-delay: -6s;
+}
+@keyframes aurora-mesh-anim {
+  0% { transform: translate(0, 0) scale(1) rotate(0deg); }
+  50% { transform: translate(15%, 20%) scale(1.15) rotate(180deg); }
+  100% { transform: translate(-10%, -15%) scale(0.9) rotate(360deg); }
 }
 
-/* Cyberpunk Grid - Retro glowing neon matrix grid */
+/* Cyberpunk Grid - Retro synthwave vector wireframe with huge glowing sun */
 .bg-theme-grid {
-  background-color: #04050d;
+  background-color: #04050a;
   background-image: 
-    linear-gradient(to right, rgba(99, 102, 241, 0.04) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(99, 102, 241, 0.04) 1px, transparent 1px);
-  background-size: 32px 32px;
+    linear-gradient(to right, rgba(236, 72, 153, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(236, 72, 153, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
   position: relative;
+  overflow: hidden;
+}
+.bg-theme-grid::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
+  height: 80%;
+  background: radial-gradient(circle, rgba(236, 72, 153, 0.12) 0%, rgba(99, 102, 241, 0.08) 50%, transparent 80%);
+  filter: blur(40px);
+  pointer-events: none;
 }
 .bg-theme-grid::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at center, transparent 30%, #000 95%);
+  background: 
+    radial-gradient(circle at center, transparent 40%, #000000 95%),
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+    linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  background-size: 100% 100%, 100% 4px, 6px 100%;
   pointer-events: none;
 }
 
-/* Sunset Glow - Slow morphing warm sunset */
+/* Sunset Glow - Slow morphing warm sunset waves */
 .bg-theme-sunset {
-  background: linear-gradient(135deg, #180529, #2d0315, #3a1501, #1b0232);
-  background-size: 400% 400%;
-  animation: theme-sunset-anim 12s ease infinite;
+  background: #14050d;
+  position: relative;
+  overflow: hidden;
 }
-@keyframes theme-sunset-anim {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+.bg-theme-sunset::before,
+.bg-theme-sunset::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.55;
+  mix-blend-mode: color-dodge;
+  animation: sunset-mesh-anim 16s infinite alternate ease-in-out;
+  pointer-events: none;
+}
+.bg-theme-sunset::before {
+  width: 130%;
+  height: 130%;
+  background: radial-gradient(circle, #f97316 0%, #4c0519 65%, transparent 100%);
+  top: -30%;
+  right: -20%;
+}
+.bg-theme-sunset::after {
+  width: 120%;
+  height: 120%;
+  background: radial-gradient(circle, #db2777 0%, #2e0854 65%, transparent 100%);
+  bottom: -40%;
+  left: -10%;
+  animation-duration: 22s;
+  animation-delay: -4s;
+}
+@keyframes sunset-mesh-anim {
+  0% { transform: translate(0, 0) scale(1) rotate(0deg); }
+  50% { transform: translate(-10%, 15%) scale(1.1) rotate(120deg); }
+  100% { transform: translate(15%, -10%) scale(0.95) rotate(240deg); }
 }
 
 /* Forest Rain - Organic deep emerald glow */
 .bg-theme-forest {
-  background: linear-gradient(135deg, #011c16, #033628, #071510, #01140c);
-  background-size: 400% 400%;
-  animation: theme-forest-anim 14s ease infinite;
+  background: #010f0b;
+  position: relative;
+  overflow: hidden;
 }
-@keyframes theme-forest-anim {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+.bg-theme-forest::before,
+.bg-theme-forest::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(110px);
+  opacity: 0.45;
+  mix-blend-mode: screen;
+  animation: forest-mesh-anim 18s infinite alternate ease-in-out;
+  pointer-events: none;
+}
+.bg-theme-forest::before {
+  width: 130%;
+  height: 130%;
+  background: radial-gradient(circle, #10b981 0%, #064e3b 60%, transparent 100%);
+  top: -20%;
+  left: -10%;
+}
+.bg-theme-forest::after {
+  width: 110%;
+  height: 110%;
+  background: radial-gradient(circle, #06b6d4 0%, #083344 60%, transparent 100%);
+  bottom: -30%;
+  right: -10%;
+  animation-duration: 24s;
+  animation-delay: -5s;
+}
+@keyframes forest-mesh-anim {
+  0% { transform: translate(0, 0) scale(1) rotate(0deg); }
+  50% { transform: translate(12%, -15%) scale(1.08) rotate(-120deg); }
+  100% { transform: translate(-8%, 10%) scale(0.92) rotate(-240deg); }
+}
+
+/* Lavender Dream - Dreamy pastel cloud texture with moving bubble shapes */
+.bg-theme-lavender {
+  background: #0e0b16;
+  position: relative;
+  overflow: hidden;
+}
+.bg-theme-lavender::before,
+.bg-theme-lavender::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(95px);
+  opacity: 0.5;
+  mix-blend-mode: screen;
+  animation: lavender-mesh-anim 15s infinite alternate ease-in-out;
+  pointer-events: none;
+}
+.bg-theme-lavender::before {
+  width: 140%;
+  height: 140%;
+  background: radial-gradient(circle, #ec4899 0%, #311042 65%, transparent 100%);
+  top: -40%;
+  right: -20%;
+}
+.bg-theme-lavender::after {
+  width: 120%;
+  height: 120%;
+  background: radial-gradient(circle, #8b5cf6 0%, #1e1b4b 65%, transparent 100%);
+  bottom: -20%;
+  left: -10%;
+  animation-duration: 21s;
+  animation-delay: -3s;
+}
+@keyframes lavender-mesh-anim {
+  0% { transform: translate(0, 0) scale(1) rotate(0deg); }
+  50% { transform: translate(10%, -10%) scale(1.12) rotate(150deg); }
+  100% { transform: translate(-12%, 12%) scale(0.9) rotate(300deg); }
 }
 
 /* Font Styles - Text Patterns */
@@ -952,6 +1089,18 @@ a {
 }
 .font-theme-round {
   font-family: 'Outfit', 'Segoe UI', system-ui, sans-serif !important;
+}
+.font-theme-royal {
+  font-family: 'Cinzel', 'Times New Roman', Times, serif !important;
+}
+.font-theme-cursive {
+  font-family: 'Dancing Script', cursive, sans-serif !important;
+}
+.font-theme-typewriter {
+  font-family: 'Special Elite', 'Courier New', Courier, monospace !important;
+}
+.font-theme-fun {
+  font-family: 'Pacifico', cursive, sans-serif !important;
 }
 
 /* Disable transitions on layout containers to prevent lagging behind the keyboard */

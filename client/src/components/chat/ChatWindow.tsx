@@ -1493,7 +1493,7 @@ const ChatWindow: React.FC = () => {
             />
             {showCustomizeModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setShowCustomizeModal(false)}>
-                    <div className="relative bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl flex flex-col max-h-[90dvh] w-full max-w-md p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                    <div className="relative bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl flex flex-col max-h-[90dvh] w-full max-w-md p-6 animate-in zoom-in-95 duration-200 overflow-y-auto custom-scrollbar" onClick={e => e.stopPropagation()}>
                         <button 
                             type="button"
                             onClick={() => setShowCustomizeModal(false)}
@@ -1505,14 +1505,15 @@ const ChatWindow: React.FC = () => {
                         
                         {/* Wallpaper Selection */}
                         <div className="space-y-3 mb-6">
-                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-1">Animated Backgrounds</label>
+                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-1">Premium Animated Backgrounds</label>
                             <div className="grid grid-cols-2 gap-3">
                                 {[
                                     { id: 'classic', label: 'Classic Dark', preview: 'bg-gray-950' },
-                                    { id: 'aurora', label: 'Midnight Aurora', preview: 'bg-gradient-to-r from-blue-900 via-indigo-950 to-purple-950' },
+                                    { id: 'aurora', label: 'Midnight Aurora', preview: 'bg-theme-aurora' },
                                     { id: 'grid', label: 'Cyberpunk Grid', preview: 'bg-theme-grid' },
-                                    { id: 'sunset', label: 'Sunset Glow', preview: 'bg-gradient-to-r from-amber-950 via-rose-950 to-purple-950' },
-                                    { id: 'forest', label: 'Forest Rain', preview: 'bg-gradient-to-r from-teal-950 via-emerald-950 to-cyan-950' },
+                                    { id: 'sunset', label: 'Sunset Glow', preview: 'bg-theme-sunset' },
+                                    { id: 'forest', label: 'Forest Rain', preview: 'bg-theme-forest' },
+                                    { id: 'lavender', label: 'Lavender Dream', preview: 'bg-theme-lavender' },
                                 ].map((item) => (
                                     <button
                                         type="button"
@@ -1521,14 +1522,14 @@ const ChatWindow: React.FC = () => {
                                             setBgTheme(item.id);
                                             localStorage.setItem('chat_bg_theme', item.id);
                                         }}
-                                        className={`flex items-center gap-2 p-2 rounded-xl border text-xs text-left transition-all ${
+                                        className={`flex items-center gap-2 p-2 rounded-xl border text-xs text-left transition-all relative overflow-hidden ${
                                             bgTheme === item.id 
-                                                ? 'border-blue-500 bg-blue-500/10 font-bold text-white' 
+                                                ? 'border-blue-500 bg-blue-500/10 font-bold text-white shadow-lg shadow-blue-500/20' 
                                                 : 'border-white/5 bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
                                         }`}
                                     >
-                                        <div className={`w-8 h-8 rounded-lg ${item.preview} border border-white/10`} />
-                                        <span>{item.label}</span>
+                                        <div className={`w-8 h-8 rounded-lg ${item.preview} border border-white/10 flex-shrink-0 relative overflow-hidden`} />
+                                        <span className="truncate">{item.label}</span>
                                     </button>
                                 ))}
                             </div>
@@ -1536,13 +1537,17 @@ const ChatWindow: React.FC = () => {
 
                         {/* Font Selection */}
                         <div className="space-y-3">
-                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-1">Text Writing Styles</label>
+                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-1">Beautiful Handwriting & Text Styles</label>
                             <div className="grid grid-cols-2 gap-3">
                                 {[
                                     { id: 'sans', label: 'Modern Sans', styleClass: 'font-theme-sans' },
-                                    { id: 'serif', label: 'Elegant Serif', styleClass: 'font-theme-serif' },
-                                    { id: 'mono', label: 'Tech Mono', styleClass: 'font-theme-mono' },
-                                    { id: 'round', label: 'Playful Round', styleClass: 'font-theme-round' },
+                                    { id: 'serif', label: 'Editorial Serif', styleClass: 'font-theme-serif' },
+                                    { id: 'mono', label: 'Developer Mono', styleClass: 'font-theme-mono' },
+                                    { id: 'round', label: 'Premium Round', styleClass: 'font-theme-round' },
+                                    { id: 'royal', label: 'Royal Classic', styleClass: 'font-theme-royal' },
+                                    { id: 'cursive', label: 'Dancing Script', styleClass: 'font-theme-cursive' },
+                                    { id: 'typewriter', label: 'Retro Typewriter', styleClass: 'font-theme-typewriter' },
+                                    { id: 'fun', label: 'Fun Pacifico', styleClass: 'font-theme-fun' },
                                 ].map((item) => (
                                     <button
                                         type="button"
@@ -1553,12 +1558,12 @@ const ChatWindow: React.FC = () => {
                                         }}
                                         className={`flex flex-col gap-1 p-3 rounded-xl border text-left transition-all ${
                                             fontTheme === item.id 
-                                                ? 'border-blue-500 bg-blue-500/10 text-white' 
+                                                ? 'border-blue-500 bg-blue-500/10 text-white shadow-lg shadow-blue-500/15' 
                                                 : 'border-white/5 bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
                                         }`}
                                     >
-                                        <span className="text-xs font-bold">{item.label}</span>
-                                        <span className={`text-[10px] opacity-75 ${item.styleClass}`}>Beautiful text pattern</span>
+                                        <span className="text-xs font-bold truncate">{item.label}</span>
+                                        <span className={`text-[11px] opacity-90 truncate leading-relaxed ${item.styleClass}`}>Aesthetic style</span>
                                     </button>
                                 ))}
                             </div>
