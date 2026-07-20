@@ -437,7 +437,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const shouldRegisterSession = event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || wasSwitching;
           if (shouldRegisterSession) {
             getDeviceId().then(deviceId => {
-            const apiBase = import.meta.env.VITE_API_URL || '';
+            const apiBase = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5001' : 'https://note-standard-api.onrender.com');
             fetch(`${apiBase}/api/auth/register-session`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },

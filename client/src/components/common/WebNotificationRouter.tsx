@@ -109,7 +109,7 @@ export const WebNotificationRouter: React.FC = () => {
       if (activeAccount?.tokens?.access_token) {
         try {
           // Step 6a: Register fresh session for the new account and get new sessionId
-          const apiBase = import.meta.env.VITE_API_URL || '';
+          const apiBase = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5001' : 'https://note-standard-api.onrender.com');
           const sessionResp = await fetch(`${apiBase}/api/auth/register-session`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -163,7 +163,7 @@ export const WebNotificationRouter: React.FC = () => {
           .then(async (reg) => {
             const sub = await reg.pushManager.getSubscription();
             if (!sub) return;
-            const apiBase = import.meta.env.VITE_API_URL || '';
+            const apiBase = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5001' : 'https://note-standard-api.onrender.com');
             const token = activeAccount.tokens.access_token;
 
             // Legacy re-register

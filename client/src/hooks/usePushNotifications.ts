@@ -76,7 +76,7 @@ export function usePushNotifications() {
       // Phase 1: Dual-Write to new V2 multi-account installation endpoint
       try {
         const { getDeviceId } = await import('../utils/deviceId');
-        const deviceId = getDeviceId();
+        const deviceId = await getDeviceId();
         
         await fetch(`${API_URL}/api/notifications/register-installation`, {
           method: 'POST',

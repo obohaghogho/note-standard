@@ -216,7 +216,7 @@ async function sendChatPush({ supabase, firebaseApp: fbApp, userId, title, body,
       return sendFcm(resolvedFbApp, supabase, t, { userId, title, body, messageId, conversationId, webhookUrl });
     }
     if (t.platform === 'web' && t.type === 'vapid' && t.push_endpoint) {
-      return sendWeb(supabase, t, { userId, title, body, messageId, conversationId });
+      return sendWeb(supabase, t, { userId, title, body, messageId, conversationId, webhookUrl });
     }
     return Promise.resolve(); // iOS APNs: add here when needed
   }));
@@ -277,7 +277,7 @@ async function sendFcm(fbApp, supabase, target, { userId, title, body, messageId
 }
 
 /** Web push (VAPID) */
-async function sendWeb(supabase, target, { userId, title, body, messageId, conversationId }) {
+async function sendWeb(supabase, target, { userId, title, body, messageId, conversationId, webhookUrl }) {
   if (!process.env.VAPID_PUBLIC_KEY) return;
 
   const payload = JSON.stringify({
@@ -290,6 +290,7 @@ async function sendWeb(supabase, target, { userId, title, body, messageId, conve
       url: '/dashboard/chat',
       recipientId: userId,
       targetAccountId: userId,
+      deliveryWebhookUrl: webhookUrl || '',
     },
   });
 
