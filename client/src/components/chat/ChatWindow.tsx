@@ -109,6 +109,9 @@ const ChatWindow: React.FC = () => {
     const [showAttachMenu, setShowAttachMenu] = useState(false);
     const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
     const signedUrlsRef = useRef<Record<string, string>>({});
+    const [bgTheme, setBgTheme] = useState(() => localStorage.getItem('chat_bg_theme') || 'classic');
+    const [fontTheme, setFontTheme] = useState(() => localStorage.getItem('chat_font_theme') || 'sans');
+    const [showCustomizeModal, setShowCustomizeModal] = useState(false);
     useEffect(() => {
         signedUrlsRef.current = signedUrls;
     }, [signedUrls]);
@@ -754,6 +757,8 @@ const ChatWindow: React.FC = () => {
         <div className="chat-root bg-crystal text-white w-full h-full flex flex-col relative overflow-hidden md:max-w-[1200px] md:mx-auto md:shadow-2xl md:border-x md:border-white/5">
             {/* Immersive glass layer overlay */}
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-none z-0" />
+            {/* Custom Chat Wallpaper Background */}
+            <div className={`absolute inset-0 pointer-events-none z-0 ${bgTheme === 'classic' ? 'bg-theme-classic' : `bg-theme-${bgTheme}`}`} style={{ transition: 'all 0.5s ease' }} />
             {/* ── Selection Action Bar (WhatsApp-style) ── */}
             {isSelectionMode ? (
                 <div className="chat-header border-b border-blue-500/30 bg-blue-600/10 backdrop-blur-md" onClick={(e) => e.stopPropagation()}>
@@ -985,6 +990,12 @@ const ChatWindow: React.FC = () => {
                                     <button onClick={handleMuteChat} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 rounded-lg">{activeConversation?.is_muted ? 'Unmute Notifications' : 'Mute Notifications'}</button>
                                     <button onClick={handleClearChat} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 rounded-lg">Clear History</button>
                                     <button onClick={handleDeleteChat} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-400/10 rounded-lg">Delete Chat</button>
+                                    <button 
+                                        onClick={() => { setShowCustomizeModal(true); setShowMoreMenu(false); }} 
+                                        className="w-full text-left px-4 py-2 text-sm text-blue-400 hover:bg-blue-500/10 rounded-lg"
+                                    >
+                                        Theme & Fonts
+                                    </button>
                                     {activeConversation?.type === 'direct' && (
                                         <button onClick={handleBlockUser} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-400/10 rounded-lg">
                                             {activeConversation.blockedByMe ? 'Unblock User' : 'Block User'}
@@ -999,7 +1010,7 @@ const ChatWindow: React.FC = () => {
             )}
 
                 {isSearchOpen && searchQuery.trim() !== '' ? (
-                    <div className="overflow-y-auto flex flex-col flex-1 min-h-0 custom-scrollbar px-3 md:px-6 gap-1 md:gap-2" style={{ touchAction: 'pan-y' }}>
+                    <div className={`overflow-y-auto flex flex-col flex-1 min-h-0 custom-scrollbar px-3 md:px-6 gap-1 md:gap-2 font-theme-${fontTheme}`} style={{ touchAction: 'pan-y' }}>
                         <div className="space-y-4 flex flex-col w-full">
                             <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-4">
                                 {isSearching ? 'Searching...' : `Search Results (${searchResults.length})`}
@@ -1023,7 +1034,7 @@ const ChatWindow: React.FC = () => {
                     </div>
                 ) : (
                     <div 
-                        className="chat-messages custom-scrollbar px-3 md:px-6"
+                        className={`chat-messages custom-scrollbar px-3 md:px-6 font-theme-${fontTheme}`}
                         ref={(ref) => {
                             if (ref) scrollContainerRef.current = ref as HTMLDivElement;
                         }}
@@ -1289,7 +1300,7 @@ const ChatWindow: React.FC = () => {
                                                 autoComplete="off"
                                                 spellCheck={true}
                                                 autoCapitalize="sentences"
-                                                className="w-full bg-transparent text-white py-2.5 md:py-3 px-1 md:px-2 focus:outline-none disabled:opacity-50 text-[16px] md:text-sm placeholder:text-gray-500 font-medium leading-[1.4] resize-none overflow-y-auto"
+                                                className={`w-full bg-transparent text-white py-2.5 md:py-3 px-1 md:px-2 focus:outline-none disabled:opacity-50 text-[16px] md:text-sm placeholder:text-gray-500 font-medium leading-[1.4] resize-none overflow-y-auto font-theme-${fontTheme}`}
                                                 style={{
                                                     minHeight: '24px',
                                                     maxHeight: '130px', // ~5 lines
@@ -1467,6 +1478,88 @@ const ChatWindow: React.FC = () => {
                     }
                 }}
             />
+            {showCustomizeModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setShowCustomizeModal(false)}>
+                    <div className="relative bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl flex flex-col max-h-[90dvh] w-full max-w-md p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                        <button 
+                            type="button"
+                            onClick={() => setShowCustomizeModal(false)}
+                            className="absolute right-4 top-4 p-2 rounded-full text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
+                        >
+                            <X size={20} />
+                        </button>
+                        <h3 className="text-lg font-black text-white uppercase tracking-tight italic mb-6">Customize Chat Room</h3>
+                        
+                        {/* Wallpaper Selection */}
+                        <div className="space-y-3 mb-6">
+                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-1">Animated Backgrounds</label>
+                            <div className="grid grid-cols-2 gap-3">
+                                {[
+                                    { id: 'classic', label: 'Classic Dark', preview: 'bg-gray-950' },
+                                    { id: 'aurora', label: 'Midnight Aurora', preview: 'bg-gradient-to-r from-blue-900 via-indigo-950 to-purple-950' },
+                                    { id: 'grid', label: 'Cyberpunk Grid', preview: 'bg-theme-grid' },
+                                    { id: 'sunset', label: 'Sunset Glow', preview: 'bg-gradient-to-r from-amber-950 via-rose-950 to-purple-950' },
+                                    { id: 'forest', label: 'Forest Rain', preview: 'bg-gradient-to-r from-teal-950 via-emerald-950 to-cyan-950' },
+                                ].map((item) => (
+                                    <button
+                                        type="button"
+                                        key={item.id}
+                                        onClick={() => {
+                                            setBgTheme(item.id);
+                                            localStorage.setItem('chat_bg_theme', item.id);
+                                        }}
+                                        className={`flex items-center gap-2 p-2 rounded-xl border text-xs text-left transition-all ${
+                                            bgTheme === item.id 
+                                                ? 'border-blue-500 bg-blue-500/10 font-bold text-white' 
+                                                : 'border-white/5 bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                                        }`}
+                                    >
+                                        <div className={`w-8 h-8 rounded-lg ${item.preview} border border-white/10`} />
+                                        <span>{item.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Font Selection */}
+                        <div className="space-y-3">
+                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-1">Text Writing Styles</label>
+                            <div className="grid grid-cols-2 gap-3">
+                                {[
+                                    { id: 'sans', label: 'Modern Sans', styleClass: 'font-theme-sans' },
+                                    { id: 'serif', label: 'Elegant Serif', styleClass: 'font-theme-serif' },
+                                    { id: 'mono', label: 'Tech Mono', styleClass: 'font-theme-mono' },
+                                    { id: 'round', label: 'Playful Round', styleClass: 'font-theme-round' },
+                                ].map((item) => (
+                                    <button
+                                        type="button"
+                                        key={item.id}
+                                        onClick={() => {
+                                            setFontTheme(item.id);
+                                            localStorage.setItem('chat_font_theme', item.id);
+                                        }}
+                                        className={`flex flex-col gap-1 p-3 rounded-xl border text-left transition-all ${
+                                            fontTheme === item.id 
+                                                ? 'border-blue-500 bg-blue-500/10 text-white' 
+                                                : 'border-white/5 bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                                        }`}
+                                    >
+                                        <span className="text-xs font-bold">{item.label}</span>
+                                        <span className={`text-[10px] opacity-75 ${item.styleClass}`}>Beautiful text pattern</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <Button 
+                            onClick={() => setShowCustomizeModal(false)}
+                            className="mt-8 h-12 font-black rounded-2xl text-xs uppercase tracking-wider"
+                        >
+                            Apply Settings
+                        </Button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

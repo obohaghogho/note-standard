@@ -123,6 +123,10 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
     type: 'image'
   });
 
+  const [bgTheme, setBgTheme] = useState(() => localStorage.getItem('chat_bg_theme') || 'classic');
+  const [fontTheme, setFontTheme] = useState(() => localStorage.getItem('chat_font_theme') || 'sans');
+  const [showCustomizeModal, setShowCustomizeModal] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -505,7 +509,9 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
   }
 
   return (
-    <div className={`team-chat ${className}`}>
+    <div className={`team-chat ${className} relative overflow-hidden`}>
+      {/* Custom Chat Wallpaper Background */}
+      <div className={`absolute inset-0 pointer-events-none z-0 ${bgTheme === 'classic' ? 'bg-theme-classic' : `bg-theme-${bgTheme}`}`} style={{ transition: 'all 0.5s ease' }} />
       {/* Hidden File Input */}
       <input
         id="team-chat-file-upload"
@@ -626,6 +632,15 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
               <Users size={16} />
               <span>{members.length} members</span>
             </div>
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              className="text-blue-400 hover:text-blue-300 hover:bg-blue-400/10"
+              onClick={() => setShowCustomizeModal(true)}
+              title="Theme & Fonts"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 14.7255 3.09032 17.1962 4.85857 19C5.3974 19.5492 5.66681 19.8238 5.66681 20C5.66681 20.4437 5.2974 21.0567 4.928 21.6703C4.60677 22.2039 4.88716 22 5.66681 22H12Z"/><circle cx="7.5" cy="10.5" r="1.5"/><circle cx="11.5" cy="7.5" r="1.5"/><circle cx="16.5" cy="9.5" r="1.5"/><circle cx="15.5" cy="14.5" r="1.5"/></svg>
+            </Button>
             {myRole === 'owner' && (
               <Button 
                 size="sm" 
@@ -668,7 +683,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
       {/* Messages Container */}
       <div
         ref={messagesContainerRef}
-        className="team-chat__messages transition-all"
+        className={`team-chat__messages transition-all font-theme-${fontTheme}`}
         onScroll={handleScroll}
         style={{ paddingBottom: 'var(--chat-input-height, 24px)' }}
       >
@@ -784,7 +799,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
                   el.style.height = Math.min(el.scrollHeight, 130) + 'px';
               }}
               placeholder="Type a message..."
-              className="team-chat__input"
+              className={`team-chat__input font-theme-${fontTheme}`}
               rows={1}
               disabled={isSending || !connected}
               spellCheck={true}
@@ -889,6 +904,88 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
         confirmText={confirmDelete.type === 'message' ? 'Delete' : 'Wipe Everything'}
         variant="danger"
       />
+      {showCustomizeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setShowCustomizeModal(false)}>
+          <div className="relative bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl flex flex-col max-h-[90dvh] w-full max-w-md p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <button 
+              type="button"
+              onClick={() => setShowCustomizeModal(false)}
+              className="absolute right-4 top-4 p-2 rounded-full text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
+            >
+              <X size={20} />
+            </button>
+            <h3 className="text-lg font-black text-white uppercase tracking-tight italic mb-6">Customize Chat Room</h3>
+            
+            {/* Wallpaper Selection */}
+            <div className="space-y-3 mb-6">
+              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-1">Animated Backgrounds</label>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { id: 'classic', label: 'Classic Dark', preview: 'bg-gray-950' },
+                  { id: 'aurora', label: 'Midnight Aurora', preview: 'bg-gradient-to-r from-blue-900 via-indigo-950 to-purple-950' },
+                  { id: 'grid', label: 'Cyberpunk Grid', preview: 'bg-theme-grid' },
+                  { id: 'sunset', label: 'Sunset Glow', preview: 'bg-gradient-to-r from-amber-950 via-rose-950 to-purple-950' },
+                  { id: 'forest', label: 'Forest Rain', preview: 'bg-gradient-to-r from-teal-950 via-emerald-950 to-cyan-950' },
+                ].map((item) => (
+                  <button
+                    type="button"
+                    key={item.id}
+                    onClick={() => {
+                      setBgTheme(item.id);
+                      localStorage.setItem('chat_bg_theme', item.id);
+                    }}
+                    className={`flex items-center gap-2 p-2 rounded-xl border text-xs text-left transition-all ${
+                      bgTheme === item.id 
+                        ? 'border-blue-500 bg-blue-500/10 font-bold text-white' 
+                        : 'border-white/5 bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-lg ${item.preview} border border-white/10`} />
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Font Selection */}
+            <div className="space-y-3">
+              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-1">Text Writing Styles</label>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { id: 'sans', label: 'Modern Sans', styleClass: 'font-theme-sans' },
+                  { id: 'serif', label: 'Elegant Serif', styleClass: 'font-theme-serif' },
+                  { id: 'mono', label: 'Tech Mono', styleClass: 'font-theme-mono' },
+                  { id: 'round', label: 'Playful Round', styleClass: 'font-theme-round' },
+                ].map((item) => (
+                  <button
+                    type="button"
+                    key={item.id}
+                    onClick={() => {
+                      setFontTheme(item.id);
+                      localStorage.setItem('chat_font_theme', item.id);
+                    }}
+                    className={`flex flex-col gap-1 p-3 rounded-xl border text-left transition-all ${
+                      fontTheme === item.id 
+                        ? 'border-blue-500 bg-blue-500/10 text-white' 
+                        : 'border-white/5 bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <span className="text-xs font-bold">{item.label}</span>
+                    <span className={`text-[10px] opacity-75 ${item.styleClass}`}>Beautiful text pattern</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <Button 
+              onClick={() => setShowCustomizeModal(false)}
+              className="mt-8 h-12 font-black rounded-2xl text-xs uppercase tracking-wider"
+            >
+              Apply Settings
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
