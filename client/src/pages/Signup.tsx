@@ -64,8 +64,17 @@ export const Signup = () => {
     const handleNext = () => {
         setError('');
         let err = null;
-        if (step === 'details') err = validateDetails();
-        else if (step === 'security') err = validateSecurity();
+        if (step === 'details') {
+            err = validateDetails();
+        } else if (step === 'security') {
+            err = validateSecurity();
+            if (!err && !termsAccepted) {
+                err = 'You must accept the Terms of Service and Privacy Policy to continue';
+            }
+            if (!err && import.meta.env.PROD && !!import.meta.env.VITE_RECAPTCHA_SITE_KEY && !captchaToken) {
+                err = 'Please complete the robot verification';
+            }
+        }
 
         if (err) {
             setError(err);

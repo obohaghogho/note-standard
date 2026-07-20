@@ -67,6 +67,7 @@ module.exports = {
   // Security
   JWT_SECRET: process.env.JWT_SECRET,
   RECAPTCHA_SECRET_KEY: process.env.RECAPTCHA_SECRET_KEY,
+  DATABASE_URL: process.env.DATABASE_URL,
   
   // Wallet Fees
   FEES: {

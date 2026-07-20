@@ -1,7 +1,8 @@
 const { createClient } = require("@supabase/supabase-js");
+const env = require("./env");
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseUrl = env.SUPABASE_URL;
+const supabaseServiceKey = env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseServiceKey) {
   const errorMsg = "❌ Supabase environment variables are missing (SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY)";

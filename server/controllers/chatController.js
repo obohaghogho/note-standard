@@ -502,7 +502,15 @@ exports.createConversation = async (req, res) => {
       return res.status(404).json({ error: "No valid participants found" });
     }
 
-    const participantIds = finalProfiles.map((p) => p.id);
+    const participantIds = finalProfiles.map((p) => p.id).filter(id => id !== userId);
+
+    if (type === "direct" && participantIds.length === 0) {
+      return res.status(400).json({ error: "You cannot start a direct chat with yourself." });
+    }
+
+    if (type === "group" && participantIds.length === 0) {
+      return res.status(400).json({ error: "Group chats require at least one other participant." });
+    }
 
     // 2. Check for existing direct conversation
     if (type === "direct" && participantIds.length === 1) {
@@ -542,6 +550,7 @@ exports.createConversation = async (req, res) => {
               .eq("id", existingId)
               .single();
 
+            // Fetch members
             const { data: members } = await supabase
               .from("conversation_members")
               .select(`
@@ -550,8 +559,52 @@ exports.createConversation = async (req, res) => {
               `)
               .eq("conversation_id", existingId);
 
+            const memberList = members || [];
+
+            // Reset cleared_at to null for the current user so it appears in their sidebar again
+            await supabase
+              .from("conversation_members")
+              .update({ cleared_at: null })
+              .eq("conversation_id", existingId)
+              .eq("user_id", userId);
+
+            // Auto-accept if the initiator's current status is pending
+            const myMembership = memberList.find(m => m.user_id === userId);
+            if (myMembership && myMembership.status === 'pending') {
+              await supabase
+                .from("conversation_members")
+                .update({ status: 'accepted' })
+                .eq("conversation_id", existingId)
+                .eq("user_id", userId);
+              
+              myMembership.status = 'accepted';
+
+              // Notify the other user B
+              try {
+                const otherMember = memberList.find(m => m.user_id !== userId);
+                if (otherMember) {
+                  const { data: accepter } = await supabase.from("profiles").select("username").eq("id", userId).single();
+                  await createNotification({
+                    receiverId: otherMember.user_id,
+                    senderId: userId,
+                    type: "chat_accepted",
+                    title: "Chat Request Accepted",
+                    message: `${accepter?.username || "Someone"} accepted your chat request!`,
+                    link: `/dashboard/chat?id=${existingId}`,
+                  });
+                  await realtime.emitToUser(otherMember.user_id, "chat:conversation_updated", {
+                    conversationId: existingId,
+                    userId,
+                    status: "accepted"
+                  });
+                }
+              } catch (e) {
+                console.warn("[Chat] Accept notification/socket failed in createConversation fallback:", e.message);
+              }
+            }
+
             return res.json({
-              conversation: { ...conv, members: members || [] },
+              conversation: { ...conv, members: memberList },
               isExisting: true
             });
           }

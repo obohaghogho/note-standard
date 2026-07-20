@@ -538,7 +538,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         try {
             // FAST-PATH: Call Gateway directly — it is always awake and writes to DB immediately.
             // The API server sleeps on Render free tier (30-90s cold start delays delivery ACKs).
-            const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || 'https://realtime-gateway-gsb5.onrender.com';
+            const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || import.meta.env.VITE_SOCKET_URL || 'https://realtime-gateway-gsb5.onrender.com';
             if (msgIds && msgIds.length > 0) {
                 await fetch(`${gatewayUrl}/deliver/batch`, {
                     method: 'POST',
@@ -643,7 +643,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 // the `chat:delivered` socket event. When they load the app, we scan for any
                 // unread conversations where they are the receiver, and immediately blast out
                 // delivery ACKs via the Gateway's always-awake /deliver/batch endpoint.
-                const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || 'https://realtime-gateway-gsb5.onrender.com';
+                const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || import.meta.env.VITE_SOCKET_URL || 'https://realtime-gateway-gsb5.onrender.com';
                 const nowStr = new Date().toISOString();
                 const s = socketRef.current;
                 
@@ -1077,7 +1077,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
                 // 2. HTTP POST to Gateway fast-path — persists delivered_at directly, bypassing the sleeping API server.
                 //    The Gateway is always awake (it holds the sender's live socket connection).
-                const gatewayBase = import.meta.env.VITE_GATEWAY_URL || 'https://realtime-gateway-gsb5.onrender.com';
+                const gatewayBase = import.meta.env.VITE_GATEWAY_URL || import.meta.env.VITE_SOCKET_URL || 'https://realtime-gateway-gsb5.onrender.com';
                 fetch(`${gatewayBase}/deliver/batch`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
