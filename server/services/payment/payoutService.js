@@ -37,6 +37,22 @@ class PayoutService {
     reference,
     narration = "Withdrawal"
   ) {
+    // --- MOCK MODE FOR TESTING ---
+    if (process.env.MOCK_PAYOUT === 'true') {
+      logger.info(`[PayoutService] MOCK MODE: Simulating Paystack Transfer of ${amount} ${currency} to ${accountNumber}`);
+      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate latency
+      return {
+        success: true,
+        payoutId: reference,
+        status: 'SUCCESS',
+        provider: "MOCK_PAYSTACK",
+        latency: 1500,
+        rawResponse: { message: "Simulated success for NGN transfer" },
+        requestPayload: { bankCode, accountNumber, accountName, amount, currency }
+      };
+    }
+    // ----------------------------
+
     const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
     if (!PAYSTACK_SECRET_KEY) {
       throw new Error("Paystack configuration missing (secret key)");

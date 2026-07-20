@@ -43,7 +43,7 @@ class FiatWalletService {
     }
 
     const { data: existing } = await supabase
-      .from("wallets_store")
+      .from("wallets_v6")
       .select("*")
       .eq("user_id", userId)
       .eq("currency", upCurrency)
