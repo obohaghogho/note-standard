@@ -29,6 +29,7 @@ export default function StatusViewer() {
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
   const [showViewers, setShowViewers] = useState(false);
+  const [activeDuration, setActiveDuration] = useState(STATUS_DURATION);
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number | null>(null);
@@ -84,6 +85,11 @@ export default function StatusViewer() {
   const status = userEntry && statusIndex !== undefined ? userEntry.statuses[statusIndex] : null;
   const isOwn = status?.user_id === user?.id;
 
+  // Reset activeDuration back to STATUS_DURATION when status changes
+  useEffect(() => {
+    setActiveDuration(STATUS_DURATION);
+  }, [status?.id]);
+
   // Sync background music with play/pause state
   useEffect(() => {
     const audio = musicAudioRef.current;
@@ -119,9 +125,19 @@ export default function StatusViewer() {
     setShowViewers(false);
   }, [status?.id, markViewed, isOwn]);
 
-  const getDuration = useCallback(() => {
-    return STATUS_DURATION;
+  const handleMediaMetadata = useCallback((e: React.SyntheticEvent<HTMLVideoElement | HTMLAudioElement>) => {
+    const durationSec = e.currentTarget.duration;
+    if (durationSec && !isNaN(durationSec)) {
+      const durationMs = durationSec * 1000;
+      // Cap it at STATUS_DURATION
+      const targetDuration = Math.min(durationMs, STATUS_DURATION);
+      setActiveDuration(targetDuration);
+    }
   }, []);
+
+  const getDuration = useCallback(() => {
+    return activeDuration;
+  }, [activeDuration]);
 
   const startTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -326,6 +342,7 @@ export default function StatusViewer() {
               src={status.media_url} 
               className="w-full h-full object-contain"
               playsInline
+              onLoadedMetadata={handleMediaMetadata}
             />
           )}
 
@@ -338,6 +355,7 @@ export default function StatusViewer() {
                 ref={mediaRef as React.RefObject<HTMLAudioElement>}
                 src={status.media_url}
                 className="w-full mt-2"
+                onLoadedMetadata={handleMediaMetadata}
               />
               {status.content && (
                 <p className="text-gray-300 text-sm text-center font-medium mt-2 leading-relaxed max-h-[100px] overflow-y-auto no-scrollbar">
