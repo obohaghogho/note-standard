@@ -789,6 +789,18 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
               ref={inputRef}
               value={input}
               onChange={handleInputChange}
+              onTouchStart={(e) => {
+                if (document.activeElement !== e.currentTarget) {
+                  e.preventDefault();
+                  e.currentTarget.focus({ preventScroll: true });
+                }
+              }}
+              onMouseDown={(e) => {
+                if (document.activeElement !== e.currentTarget) {
+                  e.preventDefault();
+                  e.currentTarget.focus({ preventScroll: true });
+                }
+              }}
               onKeyDown={() => {
                   // By product requirement, Enter inserts a newline instead of sending.
                   // Sending is done exclusively via the explicit Send button.

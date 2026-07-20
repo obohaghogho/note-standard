@@ -954,3 +954,11 @@ a {
   font-family: 'Outfit', 'Segoe UI', system-ui, sans-serif !important;
 }
 
+/* Disable transitions on layout containers to prevent lagging behind the keyboard */
+.chat-root,
+.teams-page,
+.teams-content,
+.team-chat {
+  transition: none !important;
+}
+
