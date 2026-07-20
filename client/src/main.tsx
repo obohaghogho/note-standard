@@ -229,6 +229,11 @@ console.log('🚀 NoteStandard Booting...');
       forceScrollReset();
       // Apply viewport immediately on focus so the layout is ready before the keyboard animates
       applyViewportVars();
+      // Snap scroll back to 0 on subsequent ticks to prevent native browser scrolling/jumping
+      setTimeout(forceScrollReset, 10);
+      setTimeout(forceScrollReset, 40);
+      setTimeout(forceScrollReset, 100);
+      setTimeout(forceScrollReset, 200);
     }
   }, { passive: true });
 

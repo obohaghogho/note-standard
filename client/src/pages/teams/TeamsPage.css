@@ -338,7 +338,17 @@
 
   /* Root: stack all columns absolutely so only one is visible */
   .teams-page {
-    position: relative;
+    position: fixed;
+    top: var(--vv-top, 0px);
+    left: 0;
+    right: 0;
+    height: var(--vv-height, 100dvh) !important;
+    bottom: auto;
+    z-index: 10;
+    background: #000;
+    display: flex;
+    max-width: 100%;
+    overflow: hidden;
     /* Remove GPU-expensive isolation on mobile — use simpler stacking */
     isolation: auto;
   }
