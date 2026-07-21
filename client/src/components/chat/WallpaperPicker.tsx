@@ -8,6 +8,17 @@ import { WallpaperEngine } from './WallpaperEngine';
 import { Button } from '../common/Button';
 import toast from 'react-hot-toast';
 
+const FONT_OPTIONS = [
+  { id: 'sans', name: 'Inter Sans', subtitle: 'Modern clean sans-serif', fontClass: 'font-theme-sans' },
+  { id: 'serif', name: 'Playfair Serif', subtitle: 'Elegant editorial serif', fontClass: 'font-theme-serif' },
+  { id: 'mono', name: 'Roboto Mono', subtitle: 'Technical code font', fontClass: 'font-theme-mono' },
+  { id: 'round', name: 'Outfit Rounded', subtitle: 'Soft friendly rounded font', fontClass: 'font-theme-round' },
+  { id: 'royal', name: 'Cinzel Royal', subtitle: 'Classic high-contrast display', fontClass: 'font-theme-royal' },
+  { id: 'cursive', name: 'Dancing Script', subtitle: 'Expressive handwriting style', fontClass: 'font-theme-cursive' },
+  { id: 'typewriter', name: 'Special Elite', subtitle: 'Vintage typewriter style', fontClass: 'font-theme-typewriter' },
+  { id: 'fun', name: 'Pacifico Creative', subtitle: 'Playful bold script', fontClass: 'font-theme-fun' }
+];
+
 interface WallpaperPickerProps {
   chatId: string | 'global';
   onClose: () => void;
@@ -34,7 +45,7 @@ export const WallpaperPicker: React.FC<WallpaperPickerProps> = ({ chatId, onClos
   // Tabs and search filters
   const [activeCategory, setActiveCategory] = useState<string>('Minimal');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [activePanel, setActivePanel] = useState<'picker' | 'adjust' | 'auto'>('picker');
+  const [activePanel, setActivePanel] = useState<'picker' | 'fonts' | 'adjust' | 'auto'>('picker');
 
   // Sync state if saved wallpaper changes
   useEffect(() => {
@@ -175,7 +186,7 @@ export const WallpaperPicker: React.FC<WallpaperPickerProps> = ({ chatId, onClos
               </div>
 
               {/* Mock Chat Messages */}
-              <div className="relative z-10 flex-1 p-4 overflow-y-auto space-y-3 flex flex-col justify-end">
+              <div className={`relative z-10 flex-1 p-4 overflow-y-auto space-y-3 flex flex-col justify-end font-theme-${tempConfig.fontTheme || 'sans'}`}>
                 <div className="self-start max-w-[80%] rounded-2xl rounded-tl-sm px-3.5 py-2 text-[11px] bg-slate-900/90 text-slate-100 border border-white/5 leading-relaxed">
                   Hi there! You can customize this chat room background using our premium shaders, animations, and typography!
                 </div>
@@ -211,6 +222,17 @@ export const WallpaperPicker: React.FC<WallpaperPickerProps> = ({ chatId, onClos
                 }`}
               >
                 Wallpapers
+              </button>
+              <button
+                type="button"
+                onClick={() => setActivePanel('fonts')}
+                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest text-center transition-all border-b-2 ${
+                  activePanel === 'fonts' 
+                    ? 'border-blue-500 text-blue-400' 
+                    : 'border-transparent text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                Fonts
               </button>
               <button
                 type="button"
@@ -352,6 +374,38 @@ export const WallpaperPicker: React.FC<WallpaperPickerProps> = ({ chatId, onClos
                       </div>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB PANEL: FONTS */}
+            {activePanel === 'fonts' && (
+              <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+                <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-1 mb-2">Typography & Text Writing Style</h4>
+                <div className="space-y-2.5">
+                  {FONT_OPTIONS.map(f => (
+                    <button
+                      type="button"
+                      key={f.id}
+                      onClick={() => setTempConfig(prev => ({ ...prev, fontTheme: f.id }))}
+                      className={`w-full p-3.5 rounded-2xl border text-left transition-all flex flex-col gap-1 ${
+                        (tempConfig.fontTheme || 'sans') === f.id
+                          ? 'border-blue-500 bg-blue-500/10 shadow-lg shadow-blue-500/10'
+                          : 'border-gray-900 bg-gray-900/30 hover:border-gray-800 hover:bg-gray-900/50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-white">{f.name}</span>
+                        {(tempConfig.fontTheme || 'sans') === f.id && (
+                          <span className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center text-white text-[10px]">✓</span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-gray-500 font-semibold">{f.subtitle}</span>
+                      <p className={`text-sm text-gray-200 mt-1 ${f.fontClass}`}>
+                        The quick brown fox jumps over the lazy dog
+                      </p>
+                    </button>
+                  ))}
                 </div>
               </div>
             )}

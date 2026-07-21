@@ -18,6 +18,7 @@ export interface WallpaperConfig {
   opacity: number; // 0 to 1
   speed: number; // 0.1 to 3 (animation speed multiplier)
   particleCount: number; // 10 to 150 (particles, stars, snow etc.)
+  fontTheme?: 'sans' | 'serif' | 'mono' | 'round' | 'royal' | 'cursive' | 'typewriter' | 'fun' | string;
 }
 
 export interface AutoThemeSettings {
@@ -278,21 +279,22 @@ export const WallpaperProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return user?.id ? `ns_wp_${user.id}_` : 'ns_wp_anon_';
   }, [user?.id]);
 
-  // ─── STATE MANAGEMENT ───
+  // ─── STATE MANAGEMENT WITH CROSS-REFRESH PERSISTENCE ───
   const [globalWallpaper, setGlobalWallpaper] = useState<WallpaperConfig>(() => {
     try {
-      const saved = localStorage.getItem(`${storagePrefix}global`);
+      const saved = localStorage.getItem(`${storagePrefix}global`) || localStorage.getItem('ns_wp_global');
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.warn('Failed to parse global wallpaper preference:', e);
     }
-    // Default to WhatsApp style dark doodle or slate
-    return WALLPAPER_PRESETS.find(p => p.id === 'doodle_dark') || WALLPAPER_PRESETS[0];
+    const savedFont = localStorage.getItem('chat_font_theme');
+    const base = WALLPAPER_PRESETS.find(p => p.id === 'doodle_dark') || WALLPAPER_PRESETS[0];
+    return savedFont ? { ...base, fontTheme: savedFont } : base;
   });
 
   const [chatWallpapers, setChatWallpapers] = useState<Record<string, WallpaperConfig>>(() => {
     try {
-      const saved = localStorage.getItem(`${storagePrefix}chats`);
+      const saved = localStorage.getItem(`${storagePrefix}chats`) || localStorage.getItem('ns_wp_chats');
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.warn('Failed to parse chat wallpaper preferences:', e);
@@ -302,7 +304,7 @@ export const WallpaperProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const [favorites, setFavorites] = useState<string[]>(() => {
     try {
-      const saved = localStorage.getItem(`${storagePrefix}favorites`);
+      const saved = localStorage.getItem(`${storagePrefix}favorites`) || localStorage.getItem('ns_wp_favorites');
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.warn('Failed to parse wallpaper favorites:', e);
@@ -312,7 +314,7 @@ export const WallpaperProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const [recentlyUsed, setRecentlyUsed] = useState<string[]>(() => {
     try {
-      const saved = localStorage.getItem(`${storagePrefix}recently_used`);
+      const saved = localStorage.getItem(`${storagePrefix}recently_used`) || localStorage.getItem('ns_wp_recently_used');
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.warn('Failed to parse recently used wallpapers:', e);
@@ -322,7 +324,7 @@ export const WallpaperProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const [autoThemeSettings, setAutoThemeSettings] = useState<AutoThemeSettings>(() => {
     try {
-      const saved = localStorage.getItem(`${storagePrefix}auto_theme`);
+      const saved = localStorage.getItem(`${storagePrefix}auto_theme`) || localStorage.getItem('ns_wp_auto_theme');
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.warn('Failed to parse auto theme settings:', e);
@@ -336,6 +338,43 @@ export const WallpaperProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       batterySaverDimming: true
     };
   });
+
+  // Re-sync from localStorage when storagePrefix resolves after user auth
+  useEffect(() => {
+    try {
+      const savedGlobal = localStorage.getItem(`${storagePrefix}global`) || localStorage.getItem('ns_wp_global');
+      if (savedGlobal) {
+        const parsed = JSON.parse(savedGlobal);
+        if (parsed && parsed.id) setGlobalWallpaper(parsed);
+      }
+
+      const savedChats = localStorage.getItem(`${storagePrefix}chats`) || localStorage.getItem('ns_wp_chats');
+      if (savedChats) {
+        const parsed = JSON.parse(savedChats);
+        if (parsed) setChatWallpapers(parsed);
+      }
+
+      const savedFavs = localStorage.getItem(`${storagePrefix}favorites`) || localStorage.getItem('ns_wp_favorites');
+      if (savedFavs) {
+        const parsed = JSON.parse(savedFavs);
+        if (Array.isArray(parsed)) setFavorites(parsed);
+      }
+
+      const savedRecent = localStorage.getItem(`${storagePrefix}recently_used`) || localStorage.getItem('ns_wp_recently_used');
+      if (savedRecent) {
+        const parsed = JSON.parse(savedRecent);
+        if (Array.isArray(parsed)) setRecentlyUsed(parsed);
+      }
+
+      const savedAuto = localStorage.getItem(`${storagePrefix}auto_theme`) || localStorage.getItem('ns_wp_auto_theme');
+      if (savedAuto) {
+        const parsed = JSON.parse(savedAuto);
+        if (parsed) setAutoThemeSettings(parsed);
+      }
+    } catch (e) {
+      console.warn('Failed to sync wallpaper settings on prefix update:', e);
+    }
+  }, [storagePrefix]);
 
   // ─── PERF & SYSTEM TRIGGERS ───
   const [isBatterySaverActive, setIsBatterySaverActive] = useState(false);
@@ -436,10 +475,15 @@ export const WallpaperProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [globalWallpaper, chatWallpapers, autoThemeSettings]);
 
   const saveWallpaper = useCallback((chatId: string | 'global', config: Partial<WallpaperConfig>) => {
+    if (config.fontTheme) {
+      localStorage.setItem('chat_font_theme', config.fontTheme);
+    }
     if (chatId === 'global') {
       setGlobalWallpaper(prev => {
         const next = { ...prev, ...config } as WallpaperConfig;
-        localStorage.setItem(`${storagePrefix}global`, JSON.stringify(next));
+        const json = JSON.stringify(next);
+        localStorage.setItem(`${storagePrefix}global`, json);
+        localStorage.setItem('ns_wp_global', json);
         return next;
       });
     } else {
@@ -447,7 +491,9 @@ export const WallpaperProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         // Get existing or derive from global
         const base = prev[chatId] || { ...globalWallpaper };
         const next = { ...prev, [chatId]: { ...base, ...config } as WallpaperConfig };
-        localStorage.setItem(`${storagePrefix}chats`, JSON.stringify(next));
+        const json = JSON.stringify(next);
+        localStorage.setItem(`${storagePrefix}chats`, json);
+        localStorage.setItem('ns_wp_chats', json);
         return next;
       });
     }
