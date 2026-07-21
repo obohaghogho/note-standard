@@ -1081,29 +1081,45 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 lastSyncTimestampRef.current = msg.created_at;
             }
 
-            // Industry pattern (WhatsApp / Messenger): fire delivery ACK unconditionally.
+            // Industry pattern (WhatsApp / Messenger): fire delivery and read ACKs instantly.
             if (!isOwnMessage) {
-                // 1. Socket emit — instant real-time notification to sender
-                socket.emit('chat:delivered', {
-                    conversationId: msg.conversation_id,
-                    messageId: msg.id,
-                    eventId: msg.event_id,
-                    senderId: msg.sender_id,
-                    deliveredAt: new Date().toISOString()
-                });
+                const isCurrentlyOpen = activeConversationIdRef.current === msg.conversation_id;
 
-                // 2. HTTP POST to Gateway fast-path — persists delivered_at directly, bypassing the sleeping API server.
-                //    The Gateway is always awake (it holds the sender's live socket connection).
-                const gatewayBase = import.meta.env.VITE_GATEWAY_URL || import.meta.env.VITE_SOCKET_URL || 'https://realtime-gateway-gsb5.onrender.com';
-                fetch(`${gatewayBase}/deliver/batch`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ messageIds: [msg.id], userId: user?.id })
-                }).catch(() => {}); // fire-and-forget, non-fatal
+                if (isCurrentlyOpen) {
+                    const nowStr = new Date().toISOString();
+                    // 1. Socket emit read instantly — instant real-time tick upgrade to blue on sender screen
+                    socket.emit('chat:read', {
+                        conversationId: msg.conversation_id,
+                        messageIds: [msg.id],
+                        readAt: nowStr,
+                        deviceId: deviceIdRef.current
+                    });
 
-                // 3. Debounced read mark — fires 1.5s after the last message arrives
-                //    (secondary path; the conversation-open useEffect is the primary).
-                debouncedMarkReadRef.current(msg.conversation_id);
+                    // 2. HTTP PUT to mark read instantly in database
+                    markConversationRead(msg.conversation_id);
+                } else {
+                    // Background conversation: message is only delivered, not read yet.
+                    
+                    // 1. Socket emit delivered instantly — grey double tick on sender screen
+                    socket.emit('chat:delivered', {
+                        conversationId: msg.conversation_id,
+                        messageId: msg.id,
+                        eventId: msg.event_id,
+                        senderId: msg.sender_id,
+                        deliveredAt: new Date().toISOString()
+                    });
+
+                    // 2. HTTP POST to Gateway fast-path for delivery persistence
+                    const gatewayBase = import.meta.env.VITE_GATEWAY_URL || import.meta.env.VITE_SOCKET_URL || 'https://realtime-gateway-gsb5.onrender.com';
+                    fetch(`${gatewayBase}/deliver/batch`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ messageIds: [msg.id], userId: user?.id })
+                    }).catch(() => {});
+
+                    // 3. Debounced read mark — fallback sync
+                    debouncedMarkReadRef.current(msg.conversation_id);
+                }
             }
 
             // Pre-injection guard
