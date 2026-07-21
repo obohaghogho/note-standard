@@ -73,6 +73,37 @@ function getNotificationPreview(type, content) {
   }
 }
 
+function deduplicateDirectConversations(conversations, currentUserId) {
+  if (!Array.isArray(conversations) || conversations.length === 0) return conversations;
+
+  const seenDirectPeerIds = new Set();
+  const result = [];
+
+  const sorted = [...conversations].sort((a, b) => {
+    const timeA = new Date(a.last_message_at || a.last_message?.created_at || a.updated_at || a.created_at || 0).getTime();
+    const timeB = new Date(b.last_message_at || b.last_message?.created_at || b.updated_at || b.created_at || 0).getTime();
+    return timeB - timeA;
+  });
+
+  for (const conv of sorted) {
+    if (conv.type === "direct") {
+      const members = conv.members || [];
+      const otherMember = members.find(m => (m.user_id || m.profile?.id) !== currentUserId);
+      const peerId = otherMember?.user_id || otherMember?.profile?.id;
+
+      if (peerId) {
+        if (seenDirectPeerIds.has(peerId)) {
+          continue;
+        }
+        seenDirectPeerIds.add(peerId);
+      }
+    }
+    result.push(conv);
+  }
+
+  return result;
+}
+
 // --- Conversations ---
 
 exports.getConversations = async (req, res) => {
@@ -108,6 +139,9 @@ exports.getConversations = async (req, res) => {
         }
         return true;
       });
+
+      // Deduplicate direct conversations by peer user ID
+      conversations = deduplicateDirectConversations(conversations, userId);
 
       console.log(`[Chat RPC] getConversations: ${conversations.length} convs in ${Date.now() - t0}ms`);
       return res.json(conversations);
@@ -243,7 +277,10 @@ exports.getConversations = async (req, res) => {
       return true;
     });
 
-    res.json(visible);
+    // Deduplicate direct conversations by peer user ID
+    const deduplicated = deduplicateDirectConversations(visible, userId);
+
+    res.json(deduplicated);
   } catch (err) {
     console.error("[Chat] getConversations Critical Error:", err.message, err.stack);
     res.status(500).json({ error: "Internal Server Error", details: err.message });
@@ -537,9 +574,10 @@ exports.createConversation = async (req, res) => {
           const finalConvIds = commonMemberships.map(m => m.conversation_id);
           const { data: existingConvs } = await supabase
             .from("conversations")
-            .select("id, type")
+            .select("id, type, updated_at")
             .in("id", finalConvIds)
-            .eq("type", "direct");
+            .eq("type", "direct")
+            .order("updated_at", { ascending: false });
 
           if (existingConvs && existingConvs.length > 0) {
             const existingId = existingConvs[0].id;

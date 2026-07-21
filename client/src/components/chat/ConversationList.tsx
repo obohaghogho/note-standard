@@ -179,13 +179,34 @@ const ConversationList: React.FC = () => {
     ).join(',');
 
     const sortedConversations = useMemo(() => {
-        return [...conversations].sort((a, b) => {
+        const sorted = [...conversations].sort((a, b) => {
             const timeA = new Date(a.lastMessage?.created_at || a.updated_at || 0).getTime();
             const timeB = new Date(b.lastMessage?.created_at || b.updated_at || 0).getTime();
             return timeB - timeA;
         });
+
+        // Deduplicate direct conversations by peer user ID so no user appears twice in the chat list
+        const seenDirectPeerIds = new Set<string>();
+        const uniqueConversations: Conversation[] = [];
+
+        for (const conv of sorted) {
+            if (conv.type === 'direct') {
+                const otherMember = conv.members?.find((m: { user_id: string; profile?: Conversation['members'][0]['profile'] }) => m.user_id !== user?.id);
+                const peerId = otherMember?.user_id || otherMember?.profile?.id;
+
+                if (peerId) {
+                    if (seenDirectPeerIds.has(peerId)) {
+                        continue;
+                    }
+                    seenDirectPeerIds.add(peerId);
+                }
+            }
+            uniqueConversations.push(conv);
+        }
+
+        return uniqueConversations;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [sortKeys]);
+    }, [sortKeys, user?.id]);
 
     const handleConversationClick = useCallback((convId: string) => {
         const now = Date.now();

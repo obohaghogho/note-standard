@@ -630,9 +630,26 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                             lastMessage: mergedLastMessage,
                         });
                     });
-                    return Array.from(existingMap.values()).sort((a, b) =>
+
+                    const allMerged = Array.from(existingMap.values()).sort((a, b) =>
                         new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
                     );
+
+                    // Deduplicate direct conversations by peer user ID
+                    const seenDirectPeers = new Set<string>();
+                    const uniqueConvs: Conversation[] = [];
+                    for (const conv of allMerged) {
+                        if (conv.type === 'direct') {
+                            const otherMember = conv.members?.find((m: { user_id: string }) => m.user_id !== user?.id);
+                            const peerId = otherMember?.user_id;
+                            if (peerId) {
+                                if (seenDirectPeers.has(peerId)) continue;
+                                seenDirectPeers.add(peerId);
+                            }
+                        }
+                        uniqueConvs.push(conv);
+                    }
+                    return uniqueConvs;
                 });
                 
                 setLoading(false);
