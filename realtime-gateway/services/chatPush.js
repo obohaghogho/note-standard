@@ -248,10 +248,14 @@ async function sendChatPush({ supabase, firebaseApp: fbApp, userId, title, body,
   console.log(`[ChatPush] Sent ${sent}/${targets.length} pushes for user ${userId} | messageId:${messageId || 'N/A'}`);
 }
 
-/** FCM data-only push */
+/** FCM dual-payload push (works when app process is closed/killed) */
 async function sendFcm(fbApp, supabase, target, { userId, title, body, messageId, conversationId, webhookUrl }) {
   const message = {
     token: target.push_endpoint,
+    notification: {
+      title: String(title || 'New Message'),
+      body: String(body || 'You have a new message'),
+    },
     data: {
       type: 'chat_message',
       title: String(title || 'New Message'),
@@ -262,7 +266,18 @@ async function sendFcm(fbApp, supabase, target, { userId, title, body, messageId
       recipientId: String(userId || ''),
       targetAccountId: String(userId || ''),
     },
-    android: { priority: 'high', ttl: 86400 },
+    android: {
+      priority: 'high',
+      ttl: 86400,
+      notification: {
+        channelId: 'default',
+        sound: 'default',
+        priority: 'high',
+        visibility: 'public',
+        defaultSound: true,
+        defaultVibrateTimings: true,
+      },
+    },
   };
 
   try {

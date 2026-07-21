@@ -314,7 +314,7 @@ async function computeV2Routing(params) {
           state: state
         });
         
-        if (state === 'ACTIVE' || state === 'BACKGROUND') {
+        if (state !== 'LOGGED_OUT') {
           activeCount++;
           if (deviceInst && deviceInst.push_endpoint && deviceInst.endpoint_status !== 'INVALID') {
             // PUSH SUPPRESSION REMOVED: Always push to valid endpoints regardless of socket state.
@@ -615,23 +615,16 @@ async function dispatchV2Push(params, pushTargets, isCall = false) {
 
   for (const t of pushTargets) {
     if (t.platform === 'android' && t.type === 'fcm' && firebaseApp) {
-      // ── DATA-ONLY FCM MESSAGE (permanent architecture) ──────────────────────
-      // DO NOT add a top-level `notification` or `android.notification` block for
-      // chat messages. Adding either causes Firebase to classify the push as a
-      // "Notification Message", which the Android OS intercepts and renders
-      // directly — bypassing the React Native JS thread entirely.
-      //
-      // Data-Only messages guarantee:
-      //   1. setBackgroundMessageHandler() ALWAYS executes (app terminated/background)
-      //   2. The JS thread controls the UI — correct channel, sound, content
-      //   3. The delivery webhook fires reliably → double tick works
-      //   4. No OS-level duplicate notifications
-      //
-      // For incoming calls we still use data-only (notification: undefined) —
-      // that path was already correct.
+      // ── FCM HYBRID DUAL PAYLOAD FOR CLOSED-APP DELIVERY ──────────────────────
+      // Including top-level `notification` + `android.notification` guarantees Android OS
+      // renders system tray alerts natively even when the app process is terminated/closed.
+      // Retaining `data` block ensures in-app handlers get all metadata when open.
       const message = {
         token: t.push_endpoint,
-        // No top-level notification block — data-only for all message types
+        notification: isCall ? undefined : {
+          title: String(title || 'New Message'),
+          body: String(body || 'You have a new message'),
+        },
         data: isCall ? {
           ...Object.fromEntries(Object.entries(payload || {}).map(([k, v]) => [k, String(v)])),
           type: String(payload?.type || 'incoming_call'),
@@ -641,7 +634,6 @@ async function dispatchV2Push(params, pushTargets, isCall = false) {
           call_id: String(payload?.sessionId || payload?.callId || payload?.peerId || ''),
           conversation_id: String(payload?.conversationId || ''),
         } : {
-          // Chat message — all fields in data so background handler can render alert
           type: String(payload?.type || 'chat_message'),
           title: String(title || 'New Message'),
           body: String(body || 'You have a new message'),
@@ -658,11 +650,18 @@ async function dispatchV2Push(params, pushTargets, isCall = false) {
         android: {
           priority: 'high',
           ttl: isCall ? 0 : 86400, // calls: 0 (expire immediately if undelivered); chats: 24h
-          // No android.notification block — JS thread renders the UI
+          notification: isCall ? undefined : {
+            channelId: 'default',
+            sound: 'default',
+            priority: 'high',
+            visibility: 'public',
+            defaultSound: true,
+            defaultVibrateTimings: true,
+          },
         },
       };
 
-      console.log(`[PushService] 📤 FCM data-only push | deviceId:${t.device_id} | userId:${userId} | messageId:${payload?.messageId || 'N/A'} | isCall:${isCall} | ts:${Date.now()}`);
+      console.log(`[PushService] 📤 FCM push (dual payload) | deviceId:${t.device_id} | userId:${userId} | messageId:${payload?.messageId || 'N/A'} | isCall:${isCall} | ts:${Date.now()}`);
       logPushMetric({ platform: t.platform, push_type: t.type, status: 'attempted', user_id: userId, device_id: t.device_id });
 
       nativePromises.push(
@@ -679,9 +678,35 @@ async function dispatchV2Push(params, pushTargets, isCall = false) {
             }
           })
       );
-    } else if (t.platform === 'ios' && t.type === 'apns' && apnProviderProd) {
-       // APNs logic omitted for brevity in V2 unless needed. Standard fallback to legacy for iOS can handle it.
-       console.log("[V2Router] iOS APNs not fully ported to V2 dispatcher yet, relying on legacy for iOS if needed.");
+    } else if (t.platform === 'ios' && (t.type === 'apns' || t.type === 'voip') && (apnProviderProd || apnProviderSandbox)) {
+      if (isCall && t.type === 'voip') {
+        const notification = new apn.Notification();
+        notification.topic = (process.env.APNS_BUNDLE_ID || 'com.notestandard.app') + '.voip';
+        notification.priority = 10;
+        notification.pushType = 'voip';
+        notification.expiry = 0;
+        notification.sound = 'default';
+        notification.contentAvailable = true;
+        notification.payload = { ...payload, uuid: payload.sessionId || payload.callId };
+        nativePromises.push(sendApnsWithFallback(notification, t.push_endpoint, 'V2 VoIP Push', t.platform, t.type, userId, t.device_id));
+      } else if (!isCall) {
+        const notification = new apn.Notification();
+        notification.topic = process.env.APNS_BUNDLE_ID || 'com.notestandard.app';
+        notification.priority = 10;
+        notification.pushType = 'alert';
+        notification.alert = { title: String(title || 'New Message'), body: String(body || '') };
+        notification.sound = 'default';
+        notification.badge = 1;
+        notification.contentAvailable = true;
+        notification.mutableContent = true;
+        notification.payload = {
+          type: payload?.type || 'chat_message',
+          conversationId: payload?.conversationId,
+          messageId: payload?.messageId,
+          url: payload?.url,
+        };
+        nativePromises.push(sendApnsWithFallback(notification, t.push_endpoint, 'V2 APNs Push', t.platform, t.type, userId, t.device_id));
+      }
     } else if (t.platform === 'web' && t.type === 'vapid' && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
       if (isCall) continue; // Web pushes usually don't handle VoIP call pushes the same way
 
@@ -796,11 +821,14 @@ async function sendGenericPush(params) {
 
     if (!error && tokens && tokens.length > 0) {
       tokens.forEach((t) => {
-        // Android FCM — data-only message: JS thread controls notification display
+        // Android FCM — dual-payload for closed-app system tray display and JS handler
         if (t.platform === 'android' && t.type === 'fcm' && firebaseApp) {
           const message = {
             token: t.token,
-            // No notification block — data-only so setBackgroundMessageHandler always executes
+            notification: {
+              title: String(title || 'New Message'),
+              body: String(body || 'You have a new message'),
+            },
             data: {
               type: String(payload.type || 'chat_message'),
               title: String(title || 'New Message'),
@@ -818,7 +846,14 @@ async function sendGenericPush(params) {
             android: {
               priority: 'high',
               ttl: 86400,
-              // No android.notification block — JS thread renders the UI
+              notification: {
+                channelId: 'default',
+                sound: 'default',
+                priority: 'high',
+                visibility: 'public',
+                defaultSound: true,
+                defaultVibrateTimings: true,
+              },
             },
           };
           console.log(`[PushService] 📤 FCM data-only push (legacy) | userId:${userId} | messageId:${payload?.messageId || 'N/A'} | ts:${Date.now()}`);
