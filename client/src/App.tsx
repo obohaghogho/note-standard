@@ -15,6 +15,7 @@ import { WebRTCProvider } from './context/WebRTCContext';
 import { PresenceProvider } from './context/PresenceContext';
 import { NotesProvider } from './context/NotesContext';
 import { NotesDashboardProvider } from './context/NotesDashboardContext';
+import { WallpaperProvider } from './context/WallpaperContext';
 // import { ChatWidget } from './components/chat/ChatWidget'; // already handled by Route
 import { ChatWidget } from './components/chat/ChatWidget';
 import { ErrorBoundary } from 'react-error-boundary';
@@ -138,6 +139,7 @@ function App() {
         }>
           <AuthProvider>
             <VersionGuard>
+            <WallpaperProvider>
             <SocketProvider>
               <PresenceProvider>
                 <NotificationProvider>
@@ -232,6 +234,7 @@ function App() {
                 </NotificationProvider>
               </PresenceProvider>
             </SocketProvider>
+            </WallpaperProvider>
             </VersionGuard>
           </AuthProvider>
         </Suspense>

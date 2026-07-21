@@ -41,6 +41,9 @@ import { MediaPreviewModal } from '../chat/MediaPreviewModal';
 import { AnimatePresence } from 'framer-motion';
 import { ConfirmationModal } from '../common/ConfirmationModal';
 import { applyAutoCorrect } from '../../utils/textUtils';
+import { useWallpaper } from '../../context/WallpaperContext';
+import { WallpaperEngine } from '../chat/WallpaperEngine';
+import { WallpaperPicker } from '../chat/WallpaperPicker';
 import './TeamChat.css';
 
 interface TeamChatProps {
@@ -123,8 +126,9 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
     type: 'image'
   });
 
-  const [bgTheme, setBgTheme] = useState(() => localStorage.getItem('chat_bg_theme') || 'classic');
-  const [fontTheme, setFontTheme] = useState(() => localStorage.getItem('chat_font_theme') || 'sans');
+  const { getWallpaper } = useWallpaper();
+  const activeWallpaper = getWallpaper(teamId);
+  const fontTheme = activeWallpaper.fontTheme || localStorage.getItem('chat_font_theme') || 'sans';
   const [showCustomizeModal, setShowCustomizeModal] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -510,8 +514,8 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
 
   return (
     <div className={`team-chat ${className} relative overflow-hidden`}>
-      {/* Custom Chat Wallpaper Background */}
-      <div className={`absolute inset-0 pointer-events-none z-0 ${bgTheme === 'classic' ? 'bg-theme-classic' : `bg-theme-${bgTheme}`}`} style={{ transition: 'all 0.5s ease' }} />
+      {/* Premium Wallpaper Engine */}
+      <WallpaperEngine chatId={teamId} />
       {/* Hidden File Input */}
       <input
         id="team-chat-file-upload"
@@ -917,91 +921,10 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
         variant="danger"
       />
       {showCustomizeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setShowCustomizeModal(false)}>
-          <div className="relative bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl flex flex-col max-h-[90dvh] w-full max-w-md p-6 animate-in zoom-in-95 duration-200 overflow-y-auto custom-scrollbar" onClick={e => e.stopPropagation()}>
-            <button 
-              type="button"
-              onClick={() => setShowCustomizeModal(false)}
-              className="absolute right-4 top-4 p-2 rounded-full text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
-            >
-              <X size={20} />
-            </button>
-            <h3 className="text-lg font-black text-white uppercase tracking-tight italic mb-6">Customize Chat Room</h3>
-            
-            {/* Wallpaper Selection */}
-            <div className="space-y-3 mb-6">
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-1">Premium Animated Backgrounds</label>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { id: 'classic', label: 'Classic Dark', preview: 'bg-gray-950' },
-                  { id: 'aurora', label: 'Midnight Aurora', preview: 'bg-theme-aurora' },
-                  { id: 'grid', label: 'Cyberpunk Grid', preview: 'bg-theme-grid' },
-                  { id: 'sunset', label: 'Sunset Glow', preview: 'bg-theme-sunset' },
-                  { id: 'forest', label: 'Forest Rain', preview: 'bg-theme-forest' },
-                  { id: 'lavender', label: 'Lavender Dream', preview: 'bg-theme-lavender' },
-                ].map((item) => (
-                  <button
-                    type="button"
-                    key={item.id}
-                    onClick={() => {
-                      setBgTheme(item.id);
-                      localStorage.setItem('chat_bg_theme', item.id);
-                    }}
-                    className={`flex items-center gap-2 p-2 rounded-xl border text-xs text-left transition-all relative overflow-hidden ${
-                      bgTheme === item.id 
-                        ? 'border-blue-500 bg-blue-500/10 font-bold text-white shadow-lg shadow-blue-500/20' 
-                        : 'border-white/5 bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
-                    }`}
-                  >
-                    <div className={`w-8 h-8 rounded-lg ${item.preview} border border-white/10 flex-shrink-0 relative overflow-hidden`} />
-                    <span className="truncate">{item.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Font Selection */}
-            <div className="space-y-3">
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-1">Beautiful Handwriting & Text Styles</label>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { id: 'sans', label: 'Modern Sans', styleClass: 'font-theme-sans' },
-                  { id: 'serif', label: 'Editorial Serif', styleClass: 'font-theme-serif' },
-                  { id: 'mono', label: 'Developer Mono', styleClass: 'font-theme-mono' },
-                  { id: 'round', label: 'Premium Round', styleClass: 'font-theme-round' },
-                  { id: 'royal', label: 'Royal Classic', styleClass: 'font-theme-royal' },
-                  { id: 'cursive', label: 'Dancing Script', styleClass: 'font-theme-cursive' },
-                  { id: 'typewriter', label: 'Retro Typewriter', styleClass: 'font-theme-typewriter' },
-                  { id: 'fun', label: 'Fun Pacifico', styleClass: 'font-theme-fun' },
-                ].map((item) => (
-                  <button
-                    type="button"
-                    key={item.id}
-                    onClick={() => {
-                      setFontTheme(item.id);
-                      localStorage.setItem('chat_font_theme', item.id);
-                    }}
-                    className={`flex flex-col gap-1 p-3 rounded-xl border text-left transition-all ${
-                      fontTheme === item.id 
-                        ? 'border-blue-500 bg-blue-500/10 text-white shadow-lg shadow-blue-500/15' 
-                        : 'border-white/5 bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
-                    }`}
-                  >
-                    <span className="text-xs font-bold truncate">{item.label}</span>
-                    <span className={`text-[11px] opacity-90 truncate leading-relaxed ${item.styleClass}`}>Aesthetic style</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <Button 
-              onClick={() => setShowCustomizeModal(false)}
-              className="mt-8 h-12 font-black rounded-2xl text-xs uppercase tracking-wider"
-            >
-              Apply Settings
-            </Button>
-          </div>
-        </div>
+        <WallpaperPicker
+          chatId={teamId}
+          onClose={() => setShowCustomizeModal(false)}
+        />
       )}
     </div>
   );
