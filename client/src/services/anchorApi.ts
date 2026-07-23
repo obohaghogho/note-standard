@@ -1,12 +1,12 @@
 import api from "../api/axiosInstance";
 
-export interface AnchorBank {
+export type AnchorBank = {
   name: string;
   code: string;
   slug: string;
-}
+};
 
-export interface AnchorAccount {
+export type AnchorAccount = {
   id: string;
   bank_name: string;
   account_number: string;
@@ -14,15 +14,15 @@ export interface AnchorAccount {
   currency: string;
   provider: string;
   created_at: string;
-}
+};
 
-export interface AnchorHealth {
+export type AnchorHealth = {
   enabled: boolean;
   status: string;
   mode: string;
   latencyMs: number;
   authenticated?: boolean;
-}
+};
 
 export const anchorApi = {
   async getHealth(): Promise<AnchorHealth> {

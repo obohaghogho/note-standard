@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Landmark, Copy, Check, ShieldCheck, Loader2 } from "lucide-react";
-import { anchorApi, AnchorAccount } from "../../services/anchorApi";
+import { anchorApi, type AnchorAccount } from "../../services/anchorApi";
 import toast from "react-hot-toast";
 
 export const AnchorAccountCard: React.FC = () => {
