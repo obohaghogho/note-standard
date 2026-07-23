@@ -59,15 +59,17 @@ class AnchorService {
       // 2. Onboard new customer on Anchor API
       logger.info(`[AnchorService] Onboarding new individual customer on Anchor for user ${userId}`);
       const payload = {
-        type: "individual",
-        attributes: {
-          email: email,
-          fullName: {
-            firstName: firstName || "Customer",
-            lastName: lastName || "User",
+        data: {
+          type: "IndividualCustomer",
+          attributes: {
+            email: email,
+            fullName: {
+              firstName: firstName || "Customer",
+              lastName: lastName || "User",
+            },
+            phoneNumber: phone ? phone.replace(/^\+/, "") : undefined,
+            kyc: bvn ? { bvn } : undefined,
           },
-          phoneNumber: phone ? phone.replace(/^\+/, "") : undefined,
-          kyc: bvn ? { bvn } : undefined,
         },
       };
 

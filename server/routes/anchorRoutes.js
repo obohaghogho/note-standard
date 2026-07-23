@@ -77,21 +77,28 @@ router.post("/verify-account", requireAuth, async (req, res, next) => {
 router.post("/virtual-account", requireAuth, async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const email = req.user.email;
+    const email = req.user.email || req.userProfile?.email || `${userId}@notestandard.com`;
     const { firstName, lastName, phone, bvn } = req.body;
+
+    logger.info(`[AnchorRoute] POST /virtual-account triggered for user ${userId}`);
 
     const result = await anchorService.createVirtualAccount({
       userId,
       email,
-      firstName: firstName || req.user.user_metadata?.first_name,
-      lastName: lastName || req.user.user_metadata?.last_name,
+      firstName: firstName || req.user.user_metadata?.first_name || req.userProfile?.username || "User",
+      lastName: lastName || req.user.user_metadata?.last_name || "Customer",
       phone: phone || req.user.phone,
       bvn,
     });
 
     res.json({ success: true, data: result });
   } catch (err) {
-    next(err);
+    logger.error(`[AnchorRoute] POST /virtual-account error: ${err.message}`);
+    res.status(400).json({
+      success: false,
+      message: err.message || "Failed to generate Anchor virtual account",
+      error: err.message,
+    });
   }
 });
 
