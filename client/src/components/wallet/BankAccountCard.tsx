@@ -5,6 +5,8 @@ import walletApi from '../../api/walletApi';
 import toast from 'react-hot-toast';
 
 
+import { AnchorAccountCard } from './AnchorAccountCard';
+
 interface BankAccount {
     currency: string;
     account_holder: string;
@@ -18,7 +20,8 @@ interface BankAccount {
 const SUPPORTED_BANKS = [
     { currency: 'USD', label: 'US (USD)' },
     { currency: 'GBP', label: 'UK (GBP)' },
-    { currency: 'EUR', label: 'Europe (EUR)' }
+    { currency: 'EUR', label: 'Europe (EUR)' },
+    { currency: 'NGN', label: 'Nigeria (NGN)' }
 ];
 
 export const BankAccountCard: React.FC = () => {
@@ -204,6 +207,8 @@ export const BankAccountCard: React.FC = () => {
                         </Button>
                     </form>
                 </div>
+            ) : selectedCurrency === 'NGN' ? (
+                <AnchorAccountCard />
             ) : account ? (
                 <div className="bg-gradient-to-br from-gray-900 to-black border border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-hidden group">
                     <div className="absolute -top-12 -right-12 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl" />
