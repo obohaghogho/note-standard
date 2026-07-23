@@ -58,6 +58,13 @@ class AnchorService {
 
       // 2. Onboard new customer on Anchor API
       logger.info(`[AnchorService] Onboarding new individual customer on Anchor for user ${userId}`);
+
+      // Anchor requires a non-null valid phone number string
+      let sanitizedPhone = "08000000000";
+      if (phone && typeof phone === "string" && phone.trim().length >= 8) {
+        sanitizedPhone = phone.replace(/^\+/, "").trim();
+      }
+
       const payload = {
         data: {
           type: "IndividualCustomer",
@@ -67,7 +74,7 @@ class AnchorService {
               firstName: firstName || "Customer",
               lastName: lastName || "User",
             },
-            phoneNumber: phone ? phone.replace(/^\+/, "") : undefined,
+            phoneNumber: sanitizedPhone,
             kyc: bvn ? { bvn } : undefined,
           },
         },
