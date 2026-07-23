@@ -2,7 +2,7 @@ const { execSync, spawn } = require('child_process');
 const os = require('os');
 const net = require('net');
 
-const PORT = 5001;
+const PORT = process.env.PORT || 5000;
 
 function log(msg) {
     console.log(`\x1b[36m[FixScript]\x1b[0m ${msg}`);
