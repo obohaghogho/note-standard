@@ -18,7 +18,8 @@ const cors = require('cors');
 const { Client } = require('pg');
 const fs = require('fs');
 const { createClient: createSupabaseClient } = require('@supabase/supabase-js');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 // ─── Gateway-level Supabase client (for fast-path delivery webhook) ───────────
 // Separate from the pg LISTEN client — used for direct DB writes from HTTP endpoints.

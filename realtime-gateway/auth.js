@@ -1,10 +1,11 @@
 const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabaseUrl = process.env.SUPABASE_URL || "https://tngcvgisfctggvivcnva.supabase.co";
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || "sb_secret_MQoyxNBDiw5adSTXQ7Fd1g_fxERdBuL";
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 /**
  * Helper to fetch user with retry logic for Supabase Auth
