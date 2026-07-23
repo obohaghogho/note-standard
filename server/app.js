@@ -239,6 +239,7 @@ app.use("/api/broadcasts", broadcastsRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/status', statusRoutes);
 app.use("/api/bank-account", bankAccountRoutes);
+app.use("/api/anchor", require("./routes/anchorRoutes"));
 app.use("/api/limit-requests", requireAuth, require("./routes/limitRequests"));
 app.use("/api/webrtc", require("./routes/webrtc"));
 app.use("/api/teams", teamRoutes);

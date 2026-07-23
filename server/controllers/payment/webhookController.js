@@ -398,3 +398,14 @@ exports.handleSendGridInbound = async (req, res) => {
   }
 };
 
+// ─── Anchor BaaS Webhook ─────────────────────────────────────
+exports.handleAnchor = async (req, res) => {
+  if (process.env.ANCHOR_ENABLED !== "true") {
+    logger.warn("[Webhook] Anchor webhook received while ANCHOR_ENABLED is false. Dropping.");
+    return res.status(200).json({ received: true, status: "disabled" });
+  }
+  const provider = PaymentFactory.getProviderByName("anchor");
+  return await provider.processWebhook(req, res);
+};
+
+

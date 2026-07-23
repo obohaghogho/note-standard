@@ -26,6 +26,9 @@ const MoniepointProvider = require(
 const ProvidusProvider = require(
   path.join(__dirname, "providers", "ProvidusProvider"),
 );
+const AnchorProvider = require(
+  path.join(__dirname, "providers", "AnchorProvider"),
+);
 const logger = require("../../utils/logger");
 const currencyConfig = require("../../config/currencyConfig");
 
@@ -135,6 +138,8 @@ class PaymentFactory {
         return new MoniepointProvider();
       case "providus":
         return new ProvidusProvider();
+      case "anchor":
+        return new AnchorProvider();
 
       default:
         throw new Error(`Unknown provider: ${name}`);

@@ -66,6 +66,12 @@ router.post("/fincra", webhookController.handleFincra);
 router.post("/nowpayments", webhookController.handleNowPayments);
 router.post("/crypto", webhookController.handleCrypto);
 
+/**
+ * POST /webhooks/anchor
+ * Anchor BaaS virtual account & payout webhooks
+ */
+router.post("/anchor", webhookController.handleAnchor);
+
 // ─── Admin Endpoints ──────────────────────────────────────────
 
 /**
