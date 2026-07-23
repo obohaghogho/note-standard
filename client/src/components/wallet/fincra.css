@@ -1,0 +1,265 @@
+/* =============================================================================
+ * Fincra Component Styles — Isolated Stylesheet
+ * =============================================================================
+ * These styles are scoped under .fincra-* namespaced classes.
+ * They do NOT override any existing NoteStandard Tailwind or global styles.
+ * Import this file only in Fincra-specific components.
+ * ============================================================================= */
+
+/* ── Card ──────────────────────────────────────────────────────────────────── */
+.fincra-accounts-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.fincra-card {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  color: #e2e8f0;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow 0.2s ease;
+}
+
+.fincra-card:hover {
+  box-shadow: 0 4px 24px rgba(99, 102, 241, 0.2);
+}
+
+.fincra-card::before {
+  content: "";
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 100px;
+  height: 100px;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.15), transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.fincra-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.fincra-card__badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(99, 102, 241, 0.2);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.fincra-card__currency {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.fincra-card__bank-name {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  margin: 0 0 0.2rem;
+}
+
+.fincra-card__account-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  margin: 0 0 0.6rem;
+}
+
+.fincra-card__account-number-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.fincra-card__account-number {
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #c7d2fe;
+  font-family: "Courier New", monospace;
+}
+
+.fincra-card__copy-btn {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 5px;
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  background: rgba(99, 102, 241, 0.1);
+  color: #a5b4fc;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.fincra-card__copy-btn:hover {
+  background: rgba(99, 102, 241, 0.25);
+}
+
+.fincra-card__disclaimer {
+  font-size: 0.72rem;
+  color: #475569;
+  margin: 0.75rem 0 0;
+  line-height: 1.5;
+}
+
+.fincra-card__error {
+  font-size: 0.8rem;
+  color: #f87171;
+  margin-top: 0.5rem;
+}
+
+.fincra-card--loading .fincra-skeleton {
+  height: 80px;
+  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background-size: 200% 100%;
+  border-radius: 8px;
+  animation: fincra-shimmer 1.4s infinite;
+}
+
+@keyframes fincra-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Form ──────────────────────────────────────────────────────────────────── */
+.fincra-form {
+  background: #0f172a;
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 12px;
+  padding: 1.5rem;
+  color: #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.fincra-form--success {
+  border-color: rgba(52, 211, 153, 0.35);
+  text-align: center;
+}
+
+.fincra-form__title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0;
+  color: #f8fafc;
+}
+
+.fincra-form__subtitle {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin: -0.5rem 0 0;
+}
+
+.fincra-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.fincra-form__field label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #94a3b8;
+  letter-spacing: 0.04em;
+}
+
+.fincra-form__input {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 7px;
+  padding: 0.55rem 0.75rem;
+  color: #f1f5f9;
+  font-size: 0.9rem;
+  transition: border-color 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.fincra-form__input:focus {
+  outline: none;
+  border-color: rgba(99, 102, 241, 0.6);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+.fincra-form__resolved {
+  font-size: 0.85rem;
+  background: rgba(52, 211, 153, 0.1);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  color: #6ee7b7;
+}
+
+.fincra-form__error {
+  font-size: 0.8rem;
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+}
+
+.fincra-form__ref {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin-top: 0.5rem;
+}
+
+.fincra-form__ref code {
+  font-family: "Courier New", monospace;
+  color: #a5b4fc;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────────────── */
+.fincra-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 1.25rem;
+  border-radius: 7px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+  border: none;
+}
+
+.fincra-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.fincra-btn--primary {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #fff;
+  width: 100%;
+}
+
+.fincra-btn--primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.fincra-btn--secondary {
+  background: rgba(99, 102, 241, 0.12);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  align-self: flex-start;
+}
+
+.fincra-btn--secondary:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.22);
+}

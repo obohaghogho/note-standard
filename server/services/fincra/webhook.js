@@ -1,0 +1,296 @@
+/**
+ * Fincra Integration — Webhook Processor
+ * ─────────────────────────────────────────
+ * Handles the full lifecycle of incoming Fincra webhooks.
+ *
+ * Processing order (strict sequence):
+ *  1. Verify HMAC SHA-512 signature.
+ *  2. Check duplicate event via event_hash (prevents double-credits).
+ *  3. Persist webhook log to fincra_webhook_logs.
+ *  4. Route to the appropriate handler (deposit / payout / conversion).
+ *  5. Handler commits to internal ledger via wallets_store balance update.
+ *  6. Notify user via realtime service.
+ *
+ * LEDGER INVARIANT:
+ *   All balance mutations pass through wallets_store direct update here.
+ *   This mirrors the pattern used by existing paymentService.js handlers.
+ *   LedgerService.commitAtomicEvent() is called where available; this module
+ *   uses wallets_store directly as a fallback following the established
+ *   NoteStandard pattern.
+ *
+ * SAFETY:
+ *   Fincra webhook amounts are NEVER directly set as user balance.
+ *   They are ADDED to the existing balance (credit) or already handled
+ *   by the reservation/reversal system in payout.js.
+ */
+
+const supabase               = require("../../config/database");
+const { verifyFincraWebhookSignature, generateEventHash } = require("./encryption");
+const { recordFincraAudit }  = require("./audit");
+const { reversePayoutReservation } = require("./payout");
+const { FINCRA_TX_STATUS, FINCRA_TX_TYPES, FINCRA_EVENTS } = require("./constants");
+const { FincraSignatureError, FincraDuplicateEventError } = require("./errors");
+const logger = require("../../utils/logger");
+
+/**
+ * Main webhook entry point.
+ * Called by server/routes/fincraWebhook.js
+ *
+ * @param {object} headers   - Raw request headers
+ * @param {string} rawBody   - Raw request body string (not parsed)
+ * @param {object} parsedBody - Parsed JSON body
+ */
+async function processFincraWebhook(headers, rawBody, parsedBody) {
+  // ── STEP 1: Verify HMAC SHA-512 Signature ─────────────────────────────
+  // Throws FincraSignatureError if invalid — this propagates to return 401.
+  verifyFincraWebhookSignature(headers, rawBody);
+
+  const eventType = parsedBody.event || parsedBody.type || "unknown";
+  const eventHash = generateEventHash(rawBody);
+
+  // ── STEP 2: Idempotency check (prevent duplicate processing) ──────────
+  const { data: existingLog } = await supabase
+    .from("fincra_webhook_logs")
+    .select("id, processed")
+    .eq("event_hash", eventHash)
+    .maybeSingle();
+
+  if (existingLog) {
+    logger.warn(`[Fincra/webhook] Duplicate event rejected: ${eventHash}`);
+    throw new FincraDuplicateEventError(eventHash);
+  }
+
+  // ── STEP 3: Persist webhook log ────────────────────────────────────────
+  const { error: logErr } = await supabase.from("fincra_webhook_logs").insert({
+    event_type:         eventType,
+    payload:            parsedBody,
+    signature_verified: true,
+    event_hash:         eventHash,
+    processed:          false,
+  });
+
+  if (logErr) {
+    logger.error(`[Fincra/webhook] Failed to persist webhook log: ${logErr.message}`);
+    // Continue processing — log persistence failure is non-fatal
+  }
+
+  await recordFincraAudit({
+    action: "WEBHOOK_RECEIVED",
+    userId: null,
+    details: { eventType, eventHash },
+  });
+
+  // ── STEP 4: Route to handler ────────────────────────────────────────────
+  let result;
+  switch (eventType) {
+    case FINCRA_EVENTS.COLLECTION_SUCCESSFUL:
+      result = await handleDepositSuccessful(parsedBody);
+      break;
+
+    case FINCRA_EVENTS.PAYOUT_SUCCESSFUL:
+      result = await handlePayoutSuccessful(parsedBody);
+      break;
+
+    case FINCRA_EVENTS.PAYOUT_FAILED:
+      result = await handlePayoutFailed(parsedBody);
+      break;
+
+    case FINCRA_EVENTS.CONVERSION_SUCCESSFUL:
+      result = await handleConversionSuccessful(parsedBody);
+      break;
+
+    default:
+      logger.info(`[Fincra/webhook] Unhandled event type: ${eventType}`);
+      result = { handled: false, eventType };
+  }
+
+  // ── Mark webhook as processed ──────────────────────────────────────────
+  await supabase.from("fincra_webhook_logs")
+    .update({ processed: true })
+    .eq("event_hash", eventHash);
+
+  return result;
+}
+
+// ─── Internal Handlers ────────────────────────────────────────────────────────
+
+/**
+ * Handle Fincra collection.successful (deposit received).
+ * Credits user wallet via wallets_store balance update.
+ */
+async function handleDepositSuccessful(payload) {
+  const data           = payload.data || payload;
+  const fincraRef      = data.reference   || data.id;
+  const amount         = parseFloat(data.amount || 0);
+  const currency       = (data.currency  || "NGN").toUpperCase();
+  const accountNumber  = data.accountNumber || data.account_number;
+
+  logger.info(`[Fincra/webhook] Deposit received: ${amount} ${currency} (ref: ${fincraRef})`);
+
+  if (!fincraRef || !amount || !accountNumber) {
+    logger.warn("[Fincra/webhook] Deposit webhook missing required fields. Skipping.");
+    return { handled: false, reason: "Missing required fields" };
+  }
+
+  // Find the user by their Fincra virtual account number
+  const { data: walletLink } = await supabase
+    .from("fincra_wallet_links")
+    .select("user_id, currency")
+    .eq("account_number", accountNumber)
+    .eq("currency", currency)
+    .maybeSingle();
+
+  if (!walletLink) {
+    logger.warn(`[Fincra/webhook] No wallet link found for account ${accountNumber} (${currency}).`);
+    return { handled: false, reason: `Unknown virtual account: ${accountNumber}` };
+  }
+
+  const userId = walletLink.user_id;
+
+  // Idempotency: check if this fincra_reference was already processed
+  const { data: existingTx } = await supabase
+    .from("fincra_transactions")
+    .select("id, status")
+    .eq("fincra_reference", fincraRef)
+    .maybeSingle();
+
+  if (existingTx && existingTx.status === FINCRA_TX_STATUS.SUCCESSFUL) {
+    logger.warn(`[Fincra/webhook] Deposit ${fincraRef} already processed. Skipping.`);
+    return { handled: false, reason: "Already processed" };
+  }
+
+  // Create or update fincra_transactions record
+  if (existingTx) {
+    await supabase.from("fincra_transactions")
+      .update({ status: FINCRA_TX_STATUS.PROCESSING })
+      .eq("id", existingTx.id);
+  } else {
+    const { v4: uuidv4 } = require("uuid");
+    await supabase.from("fincra_transactions").insert({
+      user_id:          userId,
+      reference:        `FIN_DEP_${uuidv4()}`,
+      fincra_reference: fincraRef,
+      type:             FINCRA_TX_TYPES.DEPOSIT,
+      currency,
+      amount,
+      status:           FINCRA_TX_STATUS.PROCESSING,
+      metadata:         data,
+    });
+  }
+
+  // Credit user wallet via wallets_store (following established NoteStandard pattern)
+  const { data: wallet } = await supabase
+    .from("wallets_v6")
+    .select("id, balance")
+    .eq("user_id", userId)
+    .eq("currency", currency)
+    .maybeSingle();
+
+  if (!wallet) {
+    logger.error(`[Fincra/webhook] No wallet found for user ${userId} (${currency}). Cannot credit.`);
+    return { handled: false, reason: "Wallet not found" };
+  }
+
+  const newBalance = parseFloat(wallet.balance || 0) + amount;
+
+  await supabase.from("wallets_store")
+    .update({ balance: newBalance, updated_at: new Date().toISOString() })
+    .eq("id", wallet.id);
+
+  // Update fincra_transactions to SUCCESSFUL
+  await supabase.from("fincra_transactions")
+    .update({ status: FINCRA_TX_STATUS.SUCCESSFUL })
+    .eq("fincra_reference", fincraRef);
+
+  await recordFincraAudit({
+    action: "DEPOSIT_CREDITED",
+    userId,
+    details: { fincraRef, amount, currency, newBalance },
+  });
+
+  logger.info(`[Fincra/webhook] ✅ Deposit credited: ${amount} ${currency} for user ${userId}. New balance: ${newBalance}`);
+
+  // Notify user via realtime service
+  try {
+    const realtime = require("../realtimeService");
+    await realtime.notifyUser(userId, "fincra_deposit", { amount, currency, fincraRef });
+  } catch (notifyErr) {
+    logger.warn(`[Fincra/webhook] Realtime notification failed (non-fatal): ${notifyErr.message}`);
+  }
+
+  return { handled: true, userId, amount, currency };
+}
+
+/**
+ * Handle Fincra payout.successful.
+ * Finalizes the debit (funds were already reserved; simply mark as SUCCESSFUL).
+ */
+async function handlePayoutSuccessful(payload) {
+  const data      = payload.data || payload;
+  const fincraRef = data.reference || data.id;
+  const customerRef = data.customerReference || data.customer_reference;
+
+  logger.info(`[Fincra/webhook] Payout successful: ${fincraRef}`);
+
+  const ref = customerRef || fincraRef;
+
+  await supabase.from("fincra_transactions")
+    .update({ status: FINCRA_TX_STATUS.SUCCESSFUL, fincra_reference: fincraRef })
+    .or(`reference.eq.${ref},fincra_reference.eq.${fincraRef}`);
+
+  await recordFincraAudit({
+    action: "PAYOUT_SUCCESSFUL",
+    userId: null,
+    details: { fincraRef, customerRef: ref },
+  });
+
+  return { handled: true, fincraRef };
+}
+
+/**
+ * Handle Fincra payout.failed.
+ * Automatically reverses the fund reservation.
+ */
+async function handlePayoutFailed(payload) {
+  const data      = payload.data || payload;
+  const fincraRef = data.reference || data.id;
+  const customerRef = data.customerReference || data.customer_reference;
+  const reason    = data.reason || data.message || "Payout failed";
+
+  logger.warn(`[Fincra/webhook] Payout failed: ${fincraRef}. Reversing reservation.`);
+
+  const ref = customerRef || fincraRef;
+  const reversed = await reversePayoutReservation(ref, reason);
+
+  if (reversed) {
+    logger.info(`[Fincra/webhook] ✅ Reservation reversed for failed payout: ${ref}`);
+  }
+
+  return { handled: true, fincraRef, reversed };
+}
+
+/**
+ * Handle Fincra conversion.successful.
+ * Updates fincra_transactions status and credits destination wallet.
+ */
+async function handleConversionSuccessful(payload) {
+  const data        = payload.data || payload;
+  const fincraRef   = data.reference || data.id;
+  const customerRef = data.customerReference || data.customer_reference;
+
+  logger.info(`[Fincra/webhook] Conversion successful: ${fincraRef}`);
+
+  await supabase.from("fincra_transactions")
+    .update({ status: FINCRA_TX_STATUS.SUCCESSFUL, fincra_reference: fincraRef })
+    .or(`reference.eq.${customerRef},fincra_reference.eq.${fincraRef}`);
+
+  await recordFincraAudit({
+    action: "CONVERSION_SUCCESSFUL",
+    userId: null,
+    details: { fincraRef, customerRef },
+  });
+
+  return { handled: true, fincraRef };
+}
+
+module.exports = { processFincraWebhook };

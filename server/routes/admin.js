@@ -98,4 +98,9 @@ router.get("/withdrawals/pending", adminController.getPendingWithdrawals);
 router.put("/withdrawals/:id/approve", adminController.approveWithdrawal);
 router.put("/withdrawals/:id/reject", adminController.rejectWithdrawal);
 
+// Fincra Admin Sub-Router (isolated, feature-flagged internally)
+if (process.env.ENABLE_FINCRA === "true") {
+  router.use("/fincra", require("./admin/fincraAdmin"));
+}
+
 module.exports = router;
