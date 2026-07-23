@@ -235,7 +235,7 @@ class AnchorProvider extends BaseProvider {
     }
     try {
       const start = Date.now();
-      await this.client.get("/health");
+      await this.client.get("/banks");
       return {
         status: "healthy",
         latencyMs: Date.now() - start,

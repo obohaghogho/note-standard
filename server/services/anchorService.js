@@ -280,7 +280,7 @@ class AnchorService {
 
     try {
       const start = Date.now();
-      await this.client.get("/health");
+      await this.client.get("/banks");
       return {
         enabled: true,
         status: "healthy",
