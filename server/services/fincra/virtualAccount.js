@@ -51,9 +51,13 @@ async function createOrGetFincraVirtualAccount({ userId, email, firstName, lastN
       email,
       firstName,
       lastName,
+      // BVN required by Fincra sandbox; use placeholder for sandbox testing.
+      // In production, collect BVN from users via KYC flow.
+      bvn: "00000000000",
     },
-    meansOfId: [],
+    meansOfId:      [],
     attachmentType: "none",
+    // NOTE: Do NOT include businessID in body — it is inferred from the api-key header
   };
 
   const res = await instance.post(`/profile/virtual-accounts/requests`, payload);

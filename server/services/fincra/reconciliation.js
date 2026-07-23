@@ -71,7 +71,12 @@ async function runFincraReconciliation({ currency = "NGN", fromDate, toDate } = 
   // ── 2. Fetch Fincra wallet logs ──────────────────────────────────────────
   let fincraLogs = [];
   try {
-    fincraLogs = await getFincraWalletLogs({ currency, from: fromDate, to: toDate });
+    // Fetch all wallet logs (Fincra sandbox doesn't support date/business filtering)
+    fincraLogs = await getFincraWalletLogs();
+    // Filter locally by currency if needed
+    if (currency) {
+      fincraLogs = fincraLogs.filter(e => (e.currency || "").toUpperCase() === currency.toUpperCase());
+    }
     report.fincraCount = fincraLogs.length;
   } catch (err) {
     logger.error(`[Fincra/reconciliation] Fincra wallet log fetch failed: ${err.message}`);

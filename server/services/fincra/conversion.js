@@ -53,7 +53,7 @@ async function generateFincraQuote({ sourceCurrency, destinationCurrency, amount
     destinationCurrency,
     amount,
     type: "conversion",
-    business: businessId,
+    // business is inferred from api-key header
   });
 
   const quote = res.data?.data || res.data;
@@ -98,8 +98,8 @@ async function executeFincraConversion({ quoteReference, userId, sourceCurrency,
 
   const res = await instance.post("/conversions", {
     quoteReference,
-    business: businessId,
     customerReference: reference,
+    // business is inferred from api-key header
   });
 
   const convData    = res.data?.data || res.data;

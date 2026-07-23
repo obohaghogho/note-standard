@@ -17,7 +17,7 @@ const logger = require("../../utils/logger");
  */
 async function getFincraWallets() {
   const { instance, businessId } = getFincraClient();
-  const res = await instance.get(`/wallets`, { params: { business: businessId } });
+  const res = await instance.get(`/wallets`, { params: { businessID: businessId } });
   logger.info("[Fincra/wallet] Retrieved wallet list");
   return res.data?.data || res.data || [];
 }
@@ -37,10 +37,9 @@ async function getFincraWalletById(walletId) {
  * @param {object} params - Optional filters (page, limit, currency)
  */
 async function getFincraWalletLogs(params = {}) {
-  const { instance, businessId } = getFincraClient();
-  const res = await instance.get("/wallets/logs", {
-    params: { business: businessId, ...params },
-  });
+  const { instance } = getFincraClient();
+  // Note: sandbox /wallets/logs does not accept businessID/from/to filters
+  const res = await instance.get("/wallets/logs", { params });
   return res.data?.data || res.data || [];
 }
 

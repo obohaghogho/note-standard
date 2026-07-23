@@ -108,7 +108,6 @@ async function initiateFincraPayout({ userId, amount, currency, bankCode, accoun
       sourceCurrency: currency,
       destinationCurrency: currency,
       amount: required,
-      business: businessId,
       description: narration || `NoteStandard withdrawal ${reference}`,
       customerReference: reference,
       beneficiary: {

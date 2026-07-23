@@ -36,7 +36,7 @@ async function verifyBankAccount({ accountNumber, bankCode, currency = "NGN", us
     accountNumber,
     bankCode,
     type: "nuban",
-    business: businessId,
+    // NOTE: business param is NOT accepted — api-key identifies the business
   });
 
   const data = res.data?.data || res.data;
