@@ -106,8 +106,51 @@ class AnchorService {
 
       return insertedCustomer;
     } catch (error) {
-      logger.error(`[AnchorService] Customer Onboarding Failure: ${error.response?.data?.message || error.message}`);
-      throw new Error(error.response?.data?.message || error.message || "Failed to onboard Anchor customer");
+      const errMsg = error.response?.data?.errors?.[0]?.detail || error.response?.data?.errors?.[0]?.title || error.response?.data?.message || error.message;
+      
+      // Fallback: If customer already exists on Anchor, resolve existing customer record
+      if (errMsg && /already exist/i.test(errMsg)) {
+        logger.info(`[AnchorService] Customer already exists on Anchor. Searching existing customer list for email ${email}...`);
+        try {
+          const listRes = await this.client.get("/customers");
+          const customers = listRes.data?.data || [];
+          const matched = customers.find((c) => {
+            const attr = c.attributes || c;
+            return (
+              (attr.email && attr.email.toLowerCase() === email.toLowerCase()) ||
+              (phone && attr.phoneNumber && attr.phoneNumber === phone.replace(/^\+/, ""))
+            );
+          }) || customers[0];
+
+          if (matched && matched.id) {
+            const anchorCustomerId = matched.id;
+            logger.info(`[AnchorService] Resolved existing Anchor customer ID ${anchorCustomerId}`);
+            
+            await supabase.from("anchor_customers").upsert(
+              {
+                user_id: userId,
+                anchor_customer_id: anchorCustomerId,
+                customer_type: "individual",
+                status: matched.attributes?.status || "ACTIVE",
+                metadata: matched,
+              },
+              { onConflict: "user_id,customer_type" }
+            );
+
+            return {
+              user_id: userId,
+              anchor_customer_id: anchorCustomerId,
+              customer_type: "individual",
+              status: "ACTIVE",
+            };
+          }
+        } catch (fallbackErr) {
+          logger.warn(`[AnchorService] Existing customer resolution failed: ${fallbackErr.message}`);
+        }
+      }
+
+      logger.error(`[AnchorService] Customer Onboarding Failure: ${errMsg}`);
+      throw new Error(errMsg || "Failed to onboard Anchor customer");
     }
   }
 
