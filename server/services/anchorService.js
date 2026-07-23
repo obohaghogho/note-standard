@@ -214,11 +214,14 @@ class AnchorService {
     try {
       const response = await this.client.get("/banks");
       const list = response.data?.data || response.data || [];
-      return list.map((b) => ({
-        name: b.name,
-        code: b.code || b.nipCode,
-        slug: b.slug || b.name.toLowerCase().replace(/\s+/g, "-"),
-      }));
+      return list.map((b) => {
+        const attr = b.attributes || b;
+        return {
+          name: attr.name || b.name,
+          code: attr.nipCode || attr.code || b.code || b.nipCode,
+          slug: (attr.slug || attr.name || b.name || "").toLowerCase().replace(/\s+/g, "-"),
+        };
+      });
     } catch (error) {
       logger.error(`[AnchorService] Bank List Retrieval Error: ${error.message}`);
       return [];
