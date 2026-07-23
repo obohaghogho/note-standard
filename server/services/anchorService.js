@@ -66,7 +66,7 @@ class AnchorService {
             firstName: firstName || "Customer",
             lastName: lastName || "User",
           },
-          phoneNumber: phone || undefined,
+          phoneNumber: phone ? phone.replace(/^\+/, "") : undefined,
           kyc: bvn ? { bvn } : undefined,
         },
       };
@@ -124,24 +124,48 @@ class AnchorService {
       // 1. Ensure user has an Anchor Customer record
       const customer = await this.getOrCreateAnchorCustomer(userId, email, firstName, lastName, phone, bvn);
 
-      // 2. Request Virtual Account from Anchor API
-      logger.info(`[AnchorService] Requesting virtual account for Anchor customer ${customer.anchor_customer_id}`);
-      const response = await this.client.post("/accounts", {
-        customerId: customer.anchor_customer_id,
-        type: "deposit",
-        currency: "NGN",
-      });
+      // 2. Resolve Anchor Settlement Account
+      logger.info(`[AnchorService] Resolving settlement deposit account for customer ${customer.anchor_customer_id}`);
+      const accRes = await this.client.get("/accounts");
+      const accounts = accRes.data?.data || [];
+      const settlementAcc = accounts.find((a) => a.attributes?.type === "FBO" || a.attributes?.type === "SETTLEMENT") || accounts[0];
+
+      if (!settlementAcc) {
+        throw new Error("No Anchor settlement deposit account available");
+      }
+
+      // 3. Request Virtual NUBAN from Anchor API
+      logger.info(`[AnchorService] Provisioning Virtual NUBAN on Anchor settlement account ${settlementAcc.id}`);
+      const payload = {
+        data: {
+          type: "VirtualNuban",
+          attributes: {
+            name: `${firstName || ''} ${lastName || ''}`.trim() || email,
+          },
+          relationships: {
+            settlementAccount: {
+              data: {
+                type: "DepositAccount",
+                id: settlementAcc.id,
+              },
+            },
+          },
+        },
+      };
+
+      const response = await this.client.post("/virtual-nubans", payload);
 
       const entry = response.data?.data || response.data || {};
-      const accountNo = entry.accountNumber || entry.account_number;
-      const accountName = entry.accountName || entry.account_name || `${firstName || ''} ${lastName || ''}`.trim();
-      const bankName = entry.bank?.name || entry.bankName || "Anchor Microfinance Bank";
+      const attr = entry.attributes || entry;
+      const accountNo = attr.accountNumber;
+      const accountName = attr.accountName || `${firstName || ''} ${lastName || ''}`.trim();
+      const bankName = attr.bank?.name || "PROVIDUS BANK";
 
       if (!accountNo) {
         throw new Error("Anchor API response did not contain account_number");
       }
 
-      // 3. Save virtual account in public.dedicated_accounts table
+      // 4. Save virtual account in public.dedicated_accounts table
       const { data: dvaRecord, error: dvaError } = await supabase
         .from("dedicated_accounts")
         .upsert(
@@ -175,8 +199,9 @@ class AnchorService {
         customerCode: customer.anchor_customer_id,
       };
     } catch (error) {
-      logger.error(`[AnchorService] Create Virtual Account Error: ${error.response?.data?.message || error.message}`);
-      throw new Error(error.response?.data?.message || error.message || "Failed to generate Anchor virtual account");
+      const errMsg = error.response?.data?.errors?.[0]?.detail || error.response?.data?.message || error.message;
+      logger.error(`[AnchorService] Create Virtual Account Error: ${errMsg}`);
+      throw new Error(errMsg || "Failed to generate Anchor virtual account");
     }
   }
 
