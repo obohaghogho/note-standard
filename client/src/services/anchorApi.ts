@@ -8,12 +8,15 @@ export type AnchorBank = {
 
 export type AnchorAccount = {
   id: string;
-  bank_name: string;
-  account_number: string;
-  account_name: string;
+  bank_name?: string;
+  bankName?: string;
+  account_number?: string;
+  accountNumber?: string;
+  account_name?: string;
+  accountName?: string;
   currency: string;
   provider: string;
-  created_at: string;
+  created_at?: string;
 };
 
 export type AnchorHealth = {

@@ -84,22 +84,22 @@ export const AnchorAccountCard: React.FC = () => {
         <div className="space-y-3 bg-gray-950/40 border border-gray-800/80 rounded-xl p-4">
           <div className="flex items-center justify-between">
             <span className="text-xs text-gray-400 font-medium">Bank Name</span>
-            <span className="text-xs font-semibold text-gray-200">{account.bank_name || "Anchor MFB"}</span>
+            <span className="text-xs font-semibold text-gray-200">{account.bank_name || account.bankName || "PROVIDUS BANK"}</span>
           </div>
 
           <div className="flex items-center justify-between">
             <span className="text-xs text-gray-400 font-medium">Account Name</span>
-            <span className="text-xs font-semibold text-gray-200">{account.account_name}</span>
+            <span className="text-xs font-semibold text-gray-200">{account.account_name || account.accountName || "Account Holder"}</span>
           </div>
 
           <div className="flex items-center justify-between pt-1 border-t border-gray-800/60">
             <span className="text-xs text-gray-400 font-medium">NUBAN Number</span>
             <div className="flex items-center gap-2">
               <span className="text-base font-mono font-bold tracking-wider text-emerald-400">
-                {account.account_number}
+                {account.account_number || account.accountNumber}
               </span>
               <button
-                onClick={() => handleCopy(account.account_number)}
+                onClick={() => handleCopy(account.account_number || account.accountNumber || "")}
                 className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all active:scale-95"
                 title="Copy Account Number"
               >
