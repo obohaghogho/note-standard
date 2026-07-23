@@ -173,6 +173,28 @@ class AnchorService {
     }
 
     try {
+      // 0. Check if user already has an anchor dedicated_account (Idempotency)
+      const { data: existingDva } = await supabase
+        .from("dedicated_accounts")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("provider", "anchor")
+        .eq("currency", "NGN")
+        .maybeSingle();
+
+      if (existingDva && existingDva.account_number) {
+        logger.info(`[AnchorService] Found existing dedicated_account for user ${userId}: ${existingDva.account_number}`);
+        return {
+          id: existingDva.id,
+          bankName: existingDva.bank_name,
+          accountNumber: existingDva.account_number,
+          accountName: existingDva.account_name,
+          currency: existingDva.currency,
+          provider: existingDva.provider,
+          customerCode: existingDva.provider_customer_code,
+        };
+      }
+
       // 1. Ensure user has an Anchor Customer record
       const customer = await this.getOrCreateAnchorCustomer(userId, email, firstName, lastName, phone, bvn);
 
