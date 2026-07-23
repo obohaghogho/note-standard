@@ -79,23 +79,19 @@ server.listen(PORT, async () => {
       } else {
         logger.info("[Boot] DB connectivity verified.");
         bootManager.setService("db", true);
+        bootManager.setService("gateway", true); // Fast-path system readiness
       }
 
-      // ── B: Seed Market Data ────────────────────────────────────
+      // ── B: Seed Market Data (Non-blocking background initialization) ──────
       logger.info("[Trends] Starting initial aggregation in background...");
-      await analyticsService.aggregateDailyStats();
-      
+      analyticsService.aggregateDailyStats().catch(err => logger.warn(`[Trends] Initial aggregation warning: ${err.message}`));
+
       logger.info("[Snapshot] Generating initial DFOS v6.0 Snapshot...");
       const SnapshotService = require("./services/SnapshotService");
-      await SnapshotService.generateMarketSnapshot();
-      
-      const rates = await fxService.getAllRates();
-      await realtime.broadcast("rates_updated", rates);
-      
-      const stats = await analyticsService.getRealtimeStats();
-      if (stats) {
-        await realtime.broadcast("stats_updated", stats);
-      }
+      SnapshotService.generateMarketSnapshot().catch(err => logger.warn(`[Snapshot] Initial snapshot warning: ${err.message}`));
+
+      fxService.getAllRates().then(rates => realtime.broadcast("rates_updated", rates)).catch(() => {});
+      analyticsService.getRealtimeStats().then(stats => { if (stats) realtime.broadcast("stats_updated", stats); }).catch(() => {});
 
       // ── C: SAFE_MODE Auto-Recovery ─────────────────────────────
       const SystemState = require("./config/SystemState");
@@ -110,31 +106,6 @@ server.listen(PORT, async () => {
           logger.warn("[Startup] SAFE_MODE could not be auto-cleared. Manual intervention may be required.");
         }
       }
-
-      // ── D: Poll Gateway until alive ────────────────────────────
-      logger.info("[Boot] Polling Gateway for readiness...");
-      const GATEWAY_URL = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5001';
-      let gatewayAlive = false;
-      for (let attempt = 1; attempt <= 10; attempt++) {
-        try {
-          const healthRes = await fetch(`${GATEWAY_URL}/health`, { timeout: 3000 });
-          if (healthRes.ok) {
-            gatewayAlive = true;
-            logger.info(`[Boot] Gateway is alive (attempt ${attempt}).`);
-            break;
-          }
-        } catch {
-          // Not yet alive
-        }
-        logger.info(`[Boot] Gateway not ready yet (attempt ${attempt}/10). Waiting 2s...`);
-        await new Promise(r => setTimeout(r, 2000));
-      }
-
-      // Register gateway as ready (soft-allow even if unreachable in dev)
-      if (!gatewayAlive) {
-        logger.error("[Boot] Gateway did not respond after 10 attempts. Marking ready anyway (dev mode).");
-      }
-      bootManager.setService("gateway", true);
       // BootManager.evaluate() automatically fires → _signalGateway() → pushQueue.flush()
 
     } catch (err) {
