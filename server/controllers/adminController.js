@@ -2049,3 +2049,55 @@ exports.getCommunicationHealth = async (req, res, next) => {
   }
 };
 
+/**
+ * Financial Operations Dashboard
+ * Returns aggregated financial health metrics for the FinOps admin panel.
+ */
+exports.getFinOpsDashboard = async (req, res, next) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    const oneDayAgo = new Date(Date.now() - 86400000).toISOString();
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+
+    const [walletsRes, txRes, tx7dRes, pendingRes] = await Promise.allSettled([
+      serviceSupabase.from('wallets_store').select('currency, balance'),
+      serviceSupabase.from('transactions').select('*', { count: 'exact', head: true }).gte('created_at', oneDayAgo),
+      serviceSupabase.from('transactions').select('amount, currency, status').gte('created_at', sevenDaysAgo),
+      serviceSupabase.from('transactions').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+    ]);
+
+    const wallets = walletsRes.status === 'fulfilled' ? walletsRes.value.data || [] : [];
+    const txCount24h = txRes.status === 'fulfilled' ? txRes.value.count || 0 : 0;
+    const txLast7d = tx7dRes.status === 'fulfilled' ? tx7dRes.value.data || [] : [];
+    const pendingCount = pendingRes.status === 'fulfilled' ? pendingRes.value.count || 0 : 0;
+
+    // Aggregate balances by currency
+    const balancesByCurrency = {};
+    for (const w of wallets) {
+      if (!balancesByCurrency[w.currency]) balancesByCurrency[w.currency] = 0;
+      balancesByCurrency[w.currency] += parseFloat(w.balance || 0);
+    }
+
+    // Aggregate 7-day volume by currency
+    const volumeByCurrency = {};
+    for (const tx of txLast7d) {
+      if (tx.status === 'completed') {
+        if (!volumeByCurrency[tx.currency]) volumeByCurrency[tx.currency] = 0;
+        volumeByCurrency[tx.currency] += parseFloat(tx.amount || 0);
+      }
+    }
+
+    return res.json({
+      summary: {
+        totalWallets: wallets.length,
+        transactions24h: txCount24h,
+        pendingTransactions: pendingCount,
+      },
+      balancesByCurrency,
+      volumeLast7d: volumeByCurrency,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
