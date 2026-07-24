@@ -21,7 +21,11 @@ import { MentionSuggestions } from './MentionSuggestions';
 import { ForwardMessageModal } from './ForwardMessageModal';
 
 import { ConfirmationModal } from '../common/ConfirmationModal';
+import { Button } from '../common/Button';
 import { applyAutoCorrect } from '../../utils/textUtils';
+import { useWallpaper } from '../../context/WallpaperContext';
+import { WallpaperEngine } from './WallpaperEngine';
+import { WallpaperPicker } from './WallpaperPicker';
 import { UserBadge } from '../common/UserBadge';
 import MessageBubble from './MessageBubble';
 import { useChatTheme } from '../../context/ChatThemeContext';
@@ -113,6 +117,10 @@ const ChatWindow: React.FC = () => {
     const [showAttachMenu, setShowAttachMenu] = useState(false);
     const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
     const signedUrlsRef = useRef<Record<string, string>>({});
+    const { getWallpaper } = useWallpaper();
+    const activeWallpaper = getWallpaper(activeConversationId || undefined);
+    const fontTheme = activeWallpaper.fontTheme || localStorage.getItem('chat_font_theme') || 'sans';
+    const [showCustomizeModal, setShowCustomizeModal] = useState(false);
     useEffect(() => {
         signedUrlsRef.current = signedUrls;
     }, [signedUrls]);
@@ -756,8 +764,8 @@ const ChatWindow: React.FC = () => {
 
     return (
         <div className="chat-root bg-crystal text-white w-full h-full flex flex-col relative overflow-hidden md:max-w-[1200px] md:mx-auto md:shadow-2xl md:border-x md:border-white/5">
-            {/* Immersive glass layer overlay */}
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-none z-0" />
+            {/* Premium Wallpaper Engine */}
+            <WallpaperEngine chatId={activeConversationId || undefined} />
             {/* ── Selection Action Bar (WhatsApp-style) ── */}
             {isSelectionMode ? (
                 <div className="chat-header border-b border-blue-500/30 bg-blue-600/10 backdrop-blur-md" onClick={(e) => e.stopPropagation()}>
@@ -996,6 +1004,12 @@ const ChatWindow: React.FC = () => {
                                     <button onClick={handleMuteChat} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 rounded-lg">{activeConversation?.is_muted ? 'Unmute Notifications' : 'Mute Notifications'}</button>
                                     <button onClick={handleClearChat} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 rounded-lg">Clear History</button>
                                     <button onClick={handleDeleteChat} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-400/10 rounded-lg">Delete Chat</button>
+                                    <button 
+                                        onClick={() => { setShowCustomizeModal(true); setShowMoreMenu(false); }} 
+                                        className="w-full text-left px-4 py-2 text-sm text-blue-400 hover:bg-blue-500/10 rounded-lg"
+                                    >
+                                        Theme & Fonts
+                                    </button>
                                     {activeConversation?.type === 'direct' && (
                                         <button onClick={handleBlockUser} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-400/10 rounded-lg">
                                             {activeConversation.blockedByMe ? 'Unblock User' : 'Block User'}
@@ -1010,7 +1024,7 @@ const ChatWindow: React.FC = () => {
             )}
 
                 {isSearchOpen && searchQuery.trim() !== '' ? (
-                    <div className="overflow-y-auto flex flex-col flex-1 min-h-0 custom-scrollbar px-3 md:px-6 gap-1 md:gap-2" style={{ touchAction: 'pan-y' }}>
+                    <div className={`overflow-y-auto flex flex-col flex-1 min-h-0 custom-scrollbar px-3 md:px-6 gap-1 md:gap-2 font-theme-${fontTheme}`} style={{ touchAction: 'pan-y' }}>
                         <div className="space-y-4 flex flex-col w-full">
                             <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-4">
                                 {isSearching ? 'Searching...' : `Search Results (${searchResults.length})`}
@@ -1247,6 +1261,18 @@ const ChatWindow: React.FC = () => {
                                                 rows={1}
                                                 value={inputValue}
                                                 onChange={handleInputChange}
+                                                onTouchStart={(e) => {
+                                                    if (document.activeElement !== e.currentTarget) {
+                                                        e.preventDefault();
+                                                        e.currentTarget.focus({ preventScroll: true });
+                                                    }
+                                                }}
+                                                onMouseDown={(e) => {
+                                                    if (document.activeElement !== e.currentTarget) {
+                                                        e.preventDefault();
+                                                        e.currentTarget.focus({ preventScroll: true });
+                                                    }
+                                                }}
                                                 onKeyDown={() => {
                                                     // By product requirement, Enter inserts a newline instead of sending.
                                                     // Sending is done exclusively via the explicit Send button.
@@ -1275,7 +1301,7 @@ const ChatWindow: React.FC = () => {
                                                 autoComplete="off"
                                                 spellCheck={true}
                                                 autoCapitalize="sentences"
-                                                className="w-full bg-transparent text-white py-2.5 md:py-3 px-1 md:px-2 focus:outline-none disabled:opacity-50 text-[16px] md:text-sm placeholder:text-gray-500 font-medium leading-[1.4] resize-none overflow-y-auto"
+                                                className={`w-full bg-transparent text-white py-2.5 md:py-3 px-1 md:px-2 focus:outline-none disabled:opacity-50 text-[16px] md:text-sm placeholder:text-gray-500 font-medium leading-[1.4] resize-none overflow-y-auto font-theme-${fontTheme}`}
                                                 style={{
                                                     minHeight: '24px',
                                                     maxHeight: '130px', // ~5 lines

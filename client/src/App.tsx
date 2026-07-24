@@ -16,6 +16,7 @@ import { WebRTCProvider } from './context/WebRTCContext';
 import { PresenceProvider } from './context/PresenceContext';
 import { NotesProvider } from './context/NotesContext';
 import { NotesDashboardProvider } from './context/NotesDashboardContext';
+import { WallpaperProvider } from './context/WallpaperContext';
 // import { ChatWidget } from './components/chat/ChatWidget'; // already handled by Route
 import { ChatWidget } from './components/chat/ChatWidget';
 import { ErrorBoundary } from 'react-error-boundary';
@@ -55,6 +56,7 @@ const ContactPage = lazyWithRetry(() => import('./pages/ContactPage'), 'ContactP
 const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword'), 'ResetPassword');
 const ActivitySuccess = lazyWithRetry(() => import('./pages/ActivitySuccess'), 'ActivitySuccess');
 const ActivityCancel = lazyWithRetry(() => import('./pages/ActivityCancel'), 'ActivityCancel');
+const PaymentCallback = lazyWithRetry(() => import('./pages/PaymentCallback'), 'PaymentCallback');
 
 // Dashboard pages are now static for performance and reliability
 
@@ -140,6 +142,7 @@ function App() {
         }>
           <AuthProvider>
             <VersionGuard>
+            <WallpaperProvider>
             <SocketProvider>
               <PresenceProvider>
                 <NotificationProvider>
@@ -169,6 +172,7 @@ function App() {
 
                             <Route path="/wallet/success" element={<ActivitySuccess />} />
                             <Route path="/wallet/cancel" element={<ActivityCancel />} />
+                            <Route path="/payment/callback" element={<PaymentCallback />} />
                             <Route path="/wallet" element={<Navigate to="/dashboard/wallet" replace />} />
                             
                             <Route path="/" element={<LandingPage />} />
@@ -236,6 +240,7 @@ function App() {
               </NotificationProvider>
               </PresenceProvider>
             </SocketProvider>
+            </WallpaperProvider>
             </VersionGuard>
           </AuthProvider>
         </Suspense>
