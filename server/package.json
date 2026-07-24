@@ -5,8 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "npm install",
+    "build": "echo \"Server build complete\"",
     "start": "node index.js",
+
     "dev": "nodemon index.js",
     "dev:safe": "node scripts/fix_start.js",
     "lint": "eslint ."

@@ -4,9 +4,11 @@
   "description": "Centralized Realtime Gateway for NoteStandard",
   "main": "server.js",
   "scripts": {
+    "build": "echo \"Realtime build complete\"",
     "start": "node server.js",
     "dev": "nodemon server.js"
   },
+
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
     "apn": "^2.2.0",

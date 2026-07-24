@@ -43,16 +43,20 @@ const TABS = [
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
-interface WorkspaceContentProps {
+interface TeamHeaderProps {
   team: TeamWithUnreadCount;
   myRole: string;
   onBack: () => void;
   isInfoOpen: boolean;
   onToggleInfo: () => void;
   onInvite: () => void;
+  onJoinCall?: () => void;
   viewMode: 'chat' | 'enterprise';
   onToggleViewMode: (mode: 'chat' | 'enterprise') => void;
-}> = ({ team, myRole, onBack, isInfoOpen, onToggleInfo, onInvite, onJoinCall, viewMode, onToggleViewMode }) => {
+}
+
+const TeamHeader: React.FC<TeamHeaderProps> = ({ team, myRole, onBack, isInfoOpen, onToggleInfo, onInvite, onJoinCall, viewMode, onToggleViewMode }) => {
+
   return (
     <div className="teams-page__header flex items-center justify-between p-3 md:p-5 bg-gray-900/50 backdrop-blur-3xl border-b border-white/5 z-20">
       <div className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer group" onClick={onToggleInfo}>
@@ -397,17 +401,19 @@ export function TeamsPage() {
                   );
                 })}
               </div>
-            </div>
-          </>
+          </TeamChatProvider>
         ) : (
+
+
+
           /* Global Executive dashboard */
           <div className="teams-executive">
             <ExecutiveOverview teams={teams} onSelectTeam={(id) => handleSelectTeam(id)} />
           </div>
         )}
-      </div>
 
       {/* ============================================================
+
           MODALS
           ============================================================ */}
 
