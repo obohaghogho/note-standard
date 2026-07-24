@@ -29,6 +29,9 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   EUR: '€',
   GBP: '£',
   JPY: '¥',
+  AUD: 'A$',
+  CAD: 'C$',
+  NZD: 'NZ$',
   USDT: '₮',
   USDC: 'U',
 };

@@ -455,7 +455,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 updateSessionMeta(currentUser.id, data.session_id, deviceId!);
               }
             }).catch(err => {
-              console.warn('[Auth] Background device registration non-fatal warning:', err.message);
+              if (err.name !== 'AbortError' && !err.message?.includes('aborted')) {
+                console.warn('[Auth] Background device registration non-fatal warning:', err.message);
+              }
             }).finally(() => clearTimeout(tid));
 
 

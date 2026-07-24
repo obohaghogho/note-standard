@@ -83,6 +83,12 @@ ALTER TABLE status_mutes ENABLE ROW LEVEL SECURITY;
 
 -- The API server uses the service role key (bypasses RLS), so these policies
 -- protect direct client access only.
+DROP POLICY IF EXISTS "statuses_service_all" ON statuses;
+DROP POLICY IF EXISTS "status_views_service_all" ON status_views;
+DROP POLICY IF EXISTS "status_reactions_service_all" ON status_reactions;
+DROP POLICY IF EXISTS "status_privacy_rules_service_all" ON status_privacy_rules;
+DROP POLICY IF EXISTS "status_mutes_service_all" ON status_mutes;
+
 CREATE POLICY "statuses_service_all" ON statuses FOR ALL USING (true);
 CREATE POLICY "status_views_service_all" ON status_views FOR ALL USING (true);
 CREATE POLICY "status_reactions_service_all" ON status_reactions FOR ALL USING (true);

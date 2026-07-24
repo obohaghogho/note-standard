@@ -190,40 +190,52 @@ Do NOT escalate for routine questions — solve them yourself using the knowledg
         ...chatHistory
       ];
 
-      // 3. Call Groq API with a timeout to prevent hanging
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
+      // 3. Call Groq API with fallback models and a 15s timeout
+      const modelsToTry = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "mixtral-8x7b-32768",
+      ];
 
-      try {
-        const completion = await this.openai.chat.completions.create({
-          model: "llama-3.1-8b-instant",
-          messages: messagesPayload,
-          max_tokens: 300,
-          temperature: 0.7,
-        }, { signal: controller.signal });
+      let completion = null;
+      let lastError = null;
 
-        clearTimeout(timeout);
+      for (const model of modelsToTry) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
-        const aiResponseText = completion.choices[0]?.message?.content?.trim();
+        try {
+          completion = await this.openai.chat.completions.create({
+            model,
+            messages: messagesPayload,
+            max_tokens: 500,
+            temperature: 0.6,
+          }, { signal: controller.signal });
 
-        if (!aiResponseText) return null;
-
-        // 4. Determine if AI escalated the chat
-        const isEscalated = aiResponseText.toLowerCase().includes("escalated") || aiResponseText.toLowerCase().includes("escalating");
-
-        return {
-          text: aiResponseText,
-          isEscalated
-        };
-      } catch (apiErr) {
-        clearTimeout(timeout);
-        if (apiErr.name === 'AbortError') {
-          console.error("[AI Support] Groq API timed out after 15s");
-        } else {
-          throw apiErr;
+          clearTimeout(timeout);
+          if (completion?.choices[0]?.message?.content) break;
+        } catch (apiErr) {
+          clearTimeout(timeout);
+          lastError = apiErr;
+          console.warn(`[AI Support] Model ${model} failed, trying next:`, apiErr.message);
         }
+      }
+
+      if (!completion) {
+        if (lastError) throw lastError;
         return null;
       }
+
+      const aiResponseText = completion.choices[0]?.message?.content?.trim();
+      if (!aiResponseText) return null;
+
+      // 4. Determine if AI escalated the chat
+      const isEscalated = aiResponseText.toLowerCase().includes("escalated") || aiResponseText.toLowerCase().includes("escalating");
+
+      return {
+        text: aiResponseText,
+        isEscalated
+      };
       
     } catch (err) {
       console.error("[AI Support] Error processing message:", err.message);

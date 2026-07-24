@@ -15,7 +15,8 @@ import type { TeamWithUnreadCount, TeamMember } from '../../types/teams';
 import {
   Users, Plus, Loader2, ArrowLeft,
   Video, LayoutGrid, CheckSquare, HardDrive,
-  Calendar, Megaphone, BarChart2, Settings, Menu, X, MessageSquare
+  Calendar, Megaphone, BarChart2, Settings, Menu, X, MessageSquare,
+  Shield, UserPlus
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import SecureImage from '../../components/common/SecureImage';
@@ -26,6 +27,7 @@ import { useAgoraCall } from '../../hooks/useAgoraCall';
 import { useSocket } from '../../context/SocketContext';
 import { TeamCallOverlay } from '../../components/teams/TeamCallOverlay';
 import { TeamEnterpriseDashboard } from '../../components/teams/TeamEnterpriseDashboard';
+import ExecutiveOverview from '../../components/teams/ExecutiveOverview';
 import { BarChart3 } from 'lucide-react';
 import './TeamsPage.css';
 
@@ -258,6 +260,14 @@ export function TeamsPage() {
   const handleSelectTab = (tab: string) => {
     setActiveTab(tab);
     setMobilePanel('content');
+  };
+
+  const handleInviteClick = () => {
+    if (!isBusiness) {
+      setShowUpgradeModal(true);
+    } else {
+      setIsInfoOpen(true);
+    }
   };
 
   const selectedTeam = teams.find((t) => t.id === selectedTeamId);

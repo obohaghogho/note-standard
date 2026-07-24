@@ -417,88 +417,6 @@ exports.getConversationById = async (req, res) => {
   }
 };
 
-exports.createSupportChat = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { message } = req.body;
-
-    console.log(`[Chat Support] Creating support chat for user ${userId}`);
-
-    // 1. Create a new support conversation
-    const { data: conv, error: convError } = await supabase
-      .from("conversations")
-      .select()
-      .eq("type", "direct")
-      .eq("chat_type", "support")
-      .eq("support_status", "open")
-      .single(); // Actually, users should usually have only one open support chat?
-    
-    let conversationId;
-
-    if (conv) {
-      conversationId = conv.id;
-    } else {
-      const { data: newConv, error: newConvError } = await supabase
-        .from("conversations")
-        .insert([{ 
-          type: "direct", 
-          chat_type: "support", 
-          support_status: "open",
-          name: "Support Chat"
-        }])
-        .select()
-        .single();
-      
-      if (newConvError) throw newConvError;
-      conversationId = newConv.id;
-
-      // Add user as member
-      await supabase.from("conversation_members").insert({
-        conversation_id: conversationId,
-        user_id: userId,
-        role: "admin", // User is "admin" of their own support chat in this context?
-        status: "accepted"
-      });
-
-      // Find all system admins to add as support agents
-      const { data: admins } = await supabase
-        .from("profiles")
-        .select("id")
-        .in("role", ["admin", "support"]);
-      
-      if (admins) {
-        const adminMembers = admins.map(a => ({
-          conversation_id: conversationId,
-          user_id: a.id,
-          role: "support",
-          status: "pending"
-        }));
-        await supabase.from("conversation_members").insert(adminMembers);
-        
-        // Notify admins
-        for (const admin of admins) {
-           await realtime.emitToUser(admin.id, "chat:new_conversation", newConv);
-        }
-      }
-    }
-
-    // 2. If initial message provided, send it
-    if (message) {
-      await supabase.from("messages").insert({
-        conversation_id: conversationId,
-        sender_id: userId,
-        content: message,
-        type: "text"
-      });
-    }
-
-    res.json({ success: true, conversationId });
-  } catch (err) {
-    console.error("Error creating support chat:", err.message);
-    res.status(500).json({ error: "Server Error" });
-  }
-};
-
 exports.createConversation = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -1884,7 +1802,13 @@ exports.sendMessage = async (req, res) => {
         .eq("id", conversationId)
         .single();
 
-      if (conv?.chat_type === "support" && conv?.support_status !== "escalated" && conv?.support_status !== "resolved") {
+      if (conv?.chat_type === "support" && conv?.support_status !== "escalated") {
+        if (conv.support_status === "warning_sent" || conv.support_status === "resolved") {
+          await supabase
+            .from("conversations")
+            .update({ support_status: "open", updated_at: new Date().toISOString() })
+            .eq("id", conversationId);
+        }
         
         // Dynamically fetch a valid Admin user to satisfy foreign key constraints
         let botSenderId = "00000000-0000-0000-0000-000000000000";

@@ -43,10 +43,10 @@ section('walletCurrencyCatalog — Currency Completeness');
 
 const catalog = require('../config/walletCurrencyCatalog');
 
-const REQUIRED_FIAT   = ['NGN', 'USD', 'EUR', 'GBP', 'CAD', 'AUD'];
+const REQUIRED_FIAT   = ['NGN', 'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'NZD', 'JPY'];
 const REQUIRED_CRYPTO = ['BTC', 'ETH', 'USDT', 'USDC'];
 
-test('FIAT_CATALOG contains all 6 required currencies', () => {
+test('FIAT_CATALOG contains all 8 required currencies', () => {
   const codes = catalog.FIAT_CATALOG.map(c => c.code);
   for (const req of REQUIRED_FIAT) {
     assert.ok(codes.includes(req), `Missing fiat currency: ${req}`);
@@ -68,15 +68,12 @@ test('NGN is status=active with deposit/withdraw enabled', () => {
   assert.strictEqual(ngn.withdraw_enabled, true);
 });
 
-test('USD/EUR/GBP/CAD/AUD are status=coming_soon when INTERNATIONAL_FIAT_ENABLED is false', () => {
-  // In test env, INTERNATIONAL_FIAT_ENABLED is not set → should be coming_soon
-  if (process.env.INTERNATIONAL_FIAT_ENABLED !== 'true') {
-    for (const code of ['USD', 'EUR', 'GBP', 'CAD', 'AUD']) {
-      const cur = catalog.FIAT_CATALOG.find(c => c.code === code);
-      assert.ok(cur, `${code} not found`);
-      assert.strictEqual(cur.status, 'coming_soon', `${code} should be coming_soon`);
-      assert.strictEqual(cur.deposit_enabled, false, `${code} deposit should be disabled`);
-    }
+test('USD/EUR/GBP/CAD/AUD/NZD/JPY are status=active in enterprise multi-currency engine', () => {
+  for (const code of ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'NZD', 'JPY']) {
+    const cur = catalog.FIAT_CATALOG.find(c => c.code === code);
+    assert.ok(cur, `${code} not found`);
+    assert.strictEqual(cur.status, 'active', `${code} should be active`);
+    assert.strictEqual(cur.deposit_enabled, true, `${code} deposit should be enabled`);
   }
 });
 
@@ -112,12 +109,12 @@ test('BTC has 8 decimal places, ETH has 6', () => {
   assert.strictEqual(eth.decimal_places, 6, 'ETH should have 6 decimal places');
 });
 
-test('getAllCurrencies() returns all 10 currencies', () => {
+test('getAllCurrencies() returns all 12 currencies', () => {
   const all = catalog.getAllCurrencies();
-  assert.strictEqual(all.length, 10, `Expected 10 currencies, got ${all.length}`);
+  assert.strictEqual(all.length, 12, `Expected 12 currencies, got ${all.length}`);
 });
 
-test('getCatalogEntry() works for all 8 currencies', () => {
+test('getCatalogEntry() works for all 12 currencies', () => {
   for (const code of [...REQUIRED_FIAT, ...REQUIRED_CRYPTO]) {
     const entry = catalog.getCatalogEntry(code);
     assert.ok(entry, `getCatalogEntry(${code}) returned null`);
@@ -126,11 +123,9 @@ test('getCatalogEntry() works for all 8 currencies', () => {
   assert.strictEqual(catalog.getCatalogEntry('INVALID'), null);
 });
 
-test('catalogSupports() respects status=coming_soon', () => {
-  if (process.env.INTERNATIONAL_FIAT_ENABLED !== 'true') {
-    assert.strictEqual(catalog.catalogSupports('USD', 'deposit_enabled'), false,
-      'USD deposit should not be supported when coming_soon');
-  }
+test('catalogSupports() validates active currencies', () => {
+  assert.strictEqual(catalog.catalogSupports('USD', 'deposit_enabled'), true,
+    'USD deposit should be supported');
   assert.strictEqual(catalog.catalogSupports('NGN', 'deposit_enabled'), true,
     'NGN deposit should be supported');
   assert.strictEqual(catalog.catalogSupports('BTC', 'swap_enabled'), true,
@@ -359,20 +354,20 @@ section('Gap Fixes — Auditor-Found Issues');
 const providerCaps = require('../config/providerCapabilities');
 const currencyConf = require('../config/currencyConfig');
 
-test('providerCapabilities: Paystack supportedCurrencies includes EUR and GBP', () => {
-  const paystackCaps = providerCaps.PAYMENT_PROVIDER_CAPABILITIES.paystack;
-  assert.ok(paystackCaps.supportedCurrencies.includes('EUR'),
-    'EUR missing from Paystack supportedCurrencies — isPaystackNative() would fail for EUR');
-  assert.ok(paystackCaps.supportedCurrencies.includes('GBP'),
-    'GBP missing from Paystack supportedCurrencies — isPaystackNative() would fail for GBP');
+test('providerCapabilities: Fincra nativeCurrencies includes EUR and GBP', () => {
+  const fincraCaps = providerCaps.PAYMENT_PROVIDER_CAPABILITIES.fincra;
+  assert.ok(fincraCaps.nativeCurrencies.includes('EUR'),
+    'EUR missing from Fincra nativeCurrencies');
+  assert.ok(fincraCaps.nativeCurrencies.includes('GBP'),
+    'GBP missing from Fincra nativeCurrencies');
 });
 
-test('providerCapabilities: Paystack settlementCurrencies includes EUR and GBP', () => {
+test('providerCapabilities: Paystack fallbackCurrencies includes EUR and GBP', () => {
   const paystackCaps = providerCaps.PAYMENT_PROVIDER_CAPABILITIES.paystack;
-  assert.ok(paystackCaps.settlementCurrencies.includes('EUR'),
-    'EUR missing from Paystack settlementCurrencies');
-  assert.ok(paystackCaps.settlementCurrencies.includes('GBP'),
-    'GBP missing from Paystack settlementCurrencies');
+  assert.ok(paystackCaps.fallbackCurrencies.includes('EUR'),
+    'EUR missing from Paystack fallbackCurrencies');
+  assert.ok(paystackCaps.fallbackCurrencies.includes('GBP'),
+    'GBP missing from Paystack fallbackCurrencies');
 });
 
 test('currencyConfig: PAYSTACK_NATIVE_CURRENCIES legacy set includes EUR and GBP', () => {

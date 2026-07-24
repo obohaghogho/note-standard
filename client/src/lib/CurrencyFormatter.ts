@@ -5,7 +5,7 @@
  */
 
 export const formatCurrency = (amount: number | string | null | undefined, currency: string | null | undefined) => {
-  const supportedFiatCurrencies = ["USD", "EUR", "GBP", "NGN", "JPY"];
+  const supportedFiatCurrencies = ["USD", "EUR", "GBP", "NGN", "JPY", "AUD", "CAD", "NZD"];
   
   // 1. Deterministic Pricing Fallback: Never mask missing prices as 0
   if (amount === null || amount === undefined || Number.isNaN(Number(amount))) {

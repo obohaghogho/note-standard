@@ -205,14 +205,14 @@ router.get('/my', requireAuth, async (req, res) => {
     const enriched = await Promise.all((statuses || []).map(async (s) => {
       const { data: viewers } = await supabase
         .from('status_views')
-        .select('viewed_at, completed, viewer:viewer_id (id, full_name, avatar_url)')
+        .select('viewed_at, completed, viewer:viewer_id (id, full_name, username, avatar_url)')
         .eq('status_id', s.id)
         .neq('viewer_id', req.user.id)
         .order('viewed_at', { ascending: false });
 
       const { data: reactions } = await supabase
         .from('status_reactions')
-        .select('emoji, user:user_id (id, full_name, avatar_url)')
+        .select('emoji, user:user_id (id, full_name, username, avatar_url)')
         .eq('status_id', s.id);
 
       const { count } = await supabase
@@ -227,14 +227,16 @@ router.get('/my', requireAuth, async (req, res) => {
         view_count: count || 0,
         viewers: (viewers || []).map(v => ({
           id: v.viewer?.id,
-          display_name: v.viewer?.full_name,
+          display_name: v.viewer?.full_name || v.viewer?.username || 'User',
+          username: v.viewer?.username,
           avatar_url: v.viewer?.avatar_url,
           viewed_at: v.viewed_at,
           completed: v.completed,
         })),
         reactions: (reactions || []).map(r => ({
           id: r.user?.id,
-          display_name: r.user?.full_name,
+          display_name: r.user?.full_name || r.user?.username || 'User',
+          username: r.user?.username,
           avatar_url: r.user?.avatar_url,
           emoji: r.emoji,
         })),
@@ -409,14 +411,20 @@ router.post('/:id/view', requireAuth, async (req, res) => {
       // Notify owner
       const { data: viewer } = await supabase
         .from('profiles')
-        .select('id, full_name, avatar_url')
+        .select('id, full_name, username, avatar_url')
         .eq('id', req.user.id)
         .single();
 
       realtime.emitToUser(status.user_id, 'status:viewed', {
         status_id: status.id,
         view_count: count || 0,
-        viewer: { id: viewer?.id, display_name: viewer?.full_name, avatar_url: viewer?.avatar_url },
+        viewer: {
+          id: viewer?.id,
+          display_name: viewer?.full_name || viewer?.username || 'User',
+          username: viewer?.username,
+          avatar_url: viewer?.avatar_url,
+          viewed_at: new Date().toISOString(),
+        },
       });
     }
 

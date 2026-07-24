@@ -65,6 +65,9 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Vary', 'Origin');
+    if (req.headers['access-control-request-headers']) {
+      res.header('Access-Control-Allow-Headers', req.headers['access-control-request-headers']);
+    }
     // Force allow sniffing for local dev to prevent CORB on JSON/Source maps
     res.removeHeader('X-Content-Type-Options');
   }

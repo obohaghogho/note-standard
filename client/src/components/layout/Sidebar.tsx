@@ -31,6 +31,8 @@ import { getStoredAccounts, isAccountSessionValid } from '../../utils/accountMan
 import SecureImage from '../common/SecureImage';
 import { useMultiAccountNotifications } from '../../hooks/useMultiAccountNotifications';
 
+import { preloadRoute } from '../../utils/routePreloader';
+
 // Items will be defined inside component to access translation
 
 
@@ -139,12 +141,14 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
                     return (
                         <button
                             key={item.to}
+                            onMouseEnter={() => preloadRoute(item.to)}
+                            onPointerDown={() => preloadRoute(item.to)}
                             onClick={() => {
                                 navigate(item.to);
                                 onClose?.();
                             }}
                             className={cn(
-                                "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 w-full text-left",
+                                "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 w-full text-left active:scale-[0.98]",
                                 isActive
                                     ? "bg-primary/10 text-primary border border-primary/20"
                                     : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -176,12 +180,14 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
                     return (
                         <button
                             key={item.to}
+                            onMouseEnter={() => preloadRoute(item.to)}
+                            onPointerDown={() => preloadRoute(item.to)}
                             onClick={() => {
                                 navigate(item.to);
                                 onClose?.();
                             }}
                             className={cn(
-                                "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 w-full text-left",
+                                "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 w-full text-left active:scale-[0.98]",
                                 isActive
                                     ? "bg-primary/10 text-primary border border-primary/20"
                                     : "text-gray-400 hover:text-white hover:bg-white/5"

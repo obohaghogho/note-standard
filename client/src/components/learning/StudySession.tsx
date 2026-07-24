@@ -86,7 +86,7 @@ export const StudySession: React.FC<{ space: StudySpace; pathNode: PathNode; onC
             <div className="text-5xl mb-4">✨</div>
             <h2 className="text-2xl font-extrabold text-heading mb-4">Session Reflection</h2>
             <p className="text-muted mb-6">What was the most important thing you learned?</p>
-            <textarea className="w-full bg-elevated border border-border rounded-input p-4 text-sm focus:ring-2 focus:ring-primary/50 outline-none resize-none" rows={4} placeholder="Write a brief reflection..." />
+            <textarea id="study-session-reflection" name="reflection" className="w-full bg-elevated border border-border rounded-input p-4 text-sm focus:ring-2 focus:ring-primary/50 outline-none resize-none" rows={4} placeholder="Write a brief reflection..." />
             <div className="flex gap-3 mt-6">
               <button onClick={() => setShowTutor(true)} className="flex-1 border border-border text-heading py-3 rounded-button hover:bg-border transition-colors font-medium flex items-center justify-center gap-2">
                 <Sparkles size={16}/> Ask AI Tutor

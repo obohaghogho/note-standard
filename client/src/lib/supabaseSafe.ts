@@ -277,11 +277,29 @@ export async function safeAuth(): Promise<Session | null> {
     return _sessionCache.session;
   }
 
-  const session = await safeCall<Session | null>("auth-session", async () => {
-    const { data, error } = await supabase.auth.getSession();
-    if (error) throw error;
-    return data.session;
-  }, { minDelay: 0, retries: 0, timeout: 3000 }); // Fast 3s timeout, no artificial delay
+  try {
+    const session = await safeCall<Session | null>("auth-session", async () => {
+      const { data, error } = await supabase.auth.getSession();
+      if (error) throw error;
+      return data.session;
+    }, { minDelay: 0, retries: 1, timeout: 5000 });
+
+    if (session) {
+      _sessionCache = { session, expiresAt: Date.now() + 55_000 };
+      return session;
+    }
+
+    // Direct fallback if safeCall returned null
+    const { data: directData } = await supabase.auth.getSession();
+    if (directData?.session) {
+      _sessionCache = { session: directData.session, expiresAt: Date.now() + 55_000 };
+      return directData.session;
+    }
+  } catch (err) {
+    console.warn('[Supabase] safeAuth error:', err);
+  }
+
+  return null;
 }
 
 // Listen for Supabase auth state changes and invalidate cache immediately

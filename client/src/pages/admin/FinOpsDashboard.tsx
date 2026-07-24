@@ -58,7 +58,7 @@ export const FinOpsDashboard: React.FC = () => {
       <div className="finops-header">
         <h1>Financial Operations Dashboard</h1>
         <div className="finops-controls">
-          <select value={timeRange} onChange={(e) => setTimeRange(e.target.value)}>
+          <select id="finops-time-range" name="timeRange" aria-label="Time Range" value={timeRange} onChange={(e) => setTimeRange(e.target.value)}>
             <option value="today">Today</option>
             <option value="24h">Last 24 Hours</option>
             <option value="7d">Last 7 Days</option>

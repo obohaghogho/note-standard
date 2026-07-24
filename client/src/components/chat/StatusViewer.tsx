@@ -1,12 +1,13 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { useStatus } from '../../context/StatusContext';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useStatus, type Viewer } from '../../context/StatusContext';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
 import { formatDistanceToNowStrict } from 'date-fns';
-import { X, Play, Pause, Eye, Trash2, Send, Music } from 'lucide-react';
+import { X, Play, Pause, Eye, Trash2, Send, Music, ChevronUp, User, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { parseFormattedText } from '../../lib/formatParser';
 import { StatusRing } from './StatusTray';
+import SecureImage from '../common/SecureImage';
 
 const QUICK_REACTIONS = ['😂', '😍', '😢', '👏', '🔥', '🎉'];
 const STATUS_DURATION = 30000; // WhatsApp 30 seconds default
@@ -84,6 +85,16 @@ export default function StatusViewer() {
 
   const status = userEntry && statusIndex !== undefined ? userEntry.statuses[statusIndex] : null;
   const isOwn = status?.user_id === user?.id;
+
+  const reactionMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (status && status.reactions) {
+      status.reactions.forEach(r => {
+        if (r.id) map[r.id] = r.emoji;
+      });
+    }
+    return map;
+  }, [status?.reactions]);
 
   // Reset activeDuration back to STATUS_DURATION when status changes
   useEffect(() => {
@@ -404,22 +415,48 @@ export default function StatusViewer() {
         </div>
 
         {/* Footer (Replies / Viewers) */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent z-20">
+        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 via-black/50 to-transparent z-20">
           {isOwn ? (
-            <div className="flex justify-between items-center px-2">
+            <div className="flex flex-col items-center gap-2">
+              {/* WhatsApp-style Interactive Viewer Bar */}
               <button 
                 onClick={(e) => { e.stopPropagation(); setShowViewers(true); setPaused(true); }}
-                className="flex flex-col items-center text-white active:scale-95 transition-transform"
+                className="flex items-center gap-3 bg-black/60 backdrop-blur-xl border border-white/15 hover:border-emerald-500/50 rounded-full px-5 py-2.5 text-white active:scale-95 transition-all shadow-xl group cursor-pointer"
               >
-                <Eye size={24} className="mb-1" />
-                <span className="text-xs font-semibold">{status.view_count || 0}</span>
+                <ChevronUp size={16} className="text-emerald-400 animate-bounce" />
+                <div className="flex items-center gap-2">
+                  <Eye size={18} className="text-emerald-400" />
+                  <span className="text-sm font-bold">
+                    {(status.viewers || []).length || status.view_count || 0} {((status.viewers || []).length || status.view_count) === 1 ? 'View' : 'Views'}
+                  </span>
+                </div>
+
+                {/* Stacked Viewer Avatars Preview */}
+                {(status.viewers || []).length > 0 && (
+                  <div className="flex items-center -space-x-2 ml-1">
+                    {(status.viewers || []).slice(0, 3).map((v, i) => (
+                      <div key={i} className="w-6 h-6 rounded-full ring-2 ring-black overflow-hidden bg-gray-800">
+                        <SecureImage
+                          src={v.avatar_url}
+                          alt={v.display_name}
+                          fallbackType="profile"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </button>
-              <button 
-                onClick={(e) => { e.stopPropagation(); handleDelete(); }}
-                className="text-red-400 p-2 active:scale-95 transition-transform"
-              >
-                <Trash2 size={22} />
-              </button>
+
+              <div className="w-full flex justify-end px-2">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); handleDelete(); }}
+                  className="text-gray-400 hover:text-red-400 p-2 rounded-full hover:bg-white/10 transition-colors"
+                  title="Delete Status"
+                >
+                  <Trash2 size={20} />
+                </button>
+              </div>
             </div>
           ) : (
             <div className="flex flex-col gap-3 relative z-30" onClick={(e) => e.stopPropagation()}>
@@ -455,34 +492,88 @@ export default function StatusViewer() {
           )}
         </div>
 
-        {/* Viewers Bottom Sheet Overlay */}
+        {/* Viewers Bottom Sheet Overlay (WhatsApp Style) */}
         {showViewers && (
-          <div className="absolute inset-0 z-50 bg-black/50 flex flex-col justify-end" onClick={(e) => { e.stopPropagation(); setShowViewers(false); setPaused(false); }}>
-            <div className="bg-gray-900 rounded-t-3xl h-[60%] flex flex-col" onClick={e => e.stopPropagation()}>
-              <div className="p-4 border-b border-gray-800 flex justify-between items-center">
-                <h3 className="text-white font-bold flex items-center gap-2">
-                  <Eye size={18} /> {status.view_count || 0} Views
-                </h3>
-                <button onClick={() => { setShowViewers(false); setPaused(false); }} className="p-2 text-gray-400 hover:text-white bg-gray-800 rounded-full">
-                  <X size={16} />
+          <div 
+            className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex flex-col justify-end transition-opacity animate-in fade-in duration-200" 
+            onClick={(e) => { e.stopPropagation(); setShowViewers(false); setPaused(false); }}
+          >
+            <div 
+              className="bg-gray-900/95 backdrop-blur-2xl border-t border-white/10 rounded-t-[2.5rem] h-[65%] flex flex-col shadow-2xl overflow-hidden" 
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Drag handle */}
+              <div className="w-12 h-1 bg-white/20 rounded-full mx-auto mt-3 mb-1" />
+
+              {/* Sheet Header */}
+              <div className="p-5 pb-4 border-b border-white/10 flex justify-between items-center bg-white/5">
+                <div>
+                  <h3 className="text-white font-black text-lg flex items-center gap-2">
+                    <Eye size={20} className="text-emerald-400" />
+                    Viewed by {(status.viewers || []).length || status.view_count || 0}
+                  </h3>
+                  <p className="text-[11px] text-gray-400 font-medium mt-0.5">
+                    People who viewed your 24h status update
+                  </p>
+                </div>
+                <button 
+                  onClick={() => { setShowViewers(false); setPaused(false); }} 
+                  className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                >
+                  <X size={18} />
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+
+              {/* Viewers List */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-2 no-scrollbar">
                 {(status.viewers || []).length === 0 ? (
-                  <div className="text-center text-gray-500 mt-10">No views yet</div>
-                ) : (status.viewers || []).map((v: { avatar_url?: string; id: string; display_name: string; viewed_at: string }, idx: number) => (
-                  <div key={idx} className="flex items-center gap-3">
-                    <img 
-                      src={v.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${v.id}`} 
-                      alt="" 
-                      className="w-10 h-10 rounded-full bg-gray-800"
-                    />
-                    <div className="flex-1">
-                      <div className="text-white font-medium text-sm">{v.display_name}</div>
-                      <div className="text-gray-400 text-xs">{formatDistanceToNowStrict(new Date(v.viewed_at), { addSuffix: true })}</div>
-                    </div>
+                  <div className="flex flex-col items-center justify-center h-48 text-center text-gray-500 space-y-2">
+                    <Eye size={36} className="text-gray-700 stroke-1" />
+                    <p className="text-sm font-semibold text-gray-400">No views yet</p>
+                    <p className="text-xs text-gray-600 max-w-[200px]">When contacts view your picture or video status, their names and icons will appear here.</p>
                   </div>
-                ))}
+                ) : (
+                  (status.viewers || []).map((v: Viewer, idx: number) => {
+                    const reactionEmoji = reactionMap[v.id];
+                    return (
+                      <div 
+                        key={v.id || idx} 
+                        className="flex items-center gap-3.5 p-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 transition-all group"
+                      >
+                        <div className="relative">
+                          <div className="w-11 h-11 rounded-full overflow-hidden bg-gray-800 ring-2 ring-white/10 group-hover:ring-emerald-500/40 transition-all shrink-0">
+                            <SecureImage 
+                              src={v.avatar_url} 
+                              alt={v.display_name} 
+                              fallbackType="profile"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          {reactionEmoji && (
+                            <span className="absolute -bottom-1 -right-1 text-sm bg-gray-900 rounded-full px-1 shadow">
+                              {reactionEmoji}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="text-white font-bold text-sm truncate flex items-center gap-2">
+                            <span>{v.display_name || v.username || 'User'}</span>
+                          </div>
+                          <div className="text-gray-400 text-xs mt-0.5 flex items-center gap-1.5">
+                            <span>{v.viewed_at ? formatDistanceToNowStrict(new Date(v.viewed_at), { addSuffix: true }) : 'Recently'}</span>
+                          </div>
+                        </div>
+
+                        {reactionEmoji && (
+                          <div className="text-xl bg-white/5 p-2 rounded-xl border border-white/10">
+                            {reactionEmoji}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           </div>

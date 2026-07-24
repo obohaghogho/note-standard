@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { useWallpaper, WallpaperConfig } from '../../context/WallpaperContext';
+import { useWallpaper, type WallpaperConfig } from '../../context/WallpaperContext';
 
 interface WallpaperEngineProps {
   chatId?: string;

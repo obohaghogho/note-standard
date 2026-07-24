@@ -157,7 +157,42 @@ class ReconciliationWorker {
         await this.cleanupStaleReservations();
         await this.checkAndSweepSettlements();
         await this.sweepStuckPendingTransactions();
+        await this.reconcileFxConversions();
         await this.assertLedgerIntegrity();
+    }
+
+    static async reconcileFxConversions() {
+        try {
+            logger.info("[ReconciliationWorker] Running FX Conversion Audit Verification...");
+            const { data: convTxs } = await supabase
+                .from("transactions")
+                .select("id, reference_id, requested_currency, requested_amount, gateway_currency, gateway_amount, exchange_rate, status")
+                .eq("status", "SUCCESS")
+                .not("requested_currency", "is", null)
+                .order("created_at", { ascending: false })
+                .limit(100);
+
+            if (!convTxs || convTxs.length === 0) return;
+
+            let driftCount = 0;
+            for (const tx of convTxs) {
+                if (!tx.exchange_rate || tx.requested_currency === tx.gateway_currency) continue;
+
+                const expectedGatewayAmount = parseFloat(tx.requested_amount) * parseFloat(tx.exchange_rate);
+                const actualGatewayAmount = parseFloat(tx.gateway_amount);
+                const diff = Math.abs(expectedGatewayAmount - actualGatewayAmount);
+
+                // Allow 0.05 minor unit variance for integer conversion rounding
+                if (diff > 0.05) {
+                    driftCount++;
+                    logger.warn(`[ReconciliationWorker] FX Conversion Drift Flagged: Tx ${tx.reference_id} | Expected: ${expectedGatewayAmount.toFixed(4)} ${tx.gateway_currency} | Actual: ${actualGatewayAmount} ${tx.gateway_currency} | Diff: ${diff.toFixed(4)}`);
+                }
+            }
+
+            logger.info(`[ReconciliationWorker] FX Audit complete: ${convTxs.length} transactions checked, ${driftCount} conversion drift flags.`);
+        } catch (err) {
+            logger.error("[ReconciliationWorker] FX conversion reconciliation error:", err.message);
+        }
     }
 
     static lastSweepTime = 0;

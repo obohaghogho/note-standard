@@ -3,7 +3,7 @@ import {
   X, Search, Heart, History, Sliders, Upload, Check, 
   RefreshCw, ZoomIn, Sun, Layout, Eye, EyeOff, Moon 
 } from 'lucide-react';
-import { useWallpaper, WallpaperConfig, WALLPAPER_PRESETS } from '../../context/WallpaperContext';
+import { useWallpaper, type WallpaperConfig, WALLPAPER_PRESETS } from '../../context/WallpaperContext';
 import { WallpaperEngine } from './WallpaperEngine';
 import { Button } from '../common/Button';
 import toast from 'react-hot-toast';

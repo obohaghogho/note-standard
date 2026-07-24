@@ -10,8 +10,10 @@ const PAYMENT_PROVIDER_CAPABILITIES = {
     name: 'paystack',
     // Currencies the gateway platform accepts natively
     supportedCurrencies: ['NGN', 'USD', 'ZAR', 'GHS', 'KES', 'EGP'],
-    // Currencies our merchant account is enabled for
+    // Currencies our merchant account is enabled for natively
     merchantCurrencies: ['NGN', 'USD'],
+    nativeCurrencies: ['NGN', 'USD'],
+    fallbackCurrencies: ['EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'NZD'],
     // Feature flags — controlled by config, not code
     merchantEnabled: true,
     cardEnabled: true,
@@ -32,6 +34,8 @@ const PAYMENT_PROVIDER_CAPABILITIES = {
     name: 'fincra',
     supportedCurrencies: ['NGN', 'USD', 'EUR', 'GBP'],
     merchantCurrencies: ['NGN', 'USD', 'EUR', 'GBP'],
+    nativeCurrencies: ['NGN', 'USD', 'EUR', 'GBP'],
+    fallbackCurrencies: ['JPY', 'AUD', 'CAD', 'NZD'],
     merchantEnabled: true,
     cardEnabled: true,
     subscriptionEnabled: true,
@@ -48,6 +52,8 @@ const PAYMENT_PROVIDER_CAPABILITIES = {
     name: 'grey',
     supportedCurrencies: ['USD', 'EUR', 'GBP'],
     merchantCurrencies: ['USD', 'EUR', 'GBP'],
+    nativeCurrencies: ['USD', 'EUR', 'GBP'],
+    fallbackCurrencies: [],
     merchantEnabled: true,
     cardEnabled: false,
     subscriptionEnabled: false,
@@ -64,6 +70,8 @@ const PAYMENT_PROVIDER_CAPABILITIES = {
     name: 'anchor',
     supportedCurrencies: ['NGN', 'USD'],
     merchantCurrencies: ['NGN', 'USD'],
+    nativeCurrencies: ['NGN', 'USD'],
+    fallbackCurrencies: [],
     merchantEnabled: true,
     cardEnabled: false,
     subscriptionEnabled: false,
@@ -80,6 +88,8 @@ const PAYMENT_PROVIDER_CAPABILITIES = {
     name: 'nowpayments',
     supportedCurrencies: ['BTC', 'ETH', 'USDT', 'USDC', 'MATIC', 'XRP'],
     merchantCurrencies: ['BTC', 'ETH', 'USDT', 'USDC', 'MATIC', 'XRP'],
+    nativeCurrencies: ['BTC', 'ETH', 'USDT', 'USDC', 'MATIC', 'XRP'],
+    fallbackCurrencies: [],
     merchantEnabled: true,
     cardEnabled: false,
     subscriptionEnabled: false,
@@ -101,6 +111,15 @@ function supportsCurrency(providerName, currency) {
   const p = PAYMENT_PROVIDER_CAPABILITIES[String(providerName).toLowerCase()];
   if (!p || !p.merchantEnabled) return false;
   return p.merchantCurrencies.includes(String(currency).toUpperCase());
+}
+
+/**
+ * Checks if a provider supports a currency via SmartFallbackEngine.
+ */
+function supportsFallbackCurrency(providerName, currency) {
+  const p = PAYMENT_PROVIDER_CAPABILITIES[String(providerName).toLowerCase()];
+  if (!p || !p.merchantEnabled) return false;
+  return (p.fallbackCurrencies || []).includes(String(currency).toUpperCase());
 }
 
 /**
@@ -131,13 +150,14 @@ function getProviderCapabilities(providerName) {
 function getCompatibleProviders(currency, method = 'card') {
   const up = String(currency).toUpperCase();
   return Object.values(PAYMENT_PROVIDER_CAPABILITIES).filter(
-    (p) => p.merchantEnabled && p.merchantCurrencies.includes(up) && p.methods.includes(method)
+    (p) => p.merchantEnabled && (p.merchantCurrencies.includes(up) || (p.fallbackCurrencies || []).includes(up)) && p.methods.includes(method)
   );
 }
 
 module.exports = {
   PAYMENT_PROVIDER_CAPABILITIES,
   supportsCurrency,
+  supportsFallbackCurrency,
   supportsMethod,
   getProviderCapabilities,
   getCompatibleProviders,

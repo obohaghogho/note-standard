@@ -64,29 +64,60 @@ INSERT INTO supported_currencies (
 ) VALUES
   (
     'NGN', 'fiat', 'Nigerian Naira', '₦', '🇳🇬', '#6366f1', 'active',
-    true, true, true, true, true, false, false,
+    true, true, true, true, true, false, true,
     100, 500, 5000000, 1000000,
     2, 'paystack', ARRAY['card', 'bank_transfer'], 1
   ),
   (
-    'USD', 'fiat', 'US Dollar', '$', '🇺🇸', '#10b981', 'coming_soon',
-    false, false, false, false, false, false, false,
+    'USD', 'fiat', 'US Dollar', '$', '🇺🇸', '#10b981', 'active',
+    true, true, true, true, true, false, true,
     1, 5, 50000, 10000,
-    2, 'paystack_international', ARRAY['card', 'apple_pay', 'google_pay'], 2
+    2, 'fincra', ARRAY['card', 'apple_pay', 'google_pay', 'ach_transfer', 'domestic_wire', 'virtual_account'], 2
   ),
   (
-    'EUR', 'fiat', 'Euro', '€', '🇪🇺', '#3b82f6', 'coming_soon',
-    false, false, false, false, false, false, false,
+    'EUR', 'fiat', 'Euro', '€', '🇪🇺', '#3b82f6', 'active',
+    true, true, true, true, true, false, true,
     1, 5, 50000, 10000,
-    2, 'paystack_international', ARRAY['card', 'bank_transfer'], 3
+    2, 'fincra', ARRAY['card', 'bank_transfer', 'sepa_transfer', 'virtual_account'], 3
   ),
   (
-    'GBP', 'fiat', 'British Pound', '£', '🇬🇧', '#ec4899', 'coming_soon',
-    false, false, false, false, false, false, false,
+    'GBP', 'fiat', 'British Pound', '£', '🇬🇧', '#ec4899', 'active',
+    true, true, true, true, true, false, true,
     1, 5, 50000, 10000,
-    2, 'paystack_international', ARRAY['card', 'bank_transfer'], 4
+    2, 'fincra', ARRAY['card', 'bank_transfer', 'faster_payments', 'virtual_account'], 4
+  ),
+  (
+    'AUD', 'fiat', 'Australian Dollar', 'A$', '🇦🇺', '#f59e0b', 'active',
+    true, true, true, true, true, false, true,
+    1, 5, 50000, 10000,
+    2, 'fincra', ARRAY['card', 'bank_transfer', 'domestic_wire', 'virtual_account'], 5
+  ),
+  (
+    'CAD', 'fiat', 'Canadian Dollar', 'C$', '🇨🇦', '#ff4d4d', 'active',
+    true, true, true, true, true, false, true,
+    1, 5, 50000, 10000,
+    2, 'fincra', ARRAY['card', 'bank_transfer', 'eft_transfer', 'virtual_account'], 6
+  ),
+  (
+    'NZD', 'fiat', 'New Zealand Dollar', 'NZ$', '🇳🇿', '#00247d', 'active',
+    true, true, true, true, true, false, true,
+    1, 5, 50000, 10000,
+    2, 'fincra', ARRAY['card', 'bank_transfer', 'virtual_account'], 7
+  ),
+  (
+    'JPY', 'fiat', 'Japanese Yen', '¥', '🇯🇵', '#bc002d', 'active',
+    true, true, true, true, true, false, true,
+    100, 500, 5000000, 1000000,
+    0, 'paystack', ARRAY['card', 'bank_transfer'], 8
   )
-ON CONFLICT (code) DO NOTHING;
+ON CONFLICT (code) DO UPDATE SET
+  status = 'active',
+  deposit_enabled = true,
+  withdraw_enabled = true,
+  transfer_enabled = true,
+  buy_enabled = true,
+  sell_enabled = true,
+  convert_enabled = true;
 
 -- ── Seed: Crypto Currencies ──────────────────────────────────────────────────
 INSERT INTO supported_currencies (
@@ -124,6 +155,12 @@ ON CONFLICT (code) DO NOTHING;
 
 -- ── Row Level Security ───────────────────────────────────────────────────────
 ALTER TABLE supported_currencies ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if re-running migration
+DROP POLICY IF EXISTS "Authenticated users can read supported currencies" ON supported_currencies;
+DROP POLICY IF EXISTS "Admins can manage supported currencies" ON supported_currencies;
+DROP POLICY IF EXISTS "Anyone can read supported currencies" ON supported_currencies;
+DROP POLICY IF EXISTS "Admins can manage currencies" ON supported_currencies;
 
 -- Any authenticated user can READ the currency catalog
 CREATE POLICY "Authenticated users can read supported currencies"

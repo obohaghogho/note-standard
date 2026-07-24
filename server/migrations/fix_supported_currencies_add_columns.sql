@@ -65,39 +65,51 @@ INSERT INTO supported_currencies (
 ) VALUES
   (
     'NGN', 'fiat', 'Nigerian Naira', '₦', '🇳🇬', '#6366f1', 'active',
-    true, true, true, true, true, false, false, true,
+    true, true, true, true, true, false, true, true,
     100, 500, 5000000, 1000000,
     2, 'paystack', ARRAY['card', 'bank_transfer'], 1
   ),
   (
-    'USD', 'fiat', 'US Dollar', '$', '🇺🇸', '#10b981', 'coming_soon',
-    false, false, false, false, false, false, false, true,
+    'USD', 'fiat', 'US Dollar', '$', '🇺🇸', '#10b981', 'active',
+    true, true, true, true, true, false, true, true,
     1, 5, 50000, 10000,
     2, 'fincra', ARRAY['card', 'apple_pay', 'google_pay'], 2
   ),
   (
-    'EUR', 'fiat', 'Euro', '€', '🇪🇺', '#3b82f6', 'coming_soon',
-    false, false, false, false, false, false, false, true,
+    'EUR', 'fiat', 'Euro', '€', '🇪🇺', '#3b82f6', 'active',
+    true, true, true, true, true, false, true, true,
     1, 5, 50000, 10000,
     2, 'fincra', ARRAY['card', 'bank_transfer'], 3
   ),
   (
-    'GBP', 'fiat', 'British Pound', '£', '🇬🇧', '#ec4899', 'coming_soon',
-    false, false, false, false, false, false, false, true,
+    'GBP', 'fiat', 'British Pound', '£', '🇬🇧', '#ec4899', 'active',
+    true, true, true, true, true, false, true, true,
     1, 5, 50000, 10000,
     2, 'fincra', ARRAY['card', 'bank_transfer'], 4
   ),
   (
-    'CAD', 'fiat', 'Canadian Dollar', 'C$', '🇨🇦', '#ff4d4d', 'coming_soon',
-    false, false, false, false, false, false, false, true,
+    'AUD', 'fiat', 'Australian Dollar', 'A$', '🇦🇺', '#f59e0b', 'active',
+    true, true, true, true, true, false, true, true,
     1, 5, 50000, 10000,
     2, 'fincra', ARRAY['card', 'bank_transfer'], 5
   ),
   (
-    'AUD', 'fiat', 'Australian Dollar', 'A$', '🇦🇺', '#000080', 'coming_soon',
-    false, false, false, false, false, false, false, true,
+    'CAD', 'fiat', 'Canadian Dollar', 'C$', '🇨🇦', '#ff4d4d', 'active',
+    true, true, true, true, true, false, true, true,
     1, 5, 50000, 10000,
     2, 'fincra', ARRAY['card', 'bank_transfer'], 6
+  ),
+  (
+    'NZD', 'fiat', 'New Zealand Dollar', 'NZ$', '🇳🇿', '#00247d', 'active',
+    true, true, true, true, true, false, true, true,
+    1, 5, 50000, 10000,
+    2, 'fincra', ARRAY['card', 'bank_transfer'], 7
+  ),
+  (
+    'JPY', 'fiat', 'Japanese Yen', '¥', '🇯🇵', '#bc002d', 'active',
+    true, true, true, true, true, false, true, true,
+    100, 500, 5000000, 1000000,
+    0, 'paystack', ARRAY['card', 'bank_transfer'], 8
   )
 ON CONFLICT (code) DO UPDATE SET
   symbol            = EXCLUDED.symbol,

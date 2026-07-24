@@ -120,6 +120,7 @@ if ('serviceWorker' in navigator) {
                   showUpdateNotification();
               }
           } catch (err) {
+              if (err instanceof Error && (err.name === 'AbortError' || err.message?.includes('aborted'))) return;
               console.warn('[UpdateCheck] API check non-blocking warning:', err instanceof Error ? err.message : String(err));
           }
 

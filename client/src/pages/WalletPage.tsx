@@ -23,10 +23,14 @@ type HubTab = 'fiat' | 'crypto' | 'exchange';
 
 // Default catalog — used if the API hasn't loaded yet
 const DEFAULT_FIAT_CATALOG = [
-  { code: 'NGN', name: 'Nigerian Naira', symbol: '₦', flag: '🇳🇬', color: '#6366f1', status: 'active', deposit_enabled: true, withdraw_enabled: true, transfer_enabled: true, buy_enabled: true, sell_enabled: true, convert_enabled: false, decimal_places: 2 },
-  { code: 'USD', name: 'US Dollar', symbol: '$', flag: '🇺🇸', color: '#10b981', status: 'coming_soon', deposit_enabled: false, withdraw_enabled: false, transfer_enabled: false, buy_enabled: false, sell_enabled: false, convert_enabled: false, decimal_places: 2 },
-  { code: 'EUR', name: 'Euro', symbol: '€', flag: '🇪🇺', color: '#3b82f6', status: 'coming_soon', deposit_enabled: false, withdraw_enabled: false, transfer_enabled: false, buy_enabled: false, sell_enabled: false, convert_enabled: false, decimal_places: 2 },
-  { code: 'GBP', name: 'British Pound', symbol: '£', flag: '🇬🇧', color: '#ec4899', status: 'coming_soon', deposit_enabled: false, withdraw_enabled: false, transfer_enabled: false, buy_enabled: false, sell_enabled: false, convert_enabled: false, decimal_places: 2 },
+  { code: 'NGN', name: 'Nigerian Naira', symbol: '₦', flag: '🇳🇬', color: '#6366f1', status: 'active', deposit_enabled: true, withdraw_enabled: true, transfer_enabled: true, buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 2 },
+  { code: 'USD', name: 'US Dollar', symbol: '$', flag: '🇺🇸', color: '#10b981', status: 'active', deposit_enabled: true, withdraw_enabled: true, transfer_enabled: true, buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 2 },
+  { code: 'EUR', name: 'Euro', symbol: '€', flag: '🇪🇺', color: '#3b82f6', status: 'active', deposit_enabled: true, withdraw_enabled: true, transfer_enabled: true, buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 2 },
+  { code: 'GBP', name: 'British Pound', symbol: '£', flag: '🇬🇧', color: '#ec4899', status: 'active', deposit_enabled: true, withdraw_enabled: true, transfer_enabled: true, buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 2 },
+  { code: 'AUD', name: 'Australian Dollar', symbol: 'A$', flag: '🇦🇺', color: '#f59e0b', status: 'active', deposit_enabled: true, withdraw_enabled: true, transfer_enabled: true, buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 2 },
+  { code: 'CAD', name: 'Canadian Dollar', symbol: 'C$', flag: '🇨🇦', color: '#ff4d4d', status: 'active', deposit_enabled: true, withdraw_enabled: true, transfer_enabled: true, buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 2 },
+  { code: 'NZD', name: 'New Zealand Dollar', symbol: 'NZ$', flag: '🇳🇿', color: '#00247d', status: 'active', deposit_enabled: true, withdraw_enabled: true, transfer_enabled: true, buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 2 },
+  { code: 'JPY', name: 'Japanese Yen', symbol: '¥', flag: '🇯🇵', color: '#bc002d', status: 'active', deposit_enabled: true, withdraw_enabled: true, transfer_enabled: true, buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 0 },
 ];
 
 const DEFAULT_CRYPTO_CATALOG = [
@@ -291,7 +295,7 @@ function WalletHubContent() {
                 })}
               </div>
 
-              {selectedAsset.currency && ['NGN', 'USD', 'EUR', 'GBP', 'CAD', 'AUD'].includes(selectedAsset.currency) && (
+              {selectedAsset.currency && ['NGN', 'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'NZD', 'JPY'].includes(selectedAsset.currency) && (
                 <VirtualAccountDetails 
                   currency={selectedAsset.currency} 
                   onAccountCreated={handleRefresh}

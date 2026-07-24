@@ -132,7 +132,7 @@ class FraudRiskEngine {
 
   /** Approximate USD conversion for size check (not for payment processing) */
   _approxUsdAmount(amount, currency) {
-    const seeds = { USD: 1, NGN: 1 / 1590, EUR: 1.09, GBP: 1.27, JPY: 1 / 155.5 };
+    const seeds = { USD: 1, NGN: 1 / 1590, EUR: 1.09, GBP: 1.27, JPY: 1 / 155.5, AUD: 0.66, CAD: 0.73, NZD: 0.60 };
     const rate = seeds[String(currency).toUpperCase()] || 1;
     return amount * rate;
   }

@@ -30,6 +30,7 @@ const VA_FLAGS = {
   GBP: process.env.GBP_VIRTUAL_ACCOUNTS_ENABLED === 'true',
   CAD: process.env.CAD_VIRTUAL_ACCOUNTS_ENABLED === 'true',
   AUD: process.env.AUD_VIRTUAL_ACCOUNTS_ENABLED === 'true',
+  NZD: process.env.NZD_VIRTUAL_ACCOUNTS_ENABLED === 'true',
 };
 
 // ── Virtual Account Provider Registry (Configuration-driven) ──────────────────
@@ -40,6 +41,7 @@ const VA_ROUTING = {
   GBP: process.env.GBP_VIRTUAL_ACCOUNT_PROVIDER || 'fincra',
   CAD: process.env.CAD_VIRTUAL_ACCOUNT_PROVIDER || 'fincra',
   AUD: process.env.AUD_VIRTUAL_ACCOUNT_PROVIDER || 'fincra',
+  NZD: process.env.NZD_VIRTUAL_ACCOUNT_PROVIDER || 'fincra',
 };
 
 // ── Provider Registry ─────────────────────────────────────────────────────────
@@ -48,7 +50,7 @@ const PROVIDER_REGISTRY = {
   paystack: {
     name: 'Paystack',
     type: 'fiat_gateway',
-    supportedCurrencies: ['NGN', 'USD', 'EUR', 'GBP', 'ZAR', 'GHS', 'KES', 'EGP'],
+    supportedCurrencies: ['NGN', 'USD', 'EUR', 'GBP', 'JPY', 'ZAR', 'GHS', 'KES', 'EGP'],
     operations: ['deposit', 'withdraw', 'transfer', 'virtual_account'],
     requiresSmallestUnit: true,
     live: true,
@@ -56,7 +58,7 @@ const PROVIDER_REGISTRY = {
   paystack_international: {
     name: 'Paystack International',
     type: 'fiat_gateway',
-    supportedCurrencies: ['USD', 'EUR', 'GBP'],
+    supportedCurrencies: ['USD', 'EUR', 'GBP', 'AUD', 'CAD', 'NZD', 'JPY'],
     operations: ['deposit', 'withdraw'],
     requiresSmallestUnit: true,
     live: INTL_ENABLED,
@@ -80,7 +82,7 @@ const PROVIDER_REGISTRY = {
   fincra: {
     name: 'Fincra',
     type: 'fiat_gateway',
-    supportedCurrencies: ['NGN', 'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'KES'],
+    supportedCurrencies: ['NGN', 'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'NZD', 'KES'],
     operations: ['deposit', 'withdraw', 'transfer', 'virtual_account'],
     requiresSmallestUnit: false,
     live: true,
@@ -97,7 +99,7 @@ const PROVIDER_REGISTRY = {
 
 // ── Crypto currency set ───────────────────────────────────────────────────────
 const CRYPTO_CURRENCIES = new Set(['BTC', 'ETH', 'USDT', 'USDC', 'MATIC', 'XRP', 'LTC', 'BNB']);
-const FIAT_CURRENCIES   = new Set(['NGN', 'USD', 'EUR', 'GBP', 'GHS', 'ZAR', 'KES', 'EGP', 'CAD', 'AUD', 'JPY', 'AED']);
+const FIAT_CURRENCIES   = new Set(['NGN', 'USD', 'EUR', 'GBP', 'GHS', 'ZAR', 'KES', 'EGP', 'CAD', 'AUD', 'NZD', 'JPY', 'AED']);
 
 /**
  * Determines whether a currency code is crypto.
@@ -209,7 +211,7 @@ function getProviderInfo(providerName) {
  * @returns {object} routing table
  */
 function getRoutingTable() {
-  const currencies = ['NGN', 'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'BTC', 'ETH', 'USDT', 'USDC'];
+  const currencies = ['NGN', 'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'NZD', 'JPY', 'BTC', 'ETH', 'USDT', 'USDC'];
   const operations = ['deposit', 'withdraw', 'transfer', 'buy', 'sell', 'swap', 'convert', 'virtual_account'];
   const table = {};
   for (const currency of currencies) {

@@ -14,14 +14,22 @@ const api = axios.create({
 // Uses a retry loop to handle Supabase session hydration delay after Paystack redirect
 api.interceptors.request.use(
   async (config) => {
-    // If the caller already set an Authorization header (e.g. ChatContext session init
-    // passing the token directly to bypass safeAuth throttling), honour it as-is.
+    // If the caller already set an Authorization header, honour it as-is.
     if (config.headers.Authorization) {
       return config;
     }
 
     // Attempt to get session using the resilient safeAuth helper
-    const session = await safeAuth();
+    let session = await safeAuth();
+
+    // Direct fallback if safeAuth returned null (e.g. during initial hydration)
+    if (!session?.access_token) {
+      try {
+        const { supabase } = await import('../lib/supabase');
+        const { data } = await supabase.auth.getSession();
+        session = data?.session || null;
+      } catch { /* silent fallback */ }
+    }
 
     if (session?.access_token) {
       config.headers.Authorization = `Bearer ${session.access_token}`;
@@ -64,15 +72,21 @@ api.interceptors.response.use(
       return api(config);
     }
 
-
-
-    // 401: Session invalid or expired (e.g. after API key rotation)
-    // Clear all stale Supabase tokens and redirect to login.
+    // 401: Session invalid or expired — attempt token refresh first before declaring session lost
     if (error.response?.status === 401) {
-      // Avoid redirect loops if we're already on the login page
-      if (!window.location.pathname.includes('/login')) {
-        console.warn('[Axios] 401 received — clearing stale session and redirecting to login.');
-        // Clear all Supabase-related keys from localStorage
+      if (!window.location.pathname.includes('/login') && !config.__is401Retry) {
+        config.__is401Retry = true;
+        try {
+          const { supabase } = await import('../lib/supabase');
+          const { data: refreshData, error: refreshErr } = await supabase.auth.refreshSession();
+          if (!refreshErr && refreshData?.session?.access_token) {
+            console.log('[Axios] Token refreshed successfully after 401. Retrying request...');
+            config.headers.Authorization = `Bearer ${refreshData.session.access_token}`;
+            return api(config);
+          }
+        } catch { /* proceed to logout */ }
+
+        console.warn('[Axios] 401 received and token refresh failed — clearing session and redirecting to login.');
         const keysToRemove: string[] = [];
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i);
@@ -81,7 +95,6 @@ api.interceptors.response.use(
           }
         }
         keysToRemove.forEach(k => localStorage.removeItem(k));
-        // Small delay so any in-flight toasts can show before redirect
         window.location.href = '/login?reason=session_expired';
       }
     }

@@ -6,7 +6,7 @@
  */
 
 // All currencies the NoteStandard platform accepts from users
-const SUPPORTED_APP_CURRENCIES = ['NGN', 'USD', 'EUR', 'GBP', 'JPY'];
+const SUPPORTED_APP_CURRENCIES = ['NGN', 'USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'NZD'];
 
 // Crypto currencies handled by NowPayments
 const SUPPORTED_CRYPTO_CURRENCIES = ['BTC', 'ETH', 'USDT', 'USDC', 'MATIC', 'XRP'];
@@ -15,8 +15,9 @@ const SUPPORTED_CRYPTO_CURRENCIES = ['BTC', 'ETH', 'USDT', 'USDC', 'MATIC', 'XRP
 const COUNTRY_CURRENCY_DEFAULTS = {
   NG: 'NGN', // Nigeria
   US: 'USD', // United States
-  CA: 'USD', // Canada
-  AU: 'USD', // Australia
+  CA: 'CAD', // Canada
+  AU: 'AUD', // Australia
+  NZ: 'NZD', // New Zealand
   GB: 'GBP', // United Kingdom
   DE: 'EUR', // Germany
   FR: 'EUR', // France
@@ -47,6 +48,9 @@ const CURRENCY_LIMITS = {
   EUR: { min: 1,      max: 50_000 },       // €1 – €50,000
   GBP: { min: 1,      max: 50_000 },       // £1 – £50,000
   JPY: { min: 100,    max: 7_000_000 },    // ¥100 – ¥7,000,000
+  AUD: { min: 1,      max: 50_000 },       // A$1 – A$50,000
+  CAD: { min: 1,      max: 50_000 },       // C$1 – C$50,000
+  NZD: { min: 1,      max: 50_000 },       // NZ$1 – NZ$50,000
 };
 
 // Decimal precision per currency
@@ -56,6 +60,9 @@ const CURRENCY_DECIMALS = {
   EUR: 2,
   GBP: 2,
   JPY: 0, // JPY has no sub-unit
+  AUD: 2,
+  CAD: 2,
+  NZD: 2,
   BTC: 8,
   ETH: 8,
   USDT: 2,

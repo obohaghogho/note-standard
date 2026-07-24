@@ -132,8 +132,10 @@ const CurrencyManagement: React.FC = () => {
     return (
       <div style={styles.toggleContainer}>
         <span style={styles.toggleLabel}>{label}</span>
-        <label style={styles.switch}>
+        <label style={styles.switch} htmlFor={`currency-toggle-${code}-${field}`}>
           <input 
+            id={`currency-toggle-${code}-${field}`}
+            name={`currency-${code}-${field}`}
             type="checkbox" 
             className="currency-mgmt-switch-input"
             checked={!!value}

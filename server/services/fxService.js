@@ -84,6 +84,7 @@ class FXService {
       GBP: 1.27,    
       CAD: 0.73,
       AUD: 0.66,
+      NZD: 0.60,
     };
     for (const [sym, price] of Object.entries(FALLBACK_SEEDS)) {
       const key = `lkg_price_${sym}`;

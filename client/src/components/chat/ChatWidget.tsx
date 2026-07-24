@@ -96,7 +96,20 @@ export const ChatWidget = () => {
 
         const onReceiveMessage = (msg: Message) => {
             if (msg.conversation_id === supportChat?.id) {
-                setMessages(prev => [...prev, msg]);
+                setMessages(prev => {
+                    const exists = prev.some(m => 
+                        m.id === msg.id || 
+                        (m.id.startsWith('temp-') && m.content === msg.content && m.sender_id === msg.sender_id)
+                    );
+                    if (exists) {
+                        return prev.map(m => 
+                            (m.id === msg.id || (m.id.startsWith('temp-') && m.content === msg.content && m.sender_id === msg.sender_id)) 
+                                ? msg 
+                                : m
+                        );
+                    }
+                    return [...prev, msg];
+                });
                 // Auto-clear typing indicator when we receive a response
                 if (msg.sender_id !== user?.id) {
                     setAdminTyping(false);

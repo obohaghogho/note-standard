@@ -51,6 +51,24 @@ const CURRENCY_METADATA = {
     smallestUnitName: "cent",
     smallestUnitMultiplier: 100,
   },
+  AUD: {
+    symbol: "A$",
+    decimals: 2,
+    smallestUnitName: "cent",
+    smallestUnitMultiplier: 100,
+  },
+  CAD: {
+    symbol: "C$",
+    decimals: 2,
+    smallestUnitName: "cent",
+    smallestUnitMultiplier: 100,
+  },
+  NZD: {
+    symbol: "NZ$",
+    decimals: 2,
+    smallestUnitName: "cent",
+    smallestUnitMultiplier: 100,
+  },
   // Crypto mappings
   BTC: { symbol: "₿", decimals: 8, smallestUnitName: "satoshi", smallestUnitMultiplier: 100000000 },
   ETH: { symbol: "Ξ", decimals: 18, smallestUnitName: "wei", smallestUnitMultiplier: 1e18 },

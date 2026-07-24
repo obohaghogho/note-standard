@@ -795,6 +795,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                                             <input 
                                                 type="file" 
                                                 id="proof-upload" 
+                                                name="proof_upload"
                                                 className="hidden" 
                                                 accept="image/*,.pdf"
                                                 onChange={(e) => setProofFile(e.target.files?.[0] || null)}

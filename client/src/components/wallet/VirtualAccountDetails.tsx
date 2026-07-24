@@ -161,8 +161,10 @@ export function VirtualAccountDetails({ currency, onAccountCreated }: VirtualAcc
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-gray-400 text-xs font-semibold mb-1">ID Card URL</label>
+            <label htmlFor="va-id-card-url" className="block text-gray-400 text-xs font-semibold mb-1 cursor-pointer">ID Card URL</label>
             <input
+              id="va-id-card-url"
+              name="idCardUrl"
               type="url"
               required
               placeholder="https://example.com/id-card.jpg"
@@ -172,8 +174,10 @@ export function VirtualAccountDetails({ currency, onAccountCreated }: VirtualAcc
             />
           </div>
           <div>
-            <label className="block text-gray-400 text-xs font-semibold mb-1">Utility Bill URL</label>
+            <label htmlFor="va-utility-bill-url" className="block text-gray-400 text-xs font-semibold mb-1 cursor-pointer">Utility Bill URL</label>
             <input
+              id="va-utility-bill-url"
+              name="utilityBillUrl"
               type="url"
               required
               placeholder="https://example.com/utility-bill.jpg"
@@ -183,8 +187,10 @@ export function VirtualAccountDetails({ currency, onAccountCreated }: VirtualAcc
             />
           </div>
           <div>
-            <label className="block text-gray-400 text-xs font-semibold mb-1">Date of Birth</label>
+            <label htmlFor="va-dob" className="block text-gray-400 text-xs font-semibold mb-1 cursor-pointer">Date of Birth</label>
             <input
+              id="va-dob"
+              name="dob"
               type="date"
               required
               value={dob}
@@ -193,8 +199,10 @@ export function VirtualAccountDetails({ currency, onAccountCreated }: VirtualAcc
             />
           </div>
           <div>
-            <label className="block text-gray-400 text-xs font-semibold mb-1">Occupation</label>
+            <label htmlFor="va-occupation" className="block text-gray-400 text-xs font-semibold mb-1 cursor-pointer">Occupation</label>
             <input
+              id="va-occupation"
+              name="occupation"
               type="text"
               required
               value={occupation}
@@ -208,6 +216,8 @@ export function VirtualAccountDetails({ currency, onAccountCreated }: VirtualAcc
           <h5 className="text-white text-xs font-bold uppercase tracking-wider text-gray-500">Billing Address</h5>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <input
+              id="va-street"
+              name="street"
               type="text"
               placeholder="Street"
               value={address.street}
@@ -215,6 +225,8 @@ export function VirtualAccountDetails({ currency, onAccountCreated }: VirtualAcc
               className="md:col-span-2 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"
             />
             <input
+              id="va-city"
+              name="city"
               type="text"
               placeholder="City"
               value={address.city}
@@ -222,6 +234,8 @@ export function VirtualAccountDetails({ currency, onAccountCreated }: VirtualAcc
               className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"
             />
             <input
+              id="va-state"
+              name="state"
               type="text"
               placeholder="State"
               value={address.state}
@@ -229,6 +243,8 @@ export function VirtualAccountDetails({ currency, onAccountCreated }: VirtualAcc
               className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"
             />
             <input
+              id="va-country"
+              name="country"
               type="text"
               placeholder="Country Code (e.g. CA, AU)"
               value={address.country}
@@ -236,6 +252,8 @@ export function VirtualAccountDetails({ currency, onAccountCreated }: VirtualAcc
               className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"
             />
             <input
+              id="va-postal-code"
+              name="postalCode"
               type="text"
               placeholder="Postal Code"
               value={address.postalCode}

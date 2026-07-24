@@ -289,6 +289,8 @@ export function ExchangeHub({
           <div className="flex items-center gap-2 px-4 py-3 bg-white/5 border border-white/10 rounded-xl">
             <span className="text-gray-400 font-bold">{ALL_SYMBOLS[fromCurrency] || ''}</span>
             <input
+              id="exchange-amount"
+              name="amount"
               type="number"
               value={amount}
               onChange={(e) => { setAmount(e.target.value); setQuote(null); setError(''); }}

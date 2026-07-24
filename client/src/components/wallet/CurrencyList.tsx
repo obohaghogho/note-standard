@@ -23,6 +23,9 @@ const getCurrencyIcon = (curr: string) => {
         case 'EUR': return '€';
         case 'GBP': return '£';
         case 'JPY': return '¥';
+        case 'AUD': return 'A$';
+        case 'CAD': return 'C$';
+        case 'NZD': return 'NZ$';
         default: return '$';
     }
 };
@@ -39,6 +42,9 @@ const getCurrencyColor = (curr: string) => {
         case 'EUR': return 'from-indigo-500/20 to-indigo-600/5 text-indigo-400 border-indigo-500/30';
         case 'GBP': return 'from-purple-500/20 to-purple-600/5 text-purple-400 border-purple-500/30';
         case 'JPY': return 'from-rose-500/20 to-rose-600/5 text-rose-400 border-rose-500/30';
+        case 'AUD': return 'from-amber-500/20 to-amber-600/5 text-amber-400 border-amber-500/30';
+        case 'CAD': return 'from-red-500/20 to-red-600/5 text-red-400 border-red-500/30';
+        case 'NZD': return 'from-cyan-500/20 to-cyan-600/5 text-cyan-400 border-cyan-500/30';
         default: return 'from-gray-500/20 to-gray-600/5 text-gray-400 border-gray-500/30';
     }
 };

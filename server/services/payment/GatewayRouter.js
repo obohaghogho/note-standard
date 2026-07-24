@@ -16,8 +16,9 @@
  */
 
 const logger = require('../../utils/logger');
-const { PAYMENT_PROVIDER_CAPABILITIES, supportsCurrency, supportsMethod } = require('../../config/providerCapabilities');
+const { PAYMENT_PROVIDER_CAPABILITIES, supportsCurrency, supportsFallbackCurrency, supportsMethod } = require('../../config/providerCapabilities');
 const { isSupportedCryptoCurrency } = require('../../config/paymentCurrencies');
+const { GatewayUnavailableError } = require('../../utils/PaymentErrors');
 
 // Health status store (updated by HealthMonitor, defaults to HEALTHY)
 const _healthStore = new Map();
@@ -41,7 +42,7 @@ class GatewayRouter {
    * Selects and returns the highest-scoring available gateway adapter.
    *
    * @param {Object} params
-   * @param {string} params.currency   - Requested payment currency (e.g. 'JPY', 'EUR')
+   * @param {string} params.currency   - Requested payment currency (e.g. 'AUD', 'CAD', 'NZD', 'JPY', 'EUR')
    * @param {string} [params.method]   - 'card' | 'bank_transfer' | 'dva' | 'subscription' | 'crypto'
    * @param {string} [params.region]   - ISO 3166 country code of user
    * @returns {{ adapter: Object, providerName: string, isNative: boolean, score: number }}
@@ -65,8 +66,12 @@ class GatewayRouter {
       if (health === 'DOWN') continue;
 
       const nativeSupport = supportsCurrency(name, up);
+      const fallbackSupport = supportsFallbackCurrency(name, up);
+
+      if (!nativeSupport && !fallbackSupport) continue;
+
       const score =
-        (nativeSupport ? 50 : 0) +
+        (nativeSupport ? 50 : 30) +
         (caps.merchantEnabled ? 20 : 0) +
         (health === 'HEALTHY' ? 20 : health === 'DEGRADED' ? 5 : 0) +
         (caps.feeEfficiencyScore || 0);
@@ -75,7 +80,10 @@ class GatewayRouter {
     }
 
     if (candidates.length === 0) {
-      throw new Error(`[GatewayRouter] No available gateway for ${up} / ${method}. Check provider health and capabilities.`);
+      throw new GatewayUnavailableError(
+        'ANY',
+        `[GatewayRouter] No available gateway for ${up} / ${method}. Check provider health and capabilities.`
+      );
     }
 
     // Sort descending by score

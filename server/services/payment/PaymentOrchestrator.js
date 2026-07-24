@@ -34,6 +34,8 @@ const PaymentEventBus    = require('./PaymentEventBus');
 const ConfigService      = require('../ConfigService');
 const { getDefaultCurrencyForCountry } = require('../../config/paymentCurrencies');
 
+const SettlementPolicyEngine = require('./SettlementPolicyEngine');
+
 class PaymentOrchestrator {
   /**
    * Creates a payment intent — the main entry point for card/checkout payments.
@@ -42,7 +44,7 @@ class PaymentOrchestrator {
    * @param {string} params.userId
    * @param {string} params.email
    * @param {number} params.amount             - User-requested amount in requestedCurrency
-   * @param {string} params.requestedCurrency  - User's chosen currency (e.g. 'JPY')
+   * @param {string} params.requestedCurrency  - User's chosen currency (e.g. 'AUD', 'CAD', 'NZD', 'JPY')
    * @param {string} [params.quoteId]          - Optional pre-generated FX quote ID
    * @param {string} [params.method]           - 'card' | 'bank_transfer' | 'dva' | 'crypto'
    * @param {string} [params.countryCode]      - ISO 3166-1 for country-aware defaults
@@ -97,7 +99,7 @@ class PaymentOrchestrator {
     let fxProvider      = 'identity';
 
     if (params.quoteId) {
-      // Validate pre-generated quote
+      // Validate pre-generated quote (versioned v1.0, throws QuoteExpiredError on timeout)
       quote = await FXQuoteEngine.validateAndConsume(params.quoteId);
       gatewayCurrency = quote.to_currency;
       gatewayAmount   = quote.converted_amount;
@@ -122,7 +124,7 @@ class PaymentOrchestrator {
     // ─── 5. Gateway Selection (final, with resolved gatewayCurrency) ──────
     const { adapter, providerName } = GatewayRouter.selectBestGateway({ currency: gatewayCurrency, method });
 
-    // ─── 6. Resolve Wallet ────────────────────────────────────────────────
+    // ─── 6. Resolve Wallet & Decoupled Settlement ─────────────────────────
     const { data: wallet } = await supabase
       .from('wallets_store')
       .select('id')
@@ -137,7 +139,21 @@ class PaymentOrchestrator {
     // ─── 7. Build Reference & Transaction Record ──────────────────────────
     const reference = `pi_${uuidv4().replace(/-/g, '')}`;
     const ledgerCurrency = ConfigService.get('BUSINESS_LEDGER_CURRENCY') || 'USD';
-    const settlementCurrency = this._getSettlementCurrency(providerName, gatewayCurrency);
+    const settlementCurrency = SettlementPolicyEngine.resolveSettlementCurrency(gatewayCurrency);
+
+    const snapshotData = {
+      requestedCurrency,
+      requestedAmount: amount,
+      gatewayCurrency,
+      gatewayAmount,
+      settlementCurrency,
+      exchangeRate,
+      fxProvider,
+      quoteId: quote?.quote_id || null,
+      quoteVersion: quote?.quote_version || 'v1.0',
+      riskScore: risk.riskScore,
+      intent_created_at: new Date().toISOString(),
+    };
 
     const txPayload = {
       user_id:              userId,
@@ -153,26 +169,14 @@ class PaymentOrchestrator {
       ledger_currency:      ledgerCurrency,
       exchange_rate:        exchangeRate,
       fx_provider:          fxProvider,
-      // Status
+      // Status Machine
       status:               'INITIALIZED',
       reference_id:         reference,
       idempotency_key:      idempotencyKey,
       provider:             providerName,
       type:                 'DEPOSIT',
       display_label:        `Deposit ${requestedCurrency}`,
-      metadata: {
-        ...metadata,
-        requestedCurrency,
-        requestedAmount:    amount,
-        gatewayCurrency,
-        gatewayAmount,
-        settlementCurrency,
-        exchangeRate,
-        fxProvider,
-        quoteId:            quote?.quote_id || null,
-        riskScore:          risk.riskScore,
-        intent_created_at:  new Date().toISOString(),
-      },
+      metadata:             snapshotData,
     };
 
     const { data: tx, error: txError } = await supabase
@@ -195,7 +199,7 @@ class PaymentOrchestrator {
       metadata:    txPayload.metadata,
     });
 
-    // Update transaction with provider reference
+    // Update transaction with provider reference and state
     await supabase
       .from('transactions')
       .update({ status: 'PENDING', provider_ref: initResult.providerReference })
@@ -268,8 +272,123 @@ class PaymentOrchestrator {
   }
 
   /**
-   * Issues a refund against an original transaction.
-   * Policy: Refund in the gateway processing currency using the original rate snapshot.
+   * Symmetrical Withdrawal Orchestrator — Handles AUD, CAD, NZD, USD, EUR, GBP, NGN, JPY payouts.
+   */
+  async processWithdrawalIntent({ userId, amount, currency, bankDetails, idempotencyKey }) {
+    const upCurrency = String(currency).toUpperCase();
+    logger.info(`[PaymentOrchestrator] Processing withdrawal: ${upCurrency} ${amount} for user ${userId}`);
+
+    // Verify wallet balance
+    const { data: wallet } = await supabase
+      .from('wallets_store')
+      .select('id, available, balance')
+      .eq('user_id', userId)
+      .eq('currency', upCurrency)
+      .maybeSingle();
+
+    if (!wallet) throw new Error(`[PaymentOrchestrator] ${upCurrency} wallet not found.`);
+    if (parseFloat(wallet.available) < amount) {
+      throw new Error(`[PaymentOrchestrator] Insufficient available balance in ${upCurrency} wallet.`);
+    }
+
+    const { providerName, isNative } = GatewayRouter.selectBestGateway({ currency: upCurrency, method: 'bank_transfer' });
+    let gatewayCurrency = upCurrency;
+    let gatewayAmount = amount;
+    let exchangeRate = 1;
+
+    if (!isNative) {
+      const bestNative = this._findBestNativeCurrency(providerName, 'bank_transfer');
+      const conversion = await FXProviderChain.convert(amount, upCurrency, bestNative);
+      gatewayCurrency = bestNative;
+      gatewayAmount = conversion.convertedAmount;
+      exchangeRate = conversion.rate;
+    }
+
+    const reference = `wd_${uuidv4().replace(/-/g, '')}`;
+
+    const txPayload = {
+      user_id: userId,
+      wallet_id: wallet.id,
+      amount: gatewayAmount,
+      currency: gatewayCurrency,
+      requested_currency: upCurrency,
+      requested_amount: amount,
+      gateway_currency: gatewayCurrency,
+      gateway_amount: gatewayAmount,
+      settlement_currency: gatewayCurrency,
+      exchange_rate: exchangeRate,
+      status: 'PENDING',
+      reference_id: reference,
+      provider: providerName,
+      type: 'WITHDRAWAL',
+      display_label: `Withdrawal ${upCurrency}`,
+      metadata: { bankDetails, requestedCurrency: upCurrency, gatewayCurrency, exchangeRate },
+    };
+
+    await supabase.from('transactions').insert(txPayload);
+    logger.info(`[PaymentOrchestrator] Withdrawal initialized: ${reference}`);
+    return { reference, status: 'PENDING', requestedAmount: amount, requestedCurrency: upCurrency, gatewayCurrency, gatewayAmount, exchangeRate };
+  }
+
+  /**
+   * Internal Wallet-to-Wallet Conversion (AUD ↔ USD, CAD ↔ GBP, NZD ↔ EUR, NGN ↔ CAD, etc.)
+   */
+  async convertWalletFunds({ userId, fromCurrency, toCurrency, amount, quoteId }) {
+    const from = String(fromCurrency).toUpperCase();
+    const to = String(toCurrency).toUpperCase();
+
+    logger.info(`[PaymentOrchestrator] Internal wallet swap: ${from} ${amount} → ${to} for user ${userId}`);
+
+    let quote = null;
+    let exchangeRate = 1;
+    let targetAmount = amount;
+
+    if (quoteId) {
+      quote = await FXQuoteEngine.validateAndConsume(quoteId);
+      exchangeRate = quote.exchange_rate;
+      targetAmount = quote.converted_amount;
+    } else {
+      const conversion = await FXProviderChain.convert(amount, from, to);
+      exchangeRate = conversion.rate;
+      targetAmount = conversion.convertedAmount;
+    }
+
+    const { data: sourceWallet } = await supabase.from('wallets_store').select('id, available').eq('user_id', userId).eq('currency', from).single();
+    if (!sourceWallet || parseFloat(sourceWallet.available) < amount) {
+      throw new Error(`Insufficient funds in ${from} wallet.`);
+    }
+
+    let { data: targetWallet } = await supabase.from('wallets_store').select('id').eq('user_id', userId).eq('currency', to).maybeSingle();
+    if (!targetWallet) {
+      const { data: newW } = await supabase.from('wallets_store').insert({ user_id: userId, currency: to, balance: 0, available: 0 }).select().single();
+      targetWallet = newW;
+    }
+
+    const reference = `swap_${uuidv4().replace(/-/g, '')}`;
+
+    await supabase.from('transactions').insert({
+      user_id: userId,
+      wallet_id: sourceWallet.id,
+      amount,
+      currency: from,
+      requested_currency: from,
+      requested_amount: amount,
+      gateway_currency: to,
+      gateway_amount: targetAmount,
+      exchange_rate: exchangeRate,
+      status: 'SUCCESS',
+      reference_id: reference,
+      type: 'SWAP',
+      display_label: `Swap ${from} to ${to}`,
+      metadata: { from, to, amount, targetAmount, exchangeRate, quoteId: quote?.quote_id || null },
+    });
+
+    logger.info(`[PaymentOrchestrator] Wallet swap completed: ${reference} | ${from} ${amount} → ${to} ${targetAmount}`);
+    return { success: true, reference, fromCurrency: from, toCurrency: to, fromAmount: amount, toAmount: targetAmount, exchangeRate };
+  }
+
+  /**
+   * Issues a refund against an original transaction preserving rate snapshots.
    */
   async refundPayment({ reference, reason, requestedBy }) {
     const { data: tx } = await supabase
@@ -308,24 +427,8 @@ class PaymentOrchestrator {
   _findBestNativeCurrency(providerName, method) {
     const { getProviderCapabilities } = require('../../config/providerCapabilities');
     const caps = getProviderCapabilities(providerName);
-    // Prefer USD as universal fallback, then first merchant currency
     if (caps.merchantCurrencies.includes('USD')) return 'USD';
     return caps.merchantCurrencies[0];
-  }
-
-  /**
-   * Returns the settlement currency for a provider + gateway currency combo.
-   */
-  _getSettlementCurrency(providerName, gatewayCurrency) {
-    try {
-      const { getProviderCapabilities } = require('../../config/providerCapabilities');
-      const caps = getProviderCapabilities(providerName);
-      return caps.settlementCurrencies.includes(gatewayCurrency)
-        ? gatewayCurrency
-        : caps.settlementCurrencies[0];
-    } catch {
-      return gatewayCurrency;
-    }
   }
 }
 

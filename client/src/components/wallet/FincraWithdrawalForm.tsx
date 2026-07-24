@@ -140,6 +140,7 @@ export const FincraWithdrawalForm: React.FC = () => {
         <label htmlFor="fincra-bank-code">Bank Code</label>
         <input
           id="fincra-bank-code"
+          name="bankCode"
           type="text"
           placeholder="e.g. 058 (GTB)"
           value={bankCode}
@@ -153,6 +154,7 @@ export const FincraWithdrawalForm: React.FC = () => {
         <label htmlFor="fincra-account-number">Account Number</label>
         <input
           id="fincra-account-number"
+          name="accountNumber"
           type="text"
           maxLength={10}
           placeholder="10-digit NUBAN"
@@ -185,6 +187,7 @@ export const FincraWithdrawalForm: React.FC = () => {
             <label htmlFor="fincra-amount">Amount ({currency})</label>
             <input
               id="fincra-amount"
+              name="amount"
               type="number"
               min="1"
               step="0.01"
@@ -200,6 +203,7 @@ export const FincraWithdrawalForm: React.FC = () => {
             <label htmlFor="fincra-narration">Narration (optional)</label>
             <input
               id="fincra-narration"
+              name="narration"
               type="text"
               maxLength={64}
               placeholder="Payment description"

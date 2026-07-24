@@ -12,6 +12,8 @@ import { LanguageSelector } from '../common/LanguageSelector';
 import { cn } from '../../utils/cn';
 import { ErrorBoundary } from 'react-error-boundary';
 
+import { preloadCoreDashboardRoutes } from '../../utils/routePreloader';
+
 export function DashboardLayout() {
     const location = useLocation();
     const navigate = useNavigate();
@@ -20,6 +22,12 @@ export function DashboardLayout() {
     const { user, authReady } = useAuth();
 
     const isUserLoggedIn = !!user;
+
+    useEffect(() => {
+        if (authReady && isUserLoggedIn) {
+            preloadCoreDashboardRoutes();
+        }
+    }, [authReady, isUserLoggedIn]);
 
     useEffect(() => {
         // Essential render trace with version for debugging production navigation hangs

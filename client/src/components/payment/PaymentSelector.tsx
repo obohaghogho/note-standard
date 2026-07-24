@@ -27,7 +27,22 @@ const GATEWAY_ROUTING_INFO: Record<string, { icon: string; message: string }> = 
   JPY: {
     icon: "💡",
     message:
-      "Note: Your payment will be processed securely in Nigerian Naira (NGN) at the live exchange rate. Your wallet will still be credited with the exact JPY amount.",
+      "Note: Your payment will be processed securely at the live exchange rate. Your wallet will still be credited with the exact JPY amount.",
+  },
+  AUD: {
+    icon: "💡",
+    message:
+      "Note: Your payment will be processed securely at the live exchange rate. Your wallet will still be credited with the exact AUD amount.",
+  },
+  CAD: {
+    icon: "💡",
+    message:
+      "Note: Your payment will be processed securely at the live exchange rate. Your wallet will still be credited with the exact CAD amount.",
+  },
+  NZD: {
+    icon: "💡",
+    message:
+      "Note: Your payment will be processed securely at the live exchange rate. Your wallet will still be credited with the exact NZD amount.",
   },
 };
 

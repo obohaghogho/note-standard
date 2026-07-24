@@ -8,6 +8,7 @@ import { useNotes } from '../../context/NotesContext';
 import { useWallet } from '../../hooks/useWallet';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { formatCurrency } from '../../lib/CurrencyFormatter';
+import { preloadRoute } from '../../utils/routePreloader';
 import { motion } from 'framer-motion';
 import { Line } from 'react-chartjs-2';
 import {
@@ -323,7 +324,14 @@ export default function DashboardHome() {
                     </Card>
 
                     {/* Quick Access Cards */}
-                    <Card variant="glass-premium" className="p-6 flex flex-col justify-between group min-h-[130px] hover:border-emerald-500/30" hoverEffect onClick={() => navigate('/dashboard/notes')}>
+                    <Card 
+                        variant="glass-premium" 
+                        className="p-6 flex flex-col justify-between group min-h-[130px] hover:border-emerald-500/30 active:scale-[0.98] transition-all cursor-pointer" 
+                        hoverEffect 
+                        onMouseEnter={() => preloadRoute('/dashboard/notes')}
+                        onPointerDown={() => preloadRoute('/dashboard/notes')}
+                        onClick={() => navigate('/dashboard/notes')}
+                    >
                         <div className="flex justify-between items-start">
                             <div className="p-2.5 bg-emerald-500/10 rounded-xl text-emerald-400 group-hover:bg-emerald-500 group-hover:text-black transition-all">
                                 <FileText size={18} />
@@ -336,7 +344,14 @@ export default function DashboardHome() {
                         </div>
                     </Card>
 
-                    <Card variant="glass-premium" className="p-6 flex flex-col justify-between group min-h-[130px] hover:border-blue-500/30" hoverEffect onClick={() => navigate('/dashboard/chat')}>
+                    <Card 
+                        variant="glass-premium" 
+                        className="p-6 flex flex-col justify-between group min-h-[130px] hover:border-blue-500/30 active:scale-[0.98] transition-all cursor-pointer" 
+                        hoverEffect 
+                        onMouseEnter={() => preloadRoute('/dashboard/chat')}
+                        onPointerDown={() => preloadRoute('/dashboard/chat')}
+                        onClick={() => navigate('/dashboard/chat')}
+                    >
                         <div className="flex justify-between items-start">
                             <div className="p-2.5 bg-blue-500/10 rounded-xl text-blue-400 group-hover:bg-blue-500 group-hover:text-black transition-all">
                                 <Activity size={18} />

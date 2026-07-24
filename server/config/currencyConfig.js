@@ -49,13 +49,31 @@ const BANK_TRANSFER_SUPPORT = {
     message: "JPY bank transfers are not supported.",
     fallbackCurrency: "USD",
   },
+  AUD: {
+    provider: null,
+    supported: false,
+    message: "AUD bank transfers are not directly supported. Card payments are automatically processed.",
+    fallbackCurrency: "USD",
+  },
+  CAD: {
+    provider: null,
+    supported: false,
+    message: "CAD bank transfers are not directly supported. Card payments are automatically processed.",
+    fallbackCurrency: "USD",
+  },
+  NZD: {
+    provider: null,
+    supported: false,
+    message: "NZD bank transfers are not directly supported. Card payments are automatically processed.",
+    fallbackCurrency: "USD",
+  },
 };
 
 // ── Supported Wallet Currencies ───────────────────────────────────────────────
-const SUPPORTED_WALLET_CURRENCIES = new Set(["NGN", "USD", "EUR", "GBP", "JPY"]);
+const SUPPORTED_WALLET_CURRENCIES = new Set(["NGN", "USD", "EUR", "GBP", "JPY", "AUD", "CAD", "NZD"]);
 
 // ── Supported Bank Account Currencies ────────────────────────────────────────
-const SUPPORTED_BANK_ACCOUNT_CURRENCIES = new Set(["USD", "GBP", "EUR", "NGN", "JPY"]);
+const SUPPORTED_BANK_ACCOUNT_CURRENCIES = new Set(["USD", "GBP", "EUR", "NGN", "JPY", "AUD", "CAD", "NZD"]);
 
 // ── Helper Functions ──────────────────────────────────────────────────────────
 
