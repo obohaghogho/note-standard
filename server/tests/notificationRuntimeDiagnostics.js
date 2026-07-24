@@ -20,11 +20,12 @@ const fs    = require('fs');
 const path  = require('path');
 
 // ─── Config ──────────────────────────────────────────────────────────────────
-const SUPABASE_URL      = 'https://tngcvgisfctggvivcnva.supabase.co';
-const SERVICE_ROLE_KEY  = 'sb_secret_MQoyxNBDiw5adSTXQ7Fd1g_fxERdBuL';
-const VAPID_PUBLIC_KEY  = 'BP4i4RlVoAEqKuUls8op6mZpxHl_haicJGqr3rQwysxRLN4yrY4KwNbI4FNtpXHdGQX16rIKqgN_tZzXbf71IJ4';
-const VAPID_PRIVATE_KEY = 'xN6pVYZQ0VyHsiW8_SYOoE1Qu4sEtXLvLxz4bp0-sQQ';
-const CLIENT_VAPID_KEY  = 'BP4i4RlVoAEqKuUls8op6mZpxHl_haicJGqr3rQwysxRLN4yrY4KwNbI4FNtpXHdGQX16rIKqgN_tZzXbf71IJ4';
+const SUPABASE_URL      = process.env.SUPABASE_URL || 'https://tngcvgisfctggvivcnva.supabase.co';
+const SERVICE_ROLE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || '';
+const VAPID_PUBLIC_KEY  = process.env.VAPID_PUBLIC_KEY || '';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
+const CLIENT_VAPID_KEY  = process.env.VAPID_PUBLIC_KEY || '';
+
 
 const API_URL     = 'http://localhost:5000';
 const GATEWAY_URL = 'http://localhost:5001';

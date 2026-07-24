@@ -3,9 +3,10 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const supabaseUrl = process.env.SUPABASE_URL || "https://tngcvgisfctggvivcnva.supabase.co";
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || "sb_secret_MQoyxNBDiw5adSTXQ7Fd1g_fxERdBuL";
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+
 
 /**
  * Helper to fetch user with retry logic for Supabase Auth
