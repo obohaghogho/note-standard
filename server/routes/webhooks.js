@@ -106,7 +106,65 @@ router.post("/crypto", (req, res) => res.status(200).json({ received: true, stat
  * POST /webhooks/anchor
  * Anchor BaaS virtual account & payout webhooks
  */
-router.post("/anchor", webhookController.handleAnchor);
+router.post("/anchor", async (req, res) => {
+  try {
+    const AnchorProvider = require("../services/payment/providers/AnchorProvider");
+    const FiatWalletService = require("../services/FiatWalletService");
+    const AuditLogService = require("../services/AuditLogService");
+
+    const provider = new AnchorProvider();
+
+    // Always ACK immediately — Anchor retries on non-200
+    res.status(200).json({ received: true });
+
+    // Verify signature
+    const rawBody = req.rawBody || JSON.stringify(req.body);
+    const isValid = provider.verifyWebhookSignature(req.headers, req.body, rawBody);
+    if (!isValid) {
+      logger.warn("[AnchorWebhook] Invalid signature — payload ignored");
+      return;
+    }
+
+    const parsed = provider.parseWebhookEvent(req.body);
+    logger.info(`[AnchorWebhook] Event received: type=${parsed.type} status=${parsed.status} ref=${parsed.reference}`);
+
+    if (parsed.type === "DEPOSIT" && parsed.status === "success" && parsed.reference) {
+      // Find transaction by reference
+      const { data: tx } = await supabase
+        .from("transactions")
+        .select("*")
+        .eq("reference_id", parsed.reference)
+        .maybeSingle();
+
+      if (tx && ["PENDING", "FAILED"].includes(tx.status)) {
+        const idempotencyKey = `anchor_webhook_${parsed.reference}_${tx.id}`;
+        await FiatWalletService.fundWallet(
+          tx.user_id,
+          parsed.currency,
+          parsed.amount,
+          idempotencyKey,
+          { provider: "anchor", reference: parsed.reference }
+        );
+        await supabase
+          .from("transactions")
+          .update({ status: "COMPLETED", updated_at: new Date().toISOString() })
+          .eq("id", tx.id);
+
+        AuditLogService.log({
+          user_id: tx.user_id,
+          action: "anchor_deposit_webhook",
+          provider: "anchor",
+          reference: parsed.reference,
+          amount: parsed.amount,
+          currency: parsed.currency,
+        }).catch((err) => logger.warn("[AnchorWebhook] Audit log failed:", err.message));
+      }
+    }
+  } catch (err) {
+    logger.error(`[AnchorWebhook] Handler error: ${err.message}`);
+    // Response already sent — no further action
+  }
+});
 
 // ─── Admin Endpoints ──────────────────────────────────────────
 
