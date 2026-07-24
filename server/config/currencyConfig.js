@@ -83,7 +83,7 @@ function isSupportedWalletCurrency(currency) {
 
 module.exports = {
   // Legacy exports maintained to prevent massive cascading breaks during migration
-  PAYSTACK_NATIVE_CURRENCIES: new Set(["NGN", "USD", "GHS", "ZAR", "KES", "EGP"]), 
+  PAYSTACK_NATIVE_CURRENCIES: new Set(["NGN", "USD", "EUR", "GBP", "GHS", "ZAR", "KES", "EGP"]), // EUR+GBP added: supported via Paystack International Payments
   GATEWAY_CONVERSION_MAP,
   FX_VOLATILITY_BUFFER,
   BANK_TRANSFER_SUPPORT,

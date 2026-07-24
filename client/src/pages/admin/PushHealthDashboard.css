@@ -400,3 +400,136 @@
   background: rgba(99, 102, 241, 0.15);
   border: 1px solid rgba(99, 102, 241, 0.25);
 }
+
+/* ─── Coverage Progress Bar ──────────────────── */
+.ph-coverage-bar {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.ph-coverage-label {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: #94a3b8;
+  flex: 1;
+}
+
+.ph-coverage-track {
+  flex: 2;
+  min-width: 160px;
+  height: 10px;
+  background: #0f172a;
+  border-radius: 5px;
+  overflow: hidden;
+  border: 1px solid #334155;
+}
+
+.ph-coverage-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #10b981);
+  border-radius: 5px;
+  transition: width 0.4s ease;
+}
+
+.ph-coverage-pct {
+  font-size: 0.9rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.ph-coverage-pct.good { color: #10b981; }
+.ph-coverage-pct.warn { color: #f59e0b; }
+.ph-coverage-pct.bad  { color: #ef4444; }
+
+/* ─── Per-User Health Badges ─────────────────── */
+.ph-health-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.ph-health-badge {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 90px;
+  gap: 0.2rem;
+  transition: border-color 0.2s;
+}
+
+.ph-hb-count {
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.ph-hb-label {
+  font-size: 0.7rem;
+  color: #64748b;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* ─── Health badge variant: stale ────────────── */
+.ph-badge.stale {
+  background: rgba(245,158,11,0.12);
+  color: #f59e0b;
+  border: 1px solid rgba(245,158,11,0.3);
+}
+
+/* ─── Test Push Button ───────────────────────── */
+.ph-test-btn {
+  background: rgba(99,102,241,0.12);
+  border: 1px solid rgba(99,102,241,0.3);
+  color: #a5b4fc;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 72px;
+  justify-content: center;
+}
+
+.ph-test-btn:hover:not(:disabled) {
+  background: rgba(99,102,241,0.25);
+  border-color: rgba(99,102,241,0.5);
+  color: #c7d2fe;
+}
+
+.ph-test-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ph-test-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(165,180,252,0.3);
+  border-top-color: #a5b4fc;
+  border-radius: 50%;
+  animation: ph-spin 0.7s linear infinite;
+}
+
+@keyframes ph-spin {
+  to { transform: rotate(360deg); }
+}

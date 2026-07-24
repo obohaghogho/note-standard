@@ -59,9 +59,18 @@ class SwapService {
     const amountOut = math.multiply(fees.netAmount, marketPrice);
 
     // 3. Ensure wallets exist (createWallet is idempotent)
-    const walletService = require("./walletService");
-    const fromWallet = await walletService.createWallet(userId, fromCurrency);
-    const toWallet = await walletService.createWallet(userId, toCurrency);
+    const FiatWalletService = require("./FiatWalletService");
+    const CryptoWalletService = require("./CryptoWalletService");
+    
+    const isCrypto = (curr) => ["BTC", "ETH", "USDT", "USDC", "TRX", "POLYGON"].includes(String(curr).toUpperCase());
+    
+    const fromWallet = isCrypto(fromCurrency) 
+        ? await CryptoWalletService.createWallet(userId, fromCurrency)
+        : await FiatWalletService.createWallet(userId, fromCurrency);
+        
+    const toWallet = isCrypto(toCurrency)
+        ? await CryptoWalletService.createWallet(userId, toCurrency)
+        : await FiatWalletService.createWallet(userId, toCurrency);
 
     // 4. Write quote as PENDING with expiry
     const { data: quote, error } = await supabase

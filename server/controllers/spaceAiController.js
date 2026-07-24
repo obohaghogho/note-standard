@@ -3,9 +3,7 @@ const Groq = require('groq-sdk');
 const features = require('../config/features');
 const graphService = require('../services/graph/GraphService');
 
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY
-});
+const groq = (process.env.GROQ_API_KEY) ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
 
 exports.askSpaceAi = async (req, res, next) => {
     try {
@@ -16,8 +14,8 @@ exports.askSpaceAi = async (req, res, next) => {
             return res.status(400).json({ error: 'Query is required' });
         }
 
-        if (!features.LEARNING_MODE_ENABLED && !process.env.GROQ_API_KEY) {
-            return res.status(503).json({ error: 'AI Assistant is currently unavailable' });
+        if (!groq) {
+            return res.status(503).json({ error: 'AI Assistant is currently unavailable. Groq API key is not configured.' });
         }
 
         // 1. Check Space Manifest if AI is enabled

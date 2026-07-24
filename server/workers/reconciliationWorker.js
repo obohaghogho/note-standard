@@ -156,6 +156,7 @@ class ReconciliationWorker {
         await this.syncSentPayouts();
         await this.cleanupStaleReservations();
         await this.checkAndSweepSettlements();
+        await this.sweepStuckPendingTransactions();
         await this.assertLedgerIntegrity();
     }
 
@@ -172,6 +173,37 @@ class ReconciliationWorker {
             await this.sweepAllCurrencies(false);
         } catch (err) {
             logger.error("[ReconciliationWorker] Paystack Settlement Sweep check failed:", err.message);
+        }
+    }
+
+    static async sweepStuckPendingTransactions() {
+        try {
+            logger.info("[ReconciliationWorker] Running stuck PENDING transaction sweep...");
+            // Find PENDING Paystack transactions older than 2 minutes
+            const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+            const { data: stuckTxs, error } = await supabase
+                .from("transactions")
+                .select("reference_id, provider_reference, status")
+                .eq("status", "PENDING")
+                .eq("provider", "paystack")
+                .lte("created_at", twoMinutesAgo);
+
+            if (error) throw error;
+            if (!stuckTxs || stuckTxs.length === 0) return;
+
+            logger.info(`[ReconciliationWorker] Found ${stuckTxs.length} stuck PENDING transactions. Resolving...`);
+            const paymentService = require("../services/payment/paymentService");
+
+            for (const tx of stuckTxs) {
+                try {
+                    // This will check status and finalize (fund wallet) if completed
+                    await paymentService.verifyPaymentStatus(tx.reference_id, tx.provider_reference);
+                } catch (err) {
+                    logger.error(`[ReconciliationWorker] Failed to verify stuck transaction ${tx.reference_id}: ${err.message}`);
+                }
+            }
+        } catch (err) {
+            logger.error("[ReconciliationWorker] Stuck transaction sweep failed:", err.message);
         }
     }
 
@@ -375,19 +407,28 @@ class ReconciliationWorker {
                 );
 
                 if (validation.valid) {
-                    logger.info(`[ReconciliationWorker] Proposal ${proposal.id} PASSED audit. Applying correction...`);
+                    logger.info(`[ReconciliationWorker] Proposal ${proposal.id} PASSED audit. Alerting admins (auto-correction disabled).`);
                     
-                    await settlementEngine.processEvent({
-                        transactionId: proposal.id,
-                        status: 'LEDGER_COMMITTED',
-                        providerId: 'SYSTEM_GOVERNANCE',
-                        payload: { drift: proposal.drift_amount },
-                        eventAt: now
+                    const AuditLogService = require('../services/AuditLogService');
+                    await AuditLogService.log({
+                        user_id: 'SYSTEM',
+                        action: 'RECONCILIATION_ALERT',
+                        ip: '127.0.0.1',
+                        device: 'ReconciliationWorker',
+                        provider: 'system',
+                        reference: proposal.id,
+                        amount: proposal.drift_amount,
+                        currency: 'NGN',
+                        status: 'alerted',
+                        metadata: {
+                            wallet_id: proposal.wallet_id,
+                            message: `Drift of ${proposal.drift_amount} detected and validated. Manual intervention required.`
+                        }
                     });
 
                     await supabase
                         .from('reconciliation_proposals')
-                        .update({ status: 'APPLIED', applied_at: now })
+                        .update({ status: 'ALERTED', applied_at: now })
                         .eq('id', proposal.id);
 
                 } else {

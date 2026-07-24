@@ -108,9 +108,10 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 console.warn('Failed to fetch latest rates, using LKG (if any):', rateErr);
             }
         } catch (err) {
-            console.error('Error fetching wallet data:', err);
+            console.warn('Wallet data fetch warning (server initializing):', err instanceof Error ? err.message : String(err));
             setError(err instanceof Error ? err.message : 'Failed to load wallet data');
         } finally {
+
             fetchingRef.current = false;
         }
     }, [user, profile, authReady]);

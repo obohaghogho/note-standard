@@ -4,7 +4,7 @@ import { API_URL } from "../lib/api"
 
 const api = axios.create({
   baseURL: `${API_URL}/api`,
-  timeout: 15000, // 15s global timeout
+  timeout: 10000, // 10s — was 15s; long timeouts make failed requests feel frozen
   headers: {
     "Content-Type": "application/json",
   },
@@ -51,13 +51,20 @@ api.interceptors.response.use(
     const config = error.config;
     if (!config) return Promise.reject(error);
 
-    // Only retry on 503 (service temporarily unavailable)
-    if (error.response?.status === 503 && (!config.__retryCount || config.__retryCount < 2)) {
+    const isNetworkError = !error.response || error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED';
+    const isServerError = error.response?.status === 502 || error.response?.status === 503 || error.response?.status === 504;
+
+    // Automatically retry Network Errors (server starting up / port 5000 binding) or 502/503/504
+    // Gives a ~20-second grace window to cover the 9.8-second node server boot & DB connectivity checks.
+    if ((isNetworkError || isServerError) && (!config.__retryCount || config.__retryCount < 6)) {
       config.__retryCount = (config.__retryCount || 0) + 1;
-      const delay = config.__retryCount * 1500; // 1.5s, 3s
+      const delays = [1200, 2000, 3000, 4000, 5000, 5000];
+      const delay = delays[config.__retryCount - 1] || 3000;
       await new Promise(resolve => setTimeout(resolve, delay));
       return api(config);
     }
+
+
 
     // 401: Session invalid or expired (e.g. after API key rotation)
     // Clear all stale Supabase tokens and redirect to login.

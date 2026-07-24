@@ -7,7 +7,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
 
-const WalletService = require("../services/walletService");
+const CryptoWalletService = require("../services/CryptoWalletService");
 const logger = require("../utils/logger");
 
 async function upgradeAllMockAddresses() {
@@ -17,8 +17,7 @@ async function upgradeAllMockAddresses() {
   const { data: wallets, error } = await supabase
     .from("wallets_store")
     .select("user_id, currency, network, address")
-    .ilike("address", "%-%") // UUIDs have hyphens
-    .in("currency", ["BTC", "ETH", "USDT", "USDC"]);
+    .in("currency", ["BTC", "ETH", "USDT", "USDC", "TRX", "POLYGON"]);
 
   if (error) {
     console.error("Error fetching wallets:", error);
@@ -36,15 +35,22 @@ async function upgradeAllMockAddresses() {
   let failureCount = 0;
 
   for (const wallet of wallets) {
-    console.log(`Upgrading ${wallet.currency} (${wallet.network}) for user ${wallet.user_id}...`);
-    try {
-      const result = await WalletService.getAddress(wallet.user_id, wallet.currency, wallet.network);
-      
-      if (result.address && !result.address.includes("-")) {
-        console.log(`✅ Success: ${wallet.currency} upgraded to ${result.address}`);
-        successCount++;
-      } else {
-        console.log(`⚠️ Warning: ${wallet.currency} still has mock address: ${result.address}`);
+    const isMock = !wallet.address || wallet.address.includes("-") || wallet.address.includes("dummy") || wallet.address.includes("mock") || wallet.address.includes("TBD");
+    
+    if (isMock) {
+      console.log(`Upgrading ${wallet.currency} (${wallet.network}) for user ${wallet.user_id}...`);
+      try {
+        const result = await CryptoWalletService.getAddress(wallet.user_id, wallet.currency, wallet.network);
+        
+        if (result.address && !result.address.includes("-")) {
+          console.log(`✅ Success: ${wallet.currency} upgraded to ${result.address}`);
+          successCount++;
+        } else {
+          console.log(`⚠️ Warning: ${wallet.currency} still has mock address: ${result.address}`);
+          failureCount++;
+        }
+      } catch (err) {
+        console.error(`❌ Failed to upgrade ${wallet.currency} for user ${wallet.user_id}:`, err.message);
         failureCount++;
       }
     } catch (err) {

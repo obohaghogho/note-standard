@@ -24,6 +24,7 @@ import { CallOverlay } from './CallOverlay';
 import { AudioPlayer } from './AudioPlayer';
 import { applyAutoCorrect } from '../../utils/textUtils';
 import toast from 'react-hot-toast';
+import { useKeyboardLayout } from '../../hooks/useKeyboardLayout';
 
 export const ChatWidget = () => {
     const { session, user, isPro, isBusiness } = useAuth();
@@ -45,23 +46,7 @@ export const ChatWidget = () => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
-    const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-
-    // Keyboard Visibility Detection
-    useEffect(() => {
-        if (!window.visualViewport) return;
-        
-        const handleResize = () => {
-            const viewport = window.visualViewport;
-            if (!viewport) return;
-            // If viewport height is significantly less than window innerHeight, keyboard is likely open
-            const isVisible = viewport.height < window.innerHeight * 0.85;
-            setIsKeyboardVisible(isVisible);
-        };
-
-        window.visualViewport.addEventListener('resize', handleResize);
-        return () => window.visualViewport?.removeEventListener('resize', handleResize);
-    }, []);
+    const { isKeyboardOpen } = useKeyboardLayout();
 
     const fetchMessages = useCallback(async (chatId: string) => {
         if (!session?.access_token) return;
@@ -331,10 +316,10 @@ export const ChatWidget = () => {
                        location.pathname.startsWith('/admin/chats') ||
                        location.pathname.startsWith('/dashboard/teams');
 
-    if (!user || (!isOpen && isKeyboardVisible) || isChatRoom) return null;
+    if (!user || (!isOpen && isKeyboardOpen) || isChatRoom) return null;
 
     return (
-        <div className={`chat-widget ${isOpen ? 'open' : ''} ${isMinimized ? 'minimized' : ''} ${isOpen && isKeyboardVisible ? 'keyboard-visible' : ''}`} style={{ display: (!isOpen && isKeyboardVisible) || isChatRoom ? 'none' : 'block' }}>
+        <div className={`chat-widget ${isOpen ? 'open' : ''} ${isMinimized ? 'minimized' : ''} ${isOpen && isKeyboardOpen ? 'keyboard-visible' : ''}`} style={{ display: (!isOpen && isKeyboardOpen) || isChatRoom ? 'none' : 'block' }}>
             {!isOpen && (
                 <button className="chat-widget-button" onClick={() => setIsOpen(true)}>
                     <MessageCircle size={24} />

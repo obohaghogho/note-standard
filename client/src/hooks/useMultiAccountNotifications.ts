@@ -48,8 +48,9 @@ export const useMultiAccountNotifications = () => {
         setUnreadCounts({ [acc.id]: count });
       }
     } catch (err) {
-      console.error(`[MultiAccountAuth] Error fetching unread count:`, err);
+      console.warn(`[MultiAccountAuth] Unread count fetch warning (server initializing):`, err instanceof Error ? err.message : String(err));
     } finally {
+
       pollingInProgress.current = false;
     }
   }, [user, isSwitching]);

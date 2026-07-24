@@ -1,13 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const path = require("path");
-const { createClient } = require("@supabase/supabase-js");
+const supabase = require("../config/supabaseAdmin");
 const { createNotification } = require("../services/notificationService");
-
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY
-);
 
 // Get user's own limit requests
 router.get("/", async (req, res) => {

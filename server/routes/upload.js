@@ -1,29 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const cloudinary = require('cloudinary').v2;
-
-// Configure Cloudinary by parsing CLOUDINARY_URL
-// Format: cloudinary://api_key:api_secret@cloud_name
-const cloudinaryUrl = process.env.CLOUDINARY_URL;
-console.log('CLOUDINARY_URL exists:', !!cloudinaryUrl);
-if (cloudinaryUrl) {
-    console.log('CLOUDINARY_URL value:', cloudinaryUrl.substring(0, 30) + '...');
-    const regex = /cloudinary:\/\/(\d+):([^@]+)@(.+)/;
-    const match = cloudinaryUrl.match(regex);
-    if (match) {
-        cloudinary.config({
-            cloud_name: match[3],
-            api_key: match[1],
-            api_secret: match[2]
-        });
-        console.log('Cloudinary configured with cloud:', match[3], 'api_key:', match[1]);
-    } else {
-        console.log('Cloudinary URL regex did not match!');
-    }
-} else {
-    console.log('CLOUDINARY_URL not found in environment');
-}
+const cloudinary = require('../config/cloudinary');
 
 // Multer setup for image-only (legacy profile uploads)
 const storage = multer.memoryStorage();
@@ -44,10 +22,15 @@ const uploadMedia = multer({
     storage,
     limits: { fileSize: 15 * 1024 * 1024 }, // 15MB limit
     fileFilter: (req, file, cb) => {
-        if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
+        const allowedExtensions = /jpeg|jpg|png|gif|webp|mp4|mov|avi|webm|quicktime/i;
+        const extension = file.originalname.split('.').pop().toLowerCase();
+        const isMimeMatch = file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/');
+        const isExtMatch = allowedExtensions.test(extension);
+
+        if (isMimeMatch || isExtMatch) {
             cb(null, true);
         } else {
-            cb(new Error('Only image and video files are allowed'), false);
+            cb(new Error('Only image and video files are allowed (detected: ' + file.mimetype + ')'), false);
         }
     }
 });
@@ -99,13 +82,11 @@ router.post('/media', uploadMedia.single('file'), async (req, res) => {
             return res.status(400).json({ error: 'No file uploaded' });
         }
 
-        const isVideo = req.file.mimetype.startsWith('video/');
-
         const result = await new Promise((resolve, reject) => {
             const uploadStream = cloudinary.uploader.upload_stream(
                 {
                     folder: 'note_standard_statuses',
-                    resource_type: isVideo ? 'video' : 'image',
+                    resource_type: 'auto',
                     // No aggressive cropping to preserve aspect ratio
                 },
                 (error, result) => {

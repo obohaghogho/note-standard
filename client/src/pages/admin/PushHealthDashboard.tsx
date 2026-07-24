@@ -28,6 +28,14 @@ interface PushHealthData {
     healthy: number;
     stale: number;
     invalid: number;
+    neverPushed: number;
+    duplicateEndpointUsers: number;
+  };
+  coverage: {
+    totalUsers: number;
+    usersWithSubscription: number;
+    usersWithoutSubscription: number;
+    coveragePct: number;
   };
   metricsToday: {
     attempted: number;
@@ -49,6 +57,16 @@ interface PushHealthData {
     unknown: number;
   };
   topMultiDevice: { user_id: string; device_count: number }[];
+  perUserHealth: PerUserHealth[];
+  perUserHealthSummary: {
+    healthy: number;
+    no_subscription: number;
+    never_pushed: number;
+    push_failed: number;
+    invalid_endpoint: number;
+    stale: number;
+    partially_invalid: number;
+  };
   recentActivity: {
     timestamp: string;
     user_id: string;
@@ -56,6 +74,17 @@ interface PushHealthData {
     result: string;
     error_code: string | null;
   }[];
+}
+
+interface PerUserHealth {
+  user_id: string;
+  health: string;
+  health_label: string;
+  subscription_count: number;
+  last_successful_push: string | null;
+  last_failed_push: string | null;
+  platforms: string[];
+  details: string;
 }
 
 interface MessagingMetricsData {
@@ -148,6 +177,43 @@ const PushHealthDashboard = () => {
 
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  // ─── Test Push State ──────────────────────────────────────────────────────
+  // Tracks per-user test push results: userId → { loading, success, note }
+  const [testPushResults, setTestPushResults] = useState<Record<string, {
+    loading: boolean;
+    success: boolean | null;
+    note: string;
+    gatewayStatus: number | null;
+  }>>({});
+
+  const sendTestPush = async (userId: string) => {
+    setTestPushResults(prev => ({
+      ...prev,
+      [userId]: { loading: true, success: null, note: 'Sending…', gatewayStatus: null }
+    }));
+    try {
+      const res = await fetch(`${API_URL}/api/admin/push-health/test-push/${userId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      const data = await res.json();
+      setTestPushResults(prev => ({
+        ...prev,
+        [userId]: {
+          loading: false,
+          success: data.success,
+          note: data.note || (data.success ? 'Gateway accepted.' : 'Gateway rejected.'),
+          gatewayStatus: data.gatewayStatus,
+        }
+      }));
+    } catch (err) {
+      setTestPushResults(prev => ({
+        ...prev,
+        [userId]: { loading: false, success: false, note: String(err), gatewayStatus: null }
+      }));
+    }
+  };
 
   const fetchHealth = useCallback(async (isManual = false) => {
     if (!session?.access_token) return;
@@ -275,11 +341,52 @@ const PushHealthDashboard = () => {
       {/* ─── Tab Content: Push Subscriptions ─── */}
       {activeTab === 'push' && pushData && (
         <>
+          {/* ─── User Coverage Banner ─── */}
+          <p className="ph-section-title">User Coverage</p>
+          <div className="ph-coverage-bar">
+            <div className="ph-coverage-label">
+              <span>🟢 Subscribed: <strong>{pushData.coverage?.usersWithSubscription ?? '—'}</strong></span>
+              <span style={{ color: '#f87171' }}>🔴 Unsubscribed: <strong>{pushData.coverage?.usersWithoutSubscription ?? '—'}</strong></span>
+              <span style={{ color: '#94a3b8' }}>Total Users: <strong>{pushData.coverage?.totalUsers ?? '—'}</strong></span>
+            </div>
+            <div className="ph-coverage-track">
+              <div
+                className="ph-coverage-fill"
+                style={{ width: `${pushData.coverage?.coveragePct ?? 0}%` }}
+                title={`${pushData.coverage?.coveragePct ?? 0}% coverage`}
+              />
+            </div>
+            <span className={`ph-coverage-pct ${(pushData.coverage?.coveragePct ?? 0) >= 80 ? 'good' : (pushData.coverage?.coveragePct ?? 0) >= 50 ? 'warn' : 'bad'}`}>
+              {pushData.coverage?.coveragePct ?? 0}% coverage
+            </span>
+          </div>
+
+          {/* ─── Per-User Health Summary Badges ─── */}
+          {pushData.perUserHealthSummary && (
+            <div className="ph-health-badges">
+              {[
+                { label: '🟢 Healthy', value: pushData.perUserHealthSummary.healthy, color: '#10b981' },
+                { label: '🟡 Never Pushed', value: pushData.perUserHealthSummary.never_pushed, color: '#f59e0b' },
+                { label: '🟡 Stale', value: pushData.perUserHealthSummary.stale, color: '#d97706' },
+                { label: '🟡 Partial Invalid', value: pushData.perUserHealthSummary.partially_invalid, color: '#f97316' },
+                { label: '🔴 No Subscription', value: pushData.perUserHealthSummary.no_subscription, color: '#ef4444' },
+                { label: '🔴 Push Failed', value: pushData.perUserHealthSummary.push_failed, color: '#dc2626' },
+                { label: '🔴 Invalid Endpoint', value: pushData.perUserHealthSummary.invalid_endpoint, color: '#b91c1c' },
+              ].map(b => (
+                <div key={b.label} className="ph-health-badge" style={{ borderColor: b.value > 0 ? b.color : '#334155' }}>
+                  <span className="ph-hb-count" style={{ color: b.value > 0 ? b.color : '#475569' }}>{b.value}</span>
+                  <span className="ph-hb-label">{b.label}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           <p className="ph-section-title">Subscription Overview</p>
           <div className="ph-stat-grid">
             {[
               { label: 'Total Subscriptions', value: pushData.overview.totalSubscriptions, color: 'blue',   icon: Bell },
               { label: 'Healthy',             value: pushData.overview.healthy,            color: 'green',  icon: CheckCircle },
+              { label: 'Never Pushed',        value: pushData.overview.neverPushed ?? 0,   color: 'amber',  icon: AlertTriangle },
               { label: 'Stale (30d+)',        value: pushData.overview.stale,              color: 'amber',  icon: Clock },
               { label: 'Invalid',             value: pushData.overview.invalid,            color: 'red',    icon: XCircle },
             ].map(({ label, value, color, icon: Icon }) => (
@@ -416,6 +523,102 @@ const PushHealthDashboard = () => {
                   </table>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* ─── Per-User Health Status Table ─── */}
+          <p className="ph-section-title">Per-User Notification Health</p>
+          <div className="ph-panel">
+            <h3><Users size={16} /> User Health Status <span style={{ fontSize: '0.7rem', color: '#475569', marginLeft: '0.5rem' }}>(problems first · max 100)</span></h3>
+            <div className="ph-table-wrapper">
+              <table className="ph-table">
+                <thead>
+                  <tr>
+                    <th>User ID</th>
+                    <th>Status</th>
+                    <th>Subscriptions</th>
+                    <th>Platforms</th>
+                    <th>Last Success</th>
+                    <th>Last Failure</th>
+                    <th>Details</th>
+                    <th>Test</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(pushData.perUserHealth || []).length === 0 ? (
+                    <tr>
+                      <td colSpan={8} style={{ color: '#475569', textAlign: 'center' }}>
+                        No user health data available.
+                      </td>
+                    </tr>
+                  ) : (pushData.perUserHealth || []).map((row) => {
+                    const testResult = testPushResults[row.user_id];
+                    return (
+                    <tr key={row.user_id} style={{
+                      background: row.health === 'HEALTHY' ? 'transparent'
+                        : row.health === 'NO_SUBSCRIPTION' || row.health === 'INVALID_ENDPOINT' || row.health === 'PUSH_FAILED' ? 'rgba(239,68,68,0.05)'
+                        : 'rgba(245,158,11,0.05)'
+                    }}>
+                      <td className="ph-uid">{truncateUid(row.user_id)}</td>
+                      <td>
+                        <span className={`ph-badge ${
+                          row.health === 'HEALTHY' ? 'accepted'
+                          : row.health === 'NO_SUBSCRIPTION' || row.health === 'INVALID_ENDPOINT' || row.health === 'PUSH_FAILED' ? 'failed'
+                          : 'stale'
+                        }`} style={{ whiteSpace: 'nowrap' }}>
+                          {row.health_label}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>{row.subscription_count}</td>
+                      <td style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                        {row.platforms.join(', ') || '—'}
+                      </td>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.72rem', color: row.last_successful_push ? '#34d399' : '#475569' }}>
+                        {row.last_successful_push ? new Date(row.last_successful_push).toLocaleDateString() : '—'}
+                      </td>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.72rem', color: row.last_failed_push ? '#f87171' : '#475569' }}>
+                        {row.last_failed_push ? new Date(row.last_failed_push).toLocaleDateString() : '—'}
+                      </td>
+                      <td style={{ fontSize: '0.72rem', color: '#94a3b8', maxWidth: '220px' }}>
+                        {row.details}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem' }}>
+                          <button
+                            id={`test-push-${row.user_id}`}
+                            className="ph-test-btn"
+                            disabled={testResult?.loading}
+                            onClick={() => sendTestPush(row.user_id)}
+                            title={`Send a real test push to ${row.user_id}`}
+                          >
+                            {testResult?.loading ? (
+                              <span className="ph-test-spinner" />
+                            ) : testResult?.success === true ? (
+                              '✅ Sent'
+                            ) : testResult?.success === false ? (
+                              '❌ Failed'
+                            ) : (
+                              '🔔 Test'
+                            )}
+                          </button>
+                          {testResult && !testResult.loading && (
+                            <span style={{
+                              fontSize: '0.62rem',
+                              color: testResult.success ? '#34d399' : '#f87171',
+                              textAlign: 'center',
+                              maxWidth: '80px',
+                              lineHeight: '1.3',
+                            }}>
+                              {testResult.gatewayStatus ? `HTTP ${testResult.gatewayStatus}` : ''}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
 

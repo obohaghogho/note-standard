@@ -29,7 +29,7 @@ router.use((req, res, next) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.get("/webhook-logs", async (req, res, next) => {
   try {
-    const limit = parseInt(req.query.limit as string) || 200;
+    const limit = parseInt(req.query.limit) || 200;
     const { data: logs, error } = await supabase
       .from("fincra_webhook_logs")
       .select("id, event_type, signature_verified, processed, created_at")
@@ -38,7 +38,7 @@ router.get("/webhook-logs", async (req, res, next) => {
 
     if (error) throw new Error(error.message);
     res.json({ success: true, logs: logs || [] });
-  } catch (err: any) {
+  } catch (err) {
     next(err);
   }
 });
@@ -49,7 +49,7 @@ router.get("/webhook-logs", async (req, res, next) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.get("/audit-logs", async (req, res, next) => {
   try {
-    const limit = parseInt(req.query.limit as string) || 200;
+    const limit = parseInt(req.query.limit) || 200;
     const { data: logs, error } = await supabase
       .from("fincra_audit_logs")
       .select("id, action, user_id, details, created_at")
@@ -58,7 +58,7 @@ router.get("/audit-logs", async (req, res, next) => {
 
     if (error) throw new Error(error.message);
     res.json({ success: true, logs: logs || [] });
-  } catch (err: any) {
+  } catch (err) {
     next(err);
   }
 });
@@ -69,8 +69,8 @@ router.get("/audit-logs", async (req, res, next) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.get("/transactions", async (req, res, next) => {
   try {
-    const limit  = parseInt(req.query.limit as string) || 100;
-    const status = req.query.status as string;
+    const limit  = parseInt(req.query.limit) || 100;
+    const status = req.query.status;
 
     let query = supabase
       .from("fincra_transactions")
@@ -84,7 +84,7 @@ router.get("/transactions", async (req, res, next) => {
     if (error) throw new Error(error.message);
 
     res.json({ success: true, transactions: data || [] });
-  } catch (err: any) {
+  } catch (err) {
     next(err);
   }
 });

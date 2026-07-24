@@ -2,7 +2,9 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import axios from 'axios';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
+import { supabase } from '../lib/supabase';
 import { idbGet, idbSet, STORES } from '../lib/indexedDB';
+
 import toast from 'react-hot-toast';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -149,50 +151,68 @@ export const NotesDashboardProvider: React.FC<{ children: React.ReactNode }> = (
   const fetchDashboardData = useCallback(async () => {
     if (!user) return;
     
-    // Set headers with token
-    const token = localStorage.getItem("token");
+    // Set headers with token from Supabase session or fallback to localStorage
+    let token = localStorage.getItem("token");
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.access_token) {
+        token = data.session.access_token;
+      }
+    } catch {
+      // Fallback to localStorage token
+    }
+
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
     const headers = { Authorization: `Bearer ${token}` };
 
     try {
-      const [
-        layoutRes,
-        statsRes,
-        recentRes,
-        categoriesRes,
-        activityRes,
-        suggestionsRes
-      ] = await Promise.all([
-        axios.get(`${API_URL}/api/dashboard/notes/layout`, { headers }),
-        axios.get(`${API_URL}/api/dashboard/notes/stats`, { headers }),
-        axios.get(`${API_URL}/api/dashboard/notes/recent`, { headers }),
-        axios.get(`${API_URL}/api/dashboard/notes/categories`, { headers }),
-        axios.get(`${API_URL}/api/dashboard/notes/activity`, { headers }),
-        axios.get(`${API_URL}/api/dashboard/notes/suggestions`, { headers })
+      const results = await Promise.allSettled([
+        axios.get(`${API_URL}/api/dashboard/notes/layout`, { headers, timeout: 8000 }),
+        axios.get(`${API_URL}/api/dashboard/notes/stats`, { headers, timeout: 8000 }),
+        axios.get(`${API_URL}/api/dashboard/notes/recent`, { headers, timeout: 8000 }),
+        axios.get(`${API_URL}/api/dashboard/notes/categories`, { headers, timeout: 8000 }),
+        axios.get(`${API_URL}/api/dashboard/notes/activity`, { headers, timeout: 8000 }),
+        axios.get(`${API_URL}/api/dashboard/notes/suggestions`, { headers, timeout: 8000 })
       ]);
 
-      setWidgets(layoutRes.data);
-      setStats(statsRes.data);
-      setRecentNotes(recentRes.data);
-      setCategories(categoriesRes.data);
-      setActivity({ timeline: activityRes.data.timeline, chart: activityRes.data.chart });
-      setSuggestions(suggestionsRes.data.suggestions);
-      setStreak(suggestionsRes.data.streak);
+      const [layoutRes, statsRes, recentRes, categoriesRes, activityRes, suggestionsRes] = results;
 
-      // Save to cache
-      await Promise.all([
-        idbSet(STORES.USER_PREFS, { key: `widgets_${user.id}`, widget: layoutRes.data }),
-        idbSet(STORES.DASHBOARD_STATS, { userId: user.id, ...statsRes.data }),
-        idbSet(STORES.DASHBOARD_RECENT, { userId: user.id, notes: recentRes.data }),
-        idbSet(STORES.DASHBOARD_CATEGORIES, { userId: user.id, categories: categoriesRes.data }),
-        idbSet(STORES.DASHBOARD_ACTIVITY, { userId: user.id, timeline: activityRes.data.timeline, chart: activityRes.data.chart }),
-        idbSet(STORES.DASHBOARD_SUGGESTIONS, { userId: user.id, suggestions: suggestionsRes.data.suggestions, streak: suggestionsRes.data.streak })
-      ]);
+      if (layoutRes.status === 'fulfilled') {
+        setWidgets(layoutRes.value.data);
+        idbSet(STORES.USER_PREFS, { key: `widgets_${user.id}`, widget: layoutRes.value.data }).catch(() => {});
+      }
+      if (statsRes.status === 'fulfilled') {
+        setStats(statsRes.value.data);
+        idbSet(STORES.DASHBOARD_STATS, { userId: user.id, ...statsRes.value.data }).catch(() => {});
+      }
+      if (recentRes.status === 'fulfilled') {
+        setRecentNotes(recentRes.value.data);
+        idbSet(STORES.DASHBOARD_RECENT, { userId: user.id, notes: recentRes.value.data }).catch(() => {});
+      }
+      if (categoriesRes.status === 'fulfilled') {
+        setCategories(categoriesRes.value.data);
+        idbSet(STORES.DASHBOARD_CATEGORIES, { userId: user.id, categories: categoriesRes.value.data }).catch(() => {});
+      }
+      if (activityRes.status === 'fulfilled') {
+        setActivity({ timeline: activityRes.value.data.timeline, chart: activityRes.value.data.chart });
+        idbSet(STORES.DASHBOARD_ACTIVITY, { userId: user.id, timeline: activityRes.value.data.timeline, chart: activityRes.value.data.chart }).catch(() => {});
+      }
+      if (suggestionsRes.status === 'fulfilled') {
+        setSuggestions(suggestionsRes.value.data.suggestions);
+        setStreak(suggestionsRes.value.data.streak);
+        idbSet(STORES.DASHBOARD_SUGGESTIONS, { userId: user.id, suggestions: suggestionsRes.value.data.suggestions, streak: suggestionsRes.value.data.streak }).catch(() => {});
+      }
     } catch (err) {
-      console.error("[DashboardController] Failed to fetch fresh dashboard data:", err);
+      console.warn("[DashboardController] Warning during dashboard fetch:", err);
     } finally {
       setLoading(false);
     }
   }, [user]);
+
 
   // Update layout positions
   const updateWidgetLayout = async (newLayout: DashboardWidget[]) => {

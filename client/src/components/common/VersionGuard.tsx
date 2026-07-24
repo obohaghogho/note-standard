@@ -82,15 +82,21 @@ export const VersionGuard: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       try {
-        const res = await fetch(`${API_URL}/api/version/check?v=${APP_VERSION}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const res = await fetch(`${API_URL}/api/version/check?v=${APP_VERSION}`, {
+          signal: controller.signal,
+          headers: { 'Cache-Control': 'no-cache' }
+        }).finally(() => clearTimeout(timeoutId));
         if (!res.ok) return; // Fail open — don't block the app if version check fails
         const data = await res.json();
         console.log('[VersionGuard] Server response:', data);
         setStatus(data);
       } catch (err) {
-        console.warn('[VersionGuard] Version check failed (non-blocking):', err);
+        console.warn('[VersionGuard] Version check non-blocking warning:', err instanceof Error ? err.message : String(err));
         // Fail open — let users use the app if the server is unreachable
       }
+
     };
 
     checkVersion();

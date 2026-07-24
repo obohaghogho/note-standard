@@ -6,6 +6,7 @@ import React, { createContext, useContext, useState, useCallback, useRef, useEff
 import api from '../api/axiosInstance';
 import toast from 'react-hot-toast';
 import { useSocket } from './SocketContext';
+import { useAuth } from './AuthContext';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export interface StatusItem {
@@ -100,6 +101,7 @@ export const useStatus = () => {
 };
 
 export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
   const [feed, setFeed] = useState<StatusFeedEntry[]>([]);
   const [myStatuses, setMyStatuses] = useState<StatusItem[]>([]);
   const [viewerOpen, setViewerOpen] = useState<ViewerState | null>(null);
@@ -126,6 +128,20 @@ export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       console.error('[Status] My statuses fetch error', err);
     }
   }, []);
+
+  // Auto-fetch/reset when user logs in or out
+  useEffect(() => {
+    // Instantly wipe old session status data to prevent temporary UI leaks while fetching
+    setFeed([]);
+    setMyStatuses([]);
+    setViewerOpen(null);
+    setCreatorOpen(false);
+
+    if (user?.id) {
+      fetchFeed();
+      fetchMyStatuses();
+    }
+  }, [user?.id, fetchFeed, fetchMyStatuses]);
 
   const openViewer = useCallback((userIndex: number, statusIndex = 0) => {
     setViewerOpen({ userIndex, statusIndex });

@@ -1,6 +1,9 @@
+const env = require("./env");
 const { Pool } = require("pg");
 
-if (!process.env.DATABASE_URL) {
+const dbUrl = env.DATABASE_URL || process.env.DATABASE_URL;
+
+if (!dbUrl) {
   console.warn("[pgPool] ⚠️  DATABASE_URL is not set. Direct PostgreSQL queries (dashboard, etc.) will fail gracefully. Add DATABASE_URL to server/.env to enable these features.");
 }
 
@@ -10,11 +13,11 @@ const stubPool = {
   connect: async () => { throw new Error("DATABASE_URL is not configured. Please add it to server/.env."); },
 };
 
-if (!process.env.DATABASE_URL) {
+if (!dbUrl) {
   module.exports = stubPool;
 } else {
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL.replace(":6543", ":5432"),
+    connectionString: dbUrl.replace(":6543", ":5432"),
     ssl: { rejectUnauthorized: false },
     max: 5,
     idleTimeoutMillis: 15000,

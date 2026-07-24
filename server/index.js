@@ -36,6 +36,7 @@ const reconciliationWorker = require("./workers/reconciliationWorker");
 const payoutWorker = require("./workers/payoutWorker");
 const WorkerManager = require("./workers/WorkerManager");
 const notesWorkerManager = require("./workers/notesWorkerManager");
+const nowPaymentsPollingWorker = require("./workers/nowPaymentsPollingWorker");
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
@@ -64,6 +65,7 @@ server.listen(PORT, async () => {
   payoutWorker.start();
   WorkerManager.start();
   notesWorkerManager.start();
+  nowPaymentsPollingWorker.start();
   // ✅ Workers are launched — mark workers ready
   bootManager.setService("workers", true);
   

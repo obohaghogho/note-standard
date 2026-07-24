@@ -16,38 +16,33 @@ const logger = require('../utils/logger');
 const STATUS_EXPIRY_HOURS = parseInt(process.env.STATUS_EXPIRY_HOURS || '24');
 
 // ── Privacy helper ──────────────────────────────────────────────────────────
-async function canViewStatus(status, viewerId) {
+async function canViewStatus(status, viewerId, peerIdsSet = null) {
   if (status.user_id === viewerId) return true;
   if (status.privacy === 'everyone') return true;
   if (status.privacy === 'private') return false;
 
-  // Check if viewer is a contact or shares a conversation with the status owner
-  const { data: contact } = await supabase
-    .from('contacts')
-    .select('id')
-    .eq('user_id', viewerId)
-    .eq('contact_id', status.user_id)
-    .maybeSingle();
+  let isPeer = false;
+  if (peerIdsSet) {
+    isPeer = peerIdsSet.has(status.user_id);
+  } else {
+    // Check if they share a conversation (chat peer)
+    const { data: sharedConv } = await supabase
+      .from('conversation_members')
+      .select('conversation_id')
+      .eq('user_id', viewerId)
+      .in('conversation_id',
+        (await supabase
+          .from('conversation_members')
+          .select('conversation_id')
+          .eq('user_id', status.user_id)
+        ).data?.map(r => r.conversation_id) || []
+      )
+      .limit(1)
+      .maybeSingle();
+    isPeer = !!sharedConv;
+  }
 
-  // Check if they share a conversation (chat peer)
-  const { data: sharedConv } = await supabase
-    .from('conversation_participants')
-    .select('conversation_id')
-    .eq('user_id', viewerId)
-    .in('conversation_id',
-      (await supabase
-        .from('conversation_participants')
-        .select('conversation_id')
-        .eq('user_id', status.user_id)
-      ).data?.map(r => r.conversation_id) || []
-    )
-    .limit(1)
-    .maybeSingle();
-
-  const isContact = !!contact;
-  const isPeer = !!sharedConv;
-
-  if (status.privacy === 'contacts') return isContact || isPeer;
+  if (status.privacy === 'contacts') return isPeer;
 
   const { data: rule } = await supabase
     .from('status_privacy_rules')
@@ -56,7 +51,7 @@ async function canViewStatus(status, viewerId) {
     .eq('user_id', viewerId)
     .maybeSingle();
 
-  if (status.privacy === 'except') return (isContact || isPeer) && !rule;
+  if (status.privacy === 'except') return isPeer && !rule;
   if (status.privacy === 'only') return !!rule;
   return false;
 }
@@ -67,14 +62,9 @@ router.get('/feed', requireAuth, async (req, res) => {
     const viewerId = req.user.id;
     const now = new Date().toISOString();
 
-    // Gather peer user IDs (contacts + conversation peers)
-    const { data: contacts } = await supabase
-      .from('contacts')
-      .select('contact_id')
-      .eq('user_id', viewerId);
-
+    // Gather peer user IDs (conversation peers)
     const { data: myConvs } = await supabase
-      .from('conversation_participants')
+      .from('conversation_members')
       .select('conversation_id')
       .eq('user_id', viewerId);
 
@@ -82,15 +72,14 @@ router.get('/feed', requireAuth, async (req, res) => {
     let peerIds = [];
     if (convIds.length > 0) {
       const { data: peers } = await supabase
-        .from('conversation_participants')
+        .from('conversation_members')
         .select('user_id')
         .in('conversation_id', convIds)
         .neq('user_id', viewerId);
       peerIds = (peers || []).map(r => r.user_id);
     }
 
-    const contactIds = (contacts || []).map(r => r.contact_id);
-    const userIds = [...new Set([viewerId, ...contactIds, ...peerIds])];
+    const userIds = [...new Set([viewerId, ...peerIds])];
 
     // Get muted users
     const { data: mutes } = await supabase
@@ -137,9 +126,10 @@ router.get('/feed', requireAuth, async (req, res) => {
     }
 
     // Group by user, apply privacy filter
+    const peerIdsSet = new Set(peerIds);
     const grouped = {};
     for (const status of (statuses || [])) {
-      if (!await canViewStatus(status, viewerId)) continue;
+      if (!await canViewStatus(status, viewerId, peerIdsSet)) continue;
       const profile = profileMap[status.user_id] || {};
       const uid = status.user_id;
       const isMuted = mutedSet.has(uid);
@@ -158,7 +148,14 @@ router.get('/feed', requireAuth, async (req, res) => {
       }
 
       if (!hasViewed && uid !== viewerId) grouped[uid].has_unviewed = true;
-      grouped[uid].statuses.push({ ...status, has_viewed: hasViewed });
+      const statusPayload = { ...status, has_viewed: hasViewed };
+      if (statusPayload.type !== 'link') {
+        statusPayload.bg_music_url = statusPayload.link_url;
+        statusPayload.bg_music_title = statusPayload.link_title;
+        statusPayload.link_url = null;
+        statusPayload.link_title = null;
+      }
+      grouped[uid].statuses.push(statusPayload);
     }
 
     // Sort: own first, then unviewed, then muted
@@ -170,7 +167,7 @@ router.get('/feed', requireAuth, async (req, res) => {
       return 0;
     });
 
-    res.set('Cache-Control', 'private, max-age=30'); // 30s browser cache
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.json(feed);
   } catch (err) {
     logger.error('[Status] Feed error', { error: err.message });
@@ -224,7 +221,7 @@ router.get('/my', requireAuth, async (req, res) => {
         .eq('status_id', s.id)
         .neq('viewer_id', req.user.id);
 
-      return {
+      const enrichedStatus = {
         ...s,
         has_viewed: viewedSet.has(s.id),
         view_count: count || 0,
@@ -242,6 +239,15 @@ router.get('/my', requireAuth, async (req, res) => {
           emoji: r.emoji,
         })),
       };
+
+      if (enrichedStatus.type !== 'link') {
+        enrichedStatus.bg_music_url = enrichedStatus.link_url;
+        enrichedStatus.bg_music_title = enrichedStatus.link_title;
+        enrichedStatus.link_url = null;
+        enrichedStatus.link_title = null;
+      }
+
+      return enrichedStatus;
     }));
 
     res.json(enriched);
@@ -265,6 +271,7 @@ router.post('/',
         type, content, media_url, media_thumbnail, media_size, media_duration,
         bg_color, bg_gradient, font_style, font_size, text_align,
         link_url, link_title, link_description, link_image,
+        bg_music_url, bg_music_title,
         privacy = 'contacts', privacy_rules = [],
       } = req.body;
 
@@ -274,6 +281,9 @@ router.post('/',
         return res.status(400).json({ error: 'media_url required for this status type' });
 
       const expiresAt = new Date(Date.now() + STATUS_EXPIRY_HOURS * 3600 * 1000).toISOString();
+
+      const finalLinkUrl = type !== 'link' ? (bg_music_url || null) : (link_url || null);
+      const finalLinkTitle = type !== 'link' ? (bg_music_title || null) : (link_title || null);
 
       const { data: status, error } = await supabase
         .from('statuses')
@@ -289,8 +299,8 @@ router.post('/',
           font_style: font_style || 'inter',
           font_size: font_size || 24,
           text_align: text_align || 'center',
-          link_url: link_url || null,
-          link_title: link_title || null,
+          link_url: finalLinkUrl,
+          link_title: finalLinkTitle,
           link_description: link_description || null,
           link_image: link_image || null,
           privacy,
@@ -322,16 +332,23 @@ router.post('/',
         avatar_url: profile?.avatar_url,
       };
 
+      if (realtimePayload.type !== 'link') {
+        realtimePayload.bg_music_url = realtimePayload.link_url;
+        realtimePayload.bg_music_title = realtimePayload.link_title;
+        realtimePayload.link_url = null;
+        realtimePayload.link_title = null;
+      }
+
       // Notify all conversation peers via realtimeService
       const { data: myConvs } = await supabase
-        .from('conversation_participants')
+        .from('conversation_members')
         .select('conversation_id')
         .eq('user_id', req.user.id);
 
       const convIds = (myConvs || []).map(r => r.conversation_id);
       if (convIds.length > 0) {
         const { data: peers } = await supabase
-          .from('conversation_participants')
+          .from('conversation_members')
           .select('user_id')
           .in('conversation_id', convIds)
           .neq('user_id', req.user.id);
@@ -342,7 +359,15 @@ router.post('/',
         }
       }
 
-      res.status(201).json(status);
+      const clientStatus = { ...status };
+      if (clientStatus.type !== 'link') {
+        clientStatus.bg_music_url = clientStatus.link_url;
+        clientStatus.bg_music_title = clientStatus.link_title;
+        clientStatus.link_url = null;
+        clientStatus.link_title = null;
+      }
+
+      res.status(201).json(clientStatus);
     } catch (err) {
       logger.error('[Status] Create error', { error: err.message });
       res.status(500).json({ error: 'Failed to create status' });
@@ -447,13 +472,13 @@ router.post('/:id/reply', requireAuth, async (req, res) => {
 
     // Find or create direct conversation
     const { data: myConvs } = await supabase
-      .from('conversation_participants').select('conversation_id').eq('user_id', req.user.id);
+      .from('conversation_members').select('conversation_id').eq('user_id', req.user.id);
     const myConvIds = (myConvs || []).map(r => r.conversation_id);
 
     let convId = null;
     if (myConvIds.length > 0) {
       const { data: shared } = await supabase
-        .from('conversation_participants')
+        .from('conversation_members')
         .select('conversation_id')
         .in('conversation_id', myConvIds)
         .eq('user_id', status.user_id)
@@ -462,26 +487,61 @@ router.post('/:id/reply', requireAuth, async (req, res) => {
     }
 
     if (!convId) {
-      const { data: newConv } = await supabase
-        .from('conversations').insert({ type: 'direct', created_by: req.user.id }).select('id').single();
+      const { data: newConv, error: newConvError } = await supabase
+        .from('conversations').insert({ type: 'direct' }).select('id').single();
+      if (newConvError) throw newConvError;
+      
       convId = newConv.id;
-      await supabase.from('conversation_participants').insert([
+      const { error: membersError } = await supabase.from('conversation_members').insert([
         { conversation_id: convId, user_id: req.user.id },
         { conversation_id: convId, user_id: status.user_id },
       ]);
+      if (membersError) throw membersError;
     }
 
-    // Send message referencing the status
-    const { data: msg } = await supabase
-      .from('messages')
-      .insert({
-        conversation_id: convId,
-        sender_id: req.user.id,
-        type: 'text',
-        content: content || '',
-        metadata: { status_ref_id: status.id },
+    // Send message referencing the status using RPC to satisfy database check constraints (messages_seq_positive)
+    const crypto = require('crypto');
+    const { data: rpcData, error: rpcError } = await supabase.rpc('rpc_send_message', {
+      p_conversation_id: convId,
+      p_sender_id: req.user.id,
+      p_content: content || '',
+      p_type: 'text',
+      p_event_id: crypto.randomUUID(),
+      p_original_language: 'en',
+      p_attachment_id: null,
+      p_reply_to_id: null
+    });
+
+    if (rpcError) throw rpcError;
+    const msg = rpcData.message;
+
+    // Stamp authoritative last-message pointer on the conversation to update chatlist preview and ordering
+    await supabase
+      .from('conversations')
+      .update({
+        last_message_id: msg.id,
+        last_message_at: msg.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString()
       })
-      .select().single();
+      .eq('id', convId);
+
+    // Hydrate message with sender profile details needed by the chat client
+    const { data: hydratedMessage } = await supabase
+      .from('messages')
+      .select('*, sender:profiles(id, username, full_name, avatar_url)')
+      .eq('id', msg.id)
+      .single();
+
+    // Broadcast the new message via real-time sockets to both participants
+    const { data: members } = await supabase
+      .from('conversation_members')
+      .select('user_id')
+      .eq('conversation_id', convId);
+
+    if (members && members.length > 0) {
+      const userIds = members.map(m => m.user_id);
+      await realtime.emitToUsers(userIds, 'chat:message', hydratedMessage || msg);
+    }
 
     res.status(201).json({ success: true, conversation_id: convId, message_id: msg?.id });
   } catch (err) {

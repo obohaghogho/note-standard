@@ -10,7 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../common/SecureImage';
 import ImageWithSignedUrl from '../common/ImageWithSignedUrl';
 import VideoWithSignedUrl from '../common/VideoWithSignedUrl';
-import { Send, Phone, Video, Paperclip, Smile, Search, MoreHorizontal, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Trash2, Share2, X, Copy, Pencil, MessageCircle, Reply } from 'lucide-react';
+import { Send, Phone, Video, Paperclip, Smile, Search, MoreHorizontal, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Trash2, Share2, X, Copy, Pencil, MessageCircle, Reply, Palette } from 'lucide-react';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { WhatsAppMediaPicker } from './WhatsAppMediaPicker';
 import { VoiceRecorder } from './VoiceRecorder';
@@ -24,7 +24,10 @@ import { ConfirmationModal } from '../common/ConfirmationModal';
 import { applyAutoCorrect } from '../../utils/textUtils';
 import { UserBadge } from '../common/UserBadge';
 import MessageBubble from './MessageBubble';
-// Removed react-virtuoso import
+import { useChatTheme } from '../../context/ChatThemeContext';
+import { ChatWallpaper } from './ChatWallpaper';
+import { ChatThemeSettingsModal } from './ChatThemeSettingsModal';
+import { ThemeGalleryModal } from './ThemeGalleryModal';
 
 const ChatWindow: React.FC = () => {
     const { 
@@ -39,6 +42,7 @@ const ChatWindow: React.FC = () => {
     const { isUserOnline, getUserLastSeen } = usePresence();
     const { user, profile, session, isAdmin } = useAuth();
     const { startCall } = useWebRTC();
+    const { setIsSettingsOpen, setIsGalleryOpen } = useChatTheme();
 
     // ── WhatsApp-Style Selection System ──────────────────────
     const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
@@ -971,6 +975,9 @@ const ChatWindow: React.FC = () => {
                                 <button onClick={() => handleCall('video')} className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-full transition-all flex-shrink-0" aria-label="Video call">
                                     <Video size={18} className="md:w-5 md:h-5" />
                                 </button>
+                                <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-gray-400 hover:text-purple-400 hover:bg-purple-400/10 rounded-full transition-all flex-shrink-0" title="Chat Appearance & Themes">
+                                    <Palette size={18} className="md:w-5 md:h-5" />
+                                </button>
                             </div>
                         )}
                         <div className="relative">
@@ -982,6 +989,10 @@ const ChatWindow: React.FC = () => {
                             </button>
                             {showMoreMenu && (
                                 <div className="absolute top-full right-0 mt-2 w-48 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-50 p-1 animate-in zoom-in-95 duration-200">
+                                    <button onClick={() => { setShowMoreMenu(false); setIsGalleryOpen(true); }} className="w-full text-left px-4 py-2 text-sm text-purple-300 hover:bg-purple-500/20 rounded-lg flex items-center justify-between">
+                                        <span>Theme Gallery</span>
+                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-500/30">NEW</span>
+                                    </button>
                                     <button onClick={handleMuteChat} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 rounded-lg">{activeConversation?.is_muted ? 'Unmute Notifications' : 'Mute Notifications'}</button>
                                     <button onClick={handleClearChat} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 rounded-lg">Clear History</button>
                                     <button onClick={handleDeleteChat} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-400/10 rounded-lg">Delete Chat</button>
@@ -1022,123 +1033,98 @@ const ChatWindow: React.FC = () => {
                         </div>
                     </div>
                 ) : (
-                    <div 
-                        className="chat-messages custom-scrollbar px-3 md:px-6"
-                        ref={(ref) => {
-                            if (ref) scrollContainerRef.current = ref as HTMLDivElement;
-                        }}
-                        onScroll={(e) => {
-                            const target = e.target as HTMLDivElement;
-                            // In column-reverse, scrollTop === 0 is the visual bottom
-                            const isAtBottom = Math.abs(target.scrollTop) < 150;
-                            setShowScrollDown(!isAtBottom);
-                            if (isAtBottom) {
-                                setUnreadCountWhileScrolled(0);
-                            }
-                        }}
-                    >
-                        <div className="flex flex-col gap-1 md:gap-2 mt-auto">
-                            {/* Invisible anchor for IntersectionObserver - Placed at visual bottom (DOM top) */}
-                            <div ref={messagesEndRef} style={{ height: '1px', visibility: 'hidden' }} />
-                            
-                            {activeConversationId && typingUsers[activeConversationId] && typingUsers[activeConversationId].length > 0 && (
-                                <div className="flex justify-start items-center gap-2 mt-2 animate-in fade-in slide-in-from-left-2 w-full">
-                                    <div className="bg-gray-800 rounded-2xl p-3 flex gap-1 border border-gray-700 shadow-lg">
-                                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></div>
-                                    </div>
-                                    <span className="text-[10px] text-gray-500 font-medium italic">
-                                        {typingUsers[activeConversationId]?.join(', ')} {typingUsers[activeConversationId]?.length > 1 ? 'are' : 'is'} typing...
-                                    </span>
-                                </div>
-                            )}
-                        </div>
-
-                        {(() => {
-                            const reversed = [...currentMessages.slice(-100)].reverse();
-                            const getDateLabel = (dateStr: string): string => {
-                                const d = new Date(dateStr);
-                                const today = new Date();
-                                const yesterday = new Date();
-                                yesterday.setDate(today.getDate() - 1);
-                                const toMidnight = (dt: Date) => new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
-                                if (toMidnight(d) === toMidnight(today)) return 'Today';
-                                if (toMidnight(d) === toMidnight(yesterday)) return 'Yesterday';
-                                return d.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-                            };
-                            const isSameDay = (a: string, b: string) => {
-                                const da = new Date(a), db = new Date(b);
-                                return da.getFullYear() === db.getFullYear() && da.getMonth() === db.getMonth() && da.getDate() === db.getDate();
-                            };
-                            const items: React.ReactNode[] = [];
-                            reversed.forEach((msg, index, array) => {
-                                const isGrouped = index < array.length - 1 &&
-                                    array[index].sender_id === array[index + 1].sender_id &&
-                                    isSameDay(array[index].created_at, array[index + 1].created_at) &&
-                                    (new Date(array[index].created_at).getTime() - new Date(array[index + 1].created_at).getTime() < 60000);
-                                const isSelected = selectedMessages.has(msg.id);
-                                // Show date separator when this message is the first of a new day (compared to previous message in the visual list)
-                                const showDateSep = index === 0 || !isSameDay(msg.created_at, array[index - 1].created_at);
-                                if (showDateSep && msg.created_at) {
-                                    items.push(
-                                        <div key={`date-${msg.id}`} className="flex items-center gap-3 my-3 px-2">
-                                            <div className="flex-1 h-px bg-white/10" />
-                                            <span className="text-[10px] font-semibold text-gray-400 bg-gray-800/70 backdrop-blur px-3 py-1 rounded-full border border-white/10 flex-shrink-0 select-none">
-                                                {getDateLabel(msg.created_at)}
-                                            </span>
-                                            <div className="flex-1 h-px bg-white/10" />
-                                        </div>
-                                    );
+                    <ChatWallpaper className="flex-1 min-h-0">
+                        <div 
+                            className="chat-messages custom-scrollbar px-3 md:px-6 h-full overflow-y-auto"
+                            ref={(ref) => {
+                                if (ref) scrollContainerRef.current = ref as HTMLDivElement;
+                            }}
+                            onScroll={(e) => {
+                                const target = e.target as HTMLDivElement;
+                                const isAtBottom = Math.abs(target.scrollTop) < 150;
+                                setShowScrollDown(!isAtBottom);
+                                if (isAtBottom) {
+                                    setUnreadCountWhileScrolled(0);
                                 }
-                                items.push(
-                                    <MessageBubble
-                                        key={msg.id}
-                                        msg={msg}
-                                        isGrouped={isGrouped}
-                                        isSelected={isSelected}
-                                        isSelectionMode={isSelectionMode}
-                                        currentUserId={user?.id}
-                                        translations={translations}
-                                        showOriginal={showOriginal}
-                                        gesture={gesture}
-                                        getSenderName={getSenderName}
-                                        toggleMessageSelection={toggleMessageSelection}
-                                        setShowOriginal={setShowOriginal}
-                                        handleReport={handleReport}
-                                        handleManualTranslate={handleManualTranslate}
-                                        fetchSignedUrl={fetchSignedUrl}
-                                        setPreviewMedia={(data) => setPreviewMedia({ ...data, isOpen: true })}
-                                    />
-                                );
-                            });
-                            return items;
-                        })()}
-
-                        <div className="flex flex-col gap-1 md:gap-2 mb-4">
-                            {activeConversationId && hasMore[activeConversationId] && (
-                                <div className="flex justify-center py-4 bg-transparent relative z-10 w-full flex-shrink-0">
-                                    <button onClick={handleLoadMore} className="text-xs font-medium text-blue-400 hover:text-blue-300 hover:underline">Load older messages</button>
-                                </div>
-                            )}
-                            {isPending && (
-                                <div className="flex flex-col items-center justify-center p-8 bg-gray-800/50 backdrop-blur rounded-2xl my-6 border border-gray-700 shadow-xl w-full">
-                                    <div className="w-16 h-16 rounded-full bg-blue-600/20 flex items-center justify-center mb-4 text-blue-400"><MoreHorizontal size={32} /></div>
-                                    <p className="text-gray-200 mb-6 text-center font-medium">{otherMember ? `${otherMember.profile?.full_name || otherMember.profile?.username} wants to start a conversation with you.` : 'You have been invited to this chat.'}</p>
-                                    <div className="flex gap-4">
-                                        <button onClick={handleAccept} disabled={isAccepting} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg shadow-blue-900/40 disabled:opacity-50 active:scale-95">{isAccepting ? 'Accepting...' : 'Accept Chat Request'}</button>
-                                        <button className="px-6 py-3 text-gray-400 hover:text-white hover:bg-white/5 rounded-xl transition-all font-medium">Decline</button>
+                            }}
+                        >
+                            <div className="flex flex-col gap-1 md:gap-2 mt-auto">
+                                <div ref={messagesEndRef} style={{ height: '1px', visibility: 'hidden' }} />
+                                
+                                {activeConversationId && typingUsers[activeConversationId] && typingUsers[activeConversationId].length > 0 && (
+                                    <div className="flex justify-start items-center gap-2 mt-2 animate-in fade-in slide-in-from-left-2 w-full">
+                                        <div className="bg-gray-800/90 backdrop-blur rounded-2xl p-3 flex gap-1 border border-gray-700 shadow-lg">
+                                            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                                            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                                            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></div>
+                                        </div>
+                                        <span className="text-[10px] text-gray-500 font-medium italic">
+                                            {typingUsers[activeConversationId]?.join(', ')} {typingUsers[activeConversationId]?.length > 1 ? 'are' : 'is'} typing...
+                                        </span>
                                     </div>
-                                </div>
-                            )}
-                            {isWaitingForOthers && (
-                                <div className="text-center p-6 bg-gray-800/30 rounded-xl my-4 w-full">
-                                    <Loader2 className="animate-spin text-blue-500 mx-auto mb-2" size={20} />
-                                    <p className="text-sm text-gray-400 italic font-medium">Waiting for acceptance...</p>
-                                </div>
-                            )}
+                                )}
+
+                                {(() => {
+                                    const reversed = [...currentMessages.slice(-100)].reverse();
+                                    const getDateLabel = (dateStr: string): string => {
+                                        const d = new Date(dateStr);
+                                        const today = new Date();
+                                        const yesterday = new Date();
+                                        yesterday.setDate(today.getDate() - 1);
+                                        const toMidnight = (dt: Date) => new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
+                                        if (toMidnight(d) === toMidnight(today)) return 'Today';
+                                        if (toMidnight(d) === toMidnight(yesterday)) return 'Yesterday';
+                                        return d.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                                    };
+                                    const isSameDay = (a: string, b: string) => {
+                                        const da = new Date(a), db = new Date(b);
+                                        return da.getFullYear() === db.getFullYear() && da.getMonth() === db.getMonth() && da.getDate() === db.getDate();
+                                    };
+                                    const items: React.ReactNode[] = [];
+                                    reversed.forEach((msg, index, array) => {
+                                        const isGrouped = index < array.length - 1 &&
+                                            array[index].sender_id === array[index + 1].sender_id &&
+                                            isSameDay(array[index].created_at, array[index + 1].created_at) &&
+                                            (new Date(array[index].created_at).getTime() - new Date(array[index + 1].created_at).getTime() < 60000);
+                                        const isSelected = selectedMessages.has(msg.id);
+                                        const showDateSep = index === 0 || !isSameDay(msg.created_at, array[index - 1].created_at);
+                                        if (showDateSep && msg.created_at) {
+                                            items.push(
+                                                <div key={`date-${msg.id}`} className="flex items-center gap-3 my-3 px-2">
+                                                    <div className="flex-1 h-px bg-white/10" />
+                                                    <span className="text-[10px] font-semibold text-gray-400 bg-gray-800/70 backdrop-blur px-3 py-1 rounded-full border border-white/10 flex-shrink-0 select-none">
+                                                        {getDateLabel(msg.created_at)}
+                                                    </span>
+                                                    <div className="flex-1 h-px bg-white/10" />
+                                                </div>
+                                            );
+                                        }
+                                        items.push(
+                                            <MessageBubble
+                                                key={msg.id}
+                                                msg={msg}
+                                                isGrouped={isGrouped}
+                                                isSelected={isSelected}
+                                                isSelectionMode={isSelectionMode}
+                                                currentUserId={user?.id}
+                                                translations={translations}
+                                                showOriginal={showOriginal}
+                                                gesture={gesture}
+                                                getSenderName={getSenderName}
+                                                toggleMessageSelection={toggleMessageSelection}
+                                                setShowOriginal={setShowOriginal}
+                                                handleReport={handleReport}
+                                                handleManualTranslate={handleManualTranslate}
+                                                fetchSignedUrl={fetchSignedUrl}
+                                                setPreviewMedia={(data) => setPreviewMedia({ ...data, isOpen: true })}
+                                            />
+                                        );
+                                    });
+                                    return items;
+                                })()}
+                            </div>
                         </div>
-                    </div>
+                    </ChatWallpaper>
                 )}
 
             {showScrollDown && (
@@ -1467,6 +1453,9 @@ const ChatWindow: React.FC = () => {
                     }
                 }}
             />
+            {/* Theme Settings & Gallery Modals */}
+            <ChatThemeSettingsModal />
+            <ThemeGalleryModal />
         </div>
     );
 };

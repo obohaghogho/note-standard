@@ -73,6 +73,37 @@ function getNotificationPreview(type, content) {
   }
 }
 
+function deduplicateDirectConversations(conversations, currentUserId) {
+  if (!Array.isArray(conversations) || conversations.length === 0) return conversations;
+
+  const seenDirectPeerIds = new Set();
+  const result = [];
+
+  const sorted = [...conversations].sort((a, b) => {
+    const timeA = new Date(a.last_message_at || a.last_message?.created_at || a.updated_at || a.created_at || 0).getTime();
+    const timeB = new Date(b.last_message_at || b.last_message?.created_at || b.updated_at || b.created_at || 0).getTime();
+    return timeB - timeA;
+  });
+
+  for (const conv of sorted) {
+    if (conv.type === "direct") {
+      const members = conv.members || [];
+      const otherMember = members.find(m => (m.user_id || m.profile?.id) !== currentUserId);
+      const peerId = otherMember?.user_id || otherMember?.profile?.id;
+
+      if (peerId) {
+        if (seenDirectPeerIds.has(peerId)) {
+          continue;
+        }
+        seenDirectPeerIds.add(peerId);
+      }
+    }
+    result.push(conv);
+  }
+
+  return result;
+}
+
 // --- Conversations ---
 
 exports.getConversations = async (req, res) => {
@@ -108,6 +139,9 @@ exports.getConversations = async (req, res) => {
         }
         return true;
       });
+
+      // Deduplicate direct conversations by peer user ID
+      conversations = deduplicateDirectConversations(conversations, userId);
 
       console.log(`[Chat RPC] getConversations: ${conversations.length} convs in ${Date.now() - t0}ms`);
       return res.json(conversations);
@@ -243,7 +277,10 @@ exports.getConversations = async (req, res) => {
       return true;
     });
 
-    res.json(visible);
+    // Deduplicate direct conversations by peer user ID
+    const deduplicated = deduplicateDirectConversations(visible, userId);
+
+    res.json(deduplicated);
   } catch (err) {
     console.error("[Chat] getConversations Critical Error:", err.message, err.stack);
     res.status(500).json({ error: "Internal Server Error", details: err.message });
@@ -502,7 +539,15 @@ exports.createConversation = async (req, res) => {
       return res.status(404).json({ error: "No valid participants found" });
     }
 
-    const participantIds = finalProfiles.map((p) => p.id);
+    const participantIds = finalProfiles.map((p) => p.id).filter(id => id !== userId);
+
+    if (type === "direct" && participantIds.length === 0) {
+      return res.status(400).json({ error: "You cannot start a direct chat with yourself." });
+    }
+
+    if (type === "group" && participantIds.length === 0) {
+      return res.status(400).json({ error: "Group chats require at least one other participant." });
+    }
 
     // 2. Check for existing direct conversation
     if (type === "direct" && participantIds.length === 1) {
@@ -529,9 +574,10 @@ exports.createConversation = async (req, res) => {
           const finalConvIds = commonMemberships.map(m => m.conversation_id);
           const { data: existingConvs } = await supabase
             .from("conversations")
-            .select("id, type")
+            .select("id, type, updated_at")
             .in("id", finalConvIds)
-            .eq("type", "direct");
+            .eq("type", "direct")
+            .order("updated_at", { ascending: false });
 
           if (existingConvs && existingConvs.length > 0) {
             const existingId = existingConvs[0].id;
@@ -542,6 +588,7 @@ exports.createConversation = async (req, res) => {
               .eq("id", existingId)
               .single();
 
+            // Fetch members
             const { data: members } = await supabase
               .from("conversation_members")
               .select(`
@@ -550,8 +597,52 @@ exports.createConversation = async (req, res) => {
               `)
               .eq("conversation_id", existingId);
 
+            const memberList = members || [];
+
+            // Reset cleared_at to null for the current user so it appears in their sidebar again
+            await supabase
+              .from("conversation_members")
+              .update({ cleared_at: null })
+              .eq("conversation_id", existingId)
+              .eq("user_id", userId);
+
+            // Auto-accept if the initiator's current status is pending
+            const myMembership = memberList.find(m => m.user_id === userId);
+            if (myMembership && myMembership.status === 'pending') {
+              await supabase
+                .from("conversation_members")
+                .update({ status: 'accepted' })
+                .eq("conversation_id", existingId)
+                .eq("user_id", userId);
+              
+              myMembership.status = 'accepted';
+
+              // Notify the other user B
+              try {
+                const otherMember = memberList.find(m => m.user_id !== userId);
+                if (otherMember) {
+                  const { data: accepter } = await supabase.from("profiles").select("username").eq("id", userId).single();
+                  await createNotification({
+                    receiverId: otherMember.user_id,
+                    senderId: userId,
+                    type: "chat_accepted",
+                    title: "Chat Request Accepted",
+                    message: `${accepter?.username || "Someone"} accepted your chat request!`,
+                    link: `/dashboard/chat?id=${existingId}`,
+                  });
+                  await realtime.emitToUser(otherMember.user_id, "chat:conversation_updated", {
+                    conversationId: existingId,
+                    userId,
+                    status: "accepted"
+                  });
+                }
+              } catch (e) {
+                console.warn("[Chat] Accept notification/socket failed in createConversation fallback:", e.message);
+              }
+            }
+
             return res.json({
-              conversation: { ...conv, members: members || [] },
+              conversation: { ...conv, members: memberList },
               isExisting: true
             });
           }
@@ -706,6 +797,12 @@ exports.acceptConversation = async (req, res) => {
           await realtime.emitToUser(m.user_id, "chat:conversation_updated", { conversationId, userId, status: "accepted" });
         }
       }
+      // Broadcast to room so any open chat window unlocks instantly without refresh
+      await realtime.emitToConversation(conversationId, "chat:conversation_updated", {
+        conversationId,
+        userId,
+        status: "accepted",
+      });
     } catch (notifErr) {
       console.warn("[Chat] Notification failure in acceptConversation:", notifErr.message);
     }
@@ -716,6 +813,7 @@ exports.acceptConversation = async (req, res) => {
       userId,
       status: "accepted",
     });
+
 
     res.json({ success: true, member: updatedMember });
   } catch (err) {
@@ -1222,12 +1320,39 @@ exports.sendMessage = async (req, res) => {
       }
     }
 
+    // AUTO-ACCEPT: If the sender's membership status is currently 'pending', sending a message
+    // automatically accepts the conversation request and updates status to 'accepted'.
+    const currentMember = members.find(m => m.user_id === userId);
+    if (currentMember && currentMember.status === "pending") {
+      logger.info("[Chat] Auto-accepting pending request on message send", { conversationId, userId });
+      await supabase
+        .from("conversation_members")
+        .update({ status: "accepted" })
+        .eq("conversation_id", conversationId)
+        .eq("user_id", userId);
+
+      currentMember.status = "accepted";
+
+      // Emit status updates to both conversation room and individual user channels
+      realtime.emitToConversation(conversationId, "chat:conversation_updated", {
+        conversationId,
+        userId,
+        status: "accepted"
+      });
+      realtime.emitToUser(userId, "chat:conversation_updated", {
+        conversationId,
+        userId,
+        status: "accepted"
+      });
+    }
+
     logger.debug("Validation passed [Stage 2]", {
       correlationId: req.correlationId,
       userId,
       conversationId,
       durationMs: Date.now() - startTimeMs
     });
+
 
     // Analysis: Sentiment (if text)
     let sentiment = null;

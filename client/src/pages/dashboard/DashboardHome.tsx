@@ -113,17 +113,24 @@ export default function DashboardHome() {
         const fetchTrends = async () => {
             try {
                 const api = (await import('../../api/axiosInstance')).default;
-                const response = await api.get('/analytics');
+                const response = await api.get('/analytics', { timeout: 5000 });
                 if (Array.isArray(response.data) && response.data.length > 0) {
                     const sorted = [...response.data].sort((a, b) => a.date.localeCompare(b.date));
                     setTrendData(sorted);
+                } else if (response.data && typeof response.data === 'object' && response.data.date) {
+                    setTrendData([{
+                        date: response.data.date,
+                        active_users: response.data.total_active_users || 1,
+                        notes_created: response.data.total_notes_created || 0
+                    }]);
                 }
             } catch (err) {
-                console.error('[Dashboard] Failed to fetch trends:', err);
+                console.warn('[Dashboard] Trend fetch fallback active');
             }
         };
         fetchTrends();
     }, [user]);
+
 
     const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
 

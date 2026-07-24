@@ -90,7 +90,12 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
 
     const isMounted = useRef(true);
     const notificationsFetchRef = useRef(false);
+    // ─── Subscription mutex (single-flight lock) ────────────────────────────────
+    // Prevents concurrent subscription attempts from visibilitychange + focus +
+    // login + periodic check all firing simultaneously.
     const pushSubscribeRef = useRef(false);
+    const pushSubscribePromise = useRef<Promise<void> | null>(null);
+    const periodicCheckTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const unreadCount = notifications.filter(n => !n.is_read).length;
 
@@ -109,8 +114,9 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                 if (isMounted.current) setNotifications(data);
             }
         } catch (err) {
-            console.error('[Notifications] Fetch failed:', err);
+            console.warn('[Notifications] Fetch warning (server initializing):', err instanceof Error ? err.message : String(err));
         } finally {
+
             if (isMounted.current) setLoading(false);
             notificationsFetchRef.current = false;
         }
@@ -129,136 +135,239 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         return outputArray;
     };
 
-    const subscribeToPush = useCallback(async () => {
-        // Rule 7 & 12: Remove profile identity check. Respect isSwitching.
-        if (!session || isSwitching || pushSubscribeRef.current) return;
+    // ─── Core subscribe implementation (called by all recovery paths) ──────────
+    const _doSubscribe = useCallback(async (reason: string): Promise<void> => {
+        if (!session || isSwitching) return;
         if (!('serviceWorker' in navigator && 'PushManager' in window)) {
-            // iOS Safari in browser (non-installed) does NOT support Web Push.
-            // We rely on the IOSInstallPrompt component to guide users to install the PWA.
-            console.warn('[Notifications] Push NOT supported — user may need to install the PWA');
+            console.warn(`[PushRecovery][${reason}] Push NOT supported — user may need to install the PWA`);
             return;
         }
-        
-        // Detect iOS running as installed PWA (navigator.standalone === true)
+
         const isIOSPWA = (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
-        if (isIOSPWA) {
-            console.log('[Notifications] Running as iOS PWA — Web Push is supported on this device');
+        const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+
+        console.log(`[PushRecovery][${reason}] Starting. permission=${Notification.permission} isIOSPWA=${isIOSPWA}`);
+
+        if (!vapidKey) {
+            console.error(`[PushRecovery][${reason}] ❌ Missing VITE_VAPID_PUBLIC_KEY — cannot subscribe`);
+            return;
         }
-        
-        pushSubscribeRef.current = true;
-        try {
-            const registration = await navigator.serviceWorker.ready;
-            const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
-            if (!vapidKey) {
-                console.error('[Notifications] Missing VITE_VAPID_PUBLIC_KEY');
+
+        // ── Step 1: Wait for Service Worker with retry ──────────────────────────
+        // SW may still be installing when this runs. We wait with exponential backoff.
+        let registration: ServiceWorkerRegistration | null = null;
+        const swDelays = [0, 2000, 5000, 10000];
+        for (const delay of swDelays) {
+            if (delay > 0) {
+                console.log(`[PushRecovery][${reason}] SW not ready — retrying in ${delay}ms...`);
+                await new Promise(r => setTimeout(r, delay));
+            }
+            try {
+                // navigator.serviceWorker.ready resolves when SW is active
+                // We use a race with a timeout so we don't block forever
+                registration = await Promise.race([
+                    navigator.serviceWorker.ready,
+                    new Promise<never>((_, reject) => setTimeout(() => reject(new Error('SW ready timeout')), 8000))
+                ]) as ServiceWorkerRegistration;
+                console.log(`[PushRecovery][${reason}] ✅ SW ready. scope=${registration.scope}`);
+                break;
+            } catch {
+                registration = null;
+                console.warn(`[PushRecovery][${reason}] SW not ready (attempt ${swDelays.indexOf(delay) + 1}/${swDelays.length})`);
+            }
+        }
+
+        if (!registration) {
+            console.error(`[PushRecovery][${reason}] ❌ Service Worker never became ready after all retries. Aborting.`);
+            return;
+        }
+
+        // ── Step 2: Check + validate existing subscription ──────────────────────
+        let subscription = await registration.pushManager.getSubscription();
+        console.log(`[PushRecovery][${reason}] Existing subscription: ${subscription ? subscription.endpoint.slice(0, 40) + '...' : 'none'}`);
+
+        if (subscription) {
+            // VAPID key validation: if subscription was created with a different key
+            // it will always return 403. Unsubscribe and create fresh.
+            const existingKey = subscription.options?.applicationServerKey;
+            if (existingKey) {
+                const existingKeyB64 = btoa(String.fromCharCode(...new Uint8Array(existingKey)));
+                const normalizedExisting = existingKeyB64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+                const normalizedCurrent = vapidKey.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+                if (normalizedExisting !== normalizedCurrent) {
+                    console.warn(`[PushRecovery][${reason}] ⚠️ VAPID key MISMATCH — unsubscribing stale subscription and re-registering.`);
+                    await subscription.unsubscribe();
+                    subscription = null;
+                } else {
+                    console.log(`[PushRecovery][${reason}] ✅ VAPID key matches current server key.`);
+                }
+            }
+        }
+
+        // ── Step 3: Create new subscription if missing ───────────────────────────
+        if (!subscription) {
+            if (Notification.permission !== 'granted') {
+                console.log(`[PushRecovery][${reason}] Permission not granted (${Notification.permission}). Skipping auto-subscribe.`);
                 return;
             }
-
-            // Check for existing subscription first
-            let subscription = await registration.pushManager.getSubscription();
-            
-            if (subscription) {
-                // VAPID key validation: check if the existing subscription was created
-                // with the current VAPID key. If not, it will always return 403 from
-                // the push server, so we must unsubscribe and create a fresh one.
-                const existingKey = subscription.options?.applicationServerKey;
-                if (existingKey) {
-                    const existingKeyB64 = btoa(String.fromCharCode(...new Uint8Array(existingKey)));
-                    const normalizedExisting = existingKeyB64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-                    const normalizedCurrent = vapidKey.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-                    if (normalizedExisting !== normalizedCurrent) {
-                        console.warn('[Notifications] VAPID key mismatch detected — unsubscribing stale subscription and re-registering.');
-                        await subscription.unsubscribe();
-                        subscription = null;
-                    }
-                }
-            }
-
-            if (!subscription) {
-                // We MUST NOT request permission automatically on load, especially on iOS.
-                // iOS strictly requires Notification.requestPermission() to be called from a direct user gesture (e.g., button click).
-                if (Notification.permission !== 'granted') {
-                    console.log('[Notifications] Push permission not granted. Skipping automatic subscription.');
-                    return;
-                }
-
+            try {
                 subscription = await registration.pushManager.subscribe({
                     userVisibleOnly: true,
                     applicationServerKey: urlBase64ToUint8Array(vapidKey)
                 });
-                console.log('[Notifications] ✅ Created fresh push subscription with current VAPID key.');
+                console.log(`[PushRecovery][${reason}] ✅ Created fresh push subscription.`);
+            } catch (subErr) {
+                console.error(`[PushRecovery][${reason}] ❌ pushManager.subscribe() failed:`, subErr);
+                return;
             }
+        }
 
-            console.log('[Notifications] Syncing push subscription with backend...');
-            const deviceId = await getDeviceId();
-            const { device_name, platform } = getDeviceMetadata();
+        // ── Step 4: Sync with backend ────────────────────────────────────────────
+        const deviceId = await getDeviceId();
+        const { device_name, platform } = getDeviceMetadata();
+        console.log(`[PushRecovery][${reason}] Syncing with backend. deviceId=${deviceId} platform=${platform}`);
 
-            await fetch(`${API_URL}/api/notifications/subscribe`, {
+        try {
+            const subRes = await fetch(`${API_URL}/api/notifications/subscribe`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${session.access_token}`
                 },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     subscription,
-                    vapidKeyVersion: import.meta.env.VITE_VAPID_PUBLIC_KEY,
+                    vapidKeyVersion: vapidKey,
                     deviceId,
                     deviceName: device_name,
                     platform
                 })
             });
+            console.log(`[PushRecovery][${reason}] Backend /subscribe → HTTP ${subRes.status}`);
+        } catch (err) {
+            console.warn(`[PushRecovery][${reason}] /subscribe non-fatal warning (server initializing):`, err instanceof Error ? err.message : String(err));
+        }
 
-            console.log('[Notifications] Cleaning up stale endpoints for this device...');
-            await fetch(`${API_URL}/api/notifications/sync-endpoint`, {
+
+        // ── Step 5: Clean up stale endpoints on this device ────────────────────
+        try {
+            const syncRes = await fetch(`${API_URL}/api/notifications/sync-endpoint`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${session.access_token}`
                 },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     currentEndpoint: subscription.endpoint,
                     deviceId
                 })
             });
-
-            if (isIOSPWA) {
-                console.log('[Notifications] ✅ iOS PWA push subscription registered successfully');
-            }
-
+            console.log(`[PushRecovery][${reason}] Backend /sync-endpoint → HTTP ${syncRes.status}`);
         } catch (err) {
-            console.error('[Notifications] Push subscription failed:', err);
-        } finally {
-            pushSubscribeRef.current = false;
+            console.warn(`[PushRecovery][${reason}] /sync-endpoint failed (non-fatal):`, err);
         }
+
+        if (isIOSPWA) console.log(`[PushRecovery][${reason}] ✅ iOS PWA push subscription registered successfully`);
+        console.log(`[PushRecovery][${reason}] ✅ Subscription recovery complete.`);
     }, [session, isSwitching]);
 
+    // ─── Public subscribeToPush with mutex (single-flight lock) ────────────────
+    // Multiple triggers (login + focus + visibility + periodic) may fire within
+    // milliseconds of each other. The mutex ensures only one attempt runs at a time.
+    const subscribeToPush = useCallback(async (reason = 'MANUAL') => {
+        if (!session || isSwitching) return;
+        // If a subscription attempt is already in flight, wait for it rather than
+        // launching a duplicate.
+        if (pushSubscribePromise.current) {
+            console.log(`[PushRecovery][${reason}] Subscription already in progress — waiting for existing attempt.`);
+            return pushSubscribePromise.current;
+        }
+        pushSubscribeRef.current = true;
+        const attempt = _doSubscribe(reason).finally(() => {
+            pushSubscribeRef.current = false;
+            pushSubscribePromise.current = null;
+        });
+        pushSubscribePromise.current = attempt;
+        return attempt;
+    }, [session, isSwitching, _doSubscribe]);
 
-    // Initial Fetch / Identity Switch Reset
+
+    // ─── Initial Fetch / Identity Switch Reset ──────────────────────────────────
     useEffect(() => {
         if (!authReady) return;
 
         isMounted.current = true;
         
         if (session && user) {
-            console.log(`[Notifications] Identity change or initial load detect: ${user.id}`);
-            
-            // Clear old data to prevent identity leaks
+            console.log(`[Notifications] Identity change or initial load: ${user.id}`);
             setNotifications([]);
             setLoading(true);
-            
             fetchNotifications();
-            subscribeToPush();
+            subscribeToPush('AUTH_CHANGE');
         } else if (!session) {
             setNotifications([]);
             setLoading(false);
         }
 
         return () => { 
-            isMounted.current = false; 
+            isMounted.current = false;
         };
-    // NOTE: Intentionally excluded `session` and callbacks to prevent token-refresh loops.
+    // NOTE: Intentionally excludes `session` and callbacks to prevent token-refresh loops.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [authReady, user?.id]);
+
+    // ─── Auto-recovery: visibilitychange + focus ─────────────────────────────────
+    // Fires subscribeToPush whenever the user returns to the app, covering:
+    //   • tab switch back
+    //   • phone unlock / foreground return
+    //   • desktop window focus
+    //   • PWA reinstall (full page load triggers both authReady and visibilitychange)
+    useEffect(() => {
+        if (!session || !user) return;
+
+        const onVisible = () => {
+            if (document.visibilityState === 'visible') {
+                console.log('[PushRecovery] visibilitychange → visible, triggering recovery');
+                subscribeToPush('VISIBILITY_CHANGE');
+            }
+        };
+        const onFocus = () => {
+            console.log('[PushRecovery] window focus, triggering recovery');
+            subscribeToPush('WINDOW_FOCUS');
+        };
+
+        document.addEventListener('visibilitychange', onVisible);
+        window.addEventListener('focus', onFocus);
+        return () => {
+            document.removeEventListener('visibilitychange', onVisible);
+            window.removeEventListener('focus', onFocus);
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [session, user?.id]);
+
+    // ─── Periodic subscription health check (every 6 hours) ─────────────────────
+    // Keeps long-lived sessions healthy. Verifies that the subscription still
+    // exists and is synced with the backend even if the user never refreshes.
+    useEffect(() => {
+        if (!session || !user) return;
+
+        const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+
+        // Clear any existing timer before setting a new one
+        if (periodicCheckTimer.current) clearInterval(periodicCheckTimer.current);
+
+        periodicCheckTimer.current = setInterval(() => {
+            console.log('[PushRecovery] Periodic 6-hour subscription health check triggered.');
+            subscribeToPush('PERIODIC_6H');
+        }, SIX_HOURS_MS);
+
+        return () => {
+            if (periodicCheckTimer.current) {
+                clearInterval(periodicCheckTimer.current);
+                periodicCheckTimer.current = null;
+            }
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [session, user?.id]);
 
     const markAsRead = useCallback(async (id: string) => {
         if (!session) return;
@@ -440,7 +549,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         clearState();
         await Promise.all([
             fetchNotifications(),
-            subscribeToPush()
+            subscribeToPush('REINITIALIZE')
         ]);
         console.log(`[ACCOUNT_FORENSIC] NOTIFICATIONS_READY - Notifications ready at ${Date.now()}`);
     }, [clearState, fetchNotifications, subscribeToPush]);

@@ -20,10 +20,13 @@ router.get("/stats", adminController.getStats);
 router.get("/analytics/detailed", adminController.getStats);
 router.get("/me", adminController.getAdminProfile);
 
-// Push Health Dashboard
-const { getPushHealth, getMessagingMetrics } = require(path.join(__dirname, '..', 'controllers', 'pushHealthController'));
+// Push Health & Communication Subsystem Health Dashboard
+const { getPushHealth, getMessagingMetrics, sendTestPush } = require(path.join(__dirname, '..', 'controllers', 'pushHealthController'));
 router.get("/push-health", getPushHealth);
 router.get("/messaging-metrics", getMessagingMetrics);
+router.get("/communication-health", adminController.getCommunicationHealth);
+router.post("/push-health/test-push/:userId", sendTestPush);
+
 
 
 // User Management

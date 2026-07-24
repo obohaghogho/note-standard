@@ -4,9 +4,18 @@
  * Tracks users online status via Memory AND Supabase Database.
  */
 const { createClient } = require('@supabase/supabase-js');
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Lazy supabase getter — avoids crash-on-load when env vars not yet available
+let _supabase = null;
+function getSupabase() {
+  if (!_supabase) {
+    const url = process.env.SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !key) return null;
+    _supabase = createClient(url, key);
+  }
+  return _supabase;
+}
 
 // Map<userId, Set<socketId>>
 const onlineUsers = new Map();
@@ -82,8 +91,14 @@ module.exports = (io, socket) => {
       const onlineIds = getOnlineUserIds().filter(id => userVisibility.get(id) !== false);
       socket.emit('presence:initial', onlineIds);
 
+      const sb = getSupabase();
+      if (!sb) {
+        markUserOnline(userId, socket.id, socket.deviceId);
+        return;
+      }
+
       // Fetch this connected user's visibility setting
-      const { data } = await supabase
+      const { data } = await sb
         .from('profiles')
         .select('show_online_status, last_seen')
         .eq('id', userId)
@@ -95,24 +110,36 @@ module.exports = (io, socket) => {
       const wasAlreadyOnline = onlineUsers.has(userId) && onlineUsers.get(userId).size > 0;
       markUserOnline(userId, socket.id, socket.deviceId);
 
-      // If they are visible and just came online, broadcast
-      if (isVisible && !wasAlreadyOnline) {
-        console.log(`[Presence] ✓ ${userId} is now ONLINE (Visible: true)`);
-        console.log(`[FORENSIC][GW] PRESENCE_ONLINE | socket_id:${socket.id} | user_id:${userId} | ts:${Date.now()}`);
-        socket.broadcast.emit('user_online', {
-          userId,
-          online: true,
-          lastSeen: null
-        });
-        
-        // Update DB last_seen to now since they just logged in
-        await supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', userId);
-      } else if (!isVisible) {
+      // If they are visible, update DB last_seen and is_online, and broadcast online
+      if (isVisible) {
+        // Sync is_online to true
+        await sb.from('profiles').update({ 
+          last_seen: new Date().toISOString(),
+          is_online: true
+        }).eq('id', userId);
+
+        if (!wasAlreadyOnline) {
+          console.log(`[Presence] ✓ ${userId} is now ONLINE (Visible: true)`);
+          console.log(`[FORENSIC][GW] PRESENCE_ONLINE | socket_id:${socket.id} | user_id:${userId} | ts:${Date.now()}`);
+          socket.broadcast.emit('user_online', {
+            userId,
+            online: true,
+            lastSeen: null
+          });
+        }
+      } else {
         console.log(`[Presence] ✓ ${userId} connected but is HIDDEN`);
+        // Sync is_online to false since they want to be offline/hidden
+        await sb.from('profiles').update({ is_online: false }).eq('id', userId);
       }
     } catch (err) {
       console.error('[Presence] DB Init Error:', err.message);
-      markUserOnline(userId, socket.id);
+      markUserOnline(userId, socket.id, socket.deviceId);
+      // Fallback update — guard against missing client
+      const sb = getSupabase();
+      if (sb) {
+        sb.from('profiles').update({ is_online: true }).eq('id', userId).then(() => {}).catch(() => {});
+      }
     }
   };
 
@@ -126,6 +153,11 @@ module.exports = (io, socket) => {
 
     if (!wasOnline && isVisible) {
       console.log(`[Presence] ↑ ${userId} heartbeat — back ONLINE`);
+      // Update is_online in database
+      const sb = getSupabase();
+      if (sb) {
+        sb.from('profiles').update({ is_online: true }).eq('id', userId).then(() => {}).catch(() => {});
+      }
       socket.broadcast.emit('user_online', { userId, online: true, lastSeen: null });
     }
   });
@@ -135,11 +167,20 @@ module.exports = (io, socket) => {
     userVisibility.set(userId, show_online_status);
     console.log(`[Presence] ⚙️ ${userId} visibility changed to ${show_online_status}`);
     
+    // Update DB
+    const sb = getSupabase();
+    if (sb) {
+      sb.from('profiles')
+        .update({ is_online: show_online_status })
+        .eq('id', userId)
+        .then(() => {}).catch(err => console.error('[Presence] DB Settings Update Error:', err.message));
+    }
+
     // Broadcast immediately so clients update without waiting for disconnect
     io.emit('user_online', {
       userId,
       online: show_online_status,
-      lastSeen: new Date().toISOString() // Show them as offline starting now
+      lastSeen: new Date().toISOString()
     });
   });
 
@@ -148,12 +189,18 @@ module.exports = (io, socket) => {
     if (wentOffline) {
       console.log(`[Presence] ✗ ${userId} ${reason} — now OFFLINE`);
       
-      // Update DB with the exact disconnect time
-      supabase.from('profiles')
-        .update({ last_seen: lastSeen })
-        .eq('id', userId)
-        .then(() => console.log(`[Presence] DB updated last_seen for ${userId}`))
-        .catch(err => console.error('[Presence] DB Update Error:', err.message));
+      // Update DB with the exact disconnect time and set is_online to false
+      const sb = getSupabase();
+      if (sb) {
+        sb.from('profiles')
+          .update({ 
+            last_seen: lastSeen,
+            is_online: false
+          })
+          .eq('id', userId)
+          .then(() => console.log(`[Presence] DB updated last_seen and is_online for ${userId}`))
+          .catch(err => console.error('[Presence] DB Update Error:', err.message));
+      }
 
       // Broadcast offline
       io.emit('user_online', { userId, online: false, lastSeen });

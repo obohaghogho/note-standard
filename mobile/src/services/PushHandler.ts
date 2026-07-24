@@ -65,7 +65,7 @@ export class PushHandler {
       this.setupVoIP();
     }
 
-    if (finalStatus === 'granted') {
+    if (finalStatus === 'granted' || Platform.OS === 'android') {
       this.registerDeviceToken().catch(err => {
         console.warn('[PushHandler] Graceful initial register Device Token fail:', err);
       });

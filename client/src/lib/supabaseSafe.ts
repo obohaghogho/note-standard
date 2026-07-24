@@ -265,7 +265,7 @@ export async function safeAuth(): Promise<Session | null> {
     const { data, error } = await supabase.auth.getSession();
     if (error) throw error;
     return data.session;
-  }, { minDelay: 100, retries: 1, timeout: 10000 }); // More resilient timeout for auth
+  }, { minDelay: 0, retries: 0, timeout: 3000 }); // Fast 3s timeout, no artificial delay
 }
 
 // --------------------------

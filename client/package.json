@@ -1,12 +1,12 @@
 {
   "name": "client",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.2",
   "type": "module",
   "scripts": {
     "start": "vite preview",
     "dev": "vite --host",
-    "build": "node ../scripts/verify-apple-local.js && vite build",
+    "build": "node verify-pay.js && vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -54,21 +54,21 @@
     "tailwindcss": "^4.2.1",
     "typescript": "~5.9.3",
     "uuid": "^13.0.0",
-    "zustand": "^5.0.9"
-  },
-  "devDependencies": {
-    "@babel/core": "^7.29.0",
-    "@playwright/test": "^1.61.1",
+    "zustand": "^5.0.9",
     "@prerenderer/renderer-jsdom": "^1.1.9",
     "@prerenderer/rollup-plugin": "^0.3.12",
     "@tailwindcss/vite": "^4.2.1",
-    "@types/uuid": "^10.0.0",
     "jsdom": "^29.1.1",
     "terser": "^5.46.1",
     "vite": "^6.4.1"
   },
+  "devDependencies": {
+    "@babel/core": "^7.29.0",
+    "@playwright/test": "^1.61.1",
+    "@types/uuid": "^10.0.0"
+  },
   "engines": {
-    "node": "24.x",
+    "node": "22.x",
     "npm": ">=10"
   },
   "optionalDependencies": {

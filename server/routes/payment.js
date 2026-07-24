@@ -13,7 +13,7 @@ const { transactionLimiter } = require("../middleware/rateLimiter");
 
 const multer = require("multer");
 const upload = multer();
-const webhookController = require("../controllers/payment/webhookController");
+const WebhookService = require("../services/WebhookService");
 
 // ─── Initialize Payment ──────────────────────────────────────
 // Creates a payment record and returns either:
@@ -31,7 +31,14 @@ router.post(
 router.post(
   "/sendgrid-inbound",
   upload.none(),
-  webhookController.handleSendGridInbound
+  WebhookService.handleSendGridInbound.bind(WebhookService)
+);
+
+// "?"?"? Legacy Paystack Webhook "?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?
+// Maintain backward compatibility for Paystack webhook dashboard configuration
+router.post(
+  "/webhook/paystack",
+  WebhookService.processPaystackWebhook.bind(WebhookService)
 );
 
 // ─── Verify Paystack Payment ─────────────────────────────────

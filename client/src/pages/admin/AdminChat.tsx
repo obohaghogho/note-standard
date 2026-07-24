@@ -16,6 +16,7 @@ import {
 import type { Message, Conversation } from '../../context/ChatContext';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { AudioPlayer } from '../../components/chat/AudioPlayer';
+import { usePresence } from '../../context/PresenceContext';
 import toast from 'react-hot-toast';
 import SecureImage from '../../components/common/SecureImage';
 import './AdminChat.css';
@@ -28,6 +29,7 @@ export const AdminChat = () => {
     const { session, user, isAdmin } = useAuth();
     const { socket, connected } = useSocket();
     const { startCall } = useWebRTC();
+    const { isUserOnline } = usePresence();
     
     // State
     const [chats, setChats] = useState<Conversation[]>([]);
@@ -412,6 +414,7 @@ export const AdminChat = () => {
                         filteredChats?.map(chat => {
                             const chatMember = getUserFromChat(chat);
                             const userProfile = chatMember?.profile;
+                            const isOnline = chatMember ? isUserOnline(chatMember.user_id) : false;
                             return (
                                 <div
                                     key={chat.id}
@@ -426,7 +429,7 @@ export const AdminChat = () => {
                                                 {userProfile?.username?.[0]?.toUpperCase() || '?'}
                                             </div>
                                         )}
-                                        {userProfile?.is_online && <span className="online-dot" />}
+                                        {isOnline && <span className="online-dot" />}
                                     </div>
                                     <div className="info">
                                         <div className="header">
@@ -455,6 +458,7 @@ export const AdminChat = () => {
                                 {(() => {
                                     const chatMember = getUserFromChat(activeChat);
                                     const userProfile = chatMember?.profile;
+                                    const isOnline = chatMember ? isUserOnline(chatMember.user_id) : false;
                                     return (
                                         <>
                                             <div className="avatar">
@@ -465,11 +469,12 @@ export const AdminChat = () => {
                                                         {userProfile?.username?.[0]?.toUpperCase() || '?'}
                                                     </div>
                                                 )}
+                                                {isOnline && <span className="online-dot" />}
                                             </div>
                                             <div>
                                                 <h4>{userProfile?.username || activeChat.name}</h4>
-                                                <span className={userProfile?.is_online ? 'online' : 'offline'}>
-                                                    {userProfile?.is_online ? 'Online' : 'Offline'}
+                                                <span className={isOnline ? 'online' : 'offline'}>
+                                                    {isOnline ? 'Online' : 'Offline'}
                                                 </span>
                                             </div>
                                         </>

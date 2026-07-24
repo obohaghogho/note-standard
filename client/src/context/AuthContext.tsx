@@ -438,9 +438,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (shouldRegisterSession) {
             getDeviceId().then(deviceId => {
             const apiBase = import.meta.env.VITE_API_URL || '';
+            const controller = new AbortController();
+            const tid = setTimeout(() => controller.abort(), 4000);
             fetch(`${apiBase}/api/auth/register-session`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              signal: controller.signal,
               body: JSON.stringify({
                 email: currentUser.email,
                 device_id: deviceId,
@@ -452,8 +455,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 updateSessionMeta(currentUser.id, data.session_id, deviceId!);
               }
             }).catch(err => {
-              console.warn('[Auth] Background device registration failed:', err.message);
-            });
+              console.warn('[Auth] Background device registration non-fatal warning:', err.message);
+            }).finally(() => clearTimeout(tid));
+
 
             // V2 Boot-Sync: Register/update this browser's push installation in the
             // new multi-account tables. Runs on every SIGNED_IN and account switch.
@@ -496,9 +500,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                       sub = null;
                     } else {
                       try {
+                        const controller = new AbortController();
+                        const tid = setTimeout(() => controller.abort(), 3000);
                         const statusRes = await fetch(`${apiBase}/api/notifications/installation-status/${deviceId}`, {
-                          headers: { 'Authorization': `Bearer ${newSession.access_token}` }
-                        });
+                          headers: { 'Authorization': `Bearer ${newSession.access_token}` },
+                          signal: controller.signal
+                        }).finally(() => clearTimeout(tid));
                         if (statusRes.ok) {
                           const statusData = await statusRes.json();
                           if (statusData.status === 'INVALID') {
@@ -508,10 +515,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                           }
                         }
                       } catch (err: unknown) {
-                        console.warn('[Auth] [V2 Boot-Sync] Failed to check status:', err instanceof Error ? err.message : String(err));
+                        // Non-fatal warning — server initializing or unreachable
                       }
                     }
                   }
+
 
                   if (!sub) {
                     console.log('[Auth] [V2 Boot-Sync] Generating fresh push subscription...');

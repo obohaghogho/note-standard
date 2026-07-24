@@ -22,8 +22,11 @@ import {
     ShieldAlert,
     ArrowDownToLine,
     ArrowUpFromLine,
-    ArrowLeft
+    ArrowLeft,
+    Wallet,
+    Activity
 } from 'lucide-react';
+
 import { LanguageSelector } from '../common/LanguageSelector';
 import SecureImage from '../common/SecureImage';
 import './AdminLayout.css';
@@ -94,15 +97,18 @@ export const AdminLayout = () => {
         { to: '/admin/ads', icon: Target, label: 'Manage Ads' },
         { to: '/admin/audit-logs', icon: HistoryIcon, label: 'Audit Logs' },
         { to: '/admin/reconciliation', icon: ShieldAlert, label: 'NFI Control' },
+        { to: '/admin/push-health', icon: Bell, label: 'Push & Coverage' },
+        { to: '/admin/communication-health', icon: Activity, label: 'Comm Health' },
+        { to: '/admin/fincra', icon: Wallet, label: 'Fincra Audit' },
         { to: '/admin/broadcasts', icon: Megaphone, label: 'Broadcasts' },
         { to: '/admin/limit-requests', icon: Zap, label: 'Limit Requests' },
         { to: '/admin/deposits', icon: ArrowDownToLine, label: 'Manual Deposits' },
         { to: '/admin/withdrawals', icon: ArrowUpFromLine, label: 'Manual Withdrawals' },
         { to: '/admin/auto-reply', icon: Bot, label: 'Auto-Reply' },
         { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
-        { to: '/admin/push-health', icon: Bell, label: 'Push Health' },
         { to: '/admin/settings', icon: Settings, label: 'Settings' },
     ];
+
 
     return (
         <div className="admin-layout">

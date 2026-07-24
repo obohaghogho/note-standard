@@ -49,7 +49,7 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
 
                             <h2 className="text-2xl font-bold text-white mb-3">Check your email</h2>
                             <p className="text-gray-400 mb-8 leading-relaxed">
-                                We've sent a special verification code to help keep your account secure. Please check:
+                                We&apos;ve sent a special verification code to help keep your account secure. Please check:
                             </p>
 
                             <div className="space-y-4 mb-8">
@@ -69,12 +69,12 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                                 fullWidth 
                                 className="h-[56px] text-base font-bold rounded-2xl group shadow-lg shadow-primary/20"
                             >
-                                <span>I've Received the Code</span>
+                                <span>I&apos;ve Received the Code</span>
                                 <ArrowRight size={18} className="ml-2 group-hover:translate-x-1 transition-transform" />
                             </Button>
 
                             <p className="mt-6 text-xs text-gray-500 font-medium">
-                                Didn't get it? Check your spam folder or wait a few minutes.
+                                Didn&apos;t get it? Check your spam folder or wait a few minutes.
                             </p>
                         </div>
 

@@ -9,6 +9,7 @@ import { AuthProvider } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { ChatProvider } from './context/ChatContext';
+import { ChatThemeProvider } from './context/ChatThemeContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { WalletProvider } from './context/WalletContext';
 import { WebRTCProvider } from './context/WebRTCContext';
@@ -71,6 +72,9 @@ const ManualDeposits = lazyWithRetry(() => import('./pages/admin/ManualDeposits'
 const ManualWithdrawals = lazyWithRetry(() => import('./pages/admin/ManualWithdrawals'), 'ManualWithdrawals');
 const ReconciliationDashboard = lazyWithRetry(() => import('./pages/admin/ReconciliationDashboard').then(m => ({ default: m.ReconciliationDashboard })), 'ReconciliationDashboard');
 const PushHealthDashboard = lazyWithRetry(() => import('./pages/admin/PushHealthDashboard'), 'PushHealthDashboard');
+const CommunicationHealthDashboard = lazyWithRetry(() => import('./pages/admin/CommunicationHealthDashboard').then(m => ({ default: m.CommunicationHealthDashboard })), 'CommunicationHealthDashboard');
+const FincraAdminPanel = lazyWithRetry(() => import('./components/admin/FincraAdminPanel').then(m => ({ default: m.FincraAdminPanel })), 'FincraAdminPanel');
+
 
 
 const ChatRedirect = () => {
@@ -140,12 +144,13 @@ function App() {
               <PresenceProvider>
                 <NotificationProvider>
                   <ChatProvider>
-                    <WebRTCProvider>
-                      <WalletProvider>
-                        <NotesProvider>
-                          <NotesDashboardProvider>
-                            <WebNotificationRouter />
-                            <Routes>
+                    <ChatThemeProvider>
+                      <WebRTCProvider>
+                        <WalletProvider>
+                          <NotesProvider>
+                            <NotesDashboardProvider>
+                              <WebNotificationRouter />
+                              <Routes>
                             <Route path="/" element={<LandingPage />} />
                             <Route path="/login" element={<Login />} />
                             <Route path="/signup" element={<Signup />} />
@@ -212,6 +217,9 @@ function App() {
                                 <Route path="limit-requests" element={<LimitRequestsPage />} />
                                 <Route path="settings" element={<AdminSettings />} />
                                 <Route path="push-health" element={<PushHealthDashboard />} />
+                                <Route path="communication-health" element={<CommunicationHealthDashboard />} />
+                                <Route path="fincra" element={<FincraAdminPanel />} />
+
                               </Route>
                             </Route>
                           </Routes>
@@ -223,8 +231,9 @@ function App() {
                         </NotesProvider>
                       </WalletProvider>
                     </WebRTCProvider>
-                  </ChatProvider>
-                </NotificationProvider>
+                  </ChatThemeProvider>
+                </ChatProvider>
+              </NotificationProvider>
               </PresenceProvider>
             </SocketProvider>
             </VersionGuard>

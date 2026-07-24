@@ -15,6 +15,22 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
+/* ── Cross-Platform Mobile Keyboard Synchronization ── */
+@media (max-width: 768px) {
+  .team-chat {
+    position: fixed;
+    top: var(--vv-top, 0px);
+    left: 0;
+    right: 0;
+    height: var(--vv-height, 100dvh);
+    bottom: auto;
+    z-index: 10;
+    border-radius: 0;
+    border: none;
+  }
+}
+
+
 /* ====================================
    HEADER
    ==================================== */

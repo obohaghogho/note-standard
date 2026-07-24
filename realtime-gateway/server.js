@@ -21,6 +21,69 @@ const { createClient: createSupabaseClient } = require('@supabase/supabase-js');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
+// ─── Push Environment Validation ──────────────────────────────────────────────
+// Runs at startup. Logs clear warnings for every missing push configuration
+// variable so problems are immediately visible in server logs — not silent.
+(function validatePushEnvironment() {
+  const tag = '[STARTUP][PushEnv]';
+  let hasError = false;
+
+  if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+    console.error(`${tag} ❌ CRITICAL: VAPID_PUBLIC_KEY or VAPID_PRIVATE_KEY missing — web push DISABLED`);
+    hasError = true;
+  } else {
+    const fp = require('crypto').createHash('sha256').update(process.env.VAPID_PUBLIC_KEY).digest('hex').slice(0, 16);
+    console.log(`${tag} ✅ VAPID keys present. Fingerprint: ${fp}`);
+  }
+
+  if (!process.env.BACKEND_URL) {
+    console.error(`${tag} ❌ ERROR: BACKEND_URL not set — delivery receipt webhooks will use hardcoded fallback URL`);
+  } else {
+    console.log(`${tag} ✅ BACKEND_URL=${process.env.BACKEND_URL}`);
+  }
+
+  if (!process.env.SELF_URL) {
+    console.error(`${tag} ❌ ERROR: SELF_URL not set — deliveryWebhookUrl in push payloads will be wrong`);
+  } else {
+    console.log(`${tag} ✅ SELF_URL=${process.env.SELF_URL}`);
+  }
+
+  if (!process.env.USE_V2_PUSH_ROUTING) {
+    console.warn(`${tag} ⚠️  USE_V2_PUSH_ROUTING not set — V2 routing runs in SHADOW MODE only. Real pushes use legacy path.`);
+  } else {
+    console.log(`${tag} ✅ USE_V2_PUSH_ROUTING=${process.env.USE_V2_PUSH_ROUTING}`);
+  }
+
+  if (!process.env.ALLOW_V2_FALLBACK) {
+    console.warn(`${tag} ⚠️  ALLOW_V2_FALLBACK not set — assuming fallback enabled (default)`);
+  } else {
+    console.log(`${tag} ✅ ALLOW_V2_FALLBACK=${process.env.ALLOW_V2_FALLBACK}`);
+  }
+
+  if (process.env.PUSH_ENABLED === 'false') {
+    console.warn(`${tag} ⚠️  PUSH_ENABLED=false — ALL push notifications explicitly disabled`);
+  } else if (!process.env.PUSH_ENABLED) {
+    console.warn(`${tag} ⚠️  PUSH_ENABLED not set — defaulting to enabled`);
+  } else {
+    console.log(`${tag} ✅ PUSH_ENABLED=${process.env.PUSH_ENABLED}`);
+  }
+
+  if (!process.env.REALTIME_GATEWAY_URL) {
+    console.warn(`${tag} ⚠️  REALTIME_GATEWAY_URL not set in gateway env`);
+  }
+
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error(`${tag} ❌ CRITICAL: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing — DB writes will fail`);
+    hasError = true;
+  }
+
+  if (hasError) {
+    console.error(`${tag} ❌ Push environment has critical errors — check above. Server continues but push may be broken.`);
+  } else {
+    console.log(`${tag} ✅ Push environment validation complete — no critical errors.`);
+  }
+})();
+
 // ─── Gateway-level Supabase client (for fast-path delivery webhook) ───────────
 // Separate from the pg LISTEN client — used for direct DB writes from HTTP endpoints.
 let gatewaySupabase = null;
@@ -125,6 +188,52 @@ app.get('/internal/debug-env', async (req, res) => {
     push_enabled_val: process.env.PUSH_ENABLED,
     supabase_url: process.env.SUPABASE_URL ? process.env.SUPABASE_URL.substring(0, 25) + '...' : null,
     db_test: dbTest
+  });
+});
+
+// ✅ Push health check — returns JSON status of every push channel
+// Hit this on Render to instantly diagnose push issues without reading logs
+app.get('/internal/push/health', async (req, res) => {
+  const pushService = require('./services/pushService');
+  const admin = (() => { try { return require('firebase-admin'); } catch { return null; } })();
+  
+  const vapidOk = !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
+  const fcmOk = !!(admin && admin.apps && admin.apps.length > 0);
+  const supabaseOk = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+  
+  const channels = {
+    web_push_vapid: {
+      ok: vapidOk,
+      reason: vapidOk ? 'VAPID keys present' : (!process.env.VAPID_PUBLIC_KEY ? 'VAPID_PUBLIC_KEY missing' : 'VAPID_PRIVATE_KEY missing or empty'),
+    },
+    fcm_android: {
+      ok: fcmOk,
+      reason: fcmOk ? `Firebase initialized (${admin.apps.length} app(s))` : 'Firebase Admin not initialized — add FIREBASE_SERVICE_ACCOUNT or FIREBASE_PROJECT_ID+CLIENT_EMAIL+PRIVATE_KEY',
+    },
+    apns_ios: {
+      ok: !!(process.env.APNS_KEY && process.env.APNS_KEY_ID && process.env.APNS_TEAM_ID),
+      reason: (process.env.APNS_KEY && process.env.APNS_KEY_ID && process.env.APNS_TEAM_ID) ? 'APNs keys present' : 'Missing APNS_KEY / APNS_KEY_ID / APNS_TEAM_ID',
+    },
+    supabase: {
+      ok: supabaseOk,
+      reason: supabaseOk ? 'SUPABASE_URL + SERVICE_ROLE_KEY present' : 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY',
+    },
+    v2_routing: {
+      ok: process.env.USE_V2_PUSH_ROUTING === 'true',
+      fallback_enabled: process.env.ALLOW_V2_FALLBACK !== 'false',
+    },
+  };
+
+  const allOk = channels.web_push_vapid.ok && channels.fcm_android.ok && channels.supabase.ok;
+
+  res.status(allOk ? 200 : 503).json({
+    status: allOk ? 'healthy' : 'degraded',
+    push_globally_enabled: process.env.PUSH_ENABLED !== 'false',
+    channels,
+    gateway_boot_ready: global.__GATEWAY_BOOT_READY__,
+    pipeline_version: process.env.MESSAGING_PIPELINE_VERSION || 'v2',
+    self_url: process.env.SELF_URL || '(not set — delivery webhooks will use hardcoded Render URL)',
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -630,6 +739,14 @@ async function initPgListener() {
         await pgClient.query('LISTEN realtime_events');
         console.log('[Gateway] 🐘 ✓ Listening for PostgreSQL events on channel: realtime_events');
         
+        // Reset all online statuses to false on startup since memory is fresh.
+        try {
+          await pgClient.query('UPDATE public.profiles SET is_online = false');
+          console.log('[Gateway] 🐘 ✓ Reset all profiles to is_online = false on startup');
+        } catch (dbErr) {
+          console.error('[Gateway] 🐘 Warning: Failed to reset profiles is_online state on startup:', dbErr.message);
+        }
+
         // Production Hardening: Reconcile orphaned active call sessions automatically on gateway startup
         console.log('[Gateway] 🐘 Reconciling orphaned active call sessions...');
         const reconcileRes = await pgClient.query('SELECT cleanup_stale_call_sessions()');

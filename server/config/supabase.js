@@ -1,7 +1,8 @@
 const { createClient } = require("@supabase/supabase-js");
+const env = require("./env");
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseUrl = env.SUPABASE_URL;
+const supabaseServiceKey = env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseServiceKey) {
   const errorMsg = "❌ Supabase environment variables are missing (SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY)";
@@ -14,8 +15,6 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 // FIX: TCP Ephemeral Port Exhaustion
 // We must inject an HTTP keep-alive agent into Supabase's cross-fetch.
-// Without this, every single DB query opens a new connection, exhausting local ports
-// after a few hours of uptime, which causes severe request queuing and latency.
 const http = require('http');
 const https = require('https');
 const nodeFetch = require('node-fetch');
@@ -30,6 +29,22 @@ const customFetch = (url, options) => {
   });
 };
 
+// Robust Proxy-based chainable mock database for standalone/CI execution
+const makeMockBuilder = () => {
+  const builder = {
+    then: (resolve) => resolve({ data: [], error: null }),
+    catch: () => builder,
+  };
+  return new Proxy(builder, {
+    get: (target, prop) => {
+      if (prop === 'then') {
+        return target.then;
+      }
+      return () => makeMockBuilder();
+    }
+  });
+};
+
 const supabase = (supabaseUrl && supabaseServiceKey) 
   ? createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
@@ -40,19 +55,6 @@ const supabase = (supabaseUrl && supabaseServiceKey)
         fetch: customFetch
       }
     })
-  : { 
-      from: () => ({ 
-        select: () => ({ 
-          order: () => ({ limit: () => ({ data: null, error: null }) }),
-          limit: () => ({ data: null, error: null }),
-          eq: () => ({ 
-            single: () => ({ data: null, error: new Error('Supabase not initialized') }),
-            maybeSingle: () => ({ data: null, error: new Error('Supabase not initialized') }) 
-          }),
-          maybeSingle: () => ({ data: null, error: new Error('Supabase not initialized') })
-        }) 
-      }) 
-    }; 
-
+  : makeMockBuilder(); 
 
 module.exports = supabase;

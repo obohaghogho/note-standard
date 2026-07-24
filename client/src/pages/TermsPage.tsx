@@ -65,6 +65,29 @@ export const TermsPage = () => {
                             </div>
                         </section>
 
+                        <section className="relative mt-8">
+                            <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-3">
+                                <Shield className="w-6 h-6 text-primary" />
+                                Crypto Transactions
+                            </h2>
+                            <div className="ml-9">
+                                <ul className="list-none space-y-3">
+                                    <li className="flex items-center gap-4 bg-white/[0.03] p-4 rounded-xl border border-white/5 transition-all hover:bg-white/[0.06] hover:border-white/10 hover:shadow-lg hover:shadow-primary/5">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_10px_rgba(168,85,247,0.8)] ring-4 ring-primary/20"></div>
+                                        <span className="text-lg font-medium">Supported networks include BTC, ETH, TRC20, ERC20, BEP20, and POLYGON. Transactions sent on unsupported networks cannot be recovered.</span>
+                                    </li>
+                                    <li className="flex items-center gap-4 bg-white/[0.03] p-4 rounded-xl border border-white/5 transition-all hover:bg-white/[0.06] hover:border-white/10 hover:shadow-lg hover:shadow-primary/5">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_10px_rgba(168,85,247,0.8)] ring-4 ring-primary/20"></div>
+                                        <span className="text-lg font-medium">Network fees and provider processing fees apply to non-custodial transactions.</span>
+                                    </li>
+                                    <li className="flex items-center gap-4 bg-white/[0.03] p-4 rounded-xl border border-white/5 transition-all hover:bg-white/[0.06] hover:border-white/10 hover:shadow-lg hover:shadow-primary/5">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_10px_rgba(168,85,247,0.8)] ring-4 ring-primary/20"></div>
+                                        <span className="text-lg font-medium">Deposits must meet the stated minimum thresholds and network confirmation requirements to settle.</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </section>
+
                         <section className="relative">
                             <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-3">
                                 <AlertTriangle className="w-6 h-6 text-primary" />

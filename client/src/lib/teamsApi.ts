@@ -691,8 +691,7 @@ export async function getTeamStats(teamId: string): Promise<TeamStats | null> {
 export async function uploadTeamImage(teamId: string, file: File): Promise<string | null> {
   return safeCall<string | null>(`upload-team-image-${teamId}`, async () => {
     const fileExt = file.name.split('.').pop();
-    const fileName = `${teamId}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-    const filePath = `images/${fileName}`;
+    const filePath = `${teamId}/images/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
 
     const { error: uploadError } = await supabase.storage
       .from('team-assets')
@@ -738,7 +737,7 @@ export async function uploadTeamAudio(teamId: string, audioBlob: Blob): Promise<
  */
 export async function deleteTeamMessage(teamId: string, messageId: string): Promise<boolean> {
   const result = await safeCall<boolean>(`delete-team-message-${messageId}`, async () => {
-    const response = await api.delete(`/api/teams/${teamId}/messages/${messageId}`);
+    const response = await api.delete(`/teams/${teamId}/messages/${messageId}`);
     return response.status === 200;
   });
 
@@ -750,7 +749,7 @@ export async function deleteTeamMessage(teamId: string, messageId: string): Prom
  */
 export async function editTeamMessage(teamId: string, messageId: string, newContent: string): Promise<boolean> {
   const result = await safeCall<boolean>(`edit-team-message-${messageId}`, async () => {
-    const response = await api.patch(`/api/teams/${teamId}/messages/${messageId}`, { content: newContent });
+    const response = await api.patch(`/teams/${teamId}/messages/${messageId}`, { content: newContent });
     return response.status === 200;
   });
 

@@ -128,8 +128,9 @@ export const FolderModal: React.FC<FolderModalProps> = ({ isOpen, onClose }) => 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <Card className="w-full max-w-lg overflow-hidden flex flex-col" variant="glass">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" />
+      <Card className="w-full max-w-lg overflow-hidden flex flex-col relative z-10 animate-in fade-in zoom-in-95 duration-200" variant="glass">
         {/* Header */}
         <div className="p-5 border-b border-white/10 flex items-center justify-between">
           <h3 className="text-lg font-bold text-white flex items-center gap-2">

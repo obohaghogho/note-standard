@@ -78,9 +78,10 @@ export function useInstallationSync(userId: string | null | undefined) {
           console.error('[V2 Sync] ❌ Server rejected sync. status:', resp.status, 'error:', errData?.error);
         }
       } catch (err) {
-        console.error('[V2 Sync] ❌ Boot-time sync failed:', err instanceof Error ? err.message : String(err));
+        console.warn('[V2 Sync] Boot-time sync non-fatal warning (server initializing/offline):', err instanceof Error ? err.message : String(err));
       }
     };
+
 
     sync();
   }, [userId]);

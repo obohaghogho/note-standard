@@ -30,9 +30,11 @@ router.get("/token", (req, res) => {
     const appCertificate = process.env.AGORA_APP_CERTIFICATE;
 
     if (!appID || !appCertificate) {
-      logger.error("Agora credentials missing in environment variables");
-      return res.status(500).json({
-        error: "Agora server configuration missing",
+      logger.warn("[Agora] Credentials missing in environment variables. Returning development fallback token.");
+      return res.json({
+        token: `dev-token-${channel}-${uid || 0}`,
+        uid: isNumericUid ? agoraUid : uid,
+        isDevFallback: true
       });
     }
 

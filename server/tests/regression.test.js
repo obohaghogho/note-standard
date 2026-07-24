@@ -53,7 +53,7 @@ test('7. Message Delivery Verification (Batched)', (t) => {
 
 test('8. Notifications Flow Verification', (t) => {
     // Verifies push notifications aren't blocked by query limits
-    const notificationsController = require('../controllers/notificationsController');
+    const notificationsController = require('../controllers/notificationController');
     if (notificationsController) {
         assert.ok(typeof notificationsController.getNotifications === 'function' || true, 'Notification routes active');
     }

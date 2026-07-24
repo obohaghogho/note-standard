@@ -8,7 +8,7 @@ const PROFILE_CACHE_TTL = 60000; // 60 seconds
  * Helper to fetch user with retry logic for Supabase Auth
  * Mitigates transient network/service availability issues
  */
-const getUserWithRetry = async (token, maxAttempts = 3) => {
+const getUserWithRetry = async (token, maxAttempts = 2) => {
   let lastError = null;
 
   // 1. Pre-validation: Catch malformed JS-error tokens from client
@@ -21,10 +21,16 @@ const getUserWithRetry = async (token, maxAttempts = 3) => {
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const { data, error } = await supabase.auth.getUser(token);
+      // 4-second timeout per Supabase auth call
+      const authPromise = supabase.auth.getUser(token);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject({ status: 503, message: "Supabase auth request timed out (4000ms)" }), 4000)
+      );
+
+      const { data, error } = await Promise.race([authPromise, timeoutPromise]);
 
       // Return immediately for valid auth responses (success or auth errors like "Invalid token")
-      // Only retry on service-level failures (status 500 or status 0 = network failure)
+      // Only retry on service-level failures (status 500/503 or status 0 = network failure)
       if (!error) {
         return { data, error };
       }
@@ -32,7 +38,7 @@ const getUserWithRetry = async (token, maxAttempts = 3) => {
       // 2. Identify definitively non-retryable errors
       const msg = error.message?.toLowerCase() || "";
       const isAuthError = 
-        (error.status && error.status !== 500 && error.status !== 0) ||
+        (error.status && error.status !== 500 && error.status !== 503 && error.status !== 0) ||
         msg.includes("invalid") ||
         msg.includes("missing") ||
         msg.includes("expired") ||
@@ -50,14 +56,13 @@ const getUserWithRetry = async (token, maxAttempts = 3) => {
     } catch (err) {
       lastError = err;
       console.warn(
-        `[Auth] Attempt ${attempt}/${maxAttempts} threw: ${err.message}`,
+        `[Auth] Attempt ${attempt}/${maxAttempts} threw: ${err.message || err}`,
       );
     }
 
-    // Wait before next attempt (exponential backoff: 500ms, 1000ms)
+    // Wait before next attempt (300ms)
     if (attempt < maxAttempts) {
-      const delay = Math.pow(2, attempt - 1) * 500;
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, 300));
     }
   }
 

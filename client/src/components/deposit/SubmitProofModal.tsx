@@ -44,6 +44,7 @@ const SubmitProofModal: React.FC<SubmitProofModalProps> = ({
       formData.append("file", file);
       const res = await axiosInstance.post("/upload/image", formData, {
         headers: { "Content-Type": "multipart/form-data" },
+        timeout: 300000, // 5 minutes timeout for image upload
       });
       setProofUrl(res.data.url);
       return res.data.url;

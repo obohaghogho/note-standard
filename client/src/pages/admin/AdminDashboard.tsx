@@ -14,7 +14,11 @@ import {
     Database,
     Trophy,
     Wifi,
-    CheckCircle
+    CheckCircle,
+    Bell,
+    Wallet,
+    ShieldAlert,
+    ArrowRight
 } from 'lucide-react';
 import { API_URL } from '../../lib/api';
 import { Card } from '../../components/common/Card';
@@ -190,6 +194,66 @@ export const AdminDashboard = () => {
                         )}
                     </div>
                 ))}
+            </div>
+
+            {/* Operational System Health & Control Panels */}
+            <div className="my-6">
+                <h3 className="text-base font-bold text-gray-200 mb-3 flex items-center gap-2">
+                    <ActivityIcon size={18} className="text-blue-400" />
+                    Operational Tools & System Controls
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Link to="/admin/push-health" className="p-4 rounded-xl bg-gradient-to-br from-blue-900/30 to-indigo-900/20 border border-blue-500/20 hover:border-blue-500/50 transition-all group flex flex-col justify-between">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="p-2.5 rounded-lg bg-blue-500/20 text-blue-400 group-hover:scale-110 transition-transform">
+                                <Bell size={20} />
+                            </div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-500/20 text-blue-300">Live Diagnostics</span>
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-white text-sm group-hover:text-blue-300 transition-colors">Push Health & Delivery</h4>
+                            <p className="text-xs text-gray-400 mt-1">User notification coverage dashboard, subscription health audit, and live 🔔 test push trigger.</p>
+                        </div>
+                        <div className="mt-4 flex items-center gap-1 text-xs font-semibold text-blue-400 group-hover:translate-x-1 transition-transform">
+                            <span>Open Push Dashboard</span>
+                            <ArrowRight size={14} />
+                        </div>
+                    </Link>
+
+                    <Link to="/admin/fincra" className="p-4 rounded-xl bg-gradient-to-br from-purple-900/30 to-pink-900/20 border border-purple-500/20 hover:border-purple-500/50 transition-all group flex flex-col justify-between">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="p-2.5 rounded-lg bg-purple-500/20 text-purple-400 group-hover:scale-110 transition-transform">
+                                <Wallet size={20} />
+                            </div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-purple-500/20 text-purple-300">Financial Audit</span>
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-white text-sm group-hover:text-purple-300 transition-colors">Fincra Settlement Audit</h4>
+                            <p className="text-xs text-gray-400 mt-1">Incoming webhook logs, SHA-512 verification status, financial audit trail, and multi-currency reconciler.</p>
+                        </div>
+                        <div className="mt-4 flex items-center gap-1 text-xs font-semibold text-purple-400 group-hover:translate-x-1 transition-transform">
+                            <span>Open Fincra Audit</span>
+                            <ArrowRight size={14} />
+                        </div>
+                    </Link>
+
+                    <Link to="/admin/reconciliation" className="p-4 rounded-xl bg-gradient-to-br from-emerald-900/30 to-teal-900/20 border border-emerald-500/20 hover:border-emerald-500/50 transition-all group flex flex-col justify-between">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="p-2.5 rounded-lg bg-emerald-500/20 text-emerald-400 group-hover:scale-110 transition-transform">
+                                <ShieldAlert size={20} />
+                            </div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300">Ledger Control</span>
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-white text-sm group-hover:text-emerald-300 transition-colors">NFI Control & Ledger</h4>
+                            <p className="text-xs text-gray-400 mt-1">Non-Fungible Ledger drift detection, state machine proposals, and system connector health monitoring.</p>
+                        </div>
+                        <div className="mt-4 flex items-center gap-1 text-xs font-semibold text-emerald-400 group-hover:translate-x-1 transition-transform">
+                            <span>Open NFI Control</span>
+                            <ArrowRight size={14} />
+                        </div>
+                    </Link>
+                </div>
             </div>
 
             {/* New Data Sections: Usage Trends, Top Creators, System Load */}

@@ -41,6 +41,9 @@ import { MediaPreviewModal } from '../chat/MediaPreviewModal';
 import { AnimatePresence } from 'framer-motion';
 import { ConfirmationModal } from '../common/ConfirmationModal';
 import { applyAutoCorrect } from '../../utils/textUtils';
+import { useWallpaper } from '../../context/WallpaperContext';
+import { WallpaperEngine } from '../chat/WallpaperEngine';
+import { WallpaperPicker } from '../chat/WallpaperPicker';
 import './TeamChat.css';
 
 interface TeamChatProps {
@@ -122,6 +125,11 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
     url: '',
     type: 'image'
   });
+
+  const { getWallpaper } = useWallpaper();
+  const activeWallpaper = getWallpaper(teamId);
+  const fontTheme = activeWallpaper.fontTheme || localStorage.getItem('chat_font_theme') || 'sans';
+  const [showCustomizeModal, setShowCustomizeModal] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -505,7 +513,9 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
   }
 
   return (
-    <div className={`team-chat ${className}`}>
+    <div className={`team-chat ${className} relative overflow-hidden`}>
+      {/* Premium Wallpaper Engine */}
+      <WallpaperEngine chatId={teamId} />
       {/* Hidden File Input */}
       <input
         id="team-chat-file-upload"
@@ -626,6 +636,15 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
               <Users size={16} />
               <span>{members.length} members</span>
             </div>
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              className="text-blue-400 hover:text-blue-300 hover:bg-blue-400/10"
+              onClick={() => setShowCustomizeModal(true)}
+              title="Theme & Fonts"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 14.7255 3.09032 17.1962 4.85857 19C5.3974 19.5492 5.66681 19.8238 5.66681 20C5.66681 20.4437 5.2974 21.0567 4.928 21.6703C4.60677 22.2039 4.88716 22 5.66681 22H12Z"/><circle cx="7.5" cy="10.5" r="1.5"/><circle cx="11.5" cy="7.5" r="1.5"/><circle cx="16.5" cy="9.5" r="1.5"/><circle cx="15.5" cy="14.5" r="1.5"/></svg>
+            </Button>
             {myRole === 'owner' && (
               <Button 
                 size="sm" 
@@ -668,7 +687,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
       {/* Messages Container */}
       <div
         ref={messagesContainerRef}
-        className="team-chat__messages transition-all"
+        className={`team-chat__messages transition-all font-theme-${fontTheme}`}
         onScroll={handleScroll}
         style={{ paddingBottom: 'var(--chat-input-height, 24px)' }}
       >
@@ -774,6 +793,18 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
               ref={inputRef}
               value={input}
               onChange={handleInputChange}
+              onTouchStart={(e) => {
+                if (document.activeElement !== e.currentTarget) {
+                  e.preventDefault();
+                  e.currentTarget.focus({ preventScroll: true });
+                }
+              }}
+              onMouseDown={(e) => {
+                if (document.activeElement !== e.currentTarget) {
+                  e.preventDefault();
+                  e.currentTarget.focus({ preventScroll: true });
+                }
+              }}
               onKeyDown={() => {
                   // By product requirement, Enter inserts a newline instead of sending.
                   // Sending is done exclusively via the explicit Send button.
@@ -784,7 +815,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
                   el.style.height = Math.min(el.scrollHeight, 130) + 'px';
               }}
               placeholder="Type a message..."
-              className="team-chat__input"
+              className={`team-chat__input font-theme-${fontTheme}`}
               rows={1}
               disabled={isSending || !connected}
               spellCheck={true}
@@ -889,6 +920,12 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
         confirmText={confirmDelete.type === 'message' ? 'Delete' : 'Wipe Everything'}
         variant="danger"
       />
+      {showCustomizeModal && (
+        <WallpaperPicker
+          chatId={teamId}
+          onClose={() => setShowCustomizeModal(false)}
+        />
+      )}
     </div>
   );
 };

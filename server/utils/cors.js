@@ -32,7 +32,8 @@ const isOriginAllowed = (origin) => {
   const isNoteStandard = origin === clientUrl || 
     origin === "https://www.notestandard.com" ||
     origin === "https://notestandard.com" ||
-    origin.endsWith(".notestandard.com");
+    origin.endsWith(".notestandard.com") ||
+    origin.endsWith(".vercel.app"); // Allow all Vercel preview and production domains
 
   if (isProd) {
     const isMobileLocal = origin === "http://localhost" || origin === "http://127.0.0.1" || origin.startsWith("exp://");

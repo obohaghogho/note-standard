@@ -1,0 +1,129 @@
+/* ==========================================================================
+   NoteStandard Chat Theme Engine Styles & Typography
+   ========================================================================== */
+
+/* ─── Typography Font Imports ─── */
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;1,400&family=Quicksand:wght@500;600;700&family=Space+Grotesk:wght@400;500;600&display=swap');
+
+/* ─── Font Family Classes ─── */
+.chat-font-inter {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+}
+
+.chat-font-rounded {
+  font-family: 'Quicksand', 'Comfortaa', -apple-system, sans-serif !important;
+}
+
+.chat-font-serif {
+  font-family: 'Playfair Display', Georgia, serif !important;
+}
+
+.chat-font-handwriting {
+  font-family: 'Caveat', cursive, sans-serif !important;
+  font-size: 1.15em;
+}
+
+.chat-font-minimal {
+  font-family: 'Space Grotesk', -apple-system, sans-serif !important;
+}
+
+.chat-font-monospace {
+  font-family: 'Fira Code', monospace !important;
+}
+
+.chat-font-chat_classic {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+}
+
+/* ─── Glassmorphism & Elevation Utilities ─── */
+.chat-glass-bubble {
+  backdrop-filter: blur(var(--chat-bubble-blur, 12px));
+  -webkit-backdrop-filter: blur(var(--chat-bubble-blur, 12px));
+}
+
+.chat-elevation-none {
+  box-shadow: none !important;
+}
+
+.chat-elevation-subtle {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08) !important;
+}
+
+.chat-elevation-medium {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.12) !important;
+}
+
+.chat-elevation-high {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35), 0 4px 8px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* ─── Animated Typing Cursor & Focus Glow ─── */
+@keyframes chatCursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.chat-animated-cursor::after {
+  content: '|';
+  display: inline-block;
+  color: var(--chat-primary-accent, #3b82f6);
+  font-weight: 700;
+  margin-left: 2px;
+  animation: chatCursorBlink 0.9s infinite;
+}
+
+.chat-composer-focus {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.chat-composer-focus:focus-within {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35), 0 8px 24px rgba(0, 0, 0, 0.25);
+  border-color: var(--chat-primary-accent, #3b82f6);
+}
+
+/* ─── Smooth Entrance & Selection Micro-Animations ─── */
+@keyframes chatBubbleSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.chat-bubble-animated {
+  animation: chatBubbleSlideIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ─── Voice Waveform Pulse ─── */
+@keyframes waveBarPulse {
+  0%, 100% { height: 4px; }
+  50% { height: 18px; }
+}
+
+.chat-wave-bar {
+  width: 3px;
+  background-color: var(--chat-primary-accent, #3b82f6);
+  border-radius: 2px;
+  animation: waveBarPulse 1.2s ease-in-out infinite;
+}
+
+.chat-wave-bar:nth-child(1) { animation-delay: 0.0s; }
+.chat-wave-bar:nth-child(2) { animation-delay: 0.2s; }
+.chat-wave-bar:nth-child(3) { animation-delay: 0.4s; }
+.chat-wave-bar:nth-child(4) { animation-delay: 0.1s; }
+.chat-wave-bar:nth-child(5) { animation-delay: 0.3s; }
+
+/* ─── Dynamic Mesh Gradient Animation ─── */
+@keyframes meshShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.chat-mesh-animated {
+  background-size: 200% 200% !important;
+  animation: meshShift 18s ease infinite;
+}

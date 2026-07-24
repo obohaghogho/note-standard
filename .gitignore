@@ -1,83 +1,44 @@
-# Environment files (secrets — NEVER commit these)
-.env
-.env.local
-.env.development
-.env.production
-!.env.example
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# Credentials and sensitive JSON data
-*.json
-!package.json
-!package-lock.json
-!tsconfig*.json
-!app.json
-!vercel.json
-!google-services.json
-!deps.json
-!lint*.json
-!*.schema.json
-!server/middleware/*.json
-!server/utils/*.json
-!realtime-gateway/package.json
-!realtime-gateway/package-lock.json
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
 
-.gemini/artifacts
-.vscode/
-docs/
-node_modules/
-TEAM_CHAT_README.md
-WALLET_README.md
+# testing
+/coverage
 
-# Logs and temporary files
-*.log
-*error*
-*plan*.md
-*task*.md
-*walkthrough*.md
-*debug*.txt
-!client/src/pages/admin/AdminDebugTools.tsx
-result.txt
-*.txt
+# next.js
+/.next/
+/out/
 
-# Temporary processing files
-server/tmp/
-tmp/
+# production
+/build
 
-# ── Development Artifacts (NEVER commit these) ─────────────────
-# Scratch directories
-scratch/
-server/scratch/
+# misc
+.DS_Store
+*.pem
 
-# Debug & one-off scripts in server root
-server/dbg*.js
-server/debug_*.js
-server/check_*.js
-server/test_*.js
-server/test.sql
-server/test_modulo.sql
-server/inspect_*.js
-server/force_*.js
-server/repair_*.js
-server/mass_*.js
-server/migrate_sync_function.js
-server/run_fix_sql.js
-server/schema_check.js
-server/scratch_*.js
-server/scratch_*.js
-server/fix_trigger*.sql
-server/fix_trigger_v2.sql
-server/audit_wallet_drift.js
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
-# Root-level test scripts
-test_*.js
+# env files (can opt-in for committing if needed)
+.env*
 
-# Debug scripts inside server/scripts/ (migration scripts are kept)
-server/scripts/debug_*.js
-server/scripts/check_*.js
-server/scripts/test_*.js
-server/scripts/verify_*.js
-server/scripts/audit_drift.js
-server/scripts/live_payment_verify.js
-server/scripts/add_enum_values.js
-*.apk
+# vercel
 .vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# chaos reports
+acc_chaos_report.json

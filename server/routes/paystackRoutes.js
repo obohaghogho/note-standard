@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const webhookController = require("../controllers/payment/webhookController");
+const WebhookService = require("../services/WebhookService");
 
 // Paystack Webhook Route (Deprecated: Use /api/webhooks/paystack instead)
-router.post("/webhook", webhookController.handlePaystack);
+router.post("/webhook", WebhookService.processPaystackWebhook.bind(WebhookService));
 
 module.exports = router;

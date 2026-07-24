@@ -1,3 +1,4 @@
+ 
 /**
  * NoteStandard — Service Worker (Safe-Mode)
  * 

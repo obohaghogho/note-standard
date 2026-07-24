@@ -93,34 +93,52 @@ export const useAgoraCall = () => {
             try {
                 [audioTrack, videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks(
                     { AEC: true, ANS: true },
-                    { encoderConfig: "480p_1" } // Lower resolution for mobile stability
+                    { encoderConfig: "480p_1" }
                 );
             } catch (mediaErr) {
                 console.warn('[Agora] Failed to get both tracks, trying audio only', mediaErr);
-                // Fallback: If camera is denied or unavailable, try to get audio only
                 audioTrack = await AgoraRTC.createMicrophoneAudioTrack({ AEC: true, ANS: true });
             }
 
-            // Store in refs immediately so error-path cleanup can access them
             audioTrackRef.current = audioTrack;
             videoTrackRef.current = videoTrack;
             setLocalAudioTrack(audioTrack);
             setLocalVideoTrack(videoTrack);
 
             // 2. Fetch token from backend
-            // The axios instance already prefixes /api automatically
             const response = await api.get(`/agora/token?channel=${encodeURIComponent(channelName)}&uid=${encodeURIComponent(uid)}`);
-            const { token, uid: numericUid } = response.data;
-            const appId = import.meta.env.VITE_AGORA_APP_ID;
+            const { token, uid: numericUid, isDevFallback } = response.data;
 
-            if (!appId) {
-                throw new Error('Missing VITE_AGORA_APP_ID in environment variables. Add it to client/.env');
+            // 3. Validate App ID — detect placeholder and dev-fallback
+            const KNOWN_FAKE_IDS = [
+                'e9d7c0f1a2b3c4d5e6f7a8b9c0d1e2f3',
+                'your_agora_app_id',
+                'YOUR_AGORA_APP_ID',
+                '',
+            ];
+            const rawAppId = import.meta.env.VITE_AGORA_APP_ID || '';
+            const isFakePlaceholder = !rawAppId || KNOWN_FAKE_IDS.includes(rawAppId.trim());
+
+            if (isFakePlaceholder || isDevFallback) {
+                console.error(
+                    '[Agora] Conference call is not configured.\n' +
+                    '  → Add AGORA_APP_ID and AGORA_APP_CERTIFICATE to server/.env\n' +
+                    '  → Add VITE_AGORA_APP_ID (the same App ID) to client/.env\n' +
+                    '  → Get your credentials at https://console.agora.io'
+                );
+                throw new Error(
+                    'Conference call is not configured yet. ' +
+                    'Please add your Agora App ID and Certificate to the server .env file. ' +
+                    'Get credentials at console.agora.io'
+                );
             }
 
-            // 3. Join the channel
+            const appId = rawAppId.trim();
+
+            // 4. Join the channel
             await client.join(appId, channelName, token, numericUid);
 
-            // 4. Publish only the tracks we successfully acquired
+            // 5. Publish tracks
             const tracksToPublish = [];
             if (audioTrack) tracksToPublish.push(audioTrack);
             if (videoTrack) tracksToPublish.push(videoTrack);
@@ -133,7 +151,7 @@ export const useAgoraCall = () => {
         } catch (error) {
             console.error('[Agora] Failed to join channel:', error);
             const errMsg = error instanceof Error ? error.message : 'Failed to join the call';
-            toast.error(errMsg);
+            toast.error(errMsg, { duration: 6000 });
 
             // Cleanup any tracks that were created before the failure
             if (audioTrackRef.current) { audioTrackRef.current.stop(); audioTrackRef.current.close(); audioTrackRef.current = null; }

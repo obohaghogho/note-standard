@@ -15,6 +15,25 @@
     
     --floating-ui-offset: 0px;
     --chat-input-height: 0px;
+
+    /* Enterprise Responsive Design System Tokens v2.0 */
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+
+    /* Dynamic Density Multiplier (1 = comfortable, 0.8 = compact, 0.65 = dense) */
+    --density-multiplier: 1;
+    --density-padding-base: calc(16px * var(--density-multiplier));
+    --density-gap-base: calc(12px * var(--density-multiplier));
+  }
+
+  [data-density="compact"] {
+    --density-multiplier: 0.8;
+  }
+
+  [data-density="dense"] {
+    --density-multiplier: 0.65;
   }
 
   .dark, [data-theme="dark"] {
@@ -27,6 +46,7 @@
     --body: #D4D4D8;
     --muted: #A1A1AA;
   }
+
 
   * {
     box-sizing: border-box;
@@ -481,32 +501,19 @@ input[type=number] {
 /* Desktop padding removed — composer is a standard flex item now, so it will never overlap messages */
 
 /*
- * .chat-input-bar — Absolute positioning handled by Tailwind classes in ChatWindow.tsx
+ * .chat-input-bar — Normal flex child inside .chat-root.
+ * Moves automatically with the container as it shrinks with the keyboard.
  */
 .chat-input-bar {
   flex-shrink: 0;
   flex-grow: 0;
-  position: relative;   /* In normal flex flow — moves with .chat-root at 60fps */
+  position: relative;
   z-index: 40;
   width: 100%;
   background: inherit;
-  /* GPU compositor layer: the browser can animate this element independently.
-     This is the key to smooth keyboard animation — no relayout required. */
-  will-change: transform;
+  padding-bottom: var(--safe-bottom, env(safe-area-inset-bottom, 0px));
 }
 
-@media (max-width: 768px) {
-  .chat-input-bar {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-}
-
-/* Ensure desktop also respects safe-areas if installed as PWA or on Notch devices */
-@media (min-width: 769px) {
-  .chat-input-bar {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-}
 
 /*
  * .chat-keyboard-spacer — top of message list (DOM bottom in column-reverse).
@@ -685,4 +692,48 @@ pre, code {
 img, picture, video, canvas, iframe {
   max-width: 100% !important;
 }
+
+/* ======================================================
+   ENTERPRISE RESPONSIVE UTILITIES & CONTAINER QUERIES
+   ====================================================== */
+
+/* Container Query Roots */
+.responsive-container-root {
+  container-type: inline-size;
+  width: 100%;
+}
+
+/* Touch Target Standard: Minimum 44px hit areas on mobile */
+@media (max-width: 768px) {
+  .touch-target,
+  button:not(.btn-compact),
+  a:not(.link-compact),
+  input[type="button"],
+  input[type="submit"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Dynamic Fluid Typography Utilities */
+.text-fluid-xs { font-size: clamp(0.7rem, 1.5vw, 0.75rem); }
+.text-fluid-sm { font-size: clamp(0.8rem, 2vw, 0.875rem); }
+.text-fluid-base { font-size: clamp(0.9rem, 2.2vw, 1rem); }
+.text-fluid-lg { font-size: clamp(1rem, 2.5vw, 1.125rem); }
+.text-fluid-xl { font-size: clamp(1.125rem, 3vw, 1.25rem); }
+.text-fluid-2xl { font-size: clamp(1.25rem, 3.5vw, 1.5rem); }
+.text-fluid-3xl { font-size: clamp(1.5rem, 4vw, 2.25rem); }
+
+/* Accessibility: Reduced Motion Safeguard */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 

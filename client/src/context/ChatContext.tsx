@@ -362,8 +362,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         return sid;
                     }
                 } catch (err: unknown) {
-                    console.error(`[ChatContext] Session registration attempt ${attempt}/3 failed`, err);
+                    console.warn(`[ChatContext] Session registration attempt ${attempt}/3 pending (server initializing):`, err instanceof Error ? err.message : String(err));
                 }
+
                 if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 500));
             }
             return null;
@@ -538,7 +539,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         try {
             // FAST-PATH: Call Gateway directly — it is always awake and writes to DB immediately.
             // The API server sleeps on Render free tier (30-90s cold start delays delivery ACKs).
-            const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || 'https://realtime-gateway-gsb5.onrender.com';
+            const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || import.meta.env.VITE_SOCKET_URL || 'https://realtime-gateway-gsb5.onrender.com';
             if (msgIds && msgIds.length > 0) {
                 await fetch(`${gatewayUrl}/deliver/batch`, {
                     method: 'POST',
@@ -630,9 +631,26 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                             lastMessage: mergedLastMessage,
                         });
                     });
-                    return Array.from(existingMap.values()).sort((a, b) =>
+
+                    const allMerged = Array.from(existingMap.values()).sort((a, b) =>
                         new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
                     );
+
+                    // Deduplicate direct conversations by peer user ID
+                    const seenDirectPeers = new Set<string>();
+                    const uniqueConvs: Conversation[] = [];
+                    for (const conv of allMerged) {
+                        if (conv.type === 'direct') {
+                            const otherMember = conv.members?.find((m: { user_id: string }) => m.user_id !== user?.id);
+                            const peerId = otherMember?.user_id;
+                            if (peerId) {
+                                if (seenDirectPeers.has(peerId)) continue;
+                                seenDirectPeers.add(peerId);
+                            }
+                        }
+                        uniqueConvs.push(conv);
+                    }
+                    return uniqueConvs;
                 });
                 
                 setLoading(false);
@@ -643,7 +661,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 // the `chat:delivered` socket event. When they load the app, we scan for any
                 // unread conversations where they are the receiver, and immediately blast out
                 // delivery ACKs via the Gateway's always-awake /deliver/batch endpoint.
-                const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || 'https://realtime-gateway-gsb5.onrender.com';
+                const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || import.meta.env.VITE_SOCKET_URL || 'https://realtime-gateway-gsb5.onrender.com';
                 const nowStr = new Date().toISOString();
                 const s = socketRef.current;
                 
@@ -1064,29 +1082,45 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 lastSyncTimestampRef.current = msg.created_at;
             }
 
-            // Industry pattern (WhatsApp / Messenger): fire delivery ACK unconditionally.
+            // Industry pattern (WhatsApp / Messenger): fire delivery and read ACKs instantly.
             if (!isOwnMessage) {
-                // 1. Socket emit — instant real-time notification to sender
-                socket.emit('chat:delivered', {
-                    conversationId: msg.conversation_id,
-                    messageId: msg.id,
-                    eventId: msg.event_id,
-                    senderId: msg.sender_id,
-                    deliveredAt: new Date().toISOString()
-                });
+                const isCurrentlyOpen = activeConversationIdRef.current === msg.conversation_id;
 
-                // 2. HTTP POST to Gateway fast-path — persists delivered_at directly, bypassing the sleeping API server.
-                //    The Gateway is always awake (it holds the sender's live socket connection).
-                const gatewayBase = import.meta.env.VITE_GATEWAY_URL || 'https://realtime-gateway-gsb5.onrender.com';
-                fetch(`${gatewayBase}/deliver/batch`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ messageIds: [msg.id], userId: user?.id })
-                }).catch(() => {}); // fire-and-forget, non-fatal
+                if (isCurrentlyOpen) {
+                    const nowStr = new Date().toISOString();
+                    // 1. Socket emit read instantly — instant real-time tick upgrade to blue on sender screen
+                    socket.emit('chat:read', {
+                        conversationId: msg.conversation_id,
+                        messageIds: [msg.id],
+                        readAt: nowStr,
+                        deviceId: deviceIdRef.current
+                    });
 
-                // 3. Debounced read mark — fires 1.5s after the last message arrives
-                //    (secondary path; the conversation-open useEffect is the primary).
-                debouncedMarkReadRef.current(msg.conversation_id);
+                    // 2. HTTP PUT to mark read instantly in database
+                    markConversationRead(msg.conversation_id);
+                } else {
+                    // Background conversation: message is only delivered, not read yet.
+                    
+                    // 1. Socket emit delivered instantly — grey double tick on sender screen
+                    socket.emit('chat:delivered', {
+                        conversationId: msg.conversation_id,
+                        messageId: msg.id,
+                        eventId: msg.event_id,
+                        senderId: msg.sender_id,
+                        deliveredAt: new Date().toISOString()
+                    });
+
+                    // 2. HTTP POST to Gateway fast-path for delivery persistence
+                    const gatewayBase = import.meta.env.VITE_GATEWAY_URL || import.meta.env.VITE_SOCKET_URL || 'https://realtime-gateway-gsb5.onrender.com';
+                    fetch(`${gatewayBase}/deliver/batch`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ messageIds: [msg.id], userId: user?.id })
+                    }).catch(() => {});
+
+                    // 3. Debounced read mark — fallback sync
+                    debouncedMarkReadRef.current(msg.conversation_id);
+                }
             }
 
             // Pre-injection guard
@@ -1460,6 +1494,19 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         };
 
 
+        // Listener for new conversations created for/by this user
+        const onNewConversation = (conv: Conversation) => {
+            if (!isMounted.current || !conv || !conv.id) return;
+            console.log(`[ChatContext] 📥 chat:new_conversation received:`, conv.id);
+            setConversations(prev => {
+                if (prev.some(c => c.id === conv.id)) {
+                    return prev.map(c => c.id === conv.id ? { ...c, ...conv } : c);
+                }
+                return [conv, ...prev];
+            });
+            socket?.emit('join_room', conv.id);
+        };
+
         // Non-tick observer: member status/presence updates within a conversation
         const onConversationUpdated = ({ conversationId, userId, status }: { conversationId: string; userId: string; status: string }) => {
             if (!isMounted.current) return;
@@ -1470,6 +1517,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 return c;
             }));
         };
+
 
         const onTyping = ({ conversationId, userId, isTyping }: { conversationId: string, userId: string, isTyping: boolean }) => {
             if (!isMounted.current || userId === user?.id) return;
@@ -1552,6 +1600,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         socket.off('chat:conversation_updated', onConversationUpdated);
         socket.on('chat:conversation_updated', onConversationUpdated);
 
+        socket.off('chat:new_conversation', onNewConversation);
+        socket.on('chat:new_conversation', onNewConversation);
+
+
         socket.off('chat:conversation_read', onConversationRead);
         socket.on('chat:conversation_read', onConversationRead);
 
@@ -1614,7 +1666,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             socket.off('chat:message_read', onReadEvent);
             socket.off('chat:read_receipt', onBatchReadEvent);
             socket.off('chat:conversation_updated', onConversationUpdated);
+            socket.off('chat:new_conversation', onNewConversation);
             socket.off('chat:conversation_read', onConversationRead);
+
             socket.off('chat:conversation_delivered', onConversationDelivered);
             socket.off('chat:typing', onTyping);
             socket.off('connect', onSocketReconnect);
@@ -2268,14 +2322,26 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     const acceptConversation = async (conversationId: string) => {
+        // Optimistically set current member status to 'accepted'
+        setConversations(prev => prev.map(c => {
+            if (c.id === conversationId) {
+                return {
+                    ...c,
+                    members: c.members.map(m => m.user_id === user?.id ? { ...m, status: 'accepted' } : m)
+                };
+            }
+            return c;
+        }));
         try {
             await api.put(`/chat/conversations/${conversationId}/accept`);
             toast.success('Conversation accepted');
             loadConversations();
         } catch {
             toast.error('Failed to accept conversation');
+            loadConversations(); // Rollback / reload
         }
     };
+
 
     const deleteConversation = async (conversationId: string) => {
         try {
