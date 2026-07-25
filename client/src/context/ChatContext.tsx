@@ -781,10 +781,20 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     return [conv, ...prev];
                 });
             }
-        } catch (e) {
+        } catch (e: any) {
+            if (e?.response?.status === 403 || e?.response?.status === 404) {
+                console.warn(`[Chat] Access denied or conversation not found (${conversationId}) for active account ${user?.id}. Clearing selection.`);
+                setActiveConversationId(null);
+                if (typeof window !== 'undefined' && window.location.search.includes(conversationId)) {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('id');
+                    window.history.replaceState({}, '', url.toString());
+                }
+                return;
+            }
             console.error('[Chat] Failed to load single conversation:', e);
         }
-    }, [session, isSwitching]);
+    }, [session, isSwitching, user?.id]);
 
     const loadMessages = useCallback(async (conversationId: string, force = false) => {
         if (!session) return;
@@ -882,7 +892,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     console.warn('[Chat] Failed to hydrate offline queue intents:', queueErr);
                 }
             }
-        } catch (err) {
+        } catch (err: any) {
+            if (err?.response?.status === 403 || err?.response?.status === 404) {
+                console.warn(`[Chat] Access denied or conversation not found (${conversationId}) for active account ${user?.id}. Clearing selection.`);
+                setActiveConversationId(null);
+                if (typeof window !== 'undefined' && window.location.search.includes(conversationId)) {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('id');
+                    window.history.replaceState({}, '', url.toString());
+                }
+                return;
+            }
             console.error('[Chat] Failed to load messages:', err);
         }
     }, [session, user?.id]);
