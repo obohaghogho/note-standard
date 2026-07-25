@@ -96,13 +96,7 @@ self.addEventListener('push', (event) => {
             deliveryWebhookUrl: data.data?.deliveryWebhookUrl || null,
             trace: data.data?.trace || null,
         },
-        actions: [
-            { action: 'open', title: 'View Now' },
-            { action: 'close', title: 'Dismiss' }
-        ],
-        // BUG FIX: Scope notification tag by conversationId.
-        // Different conversations get different tags (they stack in notification center).
-        // Same conversation updates the single existing notification (no spam).
+        // Note: actions array omitted on desktop web push to prevent Chromium Windows Action Center notification suppression
         tag: notifConversationId ? `chat-${notifConversationId}` : (data.tag || `ns-${Date.now()}`),
         renotify: true,  // Always alert even when updating an existing tag
     };

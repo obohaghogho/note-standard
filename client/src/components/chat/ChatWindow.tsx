@@ -254,18 +254,28 @@ const ChatWindow: React.FC = () => {
     useLayoutEffect(() => {
         if (!activeConversationId || !scrollContainerRef.current) return;
 
-        // Pass 1: Direct DOM scrollTop update
-        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-
-        // Pass 2: Next frame layout update to account for dynamic heights
-        const timer = setTimeout(() => {
+        const scrollToBottomNow = () => {
             if (scrollContainerRef.current) {
                 scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
             }
-        }, 50);
+            if (messagesEndRef.current) {
+                messagesEndRef.current.scrollIntoView({ block: 'end' });
+            }
+        };
 
-        return () => clearTimeout(timer);
-    }, [activeConversationId, currentMessages.length > 0]);
+        // Pass 1: Synchronous DOM scroll
+        scrollToBottomNow();
+
+        // Pass 2: Next frame layout update
+        const timer1 = setTimeout(scrollToBottomNow, 50);
+        // Pass 3: Delayed layout update for slow image/font mounts
+        const timer2 = setTimeout(scrollToBottomNow, 150);
+
+        return () => {
+            clearTimeout(timer1);
+            clearTimeout(timer2);
+        };
+    }, [activeConversationId, currentMessages.length, messageIdsKey]);
 
     // Auto-scroll on new message if already at bottom
     const prevMessagesLengthRef = useRef(currentMessages.length);
