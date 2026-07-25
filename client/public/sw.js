@@ -88,7 +88,7 @@ self.addEventListener('push', (event) => {
             conversationId: notifConversationId,
             // CRITICAL: persist targetAccountId so notificationclick can read it and
             // pass it to the React app for account switching
-            targetAccountId: data.data?.targetAccountId || null,
+            targetAccountId: data.data?.targetAccountId || data.data?.recipientId || null,
             apiUrl: data.data?.apiUrl || 'https://note-standard-api.onrender.com',
             // FAST-PATH FIX: gateway URL bypasses the sleeping API server (Render cold-start fix).
             // When present, the SW calls the gateway directly — it is always awake because it
@@ -218,9 +218,9 @@ self.addEventListener('push', (event) => {
 
                         if (suppressOSNotification) {
                             // ── User is actively viewing this exact chat: update app in-line ──
-                            console.log(`[SW] User actively viewing conversation ${notifConversationId} — updating in-app UI.`);
+                            console.log(`[FORENSIC][SW] User actively viewing conversation ${notifConversationId} — updating in-app UI.`);
 
-                            const targetClient = conversationClient || foregroundClient;
+                            const targetClient = foregroundClient;
                             if (targetClient) {
                                 targetClient.postMessage({
                                     type: 'CHAT_MESSAGE_RECEIVED',

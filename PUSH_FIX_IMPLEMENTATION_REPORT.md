@@ -1,6 +1,6 @@
 # PUSH_FIX_IMPLEMENTATION_REPORT
 
-**Generated:** 2026-07-23T19:57:15.839Z
+**Generated:** 2026-07-25T19:28:50.717Z
 
 > [!IMPORTANT]
 > This report is based on REAL data from the live database and environment. No mock data was used.
@@ -47,51 +47,49 @@
 
 ### 2. Subscription Coverage
 
-- ⚠️ Coverage: 7/47 users subscribed (15%)
-- ✅ Total push subscriptions in DB: 13
-- ⚠️ 11 subscriptions have NEVER had a successful push (secondary issue — needs investigation)
-- ⚠️ 1 subscriptions marked INVALID (will re-register on next app open)
+- ❌ DB query failed: TypeError: fetch failed
 
 ### 3. V2 Routing Configuration
 
 - ✅ USE_V2_PUSH_ROUTING=true (V2 routing ACTIVE)
 - ✅ ALLOW_V2_FALLBACK=true (legacy fallback enabled)
 - ✅ PUSH_ENABLED=true
-- ✅ V2 telemetry: 7/10 recent events had push_sent=true
+- ✅ V2 telemetry: 10/10 recent events had push_sent=true
 
 ### 4. Recent Push Delivery (24h)
 
-- ✅ Last 24h push attempts: 2
-- ✅ Accepted: 1
-- ⚠️ Failed: 1 (check failure breakdown in dashboard)
-- ❌ Push success rate (24h): 50%
-- ⚠️ Failure codes: {"410":1}
+- ✅ Last 24h push attempts: 37
+- ✅ Accepted: 33
+- ⚠️ Failed: 4 (check failure breakdown in dashboard)
+- ✅ Push success rate (24h): 89%
+- ⚠️ Failure codes: {"410":3,"500":1}
 
 ### 5. Never-Pushed Subscriptions (Secondary Issue)
 
 - ⚠️ NOTE: This is a SEPARATE issue from the 85% coverage gap.
 - ⚠️ These users HAVE subscriptions but push service never successfully delivered.
 - ⚠️ Root cause NOT yet confirmed — may be gateway failure, browser rejection, or endpoint expiry.
-- ⚠️ Found 10 subscriptions with 0 successful pushes:
-- ⚠️   #1 user=8677bd57... platform=? status=healthy created=2026-07-20 lastFail=none
-- ⚠️   #2 user=d7502a9a... platform=Android status=healthy created=2026-07-10 lastFail=none
-- ⚠️   #3 user=5089c266... platform=Windows status=healthy created=2026-07-03 lastFail=none
-- ⚠️   #4 user=43bcb51a... platform=iOS status=healthy created=2026-07-02 lastFail=none
-- ⚠️   #5 user=5089c266... platform=Android status=healthy created=2026-07-01 lastFail=none
-- ⚠️   #6 user=43fdd48b... platform=Android status=healthy created=2026-06-30 lastFail=none
-- ⚠️   #7 user=7ed6886b... platform=iOS status=healthy created=2026-06-29 lastFail=none
-- ⚠️   #8 user=8677bd57... platform=iOS status=healthy created=2026-06-25 lastFail=2026-06-26T14:18:42.018+00:00
-- ⚠️   #9 user=8677bd57... platform=MacOS status=healthy created=2026-06-25 lastFail=2026-06-26T14:18:42.018+00:00
-- ⚠️   #10 user=8677bd57... platform=Android status=healthy created=2026-06-25 lastFail=2026-06-26T14:18:42.017+00:00
+- ⚠️ Found 11 subscriptions with 0 successful pushes:
+- ⚠️   #1 user=5089c266... platform=Android status=healthy created=2026-07-25 lastFail=none
+- ⚠️   #2 user=5089c266... platform=Windows status=healthy created=2026-07-25 lastFail=none
+- ⚠️   #3 user=8677bd57... platform=Windows status=healthy created=2026-07-25 lastFail=none
+- ⚠️   #4 user=6872e2a9... platform=? status=healthy created=2026-07-24 lastFail=none
+- ⚠️   #5 user=8677bd57... platform=? status=healthy created=2026-07-20 lastFail=none
+- ⚠️   #6 user=d7502a9a... platform=Android status=healthy created=2026-07-10 lastFail=none
+- ⚠️   #7 user=43bcb51a... platform=iOS status=healthy created=2026-07-02 lastFail=none
+- ⚠️   #8 user=43fdd48b... platform=Android status=healthy created=2026-06-30 lastFail=none
+- ⚠️   #9 user=7ed6886b... platform=iOS status=healthy created=2026-06-29 lastFail=none
+- ⚠️   #10 user=8677bd57... platform=MacOS status=healthy created=2026-06-25 lastFail=2026-06-26T14:18:42.018+00:00
+- ⚠️   #11 user=8677bd57... platform=Android status=healthy created=2026-06-25 lastFail=2026-06-26T14:18:42.017+00:00
 
 ## Summary
 
 | Metric | Count |
 |--------|-------|
 | ✅ Passed | 17 |
-| ⚠️ Warnings | 19 |
+| ⚠️ Warnings | 17 |
 | ❌ Errors | 1 |
-| Total Checks | 37 |
+| Total Checks | 35 |
 
 ## Open Investigation Items
 

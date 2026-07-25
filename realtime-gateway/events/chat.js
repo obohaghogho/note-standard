@@ -149,26 +149,27 @@ module.exports = (io, socket) => {
 
     console.log(`[FORENSIC][GW] Delivery ACK Received | userId:${userId} | conversationId:${conversationId} | messageId:${messageId} | eventId:${eventId} | ts:${Date.now()}`);
 
+    // FAST-PATH: Emit socket event to sender IMMEDIATELY (<2ms) before database network write
+    const payload = {
+      userId,
+      conversationId,
+      messageId,
+      eventId,
+      delivered_at: deliveredAt || new Date().toISOString(),
+      deliveredAt: deliveredAt || new Date().toISOString(),
+    };
+
+    if (senderId) {
+      io.to(`user:${senderId}`).emit('chat:message_delivered', payload);
+    }
+    io.to(conversationId).emit('chat:message_delivered', payload);
+
     const PIPELINE_VERSION = process.env.MESSAGING_PIPELINE_VERSION || 'v2';
     if (PIPELINE_VERSION === 'v2' && messageId) {
       const deliveryEngine = require('../services/deliveryEngine');
-      await deliveryEngine.handleDeliveryAck(supabase, io, messageId, userId);
-    } else {
-      const payload = {
-        userId,
-        conversationId,
-        messageId,
-        eventId,
-        deliveredAt: deliveredAt || new Date().toISOString(),
-      };
-
-      // Route globally to the sender's user room if provided
-      if (senderId) {
-        socket.to(`user:${senderId}`).emit('chat:message_delivered', payload);
-      }
-
-      // Still emit to the conversation room for active participants
-      socket.to(conversationId).emit('chat:message_delivered', payload);
+      deliveryEngine.handleDeliveryAck(supabase, io, messageId, userId).catch(err => {
+        console.error('[Gateway] handleDeliveryAck background error:', err.message);
+      });
     }
   });
 

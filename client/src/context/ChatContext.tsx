@@ -1113,6 +1113,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     conversationId: msg.conversation_id,
                     messageId: msg.id,
                     eventId: msg.event_id,
+                    senderId: msg.sender_id,
                     deliveredAt: now,
                     deviceId
                 });

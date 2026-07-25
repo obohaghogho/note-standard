@@ -159,14 +159,15 @@ class DeviceRegistry {
     const p = String(rawPlatform).toLowerCase();
     const t = String(type).toLowerCase();
 
+    if (p.includes('android')) return 'android';
+    if (p.includes('ios') || p.includes('iphone') || p.includes('ipad') || t.includes('apns') || t.includes('voip')) return 'ios';
+
     if (t === 'vapid' || p.includes('web') || p.includes('chrome') || p.includes('firefox') || p.includes('safari') || p.includes('edge')) {
       if (p.includes('pwa')) return 'pwa';
       if (p.includes('mobile')) return 'mobile_web';
       return 'desktop_web';
     }
 
-    if (p.includes('android') && !p.includes('web')) return 'android';
-    if (p.includes('ios') || p.includes('iphone') || p.includes('ipad') || t.includes('apns') || t.includes('voip')) return 'ios';
     if (p.includes('pwa')) return 'pwa';
     if (p.includes('mobile')) return 'mobile_web';
     if (t.includes('fcm')) return 'android';

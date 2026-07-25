@@ -113,6 +113,7 @@ class PushDispatcher {
           conversationId: String(payload.conversationId),
           deliveryWebhookUrl: String(payload.deliveryWebhookUrl),
           recipientId: String(payload.userId),
+          targetAccountId: String(payload.userId),
           correlationId: String(payload.correlationId || '')
         },
         android: {
@@ -156,6 +157,7 @@ class PushDispatcher {
           conversationId: payload.conversationId,
           url: payload.conversationId ? `/dashboard/chat?id=${payload.conversationId}` : '/dashboard/chat',
           recipientId: payload.userId,
+          targetAccountId: payload.userId,
           deliveryWebhookUrl: payload.deliveryWebhookUrl,
           correlationId: payload.correlationId
         }

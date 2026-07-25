@@ -119,6 +119,13 @@ async function processIncomingMessage(io, supabase, envelope, deps = {}) {
     });
 
     if (socketsCount > 0) {
+      console.log(`[CID:${messageId.slice(0, 8)}] Gateway Routing Decision`);
+      console.log(`Recipient Socket Count : ${socketsCount}`);
+      console.log(`Recipient Connected    : YES`);
+      console.log(`Decision               : Socket First`);
+      console.log(`Push Suppressed        : YES (ACK Timer Scheduled: ${ACK_TIMEOUT_MS}ms)`);
+      console.log(`Reason                 : Recipient Online (Socket Active)`);
+
       // Recipient has a socket — message was delivered via dispatchSocketEvent.
       // Start ACK timeout: if no chat:delivered within configured time, send push.
       const ackKey = `${messageId}:${recipientId}`;
@@ -129,9 +136,6 @@ async function processIncomingMessage(io, supabase, envelope, deps = {}) {
       const timer = setTimeout(async () => {
         pendingAcks.delete(ackKey);
 
-        // Re-check: maybe the ACK arrived after we set the timer but
-        // the clearAck call raced with this timeout firing.
-        // Check DB directly — it's the source of truth.
         try {
           const { data: check } = await supabase
             .from('messages')
@@ -140,16 +144,13 @@ async function processIncomingMessage(io, supabase, envelope, deps = {}) {
             .single();
 
           if (check?.delivered_at) {
-            // Already delivered — the ACK arrived via another path
             return;
           }
         } catch (e) {
-          // DB check failed — send push as safety net
         }
 
-        console.log(`[DeliveryEngine] ACK timeout (${ACK_TIMEOUT_MS}ms) | messageId:${messageId} | recipient:${recipientId} — sending push`);
+        console.log(`[CID:${messageId.slice(0, 8)}] Gateway ACK Timeout Fired (${ACK_TIMEOUT_MS}ms) — sending fallback push`);
 
-        // Record the fallback trigger to telemetry (non-blocking)
         updateTelemetryFallback(supabase, messageId, recipientId).catch(err => {
           console.error('[DeliveryEngine] Background telemetry fallback update failed:', err.message);
         });
@@ -168,8 +169,12 @@ async function processIncomingMessage(io, supabase, envelope, deps = {}) {
 
       pendingAcks.set(ackKey, { timer, recipientId, conversationId });
     } else {
-      // No socket — send push immediately
-      console.log(`[DeliveryEngine] No socket | messageId:${messageId} | recipient:${recipientId} — sending push`);
+      console.log(`[CID:${messageId.slice(0, 8)}] Gateway Routing Decision`);
+      console.log(`Recipient Socket Count : 0`);
+      console.log(`Recipient Connected    : NO`);
+      console.log(`Decision               : Push Fallback`);
+      console.log(`Push Suppressed        : NO`);
+      console.log(`Reason                 : Recipient Offline (No Active Sockets)`);
 
       await chatPush.sendChatPush({
         supabase,
