@@ -488,13 +488,17 @@ const sendTestPush = async (req, res, next) => {
       subscriptionCount: validSubs.length,
       v2InstallationCount: (installs || []).length,
       platforms: [...new Set(validSubs.map(s => s.platform || 'unknown'))],
-      sentAt: now,
       note: validSubs.length === 0
         ? 'No valid subscriptions found for this user. Auto-recovery will register on next app open.'
         : accepted
           ? 'Gateway accepted the push. Check the user\'s device — notification should appear within seconds.'
-          : 'Gateway rejected the push. Check gateway logs for details.',
+          : 'Gateway rejected the push. Check gateway logs for details.'
     });
+  } catch (err) {
+    console.error('[PushHealth] sendTestPush error:', err);
+    next(err);
+  }
+};
 
 /**
  * GET /api/admin/message-inspector/:messageId
@@ -597,29 +601,66 @@ const getMessageInspectorTrace = async (req, res, next) => {
     let deviceBreakdown = [];
 
     if (recipientId) {
-      const DeviceRegistry = require('../../realtime-gateway/services/DeviceRegistry');
-      const devices = await DeviceRegistry.getActiveDevices(supabase, recipientId);
+      try {
+        const { data: v2Installs } = await supabase
+          .from('device_installations')
+          .select('device_id, platform, type, endpoint_status, last_seen_at')
+          .eq('user_id', recipientId);
 
-      deviceBreakdown = devices.map(dev => {
-        let status = 'PENDING';
-        let ackMs = ackLatencyMs;
+        const { data: v1Subs } = await supabase
+          .from('push_subscriptions')
+          .select('device_id, platform, status, last_seen_at')
+          .eq('user_id', recipientId);
 
-        if (message.delivered_at) {
-          status = dev.platform === 'android' || dev.platform === 'ios' ? 'PUSH_DELIVERED' : 'SOCKET_DELIVERED';
-        } else {
-          status = 'OFFLINE_OR_ACK_PENDING';
+        const devices = [];
+
+        if (v2Installs) {
+          v2Installs.forEach(dev => {
+            devices.push({
+              deviceId: dev.device_id,
+              platform: dev.platform || 'web',
+              source: 'device_installations_v2',
+              healthy: dev.endpoint_status === 'VALID',
+              lastSeen: dev.last_seen_at || new Date().toISOString()
+            });
+          });
         }
 
-        return {
-          deviceId: dev.deviceId || dev.id,
-          platform: dev.platform,
-          source: dev.source,
-          healthy: dev.healthy,
-          status,
-          ackLatencyMs: ackMs,
-          lastSeen: dev.lastSeen
-        };
-      });
+        if (v1Subs) {
+          v1Subs.forEach(sub => {
+            devices.push({
+              deviceId: sub.device_id || 'v1-web',
+              platform: sub.platform || 'web',
+              source: 'push_subscriptions_v1',
+              healthy: sub.status === 'healthy',
+              lastSeen: sub.last_seen_at || new Date().toISOString()
+            });
+          });
+        }
+
+        deviceBreakdown = devices.map(dev => {
+          let status = 'PENDING';
+          let ackMs = ackLatencyMs;
+
+          if (message.delivered_at) {
+            status = (dev.platform === 'android' || dev.platform === 'ios') ? 'PUSH_DELIVERED' : 'SOCKET_DELIVERED';
+          } else {
+            status = 'OFFLINE_OR_ACK_PENDING';
+          }
+
+          return {
+            deviceId: dev.deviceId,
+            platform: dev.platform,
+            source: dev.source,
+            healthy: dev.healthy,
+            status,
+            ackLatencyMs: ackMs,
+            lastSeen: dev.lastSeen
+          };
+        });
+      } catch (devErr) {
+        console.warn('[PushHealth] Error fetching device breakdown:', devErr.message);
+      }
     }
 
     res.json({
