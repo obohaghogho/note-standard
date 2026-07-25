@@ -98,24 +98,65 @@ const subscribeToNotifications = async (req, res, next) => {
       return res.status(400).json({ error: "Subscription keys missing" });
     }
 
-    const { error } = await supabase
+    // 2-step safe upsert: check for existing subscription by (user_id, endpoint) or fallback to endpoint
+    const { data: existing } = await supabase
       .from("push_subscriptions")
-      .upsert({ 
-        user_id: userId, 
-        endpoint, 
-        p256dh, 
-        auth,
-        vapid_key_version: vapidKeyVersion || null,
-        status: 'healthy',
-        device_id: deviceId || null,
-        device_name: deviceName || null,
-        platform: platform || null,
-        last_seen_at: new Date().toISOString()
-      }, {
-        onConflict: "user_id,endpoint",
-      });
+      .select("id, user_id")
+      .eq("user_id", userId)
+      .eq("endpoint", endpoint)
+      .maybeSingle();
 
-    if (error) throw error;
+    if (existing) {
+      const { error: updateErr } = await supabase
+        .from("push_subscriptions")
+        .update({
+          p256dh,
+          auth,
+          vapid_key_version: vapidKeyVersion || null,
+          status: 'healthy',
+          device_id: deviceId || null,
+          device_name: deviceName || null,
+          platform: platform || null,
+          last_seen_at: new Date().toISOString()
+        })
+        .eq("id", existing.id);
+      if (updateErr) throw updateErr;
+    } else {
+      // Try insert for this user_id
+      const { error: insertErr } = await supabase
+        .from("push_subscriptions")
+        .insert([{
+          user_id: userId,
+          endpoint,
+          p256dh,
+          auth,
+          vapid_key_version: vapidKeyVersion || null,
+          status: 'healthy',
+          device_id: deviceId || null,
+          device_name: deviceName || null,
+          platform: platform || null,
+          last_seen_at: new Date().toISOString()
+        }]);
+
+      if (insertErr) {
+        // If unique constraint on endpoint exists, update existing row
+        const { error: fallbackErr } = await supabase
+          .from("push_subscriptions")
+          .update({
+            user_id: userId,
+            p256dh,
+            auth,
+            vapid_key_version: vapidKeyVersion || null,
+            status: 'healthy',
+            device_id: deviceId || null,
+            device_name: deviceName || null,
+            platform: platform || null,
+            last_seen_at: new Date().toISOString()
+          })
+          .eq("endpoint", endpoint);
+        if (fallbackErr) throw fallbackErr;
+      }
+    }
 
     res.json({ message: "Subscribed to push notifications" });
   } catch (err) {
