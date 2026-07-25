@@ -5,9 +5,10 @@ interface VideoWithSignedUrlProps {
     path: string;
     fetchUrl: (p: string) => Promise<string | null>;
     onPreview?: (url: string) => void;
+    onLoad?: () => void;
 }
 
-const VideoWithSignedUrl: React.FC<VideoWithSignedUrlProps> = ({ path, fetchUrl, onPreview }) => {
+const VideoWithSignedUrl: React.FC<VideoWithSignedUrlProps> = ({ path, fetchUrl, onPreview, onLoad }) => {
     const [url, setUrl] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -37,7 +38,7 @@ const VideoWithSignedUrl: React.FC<VideoWithSignedUrlProps> = ({ path, fetchUrl,
 
     return (
         <div className="relative group cursor-pointer" onClick={() => onPreview && onPreview(url)}>
-            <video src={url} className="max-w-full rounded-lg" />
+            <video src={url} className="max-w-full rounded-lg" onLoadedData={onLoad} />
             <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-all">
                 <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white border border-white/30">
                     <Maximize size={20} />

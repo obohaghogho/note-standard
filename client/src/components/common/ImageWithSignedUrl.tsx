@@ -5,9 +5,10 @@ interface ImageWithSignedUrlProps {
     path: string;
     fetchUrl: (p: string) => Promise<string | null>;
     onPreview?: (url: string) => void;
+    onLoad?: () => void;
 }
 
-const ImageWithSignedUrl: React.FC<ImageWithSignedUrlProps> = ({ path, fetchUrl, onPreview }) => {
+const ImageWithSignedUrl: React.FC<ImageWithSignedUrlProps> = ({ path, fetchUrl, onPreview, onLoad }) => {
     const [url, setUrl] = useState<string | null>(null);
 
     useEffect(() => {
@@ -22,6 +23,7 @@ const ImageWithSignedUrl: React.FC<ImageWithSignedUrlProps> = ({ path, fetchUrl,
         <SecureImage
             src={url || undefined}
             alt="Attached"
+            onLoad={onLoad}
             className="max-w-full h-auto cursor-pointer hover:opacity-95 transition-opacity"
             onClick={() => {
                 if (url) {

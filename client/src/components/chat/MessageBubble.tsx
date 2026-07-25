@@ -23,6 +23,7 @@ interface MessageBubbleProps {
     handleManualTranslate: (id: string, content: string, original_language?: string) => void;
     fetchSignedUrl: (path: string) => Promise<string | null>;
     setPreviewMedia: (data: { url: string; type: 'image' | 'video'; fileName?: string; isSender?: boolean }) => void;
+    onMediaLoad?: () => void;
 }
 
 const MessageBubble = memo(({
@@ -40,7 +41,8 @@ const MessageBubble = memo(({
     handleReport,
     handleManualTranslate,
     fetchSignedUrl,
-    setPreviewMedia
+    setPreviewMedia,
+    onMediaLoad
 }: MessageBubbleProps) => {
     const { activeTheme, customizer } = useChatTheme();
     const isSender = msg.sender_id === currentUserId;
@@ -137,12 +139,14 @@ const MessageBubble = memo(({
                             <ImageWithSignedUrl 
                                 path={msg.attachment.storage_path} 
                                 fetchUrl={fetchSignedUrl} 
+                                onLoad={onMediaLoad}
                                 onPreview={(url) => setPreviewMedia({ url, type: 'image', fileName: msg.attachment?.file_name, isSender })}
                             />
                         ) : msg.type === 'video' ? (
                             <VideoWithSignedUrl 
                                 path={msg.attachment.storage_path} 
                                 fetchUrl={fetchSignedUrl} 
+                                onLoad={onMediaLoad}
                                 onPreview={(url) => setPreviewMedia({ url, type: 'video', fileName: msg.attachment?.file_name, isSender })}
                             />
                         ) : (

@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback, startTransition } from 'react';
+import { useChatViewportEngine } from '../../hooks/useChatViewportEngine';
 import { useChatGesture } from '../../hooks/useChatGesture';
 import { AnimatePresence } from 'framer-motion';
 import { useChat } from '../../context/ChatContext';
@@ -150,12 +151,24 @@ const ChatWindow: React.FC = () => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const composerRef = useRef<HTMLDivElement>(null);
-    // virtuosoRef removed
+    const innerWrapperRef = useRef<HTMLDivElement>(null);
 
+    const {
+        mountEngine,
+        scrollToBottom,
+        handleConversationSwitch,
+        handleSendMessage,
+        handleNewIncomingMessage,
+        handleMediaLoad,
+        updateScrollState,
+        captureScrollHeightBeforeHistoryLoad,
+        restoreScrollAfterHistoryLoad,
+        showScrollDown,
+        unreadCountWhileScrolled
+    } = useChatViewportEngine();
 
     const [translations, setTranslations] = useState<{ [key: string]: string }>({});
     const [showOriginal, setShowOriginal] = useState<{ [key: string]: boolean }>({});
-    const [showScrollDown, setShowScrollDown] = useState(false);
     const prevConvIdRef = useRef<string | null>(null);
     
     // Search states
@@ -165,7 +178,6 @@ const ChatWindow: React.FC = () => {
     const [isSearching, setIsSearching] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [isAccepting, setIsAccepting] = useState(false);
-    const [unreadCountWhileScrolled, setUnreadCountWhileScrolled] = useState(0);
     
     // Mentions state
     const [showMentions, setShowMentions] = useState(false);
@@ -211,100 +223,41 @@ const ChatWindow: React.FC = () => {
 
 
 
-    const isKeyboardTransitioning = useRef(false);
-    const wasAtBottomBeforeKeyboard = useRef(false);
-    const showScrollDownRef = useRef(showScrollDown);
+    // Mount ChatViewportEngine single source of truth
     useEffect(() => {
-        showScrollDownRef.current = showScrollDown;
-    }, [showScrollDown]);
-
-    const scrollToBottom = useCallback((behavior: ScrollBehavior | 'instant' | 'auto' = 'smooth') => {
-        if (scrollContainerRef.current) {
-            scrollContainerRef.current.scrollTo({
-                top: 0,
-                behavior: behavior === 'instant' ? 'auto' : behavior as 'auto' | 'smooth'
+        if (scrollContainerRef.current && messagesEndRef.current) {
+            mountEngine({
+                containerEl: scrollContainerRef.current,
+                anchorEl: messagesEndRef.current,
+                composerEl: composerRef.current,
+                innerWrapperEl: innerWrapperRef.current
             });
-            setShowScrollDown(false);
-            setUnreadCountWhileScrolled(0);
         }
-    }, []);
+    }, [mountEngine, activeConversationId]);
 
-    // Track composer height dynamically via ResizeObserver.
-    useLayoutEffect(() => {
-        const el = composerRef.current;
-        if (!el) return;
-        
-        let rafId: number;
-        const observer = new ResizeObserver(() => {
-            cancelAnimationFrame(rafId);
-            rafId = requestAnimationFrame(() => {
-                if (!el) return;
-                const h = el.getBoundingClientRect().height;
-                document.documentElement.style.setProperty('--composer-height', `${h}px`);
-                
-                const isInputFocused = document.activeElement?.id === 'chat-window-input';
-                const isNearBottom = !showScrollDownRef.current;
-                if (isNearBottom || isInputFocused) {
-                    scrollToBottom('instant');
-                }
-            });
-        });
-        observer.observe(el);
-        return () => {
-            observer.disconnect();
-            cancelAnimationFrame(rafId);
-        };
-    }, [scrollToBottom]);
-
-    // visualViewport event listeners and JS stabilization are intentionally removed.
-    // The native flex-direction: column-reverse architecture ensures the browser
-    // natively anchors the scroll bottom to the top of the composer at 60fps.
     const handleLoadMore = async () => {
         if (!activeConversationId) return;
+        const prevH = captureScrollHeightBeforeHistoryLoad();
         await loadMoreMessages(activeConversationId);
+        restoreScrollAfterHistoryLoad(prevH);
     };
 
-    // We can use native IntersectionObserver to check if user has scrolled away from the bottom anchor
-    useEffect(() => {
-        const anchor = messagesEndRef.current;
-        if (!anchor) return;
-        
-        const observer = new IntersectionObserver(([entry]) => {
-            const isVisible = entry.isIntersecting;
-            setShowScrollDown(!isVisible);
-            if (isVisible) {
-                setUnreadCountWhileScrolled(0);
-            }
-        }, {
-            root: scrollContainerRef.current,
-            threshold: 0.1
-        });
-        
-        observer.observe(anchor);
-        return () => observer.disconnect();
-    }, [activeConversationId]);
-
-    // Simple auto-scroll lock when chat changes
+    // Auto-scroll lock when chat changes or initial load
     useLayoutEffect(() => {
-        if (activeConversationId && prevConvIdRef.current !== activeConversationId) {
+        if (activeConversationId) {
             prevConvIdRef.current = activeConversationId;
-            scrollToBottom('instant');
+            handleConversationSwitch();
         }
-    }, [activeConversationId, scrollToBottom]);
+    }, [activeConversationId, handleConversationSwitch]);
 
     // Auto-scroll on new message if already at bottom
     const prevMessagesLengthRef = useRef(currentMessages.length);
     useLayoutEffect(() => {
         if (currentMessages.length > prevMessagesLengthRef.current) {
-            // New message arrived
-            if (!showScrollDown) {
-                scrollToBottom('smooth');
-            } else {
-                setUnreadCountWhileScrolled(prev => prev + 1);
-            }
+            handleNewIncomingMessage();
         }
         prevMessagesLengthRef.current = currentMessages.length;
-    }, [currentMessages.length, showScrollDown, scrollToBottom]);
+    }, [currentMessages.length, handleNewIncomingMessage]);
 
     // Initialize input from draft
     useEffect(() => {
@@ -501,7 +454,7 @@ const ChatWindow: React.FC = () => {
         setInputValue('');
         if (activeConversationId) setDraft(activeConversationId, '');
         setShowMentions(false);
-        setShowScrollDown(false); // Force scroll lock to bottom so the new message is fully visible
+        handleSendMessage();
 
         // Reset textarea height back to single-line (WhatsApp collapses on send)
         const textarea = document.getElementById('chat-window-input') as HTMLTextAreaElement | null;
@@ -1053,33 +1006,13 @@ const ChatWindow: React.FC = () => {
                             ref={(ref) => {
                                 if (ref) scrollContainerRef.current = ref as HTMLDivElement;
                             }}
-                            onScroll={(e) => {
-                                const target = e.target as HTMLDivElement;
-                                const isAtBottom = Math.abs(target.scrollTop) < 150;
-                                setShowScrollDown(!isAtBottom);
-                                if (isAtBottom) {
-                                    setUnreadCountWhileScrolled(0);
-                                }
-                            }}
+                            onScroll={updateScrollState}
+                            aria-live="polite"
+                            aria-atomic="false"
                         >
-                            <div className="flex flex-col gap-1 md:gap-2 mt-auto">
-                                <div ref={messagesEndRef} style={{ height: '1px', visibility: 'hidden' }} />
-                                
-                                {activeConversationId && typingUsers[activeConversationId] && typingUsers[activeConversationId].length > 0 && (
-                                    <div className="flex justify-start items-center gap-2 mt-2 animate-in fade-in slide-in-from-left-2 w-full">
-                                        <div className="bg-gray-800/90 backdrop-blur rounded-2xl p-3 flex gap-1 border border-gray-700 shadow-lg">
-                                            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                                            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                                            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></div>
-                                        </div>
-                                        <span className="text-[10px] text-gray-500 font-medium italic">
-                                            {typingUsers[activeConversationId]?.join(', ')} {typingUsers[activeConversationId]?.length > 1 ? 'are' : 'is'} typing...
-                                        </span>
-                                    </div>
-                                )}
-
+                            <div ref={innerWrapperRef} className="flex flex-col gap-1 md:gap-2 min-h-full justify-end mt-auto w-full">
                                 {(() => {
-                                    const reversed = [...currentMessages.slice(-100)].reverse();
+                                    const visibleMessages = currentMessages.slice(-100);
                                     const getDateLabel = (dateStr: string): string => {
                                         const d = new Date(dateStr);
                                         const today = new Date();
@@ -1095,11 +1028,12 @@ const ChatWindow: React.FC = () => {
                                         return da.getFullYear() === db.getFullYear() && da.getMonth() === db.getMonth() && da.getDate() === db.getDate();
                                     };
                                     const items: React.ReactNode[] = [];
-                                    reversed.forEach((msg, index, array) => {
-                                        const isGrouped = index < array.length - 1 &&
-                                            array[index].sender_id === array[index + 1].sender_id &&
-                                            isSameDay(array[index].created_at, array[index + 1].created_at) &&
-                                            (new Date(array[index].created_at).getTime() - new Date(array[index + 1].created_at).getTime() < 60000);
+                                    visibleMessages.forEach((msg, index, array) => {
+                                        const prevMsg = array[index - 1];
+                                        const isGrouped = prevMsg &&
+                                            prevMsg.sender_id === msg.sender_id &&
+                                            isSameDay(prevMsg.created_at, msg.created_at) &&
+                                            (new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime() < 60000);
                                         const isSelected = selectedMessages.has(msg.id);
                                         const showDateSep = index === 0 || !isSameDay(msg.created_at, array[index - 1].created_at);
                                         if (showDateSep && msg.created_at) {
@@ -1131,11 +1065,27 @@ const ChatWindow: React.FC = () => {
                                                 handleManualTranslate={handleManualTranslate}
                                                 fetchSignedUrl={fetchSignedUrl}
                                                 setPreviewMedia={(data) => setPreviewMedia({ ...data, isOpen: true })}
+                                                onMediaLoad={handleMediaLoad}
                                             />
                                         );
                                     });
                                     return items;
                                 })()}
+
+                                {activeConversationId && typingUsers[activeConversationId] && typingUsers[activeConversationId].length > 0 && (
+                                    <div className="flex justify-start items-center gap-2 mt-2 animate-in fade-in slide-in-from-left-2 w-full">
+                                        <div className="bg-gray-800/90 backdrop-blur rounded-2xl p-3 flex gap-1 border border-gray-700 shadow-lg">
+                                            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                                            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                                            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></div>
+                                        </div>
+                                        <span className="text-[10px] text-gray-500 font-medium italic">
+                                            {typingUsers[activeConversationId]?.join(', ')} {typingUsers[activeConversationId]?.length > 1 ? 'are' : 'is'} typing...
+                                        </span>
+                                    </div>
+                                )}
+
+                                <div ref={messagesEndRef} className="chat-scroll-anchor" />
                             </div>
                         </div>
                     </ChatWallpaper>
