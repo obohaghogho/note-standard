@@ -84,46 +84,8 @@ async function sendChatPush({ supabase, firebaseApp: fbApp, userId, title, body,
         console.error('[ChatPush] Telemetry update warning:', err.message);
       });
   }
-}
 
-  const webhookUrl = messageId && gatewayUrl ? `${gatewayUrl}/deliver/${messageId}?recipientId=${userId}` : '';
-
-  // 3. Send to each target
-  const results = await Promise.allSettled(targets.map(t => {
-    if (t.platform === 'android' && t.type === 'fcm' && resolvedFbApp) {
-      return sendFcm(resolvedFbApp, supabase, t, { userId, title, body, messageId, conversationId, webhookUrl });
-    }
-    if (t.platform === 'web' && t.type === 'vapid' && t.push_endpoint) {
-      return sendWeb(supabase, t, { userId, title, body, messageId, conversationId, webhookUrl });
-    }
-    return Promise.resolve(); // iOS APNs: add here when needed
-  }));
-
-  const sent = results.filter(r => r.status === 'fulfilled').length;
-  const failed = results.filter(r => r.status === 'rejected').length;
-  let providerResult = 'none';
-  if (sent > 0) {
-    providerResult = `success (${sent} sent)`;
-  } else if (failed > 0) {
-    const firstError = results.find(r => r.status === 'rejected');
-    providerResult = `failed: ${firstError?.reason?.message || 'unknown error'}`;
-  }
-
-  if (messageId) {
-    supabase.from('push_delivery_telemetry')
-      .update({
-        push_sent: sent > 0,
-        provider_result: providerResult
-      })
-      .eq('message_id', messageId)
-      .eq('recipient_id', userId)
-      .then()
-      .catch(err => {
-        console.error('[ChatPush] Background telemetry update failed:', err.message);
-      });
-  }
-
-  console.log(`[ChatPush] Sent ${sent}/${targets.length} pushes for user ${userId} | messageId:${messageId || 'N/A'}`);
+  console.log(`[ChatPush] Dispatched push for user ${userId}: ${dispatchResult.sent} sent, ${dispatchResult.failed} failed | messageId:${messageId || 'N/A'}`);
 }
 
 /** FCM dual-payload push (works when app process is closed/killed) */

@@ -1002,7 +1002,8 @@ const ChatWindow: React.FC = () => {
                 ) : (
                     <ChatWallpaper className="flex-1 min-h-0">
                         <div 
-                            className="chat-messages custom-scrollbar px-3 md:px-6 h-full overflow-y-auto"
+                            className="chat-messages custom-scrollbar px-3 md:px-6 h-full overflow-y-auto overscroll-y-contain"
+                            style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }}
                             ref={(ref) => {
                                 if (ref) scrollContainerRef.current = ref as HTMLDivElement;
                             }}
@@ -1010,7 +1011,7 @@ const ChatWindow: React.FC = () => {
                             aria-live="polite"
                             aria-atomic="false"
                         >
-                            <div ref={innerWrapperRef} className="flex flex-col gap-1 md:gap-2 min-h-full justify-end mt-auto w-full">
+                            <div ref={innerWrapperRef} className="flex flex-col gap-1 md:gap-2 min-h-full justify-end w-full">
                                 {(() => {
                                     const visibleMessages = currentMessages.slice(-100);
                                     const getDateLabel = (dateStr: string): string => {
