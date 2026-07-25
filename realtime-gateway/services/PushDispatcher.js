@@ -51,8 +51,9 @@ class PushDispatcher {
     // Resolve Firebase Admin instance
     let fbApp = firebaseApp || (admin.apps.length > 0 ? admin.apps[0] : null);
 
-    const deliveryWebhookUrl = messageId && gatewayUrl
-      ? `${gatewayUrl.replace(/\/$/, '')}/deliver/${messageId}?recipientId=${userId}&cid=${correlationId || ''}`
+    const resolvedGatewayUrl = gatewayUrl || process.env.SELF_URL || process.env.BACKEND_URL || 'http://localhost:4000';
+    const deliveryWebhookUrl = messageId
+      ? `${resolvedGatewayUrl.replace(/\/$/, '')}/deliver/${messageId}?recipientId=${userId}&cid=${correlationId || ''}`
       : '';
 
     const results = await Promise.allSettled(

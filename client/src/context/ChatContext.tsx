@@ -824,6 +824,23 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     m => !deletedMessageIdsRef.current.has(m.id) && !m.is_deleted
                 );
                 
+                // ── BULK UN-ACKED DELIVERY SWEEP ─────────────────────────────────
+                // Scan incoming messages: if any non-own message has delivered_at === null,
+                // emit a delivery ACK so sender's double-tick upgrades automatically.
+                const unACKedMessages = filtered.filter(m => m.sender_id !== user?.id && !m.delivered_at && m.id);
+                if (unACKedMessages.length > 0 && socketRef.current?.connected) {
+                    console.log(`[FORENSIC][CLIENT] Bulk Delivery Sweep: Sending ACK for ${unACKedMessages.length} un-ACKed message(s) in conv ${conversationId}`);
+                    unACKedMessages.forEach(m => {
+                        socketRef.current?.emit('chat:delivered', {
+                            conversationId,
+                            messageId: m.id,
+                            eventId: m.event_id,
+                            deliveredAt: new Date().toISOString(),
+                            deviceId
+                        });
+                    });
+                }
+
                 // Phase 3.2: Deterministic Merge Engine
                 setMessages(prev => {
                     const current = prev[conversationId] || [];
@@ -1085,6 +1102,21 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
             // ── Own-message echo handler ──────────────────────────────────────
             const isOwnMessage = msg.sender_id === user?.id;
+
+            // ── INSTANT RECIPIENT DELIVERY ACK ───────────────────────────────
+            // As soon as a non-own message reaches the recipient's socket, emit
+            // an immediate delivery ACK so sender's tick upgrades to ✓✓ in <50ms.
+            if (!isOwnMessage && msg.id && socketRef.current?.connected) {
+                const now = new Date().toISOString();
+                console.log(`[FORENSIC][CLIENT] Instant Delivery ACK Sent | messageId: ${msg.id} | eventId: ${msg.event_id} | convId: ${msg.conversation_id}`);
+                socketRef.current.emit('chat:delivered', {
+                    conversationId: msg.conversation_id,
+                    messageId: msg.id,
+                    eventId: msg.event_id,
+                    deliveredAt: now,
+                    deviceId
+                });
+            }
 
             // ── Phase 3: Type-safe sequence & version gap deduplication ───────
             const seq = normalizeSequenceNumber(msg.sequence_number);
