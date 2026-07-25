@@ -1344,7 +1344,19 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         };
 
         // PRIMARY WRITER — Delivery
-        const onDeliveryEvent = ({ messageId, eventId, conversationId }: { messageId: string; eventId?: string; conversationId: string }) => {
+        const onDeliveryEvent = ({ 
+            messageId, 
+            eventId, 
+            conversationId, 
+            delivered_at, 
+            deliveredAt 
+        }: { 
+            messageId: string; 
+            eventId?: string; 
+            conversationId: string; 
+            delivered_at?: string; 
+            deliveredAt?: string; 
+        }) => {
             if (!isMounted.current || (!messageId && !eventId) || !conversationId) return;
 
             // 1. RECORD CACHE (Race condition fix)
