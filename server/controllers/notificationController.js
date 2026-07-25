@@ -112,7 +112,7 @@ const subscribeToNotifications = async (req, res, next) => {
         platform: platform || null,
         last_seen_at: new Date().toISOString()
       }, {
-        onConflict: "endpoint",
+        onConflict: "user_id,endpoint",
       });
 
     if (error) throw error;
