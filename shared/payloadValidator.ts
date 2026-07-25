@@ -56,16 +56,18 @@ export function validateMessagePayload(raw: unknown): ValidationResult<Validated
     }
 
     const msg = raw as Record<string, unknown>;
+    const convId = msg.conversation_id || msg.conversationId || msg.chat_id || msg.chatId;
+    const senderId = msg.sender_id || msg.senderId;
 
     if (!isNonEmptyString(msg.id)) {
         return { valid: false, reason: 'MISSING_OR_INVALID_ID' };
     }
 
-    if (!isNonEmptyString(msg.conversation_id)) {
+    if (!isNonEmptyString(convId)) {
         return { valid: false, reason: 'MISSING_OR_INVALID_CONVERSATION_ID' };
     }
 
-    if (!isNonEmptyString(msg.sender_id)) {
+    if (!isNonEmptyString(senderId)) {
         return { valid: false, reason: 'MISSING_OR_INVALID_SENDER_ID' };
     }
 

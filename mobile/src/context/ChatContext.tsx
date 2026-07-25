@@ -366,7 +366,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         setupSocket();
 
         // INCOMING MESSAGE: Fast path — dedup, normalize, batch
-        socketManager.on('chat:message', async (rawMsg: any) => {
+        const onIncomingMessage = async (rawMsg: any) => {
             // ── Deduplication ──────────────────────────────────────────────────
             const dedupEventKey = rawMsg.event_id ? `evt:${rawMsg.event_id}` : null;
             const dedupIdKey = rawMsg.id && !String(rawMsg.id).startsWith('temp-') ? `id:${rawMsg.id}` : null;
@@ -424,7 +424,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     conversationId: incomingMessage.conversation_id
                 }).catch(() => {});
             }
-        });
+        };
+
+        socketManager.on('chat:message', onIncomingMessage);
+        socketManager.on('chat:new_message', onIncomingMessage);
 
         // 'chat:message_delivered' — sent by gateway when recipient device acks delivery
         // (either via socket emit from chat:delivered, or via /deliver/:id HTTP webhook)
@@ -560,6 +563,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         return () => {
             cancelled = true;
             socketManager.offEvent('chat:message');
+            socketManager.offEvent('chat:new_message');
             socketManager.offEvent('chat:message_delivered');
             socketManager.offEvent('chat:read_receipt');
             socketManager.offEvent('chat:message_edited');

@@ -116,7 +116,10 @@ const getVideoConstraints = (): MediaTrackConstraints => ({
 });
 
 // ── Provider ──────────────────────────────────────────────────────────────────
+import { useAuth } from './AuthContext';
+
 export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const { user, isSwitching } = useAuth();
     const { socket, connected: socketConnected } = useSocket();
     const { sendMessageToConversation } = useChat();
 
@@ -253,6 +256,14 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setIsVideoEnabled(true);
         setTimeout(() => { isCleaningUp.current = false; }, 100);
     }, [stopAllAudio]);
+
+    // ── WebRTC Safety: Automatic Call Teardown on Account Switch ─────────────
+    useEffect(() => {
+        if (isSwitching) {
+            console.log('[WebRTC] Account switch in progress — terminating active call, releasing camera/mic hardware');
+            cleanup();
+        }
+    }, [isSwitching, user?.id, cleanup]);
 
     // ── Drain queued ICE candidates ───────────────────────────────────────────
     const drainIceQueue = useCallback(async (pc: RTCPeerConnection) => {

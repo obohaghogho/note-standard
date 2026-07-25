@@ -177,6 +177,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const toastId = toast.loading('Switching to ' + target.email);
 
+    // Snapshot previous session state for Automatic Transactional Rollback
+    const previousUserId = user?.id;
+    const previousSession = session;
+
     try {
       setIsSwitching(true);
       switchInProgress.current = true;
@@ -185,16 +189,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       switchIdRef.current += 1;
       setSwitchId(switchIdRef.current);
       const currentSwitchId = switchIdRef.current;
-      console.log(`[Auth] Switch #${currentSwitchId}: refreshing ${target.email}...`);
+      console.log(`[ACCOUNT_FORENSIC] ACCOUNT_SWITCH_STARTED #${currentSwitchId}: Target=${target.email} Previous=${user?.email || 'none'}`);
 
-      // Rule 13: Try to use the stored access token first via setSession.
-      // CRITICAL: Do NOT call refreshSessionIsolated() eagerly. Supabase enforces single-use
-      // refresh tokens. If the mobile app already consumed this refresh token, calling
-      // refreshSessionIsolated() here will get a 400 'invalid_grant' error.
-      // Strategy: Try setSession with the stored token first. If it succeeds (even with a stale
-      // access token), Supabase's SDK will auto-refresh it. Only fall back to manual refresh
-      // if we have no access token at all.
-
+      // Attempt setSession with stored tokens
       const storedAccess = target.tokens?.access_token || target.session?.access_token;
       const storedRefresh = target.tokens?.refresh_token || target.session?.refresh_token;
 
@@ -207,8 +204,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // Attempt setSession with whatever tokens we have.
-      // Supabase SDK will silently auto-refresh the access token if it's expired.
       let freshSession: { access_token: string; refresh_token: string } | null = null;
 
       try {
@@ -218,16 +213,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         
         if (!setError && setResult.session) {
-          // setSession succeeded — save any newly rotated tokens
           freshSession = {
             access_token: setResult.session.access_token,
             refresh_token: setResult.session.refresh_token,
           };
           accountManager.updateAccountTokens(userId, setResult.session);
-          console.log('[Auth] setSession succeeded for', target.email);
+          console.log('[ACCOUNT_FORENSIC] ACCOUNT_SWITCH_TOKEN_UPDATED setSession succeeded for', target.email);
         } else {
           console.warn('[Auth] setSession failed:', setError?.message, '— trying isolated refresh as last resort');
-          // Only now try refreshSessionIsolated as last resort
           const latestAccount = accountManager.getAccount(userId);
           if (latestAccount) {
             const isolated = await refreshSessionIsolated(latestAccount);
@@ -243,43 +236,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // Rule 5: Protect against overlapping switch
+      // Protect against overlapping switch
       if (currentSwitchId !== switchIdRef.current) return;
 
       if (!freshSession) {
+        console.error(`[ACCOUNT_FORENSIC] ACCOUNT_SWITCH_FAILED - Invalid session for ${target.email}. Triggering rollback.`);
+        // Transactional Rollback
+        if (previousUserId && previousSession) {
+          accountManager.setActiveAccountId(previousUserId);
+          await supabase.auth.setSession({
+            access_token: previousSession.access_token,
+            refresh_token: previousSession.refresh_token,
+          }).catch(() => {});
+          console.log(`[ACCOUNT_FORENSIC] ACCOUNT_SWITCH_ROLLBACK_COMPLETED - Restored session for ${previousUserId}`);
+        }
+        
         toast.dismiss(toastId);
-        toast.error(`Session for ${target.email} has expired. Please re-authenticate.`);
+        toast.error(`Session for ${target.email} has expired. Returned to previous account.`);
         setIsSwitching(false);
         switchInProgress.current = false;
-        window.location.href = `/login?add_account=true&hint=${encodeURIComponent(target.email)}`;
         return;
       }
 
-      // Rule 3: Update active account ID FIRST
+      // Update active account ID
       accountManager.setActiveAccountId(userId);
-
-      // NOTE: We do NOT call supabase.auth.setSession() again here.
-      // The session was already established in the try block above.
-      // Calling setSession again would burn the newly rotated refresh token (Supabase single-use policy).
-
-      // Note: Logic continues in onAuthStateChange listener.
-      // We don't need syncUserData here as listener will trigger it.
-      
+      console.log(`[ACCOUNT_FORENSIC] ACCOUNT_SWITCH_COMPLETED successfully for ${target.email}`);
       toast.success(`Switched to ${target.email}`, { id: toastId });
 
     } catch (err) {
-      console.error('[Auth] Switch failed:', err);
+      console.error('[ACCOUNT_FORENSIC] ACCOUNT_SWITCH_FAILED:', err);
       
-      // Rollback active account ID if we were switching
-      const accounts = accountManager.getAllAccounts();
-      const currentActive = accountManager.getActiveAccountId();
-      const userIsStillInList = accounts.some(a => a.id === user?.id);
-      
-      if (user?.id && userIsStillInList && currentActive !== user.id) {
-        accountManager.setActiveAccountId(user.id);
+      // Automatic Transactional Rollback
+      if (previousUserId && previousSession) {
+        console.log(`[ACCOUNT_FORENSIC] ACCOUNT_SWITCH_ROLLBACK initiating for ${previousUserId}...`);
+        accountManager.setActiveAccountId(previousUserId);
+        await supabase.auth.setSession({
+          access_token: previousSession.access_token,
+          refresh_token: previousSession.refresh_token,
+        }).catch(() => {});
+        console.log(`[ACCOUNT_FORENSIC] ACCOUNT_SWITCH_ROLLBACK_COMPLETED for ${previousUserId}`);
       }
 
-      toast.error(err instanceof Error ? err.message : 'Switch failed', { id: toastId });
+      toast.error(err instanceof Error ? err.message : 'Switch failed — restored previous account', { id: toastId });
       setIsSwitching(false);
       switchInProgress.current = false;
     }

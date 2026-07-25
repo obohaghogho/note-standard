@@ -1334,59 +1334,77 @@ exports.sendMessage = async (req, res) => {
            replayGuard.advance(conversationId, insertedMessage.sequence_number);
         }
       } else {
-        const insertPayload = {
-          conversation_id: conversationId,
-          sender_id: userId,
-          content: content || '',
-          type: type || "text",
-          sentiment,
-          detected_language: detectedLang,
-          event_id: eventId,
-          sequence_number: null
-        };
-        if (attachmentId) insertPayload.attachment_id = attachmentId;
-        if (replyToId)    insertPayload.reply_to_id   = replyToId;
+        // Explicit server-side idempotency check
+        if (eventId) {
+          const { data: existingMsg } = await supabase
+            .from("messages")
+            .select("id")
+            .eq("conversation_id", conversationId)
+            .eq("event_id", eventId)
+            .maybeSingle();
 
-        const { data: insertData, error: insertError } = await supabase
-          .from("messages")
-          .insert([insertPayload])
-          .select("id")
-          .single();
-
-        if (insertError) {
-          const isSchemaError = insertError.code === "42703" || insertError.code === "PGRST200" ||
-            (insertError.message && (
-              insertError.message.includes("sentiment") || 
-              insertError.message.includes("detected_language") || 
-              insertError.message.includes("attachment_id")
-            ));
-
-          if (isSchemaError) {
-            console.warn("[Chat Controller] Schema mismatch on insert, retrying basic fallback insert:", insertError.code, insertError.message);
-            const fallbackPayload = {
-              conversation_id: conversationId,
-              sender_id: userId,
-              content: content || '',
-              type: type || "text",
-              event_id: eventId,
-              sequence_number: null
-            };
-            if (attachmentId) fallbackPayload.attachment_id = attachmentId;
-            if (replyToId)    fallbackPayload.reply_to_id   = replyToId;
-
-            const { data: retryData, error: retryErr } = await supabase
-              .from("messages")
-              .insert([fallbackPayload])
-              .select("id")
-              .single();
-
-            if (retryErr) throw retryErr;
-            insertedMessage = retryData;
-          } else {
-            throw insertError;
+          if (existingMsg) {
+            console.log(`[Chat Controller] Idempotent check: event_id ${eventId} already processed (ID: ${existingMsg.id}). Returning existing row.`);
+            insertedMessage = existingMsg;
+            isDuplicate = true;
           }
-        } else {
-          insertedMessage = insertData;
+        }
+
+        if (!insertedMessage) {
+          const insertPayload = {
+            conversation_id: conversationId,
+            sender_id: userId,
+            content: content || '',
+            type: type || "text",
+            sentiment,
+            detected_language: detectedLang,
+            event_id: eventId,
+            sequence_number: null
+          };
+          if (attachmentId) insertPayload.attachment_id = attachmentId;
+          if (replyToId)    insertPayload.reply_to_id   = replyToId;
+
+          const { data: insertData, error: insertError } = await supabase
+            .from("messages")
+            .insert([insertPayload])
+            .select("id")
+            .single();
+
+          if (insertError) {
+            const isSchemaError = insertError.code === "42703" || insertError.code === "PGRST200" ||
+              (insertError.message && (
+                insertError.message.includes("sentiment") || 
+                insertError.message.includes("detected_language") || 
+                insertError.message.includes("attachment_id")
+              ));
+
+            if (isSchemaError) {
+              console.warn("[Chat Controller] Schema mismatch on insert, retrying basic fallback insert:", insertError.code, insertError.message);
+              const fallbackPayload = {
+                conversation_id: conversationId,
+                sender_id: userId,
+                content: content || '',
+                type: type || "text",
+                event_id: eventId,
+                sequence_number: null
+              };
+              if (attachmentId) fallbackPayload.attachment_id = attachmentId;
+              if (replyToId)    fallbackPayload.reply_to_id   = replyToId;
+
+              const { data: retryData, error: retryErr } = await supabase
+                .from("messages")
+                .insert([fallbackPayload])
+                .select("id")
+                .single();
+
+              if (retryErr) throw retryErr;
+              insertedMessage = retryData;
+            } else {
+              throw insertError;
+            }
+          } else {
+            insertedMessage = insertData;
+          }
         }
       }
 

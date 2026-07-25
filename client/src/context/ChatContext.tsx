@@ -3,6 +3,7 @@ import { Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
 import { validateMessagePayload, normalizeSequenceNumber } from 'shared/payloadValidator';
+import { normalizeEvent } from 'shared/eventNormalizer';
 import { mergeMessages } from 'shared/messageMergeEngine';
 import { useSessionArbitration } from 'shared/hooks/useSessionArbitration';
 import { OfflineQueueEngine } from 'shared/offlineQueueEngine';
@@ -98,21 +99,14 @@ export interface Conversation {
 
 // ── SINGLE CANONICAL DEDUPE RULE: event_id OR id ───────────────────────────
 // This is the ONE merge system used everywhere in the app.
-// Rule: A message is unique if event_id OR id matches — never both independently.
+// Rule: Delegate to shared messageMergeEngine for canonical ID collapse and status hierarchy.
 function dedupeMessages(messages: Message[]): Message[] {
-    const map = new Map<string, Message>();
-    for (const m of messages) {
-        const key = m.event_id || m.id;
-        // Later entries for the same key win (preserves status upgrades)
-        map.set(key, m);
-    }
-    return Array.from(map.values())
-        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    return mergeMessages([], messages).merged as Message[];
 }
 
 // Alias for merge-and-dedupe of two arrays (replaces stableMerge calls)
 function stableMerge(prev: Message[], incoming: Message[]): Message[] {
-    return dedupeMessages([...prev, ...incoming]);
+    return mergeMessages(prev, incoming).merged as Message[];
 }
 
 export interface ChatContextValue {
@@ -834,7 +828,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         });
                     }
 
-                    return { ...prev, [conversationId]: merged as Message[] };
+                    const boundedMerged = merged.length > 500 ? merged.slice(-500) : merged;
+                    return { ...prev, [conversationId]: boundedMerged as Message[] };
                 });
 
                 // ── Hydrate pending offline-queue intents ──────────────────────────
@@ -1017,7 +1012,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             // Stamp last server event time for silent-drift detection
             lastServerAckRef.current = Date.now();
 
-            const validation = validateMessagePayload(raw);
+            const normalizedRaw = normalizeEvent(raw);
+            const validation = validateMessagePayload(normalizedRaw);
             if (!validation.valid) {
                 console.log(`[SYNC_FORENSICS] [CLIENT_TRACE] schema validation: FAIL | reason: ${validation.reason}`);
                 return;
@@ -1054,14 +1050,23 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 return;
             }
 
-            // ── Own-message echo guard ────────────────────────────────────────
-            const isOwnMessage = msg.sender_id === user?.id;
-            if (isOwnMessage) {
-                // Drop echo completely to prevent double updates.
+            // ── SAFEGUARD 2: Message Ownership & Participant Validation ───────
+            // Prevent accidental cross-conversation rendering or foreign message injection.
+            // Verify message.conversation_id belongs to a known conversation or active conversation.
+            const isKnownConversation = conversationsRef.current.some(c => c.id === msg.conversation_id) || activeConversationIdRef.current === msg.conversation_id;
+            if (!isKnownConversation) {
+                console.warn('[SECURITY_FORENSICS] Message Ownership Validation Failed: incoming message does not belong to any valid user conversation', {
+                    messageId: msg.id,
+                    conversationId: msg.conversation_id,
+                    currentUserId: user.id
+                });
                 return;
             }
 
-            // ── Phase 3: Type-safe sequence deduplication ─────────────────────
+            // ── Own-message echo handler ──────────────────────────────────────
+            const isOwnMessage = msg.sender_id === user?.id;
+
+            // ── Phase 3: Type-safe sequence & version gap deduplication ───────
             const seq = normalizeSequenceNumber(msg.sequence_number);
 
             if (seq !== undefined) {
@@ -1071,7 +1076,35 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     console.log(`[CLIENT_TRACE] sequence dedup: FAIL (dropped stale replay) | seq: ${seq} lastSeen: ${lastSeen} | id: ${msg.id}`);
                     return;
                 }
-                lastSeenSequenceRef.current[msg.conversation_id] = Math.max(lastSeen, seq);
+
+                // ── SEQUENCE GAP DETECTION (Conservative Versioning Guard) ────
+                // If sequence jumps by > 1 (e.g. lastSeen was 201, incoming is 204),
+                // do NOT skip the sequence number in memory until missing messages are backfilled.
+                if (lastSeen > 0 && seq > lastSeen + 1) {
+                    console.log(`[SEQUENCE_GAP_DETECTED] Conversation ${msg.conversation_id}: local seq ${lastSeen}, incoming seq ${seq}. Gap of ${seq - lastSeen - 1} message(s). Triggering conservative self-healing refetch.`);
+                    loadMessagesRef.current(msg.conversation_id, true)
+                        .then(() => {
+                            lastSeenSequenceRef.current[msg.conversation_id] = Math.max(lastSeenSequenceRef.current[msg.conversation_id] ?? 0, seq);
+                        })
+                        .catch(() => {});
+                } else {
+                    lastSeenSequenceRef.current[msg.conversation_id] = Math.max(lastSeen, seq);
+                }
+            }
+
+            const version = msg.conversation_version !== undefined ? Number(msg.conversation_version) : undefined;
+            if (version !== undefined && !Number.isNaN(version) && version > 0) {
+                const lastVersion = lastSeenSequenceRef.current[`ver:${msg.conversation_id}`] ?? -1;
+                if (lastVersion > 0 && version > lastVersion + 1) {
+                    console.log(`[VERSION_GAP_DETECTED] Conversation ${msg.conversation_id}: local ver ${lastVersion}, incoming ver ${version}. Triggering conservative self-healing refetch.`);
+                    loadMessagesRef.current(msg.conversation_id, true)
+                        .then(() => {
+                            lastSeenSequenceRef.current[`ver:${msg.conversation_id}`] = Math.max(lastSeenSequenceRef.current[`ver:${msg.conversation_id}`] ?? 0, version);
+                        })
+                        .catch(() => {});
+                } else {
+                    lastSeenSequenceRef.current[`ver:${msg.conversation_id}`] = Math.max(lastVersion, version);
+                }
             }
 
             const newMessage: Message = { ...msg, isOwn: isOwnMessage };
@@ -1145,9 +1178,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             console.log(`[CLIENT_TRACE] [${Date.now()}] setMessages called`);
             setMessages(prev => {
                 const current = prev[msg.conversation_id] || [];
-                const merged = dedupeMessages([...current, safeNewMessage]);
-                console.log(`[CLIENT_TRACE] [${Date.now()}] messages state updated: PASS | next state size: ${merged.length}`);
-                return { ...prev, [msg.conversation_id]: merged };
+                const { merged } = mergeMessages(current, [safeNewMessage]);
+                const boundedMerged = merged.length > 500 ? merged.slice(-500) : merged;
+                console.log(`[CLIENT_TRACE] [${Date.now()}] messages state updated: PASS | next state size: ${boundedMerged.length}`);
+                return { ...prev, [msg.conversation_id]: boundedMerged };
             });
 
             // Only update conversations if something materially changed (new message, or sequence update)
@@ -1207,7 +1241,24 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     return nextConvs;
                 });
             } else {
-                 console.log(`[CLIENT_TRACE] [${Date.now()}] duplicate message filtering: PASS (newlyAddedCount=0, seq=undefined)`);
+                console.log(`[CLIENT_TRACE] [${Date.now()}] duplicate message filtering: PASS (newlyAddedCount=0, seq=undefined)`);
+            }
+
+            // ── SAFEGUARD 3: Conversation Consistency Checker ────────────────
+            // Verify that if conversation lastMessage exists, it is present in messages[conversationId].
+            // If divergent (e.g. preview shows message X, but message list is missing message X),
+            // trigger background self-healing reconciliation automatically.
+            const currentConvMsgs = messagesRef.current[msg.conversation_id] || [];
+            if (currentConvMsgs.length > 0) {
+                const targetConv = conversationsRef.current.find(c => c.id === msg.conversation_id);
+                const lastMsgId = targetConv?.lastMessage?.id || (targetConv as any)?.last_message?.id;
+                if (lastMsgId && !String(lastMsgId).startsWith('temp-')) {
+                    const hasLastMsg = currentConvMsgs.some(m => m.id === lastMsgId || (m.event_id && m.event_id === targetConv?.lastMessage?.event_id));
+                    if (!hasLastMsg) {
+                        console.log(`[SELF_HEALING] Conversation consistency divergence detected for ${msg.conversation_id} (missing lastMessage ${lastMsgId}). Triggering automatic reconciliation.`);
+                        loadMessagesRef.current(msg.conversation_id, true).catch(() => {});
+                    }
+                }
             }
         };
 
@@ -1573,6 +1624,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         socket.off('chat:message', processIncomingMessage);
         socket.on('chat:message', processIncomingMessage);
+        socket.off('chat:new_message', processIncomingMessage);
+        socket.on('chat:new_message', processIncomingMessage);
 
         socket.off('chat:message_deleted', onMessageDeleted);
         socket.on('chat:message_deleted', onMessageDeleted);
@@ -1658,6 +1711,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         
         return () => { 
             socket.off('chat:message', processIncomingMessage); 
+            socket.off('chat:new_message', processIncomingMessage); 
             socket.off('chat:message_deleted', onMessageDeleted);
             socket.off('chat:message_edited', onMessageEdited);
             socket.off('chat:message_delivered', onDeliveryEvent);

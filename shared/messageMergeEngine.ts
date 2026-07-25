@@ -12,6 +12,8 @@
 export interface Message {
     id: string;
     event_id?: string;
+    client_request_id?: string;
+    clientRequestId?: string;
     sequence_number?: number;
     _optimistic?: boolean;
     reply_to?: {
@@ -30,6 +32,10 @@ export interface MergeResult {
     newlyAddedCount: number;
 }
 
+function getEventKey(m: Message): string | undefined {
+    return m.event_id || m.client_request_id || m.clientRequestId;
+}
+
 export function mergeMessages(existing: Message[], incoming: Message[]): MergeResult {
     const byId = new Map<string, Message>();
     const byEvent = new Map<string, Message>();
@@ -37,8 +43,9 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
     // Stage 1 & 2: Index existing messages
     for (const msg of existing) {
         byId.set(msg.id, msg);
-        if (msg.event_id) {
-            byEvent.set(msg.event_id, msg);
+        const evtKey = getEventKey(msg);
+        if (evtKey) {
+            byEvent.set(evtKey, msg);
         }
     }
 
@@ -46,14 +53,15 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
 
     // Stage 3: Merge incoming
     for (const msg of incoming) {
-        // Priority 1: match by event_id (canonical identity)
+        // Priority 1: match by event_id / clientRequestId (canonical ACK identity)
         // Priority 2: match by id (legacy fallback)
-        const existingMsg = (msg.event_id && byEvent.get(msg.event_id)) || byId.get(msg.id);
+        const incomingEvtKey = getEventKey(msg);
+        const existingMsg = (incomingEvtKey && byEvent.get(incomingEvtKey)) || byId.get(msg.id);
 
         if (!existingMsg) {
             newlyAddedCount++;
             byId.set(msg.id, msg);
-            if (msg.event_id) byEvent.set(msg.event_id, msg);
+            if (incomingEvtKey) byEvent.set(incomingEvtKey, msg);
             continue;
         }
 
@@ -105,7 +113,8 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
             }
             
             byId.set(updatedMsg.id, updatedMsg);
-            if (updatedMsg.event_id) byEvent.set(updatedMsg.event_id, updatedMsg);
+            const updatedEvtKey = getEventKey(updatedMsg);
+            if (updatedEvtKey) byEvent.set(updatedEvtKey, updatedMsg);
 
             console.log('[SYNC_FORENSICS]', {
                 stage: 'mergeMessages',

@@ -61,12 +61,20 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setLoading(true);
         setError(null);
 
+        const currentFetchUserId = user.id;
+
         try {
             // 1. Fetch Core Data (High Priority)
             const [walletsData, transactionsData] = await Promise.all([
                 walletApi.getWallets(),
                 walletApi.getTransactions()
             ]);
+
+            // Identity verification guard: Discard response if active user changed during fetch
+            if (user.id !== currentFetchUserId) {
+                console.warn('[Wallet] User identity changed during fetch — discarding stale wallet response');
+                return;
+            }
 
             // Map raw wallets to Unified Balance Model (WalletEntry)
             const rawWallets = Array.isArray(walletsData) ? walletsData : [];
@@ -117,16 +125,21 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }, [user, profile, authReady]);
 
 
-    // Initial Load
+    // Initial Load & Financial Data Isolation on Account Switch
     useEffect(() => {
         if (authReady && user && profile) {
+            // Financial Data Isolation: Immediately flush state before fetching
+            // to ensure no brief flash of previous account's financial data on switch
+            setWallets([]);
+            setTransactions([]);
+            setLoading(true);
             fetchData();
         } else if (authReady && (!user || !profile)) {
             setWallets([]);
             setTransactions([]);
             setLoading(false);
         }
-    }, [user, profile, authReady, fetchData]);
+    }, [user?.id, profile?.id, authReady, fetchData]);
 
     // Real-time Updates (Listen to ledger and transaction changes)
     useEffect(() => {

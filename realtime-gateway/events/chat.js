@@ -300,10 +300,14 @@ module.exports = (io, socket) => {
     if (!room || !message) return;
 
     // Relay to everyone else in the room (not back to sender)
-    socket.to(room).emit('chat:new_message', {
+    const outboundMsg = {
       ...message,
       senderId: userId, // always use authenticated userId, not client-provided
-    });
+      sender_id: message.sender_id || userId,
+      conversation_id: message.conversation_id || conversationId,
+    };
+    socket.to(room).emit('chat:message', outboundMsg);
+    socket.to(room).emit('chat:new_message', outboundMsg);
   });
 
   // ── Immediate Socket Delivery Receipt ─────────────────────────────────
