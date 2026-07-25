@@ -31,182 +31,60 @@ const CACHE_TTL_MS = 15000; // 15 seconds TTL
  * @param {string}  opts.conversationId
  * @param {string}  opts.gatewayUrl     - e.g. https://realtime-gateway-gsb5.onrender.com
  */
-async function sendChatPush({ supabase, firebaseApp: fbApp, userId, title, body, messageId, conversationId, gatewayUrl }) {
+const DeviceRegistry = require('./DeviceRegistry');
+const PushDispatcher = require('./PushDispatcher');
+
+/**
+ * @param {object}  opts
+ * @param {object}  opts.supabase       - Supabase client
+ * @param {object}  opts.firebaseApp    - Firebase Admin app (may be null)
+ * @param {string}  opts.userId         - recipient user ID
+ * @param {string}  opts.title
+ * @param {string}  opts.body
+ * @param {string}  opts.messageId
+ * @param {string}  opts.conversationId
+ * @param {string}  opts.gatewayUrl     - e.g. https://realtime-gateway-gsb5.onrender.com
+ * @param {string}  [opts.correlationId]
+ */
+async function sendChatPush({ supabase, firebaseApp: fbApp, userId, title, body, messageId, conversationId, gatewayUrl, correlationId }) {
   if (!supabase || !userId) return;
 
-  // Ensure Web Push details are configured
-  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
-    try {
-      webpush.setVapidDetails(
-        `mailto:${process.env.EMAIL_FROM || "noreply@notestandard.com"}`,
-        process.env.VAPID_PUBLIC_KEY,
-        process.env.VAPID_PRIVATE_KEY
-      );
-    } catch (e) {
-      // VAPID keys might already be set up, ignore error
-    }
+  // 1. Fetch normalized, deduplicated devices via DeviceRegistry (single source of truth)
+  const devices = await DeviceRegistry.getActiveDevices(supabase, userId);
+
+  if (!devices || devices.length === 0) {
+    console.log(`[ChatPush] No active, healthy devices found for user ${userId} | cid:${correlationId || 'N/A'}`);
+    return;
   }
 
-  // Resolve or initialize Firebase App instance
-  let resolvedFbApp = fbApp || (admin.apps.length > 0 ? admin.apps[0] : null);
-  if (!resolvedFbApp) {
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      try {
-        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-        resolvedFbApp = admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount)
-        });
-        console.log('[ChatPush] Firebase Admin initialized inside ChatPush.');
-      } catch (err) {
-        console.error('[ChatPush] Firebase initialization failed:', err.message);
-      }
-    } else if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
-      try {
-        const path = require('path');
-        const accountPath = path.resolve(process.cwd(), process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
-        const serviceAccount = require(accountPath);
-        resolvedFbApp = admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount)
-        });
-        console.log('[ChatPush] Firebase Admin initialized via file path inside ChatPush.');
-      } catch (err) {
-        console.error('[ChatPush] Firebase initialization via file failed:', err.message);
-      }
-    } else if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
-      try {
-        const privateKey = process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n');
-        resolvedFbApp = admin.initializeApp({
-          credential: admin.credential.cert({
-            projectId: process.env.FIREBASE_PROJECT_ID,
-            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-            privateKey: privateKey,
-          })
-        });
-        console.log('[ChatPush] Firebase Admin initialized via individual env vars inside ChatPush.');
-      } catch (err) {
-        console.error('[ChatPush] Firebase initialization via individual env vars failed:', err.message);
-      }
-    }
-  }
+  // 2. Dispatch platform-tailored push notifications via PushDispatcher
+  const dispatchResult = await PushDispatcher.dispatch({
+    supabase,
+    firebaseApp: fbApp,
+    devices,
+    userId,
+    title,
+    body,
+    messageId,
+    conversationId,
+    gatewayUrl,
+    correlationId
+  });
 
-  // 1. Fetch endpoints from cache or database (single source of truth)
-  let installations = null;
-  const nowTime = Date.now();
-  const cached = installationsCache.get(userId);
-  // isCacheMiss: true when the cache is empty/expired for this user.
-  // On a cache miss we ALWAYS do a live DB read (no cache write for first-time calls
-  // that race with session registration). This prevents the "first message silent skip"
-  // where an empty cache entry was written before session_state turned ACTIVE.
-  const isCacheMiss = !cached || cached.expiresAt <= nowTime;
-
-  if (!isCacheMiss) {
-    installations = cached.installations;
-  } else {
-    const { data, error } = await supabase
-      .from('installation_accounts')
-      .select('session_state, device_installations(installation_id, type, push_endpoint, platform, push_p256dh, push_auth, device_id, endpoint_status)')
-      .eq('user_id', userId);
-
-    if (error) {
-      console.error('[ChatPush] Failed to query installations:', error.message);
-      return;
-    }
-
-    installations = data || [];
-    // Only cache if we found ACTIVE/BACKGROUND sessions — avoids caching an empty
-    // result that was caused by session_state still being null/pending.
-    const hasActiveSession = installations.some(i => i.session_state === 'ACTIVE' || i.session_state === 'BACKGROUND');
-    if (hasActiveSession) {
-      installationsCache.set(userId, {
-        installations,
-        expiresAt: nowTime + CACHE_TTL_MS
+  if (messageId) {
+    supabase.from('push_delivery_telemetry')
+      .update({
+        push_sent: dispatchResult.sent > 0,
+        provider_result: dispatchResult.sent > 0 ? `success (${dispatchResult.sent} sent)` : `failed (${dispatchResult.failed} failed)`
+      })
+      .eq('message_id', messageId)
+      .eq('recipient_id', userId)
+      .then()
+      .catch(err => {
+        console.error('[ChatPush] Telemetry update warning:', err.message);
       });
-    }
   }
-
-  if (!installations || installations.length === 0) {
-    console.log(`[ChatPush] No installations for user ${userId}`);
-    return;
-  }
-
-  // 2. Collect valid push targets
-  let targets = [];
-  for (const inst of installations) {
-    if (inst.session_state !== 'ACTIVE' && inst.session_state !== 'BACKGROUND') continue;
-    const device = Array.isArray(inst.device_installations) ? inst.device_installations[0] : inst.device_installations;
-    if (!device?.push_endpoint || device.endpoint_status === 'INVALID') continue;
-    targets.push(device);
-  }
-
-  // FIX: Relaxed session_state fallback.
-  // If no ACTIVE/BACKGROUND targets found, this likely means the session_state race
-  // condition hit (socket connected before /api/auth/register-session completed).
-  // Retry with relaxed filter: accept installations where session_state is null or any value.
-  // This handles the window between first socket connect and session activation.
-  if (targets.length === 0) {
-    console.log(`[ChatPush] ⚠️ No ACTIVE/BACKGROUND targets for ${userId} — retrying with relaxed session_state filter (race condition recovery)`);
-    for (const inst of installations) {
-      if (inst.session_state === 'LOGGED_OUT') continue; // Only skip explicitly logged-out sessions
-      const device = Array.isArray(inst.device_installations) ? inst.device_installations[0] : inst.device_installations;
-      if (!device?.push_endpoint || device.endpoint_status === 'INVALID') continue;
-      targets.push(device);
-    }
-  }
-
-  // FIX: Legacy push_subscriptions fallback for PWA users.
-  // Users who registered before the V2 installation_accounts system may only have
-  // rows in the legacy push_subscriptions table. Fall back to those to avoid silent skips.
-  if (targets.length === 0 && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
-    console.log(`[ChatPush] ⚠️ No V2 endpoints for ${userId} — falling back to legacy push_subscriptions`);
-    try {
-      const { data: legacySubs } = await supabase
-        .from('push_subscriptions')
-        .select('endpoint, p256dh, auth')
-        .eq('user_id', userId);
-
-      if (legacySubs && legacySubs.length > 0) {
-        console.log(`[ChatPush] Found ${legacySubs.length} legacy push subscription(s) for user ${userId}`);
-        const webhookUrlLegacy = messageId && gatewayUrl ? `${gatewayUrl}/deliver/${messageId}?recipientId=${userId}` : '';
-        const legacyResults = await Promise.allSettled(legacySubs.map(sub => {
-          const legacyPayload = JSON.stringify({
-            title: title || 'New Message',
-            body: body || 'You have a new message',
-            icon: '/icon-192.png',
-            data: {
-              type: 'chat_message',
-              messageId,
-              conversationId,
-              url: conversationId ? `/dashboard/chat?id=${conversationId}` : '/dashboard/chat',
-              recipientId: userId,
-              targetAccountId: userId,
-              deliveryWebhookUrl: webhookUrlLegacy,
-            },
-          });
-          return webpush.sendNotification(
-            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-            legacyPayload
-          ).then(() => {
-            console.log(`[ChatPush] ✅ Legacy Web Push sent | user:${userId}`);
-          }).catch(err => {
-            if (err.statusCode === 410 || err.statusCode === 404) {
-              supabase.from('push_subscriptions').delete().match({ user_id: userId, endpoint: sub.endpoint }).then();
-            }
-            console.error(`[ChatPush] ❌ Legacy Web Push | user:${userId} | ${err.statusCode || err.message}`);
-          });
-        }));
-        const legacySent = legacyResults.filter(r => r.status === 'fulfilled').length;
-        console.log(`[ChatPush] Legacy fallback: sent ${legacySent}/${legacySubs.length} pushes for user ${userId}`);
-        return; // Done — legacy fallback handled delivery
-      }
-    } catch (legacyErr) {
-      console.error('[ChatPush] Legacy push_subscriptions fallback error:', legacyErr.message);
-    }
-  }
-
-  if (targets.length === 0) {
-    console.log(`[ChatPush] No valid endpoints for user ${userId} (V2 and legacy exhausted)`);
-    return;
-  }
+}
 
   const webhookUrl = messageId && gatewayUrl ? `${gatewayUrl}/deliver/${messageId}?recipientId=${userId}` : '';
 
