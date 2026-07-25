@@ -240,7 +240,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (currentSwitchId !== switchIdRef.current) return;
 
       if (!freshSession) {
-        console.error(`[ACCOUNT_FORENSIC] ACCOUNT_SWITCH_FAILED - Invalid session for ${target.email}. Triggering rollback.`);
+        console.error(`[ACCOUNT_FORENSIC] ACCOUNT_SWITCH_FAILED - Invalid session for ${target.email}. Triggering rollback & pruning expired account.`);
+        
+        // Remove the expired account from multi-account store so user is not stuck on a dead session
+        accountManager.removeAccount(userId);
+
+        // Strip stale conversation ID from URL to prevent 403 Forbidden cross-account fetch
+        if (window.location.search.includes('id=')) {
+          try {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('id');
+            window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''));
+          } catch (_) {}
+        }
+
         // Transactional Rollback
         if (previousUserId && previousSession) {
           accountManager.setActiveAccountId(previousUserId);
@@ -252,7 +265,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         
         toast.dismiss(toastId);
-        toast.error(`Session for ${target.email} has expired. Returned to previous account.`);
+        toast.error(`Session for ${target.email} has expired. Removed from accounts.`);
         setIsSwitching(false);
         switchInProgress.current = false;
         return;
