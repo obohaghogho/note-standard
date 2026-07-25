@@ -1716,30 +1716,28 @@ exports.sendMessage = async (req, res) => {
           });
         });
 
-        if (PIPELINE_VERSION !== 'v2') {
-          const fastPushPromises = otherMembers.map(async (member) => {
-            if (member.is_muted) {
-              console.log(`[Chat Notify] Skipping muted user fast-push: ${member.user_id}`);
-              return;
+        const fastPushPromises = otherMembers.map(async (member) => {
+          if (member.is_muted) {
+            console.log(`[Chat Notify] Skipping muted user fast-push: ${member.user_id}`);
+            return;
+          }
+          await dispatchFastPush({
+            receiverId: member.user_id,
+            type: "chat_message",
+            title: senderName,
+            message: previewContent,
+            link: `/dashboard/chat?id=${conversationId}`,
+            messageId: createdMessageId,
+            conversationId: conversationId,
+            trace: {
+              clientSendTs,
+              apiReceiveTs: t1_ApiReceived,
+              dbStartTs: t2_DbInsertStart,
+              dbDoneTs: t3_DbInsertDone,
             }
-            await dispatchFastPush({
-              receiverId: member.user_id,
-              type: "chat_message",
-              title: senderName,
-              message: previewContent,
-              link: `/dashboard/chat?id=${conversationId}`,
-              messageId: createdMessageId,
-              conversationId: conversationId,
-              trace: {
-                clientSendTs,
-                apiReceiveTs: t1_ApiReceived,
-                dbStartTs: t2_DbInsertStart,
-                dbDoneTs: t3_DbInsertDone,
-              }
-            });
           });
-          await Promise.allSettled(fastPushPromises);
-        }
+        });
+        await Promise.allSettled(fastPushPromises);
 
         Promise.allSettled(dbNotificationPromises).then();
       }
