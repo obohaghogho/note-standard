@@ -1337,34 +1337,48 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             const currentMsgs = messagesRef.current[conversationId] || [];
             const targetMsg = currentMsgs.find(m => (messageId && m.id === messageId) || (eventId && m.event_id === eventId));
             const trackId = targetMsg?.id ?? messageId; // FIX 2: fall back to messageId if msg not yet in state
-            const nowStr = new Date().toISOString();
-
+            const nowStr = delivered_at || deliveredAt || new Date().toISOString();
             const targetMatchKeys = [messageId, eventId, trackId].filter(Boolean);
+
             setMessages(prev => {
                 const current = prev[conversationId] || [];
-                if (!current.some(m => targetMatchKeys.includes(m.id) || (m.event_id && targetMatchKeys.includes(m.event_id)))) return prev;
-                return {
-                    ...prev,
-                    [conversationId]: current.map(m =>
-                        (targetMatchKeys.includes(m.id) || (m.event_id && targetMatchKeys.includes(m.event_id)))
-                            ? mergeMessageStatus(m, { delivered_at: nowStr, status: 'delivered' })
-                            : m
-                    )
-                };
+                const hasMatch = current.some(m => targetMatchKeys.includes(m.id) || (m.event_id && targetMatchKeys.includes(m.event_id)));
+                if (!hasMatch) return prev;
+
+                const updatedMsgs = current.map(m => {
+                    const isMatch = targetMatchKeys.includes(m.id) || (m.event_id && targetMatchKeys.includes(m.event_id));
+                    if (!isMatch) return m;
+                    return {
+                        ...m,
+                        delivered_at: m.delivered_at || nowStr,
+                        status: (m.status === 'read' || m.read_at) ? 'read' : 'delivered'
+                    };
+                });
+
+                const nextState = { ...prev, [conversationId]: updatedMsgs };
+                messagesRef.current = nextState;
+                return nextState;
             });
 
-            // FIX 2: Update chat list lastMessage unconditionally for the conversation.
-            // Previously this was gated on lastMessage.id === trackId, which fails during
-            // the React commit race where conversationsRef still holds the pre-update snapshot.
-            setConversations(prev => prev.map(c => {
-                if (c.id !== conversationId) return c;
-                const lm = c.lastMessage;
-                if (!lm) return c;
-                // Only upgrade — never downgrade
-                const isMatch = lm.id === trackId || ('event_id' in lm ? (lm as { event_id?: string }).event_id === eventId : false) || lm.id === messageId;
-                if (!isMatch) return c;
-                return { ...c, lastMessage: mergeMessageStatus(lm as Message, { delivered_at: nowStr, status: 'delivered' }) as Conversation['lastMessage'] };
-            }));
+            // Update chat list lastMessage for the conversation
+            setConversations(prev => {
+                const nextConvs = prev.map(c => {
+                    if (c.id !== conversationId || !c.lastMessage) return c;
+                    const lm = c.lastMessage;
+                    const isMatch = targetMatchKeys.includes(lm.id) || ('event_id' in lm && lm.event_id ? targetMatchKeys.includes(lm.event_id as string) : false);
+                    if (!isMatch) return c;
+                    return {
+                        ...c,
+                        lastMessage: {
+                            ...lm,
+                            delivered_at: lm.delivered_at || nowStr,
+                            status: (lm.status === 'read' || lm.read_at) ? 'read' : 'delivered'
+                        }
+                    };
+                });
+                conversationsRef.current = nextConvs;
+                return nextConvs;
+            });
         };
 
         // FIX 1: Handler for chat:messages_delivered_batch.

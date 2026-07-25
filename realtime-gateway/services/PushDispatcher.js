@@ -137,6 +137,14 @@ class PushDispatcher {
    */
   static async sendWebPush(supabase, device, payload) {
     try {
+      const p256dh = device.p256dh || device.push_p256dh || device.keys?.p256dh;
+      const auth = device.auth || device.push_auth || device.keys?.auth;
+
+      if (!p256dh || !auth) {
+        console.warn(`[PushDispatcher] ⚠️ Skipping Web Push for ${device.endpoint?.slice(0, 30)}... — missing p256dh or auth keys`);
+        return false;
+      }
+
       const webPayload = JSON.stringify({
         title: payload.title,
         body: payload.body,
@@ -153,7 +161,7 @@ class PushDispatcher {
       });
 
       await webpush.sendNotification(
-        { endpoint: device.endpoint, keys: { p256dh: device.p256dh, auth: device.auth } },
+        { endpoint: device.endpoint, keys: { p256dh, auth } },
         webPayload
       );
 
