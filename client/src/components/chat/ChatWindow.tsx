@@ -1011,7 +1011,7 @@ const ChatWindow: React.FC = () => {
                             aria-live="polite"
                             aria-atomic="false"
                         >
-                            <div ref={innerWrapperRef} className="flex flex-col gap-1 md:gap-2 min-h-full justify-end w-full">
+                            <div ref={innerWrapperRef} className="flex flex-col gap-1 md:gap-2 min-h-full justify-start mt-auto w-full">
                                 {(() => {
                                     const visibleMessages = currentMessages.slice(-100);
                                     const getDateLabel = (dateStr: string): string => {

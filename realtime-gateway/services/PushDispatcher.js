@@ -78,16 +78,20 @@ class PushDispatcher {
    * Routes dispatch to the correct platform handler.
    */
   static async dispatchToDevice(supabase, fbApp, device, payload) {
+    if (device.type === 'vapid' || (device.endpoint && !device.endpoint.startsWith('fcm:'))) {
+      return PushDispatcher.sendWebPush(supabase, device, payload);
+    }
+
     if (device.platform === 'android' && fbApp && device.type === 'fcm') {
       return PushDispatcher.sendAndroidFcm(fbApp, supabase, device, payload);
     }
 
-    if ((device.platform === 'desktop_web' || device.platform === 'pwa' || device.platform === 'mobile_web') && device.endpoint) {
-      return PushDispatcher.sendWebPush(supabase, device, payload);
-    }
-
     if (device.platform === 'ios') {
       return PushDispatcher.sendIosPush(fbApp, supabase, device, payload);
+    }
+
+    if (device.endpoint) {
+      return PushDispatcher.sendWebPush(supabase, device, payload);
     }
 
     return false;
