@@ -275,22 +275,6 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
                                             <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 border-2 border-black rounded-full" />
                                         )}
                                     </button>
-
-                                    {/* Remove Account Button */}
-                                    {!isActive && (
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                if (window.confirm(`Forget account ${acc.email} on this device?`)) {
-                                                    removeAccount(acc.id);
-                                                }
-                                            }}
-                                            className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-white opacity-0 group-hover/acc:opacity-100 transition-opacity hover:bg-red-600 z-30 shadow-lg"
-                                            title="Forget account"
-                                        >
-                                            <X size={10} strokeWidth={3} />
-                                        </button>
-                                    )}
                                 </div>
                             );
                         })

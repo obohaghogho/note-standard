@@ -160,8 +160,7 @@ const dispatchFastPush = async ({
   trace,
 }) => {
   try {
-    const axios = require('axios');
-    const gatewayUrlStr = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
+    const gatewayUrlStr = process.env.REALTIME_GATEWAY_URL || 'http://localhost:4000';
     const bodyStr = message || title;
     
     // Normalize Gateway URL

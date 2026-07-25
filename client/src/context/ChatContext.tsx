@@ -1319,17 +1319,19 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             const trackId = targetMsg?.id ?? messageId; // FIX 2: fall back to messageId if msg not yet in state
             const nowStr = new Date().toISOString();
 
-            if (targetMsg) {
-                setMessages(prev => {
-                    const current = prev[conversationId] || [];
-                    return {
-                        ...prev,
-                        [conversationId]: current.map(m =>
-                            m.id === trackId ? mergeMessageStatus(m, { delivered_at: nowStr, status: 'delivered' }) : m
-                        )
-                    };
-                });
-            }
+            const targetMatchKeys = [messageId, eventId, trackId].filter(Boolean);
+            setMessages(prev => {
+                const current = prev[conversationId] || [];
+                if (!current.some(m => targetMatchKeys.includes(m.id) || (m.event_id && targetMatchKeys.includes(m.event_id)))) return prev;
+                return {
+                    ...prev,
+                    [conversationId]: current.map(m =>
+                        (targetMatchKeys.includes(m.id) || (m.event_id && targetMatchKeys.includes(m.event_id)))
+                            ? mergeMessageStatus(m, { delivered_at: nowStr, status: 'delivered' })
+                            : m
+                    )
+                };
+            });
 
             // FIX 2: Update chat list lastMessage unconditionally for the conversation.
             // Previously this was gated on lastMessage.id === trackId, which fails during
