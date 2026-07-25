@@ -21,11 +21,21 @@ router.get("/analytics/detailed", adminController.getStats);
 router.get("/me", adminController.getAdminProfile);
 
 // Push Health & Communication Subsystem Health Dashboard
-const { getPushHealth, getMessagingMetrics, sendTestPush, getMessageInspectorTrace } = require(path.join(__dirname, '..', 'controllers', 'pushHealthController'));
+const {
+  getPushHealth,
+  getMessagingMetrics,
+  sendTestPush,
+  getMessageInspectorTrace,
+  getConversationInspectorTrace,
+  replayMessageDiagnosticAction
+} = require(path.join(__dirname, '..', 'controllers', 'pushHealthController'));
+
 router.get("/push-health", getPushHealth);
 router.get("/messaging-metrics", getMessagingMetrics);
 router.get("/communication-health", adminController.getCommunicationHealth);
 router.get("/message-inspector/:messageId", getMessageInspectorTrace);
+router.get("/conversation-inspector/:conversationId", getConversationInspectorTrace);
+router.post("/message-inspector/:messageId/replay", replayMessageDiagnosticAction);
 router.post("/push-health/test-push/:userId", sendTestPush);
 
 

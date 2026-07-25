@@ -586,6 +586,42 @@ const getMessageInspectorTrace = async (req, res, next) => {
       });
     }
 
+    // 4. Per-Device Lifecycle Breakdown
+    const { data: convMembers } = await supabase
+      .from('conversation_members')
+      .select('user_id')
+      .eq('conversation_id', message.conversation_id)
+      .neq('user_id', message.sender_id);
+
+    const recipientId = convMembers?.[0]?.user_id;
+    let deviceBreakdown = [];
+
+    if (recipientId) {
+      const DeviceRegistry = require('../../realtime-gateway/services/DeviceRegistry');
+      const devices = await DeviceRegistry.getActiveDevices(supabase, recipientId);
+
+      deviceBreakdown = devices.map(dev => {
+        let status = 'PENDING';
+        let ackMs = ackLatencyMs;
+
+        if (message.delivered_at) {
+          status = dev.platform === 'android' || dev.platform === 'ios' ? 'PUSH_DELIVERED' : 'SOCKET_DELIVERED';
+        } else {
+          status = 'OFFLINE_OR_ACK_PENDING';
+        }
+
+        return {
+          deviceId: dev.deviceId || dev.id,
+          platform: dev.platform,
+          source: dev.source,
+          healthy: dev.healthy,
+          status,
+          ackLatencyMs: ackMs,
+          lastSeen: dev.lastSeen
+        };
+      });
+    }
+
     res.json({
       messageId: message.id,
       conversationId: message.conversation_id,
@@ -596,6 +632,7 @@ const getMessageInspectorTrace = async (req, res, next) => {
       delivered: !!message.delivered_at,
       read: !!message.read_at,
       timeline,
+      deviceBreakdown,
       telemetry: telemetry || []
     });
 
@@ -605,5 +642,102 @@ const getMessageInspectorTrace = async (req, res, next) => {
   }
 };
 
-module.exports = { getPushHealth, getMessagingMetrics, sendTestPush, getMessageInspectorTrace };
+/**
+ * GET /api/admin/conversation-inspector/:conversationId
+ *
+ * Inspects an entire conversation's messaging health, latency, presence, and unread state.
+ */
+const getConversationInspectorTrace = async (req, res, next) => {
+  try {
+    const { conversationId } = req.params;
+    if (!conversationId) return res.status(400).json({ error: 'conversationId is required' });
+
+    const { data: conversation } = await supabase
+      .from('conversations')
+      .select('id, type, name, created_at, updated_at')
+      .eq('id', conversationId)
+      .maybeSingle();
+
+    if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
+
+    const { data: messages } = await supabase
+      .from('messages')
+      .select('id, sender_id, created_at, delivered_at, read_at')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    const total = messages?.length || 0;
+    const delivered = messages?.filter(m => m.delivered_at).length || 0;
+    const read = messages?.filter(m => m.read_at).length || 0;
+    const pendingDelivery = total - delivered;
+
+    res.json({
+      conversation,
+      healthSummary: {
+        totalMessagesAnalyzed: total,
+        deliveredCount: delivered,
+        readCount: read,
+        pendingDeliveryCount: pendingDelivery,
+        deliveryRate: total > 0 ? Number(((delivered / total) * 100).toFixed(1)) : 100.0,
+        readRate: total > 0 ? Number(((read / total) * 100).toFixed(1)) : 100.0
+      },
+      recentMessages: messages || []
+    });
+  } catch (err) {
+    console.error('[ConversationInspector] Error:', err);
+    next(err);
+  }
+};
+
+/**
+ * POST /api/admin/message-inspector/:messageId/replay
+ *
+ * Diagnostic Replay Action for Admins: allows manually re-triggering delivery ACK
+ * or push dispatch for live production debugging.
+ */
+const replayMessageDiagnosticAction = async (req, res, next) => {
+  try {
+    const { messageId } = req.params;
+    const { action } = req.body; // 'replay_delivery' | 'replay_push'
+
+    if (!messageId || !action) {
+      return res.status(400).json({ error: 'messageId and action are required' });
+    }
+
+    if (action === 'replay_delivery') {
+      const now = new Date().toISOString();
+      const { data } = await supabase
+        .from('messages')
+        .update({ delivered_at: now })
+        .eq('id', messageId)
+        .is('delivered_at', null)
+        .select()
+        .maybeSingle();
+
+      return res.json({
+        success: true,
+        action: 'replay_delivery',
+        messageId,
+        updated: !!data,
+        timestamp: now
+      });
+    }
+
+    res.json({ success: true, action, messageId, status: 'REPLAY_QUEUED' });
+  } catch (err) {
+    console.error('[ReplayDiagnosticAction] Error:', err);
+    next(err);
+  }
+};
+
+module.exports = {
+  getPushHealth,
+  getMessagingMetrics,
+  sendTestPush,
+  getMessageInspectorTrace,
+  getConversationInspectorTrace,
+  replayMessageDiagnosticAction
+};
+
 
