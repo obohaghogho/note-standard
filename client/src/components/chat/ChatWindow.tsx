@@ -250,6 +250,23 @@ const ChatWindow: React.FC = () => {
         }
     }, [activeConversationId, handleConversationSwitch]);
 
+    // GUARANTEED SCROLL TO BOTTOM ON OPEN & INITIAL MESSAGE LOAD
+    useLayoutEffect(() => {
+        if (!activeConversationId || !scrollContainerRef.current) return;
+
+        // Pass 1: Direct DOM scrollTop update
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+
+        // Pass 2: Next frame layout update to account for dynamic heights
+        const timer = setTimeout(() => {
+            if (scrollContainerRef.current) {
+                scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+            }
+        }, 50);
+
+        return () => clearTimeout(timer);
+    }, [activeConversationId, currentMessages.length > 0]);
+
     // Auto-scroll on new message if already at bottom
     const prevMessagesLengthRef = useRef(currentMessages.length);
     useLayoutEffect(() => {

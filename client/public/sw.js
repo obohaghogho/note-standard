@@ -200,55 +200,47 @@ self.addEventListener('push', (event) => {
                             }
                         });
 
-                        // Find the exact conversation client for precise in-app routing
-                        const conversationClient = notifConversationId
-                            ? windowClients.find(client => {
-                                try {
-                                    const clientUrl = new URL(client.url);
-                                    return clientUrl.searchParams.get('id') === notifConversationId;
-                                } catch (_) {
-                                    return false;
-                                }
-                            })
-                            : null;
+                        // Precise conversation view check: only suppress OS desktop notification popup
+                        // if the user is actively focused inside THIS exact conversation ID.
+                        const isActivelyViewingThisChat = !!(notifConversationId && windowClients.find(client => {
+                            try {
+                                const clientUrl = new URL(client.url);
+                                return client.visibilityState === 'visible' && clientUrl.searchParams.get('id') === notifConversationId;
+                            } catch (_) {
+                                return false;
+                            }
+                        }));
 
-                        let appIsInForeground = !!foregroundClient;
+                        let suppressOSNotification = isActivelyViewingThisChat;
 
                         // Account-switch guard: if the visible window is logged into a DIFFERENT account
-                        // than the notification target, we must still show the notification.
-                        if (appIsInForeground && options.data.targetAccountId && activeAccountId) {
+                        // than the notification target, we must still show the OS notification.
+                        if (suppressOSNotification && options.data.targetAccountId && activeAccountId) {
                             if (String(options.data.targetAccountId) !== String(activeAccountId)) {
-                                console.log(`[SW] Account mismatch — visible window is account ${activeAccountId}, push is for ${options.data.targetAccountId}. Will show notification.`);
-                                appIsInForeground = false;
+                                console.log(`[SW] Account mismatch — visible window is account ${activeAccountId}, push is for ${options.data.targetAccountId}. Will show OS notification.`);
+                                suppressOSNotification = false;
                             }
                         }
 
-                        if (appIsInForeground) {
-                            // ── App is in the foreground: suppress popup, update app silently ──
-                            console.log(`[SW] App is visible — suppressing notification, posting in-app update.`);
+                        if (suppressOSNotification) {
+                            // ── User is actively viewing this exact chat: update app in-line ──
+                            console.log(`[SW] User actively viewing conversation ${notifConversationId} — updating in-app UI.`);
 
                             const targetClient = conversationClient || foregroundClient;
-                            targetClient.postMessage({
-                                type: 'CHAT_MESSAGE_RECEIVED',
-                                conversationId: notifConversationId,
-                                messageId: options.data.messageId
-                            });
-
-                            // Notify all OTHER tabs to refresh their conversation list
-                            windowClients.forEach(client => {
-                                if (client !== targetClient) {
-                                    client.postMessage({
-                                        type: 'BACKGROUND_PREFETCH',
-                                        conversationId: notifConversationId
-                                    });
-                                }
-                            });
+                            if (targetClient) {
+                                targetClient.postMessage({
+                                    type: 'CHAT_MESSAGE_RECEIVED',
+                                    conversationId: notifConversationId,
+                                    messageId: options.data.messageId
+                                });
+                            }
 
                             return fetch(deliveryUrl, { method: 'POST' })
                                 .catch(err => console.error('[SW] Delivery receipt failed (foreground):', err));
                         }
 
-                        // ── App is backgrounded: show notification ──────────────
+                        // ── User is in another room, dashboard, or backgrounded: SHOW OS DESKTOP PUSH ──────────────
+                        console.log(`[SW] Displaying OS Desktop Web Push notification popup.`);
                         windowClients.forEach(client => {
                             client.postMessage({
                                 type: 'BACKGROUND_PREFETCH',
