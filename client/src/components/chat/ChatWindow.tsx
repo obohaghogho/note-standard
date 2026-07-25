@@ -1228,16 +1228,7 @@ const ChatWindow: React.FC = () => {
                                                     // Sending is done exclusively via the explicit Send button.
                                                 }}
                                                 onFocus={() => {
-                                                    // Start transition lock preemptively if the device is going to open the keyboard
-                                                    if (!isKeyboardTransitioning.current) {
-                                                        isKeyboardTransitioning.current = true;
-                                                        wasAtBottomBeforeKeyboard.current = !showScrollDownRef.current;
-                                                        
-                                                        // Fallback unlock if visualViewport resize doesn't fire
-                                                        setTimeout(() => {
-                                                            isKeyboardTransitioning.current = false;
-                                                        }, 500);
-                                                    }
+                                                    scrollToBottom('instant');
                                                 }}
                                                 onInput={(e) => {
                                                     // Auto-grow: reset height then expand to scrollHeight
