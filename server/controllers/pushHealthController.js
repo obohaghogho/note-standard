@@ -496,10 +496,114 @@ const sendTestPush = async (req, res, next) => {
           : 'Gateway rejected the push. Check gateway logs for details.',
     });
 
+/**
+ * GET /api/admin/message-inspector/:messageId
+ *
+ * Per-Message Lifecycle Inspector: returns the complete trace timeline
+ * for any given message ID across DB, Gateway, Socket, Push, and ACK stages.
+ */
+const getMessageInspectorTrace = async (req, res, next) => {
+  try {
+    const { messageId } = req.params;
+    if (!messageId) return res.status(400).json({ error: 'messageId is required' });
+
+    // 1. Fetch message record
+    const { data: message, error: msgErr } = await supabase
+      .from('messages')
+      .select('id, conversation_id, sender_id, content, type, event_id, created_at, delivered_at, read_at, sender:profiles(id, username, full_name, avatar_url)')
+      .eq('id', messageId)
+      .maybeSingle();
+
+    if (msgErr) throw msgErr;
+    if (!message) return res.status(404).json({ error: 'Message not found' });
+
+    // 2. Fetch telemetry entries for this message
+    const { data: telemetry } = await supabase
+      .from('push_delivery_telemetry')
+      .select('*')
+      .eq('message_id', messageId);
+
+    // 3. Build ordered lifecycle timeline
+    const createdTs = new Date(message.created_at).getTime();
+    const deliveredTs = message.delivered_at ? new Date(message.delivered_at).getTime() : null;
+    const readTs = message.read_at ? new Date(message.read_at).getTime() : null;
+    const ackLatencyMs = deliveredTs ? (deliveredTs - createdTs) : null;
+
+    const timeline = [
+      { stage: 'Created', timestamp: message.created_at, status: 'SUCCESS' },
+      { stage: 'Stored in DB', timestamp: message.created_at, status: 'SUCCESS' }
+    ];
+
+    if (telemetry && telemetry.length > 0) {
+      const t = telemetry[0];
+      timeline.push({
+        stage: 'Gateway Routed',
+        timestamp: t.created_at || message.created_at,
+        status: 'SUCCESS',
+        socketPresent: t.socket_present,
+        routingDecision: t.routing_decision
+      });
+
+      if (t.socket_present) {
+        timeline.push({ stage: 'Socket Sent', timestamp: t.created_at, status: 'SUCCESS' });
+      }
+
+      if (t.push_sent) {
+        timeline.push({
+          stage: 'Push Dispatched',
+          timestamp: t.created_at,
+          status: 'SUCCESS',
+          providerResult: t.provider_result
+        });
+      }
+    }
+
+    if (message.delivered_at) {
+      timeline.push({
+        stage: 'Delivery ACK Received (First Device Wins)',
+        timestamp: message.delivered_at,
+        status: 'SUCCESS',
+        ackLatencyMs
+      });
+      timeline.push({
+        stage: 'delivered_at Updated in DB (Sender Sees Double Gray Check ✓✓)',
+        timestamp: message.delivered_at,
+        status: 'SUCCESS'
+      });
+    } else {
+      timeline.push({
+        stage: 'Delivery ACK Pending (Sender Sees Single Check ✓)',
+        timestamp: null,
+        status: 'PENDING'
+      });
+    }
+
+    if (message.read_at) {
+      timeline.push({
+        stage: 'Read ACK Received (Sender Sees Double Blue Check ✓✓)',
+        timestamp: message.read_at,
+        status: 'SUCCESS'
+      });
+    }
+
+    res.json({
+      messageId: message.id,
+      conversationId: message.conversation_id,
+      eventId: message.event_id,
+      sender: message.sender,
+      type: message.type,
+      ackLatencyMs,
+      delivered: !!message.delivered_at,
+      read: !!message.read_at,
+      timeline,
+      telemetry: telemetry || []
+    });
+
   } catch (err) {
-    console.error('[PushHealth] sendTestPush error:', err);
+    console.error('[MessageInspector] Error:', err);
     next(err);
   }
 };
 
-module.exports = { getPushHealth, getMessagingMetrics, sendTestPush };
+module.exports = { getPushHealth, getMessagingMetrics, sendTestPush, getMessageInspectorTrace };
+
