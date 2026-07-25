@@ -245,7 +245,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                     'Authorization': `Bearer ${session.access_token}`
                 },
                 body: JSON.stringify({
-                    subscription,
+                    subscription: subscription.toJSON ? subscription.toJSON() : subscription,
                     vapidKeyVersion: vapidKey,
                     deviceId,
                     deviceName: device_name,

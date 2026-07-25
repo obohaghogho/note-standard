@@ -86,15 +86,22 @@ const subscribeToNotifications = async (req, res, next) => {
     const { id: userId } = req.user;
     const { subscription, vapidKeyVersion, deviceId, deviceName, platform } = req.body;
 
-    if (!subscription || !subscription.endpoint) {
+    if (!subscription) {
+      return res.status(400).json({ error: "Subscription object is required" });
+    }
+
+    const subObj = typeof subscription === 'string' ? JSON.parse(subscription) : (subscription?.toJSON ? subscription.toJSON() : subscription);
+    const endpoint = subObj?.endpoint || subscription?.endpoint;
+    const keys = subObj?.keys || subscription?.keys;
+    const p256dh = keys?.p256dh || subObj?.p256dh || subscription?.p256dh;
+    const auth = keys?.auth || subObj?.auth || subscription?.auth;
+
+    if (!endpoint) {
       return res.status(400).json({ error: "Subscription endpoint is required" });
     }
 
-    const { endpoint, keys } = subscription;
-    const p256dh = keys?.p256dh;
-    const auth = keys?.auth;
-
     if (!p256dh || !auth) {
+      console.warn(`[PushSubscribe] Warning: missing keys for endpoint ${endpoint?.slice(0, 30)}... (p256dh: ${!!p256dh}, auth: ${!!auth})`);
       return res.status(400).json({ error: "Subscription keys missing" });
     }
 
