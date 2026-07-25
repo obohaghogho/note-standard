@@ -460,32 +460,45 @@ app.post('/deliver/:messageId', async (req, res) => {
     }
 
     const now = new Date().toISOString();
-    const { data, error } = await gatewaySupabase
-      .from('messages')
-      .update({ delivered_at: now })
-      .eq('id', messageId)
-      .is('delivered_at', null)          // Idempotent: no-op if already delivered
-      .select('id, conversation_id, sender_id, delivered_at, event_id')
-      .single();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(messageId);
 
-    if (!error && data) {
+    let query = gatewaySupabase.from('messages').update({ delivered_at: now });
+    if (isUuid) {
+      query = query.or(`id.eq.${messageId},event_id.eq.${messageId}`);
+    } else {
+      query = query.eq('event_id', messageId);
+    }
+
+    const { data: updatedData } = await query
+      .is('delivered_at', null)
+      .select('id, conversation_id, sender_id, delivered_at, event_id')
+      .maybeSingle();
+
+    let targetMessage = updatedData;
+    if (!targetMessage) {
+      let fetchQuery = gatewaySupabase.from('messages').select('id, conversation_id, sender_id, delivered_at, event_id');
+      if (isUuid) {
+        fetchQuery = fetchQuery.or(`id.eq.${messageId},event_id.eq.${messageId}`);
+      } else {
+        fetchQuery = fetchQuery.eq('event_id', messageId);
+      }
+      const { data: existingData } = await fetchQuery.maybeSingle();
+      targetMessage = existingData;
+    }
+
+    if (targetMessage) {
       const receiptPayload = {
-        messageId: data.id,
-        eventId: data.event_id,
-        conversationId: data.conversation_id,
-        userId: data.sender_id,
-        delivered_at: data.delivered_at || now
+        messageId: targetMessage.id,
+        eventId: targetMessage.event_id,
+        conversationId: targetMessage.conversation_id,
+        userId: targetMessage.sender_id,
+        delivered_at: targetMessage.delivered_at || now
       };
 
-      console.log(`[Gateway] ⚡ Deliver | messageId:${messageId} | senderId:${data.sender_id} | conversationId:${data.conversation_id} | ts:${Date.now()}`);
+      console.log(`[Gateway] ⚡ Deliver | messageId:${targetMessage.id} | senderId:${targetMessage.sender_id} | conversationId:${targetMessage.conversation_id} | ts:${Date.now()}`);
 
-      // Emit 'chat:message_delivered' — mobile ChatContext listens on this exact event name
-      io.to(`user:${data.sender_id}`).emit('chat:message_delivered', receiptPayload);
-      io.to(data.conversation_id).emit('chat:message_delivered', receiptPayload);
-    } else if (error && error.code !== 'PGRST204') {
-      // PGRST204 = 0 rows (already delivered) — silent success
-      // Any other error is worth logging
-      console.warn('[Gateway] /deliver DB error:', error.message);
+      io.to(`user:${targetMessage.sender_id}`).emit('chat:message_delivered', receiptPayload);
+      io.to(targetMessage.conversation_id).emit('chat:message_delivered', receiptPayload);
     }
 
     res.json({ ok: true });

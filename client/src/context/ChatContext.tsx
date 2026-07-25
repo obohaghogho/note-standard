@@ -1347,12 +1347,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         const onDeliveryEvent = ({ messageId, eventId, conversationId }: { messageId: string; eventId?: string; conversationId: string }) => {
             if (!isMounted.current || (!messageId && !eventId) || !conversationId) return;
 
-            // 1. RECORD CACHE FIRST (Race condition fix)
+            // 1. RECORD CACHE (Race condition fix)
             const tickSet = messageId ? appliedTicksRef.current.get(messageId) : undefined;
             const eventTickSet = eventId ? appliedTicksRef.current.get(eventId) : undefined;
-            
-            if ((tickSet && (tickSet.has('delivered') || tickSet.has('read'))) ||
-                (eventTickSet && (eventTickSet.has('delivered') || eventTickSet.has('read')))) return;
                 
             const nextSet = tickSet || eventTickSet || new Set<string>();
             nextSet.add('delivered');

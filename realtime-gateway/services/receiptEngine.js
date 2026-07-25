@@ -26,38 +26,54 @@ async function markDelivered(supabase, io, messageId) {
   if (!messageId || !supabase) return { updated: false, message: null };
 
   const now = new Date().toISOString();
-  const { data, error } = await supabase
-    .from('messages')
-    .update({ delivered_at: now })
-    .eq('id', messageId)
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(messageId);
+
+  // 1. Try update using dual-column match (id OR event_id)
+  let query = supabase.from('messages').update({ delivered_at: now });
+  if (isUuid) {
+    query = query.or(`id.eq.${messageId},event_id.eq.${messageId}`);
+  } else {
+    query = query.eq('event_id', messageId);
+  }
+
+  const { data: updatedData, error } = await query
     .is('delivered_at', null)
     .select('id, conversation_id, sender_id, event_id, delivered_at, created_at')
-    .single();
+    .maybeSingle();
 
-  if (error && error.code !== 'PGRST116') {
-    // PGRST116 = no rows matched (already delivered) — idempotent, not an error
-    if (error.code !== 'PGRST204') {
-      console.warn('[ReceiptEngine] markDelivered DB error:', error.message);
+  let targetMessage = updatedData;
+
+  // 2. Fallback: if already marked delivered (or 0 updated rows), fetch existing row to guarantee sender receipt emission
+  if (!targetMessage) {
+    let fetchQuery = supabase.from('messages').select('id, conversation_id, sender_id, event_id, delivered_at, created_at');
+    if (isUuid) {
+      fetchQuery = fetchQuery.or(`id.eq.${messageId},event_id.eq.${messageId}`);
+    } else {
+      fetchQuery = fetchQuery.eq('event_id', messageId);
     }
+    const { data: existingData } = await fetchQuery.maybeSingle();
+    targetMessage = existingData;
+  }
+
+  if (!targetMessage) {
+    console.warn(`[ReceiptEngine] markDelivered message not found for key: ${messageId}`);
     return { updated: false, message: null };
   }
 
-  if (!data) return { updated: false, message: null };
-
-  // Emit receipt to sender
+  // 3. Emit receipt to sender (always)
   const receipt = {
-    messageId: data.id,
-    eventId: data.event_id,
-    conversationId: data.conversation_id,
-    userId: data.sender_id,
-    delivered_at: data.delivered_at,
+    messageId: targetMessage.id,
+    eventId: targetMessage.event_id,
+    conversationId: targetMessage.conversation_id,
+    userId: targetMessage.sender_id,
+    delivered_at: targetMessage.delivered_at || now,
   };
 
-  io.to(`user:${data.sender_id}`).emit('chat:message_delivered', receipt);
-  io.to(data.conversation_id).emit('chat:message_delivered', receipt);
+  io.to(`user:${targetMessage.sender_id}`).emit('chat:message_delivered', receipt);
+  io.to(targetMessage.conversation_id).emit('chat:message_delivered', receipt);
 
-  console.log(`[ReceiptEngine] DELIVERED | messageId:${messageId} | sender:${data.sender_id} | conv:${data.conversation_id}`);
-  return { updated: true, message: data };
+  console.log(`[ReceiptEngine] DELIVERED | messageId:${targetMessage.id} | eventId:${targetMessage.event_id || 'N/A'} | sender:${targetMessage.sender_id} | conv:${targetMessage.conversation_id}`);
+  return { updated: true, message: targetMessage };
 }
 
 /**
