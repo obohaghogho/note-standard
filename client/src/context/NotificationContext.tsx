@@ -206,8 +206,18 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
 
         // ── Step 3: Create new subscription if missing ───────────────────────────
         if (!subscription) {
-            if (Notification.permission !== 'granted') {
-                console.log(`[PushRecovery][${reason}] Permission not granted (${Notification.permission}). Skipping auto-subscribe.`);
+            let perm = Notification.permission;
+            if (perm === 'default') {
+                console.log(`[PushRecovery][${reason}] Requesting browser notification permission...`);
+                try {
+                    perm = await Notification.requestPermission();
+                } catch (permErr) {
+                    console.warn(`[PushRecovery][${reason}] requestPermission error:`, permErr);
+                }
+            }
+
+            if (perm !== 'granted') {
+                console.log(`[PushRecovery][${reason}] Permission state: ${perm}. Cannot subscribe.`);
                 return;
             }
             try {
