@@ -7,62 +7,53 @@ export const Hero = () => {
     const { installApp } = usePWAInstall();
 
     return (
-        <section className="relative min-h-[100dvh] flex items-center justify-center pt-24">
-            {/* Crystal Shards Background - VIVID MOD */}
+        <section className="relative min-h-[100dvh] flex items-center justify-center pt-20 sm:pt-28 pb-12 overflow-hidden w-full">
+            {/* Crystal Shards Background - Responsive constrained */}
             <motion.div
-                animate={{ y: [-30, 30, -30], rotate: [0, 8, 0] }}
+                animate={{ y: [-20, 20, -20], rotate: [0, 6, 0] }}
                 transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
-                className="crystal-shape bg-emerald-400/20"
+                className="crystal-shape bg-emerald-400/15 hidden sm:block pointer-events-none"
                 style={{
-                    width: '400px', height: '500px',
+                    width: '320px', height: '420px',
                     left: '-5%', top: '10%',
                     clipPath: 'polygon(50% 0%, 100% 25%, 80% 100%, 20% 100%, 0% 25%)'
                 }}
             />
             <motion.div
-                animate={{ y: [30, -30, 30], rotate: [0, -12, 0] }}
+                animate={{ y: [20, -20, 20], rotate: [0, -8, 0] }}
                 transition={{ duration: 9, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
-                className="crystal-shape bg-purple-400/30"
+                className="crystal-shape bg-purple-400/20 hidden sm:block pointer-events-none"
                 style={{
-                    width: '450px', height: '550px',
-                    right: '2%', top: '0%',
+                    width: '350px', height: '450px',
+                    right: '1%', top: '0%',
                     clipPath: 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)'
                 }}
             />
-            <motion.div
-                animate={{ y: [-20, 20, -20], rotate: [-10, 10, -10] }}
-                transition={{ duration: 11, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-                className="crystal-shape bg-blue-400/20"
-                style={{
-                    width: '250px', height: '250px',
-                    right: '20%', bottom: '10%',
-                    clipPath: 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)'
-                }}
-            />
 
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 grid lg:grid-cols-2 gap-12 items-center relative z-10">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 grid lg:grid-cols-2 gap-8 sm:gap-12 items-center relative z-10 w-full">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.6 }}
+                    className="text-center sm:text-left flex flex-col items-center sm:items-start"
                 >
-                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/20 text-sm mb-6 backdrop-blur-md shadow-[0_0_15px_rgba(255,255,255,0.1)]">
-                        <Diamond className="w-3.5 h-3.5 text-primary" />
+                    <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/20 text-xs sm:text-sm mb-4 sm:mb-6 backdrop-blur-md shadow-[0_0_15px_rgba(255,255,255,0.1)]">
+                        <Diamond className="w-3.5 h-3.5 text-primary flex-shrink-0" />
                         <span className="text-gray-200 font-medium tracking-wide">Crystal Theme 2.0 Live</span>
                     </div>
 
-                    <h1 className="text-xl sm:text-4xl lg:text-5xl font-bold leading-tight mb-6">
-                        Connect, Call & Transact <br />
+                    <h1 className="text-2xl xs:text-3xl sm:text-4xl lg:text-5xl font-extrabold leading-tight sm:leading-tight mb-4 sm:mb-6 tracking-tight">
+                        Connect, Call & Transact <br className="hidden sm:inline" />
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400">Globally in Real-Time</span> <br />
-                        <span className="text-lg sm:text-2xl text-gray-300 font-medium mix-blend-plus-lighter">– Note Standard Platform</span>
+                        <span className="text-base sm:text-2xl text-gray-300 font-medium opacity-90">– Note Standard Platform</span>
                     </h1>
 
-                    <p className="text-base sm:text-xl text-gray-300/90 mb-8 max-w-lg leading-relaxed">
+                    <p className="text-sm sm:text-lg text-gray-300/90 mb-6 sm:mb-8 max-w-lg leading-relaxed text-center sm:text-left">
                         Experience the ultimate all-in-one platform featuring instant encrypted messaging, crystal-clear WebRTC voice and video calls, and a secure multi-currency digital wallet. Built for global collaboration.
                     </p>
 
-                    <div className="flex flex-col sm:flex-row gap-4">
-                        <Link to="/signup" className="px-8 py-4 bg-primary hover:bg-primary/90 shadow-[0_0_20px_rgba(16,185,129,0.4)] text-white rounded-xl font-medium transition-all flex items-center justify-center gap-2 group border border-white/10">
+                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto">
+                        <Link to="/signup" className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 bg-primary hover:bg-primary/90 shadow-[0_0_20px_rgba(16,185,129,0.4)] text-white rounded-xl font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 group border border-white/10">
                             Start for free
                             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                         </Link>
@@ -70,31 +61,31 @@ export const Hero = () => {
                             onClick={() => {
                                 document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
                             }}
-                            className="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/20 text-white rounded-xl font-medium transition-all backdrop-blur-xl shadow-lg"
+                            className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 bg-white/5 hover:bg-white/10 border border-white/20 text-white rounded-xl font-bold text-sm sm:text-base transition-all backdrop-blur-xl shadow-lg"
                         >
                             View Features
                         </button>
                         <button 
                             onClick={installApp}
-                            className="px-8 py-4 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white rounded-xl font-bold transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] flex items-center justify-center gap-2 border border-white/10 hover:scale-105 active:scale-100 cursor-pointer"
+                            className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white rounded-xl font-bold text-sm sm:text-base transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] flex items-center justify-center gap-2 border border-white/10 hover:scale-105 active:scale-100 cursor-pointer"
                         >
                             <Smartphone className="w-4 h-4" />
                             Install Web App
                         </button>
                     </div>
 
-                    <div className="mt-8 sm:mt-12 flex flex-wrap items-center gap-4 sm:gap-8 text-gray-400">
+                    <div className="mt-6 sm:mt-10 flex flex-wrap items-center justify-center sm:justify-start gap-4 sm:gap-8 text-gray-400">
                         <div className="flex items-center gap-2">
-                            <Shield className="w-5 h-5 text-purple-400" />
-                            <span className="text-sm font-medium">E2E Encrypted</span>
+                            <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400 flex-shrink-0" />
+                            <span className="text-xs sm:text-sm font-medium">E2E Encrypted</span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <Zap className="w-5 h-5 text-yellow-400" />
-                            <span className="text-sm font-medium">Lightning Fast</span>
+                            <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400 flex-shrink-0" />
+                            <span className="text-xs sm:text-sm font-medium">Lightning Fast</span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <Globe className="w-5 h-5 text-blue-400" />
-                            <span className="text-sm font-medium">Global Sync</span>
+                            <Globe className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400 flex-shrink-0" />
+                            <span className="text-xs sm:text-sm font-medium">Global Sync</span>
                         </div>
                     </div>
                 </motion.div>

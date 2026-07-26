@@ -2,10 +2,10 @@ import { Link } from 'react-router-dom';
 
 export const Footer = () => {
     return (
-        <footer className="border-t border-white/10 bg-black/50 backdrop-blur-xl">
-            <div className="max-w-7xl mx-auto px-6 py-12">
-                <div className="grid md:grid-cols-4 gap-8 mb-8">
-                    <div className="col-span-1 md:col-span-2">
+        <footer className="border-t border-white/10 bg-black/50 backdrop-blur-xl w-full">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8 mb-8">
+                    <div className="col-span-1 sm:col-span-2">
                         <div className="flex items-center gap-2 mb-4">
                             <div className="w-6 h-6 rounded bg-primary flex items-center justify-center font-bold text-xs text-white">N</div>
                             <span className="font-bold text-lg">Note Standard</span>
