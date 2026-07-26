@@ -72,7 +72,7 @@ export const DownloadPage: React.FC = () => {
           <ChevronLeft size={20} />
         </button>
         <span className="font-bold text-sm text-gray-300">Get the App</span>
-        {installed && (
+        {isInstalled && (
           <span className="ml-auto flex items-center gap-1.5 text-[11px] font-bold text-green-400 bg-green-400/10 border border-green-400/20 rounded-full px-3 py-1">
             <CheckCircle2 size={12} /> Already installed
           </span>
