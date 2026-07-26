@@ -40,10 +40,8 @@ export const DownloadPage: React.FC = () => {
   // ─── Guide steps ─────────────────────────────────────────────────────────
   const GUIDES = {
     android: [
-      { icon: Chrome,      color: 'bg-blue-500/10 text-blue-400',   title: 'Open in Chrome',             desc: 'Make sure you are visiting notestandard.com using the Chrome browser on your Android phone.' },
-      { icon: MoreVertical,color: 'bg-gray-500/10 text-gray-300',   title: 'Tap the ⋮ menu',              desc: 'Tap the three-dot menu in the top-right corner of Chrome.' },
-      { icon: PlusSquare,  color: 'bg-green-500/10 text-green-400', title: 'Add to Home Screen',         desc: 'Select "Add to Home Screen" or "Install App" from the menu. Tap "Add" to confirm.' },
-      { icon: CheckCircle2,color: 'bg-primary/10 text-primary',      title: 'Done! Open from your screen', desc: 'NoteStandard now appears on your home screen just like a native app — with push notifications!' },
+      { icon: Smartphone,  color: 'bg-emerald-500/10 text-emerald-400', title: 'Tap "Install Web App"', desc: 'Tap the green "Install Web App" button above on your Android phone.' },
+      { icon: CheckCircle2,color: 'bg-primary/10 text-primary',      title: '1-Tap Direct Install', desc: 'Chrome immediately opens the native 1-tap install prompt on your phone screen. Tap "Install" to add NoteStandard to your phone!' },
     ],
     ios: [
       { icon: Globe,       color: 'bg-blue-500/10 text-blue-400',   title: 'Open Safari',                desc: 'This only works in Safari. If you\'re using Chrome on iOS, copy the URL and open it in Safari.' },

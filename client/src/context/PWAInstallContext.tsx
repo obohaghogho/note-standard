@@ -41,28 +41,27 @@ interface PWAInstallContextType {
 const PWAInstallContext = createContext<PWAInstallContextType | undefined>(undefined);
 
 export const PWAInstallProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [canInstall, setCanInstall] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(
+    (typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).deferredPWAInstallPrompt as BeforeInstallPromptEvent) || null
+  );
+  const [canInstall, setCanInstall] = useState(true);
   const [isInstalled, setIsInstalled] = useState(isInStandaloneMode());
   const [isIOSModalOpen, setIsIOSModalOpen] = useState(false);
   const platform = detectPlatform();
 
   useEffect(() => {
-    if (platform === 'ios') {
-      setCanInstall(true);
-      return;
-    }
-
     const handleBeforeInstallPrompt = (e: Event) => {
-      // Prevent browser default install banner so we can trigger it from our custom button
       e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
+      const promptEvent = e as BeforeInstallPromptEvent;
+      (window as unknown as Record<string, unknown>).deferredPWAInstallPrompt = promptEvent;
+      setDeferredPrompt(promptEvent);
       setCanInstall(true);
     };
 
     const handleAppInstalled = () => {
       setIsInstalled(true);
       setDeferredPrompt(null);
+      (window as unknown as Record<string, unknown>).deferredPWAInstallPrompt = null;
       setCanInstall(false);
       toast.success('🎉 NoteStandard Web App installed successfully!');
     };
@@ -87,29 +86,27 @@ export const PWAInstallProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       return;
     }
 
-    if (deferredPrompt) {
+    const activePrompt = deferredPrompt || ((typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).deferredPWAInstallPrompt) as BeforeInstallPromptEvent | null);
+
+    if (activePrompt) {
       try {
-        await deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
+        await activePrompt.prompt();
+        const { outcome } = await activePrompt.userChoice;
         if (outcome === 'accepted') {
           setIsInstalled(true);
           toast.success('Installing NoteStandard Web App…');
         }
         setDeferredPrompt(null);
+        (window as unknown as Record<string, unknown>).deferredPWAInstallPrompt = null;
         setCanInstall(false);
       } catch (err) {
-        console.warn('PWA install prompt error:', err);
+        console.warn('PWA install error:', err);
       }
     } else {
-      // Fallback: If browser prompt isn't active or was dismissed
-      toast('To install: Tap browser menu (⋮) → "Add to Home Screen" or "Install App"', {
-        icon: '📱',
-        duration: 6000,
-      });
-      // Scroll to guide if element exists
-      const guideEl = document.getElementById('install-guide');
-      if (guideEl) {
-        guideEl.scrollIntoView({ behavior: 'smooth' });
+      // If browser has not fired beforeinstallprompt yet or already installed, trigger service worker / browser install flow directly
+      toast.loading('Opening 1-tap installation dialog…', { duration: 3000 });
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'CHECK_INSTALL' });
       }
     }
   };

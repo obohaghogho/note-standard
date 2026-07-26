@@ -1,13 +1,14 @@
 {
   "id": "/",
   "short_name": "NoteStandard",
-  "name": "NoteStandard | Professional Digital Solutions & Asset Management",
+  "name": "NoteStandard Platform",
+  "description": "Real-Time Messaging, Voice/Video Calls & Digital Wallet Platform",
   "icons": [
     {
       "src": "/icon-192.png",
       "type": "image/png",
       "sizes": "192x192",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
       "src": "/icon-512.png",
@@ -17,7 +18,10 @@
     }
   ],
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "theme_color": "#1E40AF",
-  "background_color": "#0a0a0a"
+  "background_color": "#0a0a0a",
+  "prefer_related_applications": false
 }
