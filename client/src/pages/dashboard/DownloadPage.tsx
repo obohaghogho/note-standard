@@ -15,6 +15,7 @@ import {
   Zap,
   Shield,
   Wifi,
+  Download,
   Info,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
