@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Shield, Zap, Globe, Diamond } from 'lucide-react';
+import { ArrowRight, Shield, Zap, Globe, Diamond, Download } from 'lucide-react';
+import { DIRECT_APK_URL } from '../../version';
 
 export const Hero = () => {
     return (
@@ -72,12 +73,14 @@ export const Hero = () => {
                             View Features
                         </button>
                         <a 
-                            href="https://expo.dev/artifacts/eas/cDeaKst4KG3UP2jiPqQH3H.apk"
+                            href={DIRECT_APK_URL}
                             target="_blank"
                             rel="noopener noreferrer"
+                            download
                             className="px-8 py-4 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl font-medium transition-all shadow-[0_0_20px_rgba(59,130,246,0.3)] flex items-center justify-center gap-2 border border-white/10"
                         >
-                            Download APK (v1.4.0)
+                            <Download className="w-4 h-4" />
+                            Download App
                         </a>
                     </div>
 

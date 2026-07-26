@@ -5,3 +5,4 @@
  */
 export const APP_VERSION = '1.6.8';
 export const APP_BUILD = '20260621a';
+export const DIRECT_APK_URL = 'https://expo.dev/artifacts/eas/cDeaKst4KG3UP2jiPqQH3H.apk';

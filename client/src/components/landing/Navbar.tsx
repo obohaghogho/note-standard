@@ -28,6 +28,7 @@ export const Navbar = () => {
                     <a href="#features" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">Features</a>
                     <a href="#pricing" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">Pricing</a>
                     <a href="#security" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">Security</a>
+                    <Link to="/download" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">Download App</Link>
                     <div className="h-6 w-[1px] bg-white/10 mx-2" />
                     <LanguageSelector />
                     <Link to="/login" className="text-sm font-medium px-4 py-2 hover:bg-white/5 rounded-lg transition-colors">Login</Link>
@@ -52,6 +53,7 @@ export const Navbar = () => {
                     <a href="#features" className="text-base font-medium text-gray-400 hover:text-white">Features</a>
                     <a href="#pricing" className="text-base font-medium text-gray-400 hover:text-white">Pricing</a>
                     <a href="#security" className="text-base font-medium text-gray-400 hover:text-white">Security</a>
+                    <Link to="/download" className="text-base font-medium text-primary hover:text-primary/80">Download App</Link>
                     <div className="h-px bg-white/10 my-2" />
                     <div className="flex items-center justify-between">
                         <span className="text-gray-400 font-medium">Language</span>
