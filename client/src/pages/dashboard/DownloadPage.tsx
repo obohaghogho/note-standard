@@ -21,7 +21,6 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { IOSInstallModal } from '../../components/common/IOSInstallModal';
-import { DIRECT_APK_URL } from '../../version';
 import toast from 'react-hot-toast';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -184,46 +183,35 @@ export const DownloadPage: React.FC = () => {
             <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
             <div className="relative">
               <div className="w-16 h-16 rounded-2xl bg-primary/20 border border-primary/30 flex items-center justify-center mx-auto mb-4">
-                <Download size={28} className="text-primary" />
+                <Smartphone size={28} className="text-primary" />
               </div>
               <h2 className="text-2xl font-black mb-2">
-                Download & Install NoteStandard
+                {canInstall ? '✅ Ready to Install!' : 'Install NoteStandard App'}
               </h2>
               <p className="text-gray-400 text-sm max-w-md mx-auto leading-relaxed">
-                Click below to download the NoteStandard App directly to your Android device, or add it to your home screen directly from your browser.
+                {platform === 'android' && 'Tap the button below to install NoteStandard directly to your home screen via Chrome.'}
+                {platform === 'ios'     && 'Tap below for step-by-step instructions to add NoteStandard to your iPhone home screen via Safari.'}
+                {platform === 'desktop' && 'Click below to install NoteStandard as a desktop app (Chrome/Edge required).'}
               </p>
 
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-6">
-                {/* Direct APK Download Button (Works on Chrome & all browsers) */}
-                <a
-                  href={DIRECT_APK_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  download
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-sm shadow-xl shadow-blue-500/25 transition-all hover:scale-105 active:scale-100 border border-white/10"
-                >
-                  <Download size={18} />
-                  Download Android App (APK)
-                </a>
+              <button
+                onClick={handleInstall}
+                className="mt-4 inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-primary hover:bg-primary/90 text-white font-black text-sm shadow-xl shadow-primary/30 transition-all hover:scale-105 active:scale-100 border border-white/10"
+              >
+                {platform === 'ios' ? (
+                  <><Apple size={18} /> Install Web App (Safari)</>
+                ) : platform === 'android' ? (
+                  <><Smartphone size={18} /> {canInstall ? 'Install App Now (1-Tap)' : 'How to Install on Android'}</>
+                ) : (
+                  <><Globe size={18} /> {canInstall ? 'Install Desktop App' : 'How to Install on Desktop'}</>
+                )}
+              </button>
 
-                {/* Web App / PWA Install Button */}
-                <button
-                  onClick={handleInstall}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl bg-primary hover:bg-primary/90 text-white font-black text-sm shadow-xl shadow-primary/30 transition-all hover:scale-105 active:scale-100 border border-white/10"
-                >
-                  {platform === 'ios' ? (
-                    <><Apple size={18} /> Install Web App (Safari)</>
-                  ) : platform === 'android' ? (
-                    <><Smartphone size={18} /> {canInstall ? 'Install Web App (1 Tap)' : 'Web App Install Guide'}</>
-                  ) : (
-                    <><Globe size={18} /> {canInstall ? 'Install Desktop App' : 'Desktop App Install Guide'}</>
-                  )}
-                </button>
-              </div>
-
-              <p className="mt-4 text-xs text-gray-500">
-                Direct APK download works on Chrome, Edge, Brave, Opera & all mobile browsers.
-              </p>
+              {!canInstall && platform !== 'ios' && (
+                <p className="mt-3 text-xs text-gray-500">
+                  If the prompt doesn't appear automatically, follow the step-by-step guide below to add it from your browser menu.
+                </p>
+              )}
             </div>
           </div>
         ) : (
@@ -233,48 +221,14 @@ export const DownloadPage: React.FC = () => {
             <p className="text-gray-400 text-sm">
               You're running NoteStandard as an installed app. You'll receive push notifications and the app works offline.
             </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-4">
-              <a
-                href={DIRECT_APK_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                download
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-300 font-bold text-sm hover:bg-blue-600/30 transition-all"
-              >
-                <Download size={15} /> Download APK File
-              </a>
-              <button
-                onClick={() => navigate('/dashboard')}
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 font-bold text-sm hover:bg-green-500/20 transition-all"
-              >
-                Back to Dashboard <ArrowRight size={15} />
-              </button>
-            </div>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="mt-4 inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 font-bold text-sm hover:bg-green-500/20 transition-all"
+            >
+              Back to Dashboard <ArrowRight size={15} />
+            </button>
           </div>
         )}
-
-        {/* ── Direct Mobile App Download Card ── */}
-        <div className="rounded-3xl bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-purple-950/40 border border-blue-500/30 p-8 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="space-y-2 text-center md:text-left">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold">
-              <Smartphone size={13} /> Direct Download
-            </div>
-            <h3 className="text-xl font-black text-white">Download Android Package (.apk)</h3>
-            <p className="text-sm text-gray-400 max-w-md leading-relaxed">
-              Click the download link to get the latest NoteStandard APK directly in Chrome or any mobile browser and install it on your phone.
-            </p>
-          </div>
-          <a
-            href={DIRECT_APK_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            download
-            className="flex-shrink-0 inline-flex items-center gap-2.5 px-8 py-4 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-sm shadow-xl shadow-blue-600/30 transition-all hover:scale-105 active:scale-100 border border-white/10"
-          >
-            <Download size={18} />
-            Download APK File
-          </a>
-        </div>
 
         {/* ── Step-by-step guide ── */}
         <div className="space-y-6">
