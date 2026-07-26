@@ -289,8 +289,6 @@ export const DownloadPage: React.FC = () => {
         </div>
 
       </div>
-
-      <IOSInstallModal isOpen={isIOSModalOpen} onClose={() => setIsIOSModalOpen(false)} />
     </div>
   );
 };
