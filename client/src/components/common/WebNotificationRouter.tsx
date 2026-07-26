@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useContext } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { useChat } from '../../context/ChatContext';
@@ -212,8 +213,37 @@ export const WebNotificationRouter: React.FC = () => {
     handleNotificationNavigation();
   }, [authReady, searchParams, user?.id, switchAccount, navigate, socket, chatClearState, chatInitialize, notificationContext, socketInitialize, socketTeardown]);
 
-  // Compulsory push notification prompt: Appears for ALL logged-in users until permission is granted
-  const showPromptBanner = user && typeof window !== 'undefined' && 'Notification' in window && Notification.permission !== 'granted';
+  // Push notification prompt banner state & handlers
+  const [dismissedBanner, setDismissedBanner] = useState(() => {
+    return sessionStorage.getItem('push_banner_dismissed_session') === 'true';
+  });
+  const [isEnabling, setIsEnabling] = useState(false);
+
+  const isGranted = typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted';
+  const showPromptBanner = user && typeof window !== 'undefined' && 'Notification' in window && !isGranted && !dismissedBanner;
+
+  const handleEnableClick = async () => {
+    setIsEnabling(true);
+    try {
+      if (notificationContext?.requestPushPermission) {
+        const res = await notificationContext.requestPushPermission();
+        if (res) {
+          toast.success('Push notifications enabled!');
+        }
+      }
+    } catch (err) {
+      console.error('Error enabling push notifications:', err);
+    } finally {
+      setIsEnabling(false);
+      setDismissedBanner(true);
+      sessionStorage.setItem('push_banner_dismissed_session', 'true');
+    }
+  };
+
+  const handleDismissClick = () => {
+    setDismissedBanner(true);
+    sessionStorage.setItem('push_banner_dismissed_session', 'true');
+  };
 
   if (isSwitchingOverlay) {
     return (
@@ -260,21 +290,25 @@ export const WebNotificationRouter: React.FC = () => {
             <div className="min-w-0">
               <p className="text-xs sm:text-sm font-bold leading-tight text-white flex items-center gap-1.5">
                 Enable Push Notifications
-                <span className="text-[9px] uppercase tracking-wider bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/30 font-semibold">Required</span>
+                <span className="text-[9px] uppercase tracking-wider bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/30 font-semibold">Alerts</span>
               </p>
               <p className="text-[10px] sm:text-xs text-slate-300 truncate">Get instant message alerts on your phone or device.</p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
-              onClick={async () => {
-                if (notificationContext?.requestPushPermission) {
-                  await notificationContext.requestPushPermission();
-                }
-              }}
-              className="px-4 py-2 bg-gradient-to-r from-indigo-600 via-blue-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg hover:shadow-indigo-500/25 transition-all active:scale-95"
+              onClick={handleEnableClick}
+              disabled={isEnabling}
+              className="px-4 py-2 bg-gradient-to-r from-indigo-600 via-blue-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg hover:shadow-indigo-500/25 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
             >
-              Enable
+              {isEnabling ? 'Enabling…' : 'Enable'}
+            </button>
+            <button
+              onClick={handleDismissClick}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              aria-label="Close notification banner"
+            >
+              <X size={16} />
             </button>
           </div>
         </div>
