@@ -513,6 +513,25 @@ export default function Settings() {
                                     disabled={permission === 'denied'}
                                     onChange={(c) => c ? subscribeUser() : unsubscribeUser()}
                                 />
+                                {permission === 'granted' && (
+                                    <div className="mt-2 flex items-center justify-between text-xs text-slate-400 bg-white/5 p-2.5 rounded-xl border border-white/10">
+                                        <span>Push Status: <strong className="text-emerald-400">Granted</strong> (Token Active)</span>
+                                        <button
+                                            type="button"
+                                            onClick={async () => {
+                                                try {
+                                                    await subscribeUser();
+                                                    toast.success("Push notification token successfully resynced with database!");
+                                                } catch (e) {
+                                                    toast.error("Failed to resync push token. Please try again.");
+                                                }
+                                            }}
+                                            className="px-2.5 py-1 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 rounded-lg border border-indigo-500/30 font-semibold transition-all active:scale-95 flex items-center gap-1"
+                                        >
+                                            ⚡ Re-sync Push Connection
+                                        </button>
+                                    </div>
+                                )}
                                 <div className="h-px bg-white/5" />
                                 <Toggle
                                     label="Offline Email Fallbacks"
