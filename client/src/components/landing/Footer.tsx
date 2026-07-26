@@ -20,7 +20,7 @@ export const Footer = () => {
                         <ul className="space-y-2 text-sm text-gray-400">
                             <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
                             <li><a href="#pricing" className="hover:text-white transition-colors">Pricing</a></li>
-                            <li><a href="/api/app/latest-apk" download="NoteStandard.apk" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors font-medium text-primary">Download App (APK)</a></li>
+                            <li><Link to="/download" className="hover:text-white transition-colors font-medium text-primary">Install Web App</Link></li>
                             <li><Link to="/privacy" className="hover:text-white transition-colors">Security</Link></li>
                             <li><Link to="/signup" className="hover:text-white transition-colors">Roadmap</Link></li>
                         </ul>

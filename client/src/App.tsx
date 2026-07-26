@@ -6,6 +6,7 @@ import { useEffect, Suspense } from 'react';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { AdminLayout } from './components/layout/AdminLayout';
 import { AuthProvider } from './context/AuthContext';
+import { PWAInstallProvider } from './context/PWAInstallContext';
 import { SocketProvider } from './context/SocketContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { ChatProvider } from './context/ChatContext';
@@ -143,6 +144,7 @@ function App() {
           </div>
         }>
           <AuthProvider>
+            <PWAInstallProvider>
             <VersionGuard>
             <WallpaperProvider>
             <SocketProvider>
@@ -245,6 +247,7 @@ function App() {
             </SocketProvider>
             </WallpaperProvider>
             </VersionGuard>
+            </PWAInstallProvider>
           </AuthProvider>
         </Suspense>
       </ErrorBoundary>

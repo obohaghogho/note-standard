@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Smartphone,
   Apple,
@@ -15,38 +15,11 @@ import {
   Zap,
   Shield,
   Wifi,
-  Download,
   Info,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { IOSInstallModal } from '../../components/common/IOSInstallModal';
-import toast from 'react-hot-toast';
-
-interface BeforeInstallPromptEvent extends Event {
-  readonly platforms: string[];
-  readonly userChoice: Promise<{
-    outcome: 'accepted' | 'dismissed';
-    platform: string;
-  }>;
-  prompt(): Promise<void>;
-}
-
-// ─── Platform detection ───────────────────────────────────────────────────────
-function detectPlatform(): 'ios' | 'android' | 'desktop' {
-  if (typeof window === 'undefined') return 'desktop';
-  const ua = navigator.userAgent;
-  if (/iPad|iPhone|iPod/.test(ua) && !(window as unknown as Record<string, unknown>).MSStream) return 'ios';
-  if (/android/i.test(ua)) return 'android';
-  return 'desktop';
-}
-
-function isInStandaloneMode(): boolean {
-  return (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
-  );
-}
+import { usePWAInstall } from '../../context/PWAInstallContext';
 
 // ─── Feature pills ────────────────────────────────────────────────────────────
 const FEATURES = [
@@ -58,56 +31,10 @@ const FEATURES = [
 
 export const DownloadPage: React.FC = () => {
   const navigate = useNavigate();
-  const platform  = detectPlatform();
-  const alreadyInstalled = isInStandaloneMode();
-
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [canInstall, setCanInstall]         = useState(false);
-  const [installed, setInstalled]           = useState(alreadyInstalled);
-  const [isIOSModalOpen, setIsIOSModalOpen] = useState(false);
-  const [activeGuide, setActiveGuide]       = useState<'android' | 'ios' | 'desktop'>(platform === 'ios' ? 'ios' : platform === 'android' ? 'android' : 'desktop');
-
-  useEffect(() => {
-    if (platform === 'ios') { setCanInstall(true); return; }
-
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-      setCanInstall(true);
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-
-    window.addEventListener('appinstalled', () => {
-      setInstalled(true);
-      setDeferredPrompt(null);
-      toast.success('🎉 NoteStandard installed successfully!');
-    });
-
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, [platform]);
-
-  const handleInstall = async () => {
-    if (platform === 'ios') {
-      setIsIOSModalOpen(true);
-      return;
-    }
-    if (deferredPrompt) {
-      await deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') {
-        setInstalled(true);
-        toast.success('Installing NoteStandard Web App…');
-      }
-      setDeferredPrompt(null);
-      setCanInstall(false);
-    } else {
-      document.getElementById('install-guide')?.scrollIntoView({ behavior: 'smooth' });
-      toast('To install: Tap your browser menu (⋮) → "Add to Home Screen" or "Install App"', {
-        icon: '📱',
-        duration: 6000,
-      });
-    }
-  };
+  const { platform, isInstalled, installApp } = usePWAInstall();
+  const [activeGuide, setActiveGuide] = useState<'android' | 'ios' | 'desktop'>(
+    platform === 'ios' ? 'ios' : platform === 'android' ? 'android' : 'desktop'
+  );
 
   // ─── Guide steps ─────────────────────────────────────────────────────────
   const GUIDES = {
@@ -185,7 +112,7 @@ export const DownloadPage: React.FC = () => {
         </div>
 
         {/* ── Primary CTA ── */}
-        {!installed ? (
+        {!isInstalled ? (
           <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-primary/20 via-primary/5 to-purple-500/10 border border-primary/30 p-8 text-center space-y-5">
             <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
             <div className="relative">
@@ -193,35 +120,34 @@ export const DownloadPage: React.FC = () => {
                 <Smartphone size={28} className="text-primary" />
               </div>
               <h2 className="text-2xl sm:text-3xl font-black mb-2">
-                Download & Install NoteStandard App
+                Install NoteStandard Web App
               </h2>
               <p className="text-gray-400 text-sm max-w-md mx-auto leading-relaxed">
-                Click below to download the NoteStandard App package directly to your phone and tap to install it.
+                Install NoteStandard directly on your phone or desktop in 1-tap. No app store or APK download required.
               </p>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-6">
-                <a
-                  href="/api/app/latest-apk"
-                  download="NoteStandard.apk"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-9 py-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white font-black text-base shadow-xl shadow-emerald-500/30 transition-all hover:scale-105 active:scale-100 border border-white/10"
+                <button
+                  onClick={installApp}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-9 py-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white font-black text-base shadow-xl shadow-emerald-500/30 transition-all hover:scale-105 active:scale-100 border border-white/10 cursor-pointer"
                 >
-                  <Download size={20} />
-                  Download & Install App (APK)
-                </a>
+                  <Smartphone size={20} />
+                  Install Web App
+                </button>
 
                 <button
                   onClick={() => navigate('/dashboard')}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-gray-200 font-bold text-sm border border-white/10 transition-all"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-gray-200 font-bold text-sm border border-white/10 transition-all cursor-pointer"
                 >
                   <Globe size={18} />
-                  Open Web Dashboard
+                  Open Web App
                 </button>
               </div>
 
               <p className="mt-4 text-xs text-gray-400">
-                Direct APK download works on Chrome, Edge, Brave, Opera & all mobile browsers. Tap downloaded file to install on phone.
+                {platform === 'ios'
+                  ? 'Works in Safari on iPhone / iPad. Tap Install Web App above for instructions.'
+                  : 'Works in Google Chrome, Edge, Brave, Opera & all modern mobile browsers.'}
               </p>
             </div>
           </div>
