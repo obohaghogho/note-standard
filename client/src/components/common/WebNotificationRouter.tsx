@@ -35,7 +35,10 @@ export const WebNotificationRouter: React.FC = () => {
 
     const handledKey = `${targetAccountId}`;
     if (handledRef.current === handledKey) return;
-    handledRef.current = handledKey;
+    const isSupportNotif = searchParams.get('isSupport') === 'true' || searchParams.get('link')?.includes('/admin/') || searchParams.get('type')?.includes('support');
+    const destination = isSupportNotif
+      ? (conversationId ? `/admin/chats?id=${conversationId}` : '/admin/chats')
+      : (conversationId ? `/dashboard/chat?id=${conversationId}` : '/dashboard');
 
     const handleNotificationNavigation = async () => {
       console.log('[ACCOUNT_FORENSIC] Notification Account ID:', targetAccountId);
@@ -43,8 +46,7 @@ export const WebNotificationRouter: React.FC = () => {
 
       // Scenario 1: Already on the correct account
       if (user?.id === targetAccountId) {
-        console.log('[ACCOUNT_FORENSIC] Correct account already active — navigating directly.');
-        const destination = conversationId ? `/dashboard/chat?id=${conversationId}` : '/dashboard';
+        console.log('[ACCOUNT_FORENSIC] Correct account already active — navigating directly to:', destination);
         navigate(destination, { replace: true });
         handledRef.current = null;
         return;
@@ -87,8 +89,6 @@ export const WebNotificationRouter: React.FC = () => {
       const activeAccount = accountManager.getAccount(active);
 
       // Step 5: Navigate FIRST — WhatsApp/Messenger style: show UI immediately, sync in background.
-      // Do NOT block navigation on socket/chat initialization.
-      const destination = conversationId ? `/dashboard/chat?id=${conversationId}` : '/dashboard';
       console.log('[ACCOUNT_FORENSIC] NAVIGATION_COMPLETE - Navigating to:', destination);
       navigate(destination, { replace: true });
       setIsSwitchingOverlay(false);

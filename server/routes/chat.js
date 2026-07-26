@@ -23,6 +23,7 @@ router.post(
 router.get("/conversations", chatController.getConversations);
 router.get("/conversations/:conversationId", chatController.getConversationById);
 router.post("/conversations", chatController.createConversation);
+router.get("/support", chatController.getSupportChat); // NEW: Dedicated user support chat & history fetch
 router.post("/support", chatController.createSupportChat); // NEW: User creates support chat
 router.put(
   "/conversations/:conversationId/accept",

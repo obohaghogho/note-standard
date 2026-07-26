@@ -14,12 +14,22 @@ export default function SupportCenter() {
   }, [filter]);
 
   const fetchTickets = async () => {
-    // In a real app, this would query support_tickets joined with profiles
-    const { data, error } = await supabase
+    let query = supabase
       .from("support_tickets")
       .select("*, customer:profiles!support_tickets_customer_id_fkey(full_name, avatar_url)")
       .order("created_at", { ascending: false });
-      
+
+    if (filter === "open") {
+      query = query.in("status", ["open", "escalated", "waiting"]);
+    } else if (filter === "assigned") {
+      if (user?.id) query = query.eq("assigned_admin_id", user.id);
+    } else if (filter === "waiting") {
+      query = query.eq("status", "waiting");
+    } else if (filter === "resolved") {
+      query = query.in("status", ["resolved", "closed"]);
+    }
+
+    const { data } = await query;
     if (data) {
       setTickets(data);
     }

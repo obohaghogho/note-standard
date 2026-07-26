@@ -50,8 +50,9 @@ router.get("/users/:id/notes", adminController.getUserNotes);
 router.get("/limit-requests", adminController.getLimitRequests);
 router.put("/limit-requests/:id", adminController.updateLimitRequest);
 
-// Support Chats
+// Support Chats & Telemetry
 router.get("/support-chats", adminController.getSupportChats);
+router.get("/support-metrics", adminController.getSupportMetrics);
 router.put("/support-chats/:id/status", adminController.updateChatStatus);
 router.post("/support-chats/:id/join", adminController.joinSupportChat);
 

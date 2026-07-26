@@ -369,57 +369,13 @@ exports.getUserNotes = async (req, res) => {
   }
 };
 
-// GET /api/admin/support-chats - Get all support conversations
+// GET /api/admin/support-chats - Get all support conversations with smart queue sorting
 exports.getSupportChats = async (req, res) => {
   try {
-    const serviceSupabase = getServiceSupabase();
-    const status = req.query.status; // 'open', 'pending', 'resolved', or undefined for all
-
-    let query = serviceSupabase
-      .from("conversations")
-      .select(`
-                id,
-                name,
-                support_status,
-                chat_type,
-                updated_at,
-                created_at,
-                members:conversation_members (
-                    user_id,
-                    role,
-                    status,
-                    profile:profiles (
-                        username,
-                        full_name,
-                        avatar_url,
-                        is_online
-                    )
-                ),
-                lastMessage:messages(content, created_at, sender_id, read_at, delivered_at)
-            `)
-      .eq("chat_type", "support")
-      .order("updated_at", { ascending: false });
-
-    if (status) {
-      query = query.eq("support_status", status);
-    }
-
-    const { data: chats, error } = await query;
-
-    if (error) throw error;
-
-    // messages will be an array, we only want the most recent one
-    const chatsWithLastMessage = chats.map((chat) => {
-        const sortedMsgs = (chat.lastMessage || []).sort((a, b) => 
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-        return {
-            ...chat,
-            lastMessage: sortedMsgs[0] || null,
-        };
-    });
-
-    res.json(chatsWithLastMessage);
+    const status = req.query.status;
+    const supportService = require("../services/supportService");
+    const chats = await supportService.getSupportChatsForAdmin(status);
+    res.json(chats);
   } catch (err) {
     console.error("Error fetching support chats:", err);
     res.status(500).json({ error: "Failed to fetch support chats" });
@@ -433,13 +389,14 @@ exports.updateChatStatus = async (req, res) => {
     const { id } = req.params;
     const { support_status } = req.body;
 
-    if (!["open", "pending", "resolved"].includes(support_status)) {
+    const validStatuses = ["open", "pending", "resolved", "escalated", "waiting", "assigned"];
+    if (!validStatuses.includes(support_status)) {
       return res.status(400).json({ error: "Invalid status" });
     }
 
     const { data, error } = await serviceSupabase
       .from("conversations")
-      .update({ support_status })
+      .update({ support_status, updated_at: new Date().toISOString() })
       .eq("id", id)
       .eq("chat_type", "support")
       .select()
@@ -452,9 +409,15 @@ exports.updateChatStatus = async (req, res) => {
       status: support_status,
     });
 
+    // Realtime notification of status change
+    const realtime = require("../services/realtimeService");
+    await realtime.emitToConversation(id, "chat:conversation_updated", {
+      id,
+      support_status
+    });
+
     // Notify user if resolved
     if (support_status === "resolved") {
-      // Find the user in the conversation
       const { data: member } = await serviceSupabase
         .from("conversation_members")
         .select("user_id")
@@ -467,8 +430,7 @@ exports.updateChatStatus = async (req, res) => {
           receiverId: member.user_id,
           type: "support_resolved",
           title: "Support Session Resolved",
-          message:
-            "Your support session has been marked as resolved. We hope we could help!",
+          message: "Your support session has been marked as resolved. We hope we could help!",
           link: `/dashboard/chat?id=${id}`,
         });
       }
@@ -481,7 +443,7 @@ exports.updateChatStatus = async (req, res) => {
   }
 };
 
-// POST /api/admin/support-chats/:id/join - Admin joins a support chat
+// POST /api/admin/support-chats/:id/join - Admin joins & claims a support chat
 exports.joinSupportChat = async (req, res) => {
   try {
     const serviceSupabase = getServiceSupabase();
@@ -496,27 +458,43 @@ exports.joinSupportChat = async (req, res) => {
       .eq("user_id", adminId)
       .single();
 
-    if (existingMember) {
-      return res.json({ success: true, message: "Already a member" });
+    if (!existingMember) {
+      await serviceSupabase
+        .from("conversation_members")
+        .insert({
+          conversation_id: id,
+          user_id: adminId,
+          role: "admin",
+          status: "accepted",
+        });
     }
 
-    // Add admin as member
-    const { error } = await serviceSupabase
-      .from("conversation_members")
-      .insert({
-        conversation_id: id,
-        user_id: adminId,
-        role: "admin",
-        status: "accepted",
-      });
+    // Try claiming the ticket optimistically via supportService
+    const { data: ticket } = await serviceSupabase
+      .from("support_tickets")
+      .select("id")
+      .eq("conversation_id", id)
+      .not("status", "in", "('resolved','closed')")
+      .maybeSingle();
 
-    if (error) throw error;
+    if (ticket) {
+      const supportService = require("../services/supportService");
+      const claimResult = await supportService.claimTicket(ticket.id, adminId);
+      if (!claimResult.success && claimResult.reason === "TICKET_ALREADY_CLAIMED") {
+        return res.json({ success: false, message: "Ticket is already claimed by another agent" });
+      }
+    } else {
+      await serviceSupabase
+        .from("conversations")
+        .update({ support_status: "pending", updated_at: new Date().toISOString() })
+        .eq("id", id);
+    }
 
-    // Update chat status to pending (being handled)
-    await serviceSupabase
-      .from("conversations")
-      .update({ support_status: "pending" })
-      .eq("id", id);
+    const realtime = require("../services/realtimeService");
+    await realtime.emitToConversation(id, "chat:conversation_updated", {
+      id,
+      support_status: "pending"
+    });
 
     // Log the action
     await logAdminAction(req, "join_support_chat", "conversation", id, {
@@ -543,7 +521,7 @@ exports.joinSupportChat = async (req, res) => {
         message: `Support agent ${
           admin?.username || "assigned"
         } has joined the chat to assist you.`,
-        link: `/dashboard/chat?id=${id}`,
+        link: `/admin/chats?id=${id}`,
       });
     }
 
@@ -2099,5 +2077,17 @@ exports.getFinOpsDashboard = async (req, res, next) => {
     });
   } catch (err) {
     next(err);
+  }
+};
+
+// GET /api/admin/support-metrics — Operational support telemetry metrics
+exports.getSupportMetrics = async (req, res) => {
+  try {
+    const supportService = require("../services/supportService");
+    const metrics = supportService.getMetrics();
+    res.json(metrics);
+  } catch (err) {
+    console.error("Error fetching support metrics:", err);
+    res.status(500).json({ error: "Failed to fetch support metrics" });
   }
 };

@@ -20,43 +20,36 @@ function checkPort(port) {
 }
 
 function killPort(port) {
-    const stdout = checkPort(port);
-    if (!stdout) {
-        log(`Port ${port} is free.`);
-        return;
+    if (os.platform() === 'win32') {
+        try {
+            // Find PIDs listening on the specified port
+            const findCmd = `powershell -Command "Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess"`;
+            const pidsRaw = execSync(findCmd, { stdio: 'pipe' }).toString().trim();
+            if (pidsRaw) {
+                const pids = pidsRaw.split(/\r?\n/).map(p => p.trim()).filter(p => /^\d+$/.test(p) && p !== '0');
+                for (const pid of pids) {
+                    log(`Killing process ${pid} on port ${port}...`);
+                    try {
+                        execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' });
+                    } catch (e) { /* ignore */ }
+                }
+            }
+        } catch (e) {
+            // Fallback to npx kill-port
+            try {
+                execSync(`npx --yes kill-port ${port}`, { stdio: 'ignore' });
+            } catch (err) { /* ignore */ }
+        }
+    } else {
+        try {
+            execSync(`npx --yes kill-port ${port}`, { stdio: 'ignore' });
+        } catch (e) { /* ignore */ }
     }
 
-    const lines = stdout.trim().split('\n');
-    const pids = new Set();
-    lines.forEach(line => {
-        const parts = line.trim().split(/\s+/);
-        // On Windows netstat: Proto Local Address Foreign Address State PID
-        // Last element is PID
-        const pid = parts[parts.length - 1];
-        if (pid && /^\d+$/.test(pid) && pid !== '0') {
-            pids.add(pid);
-        }
-    });
-
-    if (pids.size > 0) {
-        log(`Killing PIDs on port ${port}: ${Array.from(pids).join(', ')}`);
-        pids.forEach(pid => {
-            try {
-                if (os.platform() === 'win32') {
-                    execSync(`taskkill /F /PID ${pid}`);
-                } else {
-                    process.kill(pid, 'SIGKILL');
-                }
-            } catch (e) {
-                // Ignore if already dead
-            }
-        });
-        
-        // Wait a moment for OS to release port
-        const start = Date.now();
-        while (Date.now() - start < 1000) {
-            // busy wait
-        } 
+    // Wait a moment for OS socket release
+    const start = Date.now();
+    while (Date.now() - start < 1500) {
+        // busy wait
     }
 }
 

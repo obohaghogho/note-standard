@@ -68,27 +68,25 @@ export const ChatWidget = () => {
         if (!session?.access_token) return;
         setLoading(true);
         try {
-            const res = await fetch(`${API_URL}/api/chat/conversations`, {
+            const res = await fetch(`${API_URL}/api/chat/support`, {
                 headers: { 'Authorization': `Bearer ${session.access_token}` }
             });
 
             if (res.ok) {
-                const chats = await res.json();
-                const openSupportChat = chats.find((c: Conversation) =>
-                    c.chat_type === 'support' && c.support_status !== 'resolved'
-                );
-
-                if (openSupportChat) {
-                    setSupportChat(openSupportChat);
-                    fetchMessages(openSupportChat.id);
+                const data = await res.json();
+                if (data.conversation) {
+                    setSupportChat(data.conversation);
+                    if (data.messages) {
+                        setMessages(data.messages);
+                    }
                 }
             }
         } catch (err) {
-            console.error('Failed to check existing chat:', err);
+            console.error('Failed to check existing support chat:', err);
         } finally {
             setLoading(false);
         }
-    }, [session?.access_token, fetchMessages]);
+    }, [session?.access_token]);
 
     // Register Chat Listeners
     useEffect(() => {
@@ -110,7 +108,6 @@ export const ChatWidget = () => {
                     }
                     return [...prev, msg];
                 });
-                // Auto-clear typing indicator when we receive a response
                 if (msg.sender_id !== user?.id) {
                     setAdminTyping(false);
                 }
@@ -123,12 +120,19 @@ export const ChatWidget = () => {
             }
         };
 
+        const onConversationUpdated = ({ id, support_status }: { id: string; support_status: string }) => {
+            if (id === supportChat?.id) {
+                setSupportChat(prev => prev ? { ...prev, support_status: support_status as any } : null);
+            }
+        };
+
         const onMessageRead = ({ messageId }: { messageId: string }) => {
             setMessages(prev => prev.map(m => m.id === messageId ? { ...m, read_at: new Date().toISOString() } : m));
         };
         
         socket.on('chat:message', onReceiveMessage);
         socket.on('chat:typing', onTyping);
+        socket.on('chat:conversation_updated', onConversationUpdated);
         socket.on('chat:message_read', onMessageRead);
         socket.on('chat:message_delivered', ({ messageId }: { messageId: string }) => {
             setMessages(prev => prev.map(m => m.id === messageId ? { ...m, delivered_at: new Date().toISOString() } : m));
@@ -158,6 +162,7 @@ export const ChatWidget = () => {
         return () => {
             socket.off('chat:message', onReceiveMessage);
             socket.off('chat:typing', onTyping);
+            socket.off('chat:conversation_updated', onConversationUpdated);
             socket.off('chat:message_read', onMessageRead);
             socket.off('chat:message_delivered');
             supabase.removeChannel(convChannel);

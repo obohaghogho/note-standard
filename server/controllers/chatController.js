@@ -155,8 +155,9 @@ exports.getConversations = async (req, res) => {
 
       let conversations = Array.isArray(rpcData) ? rpcData : [];
       
-      // Filter out direct conversations that were deleted (cleared_at) and have no new messages since
+      // Filter out support chats AND deleted direct conversations
       conversations = conversations.filter(c => {
+        if (c.chat_type === "support" || c.name === "Support Chat") return false;
         if (c.type === "direct" && c.membership?.cleared_at) {
           const clearedAt = new Date(c.membership.cleared_at).getTime();
           const lastMsgAt = new Date(c.last_message?.created_at || c.updated_at || c.created_at || 0).getTime();
@@ -194,11 +195,13 @@ exports.getConversations = async (req, res) => {
 
     const conversationIds = memberships.map(m => m.conversation_id);
 
-    // 2. Fetch conversations in batch
+    // 2. Fetch conversations in batch (excluding support chats)
     const { data: conversations, error: convError } = await supabase
       .from("conversations")
       .select("*")
-      .in("id", conversationIds);
+      .in("id", conversationIds)
+      .neq("chat_type", "support")
+      .neq("name", "Support Chat");
 
     if (convError) return res.status(500).json({ error: "Failed to load conversation details" });
 
@@ -1667,6 +1670,35 @@ exports.sendMessage = async (req, res) => {
         conversationId,
       ).then();
 
+      // --- 3b. AI Support Auto-Reply Trigger ---
+      (async () => {
+        try {
+          const { data: convInfo } = await supabase
+            .from("conversations")
+            .select("chat_type, support_status")
+            .eq("id", conversationId)
+            .single();
+
+          if (convInfo && convInfo.chat_type === "support") {
+            const { data: senderProfile } = await supabase
+              .from("profiles")
+              .select("plan_tier, role")
+              .eq("id", userId)
+              .maybeSingle();
+
+            const isSenderAdmin = senderProfile?.plan_tier === "admin" || senderProfile?.role === "admin";
+
+            // If user (not admin) sends a message and support chat is open, process via Groq AI
+            if (!isSenderAdmin && (convInfo.support_status === "open" || !convInfo.support_status)) {
+              const supportService = require("../services/supportService");
+              await supportService.handleUserSupportMessage(conversationId, content || "", userId);
+            }
+          }
+        } catch (aiErr) {
+          logger.warn(`[sendMessage:AiSupport] Non-fatal AI trigger error: ${aiErr.message}`);
+        }
+      })();
+
       // 4. Server-side ACK Timeout Recheck (Self-Healing Delivery)
       // After 30s, check if the message was confirmed delivered.
       // If not (delivered_at still null), re-emit to all recipients.
@@ -2776,6 +2808,56 @@ exports.webhookDeliver = async (req, res) => {
   } catch (err) {
     console.error("Error in webhookDeliver:", err.message);
     res.status(500).json({ error: "Server Error" });
+  }
+};
+
+// GET /api/chat/support — Dedicated User Support Payload Fetch
+exports.getSupportChat = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const supportService = require("../services/supportService");
+    const payload = await supportService.getSupportChatForUser(userId);
+    res.json(payload);
+  } catch (err) {
+    console.error("[ChatController] getSupportChat error:", err.message);
+    res.status(500).json({ error: "Failed to fetch support chat", details: err.message });
+  }
+};
+
+// POST /api/chat/support — Dedicated User Support Creation / Message Handler
+exports.createSupportChat = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { content } = req.body;
+    const supportService = require("../services/supportService");
+    
+    let supportChat = await supportService.getSupportChatForUser(userId);
+    let convId = supportChat?.conversation?.id;
+
+    if (!convId) {
+      const { data: newC, error: cErr } = await supabase
+        .from("conversations")
+        .insert([{ name: "Support Chat", chat_type: "support", support_status: "open" }])
+        .select()
+        .single();
+
+      if (cErr) throw cErr;
+      convId = newC.id;
+
+      await supabase.from("conversation_members").insert([
+        { conversation_id: convId, user_id: userId, role: "member", status: "accepted" }
+      ]);
+    }
+
+    if (content) {
+      const result = await supportService.handleUserSupportMessage(convId, content, userId);
+      return res.json({ success: true, conversationId: convId, ...result });
+    }
+
+    res.json({ success: true, conversationId: convId });
+  } catch (err) {
+    console.error("[ChatController] createSupportChat error:", err.message);
+    res.status(500).json({ error: "Failed to create support chat", details: err.message });
   }
 };
 

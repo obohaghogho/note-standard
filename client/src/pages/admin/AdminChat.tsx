@@ -92,8 +92,16 @@ export const AdminChat = () => {
             setMessages(prev => prev.map(m => m.id === messageId ? { ...m, read_at: new Date().toISOString() } : m));
         };
 
+        const onConversationUpdated = ({ id, support_status }: { id: string; support_status: string }) => {
+            setChats(prev => prev.map(c => c.id === id ? { ...c, support_status: support_status as any } : c));
+            if (activeChat?.id === id) {
+                setActiveChat(prev => prev ? { ...prev, support_status: support_status as any } : null);
+            }
+        };
+
         socket.on('chat:message', onReceiveMessage);
         socket.on('chat:new_conversation', onNewSupportChat);
+        socket.on('chat:conversation_updated', onConversationUpdated);
         socket.on('chat:message_read', onMessageRead);
         socket.on('chat:message_delivered', ({ messageId, delivered_at }: { messageId: string, delivered_at?: string }) => {
             setMessages(prev => prev.map(m => m.id === messageId ? { ...m, delivered_at: m.delivered_at || delivered_at || new Date().toISOString() } : m));
@@ -111,6 +119,7 @@ export const AdminChat = () => {
         return () => {
             socket.off('chat:message', onReceiveMessage);
             socket.off('chat:new_conversation', onNewSupportChat);
+            socket.off('chat:conversation_updated', onConversationUpdated);
             socket.off('chat:message_read', onMessageRead);
             socket.off('chat:message_delivered');
             socket.off('chat:conversation_read');
@@ -296,10 +305,14 @@ export const AdminChat = () => {
     const handleChatSelect = async (chat: Conversation) => {
         if (!session?.access_token) return;
         try {
-            await fetch(`${API_URL}/api/admin/support-chats/${chat.id}/join`, {
+            const res = await fetch(`${API_URL}/api/admin/support-chats/${chat.id}/join`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${session.access_token}` }
             });
+            const data = await res.json();
+            if (!res.ok || (data.success === false && data.message)) {
+                toast.error(data.message || 'Could not claim support ticket');
+            }
             setActiveChat(chat);
         } catch (err) {
             console.error('Failed to join chat:', err);
@@ -382,8 +395,9 @@ export const AdminChat = () => {
                             aria-label="Filter chats"
                         >
                             <option value="">All</option>
-                            <option value="open">Open</option>
-                            <option value="pending">Pending</option>
+                            <option value="open">Open (Active)</option>
+                            <option value="escalated">Escalated</option>
+                            <option value="pending">Pending / Assigned</option>
                             <option value="resolved">Resolved</option>
                         </select>
                     </div>

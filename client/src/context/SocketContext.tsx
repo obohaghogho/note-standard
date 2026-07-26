@@ -177,16 +177,18 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const storedAccount = accountManager.getActiveAccountId() 
                 ? accountManager.getAccount(accountManager.getActiveAccountId()!) 
                 : null;
-            const sessionId = storedAccount?.sessionId || localStorage.getItem('chat_session_id');
+            let sessionId = storedAccount?.sessionId || localStorage.getItem('chat_session_id');
+
+            if (!sessionId) {
+                sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+                localStorage.setItem('chat_session_id', sessionId);
+            }
 
             getDeviceId().then(fallbackDeviceId => {
-                const deviceId = storedAccount?.deviceId || fallbackDeviceId;
-
-            if (!sessionId || !deviceId) {
-                console.warn('[ACCOUNT_FORENSIC] SOCKET_INITIALIZE_REJECTED - Missing sessionId or deviceId at ' + Date.now());
-                reject(new Error("Socket connection rejected: sessionId or deviceId missing"));
-                return;
-            }
+                let deviceId = storedAccount?.deviceId || fallbackDeviceId;
+                if (!deviceId) {
+                    deviceId = `dev_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+                }
 
             console.log(`[ACCOUNT_FORENSIC] SOCKET_INITIALIZE - Creating fresh socket at ${Date.now()}`);
             console.log(
