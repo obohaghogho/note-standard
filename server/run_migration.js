@@ -1,33 +1,20 @@
-require('dotenv').config({ path: '.env' });
-const { createClient } = require('@supabase/supabase-js');
-const fs = require('fs');
+require("dotenv").config();
+const { Client } = require("pg");
+const fs = require("fs");
+const path = require("path");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
-async function runMigration() {
-  console.log("Running migration 213...");
-  
-  // Since we don't have a direct SQL execution endpoint without psql, 
-  // I will just use pg pool directly to execute the SQL.
-  const { Pool } = require('pg');
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL.replace(':6543', ':5432'),
-    ssl: { rejectUnauthorized: false }
-  });
-  
-  const sql = fs.readFileSync('./database/migrations/214_push_health_status_view.sql', 'utf8');
-  
+async function run() {
+  const client = new Client({ connectionString: process.env.DATABASE_URL || process.env.SUPABASE_DB_URL });
+  await client.connect();
   try {
-    await pool.query(sql);
-    console.log("Migration executed successfully.");
-  } catch (err) {
-    console.error("Migration failed:", err);
+    const sql = fs.readFileSync(path.join(__dirname, "database/migrations/232_create_support_infrastructure.sql"), "utf8");
+    console.log("Running migration...");
+    await client.query(sql);
+    console.log("Migration successful");
+  } catch(e) {
+    console.error("Migration failed:", e.message);
   } finally {
-    await pool.end();
+    await client.end();
   }
 }
-
-runMigration().catch(console.error);
+run();

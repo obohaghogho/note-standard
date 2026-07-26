@@ -1904,12 +1904,78 @@ exports.sendMessage = async (req, res) => {
               const autoMsg = rpcData?.message;
 
               if (!autoErr && autoMsg) {
+                 // If escalated, update status and trigger full enterprise workflow
+                 if (aiResponse.isEscalated) {
+                     // 1. Update Conversation Status
+                     await supabase
+                      .from("conversations")
+                      .update({ support_status: "waiting" })
+                      .eq("id", conversationId);
+                      
+                     // 2. Create Support Ticket
+                     const { data: ticket, error: ticketErr } = await supabase
+                       .from("support_tickets")
+                       .insert({
+                          conversation_id: conversationId,
+                          customer_id: userId,
+                          status: 'waiting',
+                          priority: aiResponse.operationalMetadata?.priority || 'normal',
+                          category: aiResponse.operationalMetadata?.category || 'Unknown',
+                          intent: aiResponse.operationalMetadata?.intent || 'Unknown',
+                          confidence: aiResponse.operationalMetadata?.confidence || 0,
+                          ai_debug_metadata: aiResponse.aiDebugMetadata || {}
+                       })
+                       .select("id")
+                       .single();
+
+                     if (!ticketErr && ticket) {
+                         // 3. Log Event
+                         await supabase.from("support_ticket_events").insert({
+                             ticket_id: ticket.id,
+                             event_type: 'created',
+                             payload: { 
+                                 source: 'ai_escalation', 
+                                 problem: aiResponse.operationalMetadata?.customer_problem 
+                             }
+                         });
+
+                         // 4. Notify Support Team
+                         const { data: supportUsers } = await supabase
+                           .from('user_permissions')
+                           .select('user_id, permissions!inner(name)')
+                           .eq('permissions.name', 'support.receive_ticket');
+
+                         if (supportUsers && supportUsers.length > 0) {
+                             const notificationService = require("../services/notificationService");
+                             for (const up of supportUsers) {
+                                 const staffId = up.user_id;
+                                 
+                                 // Realtime Event
+                                 await realtime.emitToUser(staffId, "support:new_ticket", {
+                                     ticket_id: ticket.id,
+                                     conversation_id: conversationId,
+                                     priority: aiResponse.operationalMetadata?.priority || 'normal',
+                                     category: aiResponse.operationalMetadata?.category || 'Unknown'
+                                 });
+
+                                 // Push / In-App Notification
+                                 if (notificationService.createNotification) {
+                                     await notificationService.createNotification(
+                                         staffId,
+                                         'new_support_ticket',
+                                         'New Support Ticket Escalated',
+                                         `A user needs help with ${aiResponse.operationalMetadata?.category || 'an issue'}.`,
+                                         { ticket_id: ticket.id, conversation_id: conversationId }
+                                     );
+                                 }
+                             }
+                         }
+                     }
+                 }
                  autoMsg.sender_type = "ai";
                  await realtime.emitToConversation(conversationId, "chat:message", autoMsg);
               }
               
-              // If escalated, update status
-              if (aiResponse.isEscalated) {
                   await supabase
                    .from("conversations")
                    .update({ support_status: "escalated" })

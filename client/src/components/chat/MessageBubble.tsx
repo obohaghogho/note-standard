@@ -76,12 +76,10 @@ const MessageBubble = memo(({
             break;
         case 'user':
         default:
-            if (isSender) {
-                background = activeTheme.colors.sentBubbleBg;
-                color = activeTheme.colors.sentBubbleText;
-                borderColor = activeTheme.colors.sentBubbleBorder || 'rgba(255,255,255,0.1)';
-                isAlignedRight = true;
-            }
+            background = '#3B82F6'; // Blue bubble
+            color = '#FFFFFF';
+            borderColor = 'rgba(59,130,246,0.5)';
+            isAlignedRight = true; // Always right aligned for the user in this context
             break;
     }
 
@@ -133,6 +131,23 @@ const MessageBubble = memo(({
                 } relative group transition-all duration-200 ${isSelectionMode ? 'cursor-pointer' : ''}`}
                 style={bubbleStyle}
             >
+                {msg.sender_type === 'ai' && !isGrouped && (
+                    <div className="flex items-center gap-2 mb-2 pb-2 border-b border-white/10">
+                        <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                            <span className="text-[10px]">🤖</span>
+                        </div>
+                        <span className="text-xs font-bold opacity-90 tracking-wide uppercase">AI Assistant</span>
+                    </div>
+                )}
+                
+                {msg.sender_type === 'human' && !isGrouped && (
+                    <div className="flex items-center gap-2 mb-2 pb-2 border-b border-white/10">
+                        <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                            <span className="text-[10px]">🎧</span>
+                        </div>
+                        <span className="text-xs font-bold opacity-90 tracking-wide uppercase">Support Specialist</span>
+                    </div>
+                )}
                 {msg.reply_to?.id && (
                     <div 
                         className="mb-2 p-2.5 rounded-xl border-l-[3.5px] text-xs transition-all backdrop-blur-md cursor-pointer hover:bg-black/5"

@@ -376,6 +376,10 @@ export const AdminDashboard = () => {
                 <section className="recent-activity">
                     <h3>Quick Actions</h3>
                     <div className="quick-actions">
+                        <Link to="/admin/support-center" className="action-card">
+                            <ShieldAlert />
+                            <span>Enterprise Support Center</span>
+                        </Link>
                         <Link to="/admin/chats" className="action-card">
                             <MessageSquare />
                             <span>View Support Chats</span>

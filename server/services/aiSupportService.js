@@ -77,7 +77,7 @@ class AiSupportService {
      const queryLower = query.toLowerCase();
      
      const categoryKeywords = {
-         wallet: ['wallet', 'transfer', 'deposit', 'withdraw', 'cash', 'money', 'payout', 'pending', 'fee', 'fiat', 'bank'],
+         wallet: ['wallet', 'transfer', 'deposit', 'withdraw', 'cash', 'money', 'payout', 'pending', 'fee', 'fiat', 'bank', 'purchase', 'buy', 'fund', 'add', 'credit', 'virtual', 'account', 'balance', 'limit', 'settle', 'cross', 'currency', 'ngn'],
          messaging: ['message', 'tick', 'notification', 'chat', 'receipt', 'read'],
          crypto: ['crypto', 'swap', 'network', 'chain', 'coin', 'token', 'usdt', 'btc', 'eth', 'memo'],
          authentication: ['auth', 'login', 'password', 'verify', 'verification', '2fa', 'otp', 'sign'],
@@ -263,7 +263,7 @@ class AiSupportService {
           return null;
       }
       
-      let calculatedConfidence = 0.95;
+      let calculatedConfidence = parsedResponse.confidence !== undefined ? parsedResponse.confidence : 0.95;
       if (retrieval.sources_used.length === 0) {
           calculatedConfidence = 0.20;
       }
@@ -280,29 +280,34 @@ class AiSupportService {
 
       const responseId = 'ai_resp_' + require('crypto').randomUUID().replace(/-/g, '').substring(0, 16);
 
-      const analyticsPayload = {
+      const aiDebugMetadata = {
           response_id: responseId,
-          conversation_id: conversationId,
-          user_id: userId,
-          category: parsedResponse.category,
-          intent: parsedResponse.intent,
-          knowledge_articles: retrieval.sources_used,
-          latency_ms: latency,
-          escalated: isEscalated,
-          response_length: parsedResponse.response.length,
-          model: modelUsed
+          model: modelUsed,
+          latency: latency,
+          knowledge_used: retrieval.content ? true : false,
+          articles_used: retrieval.sources_used,
+          token_usage: tokens,
+          knowledge_version: retrieval.knowledge_version,
+          prompt_version: "v2_enterprise"
       };
-      console.log("[AI Support] Analytics Record:", JSON.stringify(analyticsPayload));
+
+      const operationalMetadata = {
+          category: parsedResponse.category || "Unknown",
+          intent: parsedResponse.intent || "Unknown",
+          priority: parsedResponse.priority || "normal",
+          confidence: calculatedConfidence,
+          customer_problem: userMessage,
+          actions_tried: parsedResponse.actions_tried || "",
+          recommended_next_step: parsedResponse.recommended_next_step || (isEscalated ? "Review chat history and respond manually" : "None")
+      };
+
+      console.log("[AI Support] Analytics Record:", JSON.stringify({...operationalMetadata, ...aiDebugMetadata}));
 
       return {
         text: parsedResponse.response,
         isEscalated,
-        metadata: {
-            ...analyticsPayload,
-            customer_problem: userMessage,
-            likely_cause: parsedResponse.intent || "Unknown",
-            recommended_next_step: isEscalated ? "Review chat history and respond manually" : "None"
-        }
+        operationalMetadata,
+        aiDebugMetadata
       };
       
     } catch (err) {
