@@ -3,6 +3,47 @@ const supabase = require("../config/database");
 const fs = require("fs");
 const path = require("path");
 
+class KnowledgeManager {
+  constructor(knowledgeDir) {
+    this.knowledgeDir = knowledgeDir;
+    this.cache = new Map();
+    this.version = Date.now().toString();
+    this.loadKnowledge();
+    
+    if (fs.existsSync(this.knowledgeDir)) {
+      fs.watch(this.knowledgeDir, (eventType, filename) => {
+        if (filename && filename.endsWith('.json')) {
+          console.log(`[KnowledgeManager] Detected change in ${filename}, reloading...`);
+          this.loadKnowledge();
+        }
+      });
+    }
+  }
+
+  loadKnowledge() {
+    this.cache.clear();
+    try {
+      const files = fs.readdirSync(this.knowledgeDir).filter(f => f.endsWith('.json'));
+      for (const file of files) {
+        try {
+          const data = JSON.parse(fs.readFileSync(path.join(this.knowledgeDir, file), 'utf8'));
+          this.cache.set(file, data);
+        } catch (e) {
+          console.warn(`[KnowledgeManager] Failed to parse ${file}:`, e.message);
+        }
+      }
+      this.version = Date.now().toString();
+      console.log(`[KnowledgeManager] Loaded ${this.cache.size} knowledge files (v${this.version})`);
+    } catch(err) {
+      console.warn('[KnowledgeManager] Failed to read directory:', err.message);
+    }
+  }
+  
+  getKnowledgeFiles() {
+    return Array.from(this.cache.entries());
+  }
+}
+
 class AiSupportService {
   constructor() {
     this.openai = null;
@@ -15,19 +56,109 @@ class AiSupportService {
       console.warn("[AI Support] GROQ_API_KEY not set. AI support agent will be disabled.");
     }
 
-    const promptPath = path.join(__dirname, '../prompts/support-system-prompt.md');
-    this.systemPrompt = fs.readFileSync(promptPath, 'utf8');
+    const systemPromptPath = path.join(__dirname, '../prompts/support-system-prompt.md');
+    const policyPath = path.join(__dirname, '../prompts/support-policy.md');
+    this.systemPrompt = fs.readFileSync(systemPromptPath, 'utf8');
+    this.supportPolicy = fs.readFileSync(policyPath, 'utf8');
+    
+    this.knowledgeDir = path.join(__dirname, '../knowledge');
+    this.knowledgeManager = new KnowledgeManager(this.knowledgeDir);
   }
 
   isConfigured() {
     return this.openai !== null;
   }
+  
+  retrieveKnowledge(query) {
+     const entries = this.knowledgeManager.getKnowledgeFiles();
+     let matchedArticles = [];
+     let knowledgeSnippets = [];
+     
+     const queryLower = query.toLowerCase();
+     
+     const categoryKeywords = {
+         wallet: ['wallet', 'transfer', 'deposit', 'withdraw', 'cash', 'money', 'payout', 'pending', 'fee', 'fiat', 'bank'],
+         messaging: ['message', 'tick', 'notification', 'chat', 'receipt', 'read'],
+         crypto: ['crypto', 'swap', 'network', 'chain', 'coin', 'token', 'usdt', 'btc', 'eth', 'memo'],
+         authentication: ['auth', 'login', 'password', 'verify', 'verification', '2fa', 'otp', 'sign'],
+         workspace: ['workspace', 'trend', 'note', 'folder', 'tag']
+     };
+
+     let allIntents = [];
+
+     for (const [file, data] of entries) {
+         const feature = (data.feature || "").toLowerCase();
+         let baseCategoryScore = 0;
+         
+         const keywords = categoryKeywords[feature] || [];
+         for (const kw of keywords) {
+             if (queryLower.includes(kw)) baseCategoryScore += 2;
+         }
+
+         for (const intent of data.intents || []) {
+             let score = baseCategoryScore;
+             const intentKw = intent.name.replace(/_/g, ' ').toLowerCase();
+             
+             const words = intentKw.split(' ');
+             for (const word of words) {
+                 if (word.length > 2 && queryLower.includes(word)) score += 3;
+             }
+             
+             allIntents.push({
+                 article_id: intent.article_id || `${feature}.${intent.name}`,
+                 feature,
+                 score,
+                 intentData: intent
+             });
+         }
+     }
+
+     allIntents.sort((a, b) => b.score - a.score);
+     const topIntents = allIntents.filter(i => i.score > 0).slice(0, 3);
+     
+     if (topIntents.length > 0) {
+         matchedArticles = topIntents.map(i => i.article_id);
+         knowledgeSnippets = topIntents.map(i => JSON.stringify(i.intentData));
+     } else {
+         console.log(JSON.stringify({
+             event: "knowledge_miss",
+             query: query,
+             matched: false,
+             category: null,
+             timestamp: new Date().toISOString()
+         }));
+     }
+     
+     return {
+         knowledge_version: this.knowledgeManager.version,
+         sources_used: matchedArticles,
+         content: knowledgeSnippets.join("\n\n")
+     };
+  }
+  
+  validateResponse(responseObj) {
+      const text = (responseObj.response || "").toLowerCase();
+      
+      const violations = [
+          "refund",
+          "engineering has fixed",
+          "engineering has been notified"
+      ];
+      
+      for (const v of violations) {
+          if (text.includes(v)) {
+              console.warn(`[AI Support] Validation violation caught for rule: ${v}`);
+              return false;
+          }
+      }
+      return true;
+  }
 
   async processSupportMessage(conversationId, userMessage, userId, botSenderId) {
     if (!this.isConfigured()) return null;
+    const startTimeMs = Date.now();
 
     try {
-      // 1. Fetch user profile for First Name
       const { data: profile } = await supabase
         .from("profiles")
         .select("full_name, username")
@@ -36,7 +167,6 @@ class AiSupportService {
       
       const firstName = profile?.full_name ? profile.full_name.split(' ')[0] : (profile?.username || 'User');
 
-      // 2. Fetch the last 6 messages in this conversation for context
       const { data: recentMessages, error } = await supabase
         .from("messages")
         .select("content, sender_id")
@@ -46,48 +176,57 @@ class AiSupportService {
 
       let chatHistory = [];
       if (!error && recentMessages) {
-        // Reverse to get chronological order – use the actual botSenderId to identify AI messages
         chatHistory = recentMessages.reverse().map(msg => ({
           role: msg.sender_id === botSenderId ? "assistant" : "user",
           content: msg.content
         }));
       }
 
-      // Check if the user's current message is already in context (it might be since we insert before calling this)
-      // If not, append it.
       if (chatHistory.length === 0 || chatHistory[chatHistory.length - 1].content !== userMessage) {
          chatHistory.push({ role: "user", content: userMessage });
       }
+      
+      const retrieval = this.retrieveKnowledge(userMessage);
 
       const messagesPayload = [
-        { role: "system", content: `${this.systemPrompt}\n\nThe user's first name is: ${firstName}` },
+        { role: "system", content: `${this.systemPrompt}\n\n${this.supportPolicy}\n\n# RETRIEVED PRODUCT KNOWLEDGE (Version: ${retrieval.knowledge_version})\n${retrieval.content || "No matching knowledge found."}\n\nThe user's first name is: ${firstName}` },
         ...chatHistory
       ];
 
-      // 3. Call Groq API with fallback models and a 15s timeout
+      console.log(`[AI] Sending request to Groq...`);
+      console.log(`Model: llama-3.3-70b-versatile`);
+      console.log(`Conversation ID: ${conversationId}`);
+      console.log(`User ID: ${userId}`);
+      console.log(`Prompt length: ${messagesPayload[0].content.length} chars`);
+      console.log(`History messages: ${chatHistory.length}`);
+
       const modelsToTry = [
         "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant",
-        "mixtral-8x7b-32768",
+        "llama-3.1-8b-instant"
       ];
 
       let completion = null;
       let lastError = null;
+      let modelUsed = "";
 
       for (const model of modelsToTry) {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
+        const timeout = setTimeout(() => controller.abort(), 15000);
 
         try {
           completion = await this.openai.chat.completions.create({
             model,
             messages: messagesPayload,
-            max_tokens: 500,
-            temperature: 0.6,
+            max_tokens: 600,
+            temperature: 0.2,
+            response_format: { type: "json_object" }
           }, { signal: controller.signal });
 
           clearTimeout(timeout);
-          if (completion?.choices[0]?.message?.content) break;
+          if (completion?.choices[0]?.message?.content) {
+              modelUsed = model;
+              break;
+          }
         } catch (apiErr) {
           clearTimeout(timeout);
           lastError = apiErr;
@@ -96,19 +235,74 @@ class AiSupportService {
       }
 
       if (!completion) {
+        console.error("[AI] Groq Request Failed");
+        console.error(`HTTP Status: Error`);
+        console.error(`Latency: ${Date.now() - startTimeMs}ms`);
+        console.error(`Error: ${lastError?.message}`);
+        console.error(`Fallback Used: true`);
         if (lastError) throw lastError;
         return null;
       }
-
+      
+      const latency = Date.now() - startTimeMs;
+      const tokens = completion.usage?.total_tokens || 0;
       const aiResponseText = completion.choices[0]?.message?.content?.trim();
-      if (!aiResponseText) return null;
+      
+      console.log(`[AI] Groq response received`);
+      console.log(`tokens: ${tokens}`);
+      console.log(`latency: ${latency}ms`);
+      console.log(`content: ${aiResponseText}`);
 
-      // 4. Determine if AI escalated the chat
-      const isEscalated = aiResponseText.toLowerCase().includes("escalated") || aiResponseText.toLowerCase().includes("escalating");
+      if (!aiResponseText) return null;
+      
+      let parsedResponse;
+      try {
+          parsedResponse = JSON.parse(aiResponseText);
+      } catch (parseErr) {
+          console.error("[AI Support] Failed to parse JSON response:", parseErr.message);
+          return null;
+      }
+      
+      let calculatedConfidence = 0.95;
+      if (retrieval.sources_used.length === 0) {
+          calculatedConfidence = 0.20;
+      }
+      
+      let isEscalated = parsedResponse.escalate === true || calculatedConfidence < 0.80;
+      
+      if (!isEscalated && !this.validateResponse(parsedResponse)) {
+          isEscalated = true;
+      }
+      
+      if (isEscalated) {
+          parsedResponse.response = "I don't have enough information to answer that accurately. I'll connect this conversation to the support team.";
+      }
+
+      const responseId = 'ai_resp_' + require('crypto').randomUUID().replace(/-/g, '').substring(0, 16);
+
+      const analyticsPayload = {
+          response_id: responseId,
+          conversation_id: conversationId,
+          user_id: userId,
+          category: parsedResponse.category,
+          intent: parsedResponse.intent,
+          knowledge_articles: retrieval.sources_used,
+          latency_ms: latency,
+          escalated: isEscalated,
+          response_length: parsedResponse.response.length,
+          model: modelUsed
+      };
+      console.log("[AI Support] Analytics Record:", JSON.stringify(analyticsPayload));
 
       return {
-        text: aiResponseText,
-        isEscalated
+        text: parsedResponse.response,
+        isEscalated,
+        metadata: {
+            ...analyticsPayload,
+            customer_problem: userMessage,
+            likely_cause: parsedResponse.intent || "Unknown",
+            recommended_next_step: isEscalated ? "Review chat history and respond manually" : "None"
+        }
       };
       
     } catch (err) {

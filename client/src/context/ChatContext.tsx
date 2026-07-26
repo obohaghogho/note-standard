@@ -25,6 +25,7 @@ export interface Message {
     content: string;
     created_at: string;
     type: 'text' | 'image' | 'video' | 'file' | 'audio' | 'call';
+    sender_type?: 'user' | 'ai' | 'human' | 'system';
     isOwn?: boolean;
     original_language?: string;
     read_at?: string;

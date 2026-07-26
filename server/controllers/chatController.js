@@ -24,6 +24,31 @@ const PIPELINE_VERSION = process.env.MESSAGING_PIPELINE_VERSION || 'v2';
  *
  * @param {Array<Object>} messages - mutable array of message rows
  */
+async function _mapSenderTypeBatch(messages) {
+    if (!messages || messages.length === 0) return;
+    try {
+        const convIds = [...new Set(messages.map(m => m.conversation_id))];
+        const { data: convs } = await supabase.from('conversations').select('id, chat_type').in('id', convIds);
+        const supportConvIds = new Set((convs || []).filter(c => c.chat_type === 'support').map(c => c.id));
+        
+        if (supportConvIds.size > 0) {
+            const { data: adminUser } = await supabase.from('profiles').select('id').eq('plan_tier', 'admin').limit(1).maybeSingle();
+            if (adminUser) {
+                for (const msg of messages) {
+                    if (supportConvIds.has(msg.conversation_id)) {
+                        msg.sender_type = msg.sender_id === adminUser.id ? 'ai' : 'user';
+                    } else {
+                        msg.sender_type = 'user';
+                    }
+                }
+                return;
+            }
+        }
+        for (const msg of messages) msg.sender_type = 'user';
+    } catch (e) {
+        console.warn('[Chat Controller] Error mapping sender type batch:', e.message);
+    }
+}
 async function _hydrateReplyTo(messages) {
   if (!messages || messages.length === 0) return;
   const ids = [...new Set(
@@ -341,9 +366,11 @@ exports.syncMessages = async (req, res) => {
         .order("created_at", { ascending: true })
         .limit(200);
       if (plainErr) throw plainErr;
+      return await _mapSenderTypeBatch(plain || []);
       return res.json(plain || []);
     }
 
+    await _mapSenderTypeBatch(data || []);
     res.json(data || []);
   } catch (err) {
     console.error("[Chat] syncMessages error:", err.message);
@@ -811,7 +838,8 @@ exports.getMessages = async (req, res) => {
           if (!fb1Error) {
             const fbArr = fb1Data || [];
             await _hydrateReplyTo(fbArr);
-            return res.json(fbArr.reverse());
+            await _mapSenderTypeBatch(fbArr);
+          return res.json(fbArr.reverse());
           }
 
           // Second fallback: plain select(*) + manual reply_to hydration
@@ -833,6 +861,7 @@ exports.getMessages = async (req, res) => {
           // Manual reply_to hydration — batch load all referenced parent messages
           const simpleArr = simpleData || [];
           await _hydrateReplyTo(simpleArr);
+          await _mapSenderTypeBatch(simpleArr);
           return res.json(simpleArr.reverse());
         }
         throw error;
@@ -841,6 +870,7 @@ exports.getMessages = async (req, res) => {
       // Primary query succeeded
       const primaryArr = data || [];
       await _hydrateReplyTo(primaryArr);
+      await _mapSenderTypeBatch(primaryArr);
       res.json(primaryArr.reverse());
     } catch (innerErr) {
       console.warn("[Chat Controller] Inner query error:", innerErr.message);
@@ -855,6 +885,7 @@ exports.getMessages = async (req, res) => {
       if (finalError) throw finalError;
       const finalArr = finalData || [];
       await _hydrateReplyTo(finalArr);
+      await _mapSenderTypeBatch(finalArr);
       res.json(finalArr.reverse());
     }
   } catch (err) {
@@ -1873,6 +1904,7 @@ exports.sendMessage = async (req, res) => {
               const autoMsg = rpcData?.message;
 
               if (!autoErr && autoMsg) {
+                 autoMsg.sender_type = "ai";
                  await realtime.emitToConversation(conversationId, "chat:message", autoMsg);
               }
               
@@ -1899,6 +1931,7 @@ exports.sendMessage = async (req, res) => {
               const fallbackData = rpcData?.message;
               
               if (!fallbackErr && fallbackData) {
+                 fallbackData.sender_type = "ai";
                  await realtime.emitToConversation(conversationId, "chat:message", fallbackData);
               }
             }
@@ -1927,6 +1960,7 @@ exports.sendMessage = async (req, res) => {
               const errMsg = rpcData?.message;
               
               if (!errMsgErr && errMsg) {
+                 errMsg.sender_type = "ai";
                  await realtime.emitToConversation(conversationId, "chat:message", errMsg);
               }
             } catch (fallbackInsertErr) {

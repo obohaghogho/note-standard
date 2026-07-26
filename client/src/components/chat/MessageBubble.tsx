@@ -51,6 +51,40 @@ const MessageBubble = memo(({
     const glassClass = customizer.bubble.glassmorphism ? 'chat-glass-bubble' : '';
     const elevationClass = `chat-elevation-${customizer.bubble.elevation || 'subtle'}`;
 
+    let background = activeTheme.colors.receivedBubbleBg;
+    let color = activeTheme.colors.receivedBubbleText;
+    let borderColor = activeTheme.colors.receivedBubbleBorder || 'rgba(255,255,255,0.08)';
+    let isAlignedRight = false;
+
+    switch (msg.sender_type) {
+        case 'ai':
+            background = '#1A1A1D';
+            color = '#FFFFFF';
+            borderColor = 'rgba(255,255,255,0.1)';
+            isAlignedRight = false;
+            break;
+        case 'human':
+            background = '#4B5563';
+            color = '#FFFFFF';
+            borderColor = 'rgba(255,255,255,0.1)';
+            isAlignedRight = false;
+            break;
+        case 'system':
+            background = 'transparent';
+            color = activeTheme.colors.receivedBubbleText;
+            isAlignedRight = false;
+            break;
+        case 'user':
+        default:
+            if (isSender) {
+                background = activeTheme.colors.sentBubbleBg;
+                color = activeTheme.colors.sentBubbleText;
+                borderColor = activeTheme.colors.sentBubbleBorder || 'rgba(255,255,255,0.1)';
+                isAlignedRight = true;
+            }
+            break;
+    }
+
     // Dynamic bubble styles derived from active theme and customizer
     const bubbleStyle: React.CSSProperties = {
       borderRadius: `${customizer.bubble.borderRadius}px`,
@@ -58,23 +92,15 @@ const MessageBubble = memo(({
       fontSize: `${customizer.typography.fontSize}px`,
       lineHeight: customizer.typography.lineHeight,
       letterSpacing: `${customizer.typography.letterSpacing}px`,
-      ...(isSender
-        ? {
-            background: activeTheme.colors.sentBubbleBg,
-            color: activeTheme.colors.sentBubbleText,
-            borderColor: activeTheme.colors.sentBubbleBorder || 'rgba(255,255,255,0.1)',
-          }
-        : {
-            background: activeTheme.colors.receivedBubbleBg,
-            color: activeTheme.colors.receivedBubbleText,
-            borderColor: activeTheme.colors.receivedBubbleBorder || 'rgba(255,255,255,0.08)',
-          }),
+      background,
+      color,
+      borderColor,
     };
 
     return (
         <div 
             id={`msg-${msg.id}`}
-            className={`flex px-3 md:px-4 w-full ${isSender ? 'justify-end' : 'justify-start'} ${isGrouped ? '' : 'mt-3'} msg-bubble chat-bubble-animated ${fontClass}`}
+            className={`flex px-3 md:px-4 w-full ${isAlignedRight ? 'justify-end' : (msg.sender_type === 'system' ? 'justify-center' : 'justify-start')} ${isGrouped ? '' : 'mt-3'} msg-bubble chat-bubble-animated ${fontClass}`}
             onTouchStart={(e) => gesture.onTouchStart(e, msg.id)}
             onTouchMove={gesture.onTouchMove}
             onTouchEnd={gesture.onTouchEnd}
