@@ -87,19 +87,26 @@ export const DownloadPage: React.FC = () => {
   }, [platform]);
 
   const handleInstall = async () => {
-    if (platform === 'ios') { setIsIOSModalOpen(true); return; }
-    if (!deferredPrompt) {
-      toast('Open this page in Chrome/Edge on Android and tap the menu → "Add to Home Screen"', { icon: 'ℹ️', duration: 6000 });
+    if (platform === 'ios') {
+      setIsIOSModalOpen(true);
       return;
     }
-    await deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      setInstalled(true);
-      toast.success('Installing NoteStandard…');
+    if (deferredPrompt) {
+      await deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setInstalled(true);
+        toast.success('Installing NoteStandard Web App…');
+      }
+      setDeferredPrompt(null);
+      setCanInstall(false);
+    } else {
+      document.getElementById('install-guide')?.scrollIntoView({ behavior: 'smooth' });
+      toast('To install: Tap your browser menu (⋮) → "Add to Home Screen" or "Install App"', {
+        icon: '📱',
+        duration: 6000,
+      });
     }
-    setDeferredPrompt(null);
-    setCanInstall(false);
   };
 
   // ─── Guide steps ─────────────────────────────────────────────────────────
@@ -185,33 +192,36 @@ export const DownloadPage: React.FC = () => {
               <div className="w-16 h-16 rounded-2xl bg-primary/20 border border-primary/30 flex items-center justify-center mx-auto mb-4">
                 <Smartphone size={28} className="text-primary" />
               </div>
-              <h2 className="text-2xl font-black mb-2">
-                {canInstall ? '✅ Ready to Install!' : 'Install NoteStandard App'}
+              <h2 className="text-2xl sm:text-3xl font-black mb-2">
+                Install NoteStandard Web App
               </h2>
               <p className="text-gray-400 text-sm max-w-md mx-auto leading-relaxed">
-                {platform === 'android' && 'Tap the button below to install NoteStandard directly to your home screen via Chrome.'}
-                {platform === 'ios'     && 'Tap below for step-by-step instructions to add NoteStandard to your iPhone home screen via Safari.'}
-                {platform === 'desktop' && 'Click below to install NoteStandard as a desktop app (Chrome/Edge required).'}
+                Install NoteStandard directly on your phone or desktop from your browser. Works like a native mobile app with instant loading, offline access, and push notifications.
               </p>
 
-              <button
-                onClick={handleInstall}
-                className="mt-4 inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-primary hover:bg-primary/90 text-white font-black text-sm shadow-xl shadow-primary/30 transition-all hover:scale-105 active:scale-100 border border-white/10"
-              >
-                {platform === 'ios' ? (
-                  <><Apple size={18} /> Install Web App (Safari)</>
-                ) : platform === 'android' ? (
-                  <><Smartphone size={18} /> {canInstall ? 'Install App Now (1-Tap)' : 'How to Install on Android'}</>
-                ) : (
-                  <><Globe size={18} /> {canInstall ? 'Install Desktop App' : 'How to Install on Desktop'}</>
-                )}
-              </button>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-6">
+                <button
+                  onClick={handleInstall}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-9 py-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white font-black text-base shadow-xl shadow-emerald-500/30 transition-all hover:scale-105 active:scale-100 border border-white/10"
+                >
+                  <Smartphone size={20} />
+                  Install Web App
+                </button>
 
-              {!canInstall && platform !== 'ios' && (
-                <p className="mt-3 text-xs text-gray-500">
-                  If the prompt doesn't appear automatically, follow the step-by-step guide below to add it from your browser menu.
-                </p>
-              )}
+                <button
+                  onClick={() => navigate('/dashboard')}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-gray-200 font-bold text-sm border border-white/10 transition-all"
+                >
+                  <Globe size={18} />
+                  Open Web App
+                </button>
+              </div>
+
+              <p className="mt-4 text-xs text-gray-400">
+                {platform === 'ios'
+                  ? 'Works in Safari on iPhone / iPad. Tap Install Web App above for instructions.'
+                  : 'Works in Google Chrome, Edge, Brave, Opera & all modern mobile browsers.'}
+              </p>
             </div>
           </div>
         ) : (
@@ -231,7 +241,7 @@ export const DownloadPage: React.FC = () => {
         )}
 
         {/* ── Step-by-step guide ── */}
-        <div className="space-y-6">
+        <div id="install-guide" className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-black">Step-by-step Guide</h2>
             {/* Guide switcher */}
