@@ -77,17 +77,18 @@ class SupportService {
         .limit(1)
         .maybeSingle();
 
-      if (adminProfile) return adminProfile.id;
+      if (adminProfile && adminProfile.id !== excludeUserId) return adminProfile.id;
 
-      // 3. Fallback: query any admin user
+      // 3. Fallback: query any admin user that is not the current user
       const { data: anyAdmin } = await serviceSupabase
         .from("profiles")
         .select("id")
         .eq("role", "admin")
+        .neq("id", excludeUserId || "00000000-0000-0000-0000-000000000000")
         .limit(1)
         .maybeSingle();
 
-      if (anyAdmin) return anyAdmin.id;
+      if (anyAdmin && anyAdmin.id !== excludeUserId) return anyAdmin.id;
     } catch (e) {
       logger.warn(`[SupportService] Error finding botSenderId: ${e.message}`);
     }

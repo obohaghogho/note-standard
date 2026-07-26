@@ -51,35 +51,42 @@ const MessageBubble = memo(({
     const glassClass = customizer.bubble.glassmorphism ? 'chat-glass-bubble' : '';
     const elevationClass = `chat-elevation-${customizer.bubble.elevation || 'subtle'}`;
 
-    let background = activeTheme.colors.receivedBubbleBg;
-    let color = activeTheme.colors.receivedBubbleText;
+    let background = activeTheme.colors.receivedBubbleBg || '#1E293B';
+    let color = activeTheme.colors.receivedBubbleText || '#F1F5F9';
     let borderColor = activeTheme.colors.receivedBubbleBorder || 'rgba(255,255,255,0.08)';
     let isAlignedRight = false;
 
     switch (msg.sender_type) {
         case 'ai':
-            background = '#1A1A1D';
-            color = '#FFFFFF';
-            borderColor = 'rgba(255,255,255,0.1)';
+            background = '#0F172A';
+            color = '#F1F5F9';
+            borderColor = 'rgba(56,189,248,0.3)';
             isAlignedRight = false;
             break;
         case 'human':
-            background = '#4B5563';
-            color = '#FFFFFF';
-            borderColor = 'rgba(255,255,255,0.1)';
+            background = '#1E293B';
+            color = '#F8FAFC';
+            borderColor = 'rgba(129,140,248,0.3)';
             isAlignedRight = false;
             break;
         case 'system':
             background = 'transparent';
-            color = activeTheme.colors.receivedBubbleText;
+            color = activeTheme.colors.receivedBubbleText || '#94A3B8';
             isAlignedRight = false;
             break;
         case 'user':
         default:
-            background = '#3B82F6'; // Blue bubble
-            color = '#FFFFFF';
-            borderColor = 'rgba(59,130,246,0.5)';
-            isAlignedRight = true; // Always right aligned for the user in this context
+            if (isSender) {
+                background = activeTheme.colors.sentBubbleBg || '#3B82F6';
+                color = activeTheme.colors.sentBubbleText || '#FFFFFF';
+                borderColor = 'rgba(59,130,246,0.5)';
+                isAlignedRight = true;
+            } else {
+                background = activeTheme.colors.receivedBubbleBg || '#1E293B';
+                color = activeTheme.colors.receivedBubbleText || '#F1F5F9';
+                borderColor = activeTheme.colors.receivedBubbleBorder || 'rgba(255,255,255,0.1)';
+                isAlignedRight = false;
+            }
             break;
     }
 

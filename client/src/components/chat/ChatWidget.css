@@ -247,7 +247,9 @@
     align-self: flex-end;
 }
 
-.chat-message.other {
+.chat-message.other,
+.chat-message.ai,
+.chat-message.human {
     align-self: flex-start;
 }
 
@@ -265,12 +267,32 @@
 }
 
 .chat-message.other .message-bubble {
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.08);
     color: #e4e4e7;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     border-bottom-left-radius: 4px;
+}
+
+.chat-message.ai .message-bubble {
+    background: rgba(15, 23, 42, 0.95);
+    color: #f1f5f9;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom-left-radius: 4px;
+    box-shadow: 0 4px 16px rgba(56, 189, 248, 0.12);
+}
+
+.chat-message.human .message-bubble {
+    background: rgba(30, 41, 59, 0.95);
+    color: #f8fafc;
+    border: 1px solid rgba(129, 140, 248, 0.35);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom-left-radius: 4px;
+    box-shadow: 0 4px 16px rgba(129, 140, 248, 0.15);
 }
 
 .message-bubble p {
@@ -280,7 +302,9 @@
 }
 
 /* We now control space for the specialist label using a clean class modifier */
-.chat-message.other.has-label {
+.chat-message.other.has-label,
+.chat-message.ai.has-label,
+.chat-message.human.has-label {
     margin-top: 1.35rem;
 }
 

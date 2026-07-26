@@ -424,17 +424,27 @@ export const ChatWidget = () => {
                                             </div>
                                         ) : (
                                                                        messages.map((msg, idx) => {
+                                                const isAi = msg.sender_type === 'ai' || msg.sender_id === '00000000-0000-0000-0000-000000000000';
+                                                const isHumanAgent = msg.sender_type === 'human';
+                                                const isOwn = !isAi && !isHumanAgent && msg.sender_id === user?.id;
+                                                
                                                 const isConsecutive = idx > 0 && messages[idx - 1].sender_id === msg.sender_id;
-                                                const showLabel = msg.sender_id !== user?.id && !isConsecutive;
+                                                const showLabel = !isOwn && !isConsecutive;
+
+                                                let variantClass = 'other';
+                                                if (isOwn) variantClass = 'own';
+                                                else if (isAi) variantClass = 'ai';
+                                                else if (isHumanAgent) variantClass = 'human';
+
                                                 return (
                                                     <div
                                                         key={msg.id}
-                                                        className={`chat-message ${msg.sender_id === user?.id ? 'own' : 'other'} ${showLabel ? 'has-label' : ''}`}
+                                                        className={`chat-message ${variantClass} ${showLabel ? 'has-label' : ''}`}
                                                     >
                                                         <div className="message-bubble relative">
                                                             {showLabel && (
-                                                                <span className="text-[9px] uppercase tracking-tighter opacity-50 absolute -top-4 left-1 font-bold">
-                                                                    Support Specialist
+                                                                <span className="text-[9px] uppercase tracking-tighter text-blue-300 opacity-80 absolute -top-4 left-1 font-bold">
+                                                                    {isAi ? '🤖 NoteStandard AI Support' : '🎧 Support Specialist'}
                                                                 </span>
                                                             )}
                                                             {msg.type === 'audio' ? (
@@ -449,7 +459,7 @@ export const ChatWidget = () => {
                                                             )}
                                                             <span className="msg-time">
                                                                 {formatTime(msg.created_at)}
-                                                                {msg.sender_id === user?.id && (
+                                                                {isOwn && (
                                                                     <span className="ml-1 inline-block scale-75">
                                                                         {msg.read_at ? (
                                                                             <CheckCheck size={12} className="text-blue-300" />
