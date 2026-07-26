@@ -5,7 +5,7 @@ VALUES (
     '00000000-0000-0000-0000-000000000000',
     'support_bot',
     'Note Standard Support Team',
-    'support@notestandard.com',
+    'admin@notestandard.com',
     true,
     'admin'
 ) ON CONFLICT (id) DO UPDATE SET

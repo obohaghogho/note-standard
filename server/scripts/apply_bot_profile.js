@@ -7,7 +7,7 @@ async function apply() {
     id: '00000000-0000-0000-0000-000000000000',
     username: 'support_bot',
     full_name: 'Note Standard Support Team',
-    email: 'support@notestandard.com',
+    email: 'admin@notestandard.com',
     is_verified: true,
     plan_tier: 'admin'
   }]).select();

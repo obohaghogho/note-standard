@@ -280,8 +280,8 @@ export const DownloadPage: React.FC = () => {
         <div className="text-center pb-8">
           <p className="text-gray-600 text-xs">
             Having trouble installing? Contact us at{' '}
-            <a href="mailto:support@notestandard.com" className="text-primary hover:underline">
-              support@notestandard.com
+            <a href="mailto:admin@notestandard.com" className="text-primary hover:underline">
+              admin@notestandard.com
             </a>
           </p>
         </div>

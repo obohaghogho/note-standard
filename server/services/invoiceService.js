@@ -51,7 +51,7 @@ exports.generateInvoice = async (transaction, user) => {
       doc.y = startY;
       doc.fontSize(12).text("Provider:", { align: "right", underline: true });
       doc.fontSize(10).text("NoteStandard Payments", { align: "right" });
-      doc.text("support@notestandard.com", { align: "right" });
+      doc.text("admin@notestandard.com", { align: "right" });
       doc.moveDown(3);
 
       // 3. Invoice Table

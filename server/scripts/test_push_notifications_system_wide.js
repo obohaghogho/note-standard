@@ -23,7 +23,7 @@ async function testPushNotificationsSystemWide() {
 
   try {
     webPush.setVapidDetails(
-      'mailto:support@notestandard.com',
+      'mailto:admin@notestandard.com',
       vapidPublic,
       vapidPrivate
     );
