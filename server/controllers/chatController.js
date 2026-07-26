@@ -1975,12 +1975,6 @@ exports.sendMessage = async (req, res) => {
                  autoMsg.sender_type = "ai";
                  await realtime.emitToConversation(conversationId, "chat:message", autoMsg);
               }
-              
-                  await supabase
-                   .from("conversations")
-                   .update({ support_status: "escalated" })
-                   .eq("id", conversationId);
-              }
             } else {
               // AI returned no response — send a fallback so the user isn't left hanging
               const fallbackMsg = "Hi there! 👋 Thanks for reaching out. Our team has been notified and will get back to you shortly. – Note Standard Support Team";
