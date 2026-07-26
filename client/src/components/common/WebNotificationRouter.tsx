@@ -212,8 +212,8 @@ export const WebNotificationRouter: React.FC = () => {
     handleNotificationNavigation();
   }, [authReady, searchParams, user?.id, switchAccount, navigate, socket, chatClearState, chatInitialize, notificationContext, socketInitialize, socketTeardown]);
 
-  const [bannerDismissed, setBannerDismissed] = useState(false);
-  const showPromptBanner = user && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default' && !bannerDismissed;
+  // Compulsory push notification prompt: Appears for ALL logged-in users until permission is granted
+  const showPromptBanner = user && typeof window !== 'undefined' && 'Notification' in window && Notification.permission !== 'granted';
 
   if (isSwitchingOverlay) {
     return (
@@ -252,34 +252,29 @@ export const WebNotificationRouter: React.FC = () => {
   return (
     <>
       {showPromptBanner && (
-        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[9999] w-[92%] max-w-lg bg-slate-900/95 border border-indigo-500/40 backdrop-blur-md text-white p-3 rounded-2xl shadow-2xl flex items-center justify-between gap-3 animate-in slide-in-from-top-4 duration-300">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-xl bg-indigo-600/30 border border-indigo-400/30 flex items-center justify-center flex-shrink-0 text-indigo-400">
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[9999] w-[94%] max-w-xl bg-slate-900/95 border border-indigo-500/50 backdrop-blur-xl text-white p-3.5 rounded-2xl shadow-2xl flex items-center justify-between gap-3 animate-in slide-in-from-top-4 duration-300 ring-2 ring-indigo-500/20">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 border border-indigo-400/30 flex items-center justify-center flex-shrink-0 text-white shadow-lg animate-pulse">
               🔔
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-bold leading-tight">Enable Push Notifications</p>
-              <p className="text-[10px] text-slate-400 truncate">Get instant message alerts on your phone or device.</p>
+              <p className="text-xs sm:text-sm font-bold leading-tight text-white flex items-center gap-1.5">
+                Enable Push Notifications
+                <span className="text-[9px] uppercase tracking-wider bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/30 font-semibold">Required</span>
+              </p>
+              <p className="text-[10px] sm:text-xs text-slate-300 truncate">Get instant message alerts on your phone or device.</p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <button
               onClick={async () => {
                 if (notificationContext?.requestPushPermission) {
                   await notificationContext.requestPushPermission();
                 }
-                setBannerDismissed(true);
               }}
-              className="px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-semibold text-xs rounded-xl shadow-md transition-all active:scale-95"
+              className="px-4 py-2 bg-gradient-to-r from-indigo-600 via-blue-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg hover:shadow-indigo-500/25 transition-all active:scale-95"
             >
               Enable
-            </button>
-            <button
-              onClick={() => setBannerDismissed(true)}
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors text-xs font-bold"
-              title="Dismiss"
-            >
-              ✕
             </button>
           </div>
         </div>
