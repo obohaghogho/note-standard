@@ -125,15 +125,17 @@ class PaymentOrchestrator {
     const { adapter, providerName } = GatewayRouter.selectBestGateway({ currency: gatewayCurrency, method });
 
     // ─── 6. Resolve Wallet & Decoupled Settlement ─────────────────────────
-    const { data: wallet } = await supabase
+    const upRequestedCurrency = String(requestedCurrency || 'USD').toUpperCase();
+    let { data: wallet } = await supabase
       .from('wallets_store')
       .select('id')
       .eq('user_id', userId)
-      .eq('currency', requestedCurrency)
+      .eq('currency', upRequestedCurrency)
       .maybeSingle();
 
     if (!wallet) {
-      throw new Error(`[PaymentOrchestrator] No ${requestedCurrency} wallet found for user ${userId}`);
+      const FiatWalletService = require('../FiatWalletService');
+      wallet = await FiatWalletService.createWallet(userId, upRequestedCurrency);
     }
 
     // ─── 7. Build Reference & Transaction Record ──────────────────────────

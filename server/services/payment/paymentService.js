@@ -79,33 +79,27 @@ class PaymentService {
     });
 
     // 2. Find or create wallet for this currency (Robust lookup for production schema differences)
+    const upCurrency = String(currency || "USD").toUpperCase();
     const lookupNetwork = network || "native";
     let wallet = null;
     let lookupError = null;
 
     console.time(`[PaymentService] WalletLookup:${userId}`);
     try {
-      const { data, error } = await supabase
+      // First try robust search by user_id and case-normalized currency
+      const { data: userWallets, error: searchError } = await supabase
         .from("wallets_store")
-        .select("id")
+        .select("*")
         .eq("user_id", userId)
-        .eq("currency", currency)
-        .or(`network.eq.${lookupNetwork},network.is.null`)
-        .maybeSingle();
-      wallet = data;
-      lookupError = error;
+        .eq("currency", upCurrency);
 
-      // Fallback: If network column doesn't exist, retry with currency only
-      if (lookupError && lookupError.code === "42703") {
-        logger.info("[PaymentService] network column missing on prod, falling back to currency-only lookup");
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from("wallets_store")
-          .select("id")
-          .eq("user_id", userId)
-          .eq("currency", currency)
-          .maybeSingle();
-        wallet = fallbackData;
-        lookupError = fallbackError;
+      if (searchError) {
+        lookupError = searchError;
+      } else if (userWallets && userWallets.length > 0) {
+        // Prefer matching network, fallback to native / first wallet for this currency
+        wallet = userWallets.find(w => 
+          w.network && String(w.network).toLowerCase() === String(lookupNetwork).toLowerCase()
+        ) || userWallets.find(w => !w.network || String(w.network).toLowerCase() === "native") || userWallets[0];
       }
     } catch (err) {
       lookupError = err;
@@ -113,7 +107,7 @@ class PaymentService {
     console.timeEnd(`[PaymentService] WalletLookup:${userId}`);
 
     if (lookupError) {
-      logger.error("[PaymentService] Wallet lookup failed", { userId, currency, network, lookupError });
+      logger.error("[PaymentService] Wallet lookup failed", { userId, currency: upCurrency, network, lookupError });
     }
 
     if (!wallet) {
@@ -123,11 +117,11 @@ class PaymentService {
 
       const walletPayload = {
         user_id: userId,
-        currency,
-        address: `${currency}_${userId.substring(0, 8)}`,
+        currency: upCurrency,
+        address: `${upCurrency}_${userId.substring(0, 8)}`,
       };
 
-      // Only add network if it doesn't break prod
+      // Only add network if specified
       if (network) walletPayload.network = network;
 
       let currentWalletPayload = { ...walletPayload };
@@ -149,7 +143,7 @@ class PaymentService {
 
         // 42703 = Undefined Column
         if (initialError.code === "42703") {
-          const match = initialError.message.match(/column "(.+)"/);
+          const match = initialError.message ? initialError.message.match(/column "(.+)"/) : null;
           const columnName = match ? match[1] : null;
 
           if (columnName && currentWalletPayload.hasOwnProperty(columnName)) {
@@ -165,17 +159,24 @@ class PaymentService {
       }
 
       if (createError) {
-        // Handle race condition: Unique violation (23505)
-        if (createError.code === "23505") {
-          logger.info(`[PaymentService] Race condition: Wallet already created for ${userId} (${currency})`);
-          const { data: retry } = await supabase
+        // Handle race condition / unique constraint violation (23505 or duplicate key message)
+        const isUniqueViolation = createError.code === "23505" || 
+          (createError.message && (
+            createError.message.includes("unique") || 
+            createError.message.includes("duplicate") ||
+            createError.message.includes("unique_personal_wallet")
+          ));
+
+        if (isUniqueViolation) {
+          logger.info(`[PaymentService] Race condition / unique constraint hit: Wallet already exists for ${userId} (${upCurrency})`);
+          const { data: retryList } = await supabase
             .from("wallets_store")
             .select("*")
             .eq("user_id", userId)
-            .eq("currency", currency)
-            .maybeSingle();
-          if (retry) {
-            wallet = retry;
+            .eq("currency", upCurrency);
+
+          if (retryList && retryList.length > 0) {
+            wallet = retryList[0];
             createError = null;
           }
         }
@@ -185,7 +186,7 @@ class PaymentService {
         logger.error("Failed to create wallet for deposit", {
           createError,
           userId,
-          currency,
+          currency: upCurrency,
           network,
         });
         const err = new Error(`Failed to initialize ${currency} wallet: ${createError.message || "Unknown DB Error"}`);
@@ -1103,22 +1104,22 @@ class PaymentService {
     });
 
     try {
+      const upCurrency = String(currency || "USD").toUpperCase();
       // Find wallet or create if doesn't exist
       let { data: wallet } = await supabase
-        .from("wallets")
+        .from("wallets_store")
         .select("id")
         .eq("user_id", userId)
-        .eq("currency", currency)
-        .single();
+        .eq("currency", upCurrency)
+        .maybeSingle();
 
       if (!wallet) {
         const { data: newWallet, error: createError } = await supabase
-          .from("wallets")
+          .from("wallets_store")
           .insert({
             user_id: userId,
-            currency,
-            balance: 0,
-            address: `internal_${userId.substring(0, 8)}_${currency}`,
+            currency: upCurrency,
+            address: `internal_${userId.substring(0, 8)}_${upCurrency}`,
           })
           .select()
           .single();
