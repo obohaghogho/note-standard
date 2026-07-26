@@ -35,6 +35,8 @@ export interface NotificationContextValue {
     clearAllNotifications: () => Promise<void>;
     clearState: () => void;
     reinitialize: () => Promise<void>;
+    subscribeToPush: (reason?: string) => Promise<void>;
+    requestPushPermission: () => Promise<boolean>;
 }
 
 export const NotificationContext = createContext<NotificationContextValue | null>(null);
@@ -564,6 +566,23 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         console.log(`[ACCOUNT_FORENSIC] NOTIFICATIONS_READY - Notifications ready at ${Date.now()}`);
     }, [clearState, fetchNotifications, subscribeToPush]);
 
+    const requestPushPermission = useCallback(async (): Promise<boolean> => {
+        if (!('Notification' in window)) return false;
+        try {
+            const perm = await Notification.requestPermission();
+            if (perm === 'granted') {
+                await subscribeToPush('MANUAL_USER_GESTURE');
+                toast.success('Push notifications enabled!');
+                return true;
+            } else if (perm === 'denied') {
+                toast.error('Notification permission was blocked. Please enable it in browser settings.');
+            }
+        } catch (e) {
+            console.error('[Notifications] Permission request error:', e);
+        }
+        return false;
+    }, [subscribeToPush]);
+
     return (
         <NotificationContext.Provider value={{ 
             notifications, 
@@ -574,7 +593,9 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             clearAllNotifications,
             loading,
             clearState,
-            reinitialize
+            reinitialize,
+            subscribeToPush,
+            requestPushPermission
         }}>
             {children}
             <AnimatePresence>

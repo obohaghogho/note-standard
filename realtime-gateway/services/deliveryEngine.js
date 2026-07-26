@@ -106,7 +106,23 @@ async function processIncomingMessage(io, supabase, envelope, deps = {}) {
   const senderId = msg.sender_id;
 
   // Determine recipients: everyone in the conversation except the sender
-  const recipientIds = (envelope.users || []).filter(uid => uid !== senderId);
+  let recipientIds = (envelope.users || []).filter(uid => uid !== senderId);
+
+  if (recipientIds.length === 0) {
+    try {
+      const { data: members } = await supabase
+        .from('conversation_members')
+        .select('user_id')
+        .eq('conversation_id', conversationId);
+
+      if (members && members.length > 0) {
+        recipientIds = members.map(m => m.user_id).filter(uid => uid !== senderId);
+      }
+    } catch (dbErr) {
+      console.error(`[DeliveryEngine] Error fetching conversation members for ${conversationId}:`, dbErr.message);
+    }
+  }
+
   if (recipientIds.length === 0) return;
 
   for (const recipientId of recipientIds) {
