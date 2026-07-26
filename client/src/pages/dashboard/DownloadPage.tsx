@@ -193,34 +193,35 @@ export const DownloadPage: React.FC = () => {
                 <Smartphone size={28} className="text-primary" />
               </div>
               <h2 className="text-2xl sm:text-3xl font-black mb-2">
-                Install NoteStandard Web App
+                Download & Install NoteStandard App
               </h2>
               <p className="text-gray-400 text-sm max-w-md mx-auto leading-relaxed">
-                Install NoteStandard directly on your phone or desktop from your browser. Works like a native mobile app with instant loading, offline access, and push notifications.
+                Click below to download the NoteStandard App package directly to your phone and tap to install it.
               </p>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-6">
-                <button
-                  onClick={handleInstall}
+                <a
+                  href="/api/app/latest-apk"
+                  download="NoteStandard.apk"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-9 py-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white font-black text-base shadow-xl shadow-emerald-500/30 transition-all hover:scale-105 active:scale-100 border border-white/10"
                 >
-                  <Smartphone size={20} />
-                  Install Web App
-                </button>
+                  <Download size={20} />
+                  Download & Install App (APK)
+                </a>
 
                 <button
                   onClick={() => navigate('/dashboard')}
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-gray-200 font-bold text-sm border border-white/10 transition-all"
                 >
                   <Globe size={18} />
-                  Open Web App
+                  Open Web Dashboard
                 </button>
               </div>
 
               <p className="mt-4 text-xs text-gray-400">
-                {platform === 'ios'
-                  ? 'Works in Safari on iPhone / iPad. Tap Install Web App above for instructions.'
-                  : 'Works in Google Chrome, Edge, Brave, Opera & all modern mobile browsers.'}
+                Direct APK download works on Chrome, Edge, Brave, Opera & all mobile browsers. Tap downloaded file to install on phone.
               </p>
             </div>
           </div>

@@ -8,11 +8,24 @@ const logger = require('../utils/logger');
 class DownloadService {
     constructor() {
         this.apkDir = path.join(__dirname, '..', 'uploads', 'versions');
+        try {
+            if (!fs.existsSync(this.apkDir)) {
+                fs.mkdirSync(this.apkDir, { recursive: true });
+            }
+        } catch (e) {
+            // Ignore directory creation errors if read-only filesystem
+        }
+
         this.fallbacks = [
+            path.join(__dirname, '..', '..', 'client', 'public', 'downloads', 'NoteStandard.apk'),
             path.join(__dirname, '..', '..', 'client', 'public', 'downloads', 'app-release.apk'),
+            path.join(__dirname, '..', '..', 'client', 'dist', 'downloads', 'NoteStandard.apk'),
             path.join(__dirname, '..', '..', 'client', 'dist', 'downloads', 'app-release.apk'),
+            path.join(__dirname, '..', 'public', 'downloads', 'NoteStandard.apk'),
             path.join(__dirname, '..', 'public', 'downloads', 'app-release.apk'),
+            path.join(process.cwd(), 'client', 'public', 'downloads', 'NoteStandard.apk'),
             path.join(process.cwd(), 'client', 'public', 'downloads', 'app-release.apk'),
+            path.join(process.cwd(), 'client', 'dist', 'downloads', 'NoteStandard.apk'),
             path.join(process.cwd(), 'client', 'dist', 'downloads', 'app-release.apk'),
         ];
     }

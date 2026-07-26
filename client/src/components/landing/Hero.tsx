@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Shield, Zap, Globe, Diamond, Smartphone } from 'lucide-react';
+import { ArrowRight, Shield, Zap, Globe, Diamond, Download } from 'lucide-react';
 
 export const Hero = () => {
     return (
@@ -71,13 +71,16 @@ export const Hero = () => {
                         >
                             View Features
                         </button>
-                        <Link 
-                            to="/download"
+                        <a 
+                            href="/api/app/latest-apk"
+                            download="NoteStandard.apk"
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className="px-8 py-4 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl font-medium transition-all shadow-[0_0_20px_rgba(59,130,246,0.3)] flex items-center justify-center gap-2 border border-white/10"
                         >
-                            <Smartphone className="w-4 h-4" />
-                            Install Web App
-                        </Link>
+                            <Download className="w-4 h-4" />
+                            Download & Install App
+                        </a>
                     </div>
 
                     <div className="mt-8 sm:mt-12 flex flex-wrap items-center gap-4 sm:gap-8 text-gray-400">
