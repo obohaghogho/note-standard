@@ -1066,7 +1066,11 @@ class PaymentService {
         plan_tier: planTier 
     }).eq("id", tx.user_id);
     
-    logger.info(`[PaymentService] Subscription activated for ${tx.user_id}`);
+    // Invalidate Entitlement Cache immediately
+    const planService = require("../planService");
+    planService.invalidateEntitlementCache(tx.user_id);
+
+    logger.info(`[PaymentService] Subscription activated and entitlement cache invalidated for ${tx.user_id}`);
   }
 
   async failTransaction(referenceOrId, reason) {

@@ -6,6 +6,7 @@ const { requireAuth } = require('../middleware/auth');
 router.post('/create-checkout-session', requireAuth, subscriptionController.createCheckoutSession);
 router.post('/cancel', requireAuth, subscriptionController.cancelSubscription);
 router.get('/status', requireAuth, subscriptionController.getSubscriptionStatus);
+router.get('/usage', requireAuth, subscriptionController.getSubscriptionUsage);
 router.get('/rate', requireAuth, subscriptionController.getExchangeRate);
 router.post('/sync', requireAuth, subscriptionController.syncSubscription);
 router.get('/billing-history', requireAuth, subscriptionController.getBillingHistory);

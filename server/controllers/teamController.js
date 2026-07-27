@@ -1,6 +1,33 @@
 const supabase = require("../config/database");
 const realtime = require("../services/realtimeService");
 const crypto = require("crypto");
+const planService = require("../services/planService");
+
+async function checkWorkspaceEntitlement(teamId) {
+  try {
+    const { data: team } = await supabase
+      .from('teams')
+      .select('owner_id')
+      .eq('id', teamId)
+      .single();
+
+    if (!team) return { allowed: false, error: "Team not found" };
+
+    const ownerPlan = await planService.getEffectiveWorkspacePlan(team.owner_id);
+    if (!ownerPlan.canUseTeams) {
+      return {
+        allowed: false,
+        error: `Workspace team features require an active Business Team subscription on the team owner account (${ownerPlan.tier.toUpperCase()}).`,
+        code: "WORKSPACE_PLAN_RESTRICTION",
+        ownerTier: ownerPlan.tier
+      };
+    }
+    return { allowed: true, ownerPlan };
+  } catch (err) {
+    console.error("[TeamController] Entitlement check failed:", err.message);
+    return { allowed: false, error: "Failed to verify workspace subscription" };
+  }
+}
 
 exports.getMyTeams = async (req, res, next) => {
   try {
@@ -292,6 +319,12 @@ exports.inviteMember = async (req, res, next) => {
     const { username, email, role } = req.body;
     const inviterId = req.user.id;
 
+    // 0. Verify Workspace Entitlement (Owner must have Business plan)
+    const entitlement = await checkWorkspaceEntitlement(teamId);
+    if (!entitlement.allowed) {
+      return res.status(403).json({ error: entitlement.error, code: entitlement.code });
+    }
+
     // 1. Check if inviter is owner/admin
     const { data: inviter, error: inviterError } = await supabase
       .from('team_members')
@@ -525,6 +558,13 @@ exports.getRecycledFiles = async (req, res, next) => {
 exports.uploadFile = async (req, res, next) => {
   try {
     const { teamId } = req.params;
+    
+    // Verify Workspace Entitlement (Owner must have Business plan)
+    const entitlement = await checkWorkspaceEntitlement(teamId);
+    if (!entitlement.allowed) {
+      return res.status(403).json({ error: entitlement.error, code: entitlement.code });
+    }
+
     const { fileName, fileType, fileSize, storagePath } = req.body;
 
     const { data, error } = await supabase
@@ -602,6 +642,13 @@ exports.getSyncs = async (req, res, next) => {
 exports.createSync = async (req, res, next) => {
   try {
     const { teamId } = req.params;
+
+    // Verify Workspace Entitlement (Owner must have Business plan)
+    const entitlement = await checkWorkspaceEntitlement(teamId);
+    if (!entitlement.allowed) {
+      return res.status(403).json({ error: entitlement.error, code: entitlement.code });
+    }
+
     const { title, scheduledAt, durationMins } = req.body;
     res.json({
       id: `sync-${teamId}-${Date.now()}`,
@@ -664,6 +711,13 @@ exports.getBulletins = async (req, res, next) => {
 exports.createBulletin = async (req, res, next) => {
   try {
     const { teamId } = req.params;
+
+    // Verify Workspace Entitlement (Owner must have Business plan)
+    const entitlement = await checkWorkspaceEntitlement(teamId);
+    if (!entitlement.allowed) {
+      return res.status(403).json({ error: entitlement.error, code: entitlement.code });
+    }
+
     const { title, content, isPinned } = req.body;
     res.json({
       id: `bld-${teamId}-${Date.now()}`,

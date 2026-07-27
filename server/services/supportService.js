@@ -30,23 +30,37 @@ class SupportService {
   /**
    * Intent-Driven Automatic Priority Matrix
    */
-  calculatePriority(intent = "", category = "", userMessage = "") {
+  calculatePriority(intent = "", category = "", userMessage = "", userPlan = "free") {
+    const planService = require("./planService");
+    const planConfig = planService.getPlanConfig(userPlan);
+    const priorityFloor = planConfig.supportPriorityFloor || "low";
+
     const text = `${intent} ${category} ${userMessage}`.toLowerCase();
     
     const urgentKeywords = ["fraud", "hacked", "stolen", "unauthorized", "suspicious", "drain"];
     const highKeywords = ["failed", "freeze", "frozen", "locked", "withdrawal", "deposit", "money", "fiat", "bank", "error", "emergency"];
     const lowKeywords = ["feedback", "suggestion", "ui", "font", "theme", "color"];
 
+    const PRIORITY_ORDER = { low: 1, normal: 2, high: 3, urgent: 4 };
+
+    let keywordPriority = "normal";
     for (const kw of urgentKeywords) {
-      if (text.includes(kw)) return "urgent";
+      if (text.includes(kw)) { keywordPriority = "urgent"; break; }
     }
-    for (const kw of highKeywords) {
-      if (text.includes(kw)) return "high";
+    if (keywordPriority !== "urgent") {
+      for (const kw of highKeywords) {
+        if (text.includes(kw)) { keywordPriority = "high"; break; }
+      }
     }
-    for (const kw of lowKeywords) {
-      if (text.includes(kw)) return "low";
+    if (keywordPriority === "normal") {
+      for (const kw of lowKeywords) {
+        if (text.includes(kw)) { keywordPriority = "low"; break; }
+      }
     }
-    return "normal";
+
+    return (PRIORITY_ORDER[keywordPriority] || 2) > (PRIORITY_ORDER[priorityFloor] || 1)
+      ? keywordPriority
+      : priorityFloor;
   }
 
   /**
@@ -192,10 +206,13 @@ class SupportService {
 
     // ── ESCALATION FLOW ───────────────────────────────────────────────────────
     this.metrics.ai_escalation_count++;
+    const planService = require("./planService");
+    const userPlan = await planService.getEffectivePlan(userId);
     const priority = this.calculatePriority(
       aiResponse?.operationalMetadata?.intent,
       aiResponse?.operationalMetadata?.category,
-      content
+      content,
+      userPlan.tier
     );
     const category = aiResponse?.operationalMetadata?.category || "General";
     const intent = aiResponse?.operationalMetadata?.intent || "Support Assistance";

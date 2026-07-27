@@ -216,6 +216,50 @@ exports.getSubscriptionStatus = async (req, res) => {
   }
 };
 
+exports.getSubscriptionUsage = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const planService = require("../services/planService");
+    const pool = require("../config/pgPool");
+
+    const plan = await planService.getEffectivePlan(userId);
+
+    const { rows } = await pool.query(
+      "SELECT note_count, storage_used_bytes FROM profiles WHERE id = $1",
+      [userId]
+    );
+
+    const noteCount = parseInt(rows[0]?.note_count || 0, 10);
+    const storageUsedBytes = parseInt(rows[0]?.storage_used_bytes || 0, 10);
+
+    res.json({
+      tier: plan.tier,
+      planVersion: plan.planVersion,
+      expiresAt: plan.expiresAt || null,
+      renewsAt: plan.expiresAt || null,
+      notes: {
+        used: noteCount,
+        limit: plan.maxNotes,
+        unlimited: plan.unlimitedNotes
+      },
+      storage: {
+        usedBytes: storageUsedBytes,
+        limitBytes: plan.storageLimitBytes
+      },
+      features: {
+        teams: plan.canUseTeams,
+        prioritySupport: plan.supportPriorityFloor !== "low",
+        systemFeeDiscount: plan.systemFeeDiscount,
+        spreadPercent: plan.spreadPercent
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching subscription usage:", error);
+    res.status(500).json({ error: "Failed to fetch subscription usage" });
+  }
+};
+
+
 // Simple success handler called by frontend after redirect
 // In production, rely on Webhooks! This is a fallback/visual sync.
 exports.syncSubscription = async (req, res) => {
@@ -403,6 +447,10 @@ exports.cancelSubscription = async (req, res) => {
       .from("profiles")
       .update({ plan_tier: "free" })
       .eq("id", userId);
+
+    // Invalidate Entitlement Cache immediately
+    const planService = require("../services/planService");
+    planService.invalidateEntitlementCache(userId);
 
     res.json({ success: true });
   } catch (error) {

@@ -106,15 +106,9 @@ const commissionService = {
    * @param {string} userPlan - 'FREE', 'PRO', 'BUSINESS'
    */
   async calculateSpread(type, marketPrice, userPlan = "FREE") {
-    const defaultSpread = await this.getSetting("spread_percentage") || 4.7; // Updated from 7.5%
-    let spreadPercentage = parseFloat(defaultSpread) / 100;
-
-    // Requirement 3: PRO Features - Relative spread discount
-    if (userPlan === "PRO") {
-      spreadPercentage = spreadPercentage * 0.8; // 20% discount
-    } else if (userPlan === "BUSINESS") {
-      spreadPercentage = spreadPercentage * 0.5; // 50% discount
-    }
+    const planService = require("./planService");
+    const plan = planService.getPlanConfig(userPlan);
+    const spreadPercentage = (plan.spreadPercent || 1.0) / 100;
 
     const spreadAmount = parseFloat(
       mathUtils.multiply(marketPrice, spreadPercentage),

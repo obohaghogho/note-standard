@@ -3,6 +3,7 @@ const ReminderWorker = require("./ReminderWorker");
 const SearchIndexWorker = require("./SearchIndexWorker");
 const NotificationWorker = require("./NotificationWorker");
 const AIWorker = require("./AIWorker");
+const QuotaReconciliationWorker = require("./QuotaReconciliationWorker");
 const logger = require("../utils/logger");
 
 function start() {
@@ -13,6 +14,7 @@ function start() {
     SearchIndexWorker.start();
     NotificationWorker.start();
     AIWorker.start();
+    QuotaReconciliationWorker.start();
     logger.info("[NotesWorkerManager] All note workers initiated successfully.");
   } catch (err) {
     logger.error("[NotesWorkerManager] Initialization failed:", err.message);

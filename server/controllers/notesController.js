@@ -6,6 +6,8 @@ const analyticsService = require("../services/analyticsService");
 const realtime = require("../services/realtimeService");
 const pool = require("../config/pgPool");
 const exportService = require("../services/exportService");
+const planService = require("../services/planService");
+const { formatQuotaError } = require("../middleware/subscriptionMiddleware");
 
 async function broadcastTrendUpdate(app) {
   try {
@@ -67,6 +69,31 @@ const createNote = async (req, res) => {
   try {
     const { id } = req.user;
     const { title, content, is_private } = req.body;
+
+    // --- Subscription Plan Entitlement & Quota Check ---
+    const plan = await planService.getEffectivePlan(id);
+
+    if (!plan.unlimitedNotes && plan.maxNotes) {
+      // Fetch cached note count
+      const countRes = await pool.query(
+        "SELECT note_count FROM profiles WHERE id = $1",
+        [id]
+      );
+      const currentCount = parseInt(countRes.rows[0]?.note_count || 0, 10);
+
+      if (currentCount >= plan.maxNotes) {
+        return res.status(403).json(
+          formatQuotaError({
+            code: "PLAN_LIMIT_REACHED",
+            reason: "NOTE_LIMIT",
+            message: `Note limit of ${plan.maxNotes} reached for your ${plan.tier.toUpperCase()} plan. Upgrade to Pro or Business for unlimited notes.`,
+            limit: plan.maxNotes,
+            current: currentCount,
+            upgradeRequired: true
+          })
+        );
+      }
+    }
 
     const { data, error } = await supabase
       .from("notes")
@@ -641,6 +668,31 @@ const uploadNoteFile = async (req, res) => {
     }
 
     const file = req.file;
+
+    // --- Storage Capacity Quota Check ---
+    const plan = await planService.getEffectivePlan(userId);
+    if (plan.storageLimitBytes) {
+      const profRes = await pool.query(
+        "SELECT storage_used_bytes FROM profiles WHERE id = $1",
+        [userId]
+      );
+      const currentBytes = parseInt(profRes.rows[0]?.storage_used_bytes || 0, 10);
+      const incomingBytes = file.size;
+
+      if (currentBytes + incomingBytes > plan.storageLimitBytes) {
+        return res.status(403).json(
+          formatQuotaError({
+            code: "STORAGE_LIMIT_EXCEEDED",
+            reason: "STORAGE_LIMIT",
+            message: `Storage capacity exceeded for your ${plan.tier.toUpperCase()} plan. Upgrade to increase storage capacity.`,
+            usedBytes: currentBytes,
+            limitBytes: plan.storageLimitBytes,
+            upgradeRequired: true
+          })
+        );
+      }
+    }
+
     const storageKey = `notes/${noteId}/${Date.now()}_${file.originalname}`;
 
     // 2. Upload to Supabase Storage
