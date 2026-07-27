@@ -34,8 +34,13 @@ export const WebNotificationRouter: React.FC = () => {
 
     if (!targetAccountId) return;
 
+    const isSameAccount = (id1?: string | null, id2?: string | null) => 
+      !!id1 && !!id2 && id1.trim().toLowerCase() === id2.trim().toLowerCase();
+
     const handledKey = `${targetAccountId}`;
     if (handledRef.current === handledKey) return;
+    handledRef.current = handledKey;
+
     const isSupportNotif = searchParams.get('isSupport') === 'true' || searchParams.get('link')?.includes('/admin/') || searchParams.get('type')?.includes('support');
     const destination = isSupportNotif
       ? (conversationId ? `/admin/chats?id=${conversationId}` : '/admin/chats')
@@ -46,7 +51,7 @@ export const WebNotificationRouter: React.FC = () => {
       console.log('[ACCOUNT_FORENSIC] Active Account ID:', user?.id ?? 'none');
 
       // Scenario 1: Already on the correct account
-      if (user?.id === targetAccountId) {
+      if (isSameAccount(user?.id, targetAccountId) || isSameAccount(accountManager.getActiveAccountId(), targetAccountId)) {
         console.log('[ACCOUNT_FORENSIC] Correct account already active — navigating directly to:', destination);
         navigate(destination, { replace: true });
         handledRef.current = null;
@@ -78,8 +83,10 @@ export const WebNotificationRouter: React.FC = () => {
       }
       
       const active = accountManager.getActiveAccountId();
-      if (active !== targetAccountId) {
-        console.error('[ACCOUNT_FORENSIC] Verification failed — active:', active, 'target:', targetAccountId);
+      const isSwitched = isSameAccount(active, targetAccountId) || isSameAccount(user?.id, targetAccountId);
+
+      if (!isSwitched) {
+        console.error('[ACCOUNT_FORENSIC] Verification failed — active:', active, 'user:', user?.id, 'target:', targetAccountId);
         toast.error('Account switch did not complete. Please tap the notification again.');
         handledRef.current = null;
         setIsSwitchingOverlay(false);
@@ -87,7 +94,7 @@ export const WebNotificationRouter: React.FC = () => {
       }
       console.log('[ACCOUNT_FORENSIC] ACCOUNT_SWITCH_SUCCESS');
 
-      const activeAccount = accountManager.getAccount(active);
+      const activeAccount = accountManager.getAccount(targetAccountId) || (active ? accountManager.getAccount(active) : undefined);
 
       // Step 5: Navigate FIRST — WhatsApp/Messenger style: show UI immediately, sync in background.
       console.log('[ACCOUNT_FORENSIC] NAVIGATION_COMPLETE - Navigating to:', destination);

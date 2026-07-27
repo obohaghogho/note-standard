@@ -89,12 +89,16 @@ class NotificationRouterService {
         return;
       }
 
+      const isSameAccount = (id1?: string | null, id2?: string | null) =>
+        !!id1 && !!id2 && id1.trim().toLowerCase() === id2.trim().toLowerCase();
+
       const currentUser = await AuthService.getUser();
       console.log(`[ACCOUNT_FORENSIC] Current account: ${currentUser?.id} | Target account: ${targetAccountId}`);
 
-      if (currentUser?.id !== targetAccountId) {
+      if (!isSameAccount(currentUser?.id, targetAccountId)) {
         const storedAccounts = await AuthService.getStoredAccounts();
-        const storedAccount = storedAccounts.find(a => a.id === targetAccountId);
+        const cleanTarget = String(targetAccountId).trim().toLowerCase();
+        const storedAccount = storedAccounts.find(a => a.id && a.id.trim().toLowerCase() === cleanTarget);
 
         if (!storedAccount) {
           console.error(`[ACCOUNT_FORENSIC] ❌ Account ${targetAccountId} NOT found in local storage. Available accounts:`, storedAccounts.map(a => a.id));

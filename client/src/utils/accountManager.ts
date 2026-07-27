@@ -45,7 +45,9 @@ export const accountManager = {
    * Get a specific account by ID
    */
   getAccount(userId: string): StoredAccount | undefined {
-    return this.getAllAccounts().find(a => a.id === userId);
+    if (!userId) return undefined;
+    const target = userId.trim().toLowerCase();
+    return this.getAllAccounts().find(a => a.id && a.id.trim().toLowerCase() === target);
   },
 
   /**
@@ -90,14 +92,16 @@ export const accountManager = {
     const id = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
     if (!id) return null;
     
-    // Validate that this ID actually exists in our accounts list
+    // Validate that this ID actually exists in our accounts list (case-insensitive & trimmed)
     const accounts = this.getAllAccounts();
-    if (!accounts.some(a => a.id === id)) {
+    const target = id.trim().toLowerCase();
+    const match = accounts.find(a => a.id && a.id.trim().toLowerCase() === target);
+    if (!match) {
       console.warn(`[AccountManager] Active ID ${id} not found in accounts list. Clearing.`);
       localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
       return null;
     }
-    return id;
+    return match.id;
   },
 
   /**
@@ -117,7 +121,8 @@ export const accountManager = {
     }
 
     const accounts = this.getAllAccounts();
-    const index = accounts.findIndex(a => a.id === userId);
+    const cleanUserId = userId.trim().toLowerCase();
+    const index = accounts.findIndex(a => a.id && a.id.trim().toLowerCase() === cleanUserId);
 
     const accountData: StoredAccount = {
       id: userId,
@@ -154,8 +159,10 @@ export const accountManager = {
    * Update only the tokens for an existing account
    */
   updateAccountTokens(userId: string, session: { access_token: string; refresh_token: string; expires_at?: number }) {
+    if (!userId) return false;
     const accounts = this.getAllAccounts();
-    const index = accounts.findIndex(a => a.id === userId);
+    const cleanUserId = userId.trim().toLowerCase();
+    const index = accounts.findIndex(a => a.id && a.id.trim().toLowerCase() === cleanUserId);
 
     if (index !== -1) {
       const existing = accounts[index];
@@ -185,8 +192,10 @@ export const accountManager = {
    * Update the sessionId and deviceId for an account
    */
   updateSessionMeta(userId: string, sessionId: string, deviceId: string) {
+    if (!userId) return;
     const accounts = this.getAllAccounts();
-    const index = accounts.findIndex(a => a.id === userId);
+    const cleanUserId = userId.trim().toLowerCase();
+    const index = accounts.findIndex(a => a.id && a.id.trim().toLowerCase() === cleanUserId);
     if (index !== -1) {
       accounts[index].sessionId = sessionId;
       accounts[index].deviceId = deviceId;
@@ -198,9 +207,12 @@ export const accountManager = {
    * Remove an account from the list
    */
   removeAccount(userId: string) {
-    const accounts = this.getAllAccounts().filter(a => a.id !== userId);
+    if (!userId) return;
+    const cleanUserId = userId.trim().toLowerCase();
+    const accounts = this.getAllAccounts().filter(a => !a.id || a.id.trim().toLowerCase() !== cleanUserId);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
-    if (this.getActiveAccountId() === userId) {
+    const activeId = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
+    if (activeId && activeId.trim().toLowerCase() === cleanUserId) {
       this.setActiveAccountId(null);
     }
   },
