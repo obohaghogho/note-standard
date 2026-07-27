@@ -90,9 +90,9 @@ router.get("/flutterwave", (req, res) =>
 
 /**
  * POST /webhooks/fincra
- * Fincra virtual account webhook
+ * Fincra webhook endpoint
  */
-router.post("/fincra", (req, res) => res.status(200).json({ received: true, status: "disabled" }));
+router.post("/fincra", (req, res, next) => require("./fincraWebhook")(req, res, next));
 
 /**
  * POST /webhooks/nowpayments

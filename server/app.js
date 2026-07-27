@@ -290,13 +290,14 @@ app.use(certificateRoutes);
 app.use("/api/payment", require("./routes/payment"));
 app.use("/api/transactions", require("./routes/transactionRoutes"));
 
+// Fincra webhook: ISOLATED route with raw body for SHA-512 HMAC verification
+// IMPORTANT: Must be mounted BEFORE generic /api/webhooks to prevent route collision
+app.use("/api/webhooks/fincra", require("./routes/fincraWebhook"));
+app.use("/webhooks/fincra", require("./routes/fincraWebhook"));
+
 // Webhook Routes (ALL providers)
 // Paystack, Grey, NowPayments, Flutterwave route through shared webhooks.js
 app.use("/api/webhooks", require("./routes/webhooks"));
-
-// Fincra webhook: ISOLATED route with raw body for SHA-512 HMAC verification
-// IMPORTANT: This must be mounted BEFORE express.json() processes the body.
-app.use("/api/webhooks/fincra", require("./routes/fincraWebhook"));
 
 // Alias: /api/nowpayments/webhook → /api/webhooks/nowpayments
 app.use("/api/nowpayments/webhook", (req, res, next) => {

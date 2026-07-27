@@ -82,26 +82,44 @@ async function processFincraWebhook(headers, rawBody, parsedBody) {
 
   // ── STEP 4: Route to handler ────────────────────────────────────────────
   let result;
-  switch (eventType) {
-    case FINCRA_EVENTS.COLLECTION_SUCCESSFUL:
-      result = await handleDepositSuccessful(parsedBody);
-      break;
 
-    case FINCRA_EVENTS.PAYOUT_SUCCESSFUL:
-      result = await handlePayoutSuccessful(parsedBody);
-      break;
+  const payloadData = parsedBody.data || parsedBody;
+  const merchantRef = payloadData.merchantReference || payloadData.reference || parsedBody.merchantReference || parsedBody.reference;
 
-    case FINCRA_EVENTS.PAYOUT_FAILED:
-      result = await handlePayoutFailed(parsedBody);
-      break;
+  if (merchantRef && String(merchantRef).startsWith('tx_')) {
+    logger.info(`[Fincra/webhook] Transaction reference detected in webhook: ${merchantRef}. Triggering auto-settlement...`);
+    try {
+      const paymentService = require("../payment/paymentService");
+      const verifyRes = await paymentService.verifyPaymentStatus(merchantRef);
+      logger.info(`[Fincra/webhook] Auto-settlement result for ${merchantRef}: ${verifyRes.status}`);
+      result = { handled: true, status: verifyRes.status, reference: merchantRef };
+    } catch (vErr) {
+      logger.error(`[Fincra/webhook] Auto-settlement error for ${merchantRef}: ${vErr.message}`);
+    }
+  }
 
-    case FINCRA_EVENTS.CONVERSION_SUCCESSFUL:
-      result = await handleConversionSuccessful(parsedBody);
-      break;
+  if (!result || !result.handled) {
+    switch (eventType) {
+      case FINCRA_EVENTS.COLLECTION_SUCCESSFUL:
+        result = await handleDepositSuccessful(parsedBody);
+        break;
 
-    default:
-      logger.info(`[Fincra/webhook] Unhandled event type: ${eventType}`);
-      result = { handled: false, eventType };
+      case FINCRA_EVENTS.PAYOUT_SUCCESSFUL:
+        result = await handlePayoutSuccessful(parsedBody);
+        break;
+
+      case FINCRA_EVENTS.PAYOUT_FAILED:
+        result = await handlePayoutFailed(parsedBody);
+        break;
+
+      case FINCRA_EVENTS.CONVERSION_SUCCESSFUL:
+        result = await handleConversionSuccessful(parsedBody);
+        break;
+
+      default:
+        logger.info(`[Fincra/webhook] Unhandled event type: ${eventType}`);
+        result = { handled: false, eventType };
+    }
   }
 
   // ── Mark webhook as processed ──────────────────────────────────────────
