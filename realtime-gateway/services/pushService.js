@@ -957,15 +957,17 @@ async function sendGenericPush(params) {
             return supabase.from('push_subscriptions').update({ last_successful_push_at: new Date().toISOString() }).match({ user_id: userId, endpoint: sub.endpoint });
           }).catch(err => {
             logPushMetric({ platform: 'web', push_type: 'vapid', status: 'failed', error_code: String(err.statusCode || err.message), user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
-            if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 400 || err.statusCode === 403) {
-              // Subscription expired or VAPID key mismatch (400, 403) — mark it invalid
+            if (err.statusCode === 410 || err.statusCode === 404) {
+              // Subscription explicitly expired or gone (410, 404) — mark it invalid
               logPushMetric({ platform: 'web', push_type: 'vapid', status: 'invalid_removed', error_code: String(err.statusCode), user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
               return supabase.from('push_subscriptions').update({ status: 'invalid', last_failed_push_at: new Date().toISOString() })
                 .match({ user_id: userId, endpoint: sub.endpoint })
                 .then(() => console.log(`[PushService] ❌ Marked web push sub as invalid for user ${userId} (Status: ${err.statusCode})`));
             } else {
+              // Transient error (400, 403, network timeout) — log timestamp but keep status active
               console.error(`[PushService] ❌ Web push failed for user ${userId}:`, err.message);
-              return supabase.from('push_subscriptions').update({ last_failed_push_at: new Date().toISOString() }).match({ user_id: userId, endpoint: sub.endpoint });
+              return supabase.from('push_subscriptions').update({ last_failed_push_at: new Date().toISOString() })
+                .match({ user_id: userId, endpoint: sub.endpoint });
             }
           })
         });
