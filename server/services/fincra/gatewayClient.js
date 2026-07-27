@@ -45,6 +45,8 @@ async function dispatchFincraRequest({ method, path, headers = {}, body = null, 
   const cleanPath  = path.startsWith('/') ? path : `/${path}`;
   const requestId  = headers['x-request-id'] || headers['X-Request-ID'] || uuidv4();
 
+  const normMethod = method.toUpperCase();
+
   // ── 1. GATEWAY MODE (Production / Allowlisted Egress) ───────────────────
   if (gatewayUrl) {
     if (!gatewayKey) {
@@ -57,14 +59,16 @@ async function dispatchFincraRequest({ method, path, headers = {}, body = null, 
     const timestamp = Date.now().toString();
 
     const proxyBody = {
-      method: method.toUpperCase(),
+      method: normMethod,
       path: cleanPath,
       headers: {
         ...headers,
         'x-request-id': requestId
-      },
-      body
+      }
     };
+    if (normMethod !== 'GET' && body !== null && body !== undefined) {
+      proxyBody.body = body;
+    }
 
     const rawPayload = JSON.stringify(proxyBody);
     const signature = crypto
@@ -73,7 +77,7 @@ async function dispatchFincraRequest({ method, path, headers = {}, body = null, 
       .digest('hex');
 
     logger.info(`[FincraGateway] 🔒 Routing request via Gateway (${proxyEndpoint})`, {
-      method: method.toUpperCase(),
+      method: normMethod,
       path: cleanPath,
       requestId
     });
@@ -151,23 +155,27 @@ async function dispatchFincraRequest({ method, path, headers = {}, body = null, 
   const directUrl = `${baseUrl}${cleanPath}`;
 
   logger.info(`[FincraGateway] ⚡ Routing request DIRECT (Local Dev)`, {
-    method: method.toUpperCase(),
+    method: normMethod,
     url: directUrl,
     requestId
   });
 
   try {
-    const response = await axios({
-      method: method.toUpperCase(),
+    const axiosOptions = {
+      method: normMethod,
       url: directUrl,
       headers: {
         ...headers,
         'x-request-id': requestId
       },
-      data: body,
       timeout: 30000,
       validateStatus: () => true
-    });
+    };
+    if (normMethod !== 'GET' && body !== null && body !== undefined) {
+      axiosOptions.data = body;
+    }
+
+    const response = await axios(axiosOptions);
 
     return {
       status: response.status,

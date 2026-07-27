@@ -434,6 +434,12 @@ class PaymentService {
    * Verify and update a single transaction status (STRICT CONTRACT v6.0)
    */
   async verifyPaymentStatus(reference, externalId = null) {
+    if (reference) {
+      reference = String(reference).split('?')[0].split('&')[0].trim();
+    }
+    if (externalId) {
+      externalId = String(externalId).split('?')[0].split('&')[0].trim();
+    }
     logger.info(`[PaymentService] VERIFY START for ${reference}`);
     
     let query = supabase
@@ -954,7 +960,9 @@ class PaymentService {
             p_transaction_id: tx.id,
             p_wallet_id: targetWalletId,
             p_amount: settlementAmount,
-            p_external_hash: eventData?.reference || reference
+            p_external_hash: eventData?.reference || reference,
+            p_override: false,
+            p_override_reason: null
         });
 
         if (rpcError) {

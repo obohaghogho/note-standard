@@ -1704,7 +1704,10 @@ exports.rejectWithdrawal = async (req, res) => {
     const { error: balError } = await serviceSupabase.rpc("confirm_deposit", {
       p_transaction_id: tx.id,
       p_wallet_id: wallet.id,
-      p_amount: request.amount
+      p_amount: request.amount,
+      p_external_hash: null,
+      p_override: false,
+      p_override_reason: null
     });
 
     if (balError) throw balError;

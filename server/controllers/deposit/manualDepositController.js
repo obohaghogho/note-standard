@@ -320,7 +320,10 @@ class ManualDepositController {
       const { error: balError } = await serviceSupabase.rpc("confirm_deposit", {
         p_transaction_id: finalTxId,
         p_wallet_id: wallet.id,
-        p_amount: deposit.amount
+        p_amount: deposit.amount,
+        p_external_hash: null,
+        p_override: false,
+        p_override_reason: null
       });
 
       if (balError) throw balError;

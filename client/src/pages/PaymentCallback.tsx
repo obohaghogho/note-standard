@@ -26,11 +26,13 @@ export const PaymentCallback: React.FC = () => {
     const [statusMessage, setStatusMessage] = useState<string>('Verifying transaction...');
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-    const reference = searchParams.get('reference')
+    const rawRef = searchParams.get('reference')
         || searchParams.get('trxref')
-        // Fallback: some Android WebViews strip query params on Paystack redirect.
+        || searchParams.get('merchantReference')
+        // Fallback: some Android WebViews strip query params on Paystack/Fincra redirect.
         // FundModal stores the reference in localStorage before redirecting.
         || localStorage.getItem('pendingDepositReference');
+    const reference = rawRef ? rawRef.split('?')[0].split('&')[0].trim() : null;
     const pollCountRef = useRef(0);
     const maxPolls = 30; // 60 seconds total polling (30 * 2s)
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

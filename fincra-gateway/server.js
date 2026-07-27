@@ -448,18 +448,22 @@ app.post('/proxy', authenticateRequest, async (req, res) => {
   let lastError = null;
   let upstreamResponse = null;
 
+  const axiosOptions = {
+    method: normMethod,
+    url: targetUrl,
+    headers: forwardedHeaders,
+    timeout: 30000,
+    httpsAgent,
+    validateStatus: () => true // Allow handling of all status codes
+  };
+  if (normMethod !== 'GET' && reqBody !== null && reqBody !== undefined) {
+    axiosOptions.data = reqBody;
+  }
+
   while (attempts < maxAttempts) {
     attempts += 1;
     try {
-      upstreamResponse = await axios({
-        method: normMethod,
-        url: targetUrl,
-        headers: forwardedHeaders,
-        data: reqBody,
-        timeout: 30000,
-        httpsAgent,
-        validateStatus: () => true // Allow handling of all status codes
-      });
+      upstreamResponse = await axios(axiosOptions);
       break; // Request succeeded (got HTTP response from upstream)
     } catch (err) {
       lastError = err;
