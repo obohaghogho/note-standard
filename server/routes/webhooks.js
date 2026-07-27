@@ -258,24 +258,16 @@ router.get("/status/:reference", async (req, res) => {
       return res.status(404).json({ error: "Deposit not found" });
     }
 
-    // Proactively verify pending/failed paystack transactions in case webhook was missed.
-    // BUG FIX: replaced the global singleton monkey-patch
-    // (WebhookService.verifySignature = () => true) — a race condition that
-    // caused double-credits and silent failures under concurrent poll requests.
-    // Now calls FiatWalletService.fundWallet directly with an idempotency key.
-    if (["PENDING", "FAILED"].includes(tx.status) && tx.provider === "paystack") {
+    // Proactively verify pending/failed transactions with paymentService for all providers (Fincra, Paystack, etc.)
+    if (["PENDING", "FAILED"].includes(tx.status)) {
       try {
-        const PaystackProvider = require("../services/payment/providers/PaystackProvider");
-        const provider = new PaystackProvider();
-        const verifyResult = await provider.verifyPayment(tx.reference_id);
-        
-        if (verifyResult.status === "success") {
-          await safeProactiveCredit(tx);
-          // Update local status for the response
+        const paymentService = require("../services/payment/paymentService");
+        const verifyResult = await paymentService.verifyPaymentStatus(tx.reference_id || reference);
+        if (verifyResult.status === "COMPLETED" || verifyResult.status === "SUCCESS") {
           tx.status = "COMPLETED";
         }
       } catch (pollErr) {
-        console.error("[WebhookStatus] Proactive verify failed:", pollErr.message);
+        logger.error(`[WebhookStatus] Proactive verify failed for ${reference}: ${pollErr.message}`);
       }
     }
 

@@ -125,72 +125,23 @@ router.post("/verify/:reference", requireAuth, async (req, res) => {
       });
     }
 
-    // ── Call Paystack verify API directly ─────────────────────────
-    logger.info(`[VerifyRoute] Calling Paystack verify for ${reference}`);
+    // ── Call paymentService verify for all providers (Fincra, Paystack, etc.) ──
+    logger.info(`[VerifyRoute] Calling paymentService.verifyPaymentStatus for ${reference} (provider: ${tx.provider})`);
 
-    const PaystackProvider = require("../services/payment/providers/PaystackProvider");
-    const paystackProvider = new PaystackProvider();
-    const verifyResult = await paystackProvider.verifyPayment(tx.reference_id || reference);
+    const paymentService = require("../services/payment/paymentService");
+    const verifyResult = await paymentService.verifyPaymentStatus(tx.reference_id || reference);
 
-    logger.info(`[VerifyRoute] Paystack returned: ${verifyResult.status} for ${reference}`);
+    logger.info(`[VerifyRoute] Verification result: ${verifyResult.status} for ${reference}`);
 
-    if (verifyResult.status === "success") {
-      // Credit wallet via safe idempotent helper
-      const FiatWalletService = require("../services/FiatWalletService");
-      const AuditLogService   = require("../services/AuditLogService");
-      const idempotencyKey = `paystack_verify_${tx.reference_id}_${tx.id}`;
+    const isCompleted = verifyResult.status === "COMPLETED" || verifyResult.status === "SUCCESS";
 
-      try {
-        const ledgerTxId = await FiatWalletService.fundWallet(
-          tx.user_id,
-          tx.currency,
-          tx.amount,
-          idempotencyKey,
-          { provider: "paystack", reference: tx.reference_id, manual_verify: true }
-        );
-
-        await supabase
-          .from("transactions")
-          .update({ status: "COMPLETED", updated_at: new Date().toISOString() })
-          .eq("id", tx.id);
-
-        AuditLogService.log({
-          user_id:   tx.user_id,
-          action:    "fiat_deposit_manual_verify",
-          provider:  "paystack",
-          reference: tx.reference_id,
-          amount:    tx.amount,
-          currency:  tx.currency,
-          ledger_id: ledgerTxId
-        }).catch(err => logger.warn("[VerifyRoute] Audit log failed:", err.message));
-
-        logger.info(`[VerifyRoute] Successfully credited wallet for ${reference}`);
-        return res.json({
-          success: true,
-          data: { status: "COMPLETED", amount: parseFloat(tx.amount || 0), currency: tx.currency, reference: tx.reference_id }
-        });
-      } catch (creditErr) {
-        // If fundWallet throws because already credited (idempotency), return COMPLETED
-        if (creditErr.message?.includes("idempotency") || creditErr.message?.includes("already")) {
-          return res.json({
-            success: true,
-            data: { status: "COMPLETED", amount: parseFloat(tx.amount || 0), currency: tx.currency, reference: tx.reference_id }
-          });
-        }
-        logger.error(`[VerifyRoute] Credit failed for ${reference}:`, creditErr.message);
-        throw creditErr;
-      }
-    }
-
-    // Payment not yet successful on Paystack's side — return current status
     return res.json({
       success: true,
       data: {
-        status: dbStatus,
+        status: isCompleted ? "COMPLETED" : (verifyResult.status || "PENDING"),
         amount: parseFloat(tx.amount || 0),
         currency: tx.currency,
-        reference: tx.reference_id,
-        paystackStatus: verifyResult.status  // 'abandoned', 'pending', etc.
+        reference: tx.reference_id
       }
     });
 
