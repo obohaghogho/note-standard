@@ -78,13 +78,13 @@ export interface ManualDeposit {
 // ─── API ──────────────────────────────────────────────────────
 
 const depositApi = {
-  // ─── Paystack Flow ──────────────────────────────────────────
+  // ─── Vendor-Agnostic Fiat Checkout Flow ──────────────────────
 
   /**
-   * Initialize a Paystack payment.
+   * Initialize a fiat payment checkout session.
    * Returns a checkout URL to redirect the user to.
    */
-  initiatePaystack: async (
+  initiateFiatPayment: async (
     amount: number,
     currency: string,
     metadata?: Record<string, unknown>
@@ -92,20 +92,34 @@ const depositApi = {
     const response = await axiosInstance.post("/payment/initialize", {
       amount,
       currency,
-      provider: "paystack",
+      provider: "fincra",
       metadata: { ...metadata, type: "DEPOSIT" },
     });
     return response.data;
   },
 
+  // Legacy alias for backwards compatibility
+  initiatePaystack: async (
+    amount: number,
+    currency: string,
+    metadata?: Record<string, unknown>
+  ): Promise<PaystackPaymentResult> => {
+    return depositApi.initiateFiatPayment(amount, currency, metadata);
+  },
+
   /**
-   * Verify a Paystack payment after checkout redirect.
+   * Verify a fiat payment after checkout redirect.
    */
-  verifyPaystack: async (reference: string): Promise<PaymentStatus> => {
-    const response = await axiosInstance.post("/payment/verify-paystack", {
+  verifyPayment: async (reference: string): Promise<PaymentStatus> => {
+    const response = await axiosInstance.post("/payment/verify-fiat", {
       reference,
     });
     return response.data;
+  },
+
+  // Legacy alias for backwards compatibility
+  verifyPaystack: async (reference: string): Promise<PaymentStatus> => {
+    return depositApi.verifyPayment(reference);
   },
 
   // ─── Grey Flow ──────────────────────────────────────────────

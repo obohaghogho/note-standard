@@ -26,8 +26,8 @@ exports.createCheckoutSession = async (req, res) => {
 
     const customerName = profile?.full_name || email.split("@")[0] || "Standard User";
 
-    // Fincra is completely cut off as requested by User. Paystack is the exclusive card payment provider.
-    let usedMethod = "paystack";
+    // Resolve default fiat card payment provider via GatewayRouter
+    let usedMethod = "fincra";
 
     // 2. Handle Currency Conversion with safe fallback rates
     let processedCurrency = upCurrency;

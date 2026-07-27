@@ -100,7 +100,7 @@ export const ActivitySuccess: React.FC = () => {
                 handleFailure();
             } else {
                 setUiStatus('timed_out');
-                setVerifyError('Payment is still processing on Paystack\'s side. Please wait a moment and try again.');
+                setVerifyError('Payment is still processing on gateway\'s side. Please wait a moment and try again.');
             }
         } catch (err: unknown) {
             const error = err as { message?: string };
@@ -208,7 +208,7 @@ export const ActivitySuccess: React.FC = () => {
                     <>
                         <Loader2 className="w-16 h-16 text-purple-500 animate-spin mx-auto mb-4" />
                         <h1 className="text-2xl font-bold text-white mb-2 font-outfit">Processing Payment</h1>
-                        <p className="text-gray-400">Confirming your transaction with Paystack…</p>
+                        <p className="text-gray-400">Confirming your transaction with payment gateway…</p>
                         <p className="text-gray-600 text-xs mt-3">This usually takes less than 30 seconds.</p>
                     </>
                 )}
@@ -217,7 +217,7 @@ export const ActivitySuccess: React.FC = () => {
                 {uiStatus === 'verifying' && (
                     <>
                         <Loader2 className="w-16 h-16 text-blue-500 animate-spin mx-auto mb-4" />
-                        <h1 className="text-2xl font-bold text-white mb-2 font-outfit">Verifying with Paystack…</h1>
+                        <h1 className="text-2xl font-bold text-white mb-2 font-outfit">Verifying transaction…</h1>
                         <p className="text-gray-400">Checking payment status directly. Please wait.</p>
                     </>
                 )}
@@ -248,7 +248,7 @@ export const ActivitySuccess: React.FC = () => {
                         </div>
                         <h1 className="text-2xl font-bold text-white mb-2 font-outfit">Still Processing</h1>
                         <p className="text-gray-400 mb-2">
-                            Your payment was received by Paystack. We're waiting for the final confirmation.
+                            Your payment was received. We're waiting for the final confirmation.
                         </p>
                         {verifyError && (
                             <p className="text-red-400 text-sm mb-3 bg-red-500/10 rounded-lg px-3 py-2">

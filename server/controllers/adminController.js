@@ -2091,3 +2091,36 @@ exports.getSupportMetrics = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch support metrics" });
   }
 };
+
+// GET /api/admin/financial-overview — Enterprise Financial & Gateway Telemetry Overview
+exports.getFinancialOverview = async (req, res, next) => {
+  try {
+    const TreasuryService = require("../services/payment/TreasuryService");
+    const GatewayRouter   = require("../services/payment/GatewayRouter");
+    
+    const treasury = await TreasuryService.getTreasuryOverview();
+    const providerHealth = GatewayRouter.getAllHealth();
+
+    // Query recent audit logs
+    const { data: auditLogs } = await supabase
+      .from("fincra_audit_logs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    return res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      providerHealth,
+      egressGateway: {
+        staticIp: "137.184.216.44",
+        hostname: "gateway.notestandard.com",
+        status: providerHealth.fincra || "HEALTHY"
+      },
+      treasury,
+      recentAuditLogs: auditLogs || []
+    });
+  } catch (err) {
+    next(err);
+  }
+};

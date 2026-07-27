@@ -141,10 +141,10 @@ export default function PaymentSelector({
     }
   }, [trackTelemetry]);
 
-  // ─── Paystack Flow ──────────────────────────────────────────
+  // ─── Fiat Card / Instant Checkout Flow ───────────────────────
 
-  const handlePaystack = useCallback(async (isAppleClick = false) => {
-    setSelectedMethod(isAppleClick ? "apple-pay" : "paystack");
+  const handleCardCheckout = useCallback(async (isAppleClick = false) => {
+    setSelectedMethod(isAppleClick ? "apple-pay" : "card");
     setIsLoading(true);
     setStep("processing");
 
@@ -153,17 +153,17 @@ export default function PaymentSelector({
     }
 
     try {
-      const result = await depositApi.initiatePaystack(
+      const result = await depositApi.initiateFiatPayment(
         amount,
         currency,
         metadata
       );
 
       if (result.url || result.checkoutUrl) {
-        // Open Paystack checkout
+        // Redirect to secure checkout page
         window.location.href = result.url || result.checkoutUrl;
       } else {
-        throw new Error("No checkout URL received from Paystack");
+        throw new Error("No checkout URL received from payment gateway");
       }
     } catch (err: unknown) {
       const message =
@@ -283,8 +283,8 @@ export default function PaymentSelector({
         <div className="ps-processing-card">
           <div className="ps-spinner" />
           <h2>
-            {selectedMethod === "paystack"
-              ? "Redirecting to Paystack..."
+            {selectedMethod === "card" || selectedMethod === "apple-pay"
+              ? "Redirecting to secure checkout..."
               : "Loading bank details..."}
           </h2>
           <p>Please wait while we set up your payment.</p>
@@ -311,7 +311,7 @@ export default function PaymentSelector({
         </p>
       </div>
 
-      {/* Currency routing notice — only shown for non-native Paystack currencies (JPY, EUR, GBP) */}
+      {/* Currency routing notice — only shown for non-native currencies (JPY, EUR, GBP) */}
       {routingInfo && (
         <div className="ps-routing-notice" role="note" aria-label="Payment routing information">
           <span className="ps-routing-notice-icon">{routingInfo.icon}</span>
@@ -324,7 +324,7 @@ export default function PaymentSelector({
         {isApplePaySupported && (
           <button
             className={`ps-method-card ps-apple-pay ${isLoading ? "ps-disabled" : ""}`}
-            onClick={() => handlePaystack(true)}
+            onClick={() => handleCardCheckout(true)}
             disabled={isLoading}
             id="pay-with-apple-pay"
           >
@@ -338,17 +338,17 @@ export default function PaymentSelector({
           </button>
         )}
 
-        {/* Paystack Card */}
+        {/* Credit / Debit Card & Instant Checkout */}
         <button
-          className={`ps-method-card ps-paystack ${isLoading ? "ps-disabled" : ""}`}
-          onClick={handlePaystack}
+          className={`ps-method-card ps-card-method ${isLoading ? "ps-disabled" : ""}`}
+          onClick={() => handleCardCheckout(false)}
           disabled={isLoading}
-          id="pay-with-paystack"
+          id="pay-with-card"
         >
           <div className="ps-method-icon">💳</div>
           <div className="ps-method-info">
-            <h3>{currency === "NGN" ? "Instant Card & Bank Payment" : "Pay with Card"}</h3>
-            <p>{currency === "NGN" ? "Pay securely via Bank Transfer, Card, or USSD" : "Instant • Card, Bank, USSD"}</p>
+            <h3>Pay with Card</h3>
+            <p>Instant • Secure Credit & Debit Card Payment</p>
           </div>
           <div className="ps-method-badge ps-recommended">Recommended</div>
           <div className="ps-method-arrow">→</div>

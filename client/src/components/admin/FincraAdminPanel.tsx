@@ -136,8 +136,35 @@ export const FincraAdminPanel: React.FC = () => {
   return (
     <div className="fincra-admin" role="region" aria-label="Fincra Admin Panel">
       <div className="fincra-admin__header">
-        <h2 className="fincra-admin__title">Fincra Payment Infrastructure</h2>
-        <p className="fincra-admin__subtitle">Admin visibility — isolated from core system</p>
+        <h2 className="fincra-admin__title">Fincra & Financial Gateway Infrastructure</h2>
+        <p className="fincra-admin__subtitle">Enterprise Egress Gateway & Multi-Currency Telemetry</p>
+      </div>
+
+      {/* ── Gateway Telemetry Cards ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+        <div style={{ background: '#1e293b', padding: '16px', borderRadius: '8px', border: '1px solid #334155', color: '#fff' }}>
+          <div style={{ fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase' }}>Egress Gateway IP</div>
+          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#38bdf8', marginTop: '4px' }}>137.184.216.44</div>
+          <div style={{ fontSize: '11px', color: '#4ade80', marginTop: '4px' }}>● Static IP Allowed (DigitalOcean)</div>
+        </div>
+
+        <div style={{ background: '#1e293b', padding: '16px', borderRadius: '8px', border: '1px solid #334155', color: '#fff' }}>
+          <div style={{ fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase' }}>Primary Fiat Provider</div>
+          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#4ade80', marginTop: '4px' }}>Fincra Production</div>
+          <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>NGN · USD · EUR · GBP Collections</div>
+        </div>
+
+        <div style={{ background: '#1e293b', padding: '16px', borderRadius: '8px', border: '1px solid #334155', color: '#fff' }}>
+          <div style={{ fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase' }}>BaaS & Stablecoin Rails</div>
+          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#a78bfa', marginTop: '4px' }}>Anchor & Crypto</div>
+          <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>USDT · USDC · USD Treasury</div>
+        </div>
+
+        <div style={{ background: '#1e293b', padding: '16px', borderRadius: '8px', border: '1px solid #334155', color: '#fff' }}>
+          <div style={{ fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase' }}>Gateway Routing Endpoint</div>
+          <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#f1f5f9', marginTop: '4px', wordBreak: 'break-all' }}>gateway.notestandard.com</div>
+          <div style={{ fontSize: '11px', color: '#4ade80', marginTop: '4px' }}>🔒 HMAC SHA-256 Authenticated</div>
+        </div>
       </div>
 
       {/* ── Tabs ── */}

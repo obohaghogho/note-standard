@@ -68,7 +68,7 @@ function ComingSoonModal({ currency, onClose }: { currency: CurrencyCapabilities
             <div className="flex items-start gap-3">
               <Info size={16} className="text-indigo-400 shrink-0 mt-0.5" />
               <p className="text-indigo-300 text-xs leading-relaxed">
-                We've requested international payment support from Paystack. Your {currency.code} wallet 
+                International payment capabilities for your {currency.code} wallet are currently being provisioned. Your {currency.code} wallet 
                 address is already reserved and ready to activate. No action needed on your part.
               </p>
             </div>

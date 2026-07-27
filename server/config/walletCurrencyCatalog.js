@@ -44,7 +44,7 @@ const FIAT_CATALOG = [
     maximum_deposit: 5000000,
     maximum_withdrawal: 1000000,
     decimal_places: 2,
-    provider: 'paystack',
+    provider: 'fincra',
     deposit_methods: ['card', 'bank_transfer', 'virtual_account'],
     display_order: 1,
   },

@@ -48,13 +48,9 @@ class PaymentService {
     const isCrypto = options.isCrypto || false;
     const method = metadata.method || options.method || "card";
 
-    logger.info(`[DEBUG] Step 1: Provider selection for ${currency} (${isCrypto ? 'Crypto' : 'Fiat'}) method: ${method}`);
+    logger.info(`[PaymentService] Provider selection for ${currency} (${isCrypto ? 'Crypto' : 'Fiat'}) method: ${method}, Requested provider: ${options.provider || 'auto (GatewayRouter)'}`);
     
-    // Force Paystack for all NGN transactions to prevent manual Grey transfers
-    let resolvedProvider = options.provider;
-    if (currency && String(currency).toUpperCase() === "NGN") {
-      resolvedProvider = "paystack";
-    }
+    let resolvedProvider = options.provider || null;
 
     // 1. Determine provider via Factory or explicit request
     const provider = resolvedProvider
@@ -68,7 +64,7 @@ class PaymentService {
     const providerName = provider.constructor.name.replace("Provider", "")
       .toLowerCase();
 
-    logger.info(`[DEBUG] Step 2: Initializing ${providerName} payment`, {
+    logger.info(`[PaymentService] Resolved provider: ${providerName} for ${currency} ${method}`, {
       userId,
       reference,
       currency,

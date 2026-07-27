@@ -141,10 +141,10 @@ section('ProviderRouter — Routing Logic');
 
 const router = require('../services/ProviderRouter');
 
-test('NGN deposit/withdraw routes to paystack', () => {
-  assert.strictEqual(router.getProvider('NGN', 'deposit'),  'paystack');
-  assert.strictEqual(router.getProvider('NGN', 'withdraw'), 'paystack');
-  assert.strictEqual(router.getProvider('NGN', 'transfer'), 'paystack');
+test('NGN deposit/withdraw routes to fincra', () => {
+  assert.strictEqual(router.getProvider('NGN', 'deposit'),  'fincra');
+  assert.strictEqual(router.getProvider('NGN', 'withdraw'), 'fincra');
+  assert.strictEqual(router.getProvider('NGN', 'transfer'), 'fincra');
 });
 
 test('USD/EUR/GBP route to coming_soon when INTERNATIONAL_FIAT_ENABLED is false', () => {
@@ -238,7 +238,7 @@ test('isFiat() correctly classifies all currencies', () => {
 });
 
 test('Case-insensitive routing (lowercase input)', () => {
-  assert.strictEqual(router.getProvider('ngn', 'deposit'), 'paystack');
+  assert.strictEqual(router.getProvider('ngn', 'deposit'), 'fincra');
   assert.strictEqual(router.getProvider('btc', 'deposit'), 'nowpayments');
   assert.strictEqual(router.getProvider('usdt', 'swap'),   'internal');
 });
@@ -275,9 +275,9 @@ test('All crypto currencies have provider=nowpayments', () => {
   }
 });
 
-test('NGN has provider=paystack', () => {
+test('NGN has provider=fincra', () => {
   const ngn = catalog.FIAT_CATALOG.find(c => c.code === 'NGN');
-  assert.strictEqual(ngn.provider, 'paystack');
+  assert.strictEqual(ngn.provider, 'fincra');
 });
 
 test('International fiats have provider=fincra', () => {
@@ -664,9 +664,9 @@ test('VirtualAccountService.js module exists', () => {
 });
 
 test('ProviderRouter returns correct default virtual account providers', () => {
-  // NGN virtual account should route to paystack (or custom config if set)
+  // NGN virtual account should route to fincra (or custom config if set)
   const ngnProvider = router.getProvider('NGN', 'virtual_account');
-  assert.strictEqual(ngnProvider, process.env.NGN_VIRTUAL_ACCOUNT_PROVIDER || 'paystack');
+  assert.strictEqual(ngnProvider, process.env.NGN_VIRTUAL_ACCOUNT_PROVIDER || 'fincra');
 
   // If international fiat is disabled, USD/EUR/GBP/CAD/AUD should route to coming_soon
   if (process.env.INTERNATIONAL_FIAT_ENABLED !== 'true') {

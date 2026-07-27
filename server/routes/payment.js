@@ -41,9 +41,9 @@ router.post(
   WebhookService.processPaystackWebhook.bind(WebhookService)
 );
 
-// ─── Verify Paystack Payment ─────────────────────────────────
-// Frontend calls this after Paystack checkout redirect
-// Checks with Paystack API to confirm payment
+// ─── Verify Payment (Provider-Agnostic with Paystack Legacy Alias) ──────
+// Called by frontend after checkout redirect
+router.post("/verify-fiat", requireAuth, paymentController.verifyPaystack);
 router.post("/verify-paystack", requireAuth, paymentController.verifyPaystack);
 
 // ─── Verify Grey Payment ────────────────────────────────────
@@ -56,7 +56,7 @@ router.post("/verify-grey", requireAuth, paymentController.verifyGrey);
 router.get("/status/:reference", requireAuth, paymentController.checkStatus);
 
 // ─── Failsafe Verification ───────────────────────────────────
-// Manual fallback trigger for Paystack verification
+// Fallback trigger for payment verification by reference
 router.post("/verify/:reference", requireAuth, paymentController.verifyPaystack);
 
 // ─── Manual Payment Instructions ─────────────────────────────

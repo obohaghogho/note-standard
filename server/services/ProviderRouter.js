@@ -35,7 +35,7 @@ const VA_FLAGS = {
 
 // ── Virtual Account Provider Registry (Configuration-driven) ──────────────────
 const VA_ROUTING = {
-  NGN: process.env.NGN_VIRTUAL_ACCOUNT_PROVIDER || 'paystack',
+  NGN: process.env.NGN_VIRTUAL_ACCOUNT_PROVIDER || 'fincra',
   USD: process.env.USD_VIRTUAL_ACCOUNT_PROVIDER || 'fincra',
   EUR: process.env.EUR_VIRTUAL_ACCOUNT_PROVIDER || 'fincra',
   GBP: process.env.GBP_VIRTUAL_ACCOUNT_PROVIDER || 'fincra',
@@ -162,7 +162,7 @@ function getProvider(currency, operation) {
 
   // ── NGN (primary fiat) ────────────────────────────────────────────────────
   if (code === 'NGN') {
-    return 'paystack';
+    return 'fincra';
   }
 
   // ── International fiat currencies ─────────────────────────────────────────
@@ -175,7 +175,7 @@ function getProvider(currency, operation) {
 
   // ── Other fiat (GHS, ZAR, KES, etc.) ────────────────────────────────────
   if (isFiat(code)) {
-    if (PROVIDER_REGISTRY.paystack.supportedCurrencies.includes(code)) return 'paystack';
+    if (PROVIDER_REGISTRY.fincra.supportedCurrencies.includes(code)) return 'fincra';
     return 'coming_soon';
   }
 

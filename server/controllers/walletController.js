@@ -80,7 +80,7 @@ exports.deposit = async (req, res, next) => {
           channel: "card",
           plan: req.userProfile?.plan || "FREE"
         },
-        { provider: provider || "paystack" }
+        { provider: (provider && provider !== "paystack" && provider !== "fiat") ? provider : "fincra" }
       );
       return res.json(result);
     }
@@ -174,7 +174,7 @@ exports.depositCard = async (req, res, next) => {
         targetNetwork: toNetwork,
         callbackUrl: callbackUrl
       },
-      { provider: "paystack" }
+      { provider: "fincra" }
     );
 
     // Return the structure expected by the frontend
@@ -240,7 +240,7 @@ exports.depositTransfer = async (req, res, next) => {
         targetNetwork: toNetwork,
         callbackUrl: callbackUrl
       },
-      { provider: "paystack" }
+      { provider: "fincra" }
     );
 
     res.json({

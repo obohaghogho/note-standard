@@ -104,7 +104,7 @@ export const PaymentCallback: React.FC = () => {
             if (pollCountRef.current >= maxPolls) {
                 setUiState('timeout');
                 setStatusMessage('Verification timed out');
-                setErrorMsg('We are still waiting for confirmation from Paystack. Please click the button below to manually retry verification.');
+                setErrorMsg('We are still waiting for confirmation from the payment gateway. Please click the button below to manually retry verification.');
             } else {
                 timerRef.current = setTimeout(pollStatus, 2000);
             }

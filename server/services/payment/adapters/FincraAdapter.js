@@ -80,14 +80,19 @@ class FincraAdapter extends BasePaymentAdapter {
   async healthCheck() {
     const start = Date.now();
     try {
-      const axios = require('axios');
+      const { dispatchFincraRequest } = require('../../fincra/gatewayClient');
       const baseUrl = this.config('FINCRA_BASE_URL') || 'https://sandboxapi.fincra.com';
       const apiKey = this.config('FINCRA_API_KEY');
-      await axios.get(`${baseUrl}/core/businesses/me`, {
+      const response = await dispatchFincraRequest({
+        method: 'GET',
+        path: '/core/businesses/me',
         headers: { 'api-key': apiKey },
-        timeout: 5000,
+        targetUrl: baseUrl
       });
-      return { status: 'HEALTHY', latencyMs: Date.now() - start };
+      if (response.status < 500) {
+        return { status: 'HEALTHY', latencyMs: Date.now() - start };
+      }
+      return { status: 'DEGRADED', latencyMs: Date.now() - start };
     } catch {
       return { status: 'DOWN', latencyMs: Date.now() - start };
     }

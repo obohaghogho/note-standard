@@ -201,7 +201,7 @@ export const Billing = () => {
                 },
                 body: JSON.stringify({ 
                     planType, 
-                    paymentMethod: 'paystack',
+                    paymentMethod: 'card',
                     currency 
                 })
             });
@@ -747,7 +747,7 @@ export const Billing = () => {
                 </div>
                 <div className="space-y-1">
                     <h4 className="font-bold text-sm text-white flex items-center gap-2">Secure payment operations</h4>
-                    <p className="text-xs text-gray-400 font-light leading-relaxed">NoteStandard uses Paystack for credit card and bank transfer transactions. We do not store or process your sensitive billing credentials. Subscription transactions are verified cryptographically via Paystack webhooks and logged immutably on the institutional ledger.</p>
+                    <p className="text-xs text-gray-400 font-light leading-relaxed">NoteStandard uses institutional banking partners for credit card and bank transfer transactions. We do not store or process your sensitive billing credentials. Subscription transactions are verified cryptographically via secure webhooks and logged immutably on the institutional ledger.</p>
                 </div>
             </div>
 

@@ -2,6 +2,7 @@ const axios = require("axios");
 const crypto = require("crypto");
 const BaseProvider = require("./BaseProvider");
 const logger = require("../../../utils/logger");
+const { dispatchFincraRequest } = require("../../fincra/gatewayClient");
 
 /**
  * FincraProvider — Production-Grade Checkout & Webhook Integration
@@ -50,9 +51,69 @@ class FincraProvider extends BaseProvider {
 
     logger.info(`[Fincra] Initialized — ENV: ${envFlag.toUpperCase()}, BaseURL: ${this.baseUrl}`);
 
+    const gatewayAdapter = async (config) => {
+      const method  = (config.method || 'get').toUpperCase();
+      const reqPath = config.url || '';
+      const headers = config.headers || {};
+      let body = config.data;
+
+      if (typeof body === 'string') {
+        try { body = JSON.parse(body); } catch {}
+      }
+
+      try {
+        const response = await dispatchFincraRequest({
+          method,
+          path: reqPath,
+          headers: {
+            ...headers,
+            "api-key":       this.secretKey,
+            "apiKey":        this.secretKey,
+            "x-pub-key":     this.publicKey,
+            "x-business-id": this.businessId,
+          },
+          body,
+          targetUrl: this.baseUrl
+        });
+
+        if (response.status >= 400) {
+          const error = new Error(`Fincra Request failed with status ${response.status}`);
+          error.config = config;
+          error.response = {
+            status: response.status,
+            data: response.data,
+            headers: response.headers,
+            config
+          };
+          throw error;
+        }
+
+        return {
+          data: response.data,
+          status: response.status,
+          statusText: 'OK',
+          headers: response.headers,
+          config,
+          request: {}
+        };
+      } catch (err) {
+        if (err.response) throw err;
+        const gatewayErr = new Error(err.message || 'Gateway transport error');
+        gatewayErr.config = config;
+        gatewayErr.response = {
+          status: err.statusCode || 502,
+          data: err.details || { error: err.message },
+          headers: {},
+          config
+        };
+        throw gatewayErr;
+      }
+    };
+
     this.client = axios.create({
       baseURL: this.baseUrl,
       timeout: 30000,
+      adapter: gatewayAdapter,
       headers: {
         "api-key":       this.secretKey,
         "apiKey":        this.secretKey,

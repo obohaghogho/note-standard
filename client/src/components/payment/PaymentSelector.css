@@ -131,7 +131,7 @@
   flex-shrink: 0;
 }
 
-.ps-paystack .ps-method-icon {
+.ps-card-method .ps-method-icon {
   background: linear-gradient(135deg, #f0fdf4, #dcfce7);
 }
 

@@ -24,10 +24,54 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// ── Fincra HTTP client ───────────────────────────────────────────────────────
+const { dispatchFincraRequest } = require("../services/fincra/gatewayClient");
+
+// ── Fincra HTTP client (routed via Gateway) ──────────────────────────────────
+const gatewayAdapter = async (config) => {
+  const method  = (config.method || 'get').toUpperCase();
+  const reqPath = config.url || '';
+  const headers = config.headers || {};
+  let body = config.data;
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch {}
+  }
+  const response = await dispatchFincraRequest({
+    method,
+    path: reqPath,
+    headers: {
+      ...headers,
+      "api-key": process.env.FINCRA_API_KEY
+    },
+    body,
+    targetUrl: process.env.FINCRA_BASE_URL || "https://sandboxapi.fincra.com"
+  });
+
+  if (response.status >= 400) {
+    const error = new Error(`Request failed with status code ${response.status}`);
+    error.config = config;
+    error.response = {
+      status: response.status,
+      data: response.data,
+      headers: response.headers,
+      config
+    };
+    throw error;
+  }
+
+  return {
+    data: response.data,
+    status: response.status,
+    statusText: 'OK',
+    headers: response.headers,
+    config,
+    request: {}
+  };
+};
+
 const fincra = axios.create({
   baseURL: process.env.FINCRA_BASE_URL || "https://sandboxapi.fincra.com",
   timeout: 20000,
+  adapter: gatewayAdapter,
   headers: {
     "api-key":      process.env.FINCRA_API_KEY,
     "Content-Type": "application/json",

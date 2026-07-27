@@ -34,6 +34,8 @@ const CONFIG_SCHEMA = {
   FINCRA_BUSINESS_ID:          { env: 'FINCRA_BUSINESS_ID',           default: null },
   FINCRA_WEBHOOK_SECRET:       { env: 'FINCRA_WEBHOOK_SECRET',        default: null },
   FINCRA_BASE_URL:             { env: 'FINCRA_BASE_URL',              default: 'https://sandboxapi.fincra.com' },
+  FINCRA_GATEWAY_URL:          { env: 'FINCRA_GATEWAY_URL',           default: null },
+  FINCRA_GATEWAY_KEY:          { env: 'FINCRA_GATEWAY_KEY',           default: null },
 
   // Grey
   GREY_API_KEY:                { env: 'GREY_API_KEY',                 default: null },

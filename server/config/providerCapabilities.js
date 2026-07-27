@@ -8,30 +8,36 @@
 const PAYMENT_PROVIDER_CAPABILITIES = {
   paystack: {
     name: 'paystack',
-    // Currencies the gateway platform accepts natively
+    capabilityVersion: 1,
     supportedCurrencies: ['NGN', 'USD', 'ZAR', 'GHS', 'KES', 'EGP'],
-    // Currencies our merchant account is enabled for natively
     merchantCurrencies: ['NGN', 'USD'],
     nativeCurrencies: ['NGN', 'USD'],
     fallbackCurrencies: ['EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'NZD'],
-    // Feature flags — controlled by config, not code
     merchantEnabled: true,
     cardEnabled: true,
     subscriptionEnabled: true,
-    dvaEnabled: true,        // Dynamic Virtual Account
+    dvaEnabled: true,
     refundsEnabled: true,
     supportsInternational: true,
-    requiresSmallestUnit: true, // Amount must be in kobo/cents
-    // The currencies we actually receive settlement in
+    requiresSmallestUnit: true,
     settlementCurrencies: ['NGN', 'USD'],
-    // Lower = cheaper; used in scoring
     feeEfficiencyScore: 10,
-    // Supported payment methods
     methods: ['card', 'bank_transfer', 'dva', 'subscription'],
+    supportedFeatures: {
+      checkout: true,
+      cardPayments: true,
+      bankTransfers: true,
+      virtualAccounts: true,
+      subscriptions: true,
+      refunds: true,
+      stablecoins: false,
+      treasury: false
+    }
   },
 
   fincra: {
     name: 'fincra',
+    capabilityVersion: 1,
     supportedCurrencies: ['NGN', 'USD', 'EUR', 'GBP'],
     merchantCurrencies: ['NGN', 'USD', 'EUR', 'GBP'],
     nativeCurrencies: ['NGN', 'USD', 'EUR', 'GBP'],
@@ -44,12 +50,23 @@ const PAYMENT_PROVIDER_CAPABILITIES = {
     supportsInternational: true,
     requiresSmallestUnit: false,
     settlementCurrencies: ['NGN', 'USD', 'EUR', 'GBP'],
-    feeEfficiencyScore: 9,
+    feeEfficiencyScore: 25, // Scores highest for primary fiat collections & payouts
     methods: ['card', 'bank_transfer', 'dva', 'subscription'],
+    supportedFeatures: {
+      checkout: true,
+      cardPayments: true,
+      bankTransfers: true,
+      virtualAccounts: true,
+      subscriptions: true,
+      refunds: true,
+      stablecoins: false,
+      treasury: false
+    }
   },
 
   grey: {
     name: 'grey',
+    capabilityVersion: 1,
     supportedCurrencies: ['USD', 'EUR', 'GBP'],
     merchantCurrencies: ['USD', 'EUR', 'GBP'],
     nativeCurrencies: ['USD', 'EUR', 'GBP'],
@@ -62,12 +79,23 @@ const PAYMENT_PROVIDER_CAPABILITIES = {
     supportsInternational: true,
     requiresSmallestUnit: false,
     settlementCurrencies: ['USD', 'EUR', 'GBP'],
-    feeEfficiencyScore: 8,
+    feeEfficiencyScore: 12,
     methods: ['bank_transfer', 'dva'],
+    supportedFeatures: {
+      checkout: false,
+      cardPayments: false,
+      bankTransfers: true,
+      virtualAccounts: true,
+      subscriptions: false,
+      refunds: false,
+      stablecoins: false,
+      treasury: false
+    }
   },
 
   anchor: {
     name: 'anchor',
+    capabilityVersion: 1,
     supportedCurrencies: ['NGN', 'USD'],
     merchantCurrencies: ['NGN', 'USD'],
     nativeCurrencies: ['NGN', 'USD'],
@@ -78,14 +106,25 @@ const PAYMENT_PROVIDER_CAPABILITIES = {
     dvaEnabled: true,
     refundsEnabled: false,
     supportsInternational: true,
-    requiresSmallestUnit: true, // Kobo for NGN, cents for USD
+    requiresSmallestUnit: true,
     settlementCurrencies: ['NGN', 'USD'],
-    feeEfficiencyScore: 8,
-    methods: ['dva', 'bank_transfer'],
+    feeEfficiencyScore: 20, // Scores high for treasury, stablecoins & USD BaaS
+    methods: ['dva', 'bank_transfer', 'treasury'],
+    supportedFeatures: {
+      checkout: false,
+      cardPayments: false,
+      bankTransfers: true,
+      virtualAccounts: true,
+      subscriptions: false,
+      refunds: false,
+      stablecoins: true,
+      treasury: true
+    }
   },
 
   nowpayments: {
     name: 'nowpayments',
+    capabilityVersion: 1,
     supportedCurrencies: ['BTC', 'ETH', 'USDT', 'USDC', 'MATIC', 'XRP'],
     merchantCurrencies: ['BTC', 'ETH', 'USDT', 'USDC', 'MATIC', 'XRP'],
     nativeCurrencies: ['BTC', 'ETH', 'USDT', 'USDC', 'MATIC', 'XRP'],
@@ -98,8 +137,18 @@ const PAYMENT_PROVIDER_CAPABILITIES = {
     supportsInternational: true,
     requiresSmallestUnit: false,
     settlementCurrencies: ['USDT', 'USDC'],
-    feeEfficiencyScore: 7,
+    feeEfficiencyScore: 15,
     methods: ['crypto'],
+    supportedFeatures: {
+      checkout: true,
+      cardPayments: false,
+      bankTransfers: false,
+      virtualAccounts: false,
+      subscriptions: false,
+      refunds: false,
+      stablecoins: true,
+      treasury: false
+    }
   },
 };
 
