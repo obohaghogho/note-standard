@@ -11,9 +11,20 @@
  * PURE DATA MODULE — Contains ZERO push dispatch logic, ZERO side-effects, and ZERO database mutations.
  */
 
+const deviceCache = new Map();
+const CACHE_TTL_MS = 15000; // 15 seconds TTL
+
 class DeviceRegistry {
   /**
+   * Clears in-memory device cache for a user on login/logout
+   */
+  static clearUserCache(userId) {
+    if (userId) deviceCache.delete(userId);
+  }
+
+  /**
    * Fetches and normalizes all active, healthy target devices for a user.
+   * Uses an in-memory TTL cache to eliminate database query latency during high-frequency chats.
    *
    * @param {object} supabase - Supabase client instance
    * @param {string} userId   - Recipient user ID
@@ -21,6 +32,11 @@ class DeviceRegistry {
    */
   static async getActiveDevices(supabase, userId) {
     if (!supabase || !userId) return [];
+
+    const cached = deviceCache.get(userId);
+    if (cached && (Date.now() - cached.ts < CACHE_TTL_MS)) {
+      return cached.devices;
+    }
 
     const deviceMap = new Map(); // Keyed by endpoint or token string to enforce strict deduplication
 
@@ -148,6 +164,7 @@ class DeviceRegistry {
       return new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime();
     });
 
+    deviceCache.set(userId, { devices, ts: Date.now() });
     return devices;
   }
 

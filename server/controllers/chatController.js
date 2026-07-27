@@ -1800,8 +1800,7 @@ exports.sendMessage = async (req, res) => {
             }
           });
         });
-        await Promise.allSettled(fastPushPromises);
-
+        Promise.allSettled(fastPushPromises).then();
         Promise.allSettled(dbNotificationPromises).then();
       }
 
