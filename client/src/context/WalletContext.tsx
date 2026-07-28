@@ -279,9 +279,12 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         try {
             // Generate idempotency key if not provided (Institutional Standard: UUID v4)
             const idempotencyKey = data.idempotencyKey || uuidv4();
-            await walletApi.withdraw({ ...data, idempotencyKey });
-            toast.success(`Withdrawal request submitted for ${data.amount} ${data.currency}`);
+            const res = await walletApi.withdraw({ ...data, idempotencyKey });
+            if (!res?.otpRequired && res?.status !== 'OTP_REQUIRED') {
+                toast.success(`Withdrawal request submitted for ${data.amount} ${data.currency}`);
+            }
             await fetchData();
+            return res;
         } catch (err: unknown) {
             console.error('Withdraw error:', err);
             const message = err instanceof Error ? err.message : 'Failed to withdraw funds';
