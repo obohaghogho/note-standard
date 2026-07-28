@@ -30,9 +30,10 @@ function createFincraClient() {
     "fincra_api_key_configured"
   ).trim();
 
+  const isProdEnv = process.env.NODE_ENV === 'production' || process.env.FINCRA_ENV === 'live' || process.env.FINCRA_ENV === 'production';
   const baseURL = (
     process.env.FINCRA_BASE_URL ||
-    (process.env.NODE_ENV === "production" ? "https://api.fincra.com" : "https://sandboxapi.fincra.com")
+    (isProdEnv ? "https://api.fincra.com" : "https://sandboxapi.fincra.com")
   ).trim();
 
   const businessId = (

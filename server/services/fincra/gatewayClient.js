@@ -146,10 +146,8 @@ async function dispatchFincraRequest({ method, path, headers = {}, body = null, 
   }
 
   // ── 2. DIRECT FALLBACK MODE (Local Dev / Gateway Not Configured) ───────
-  const envFlag = (process.env.FINCRA_ENV || 'sandbox').toLowerCase();
-  const defaultBase = (envFlag === 'live' || envFlag === 'production')
-    ? 'https://api.fincra.com'
-    : 'https://sandboxapi.fincra.com';
+  const isProdEnv = process.env.NODE_ENV === 'production' || process.env.FINCRA_ENV === 'live' || process.env.FINCRA_ENV === 'production';
+  const defaultBase = isProdEnv ? 'https://api.fincra.com' : 'https://sandboxapi.fincra.com';
 
   const baseUrl = (targetUrl || process.env.FINCRA_BASE_URL || defaultBase).replace(/\/+$/, '');
   const directUrl = `${baseUrl}${cleanPath}`;
