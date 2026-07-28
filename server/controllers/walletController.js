@@ -400,6 +400,7 @@ exports.withdraw = async (req, res) => {
         userAgent: req.headers["user-agent"] || "unknown",
       });
     }
+    console.log("[RUNTIME_TRACE] 2. Controller Result before res.json:", JSON.stringify(result, null, 2));
     res.json(result);
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });

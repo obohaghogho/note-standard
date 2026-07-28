@@ -185,6 +185,8 @@ class PayoutEngine {
           reference:     withdrawal_ref,
         });
 
+        console.log("[RUNTIME_TRACE] 1. Fincra Provider Raw Response (providerRes):", JSON.stringify(providerRes, null, 2));
+
         // ── OTP Challenge Detection ───────────────────────────────────────────
         if (providerRes.otpRequired || providerRes.status === "OTP_REQUIRED") {
           logger.info(`[PayoutEngine] [${correlation_id}] Fincra requested OTP challenge for reference ${withdrawal_ref}`);

@@ -162,6 +162,9 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                 captchaToken: captchaToken || undefined
             });
 
+            console.log("[RUNTIME_TRACE] 3. withdraw result in WithdrawModal:", res);
+            console.log("[RUNTIME_TRACE] 4. res.otpRequired =", res?.otpRequired, "res.status =", res?.status);
+
             if (res?.otpRequired || res?.status === 'OTP_REQUIRED') {
                 setOtpChallenge({
                     withdrawalReference: res.withdrawal_reference || res.transactionId || 'FIN_PAYOUT_REF',
