@@ -106,7 +106,7 @@ async function dispatchFincraRequest({ method, path, headers = {}, body = null, 
           'X-Signature': signature,
           'X-Request-ID': requestId
         },
-        timeout: 5000, // 5s gateway timeout before falling back to direct mode
+        timeout: 30000, // 30s — must give gateway enough time to reach Fincra
         validateStatus: () => true // Receive status codes from gateway
       });
 
@@ -148,23 +148,49 @@ async function dispatchFincraRequest({ method, path, headers = {}, body = null, 
         };
       }
 
-      logger.warn(`[FincraGateway] Gateway returned HTTP ${response.status} (${JSON.stringify(response.data)}). Falling back to direct dispatch...`);
+      // Gateway returned a 4xx/5xx that indicates a routing/infra failure — throw in production
+      const gatewayErrMsg = `[FincraGateway] Gateway returned HTTP ${response.status}: ${JSON.stringify(response.data)}`;
+      logger.error(gatewayErrMsg);
+      throw new FincraGatewayError(gatewayErrMsg, response.status, response.data);
     } catch (error) {
+      if (error instanceof FincraGatewayError) throw error;
+      // Network / timeout error reaching the gateway itself
       const errorMsg = error.response?.data?.message || error.message || 'Fincra Gateway connection failed';
-      logger.warn(`[FincraGateway] Gateway request failed (${errorMsg}). Attempting direct fallback...`);
+      const isProdGuard = process.env.NODE_ENV === 'production' || process.env.FINCRA_ENV === 'live' || process.env.FINCRA_ENV === 'production';
+      if (isProdGuard) {
+        // In production, NEVER fall back to direct — that would expose Render's unwhitelisted IP
+        const prodErr = new FincraGatewayError(
+          `[FincraGateway] PRODUCTION_GATEWAY_FAILURE: Gateway unreachable (${errorMsg}). Direct Fincra access is blocked from Render. Check gateway health at https://gateway.notestandard.com`,
+          503,
+          { gatewayUrl: proxyEndpoint, originalError: errorMsg }
+        );
+        logger.error(prodErr.message, { proxyEndpoint, originalError: errorMsg });
+        throw prodErr;
+      }
+      logger.warn(`[FincraGateway] Gateway request failed (${errorMsg}). Attempting direct fallback (non-production only)...`);
     }
   }
 
-  // ── 2. DIRECT FALLBACK MODE (Local Dev / Gateway Not Configured) ───────
+  // ── 2. DIRECT MODE (Local Dev ONLY — never reached in production) ────────
   const isProdEnv = process.env.NODE_ENV === 'production' || process.env.FINCRA_ENV === 'live' || process.env.FINCRA_ENV === 'production';
-  const defaultBase = isProdEnv ? 'https://api.fincra.com' : 'https://sandboxapi.fincra.com';
 
+  // Hard production guard: if we somehow reach this point in production, refuse to call Fincra directly
+  if (isProdEnv) {
+    const hardGuardErr = new FincraGatewayError(
+      'FINCRA_DIRECT_BLOCKED: Direct Fincra access is not permitted in production. All requests must route through gateway.notestandard.com.',
+      503
+    );
+    logger.error(hardGuardErr.message);
+    throw hardGuardErr;
+  }
+
+  const defaultBase = 'https://sandboxapi.fincra.com';
   const baseUrl = (targetUrl || process.env.FINCRA_BASE_URL || defaultBase).replace(/\/+$/, '');
   const directUrl = `${baseUrl}${cleanPath}`;
 
-  console.log(`[E2E_CORRELATION_TRACE] [${requestId}] [Stage 6/10 & 7/10] Routing Request DIRECT to Fincra Live API (${directUrl})`);
+  console.log(`[E2E_CORRELATION_TRACE] [${requestId}] [Stage 6/10 & 7/10] Routing Request DIRECT to Fincra Sandbox API (${directUrl})`);
 
-  logger.info(`[FincraGateway] ⚡ Routing request DIRECT (Local Dev)`, {
+  logger.info(`[FincraGateway] ⚡ Routing request DIRECT (Local Dev / Sandbox ONLY)`, {
     method: normMethod,
     url: directUrl,
     requestId
