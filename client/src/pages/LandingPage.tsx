@@ -1,6 +1,7 @@
 import { SEO } from '../components/common/SEO';
 import { Navbar } from '../components/landing/Navbar';
 import { Hero } from '../components/landing/Hero';
+import { AppDemoSection } from '../components/landing/AppDemoSection';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
@@ -28,6 +29,7 @@ export const LandingPage = () => {
             />
             <Navbar />
             <Hero />
+            <AppDemoSection />
             <Features />
             <Pricing />
             <FounderSection />

@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Shield, Zap, Globe, Diamond, Smartphone } from 'lucide-react';
+import { ArrowRight, Shield, Zap, Globe, Diamond, Smartphone, Play } from 'lucide-react';
 import { usePWAInstall } from '../../context/PWAInstallContext';
 
 export const Hero = () => {
@@ -52,11 +52,20 @@ export const Hero = () => {
                         Experience the ultimate all-in-one platform featuring instant encrypted messaging, crystal-clear WebRTC voice and video calls, and a secure multi-currency digital wallet. Built for global collaboration.
                     </p>
 
-                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto">
+                    <div className="flex flex-wrap sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto">
                         <Link to="/signup" className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 bg-primary hover:bg-primary/90 shadow-[0_0_20px_rgba(16,185,129,0.4)] text-white rounded-xl font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 group border border-white/10">
                             Start for free
                             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                         </Link>
+                        <button 
+                            onClick={() => {
+                                document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth' });
+                            }}
+                            className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-white rounded-xl font-bold text-sm sm:text-base transition-all backdrop-blur-xl shadow-[0_0_20px_rgba(16,185,129,0.25)] flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                            <Play className="w-4 h-4 fill-emerald-400 text-emerald-400" />
+                            Watch App Demo
+                        </button>
                         <button 
                             onClick={() => {
                                 document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });

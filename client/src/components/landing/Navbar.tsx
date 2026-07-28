@@ -28,6 +28,10 @@ export const Navbar = () => {
                 </Link>
 
                 <div className="hidden md:flex items-center gap-8">
+                    <a href="#demo" className="text-sm font-medium text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1.5 font-bold">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        Demo Video
+                    </a>
                     <a href="#features" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">Features</a>
                     <a href="#pricing" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">Pricing</a>
                     <a href="#security" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">Security</a>
@@ -53,8 +57,12 @@ export const Navbar = () => {
                     animate={{ opacity: 1, y: 0 }}
                     className="absolute top-20 left-0 right-0 bg-background/95 backdrop-blur-xl border-b border-white/10 p-6 md:hidden flex flex-col gap-4"
                 >
-                    <a href="#features" className="text-base font-medium text-gray-400 hover:text-white">Features</a>
-                    <a href="#pricing" className="text-base font-medium text-gray-400 hover:text-white">Pricing</a>
+                    <a href="#demo" onClick={() => setIsOpen(false)} className="text-base font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        Demo Video
+                    </a>
+                    <a href="#features" onClick={() => setIsOpen(false)} className="text-base font-medium text-gray-400 hover:text-white">Features</a>
+                    <a href="#pricing" onClick={() => setIsOpen(false)} className="text-base font-medium text-gray-400 hover:text-white">Pricing</a>
                     <a href="#security" className="text-base font-medium text-gray-400 hover:text-white">Security</a>
                     <button onClick={() => { setIsOpen(false); installApp(); }} className="text-base font-medium text-primary hover:text-primary/80 text-left cursor-pointer">Install App</button>
                     <div className="h-px bg-white/10 my-2" />
