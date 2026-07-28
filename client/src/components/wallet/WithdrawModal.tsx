@@ -29,6 +29,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
     const [amount, setAmount] = useState('');
     const [isWithdrawing, setIsWithdrawing] = useState(false);
     const [withdrawFee, setWithdrawFee] = useState<{ fee: number, net: number } | null>(null);
+    const [systemHealth, setSystemHealth] = useState<{ canWithdraw: boolean; status: string; message?: string } | null>(null);
     const [otpChallenge, setOtpChallenge] = useState<{
         withdrawalReference: string;
         fincraReference?: string;
@@ -39,6 +40,27 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
         accountNumberMasked: string;
         bankName: string;
     } | null>(null);
+
+    useEffect(() => {
+        if (isOpen) {
+            fetch('/api/v1/withdrawals/health')
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.canWithdraw === false) {
+                        setSystemHealth({
+                            canWithdraw: false,
+                            status: data.status || 'DEGRADED',
+                            message: 'Withdrawal operations are temporarily undergoing scheduled maintenance. Please try again shortly.',
+                        });
+                    } else {
+                        setSystemHealth({ canWithdraw: true, status: 'HEALTHY' });
+                    }
+                })
+                .catch(() => {
+                    setSystemHealth({ canWithdraw: true, status: 'HEALTHY' });
+                });
+        }
+    }, [isOpen]);
 
     // Fiat State
     const [selectedCountry, setSelectedCountry] = useState('Nigeria'); // Default or detect
@@ -230,6 +252,16 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                     Withdraw {selectedCurrency} {selectedNetwork !== 'native' ? `(${selectedNetwork})` : ''}
                 </h2>
                 
+                {systemHealth?.canWithdraw === false && (
+                    <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-3 text-amber-400 text-xs my-2">
+                        <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+                        <div>
+                            <strong className="font-semibold block text-amber-300">System Maintenance Notice</strong>
+                            <span>{systemHealth.message}</span>
+                        </div>
+                    </div>
+                )}
+
                 <form onSubmit={handleWithdraw} className="modal-body flex flex-col gap-5">
                     {isFiat ? (
                         <div className="space-y-4">
@@ -506,9 +538,9 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                         <Button variant="ghost" onClick={onClose} type="button">
                             Cancel
                         </Button>
-                        <Button type="submit" disabled={isWithdrawing} className="bg-orange-600 hover:bg-orange-500 text-white border-none">
+                        <Button type="submit" disabled={isWithdrawing || systemHealth?.canWithdraw === false} className="bg-orange-600 hover:bg-orange-500 text-white border-none disabled:opacity-50 disabled:cursor-not-allowed">
                             {isWithdrawing ? <Loader2 className="animate-spin mr-2" size={18} /> : <ArrowUpRight className="mr-2" size={18} />}
-                            {isWithdrawing ? 'Processing...' : 'Confirm Withdrawal'}
+                            {isWithdrawing ? 'Processing...' : systemHealth?.canWithdraw === false ? 'System Maintenance' : 'Confirm Withdrawal'}
                         </Button>
                     </div>
                 </form>

@@ -20,11 +20,18 @@ const withdrawalLimiter = rateLimit({
 
 // ── GET /api/v1/withdrawals/health ──────────────────────────────────────────
 router.get("/health", async (req, res) => {
-  res.json({
-    status: "HEALTHY",
-    provider: "fincra",
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const healthMonitor = require("../../withdrawal/healthMonitor");
+    const health = await healthMonitor.checkFullStackHealth();
+    res.json(health);
+  } catch (err) {
+    res.status(500).json({
+      status: "DEGRADED",
+      canWithdraw: false,
+      error: err.message,
+      timestamp: new Date().toISOString(),
+    });
+  }
 });
 
 // ── POST /api/v1/withdrawals/verify-account ────────────────────────────────
