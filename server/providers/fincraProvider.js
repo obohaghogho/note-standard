@@ -51,9 +51,17 @@ class FincraProvider extends PayoutProvider {
       },
     };
 
-    logger.info(`[FincraProvider] Submitting payout payload for ${reference}`, { amount, currency });
-
-    const res = await instance.post("/disbursements/payouts", payload);
+    let res;
+    try {
+      res = await instance.post("/disbursements/payouts", payload);
+    } catch (err) {
+      const errMsg = err.response?.data?.message || err.message || "";
+      if (errMsg.includes("IP address") || errMsg.includes("not allowed")) {
+        logger.error(`[FincraProvider] IP Whitelist restriction triggered: ${errMsg}`);
+        throw new Error("FINCRA_IP_RESTRICTION: Render egress IP is not whitelisted on Fincra Merchant Portal. Please configure FINCRA_GATEWAY_URL or allowlist server egress IP in Fincra Settings.");
+      }
+      throw err;
+    }
     logger.info(`[FincraProvider] Raw payout response for ${reference}:`, res.data);
 
     const dataObj = res.data?.data || res.data || {};
