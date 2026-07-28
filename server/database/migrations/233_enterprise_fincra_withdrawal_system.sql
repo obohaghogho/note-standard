@@ -169,11 +169,13 @@ BEGIN
         );
     END IF;
 
-    -- 2. Atomic Row Lock on Base Table public.wallets_store
+    -- 2. Atomic Row Lock on Base Table public.wallets_store (Selecting highest balance wallet entry)
     SELECT id, balance, available_balance, currency
     INTO v_wallet
     FROM public.wallets_store
     WHERE user_id = p_user_id AND currency = UPPER(p_currency)
+    ORDER BY GREATEST(0, COALESCE(available_balance, balance, 0)) DESC, updated_at DESC
+    LIMIT 1
     FOR UPDATE;
 
     IF v_wallet.id IS NULL THEN
