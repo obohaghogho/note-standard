@@ -380,13 +380,29 @@ exports.withdraw = async (req, res) => {
 
     let result;
     if (isCrypto) {
+      const CryptoWalletService = require("../services/CryptoWalletService");
       result = await CryptoWalletService.withdraw(req.user.id, mappedData);
     } else {
-      result = await FiatWalletService.withdraw(req.user.id, mappedData);
+      const payoutEngine = require("../withdrawal/payoutEngine");
+      const correlationId = req.headers["x-correlation-id"] || req.headers["x-request-id"];
+      result = await payoutEngine.processWithdrawal({
+        userId: req.user.id,
+        amount: parseFloat(amount),
+        currency: String(currency).toUpperCase(),
+        bankCode: bank_code,
+        accountNumber: account_number,
+        accountName: account_name,
+        narration: `NoteStandard ${currency} withdrawal`,
+        idempotencyKey,
+        correlationId,
+        ip: req.ip || req.socket?.remoteAddress,
+        deviceId: req.headers["x-device-id"] || "browser",
+        userAgent: req.headers["user-agent"] || "unknown",
+      });
     }
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(400).json({ success: false, error: err.message });
   }
 };
 
