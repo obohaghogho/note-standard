@@ -1,123 +1,13 @@
 -- =============================================================================
--- Migration 233: Enterprise Fincra Withdrawal Infrastructure
+-- Migration 245: Fix Enterprise Withdrawal RPC Schema (Wallets Store Row Locking)
 -- =============================================================================
 -- Features:
---   1. Configuration-driven system settings (withdrawal_system_config)
---   2. Retry Queue & Dead Letter Queue (withdrawal_retry_queue, withdrawal_dlq)
---   3. Merchant Balance Logs (fincra_merchant_balance_logs)
---   4. Versioned Bank Directory Cache (fincra_bank_cache)
---   5. Enhanced fincra_transactions columns (references, trace_id, fees, risk, correlation_id)
---   6. Atomic PL/pgSQL RPCs for row-locked wallet debits & reversals
+--   1. Replace `pending_balance` reference with `available_balance` from `wallets_store`
+--   2. Perform FOR UPDATE row-level locking directly on base table `wallets_store`
 -- =============================================================================
 
 BEGIN;
 
--- ---------------------------------------------------------------------------
--- TABLE 1: withdrawal_system_config (Dynamic Operational Rules)
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.withdrawal_system_config (
-    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    key               VARCHAR(128) NOT NULL UNIQUE,
-    value             JSONB NOT NULL DEFAULT '{}'::jsonb,
-    description       TEXT,
-    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Seed default config entries if not present
-INSERT INTO public.withdrawal_system_config (key, value, description)
-VALUES 
-    ('approval_thresholds', '{"auto_limit": 100000, "otp_limit": 500000, "single_admin_limit": 1000000, "dual_admin_limit": 5000000}'::jsonb, 'Multi-tier approval thresholds'),
-    ('feature_flags', '{"ENABLE_FINCRA_V2": true, "ENABLE_PROVIDER_FAILOVER": true, "ENABLE_CIRCUIT_BREAKER": true, "ENABLE_RISK_ENGINE": true}'::jsonb, 'System feature flags'),
-    ('retry_policy', '{"max_attempts": 5, "initial_backoff_sec": 30, "backoff_multiplier": 2.0}'::jsonb, 'Payout retry policy')
-ON CONFLICT (key) DO NOTHING;
-
--- ---------------------------------------------------------------------------
--- TABLE 2: fincra_bank_cache (Bank Directory Cache)
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.fincra_bank_cache (
-    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    country           VARCHAR(10) NOT NULL DEFAULT 'NG',
-    currency          VARCHAR(10) NOT NULL DEFAULT 'NGN',
-    bank_code         VARCHAR(32) NOT NULL,
-    bank_name         VARCHAR(255) NOT NULL,
-    is_active         BOOLEAN DEFAULT true,
-    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_fincra_bank UNIQUE(country, currency, bank_code)
-);
-
--- ---------------------------------------------------------------------------
--- TABLE 3: withdrawal_retry_queue (Exponential Backoff Queue)
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.withdrawal_retry_queue (
-    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    withdrawal_ref    VARCHAR(128) NOT NULL UNIQUE,
-    payload           JSONB NOT NULL,
-    attempts          INTEGER NOT NULL DEFAULT 0,
-    max_attempts      INTEGER NOT NULL DEFAULT 5,
-    next_retry_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_error        TEXT,
-    status            VARCHAR(32) NOT NULL DEFAULT 'PENDING',
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_retry_queue_next ON public.withdrawal_retry_queue(next_retry_at) WHERE status = 'PENDING';
-
--- ---------------------------------------------------------------------------
--- TABLE 4: withdrawal_dlq (Dead Letter Queue)
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.withdrawal_dlq (
-    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    withdrawal_ref    VARCHAR(128) NOT NULL UNIQUE,
-    payload           JSONB NOT NULL,
-    failure_reason    TEXT NOT NULL,
-    total_attempts    INTEGER NOT NULL,
-    resolved          BOOLEAN NOT NULL DEFAULT false,
-    resolved_by       UUID REFERENCES auth.users(id),
-    resolution_notes  TEXT,
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    resolved_at       TIMESTAMPTZ
-);
-
--- ---------------------------------------------------------------------------
--- TABLE 5: fincra_merchant_balance_logs (Merchant Balance Monitoring)
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.fincra_merchant_balance_logs (
-    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    currency          VARCHAR(10) NOT NULL,
-    balance           NUMERIC(20, 8) NOT NULL,
-    available_balance NUMERIC(20, 8) NOT NULL,
-    low_balance_alert BOOLEAN NOT NULL DEFAULT false,
-    checked_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ---------------------------------------------------------------------------
--- EXTEND: fincra_transactions Table
--- ---------------------------------------------------------------------------
-ALTER TABLE public.fincra_transactions
-    ADD COLUMN IF NOT EXISTS withdrawal_reference VARCHAR(128),
-    ADD COLUMN IF NOT EXISTS wallet_reference     VARCHAR(128),
-    ADD COLUMN IF NOT EXISTS ledger_reference     VARCHAR(128),
-    ADD COLUMN IF NOT EXISTS idempotency_key     VARCHAR(128),
-    ADD COLUMN IF NOT EXISTS trace_id            VARCHAR(128),
-    ADD COLUMN IF NOT EXISTS correlation_id     VARCHAR(128),
-    ADD COLUMN IF NOT EXISTS gross_amount        NUMERIC(20, 8),
-    ADD COLUMN IF NOT EXISTS fee                 NUMERIC(20, 8) DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS net_amount          NUMERIC(20, 8),
-    ADD COLUMN IF NOT EXISTS risk_score          INTEGER DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS risk_route          VARCHAR(32) DEFAULT 'AUTO',
-    ADD COLUMN IF NOT EXISTS ip_address          VARCHAR(64),
-    ADD COLUMN IF NOT EXISTS device_id           VARCHAR(128),
-    ADD COLUMN IF NOT EXISTS user_agent          TEXT;
-
-CREATE UNIQUE INDEX IF NOT EXISTS uq_fincra_tx_idempotency ON public.fincra_transactions(idempotency_key) WHERE idempotency_key IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_fincra_tx_withdrawal_ref ON public.fincra_transactions(withdrawal_reference) WHERE withdrawal_reference IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_fincra_tx_trace_id ON public.fincra_transactions(trace_id) WHERE trace_id IS NOT NULL;
-
--- ---------------------------------------------------------------------------
--- RPC 1: execute_enterprise_withdrawal
--- Performs atomic row lock on wallets_store, checks daily limit & balance, debits wallet
--- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.execute_enterprise_withdrawal(
     p_user_id             UUID,
     p_currency            VARCHAR,
@@ -246,7 +136,6 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ---------------------------------------------------------------------------
 -- RPC 2: finalize_enterprise_withdrawal
--- Finalizes payout on success or failure from provider or webhook
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.finalize_enterprise_withdrawal(
     p_withdrawal_ref  VARCHAR,
