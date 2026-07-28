@@ -91,7 +91,7 @@ async function dispatchFincraRequest({ method, path, headers = {}, body = null, 
           'X-Signature': signature,
           'X-Request-ID': requestId
         },
-        timeout: 35000,
+        timeout: 5000, // 5s gateway timeout before falling back to direct mode
         validateStatus: () => true // Receive status codes from gateway
       });
 
@@ -115,26 +115,26 @@ async function dispatchFincraRequest({ method, path, headers = {}, body = null, 
         throw authErr;
       }
 
-      // Gateway returns { status, data, headers }
-      const resData = response.data?.data !== undefined && response.data?.status !== undefined
-        ? response.data.data
-        : response.data;
+      // If Gateway returns a gateway-level 404/502/503/504 error, attempt direct dispatch fallback
+      const isGatewayError = response.status === 404 || response.status === 502 || response.status === 503 || response.status === 504 || response.data?.error === "Not Found";
+      if (!isGatewayError) {
+        const resData = response.data?.data !== undefined && response.data?.status !== undefined
+          ? response.data.data
+          : response.data;
 
-      const resStatus = response.data?.status || response.status;
+        const resStatus = response.data?.status || response.status;
 
-      return {
-        status: resStatus,
-        data: resData,
-        headers: response.headers
-      };
+        return {
+          status: resStatus,
+          data: resData,
+          headers: response.headers
+        };
+      }
 
+      logger.warn(`[FincraGateway] Gateway returned HTTP ${response.status} (${JSON.stringify(response.data)}). Falling back to direct dispatch...`);
     } catch (error) {
-      if (error instanceof FincraGatewayError && error.statusCode !== 403 && error.statusCode !== 400) throw error;
-
       const errorMsg = error.response?.data?.message || error.message || 'Fincra Gateway connection failed';
-      const statusCode = error.response?.status || 502;
-
-      logger.warn(`[FincraGateway] Gateway request failed (${errorMsg}, status ${statusCode}). Attempting direct fallback...`);
+      logger.warn(`[FincraGateway] Gateway request failed (${errorMsg}). Attempting direct fallback...`);
     }
   }
 
@@ -166,7 +166,28 @@ async function dispatchFincraRequest({ method, path, headers = {}, body = null, 
       axiosOptions.data = body;
     }
 
+    const maskedHeaders = { ...headers };
+    if (maskedHeaders['api-key']) {
+      maskedHeaders['api-key'] = `${maskedHeaders['api-key'].substring(0, 4)}****${maskedHeaders['api-key'].substring(maskedHeaders['api-key'].length - 4)}`;
+    }
+    if (maskedHeaders['x-pub-key']) {
+      maskedHeaders['x-pub-key'] = `${maskedHeaders['x-pub-key'].substring(0, 4)}****${maskedHeaders['x-pub-key'].substring(maskedHeaders['x-pub-key'].length - 4)}`;
+    }
+
+    console.log("[FINCRA_HTTP_TRACE] OUTBOUND REQUEST:", JSON.stringify({
+      url: directUrl,
+      method: normMethod,
+      headers: maskedHeaders,
+      body,
+    }, null, 2));
+
     const response = await axios(axiosOptions);
+
+    console.log("[FINCRA_HTTP_TRACE] INBOUND RESPONSE:", JSON.stringify({
+      status: response.status,
+      headers: response.headers,
+      data: response.data,
+    }, null, 2));
 
     return {
       status: response.status,
