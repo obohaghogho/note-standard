@@ -11,7 +11,7 @@ self.addEventListener('install', (event) => {
     // Force immediate update to bypass aggressive caching
     self.skipWaiting();
 });
-// Cache Bust Timestamp: 2026-06-21T09:00:00 — v6: fast-path delivery via gateway (eliminates cold-start delay)
+// Cache Bust Timestamp: 2026-07-28T13:51:00 — v7: mobile team dashboard navigation & layout fix
 
 self.addEventListener('activate', (event) => {
     console.log(`[FORENSIC][SW] ACTIVATE event at ${new Date().toISOString()}`);
