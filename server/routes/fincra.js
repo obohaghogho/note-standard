@@ -110,14 +110,14 @@ router.post("/verify-account", requireAuth, withdrawalLimiter, async (req, res, 
   }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 // POST /api/fincra/withdraw
-// Initiate a bank withdrawal. Rate limited (5/min). Requires verified account.
+// Initiate a bank withdrawal. Rate limited (5/min). Uses Enterprise Payout Engine.
 // ─────────────────────────────────────────────────────────────────────────────
 router.post("/withdraw", requireAuth, withdrawalLimiter, async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { amount, currency = "NGN", bankCode, accountNumber, accountName, narration } = req.body;
+    const correlationId = req.headers["x-correlation-id"] || req.headers["x-request-id"];
+    const { amount, currency = "NGN", bankCode, accountNumber, accountName, narration, idempotencyKey } = req.body;
 
     if (!amount || !bankCode || !accountNumber || !accountName) {
       return res.status(400).json({
@@ -130,8 +130,20 @@ router.post("/withdraw", requireAuth, withdrawalLimiter, async (req, res, next) 
       return res.status(400).json({ success: false, error: "Withdrawal amount must be greater than 0." });
     }
 
-    const result = await payout.initiateFincraPayout({
-      userId, amount: parseFloat(amount), currency, bankCode, accountNumber, accountName, narration,
+    const payoutEngine = require("../withdrawal/payoutEngine");
+    const result = await payoutEngine.processWithdrawal({
+      userId,
+      amount: parseFloat(amount),
+      currency,
+      bankCode,
+      accountNumber,
+      accountName,
+      narration,
+      idempotencyKey,
+      correlationId,
+      ip: req.ip || req.socket?.remoteAddress,
+      deviceId: req.headers["x-device-id"] || "browser",
+      userAgent: req.headers["user-agent"] || "unknown",
     });
 
     res.json({ success: true, ...result });

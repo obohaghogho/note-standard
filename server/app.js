@@ -245,6 +245,8 @@ app.use('/api/status', statusRoutes);
 app.use("/api/bank-account", bankAccountRoutes);
 app.use("/api/anchor", require("./routes/anchorRoutes"));
 app.use("/api/fincra", require("./routes/fincra")); // Fincra: isolated, feature-flagged
+app.use("/api/v1/withdrawals", require("./routes/v1/withdrawals")); // Enterprise Payout Infrastructure v1
+app.use("/api/v1/admin/withdrawals", require("./routes/v1/adminWithdrawals")); // Admin Operations & Webhook Replay v1
 app.use("/api/limit-requests", requireAuth, require("./routes/limitRequests"));
 app.use("/api/webrtc", require("./routes/webrtc"));
 app.use("/api/teams", teamRoutes);
