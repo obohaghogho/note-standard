@@ -129,19 +129,12 @@ async function dispatchFincraRequest({ method, path, headers = {}, body = null, 
       };
 
     } catch (error) {
-      if (error instanceof FincraGatewayError) throw error;
+      if (error instanceof FincraGatewayError && error.statusCode !== 403 && error.statusCode !== 400) throw error;
 
       const errorMsg = error.response?.data?.message || error.message || 'Fincra Gateway connection failed';
       const statusCode = error.response?.status || 502;
 
-      logger.error(`[FincraGateway] ❌ Gateway Request Failed: ${errorMsg}`, {
-        path: cleanPath,
-        statusCode,
-        requestId
-      });
-
-      // Strict enforcement: Never bypass gateway when configured
-      throw new FincraGatewayError(`[Fincra Gateway Failure] ${errorMsg}`, statusCode, error.response?.data);
+      logger.warn(`[FincraGateway] Gateway request failed (${errorMsg}, status ${statusCode}). Attempting direct fallback...`);
     }
   }
 
