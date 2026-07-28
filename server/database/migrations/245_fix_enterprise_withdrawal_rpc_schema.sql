@@ -1,9 +1,5 @@
 -- =============================================================================
--- Migration 245: Fix Enterprise Withdrawal RPC Schema (Wallets Store Row Locking)
--- =============================================================================
--- Features:
---   1. Replace `pending_balance` reference with `available_balance` from `wallets_store`
---   2. Perform FOR UPDATE row-level locking directly on base table `wallets_store`
+-- Migration 245: Fix Enterprise Withdrawal RPC Schema & Smart Fee Deduction
 -- =============================================================================
 
 BEGIN;
@@ -32,14 +28,17 @@ CREATE OR REPLACE FUNCTION public.execute_enterprise_withdrawal(
 ) RETURNS JSONB AS $$
 DECLARE
     v_wallet RECORD;
+    v_available NUMERIC(20, 8);
     v_total_deduction NUMERIC(20, 8);
     v_net_amount NUMERIC(20, 8);
+    v_fee NUMERIC(20, 8);
     v_daily_sum NUMERIC(20, 8);
     v_existing_tx RECORD;
     v_new_tx_id UUID;
     v_daily_limit NUMERIC(20, 8) := 5000000;
 BEGIN
-    v_total_deduction := p_amount + COALESCE(p_fee, 0);
+    v_fee := COALESCE(p_fee, 0);
+    v_total_deduction := p_amount + v_fee;
     v_net_amount := p_amount;
 
     -- 1. Idempotency Guard
@@ -67,8 +66,20 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'error_code', 'WALLET_NOT_FOUND', 'message', 'User wallet not found');
     END IF;
 
-    IF COALESCE(v_wallet.balance, 0) < v_total_deduction THEN
-        RETURN jsonb_build_object('success', false, 'error_code', 'INSUFFICIENT_BALANCE', 'message', 'Insufficient wallet balance for withdrawal and fee');
+    v_available := GREATEST(0, COALESCE(v_wallet.available_balance, v_wallet.balance, 0));
+
+    -- Smart Fee Adjustment: If balance covers amount but not amount + fee, deduct fee from amount
+    IF v_available < v_total_deduction THEN
+        IF v_available >= p_amount AND p_amount > v_fee THEN
+            v_total_deduction := p_amount;
+            v_net_amount := p_amount - v_fee;
+        ELSE
+            RETURN jsonb_build_object(
+                'success', false, 
+                'error_code', 'INSUFFICIENT_BALANCE', 
+                'message', format('Insufficient wallet balance (%s %s) for requested withdrawal of %s %s', v_available, UPPER(p_currency), p_amount, UPPER(p_currency))
+            );
+        END IF;
     END IF;
 
     -- 3. Daily Limit Verification
@@ -100,7 +111,7 @@ BEGIN
     ) VALUES (
         p_user_id, p_withdrawal_ref, p_withdrawal_ref, p_wallet_ref, p_ledger_ref,
         p_idempotency_key, p_trace_id, p_correlation_id, 'WITHDRAWAL', UPPER(p_currency),
-        v_net_amount, v_total_deduction, p_fee, v_net_amount, 
+        v_net_amount, v_total_deduction, v_fee, v_net_amount, 
         CASE WHEN p_risk_route = 'MANUAL_REVIEW' THEN 'MANUAL_REVIEW' ELSE 'RESERVED' END,
         p_provider_name, p_bank_code, p_account_number_mask,
         p_account_name, p_narration, p_ip_address, p_device_id, p_user_agent, p_risk_score, p_risk_route
@@ -117,7 +128,7 @@ BEGIN
             'wallet_reference', p_wallet_ref,
             'gross_amount', v_total_deduction,
             'net_amount', v_net_amount,
-            'fee', p_fee,
+            'fee', v_fee,
             'correlation_id', p_correlation_id,
             'risk_score', p_risk_score,
             'risk_route', p_risk_route
