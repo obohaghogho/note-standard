@@ -25,6 +25,7 @@ router.get("/conversations/:conversationId", chatController.getConversationById)
 router.post("/conversations", chatController.createConversation);
 router.get("/support", chatController.getSupportChat); // NEW: Dedicated user support chat & history fetch
 router.post("/support", chatController.createSupportChat); // NEW: User creates support chat
+router.post("/support/close", chatController.closeSupportChat); // Close chat & wipe previous history
 router.put(
   "/conversations/:conversationId/accept",
   chatController.acceptConversation,

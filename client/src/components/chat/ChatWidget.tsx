@@ -16,7 +16,9 @@ import {
     Phone,
     Video,
     Zap,
-    ShieldCheck
+    ShieldCheck,
+    Trash2,
+    RefreshCw
 } from 'lucide-react';
 import type { Message, Conversation } from '../../context/ChatContext';
 import { useWebRTC } from '../../context/WebRTCContext';
@@ -228,6 +230,32 @@ export const ChatWidget = () => {
         }
     };
 
+    const handleCloseChat = async () => {
+        if (!supportChat || !session?.access_token) return;
+        try {
+            toast.loading('Closing support chat & resetting history...', { id: 'close-support' });
+            const res = await fetch(`${API_URL}/api/chat/support/close`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`
+                },
+                body: JSON.stringify({ conversationId: supportChat.id })
+            });
+
+            if (res.ok) {
+                setMessages([]);
+                setSupportChat(prev => prev ? { ...prev, support_status: 'resolved' as any } : null);
+                toast.success('Support chat closed. Previous messages wiped clean!', { id: 'close-support' });
+            } else {
+                toast.error('Failed to close chat', { id: 'close-support' });
+            }
+        } catch (err) {
+            console.error('Failed to close support chat:', err);
+            toast.error('Error closing support chat', { id: 'close-support' });
+        }
+    };
+
     const sendMessage = async () => {
         if (!newMessage.trim() || !supportChat || !session?.access_token) return;
 
@@ -380,12 +408,15 @@ export const ChatWidget = () => {
                         </div>
                         <div className="header-actions">
                             {supportChat && !isMinimized && (
-                                <div className="flex items-center mr-2">
+                                <div className="flex items-center mr-2 gap-1">
                                     <button onClick={() => handleCall('voice')} className="p-1.5 text-blue-400 hover:bg-blue-400/10 rounded-full" title="Voice Call">
                                         <Phone size={16} />
                                     </button>
                                     <button onClick={() => handleCall('video')} className="p-1.5 text-blue-400 hover:bg-blue-400/10 rounded-full" title="Video Call">
                                         <Video size={16} />
+                                    </button>
+                                    <button onClick={handleCloseChat} className="p-1.5 text-red-400 hover:bg-red-400/10 rounded-full" title="Close Chat & Wipe History">
+                                        <Trash2 size={16} />
                                     </button>
                                 </div>
                             )}

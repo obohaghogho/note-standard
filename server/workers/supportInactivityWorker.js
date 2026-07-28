@@ -85,7 +85,7 @@ class SupportInactivityWorker {
           if (elapsedSinceLastMsg >= WARNING_TIMEOUT_MS) {
             logger.info(`[SupportInactivityWorker] Sending inactivity warning for conv ${conv.id}`);
 
-            const warningText = "Are you still there? 😊 We haven't received a response from you in a while. If you still need help, please reply to this message! Otherwise, this support chat session will automatically end in 3 minutes. – Note Standard Support Team";
+            const warningText = "I will be closing this chat if there are no further questions. Please let us know if you need anything else! 😊 If you still need help, please reply to this message within 3 minutes.";
 
             const { data: rpcData } = await supabase.rpc('rpc_send_message', {
               p_conversation_id: conv.id,
@@ -116,7 +116,7 @@ class SupportInactivityWorker {
           if (elapsedSinceLastMsg >= CLOSING_TIMEOUT_MS) {
             logger.info(`[SupportInactivityWorker] Auto-closing idle support chat ${conv.id}`);
 
-            const closingText = "This support chat session has now been ended due to inactivity. ✅ If you need any assistance in the future, simply tap 'Need Help?' to start a new chat anytime! Have a great day! – Note Standard Support Team";
+            const closingText = "This support chat session is now closed due to inactivity. ✅ Whenever you reach out to our AI support team again, your previous conversation will be wiped clean so you start with a fresh new session! Have a great day! – Note Standard Support Team";
 
             const { data: rpcData } = await supabase.rpc('rpc_send_message', {
               p_conversation_id: conv.id,

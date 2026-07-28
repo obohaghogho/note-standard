@@ -158,6 +158,32 @@ class AiSupportService {
     if (!this.isConfigured()) return null;
     const startTimeMs = Date.now();
 
+    // Check for user close/resolution intent keywords
+    const lowerMsg = (userMessage || "").trim().toLowerCase();
+    const closeTriggers = [
+        "close", "close chat", "close support", "no further questions", 
+        "thanks, close", "close it", "done", "no more questions", "i am done", 
+        "resolved", "problem solved", "issue resolved"
+    ];
+
+    if (closeTriggers.some(trigger => lowerMsg === trigger || lowerMsg.includes(trigger))) {
+        // Automatically resolve conversation status
+        await supabase
+            .from("conversations")
+            .update({ support_status: "resolved", updated_at: new Date().toISOString() })
+            .eq("id", conversationId);
+
+        return {
+            text: "This support chat session has been resolved and closed. ✅ Whenever you reach out to our support team again, your previous messages will be wiped clean so you start with a fresh new session! Have a great day!",
+            isEscalated: false,
+            operationalMetadata: {
+                intent: "close_chat",
+                category: "support",
+                confidence: 1.0
+            }
+        };
+    }
+
     try {
       const { data: profile } = await supabase
         .from("profiles")

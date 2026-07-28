@@ -423,7 +423,32 @@ class SupportService {
         return null;
       }
 
-      const conversation = convs[0];
+      let conversation = convs[0];
+
+      // If previous support chat was resolved or closed, wipe previous messages for a clean slate
+      if (conversation && (conversation.support_status === "resolved" || conversation.support_status === "closed")) {
+        logger.info(`[SupportService] Previous support chat ${conversation.id} was resolved/closed. Wiping history for fresh session.`);
+        await supabase
+          .from("messages")
+          .delete()
+          .eq("conversation_id", conversation.id);
+
+        await supabase
+          .from("conversations")
+          .update({ support_status: "open", updated_at: new Date().toISOString() })
+          .eq("id", conversation.id);
+
+        conversation.support_status = "open";
+
+        return {
+          conversation,
+          messages: [],
+          ticket: null,
+          supportStatus: "open",
+          assignedAdmin: null,
+          unreadCount: 0
+        };
+      }
 
       // 2. Fetch full timeline messages
       const { data: messages } = await supabase
@@ -463,6 +488,36 @@ class SupportService {
       };
     } catch (err) {
       logger.error(`[SupportService] getSupportChatForUser error: ${err.message}`);
+      throw err;
+    }
+  }
+
+  /**
+   * Explicitly Close Support Chat and Wipe Previous Messages
+   */
+  async closeSupportChat(conversationId, userId) {
+    try {
+      logger.info(`[SupportService] Closing support chat ${conversationId} for user ${userId}`);
+
+      await supabase
+        .from("conversations")
+        .update({ support_status: "resolved", updated_at: new Date().toISOString() })
+        .eq("id", conversationId);
+
+      // Delete previous message history to ensure clean slate on next session
+      await supabase
+        .from("messages")
+        .delete()
+        .eq("conversation_id", conversationId);
+
+      await realtime.emitToConversation(conversationId, "chat:conversation_updated", {
+        id: conversationId,
+        support_status: "resolved"
+      });
+
+      return { success: true };
+    } catch (err) {
+      logger.error(`[SupportService] closeSupportChat error: ${err.message}`);
       throw err;
     }
   }

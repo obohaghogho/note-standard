@@ -2860,3 +2860,28 @@ exports.createSupportChat = async (req, res) => {
   }
 };
 
+// POST /api/chat/support/close — Close Support Chat & Wipe History
+exports.closeSupportChat = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { conversationId } = req.body;
+    const supportService = require("../services/supportService");
+
+    let convId = conversationId;
+    if (!convId) {
+      const userSupport = await supportService.getSupportChatForUser(userId);
+      convId = userSupport?.conversation?.id;
+    }
+
+    if (!convId) {
+      return res.status(400).json({ error: "No active support conversation found" });
+    }
+
+    await supportService.closeSupportChat(convId, userId);
+    res.json({ success: true, message: "Support chat closed and previous messages wiped clean" });
+  } catch (err) {
+    console.error("[ChatController] closeSupportChat error:", err.message);
+    res.status(500).json({ error: "Failed to close support chat", details: err.message });
+  }
+};
+
