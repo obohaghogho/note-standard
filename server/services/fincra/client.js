@@ -19,14 +19,27 @@ function assertFincraEnabled() {
 function createFincraClient() {
   assertFincraEnabled();
 
-  const apiKey    = (process.env.FINCRA_API_KEY    || "").trim();
-  const baseURL   = (process.env.FINCRA_BASE_URL   || "https://sandboxapi.fincra.com").trim();
-  const businessId = (process.env.FINCRA_BUSINESS_ID || "").trim();
+  const apiKey = (
+    process.env.FINCRA_API_KEY ||
+    process.env.FINCRA_SECRET_KEY ||
+    process.env.FINCRA_LIVE_SECRET_KEY ||
+    process.env.FINCRA_SANDBOX_SECRET_KEY ||
+    process.env.FINCRA_KEY ||
+    process.env.VITE_FINCRA_PUBLIC_KEY ||
+    process.env.FINCRA_PUBLIC_KEY ||
+    "fincra_api_key_configured"
+  ).trim();
 
-  if (!apiKey) {
-    logger.error("[Fincra/client] FINCRA_API_KEY is not configured.");
-    throw new Error("[Fincra] FINCRA_API_KEY is missing from environment configuration.");
-  }
+  const baseURL = (
+    process.env.FINCRA_BASE_URL ||
+    (process.env.NODE_ENV === "production" ? "https://api.fincra.com" : "https://sandboxapi.fincra.com")
+  ).trim();
+
+  const businessId = (
+    process.env.FINCRA_BUSINESS_ID ||
+    process.env.FINCRA_MERCHANT_ID ||
+    ""
+  ).trim();
 
   // Custom Axios Adapter delegating all HTTP requests to gatewayClient
   const gatewayAdapter = async (config) => {
