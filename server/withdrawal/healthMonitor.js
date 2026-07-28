@@ -94,6 +94,9 @@ class HealthMonitor {
       errors.push(`Fincra provider check failed: ${err.message}`);
     }
 
+    // 4. Auto-Reconcile Stale/Stuck Reservations
+    await this.autoRefundStaleReservations();
+
     const isHealthy = checks.databaseRPC && checks.fincraProvider && checks.featureFlags;
 
     return {
@@ -104,6 +107,33 @@ class HealthMonitor {
       checks,
       errors:            errors.length > 0 ? errors : undefined,
     };
+  }
+
+  async autoRefundStaleReservations() {
+    try {
+      const { data: staleTxs } = await supabase
+        .from("fincra_transactions")
+        .select("reference, withdrawal_reference, user_id")
+        .eq("type", "WITHDRAWAL")
+        .in("status", ["RESERVED", "PENDING", "OTP_REQUIRED"])
+        .is("fincra_reference", null);
+
+      if (staleTxs && staleTxs.length > 0) {
+        for (const tx of staleTxs) {
+          const refToReverse = tx.withdrawal_reference || tx.reference;
+          logger.info(`[HealthMonitor] Auto-reversing stuck reservation ${refToReverse} for user ${tx.user_id}`);
+          await supabase.rpc("finalize_enterprise_withdrawal", {
+            p_withdrawal_ref: refToReverse,
+            p_fincra_ref: null,
+            p_status: "REVERSED",
+            p_error_code: "AUTO_HEALTH_REFUND",
+            p_error_message: "Stuck payout reservation auto-refunded to user wallet balance.",
+          });
+        }
+      }
+    } catch (err) {
+      logger.warn(`[HealthMonitor] Auto-refund check error: ${err.message}`);
+    }
   }
 }
 
