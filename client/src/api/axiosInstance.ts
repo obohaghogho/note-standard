@@ -4,7 +4,7 @@ import { API_URL } from "../lib/api"
 
 const api = axios.create({
   baseURL: `${API_URL}/api`,
-  timeout: 10000, // 10s — was 15s; long timeouts make failed requests feel frozen
+  timeout: 45000, // 45s timeout for complete payment & withdrawal processing
   headers: {
     "Content-Type": "application/json",
   },
