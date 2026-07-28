@@ -43,7 +43,7 @@ export const Footer = () => {
                         <p>© 2026 Note Standard</p>
                         <p>NoteStandard is a technology platform operated by Jossy Digital Technologies Ltd.</p>
                         <div className="flex flex-col gap-1">
-                            <p>Address: 10 Winnie Okia Street</p>
+                            <p>Address: 10 Winnie Okia Street, Effurun, Delta State, Nigeria</p>
                             <p>Email: <a href="mailto:admin@notestandard.com" className="hover:text-white transition-colors">admin@notestandard.com</a></p>
                             <p>Alt Email: <a href="mailto:admin.notestandard@gmail.com" className="hover:text-white transition-colors">admin.notestandard@gmail.com</a></p>
                         </div>

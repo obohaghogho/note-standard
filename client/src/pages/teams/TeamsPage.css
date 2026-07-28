@@ -571,12 +571,14 @@
     align-items: center;
     overflow-x: auto;
     scrollbar-width: none;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
-    background: #050508;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: #09090b !important;
     flex-shrink: 0;
-    padding: 4px 4px;
+    z-index: 30;
+    position: relative;
+    padding: 6px 4px;
     /* Safe area for notch phones */
-    padding-bottom: max(4px, env(safe-area-inset-bottom, 4px));
+    padding-bottom: max(6px, env(safe-area-inset-bottom, 6px));
     gap: 2px;
     /* GPU glitch fix: no blur, solid background */
     backdrop-filter: none !important;

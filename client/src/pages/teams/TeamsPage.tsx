@@ -53,11 +53,11 @@ interface TeamHeaderProps {
   onToggleInfo: () => void;
   onInvite: () => void;
   onJoinCall?: () => void;
-  viewMode: 'chat' | 'enterprise';
-  onToggleViewMode: (mode: 'chat' | 'enterprise') => void;
+  activeTab: string;
+  onSelectTab: (tab: string) => void;
 }
 
-const TeamHeader: React.FC<TeamHeaderProps> = ({ team, myRole, onBack, isInfoOpen, onToggleInfo, onInvite, onJoinCall, viewMode, onToggleViewMode }) => {
+const TeamHeader: React.FC<TeamHeaderProps> = ({ team, myRole, onBack, isInfoOpen, onToggleInfo, onInvite, onJoinCall, activeTab, onSelectTab }) => {
 
   return (
     <div className="teams-page__header flex items-center justify-between p-3 md:p-5 bg-gray-900/50 backdrop-blur-3xl border-b border-white/5 z-20">
@@ -88,20 +88,20 @@ const TeamHeader: React.FC<TeamHeaderProps> = ({ team, myRole, onBack, isInfoOpe
          {/* Toggle Chat vs Enterprise Workspace */}
          <div className="flex items-center bg-gray-800/80 p-1 rounded-2xl border border-white/10">
             <button
-              onClick={() => onToggleViewMode('chat')}
+              onClick={() => onSelectTab('chat')}
               className={cn(
                 "px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5",
-                viewMode === 'chat' ? "bg-blue-600 text-white shadow-md" : "text-gray-400 hover:text-white"
+                activeTab === 'chat' ? "bg-blue-600 text-white shadow-md" : "text-gray-400 hover:text-white"
               )}
             >
               <MessageSquare size={14} />
               <span className="hidden sm:inline">Chat</span>
             </button>
             <button
-              onClick={() => onToggleViewMode('enterprise')}
+              onClick={() => onSelectTab(activeTab === 'chat' ? 'overview' : activeTab)}
               className={cn(
                 "px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5",
-                viewMode === 'enterprise' ? "bg-blue-600 text-white shadow-md" : "text-gray-400 hover:text-white"
+                activeTab !== 'chat' ? "bg-blue-600 text-white shadow-md" : "text-gray-400 hover:text-white"
               )}
             >
               <BarChart3 size={14} />
@@ -179,7 +179,6 @@ export function TeamsPage() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
   const [isInfoOpen, setIsInfoOpen] = useState(false);
-  const [workspaceViewMode, setWorkspaceViewMode] = useState<'chat' | 'enterprise'>('chat');
 
   // Mobile navigation state
   // 'teams' = show team icon sidebar (mobile home)
@@ -356,11 +355,11 @@ export function TeamsPage() {
 
       {selectedTeamId && selectedTeam ? (
         <TeamChatProvider teamId={selectedTeamId}>
-          <div className="teams-page__main flex flex-col h-full bg-gray-950 overflow-hidden relative">
+          <div className="teams-content flex flex-col h-full bg-gray-950 overflow-hidden relative">
               <TeamHeader 
                 team={selectedTeam} 
                 myRole={myRole}
-                onBack={() => setMobileView('list')}
+                onBack={() => setMobilePanel('teams')}
                 isInfoOpen={isInfoOpen}
                 onToggleInfo={() => setIsInfoOpen(!isInfoOpen)}
                 onInvite={handleInviteClick}
@@ -371,12 +370,12 @@ export function TeamsPage() {
                     teamName: selectedTeam.name
                   });
                 }}
-                viewMode={workspaceViewMode}
-                onToggleViewMode={setWorkspaceViewMode}
+                activeTab={activeTab}
+                onSelectTab={setActiveTab}
               />
 
-              <div className="flex-1 overflow-hidden">
-                 {workspaceViewMode === 'chat' ? (
+              <div className="flex-1 overflow-hidden relative">
+                 {activeTab === 'chat' ? (
                    <TeamChat
                      teamId={selectedTeamId}
                      activeCall={activeCall?.teamId === selectedTeamId ? activeCall : null}
@@ -386,11 +385,12 @@ export function TeamsPage() {
                    <TeamEnterpriseDashboard
                      team={selectedTeam}
                      myRole={myRole}
-                     onOpenChat={() => setWorkspaceViewMode('chat')}
+                     activeTab={activeTab as any}
+                     onTabChange={(tab) => setActiveTab(tab)}
+                     onOpenChat={() => setActiveTab('chat')}
                    />
                  )}
               </div>
-          </div>
 
               {/* Mobile bottom tab bar */}
               <div className="teams-content__bottom-tabs">
@@ -399,7 +399,7 @@ export function TeamsPage() {
                   return (
                     <button
                       key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
+                      onClick={() => handleSelectTab(tab.id)}
                       className={cn(
                         "teams-content__bottom-tab",
                         activeTab === tab.id ? "teams-content__bottom-tab--active" : ""
@@ -411,8 +411,9 @@ export function TeamsPage() {
                   );
                 })}
               </div>
-          </TeamChatProvider>
-        ) : (
+          </div>
+        </TeamChatProvider>
+      ) : (
 
 
 

@@ -157,6 +157,8 @@ interface TeamEnterpriseDashboardProps {
   team: Team;
   myRole: string;
   onOpenChat?: () => void;
+  activeTab?: WorkspaceTab;
+  onTabChange?: (tab: WorkspaceTab) => void;
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────
@@ -165,8 +167,17 @@ export const TeamEnterpriseDashboard: React.FC<TeamEnterpriseDashboardProps> = (
   team,
   myRole,
   onOpenChat,
+  activeTab: propActiveTab,
+  onTabChange,
 }) => {
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('overview');
+  const [internalActiveTab, setInternalActiveTab] = useState<WorkspaceTab>('overview');
+  const activeTab = propActiveTab || internalActiveTab;
+
+  const setActiveTab = useCallback((tab: WorkspaceTab) => {
+    setInternalActiveTab(tab);
+    onTabChange?.(tab);
+  }, [onTabChange]);
+
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const contentRef = useRef<HTMLDivElement>(null);
 
