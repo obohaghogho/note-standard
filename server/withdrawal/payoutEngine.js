@@ -83,6 +83,32 @@ class PayoutEngine {
         throw new Error("MERCHANT_RESERVE_MAINTENANCE: Merchant payout reserves are currently undergoing top-up. Please try again shortly.");
       }
 
+      // ── STEP 3.5: Auto-Reconcile Stale Reserved Transactions ────────────────
+      try {
+        const { data: staleTxs } = await supabase
+          .from("fincra_transactions")
+          .select("reference, withdrawal_reference")
+          .eq("user_id", userId)
+          .eq("status", "RESERVED")
+          .lt("created_at", new Date(Date.now() - 2 * 60 * 1000).toISOString());
+
+        if (staleTxs && staleTxs.length > 0) {
+          for (const staleTx of staleTxs) {
+            const refToReverse = staleTx.withdrawal_reference || staleTx.reference;
+            logger.info(`[PayoutEngine] Auto-reversing stale reserved transaction: ${refToReverse}`);
+            await supabase.rpc("finalize_enterprise_withdrawal", {
+              p_withdrawal_ref: refToReverse,
+              p_fincra_ref:     null,
+              p_status:         "REVERSED",
+              p_error_code:     "STALE_RESERVATION_TIMEOUT",
+              p_error_message:  "Transaction reserved timeout; funds automatically restored to wallet balance.",
+            });
+          }
+        }
+      } catch (staleErr) {
+        logger.warn(`[PayoutEngine] Non-critical error checking stale reserved transactions: ${staleErr.message}`);
+      }
+
       // ── STEP 4: Atomic DB RPC Execution (SELECT ... FOR UPDATE) ───────────
       assertTransition(WITHDRAWAL_STATES.VALIDATED, WITHDRAWAL_STATES.RESERVED);
 
