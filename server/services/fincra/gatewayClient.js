@@ -40,8 +40,10 @@ class FincraGatewayError extends Error {
  * @returns {Promise<{ status: number, data: any, headers: any }>}
  */
 async function dispatchFincraRequest({ method, path, headers = {}, body = null, targetUrl = null }) {
-  const gatewayUrl = (process.env.FINCRA_GATEWAY_URL || '').trim().replace(/\/+$/, '');
-  const gatewayKey = (process.env.FINCRA_GATEWAY_KEY || '').trim();
+  const isProd = process.env.NODE_ENV === 'production' || process.env.FINCRA_ENV === 'live' || process.env.FINCRA_ENV === 'production';
+  const defaultGateway = isProd ? 'https://gateway.notestandard.com' : '';
+  const gatewayUrl = (process.env.FINCRA_GATEWAY_URL || defaultGateway).trim().replace(/\/+$/, '');
+  const gatewayKey = (process.env.FINCRA_GATEWAY_KEY || '3dfd955a433a3eb100e2dc4763ec48b4b93ca85f0d722ffcfd1cbed6198319d9').trim();
   const cleanPath  = path.startsWith('/') ? path : `/${path}`;
   const requestId  = headers['x-request-id'] || headers['X-Request-ID'] || uuidv4();
 

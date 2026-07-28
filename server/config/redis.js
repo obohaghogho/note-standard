@@ -23,6 +23,10 @@ if (process.env.REDIS_URL && process.env.DISABLE_REDIS !== 'true') {
         });
 
         redisClient.on("error", (err) => {
+            if (err.message && err.message.includes("max requests limit exceeded")) {
+                // Suppress log spam when Upstash free quota limit is hit
+                return;
+            }
             logger.error("[Redis] Shared Connection Error", { error: err.message });
         });
 
