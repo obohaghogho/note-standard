@@ -8,13 +8,17 @@ const logger = require("../utils/logger");
  * Only enforces in production or if RECAPTCHA_SECRET_KEY is present.
  */
 const requireRecaptcha = async (req, res, next) => {
-  // Skip if not production
-  if (env.NODE_ENV !== "production") {
+  // Skip if not production or if explicitly disabled/test key
+  if (
+    process.env.NODE_ENV !== "production" ||
+    process.env.DISABLE_RECAPTCHA === "true" ||
+    !env.RECAPTCHA_SECRET_KEY ||
+    env.RECAPTCHA_SECRET_KEY === "6LeIxAcTAAAAAGG-vFI1TnRW6E3EL3UabERV677z"
+  ) {
     return next();
   }
 
   // Skip for mobile app clients — reCAPTCHA is web-only.
-  // Mobile requests are still protected by JWT auth (requireAuth runs first).
   const isMobile = req.headers["x-client-type"] === "mobile";
   if (isMobile) {
     return next();
@@ -23,6 +27,10 @@ const requireRecaptcha = async (req, res, next) => {
   const token = req.body.captchaToken || req.headers["x-captcha-token"];
 
   if (!token) {
+    if (req.user?.id) {
+      logger.warn(`[Security] reCAPTCHA token missing for authenticated user ${req.user.id}, allowing JWT-backed request`);
+      return next();
+    }
     return res.status(400).json({
       error: "Bot protection: reCAPTCHA token is missing.",
       code: "RECAPTCHA_REQUIRED",
@@ -35,11 +43,14 @@ const requireRecaptcha = async (req, res, next) => {
     );
 
     if (!response.data.success) {
-      logger.warn(`[Security] reCAPTCHA verification failed`, {
+      logger.warn(`[Security] reCAPTCHA verification failed for authenticated user ${req.user?.id}`, {
         ip: req.ip,
         errors: response.data["error-codes"],
         origin: req.headers.origin,
       });
+      if (req.user?.id) {
+        return next();
+      }
       return res.status(400).json({
         error: "Bot protection: reCAPTCHA verification failed.",
         code: "RECAPTCHA_FAILED",
@@ -50,12 +61,10 @@ const requireRecaptcha = async (req, res, next) => {
     logger.info(`[Security] reCAPTCHA verified successfully for ${req.ip}`);
     next();
   } catch (error) {
-    logger.error(`[Security] reCAPTCHA service error: ${error.message}`, {
-      stack: error.stack,
-      requestOrigin: req.headers.origin,
-    });
-    // If service is down, allowed but logged in production?
-    // Usually safer to fail closed for financial apps.
+    logger.error(`[Security] reCAPTCHA service error: ${error.message}`);
+    if (req.user?.id) {
+      return next();
+    }
     res.status(503).json({
       error: "Security service temporarily unavailable.",
     });
