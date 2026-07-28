@@ -93,7 +93,7 @@ class CausalWorker {
         }
         
         if (!intents || intents.length === 0) {
-            logger.info(`[CausalWorker] Shard ${this.shardId} no pending intents.`);
+            logger.debug(`[CausalWorker] Shard ${this.shardId} no pending intents.`);
             return;
         }
 

@@ -118,6 +118,13 @@ if (redis && env.REDIS_URL) {
         { connection: redis, concurrency: 5 }
     );
 
+    worker.on('error', (err) => {
+        if (err.message && err.message.includes('max requests limit exceeded')) {
+            return;
+        }
+        logger.error('[PaymentWorker] Worker error', { error: err.message });
+    });
+
     worker.on('ready', () => {
         logger.info('[Queue Worker Active] Worker is online and bound to Redis queue');
     });
