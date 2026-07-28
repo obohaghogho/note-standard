@@ -17,7 +17,9 @@ router.use(requireAuth, requireAdmin);
 
 // Feature flag guard
 router.use((req, res, next) => {
-  if (process.env.ENABLE_FINCRA !== "true") {
+  const isEnabled = process.env.ENABLE_FINCRA !== "false" && 
+    (process.env.ENABLE_FINCRA === "true" || process.env.ENABLE_FINCRA === "1" || Boolean((process.env.FINCRA_API_KEY || "").trim()));
+  if (!isEnabled) {
     return res.status(404).json({ success: false, error: "Fincra integration is not enabled." });
   }
   next();

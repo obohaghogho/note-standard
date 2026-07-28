@@ -12,7 +12,13 @@ const { FINCRA_HTTP_TIMEOUT_MS } = require("./constants");
 const { dispatchFincraRequest } = require("./gatewayClient");
 
 function assertFincraEnabled() {
-  if (process.env.ENABLE_FINCRA !== "true") {
+  if (process.env.ENABLE_FINCRA === "false") {
+    throw new FincraDisabledError();
+  }
+  const isEnabled = process.env.ENABLE_FINCRA === "true" || 
+                    process.env.ENABLE_FINCRA === "1" || 
+                    Boolean((process.env.FINCRA_API_KEY || "").trim());
+  if (!isEnabled) {
     throw new FincraDisabledError();
   }
 }
