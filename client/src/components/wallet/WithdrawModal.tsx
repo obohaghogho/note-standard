@@ -145,6 +145,9 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
             return;
         }
 
+        const correlationId = `corr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        console.log(`[E2E_CORRELATION_TRACE] [${correlationId}] [Stage 1/10] React Client Submission | Amount: ${amount} ${selectedCurrency}, Account: ${accountNumber}`);
+
         setIsWithdrawing(true);
         try {
             const res = await withdraw({
@@ -159,8 +162,11 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                 branch_code: isFiat ? branchCode : undefined,
                 country: isFiat ? selectedCountry : undefined,
                 network: isFiat ? undefined : selectedNetwork,
-                captchaToken: captchaToken || undefined
+                captchaToken: captchaToken || undefined,
+                correlationId,
             });
+
+            console.log(`[E2E_CORRELATION_TRACE] [${correlationId}] [Stage 10/10] Final Response Received in Component | Payload:`, res);
 
             console.log("[RUNTIME_TRACE] 3. withdraw result in WithdrawModal:", res);
             console.log("[RUNTIME_TRACE] 4. res.otpRequired =", res?.otpRequired, "res.status =", res?.status);

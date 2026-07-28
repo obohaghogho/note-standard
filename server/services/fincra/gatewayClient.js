@@ -47,6 +47,17 @@ async function dispatchFincraRequest({ method, path, headers = {}, body = null, 
 
   const normMethod = method.toUpperCase();
 
+  const maskedHeaders = { ...headers };
+  if (maskedHeaders['api-key']) {
+    maskedHeaders['api-key'] = `${maskedHeaders['api-key'].substring(0, 4)}****${maskedHeaders['api-key'].substring(maskedHeaders['api-key'].length - 4)}`;
+  }
+  if (maskedHeaders['x-pub-key']) {
+    maskedHeaders['x-pub-key'] = `${maskedHeaders['x-pub-key'].substring(0, 4)}****${maskedHeaders['x-pub-key'].substring(maskedHeaders['x-pub-key'].length - 4)}`;
+  }
+
+  console.log(`[E2E_CORRELATION_TRACE] [${requestId}] [Stage 4/10] gatewayClient.dispatchFincraRequest Entry | Path: ${cleanPath}, Method: ${normMethod}`);
+  console.log(`[E2E_CORRELATION_TRACE] [${requestId}] [Stage 5/10] Outbound Request Configuration | Target Gateway: ${gatewayUrl || 'DIRECT_MODE'}, Headers:`, JSON.stringify(maskedHeaders, null, 2));
+
   // ── 1. GATEWAY MODE (Production / Allowlisted Egress) ───────────────────
   if (gatewayUrl) {
     if (!gatewayKey) {
@@ -76,6 +87,8 @@ async function dispatchFincraRequest({ method, path, headers = {}, body = null, 
       .update(`${timestamp}${rawPayload}`)
       .digest('hex');
 
+    console.log(`[E2E_CORRELATION_TRACE] [${requestId}] [Stage 6/10 & 7/10] Forwarding via Gateway Proxy Endpoint (${proxyEndpoint})`);
+
     logger.info(`[FincraGateway] 🔒 Routing request via Gateway (${proxyEndpoint})`, {
       method: normMethod,
       path: cleanPath,
@@ -94,6 +107,8 @@ async function dispatchFincraRequest({ method, path, headers = {}, body = null, 
         timeout: 5000, // 5s gateway timeout before falling back to direct mode
         validateStatus: () => true // Receive status codes from gateway
       });
+
+      console.log(`[E2E_CORRELATION_TRACE] [${requestId}] [Stage 8/10] Gateway Response Received | Status: ${response.status}, Data:`, JSON.stringify(response.data, null, 2));
 
       if (response.status >= 500 && response.data?.error === 'Service Unavailable') {
         const circuitErr = new FincraGatewayError(
@@ -145,6 +160,8 @@ async function dispatchFincraRequest({ method, path, headers = {}, body = null, 
   const baseUrl = (targetUrl || process.env.FINCRA_BASE_URL || defaultBase).replace(/\/+$/, '');
   const directUrl = `${baseUrl}${cleanPath}`;
 
+  console.log(`[E2E_CORRELATION_TRACE] [${requestId}] [Stage 6/10 & 7/10] Routing Request DIRECT to Fincra Live API (${directUrl})`);
+
   logger.info(`[FincraGateway] ⚡ Routing request DIRECT (Local Dev)`, {
     method: normMethod,
     url: directUrl,
@@ -182,6 +199,8 @@ async function dispatchFincraRequest({ method, path, headers = {}, body = null, 
     }, null, 2));
 
     const response = await axios(axiosOptions);
+
+    console.log(`[E2E_CORRELATION_TRACE] [${requestId}] [Stage 8/10] Direct Fincra Raw Response Received | Status: ${response.status}, Body:`, JSON.stringify(response.data, null, 2));
 
     console.log("[FINCRA_HTTP_TRACE] INBOUND RESPONSE:", JSON.stringify({
       status: response.status,

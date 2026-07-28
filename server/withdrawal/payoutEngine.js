@@ -56,7 +56,7 @@ class PayoutEngine {
     const wallet_ref       = `WAL_${uuidv4().replace(/-/g, "").substring(0, 16)}`;
     const ledger_ref       = `LDG_${uuidv4().replace(/-/g, "").substring(0, 16)}`;
 
-    logger.info(`[PayoutEngine] [${correlation_id}] Initiating withdrawal: ${amount} ${currency} for user ${userId}`);
+    console.log(`[E2E_CORRELATION_TRACE] [${correlation_id}] [Stage 3/10] payoutEngine.processWithdrawal Entry | Ref: ${withdrawal_ref}, Amount: ${amount} ${currency}`);
 
     // ── STEP 1: Acquire Distributed Lock (withdraw:user:UUID) ─────────────
     const { release } = await acquireWithdrawalLock(userId, 3000);
@@ -134,6 +134,8 @@ class PayoutEngine {
         p_risk_route:          riskRoute,
         p_provider_name:       provider.name,
       });
+
+      console.log(`[E2E_CORRELATION_TRACE] [${correlation_id}] [Stage 9/10] RPC execute_enterprise_withdrawal Result:`, JSON.stringify({ rpcRes, rpcErr }, null, 2));
 
       if (rpcErr || !rpcRes?.success) {
         const errCode = rpcRes?.error_code || "RPC_ERROR";

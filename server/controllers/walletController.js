@@ -384,7 +384,9 @@ exports.withdraw = async (req, res) => {
       result = await CryptoWalletService.withdraw(req.user.id, mappedData);
     } else {
       const payoutEngine = require("../withdrawal/payoutEngine");
-      const correlationId = req.headers["x-correlation-id"] || req.headers["x-request-id"];
+      const correlationId = req.body.correlationId || req.headers["x-correlation-id"] || req.headers["x-request-id"] || `corr_${Date.now()}`;
+      console.log(`[E2E_CORRELATION_TRACE] [${correlationId}] [Stage 2/10] Controller Entry (/api/wallet/withdraw) | User: ${req.user.id}, Amount: ${amount} ${currency}`);
+
       result = await payoutEngine.processWithdrawal({
         userId: req.user.id,
         amount: parseFloat(amount),
@@ -400,7 +402,7 @@ exports.withdraw = async (req, res) => {
         userAgent: req.headers["user-agent"] || "unknown",
       });
     }
-    console.log("[RUNTIME_TRACE] 2. Controller Result before res.json:", JSON.stringify(result, null, 2));
+    console.log(`[E2E_CORRELATION_TRACE] [Stage 10/10] Controller Returning Result to Express Response | Payload:`, JSON.stringify(result, null, 2));
     res.json(result);
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
