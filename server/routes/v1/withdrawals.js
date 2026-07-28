@@ -78,6 +78,12 @@ router.post("/", requireAuth, withdrawalLimiter, async (req, res, next) => {
       userAgent: req.headers["user-agent"] || "unknown",
     });
 
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── GET /api/v1/withdrawals/:id/verify ──────────────────────────────────────
 router.get("/:id/verify", async (req, res, next) => {
   try {
