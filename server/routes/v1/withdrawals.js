@@ -84,6 +84,66 @@ router.post("/", requireAuth, withdrawalLimiter, async (req, res, next) => {
   }
 });
 
+// ── POST /api/v1/withdrawals/verify-otp ────────────────────────────────────
+router.post("/verify-otp", requireAuth, withdrawalLimiter, async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const correlationId = req.headers["x-correlation-id"] || req.headers["x-request-id"];
+    const { otp, withdrawal_reference, fincra_reference, trace_id } = req.body;
+
+    if (!otp || (!withdrawal_reference && !fincra_reference)) {
+      return res.status(400).json({
+        success: false,
+        error: "otp and withdrawal_reference (or fincra_reference) are required.",
+      });
+    }
+
+    const result = await payoutEngine.verifyOtp({
+      userId,
+      withdrawalReference: withdrawal_reference,
+      fincraReference: fincra_reference,
+      otp,
+      traceId: trace_id,
+      correlationId,
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({
+      success: false,
+      error: err.message || "OTP verification failed.",
+    });
+  }
+});
+
+// ── POST /api/v1/withdrawals/resend-otp ────────────────────────────────────
+router.post("/resend-otp", requireAuth, withdrawalLimiter, async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { withdrawal_reference, fincra_reference } = req.body;
+
+    if (!withdrawal_reference && !fincra_reference) {
+      return res.status(400).json({
+        success: false,
+        error: "withdrawal_reference or fincra_reference is required.",
+      });
+    }
+
+    const result = await payoutEngine.resendOtp({
+      userId,
+      withdrawalReference: withdrawal_reference,
+      fincraReference: fincra_reference,
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({
+      success: false,
+      error: err.message || "Failed to resend OTP.",
+    });
+  }
+});
+
 // ── GET /api/v1/withdrawals/:id/verify ──────────────────────────────────────
 router.get("/:id/verify", async (req, res, next) => {
   try {

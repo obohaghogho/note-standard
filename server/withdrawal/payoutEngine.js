@@ -2,7 +2,7 @@
  * Sovereign Enterprise Payout Engine
  * ───────────────────────────────────
  * Orchestrates the full 14-step withdrawal sequence with atomic database state,
- * distributed locks, Global Correlation IDs, and provider failover capability.
+ * distributed locks, Global Correlation IDs, OTP Challenge detection, and provider failover.
  */
 
 const { v4: uuidv4 }        = require("uuid");
@@ -159,6 +159,43 @@ class PayoutEngine {
           reference:     withdrawal_ref,
         });
 
+        // ── OTP Challenge Detection ───────────────────────────────────────────
+        if (providerRes.otpRequired || providerRes.status === "OTP_REQUIRED") {
+          logger.info(`[PayoutEngine] [${correlation_id}] Fincra requested OTP challenge for reference ${withdrawal_ref}`);
+
+          await supabase
+            .from("fincra_transactions")
+            .update({
+              status:           "OTP_REQUIRED",
+              fincra_reference: providerRes.fincraReference,
+            })
+            .eq("reference", withdrawal_ref);
+
+          await recordAuditLog({
+            action:  "PAYOUT_OTP_CHALLENGE_ISSUED",
+            userId,
+            details: { withdrawal_ref, fincra_ref: providerRes.fincraReference, correlation_id },
+          });
+
+          return {
+            success:              true,
+            status:               "OTP_REQUIRED",
+            otpRequired:          true,
+            withdrawal_reference: withdrawal_ref,
+            fincra_reference:     providerRes.fincraReference,
+            trace_id,
+            correlation_id,
+            message:              "Fincra OTP verification required to complete withdrawal.",
+            details: {
+              amount:              parseFloat(amount),
+              currency:            currency.toUpperCase(),
+              accountName,
+              accountNumberMasked,
+              bankCode,
+            },
+          };
+        }
+
         assertTransition(WITHDRAWAL_STATES.SENT_TO_PROVIDER, WITHDRAWAL_STATES.PROCESSING);
 
         await supabase
@@ -200,6 +237,112 @@ class PayoutEngine {
     } finally {
       await release();
     }
+  }
+
+  /**
+   * Verify OTP submitted by user for a payout challenge.
+   */
+  async verifyOtp({ userId, withdrawalReference, fincraReference, otp, traceId, correlationId }) {
+    const correlation_id = correlationId || `corr_${uuidv4()}`;
+
+    logger.info(`[PayoutEngine] [${correlation_id}] Verifying payout OTP for ref: ${withdrawalReference}`);
+
+    const { data: tx, error } = await supabase
+      .from("fincra_transactions")
+      .select("*")
+      .or(`reference.eq.${withdrawalReference},withdrawal_reference.eq.${withdrawalReference}`)
+      .single();
+
+    if (error || !tx) {
+      throw new Error("TRANSACTION_NOT_FOUND: Withdrawal reference not found.");
+    }
+
+    if (tx.status === "SUCCESSFUL" || tx.status === "PROCESSING") {
+      return {
+        success:              true,
+        status:               tx.status,
+        withdrawal_reference: tx.reference,
+        fincra_reference:     tx.fincra_reference,
+        message:              "Withdrawal already verified and processing.",
+      };
+    }
+
+    const provider = registry.getPrimary();
+
+    try {
+      const res = await provider.verifyOtp({
+        fincraReference: fincraReference || tx.fincra_reference,
+        otp,
+        withdrawalReference,
+      });
+
+      const nextStatus = res.status === "SUCCESSFUL" ? "SUCCESSFUL" : "PROCESSING";
+
+      await supabase
+        .from("fincra_transactions")
+        .update({
+          status:     nextStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", tx.id);
+
+      await recordAuditLog({
+        action:  "PAYOUT_OTP_VERIFIED",
+        userId,
+        details: { withdrawalReference, fincraReference, nextStatus, correlation_id },
+      });
+
+      const { emitWithdrawalEvent, EVENTS } = require("../realtime/withdrawalEvents");
+      const { publishWithdrawalNotification } = require("./notificationPublisher");
+
+      await emitWithdrawalEvent(userId, EVENTS.WITHDRAWAL_SETTLED, {
+        reference: tx.reference,
+        amount:    tx.amount,
+        currency:  tx.currency,
+        status:    nextStatus,
+      });
+
+      await publishWithdrawalNotification({
+        userId,
+        type:      "PENDING",
+        amount:    tx.amount,
+        currency:  tx.currency,
+        reference: tx.reference,
+      });
+
+      return {
+        success:              true,
+        status:               nextStatus,
+        withdrawal_reference: tx.reference,
+        fincra_reference:     tx.fincra_reference,
+        trace_id:             tx.trace_id,
+        message:              "OTP verified successfully. Withdrawal is processing.",
+      };
+    } catch (err) {
+      logger.error(`[PayoutEngine] [${correlation_id}] OTP verification failed for ${withdrawalReference}: ${err.message}`);
+
+      await recordAuditLog({
+        action:  "PAYOUT_OTP_VERIFICATION_FAILED",
+        userId,
+        details: { withdrawalReference, fincraReference, error: err.message, correlation_id },
+      });
+
+      throw err;
+    }
+  }
+
+  /**
+   * Resend OTP challenge to user.
+   */
+  async resendOtp({ userId, withdrawalReference, fincraReference }) {
+    const provider = registry.getPrimary();
+    const res = await provider.resendOtp({ fincraReference, withdrawalReference });
+    await recordAuditLog({
+      action:  "PAYOUT_OTP_RESENT",
+      userId,
+      details: { withdrawalReference, fincraReference },
+    });
+    return res;
   }
 }
 

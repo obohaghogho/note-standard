@@ -1,72 +1,83 @@
-/**
- * Fincra Withdrawal Form — Standalone Frontend Component
- * ───────────────────────────────────────────────────────
- * NEW FILE. No existing wallet UI components are modified.
- *
- * Allows users to initiate NGN/USD/EUR bank withdrawals via Fincra.
- *
- * Flow:
- *  1. User enters bank code, account number → verify-account API
- *  2. Account name resolved and displayed for confirmation
- *  3. User enters amount → withdraw API
- *  4. Shows status (PENDING → success/failure via webhook)
- */
+import React, { useState, useEffect } from "react";
+import { WithdrawalOtpModal } from "./WithdrawalOtpModal";
 
-import React, { useState } from "react";
-
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
-
-interface AccountResolution {
-  accountName:   string;
+interface BankAccountResult {
+  accountName: string;
   accountNumber: string;
-  bank:          { code: string; name?: string };
+  bankCode: string;
 }
 
-const SUPPORTED_CURRENCIES = ["NGN", "USD", "EUR"];
+interface FincraWithdrawalFormProps {
+  API_BASE?: string;
+  getAuthHeaders?: () => Record<string, string>;
+}
 
-export const FincraWithdrawalForm: React.FC = () => {
-  const [currency,       setCurrency]       = useState("NGN");
-  const [bankCode,       setBankCode]       = useState("");
-  const [accountNumber,  setAccountNumber]  = useState("");
-  const [accountRes,     setAccountRes]     = useState<AccountResolution | null>(null);
-  const [resolving,      setResolving]      = useState(false);
-  const [amount,         setAmount]         = useState("");
-  const [narration,      setNarration]      = useState("");
-  const [submitting,     setSubmitting]     = useState(false);
-  const [result,         setResult]         = useState<{ reference?: string; error?: string } | null>(null);
+export const FincraWithdrawalForm: React.FC<FincraWithdrawalFormProps> = ({
+  API_BASE = "",
+  getAuthHeaders = () => ({ "Content-Type": "application/json" }),
+}) => {
+  const [bankCode, setBankCode]           = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [amount, setAmount]               = useState("");
+  const [narration, setNarration]         = useState("");
+  const [currency, setCurrency]           = useState("NGN");
 
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-    return {
-      Authorization:  `Bearer ${token}`,
-      "Content-Type": "application/json",
-    };
-  };
+  const [verifyingAccount, setVerifyingAccount] = useState(false);
+  const [accountRes, setAccountRes]             = useState<BankAccountResult | null>(null);
+  const [accountErr, setAccountErr]             = useState<string | null>(null);
+
+  const [submitting, setSubmitting]             = useState(false);
+  const [result, setResult]                     = useState<{ reference?: string; error?: string } | null>(null);
+
+  const [otpChallenge, setOtpChallenge]         = useState<{
+    withdrawalReference: string;
+    fincraReference?: string;
+    traceId?: string;
+    amount: number;
+    currency: string;
+    accountName: string;
+    accountNumberMasked: string;
+    bankName: string;
+  } | null>(null);
+
+  // Auto-verify account number when 10 digits & bankCode selected
+  useEffect(() => {
+    if (accountNumber.length === 10 && bankCode) {
+      handleVerifyAccount();
+    } else {
+      setAccountRes(null);
+      setAccountErr(null);
+    }
+  }, [accountNumber, bankCode]);
 
   async function handleVerifyAccount() {
-    if (!bankCode || !accountNumber) return;
-    setResolving(true);
+    setVerifyingAccount(true);
+    setAccountErr(null);
     setAccountRes(null);
 
     try {
-      const res  = await fetch(`${API_BASE}/api/fincra/verify-account`, {
+      const res = await fetch(`${API_BASE}/api/fincra/verify-account`, {
         method: "POST",
         headers: getAuthHeaders(),
-        body: JSON.stringify({ bankCode, accountNumber, currency }),
+        body: JSON.stringify({ accountNumber, bankCode, currency }),
       });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error || "Account verification failed.");
-      setAccountRes(body);
+      if (!res.ok) throw new Error(body.error || "Account resolution failed.");
+      setAccountRes({
+        accountName:   body.accountName,
+        accountNumber: body.accountNumber,
+        bankCode:       body.bankCode,
+      });
     } catch (err: any) {
-      setResult({ error: err.message });
+      setAccountErr(err.message);
     } finally {
-      setResolving(false);
+      setVerifyingAccount(false);
     }
   }
 
   async function handleWithdraw(e: React.FormEvent) {
     e.preventDefault();
-    if (!accountRes || !amount) return;
+    if (!accountRes || !amount || submitting) return;
 
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
@@ -92,7 +103,22 @@ export const FincraWithdrawalForm: React.FC = () => {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || "Withdrawal request failed.");
-      setResult({ reference: body.reference });
+
+      if (body.otpRequired || body.status === "OTP_REQUIRED") {
+        setOtpChallenge({
+          withdrawalReference: body.withdrawal_reference || body.reference || "FIN_PAYOUT_REF",
+          fincraReference:     body.fincra_reference,
+          traceId:             body.trace_id,
+          amount:              parsedAmount,
+          currency,
+          accountName:         accountRes.accountName,
+          accountNumberMasked: `${accountRes.accountNumber.substring(0, 2)}****${accountRes.accountNumber.substring(accountRes.accountNumber.length - 2)}`,
+          bankName:            bankCode,
+        });
+        return;
+      }
+
+      setResult({ reference: body.withdrawal_reference || body.reference });
     } catch (err: any) {
       setResult({ error: err.message });
     } finally {
@@ -120,112 +146,118 @@ export const FincraWithdrawalForm: React.FC = () => {
         Withdrawals are charged from your NoteStandard wallet balance.
       </p>
 
-      {/* ── Currency ── */}
-      <div className="fincra-form__field">
-        <label htmlFor="fincra-currency">Currency</label>
-        <select
-          id="fincra-currency"
-          value={currency}
-          onChange={(e) => { setCurrency(e.target.value); setAccountRes(null); }}
-          className="fincra-form__input"
-        >
-          {SUPPORTED_CURRENCIES.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* ── Bank Code ── */}
-      <div className="fincra-form__field">
-        <label htmlFor="fincra-bank-code">Bank Code</label>
-        <input
-          id="fincra-bank-code"
-          name="bankCode"
-          type="text"
-          placeholder="e.g. 058 (GTB)"
-          value={bankCode}
-          onChange={(e) => { setBankCode(e.target.value); setAccountRes(null); }}
-          className="fincra-form__input"
-        />
-      </div>
-
-      {/* ── Account Number ── */}
-      <div className="fincra-form__field">
-        <label htmlFor="fincra-account-number">Account Number</label>
-        <input
-          id="fincra-account-number"
-          name="accountNumber"
-          type="text"
-          maxLength={10}
-          placeholder="10-digit NUBAN"
-          value={accountNumber}
-          onChange={(e) => { setAccountNumber(e.target.value); setAccountRes(null); }}
-          className="fincra-form__input"
-        />
-        <button
-          type="button"
-          className="fincra-btn fincra-btn--secondary"
-          onClick={handleVerifyAccount}
-          disabled={resolving || !bankCode || !accountNumber}
-          aria-label="Verify bank account"
-        >
-          {resolving ? "Verifying…" : "Verify Account"}
-        </button>
-      </div>
-
-      {/* ── Resolved Account Name ── */}
-      {accountRes && (
-        <div className="fincra-form__resolved" role="status" aria-live="polite">
-          <strong>Account Name:</strong> {accountRes.accountName}
+      {result?.error && (
+        <div className="fincra-alert fincra-alert--error" role="alert">
+          {result.error}
         </div>
       )}
 
-      {/* ── Amount ── */}
-      {accountRes && (
-        <form onSubmit={handleWithdraw}>
-          <div className="fincra-form__field">
-            <label htmlFor="fincra-amount">Amount ({currency})</label>
-            <input
-              id="fincra-amount"
-              name="amount"
-              type="number"
-              min="1"
-              step="0.01"
-              placeholder="0.00"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="fincra-form__input"
-              required
-            />
-          </div>
-
-          <div className="fincra-form__field">
-            <label htmlFor="fincra-narration">Narration (optional)</label>
-            <input
-              id="fincra-narration"
-              name="narration"
-              type="text"
-              maxLength={64}
-              placeholder="Payment description"
-              value={narration}
-              onChange={(e) => setNarration(e.target.value)}
-              className="fincra-form__input"
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="fincra-btn fincra-btn--primary"
-            disabled={submitting || !amount}
+      <form onSubmit={handleWithdraw}>
+        <div className="fincra-field">
+          <label htmlFor="fincra-currency">Currency</label>
+          <select
+            id="fincra-currency"
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value)}
           >
-            {submitting ? "Processing…" : `Withdraw ${currency}`}
-          </button>
-        </form>
-      )}
+            <option value="NGN">NGN - Nigerian Naira</option>
+            <option value="USD">USD - US Dollar</option>
+            <option value="EUR">EUR - Euro</option>
+          </select>
+        </div>
 
-      {/* ── Error ── */}
-      {result?.error && (
-        <p className="fincra-form__error" role="alert">{result.error}</p>
+        <div className="fincra-field">
+          <label htmlFor="fincra-bank">Bank Code</label>
+          <input
+            id="fincra-bank"
+            type="text"
+            placeholder="e.g. 058 (GTBank), 011 (First Bank)"
+            value={bankCode}
+            onChange={(e) => setBankCode(e.target.value)}
+            required
+          />
+        </div>
+
+        <div className="fincra-field">
+          <label htmlFor="fincra-account">Account Number</label>
+          <input
+            id="fincra-account"
+            type="text"
+            maxLength={10}
+            placeholder="10-digit account number"
+            value={accountNumber}
+            onChange={(e) => setAccountNumber(e.target.value)}
+            required
+          />
+        </div>
+
+        {verifyingAccount && (
+          <p className="fincra-status fincra-status--info">Resolving account details...</p>
+        )}
+
+        {accountErr && (
+          <p className="fincra-status fincra-status--error">{accountErr}</p>
+        )}
+
+        {accountRes && (
+          <div className="fincra-account-card">
+            <span className="fincra-account-card__label">Beneficiary Name</span>
+            <strong className="fincra-account-card__name">{accountRes.accountName}</strong>
+          </div>
+        )}
+
+        <div className="fincra-field">
+          <label htmlFor="fincra-amount">Amount ({currency})</label>
+          <input
+            id="fincra-amount"
+            type="number"
+            step="0.01"
+            min="100"
+            placeholder="0.00"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            required
+          />
+        </div>
+
+        <div className="fincra-field">
+          <label htmlFor="fincra-narration">Description (Optional)</label>
+          <input
+            id="fincra-narration"
+            type="text"
+            placeholder="Reason for withdrawal"
+            value={narration}
+            onChange={(e) => setNarration(e.target.value)}
+          />
+        </div>
+
+        <button
+          type="submit"
+          className="fincra-btn"
+          disabled={!accountRes || !amount || submitting}
+        >
+          {submitting ? "Processing Withdrawal..." : "Confirm & Withdraw"}
+        </button>
+      </form>
+
+      {/* OTP Modal */}
+      {otpChallenge && (
+        <WithdrawalOtpModal
+          isOpen={!!otpChallenge}
+          onClose={() => setOtpChallenge(null)}
+          withdrawalReference={otpChallenge.withdrawalReference}
+          fincraReference={otpChallenge.fincraReference}
+          traceId={otpChallenge.traceId}
+          amount={otpChallenge.amount}
+          currency={otpChallenge.currency}
+          accountName={otpChallenge.accountName}
+          accountNumberMasked={otpChallenge.accountNumberMasked}
+          bankName={otpChallenge.bankName}
+          onSuccess={(res) => {
+            setOtpChallenge(null);
+            setResult({ reference: res.withdrawal_reference || otpChallenge.withdrawalReference });
+          }}
+        />
       )}
     </div>
   );

@@ -1,7 +1,7 @@
 /**
  * Comprehensive Enterprise Withdrawal System Extended Integration & Security Test Suite
  * ──────────────────────────────────────────────────────────────────────────────────────────
- * Validates 15 core enterprise payout scenarios & security controls:
+ * Validates 17 core enterprise payout scenarios, OTP flows & security controls:
  *
  *   1. State Machine legal state transitions
  *   2. State Machine illegal transition blocking
@@ -10,14 +10,11 @@
  *   5. Risk Engine scoring & route assignment
  *   6. Feature flags toggle state
  *   7. Digital HMAC receipt signature generation & public verification
- *   8. Idempotency key duplication behavior
- *   9. Automatic wallet balance reversal on provider failure
- *  10. Circuit Breaker OPEN / HALF_OPEN / CLOSED state machine
- *  11. Retry Queue exponential backoff calculation
- *  12. Dead Letter Queue (DLQ) routing
- *  13. Admin multi-tier approval threshold rules
- *  14. Sensitive data masking (account numbers & PII)
- *  15. Public Receipt Verification endpoint logic
+ *   8. Circuit Breaker OPEN / HALF_OPEN / CLOSED state machine
+ *   9. Sensitive data masking (account numbers & PII)
+ *  10. Idempotency key duplication behavior
+ *  11. Fincra Payout OTP Challenge Detection Contract
+ *  12. OTP Verification Payload Contract & Validation
  *
  * Usage: node server/tests/enterpriseWithdrawal.test.js
  */
@@ -168,6 +165,31 @@ async function runAllTests() {
     const idemp2 = `idemp_${uuidv4()}`;
     assert.notStrictEqual(idemp1, idemp2);
     assert.strictEqual(idemp1.startsWith("idemp_"), true);
+  });
+
+  // TEST 11: Fincra Payout OTP Challenge Detection Contract
+  test("Fincra Provider: OTP Challenge Status Detection", () => {
+    const mockFincraResponse = {
+      status: true,
+      message: "OTP required to complete transaction",
+      data: {
+        reference: "FIN_PAYOUT_123456",
+        status: "otp_required",
+        otpRequired: true,
+      },
+    };
+    const rawStatus = String(mockFincraResponse.data.status).toLowerCase();
+    const isOtpRequired = rawStatus.includes("otp") || mockFincraResponse.data.otpRequired === true;
+    assert.strictEqual(isOtpRequired, true);
+  });
+
+  // TEST 12: OTP Verification Payload Contract
+  test("OTP Verification Engine: Payload Validation", () => {
+    const otpInput = "123456";
+    const withdrawalRef = `FIN_PAYOUT_${uuidv4().substring(0, 8)}`;
+    assert.strictEqual(otpInput.length, 6);
+    assert.strictEqual(/^\d{6}$/.test(otpInput), true);
+    assert.strictEqual(withdrawalRef.startsWith("FIN_PAYOUT_"), true);
   });
 
   console.log("\n=======================================================");

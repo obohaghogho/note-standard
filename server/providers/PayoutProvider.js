@@ -53,6 +53,22 @@ class PayoutProvider {
   async getMerchantBalance(currency) {
     throw new Error("Method 'getMerchantBalance()' must be implemented.");
   }
+
+  /**
+   * Submit OTP verification for an outbound payout.
+   * @abstract
+   */
+  async verifyOtp(params) {
+    throw new Error("Method 'verifyOtp()' must be implemented.");
+  }
+
+  /**
+   * Resend OTP challenge for a payout.
+   * @abstract
+   */
+  async resendOtp(params) {
+    throw new Error("Method 'resendOtp()' must be implemented.");
+  }
 }
 
 /**

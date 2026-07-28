@@ -21,8 +21,49 @@ export const walletApi = {
   },
 
   // Withdraw funds
-  async withdraw(data: WithdrawalRequest): Promise<{ success: boolean; transactionId: string; fee: number }> {
+  async withdraw(data: WithdrawalRequest): Promise<{
+    success: boolean;
+    transactionId?: string;
+    withdrawal_reference?: string;
+    fincra_reference?: string;
+    trace_id?: string;
+    status?: string;
+    otpRequired?: boolean;
+    fee?: number;
+    message?: string;
+    details?: any;
+  }> {
     const response = await api.post('/wallet/withdraw', data);
+    return response.data;
+  },
+
+  // Verify withdrawal OTP
+  async verifyWithdrawalOtp(data: {
+    otp: string;
+    withdrawal_reference: string;
+    fincra_reference?: string;
+    trace_id?: string;
+  }): Promise<{
+    success: boolean;
+    status: string;
+    withdrawal_reference?: string;
+    fincra_reference?: string;
+    trace_id?: string;
+    message?: string;
+  }> {
+    const response = await api.post('/v1/withdrawals/verify-otp', data);
+    return response.data;
+  },
+
+  // Resend withdrawal OTP
+  async resendWithdrawalOtp(data: {
+    withdrawal_reference: string;
+    fincra_reference?: string;
+  }): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    const response = await api.post('/v1/withdrawals/resend-otp', data);
     return response.data;
   },
 

@@ -7,6 +7,7 @@ import type { Currency } from '@/types/wallet';
 import { POPULAR_BANKS, COUNTRIES } from '../../lib/bankList';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReCAPTCHA from 'react-google-recaptcha';
+import { WithdrawalOtpModal } from './WithdrawalOtpModal';
 
 interface WithdrawModalProps {
     isOpen: boolean;
@@ -28,6 +29,16 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
     const [amount, setAmount] = useState('');
     const [isWithdrawing, setIsWithdrawing] = useState(false);
     const [withdrawFee, setWithdrawFee] = useState<{ fee: number, net: number } | null>(null);
+    const [otpChallenge, setOtpChallenge] = useState<{
+        withdrawalReference: string;
+        fincraReference?: string;
+        traceId?: string;
+        amount: number;
+        currency: string;
+        accountName: string;
+        accountNumberMasked: string;
+        bankName: string;
+    } | null>(null);
 
     // Fiat State
     const [selectedCountry, setSelectedCountry] = useState('Nigeria'); // Default or detect
@@ -114,7 +125,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
 
         setIsWithdrawing(true);
         try {
-            await withdraw({
+            const res = await withdraw({
                 currency: selectedCurrency,
                 amount: parseFloat(amount),
                 address: isFiat ? undefined : address,
@@ -128,6 +139,21 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                 network: isFiat ? undefined : selectedNetwork,
                 captchaToken: captchaToken || undefined
             });
+
+            if (res?.otpRequired || res?.status === 'OTP_REQUIRED') {
+                setOtpChallenge({
+                    withdrawalReference: res.withdrawal_reference || res.transactionId || 'FIN_PAYOUT_REF',
+                    fincraReference: res.fincra_reference,
+                    traceId: res.trace_id,
+                    amount: parseFloat(amount),
+                    currency: selectedCurrency,
+                    accountName: accountName || 'Beneficiary Account',
+                    accountNumberMasked: accountNumber ? `${accountNumber.substring(0, 2)}****${accountNumber.substring(accountNumber.length - 2)}` : '****',
+                    bankName: selectedBank?.name || searchTerm || 'Bank',
+                });
+                return;
+            }
+
             onSuccess();
             onClose();
         } catch {
@@ -487,6 +513,27 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                     </div>
                 </form>
             </motion.div>
+
+            {/* Fincra Payout OTP Challenge Verification Modal */}
+            {otpChallenge && (
+                <WithdrawalOtpModal
+                    isOpen={!!otpChallenge}
+                    onClose={() => setOtpChallenge(null)}
+                    withdrawalReference={otpChallenge.withdrawalReference}
+                    fincraReference={otpChallenge.fincraReference}
+                    traceId={otpChallenge.traceId}
+                    amount={otpChallenge.amount}
+                    currency={otpChallenge.currency}
+                    accountName={otpChallenge.accountName}
+                    accountNumberMasked={otpChallenge.accountNumberMasked}
+                    bankName={otpChallenge.bankName}
+                    onSuccess={() => {
+                        setOtpChallenge(null);
+                        onSuccess();
+                        onClose();
+                    }}
+                />
+            )}
         </div>
     );
 };
