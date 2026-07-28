@@ -59,7 +59,7 @@ class PayoutEngine {
     logger.info(`[PayoutEngine] [${correlation_id}] Initiating withdrawal: ${amount} ${currency} for user ${userId}`);
 
     // ── STEP 1: Acquire Distributed Lock (withdraw:user:UUID) ─────────────
-    const { release } = await acquireWithdrawalLock(userId, 15000);
+    const { release } = await acquireWithdrawalLock(userId, 3000);
 
     try {
       // ── STEP 2: State Machine Check (CREATED -> VALIDATED) ─────────────────

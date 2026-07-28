@@ -16,7 +16,7 @@ const inMemoryLocks = new Map();
  * @param {number} ttlMs Default 15,000 ms
  * @returns {Promise<{ lockId: string, release: Function }>}
  */
-async function acquireWithdrawalLock(userId, ttlMs = 15000) {
+async function acquireWithdrawalLock(userId, ttlMs = 3000) {
   const lockKey = `withdraw:user:${userId}`;
   const now = Date.now();
 
@@ -54,4 +54,10 @@ async function acquireWithdrawalLock(userId, ttlMs = 15000) {
   return { lockId, release };
 }
 
-module.exports = { acquireWithdrawalLock };
+function releaseUserLock(userId) {
+  const lockKey = `withdraw:user:${userId}`;
+  inMemoryLocks.delete(lockKey);
+  logger.info(`[RedisLock] Force-released lock for key: ${lockKey}`);
+}
+
+module.exports = { acquireWithdrawalLock, releaseUserLock };
