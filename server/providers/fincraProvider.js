@@ -64,6 +64,12 @@ class FincraProvider extends PayoutProvider {
     }
     logger.info(`[FincraProvider] Raw payout response for ${reference}:`, res.data);
 
+    if (res.status >= 400 || res.data?.success === false) {
+      const errorMsg = res.data?.error || res.data?.message || `Fincra payout failed with status ${res.status}`;
+      logger.error(`[FincraProvider] Payout rejected by Fincra API: ${errorMsg}`, res.data);
+      throw new Error(`[Fincra Payout Failure] ${errorMsg}`);
+    }
+
     const dataObj = res.data?.data || res.data || {};
     const fincraRef = dataObj.reference || dataObj.id || res.data?.reference;
     const rawStatus = String(dataObj.status || res.data?.status || "").toLowerCase();
