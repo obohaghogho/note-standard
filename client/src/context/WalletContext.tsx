@@ -300,3 +300,5 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         </WalletContext.Provider>
     );
 };
+
+export { useWallet } from '../hooks/useWallet';

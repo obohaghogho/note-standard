@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldCheck, Lock, AlertCircle, CheckCircle2, X, RefreshCw, ArrowRight } from 'lucide-react';
 import walletApi from '@/api/walletApi';
-import { useWallet } from '@/context/WalletContext';
+import { useWallet } from '../../hooks/useWallet';
 
 interface WithdrawalOtpModalProps {
   isOpen: boolean;
