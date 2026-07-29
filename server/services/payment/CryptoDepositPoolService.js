@@ -12,7 +12,7 @@
 
 const supabase = require('../../config/database');
 const logger   = require('../../utils/logger');
-const NowPaymentsProvider = require('../../providers/NowPaymentsProvider');
+const NowPaymentsProvider = require('../../providers/nowpaymentsProvider');
 
 class CryptoDepositPoolService {
   /**

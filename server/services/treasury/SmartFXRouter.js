@@ -158,7 +158,7 @@ const SmartFXRouter = {
     // ── NOWPayments FX ────────────────────────────────────────────────────────
     try {
       if (process.env.NOWPAYMENTS_ENABLED !== 'false') {
-        const NowPaymentsProvider = require('../../providers/NowPaymentsProvider');
+        const NowPaymentsProvider = require('../../providers/nowpaymentsProvider');
         const rate = await NowPaymentsProvider.getRate(from, to, amount);
         if (rate && rate > 0) {
           quotes.push({
