@@ -164,17 +164,23 @@ class CryptoCapabilityService {
           };
         }
 
+        const isReady = net.operational_state === 'READY' && net.wallet_configured;
+        const displayState = isReady 
+          ? 'AVAILABLE' 
+          : (net.operational_state === 'WALLET_MISSING' ? 'COMING_SOON' : 'DISABLED');
+
         result[net.currency].networks.push({
           network:             net.network,
           networkLabel:        net.network_label,
+          status:              net.operational_state,
+          available:           isReady,
+          displayState:        displayState,
           walletConfigured:    net.wallet_configured,
           depositsEnabled:     net.deposits_enabled,
           withdrawalsEnabled:  net.withdrawals_enabled,
-          operationalState:    net.operational_state,
-          disabledReason:      net.disabled_reason,
+          disabledReason:      net.disabled_reason || (isReady ? null : 'Production treasury wallet not configured'),
           minConfirmations:    net.min_confirmations,
           explorerUrl:         net.explorer_url,
-          isAvailable:         net.operational_state === 'READY' && net.wallet_configured,
         });
       }
 
