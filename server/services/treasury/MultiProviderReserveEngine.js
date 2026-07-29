@@ -123,17 +123,20 @@ const MultiProviderReserveEngine = {
     };
 
     // ── Persist to reserve_ratios ─────────────────────────────────────────────
-    await supabase
-      .from('reserve_ratios')
-      .insert({
-        currency:        up,
-        reserve_ratio:   reserveRatio,
-        total_assets:    totalAssets,
-        total_liability: totalLiability,
-        status,
-        computed_at:     new Date().toISOString(),
-      })
-      .catch(e => logger.warn(`[MultiReserve] Failed to persist ratio for ${up}: ${e.message}`));
+    try {
+      await supabase
+        .from('reserve_ratios')
+        .insert({
+          currency:        up,
+          reserve_ratio:   reserveRatio,
+          total_assets:    totalAssets,
+          total_liability: totalLiability,
+          status,
+          computed_at:     new Date().toISOString(),
+        });
+    } catch (e) {
+      logger.warn(`[MultiReserve] Failed to persist ratio for ${up}: ${e.message}`);
+    }
 
     return result;
   },

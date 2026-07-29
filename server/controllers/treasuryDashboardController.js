@@ -757,4 +757,61 @@ exports.getCryptoReconciliation = async (req, res) => {
   } catch (e) { err(res, e.message); }
 };
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// PHASE 18B: Proof of Treasury & Security Governance Controllers
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const ProofOfTreasuryEngine       = require('../services/treasury/ProofOfTreasuryEngine');
+const SecurityGovernanceVerifier  = require('../services/payment/SecurityGovernanceVerifier');
+const ReportingService            = require('../services/reporting/ReportingService');
+
+exports.getProofOfTreasury = async (req, res) => {
+  try {
+    const report = await ProofOfTreasuryEngine.verifyAll();
+    ok(res, { data: report });
+  } catch (e) { err(res, e.message); }
+};
+
+exports.getSecurityAudit = async (req, res) => {
+  try {
+    const audit = await SecurityGovernanceVerifier.runAudit();
+    ok(res, { data: audit });
+  } catch (e) { err(res, e.message); }
+};
+
+exports.getAMLReport = async (req, res) => {
+  try {
+    const from = req.query.from || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const to   = req.query.to || new Date().toISOString();
+    const report = await ReportingService.generateAMLReport({ from, to, format: req.query.format });
+    ok(res, { data: report });
+  } catch (e) { err(res, e.message); }
+};
+
+exports.getCustomerLiabilityReport = async (req, res) => {
+  try {
+    const report = await ReportingService.generateCustomerLiabilityReport({ format: req.query.format });
+    ok(res, { data: report });
+  } catch (e) { err(res, e.message); }
+};
+
+exports.getProviderExposureReport = async (req, res) => {
+  try {
+    const report = await ReportingService.generateProviderExposureReport({ format: req.query.format });
+    ok(res, { data: report });
+  } catch (e) { err(res, e.message); }
+};
+
+exports.getAuditExport = async (req, res) => {
+  try {
+    const report = await ReportingService.generateAuditExport({
+      from:   req.query.from,
+      to:     req.query.to,
+      limit:  parseInt(req.query.limit || '500', 10),
+      format: req.query.format,
+    });
+    ok(res, { data: report });
+  } catch (e) { err(res, e.message); }
+};
+
 

@@ -91,6 +91,19 @@ class TreasuryAlertService {
     }
   }
 
+  async createAlert(params) {
+    const level = params.level || params.severity || 'WARN';
+    return this.sendAlert({
+      type:     params.alertType || params.type || 'TREASURY_ALERT',
+      level,
+      title:    params.title || 'Treasury Alert',
+      message:  params.message || params.title,
+      currency: params.currency || params.affectedCurrency,
+      provider: params.provider || params.affectedProvider,
+      metadata: params.metadata || {},
+    });
+  }
+
   // ── Private ───────────────────────────────────────────────────────────────
 
   async _processReport(report) {

@@ -222,6 +222,90 @@ const ReportingService = {
     return this._format({ type: 'RECONCILIATION', run_id: runId, summary, rows }, format);
   },
 
+  // ─── Customer Liability Report ───────────────────────────────────────────────
+
+  async generateCustomerLiabilityReport({ format = 'json' }) {
+    const { data, error } = await supabase
+      .from('wallets_v6')
+      .select('currency, balance, available_balance, network')
+      .neq('network', 'SYSTEM');
+
+    if (error) throw new Error(`[ReportingService] Customer liability query failed: ${error.message}`);
+
+    const rows = data || [];
+    const liabilities = {};
+
+    for (const r of rows) {
+      const cur = r.currency;
+      if (!liabilities[cur]) liabilities[cur] = { currency: cur, total_balance: 0, available_balance: 0, wallet_count: 0 };
+      liabilities[cur].total_balance += parseFloat(r.balance || 0);
+      liabilities[cur].available_balance += parseFloat(r.available_balance || 0);
+      liabilities[cur].wallet_count += 1;
+    }
+
+    const summary = Object.values(liabilities);
+    return this._format({ type: 'CUSTOMER_LIABILITY', summary, rows }, format);
+  },
+
+  // ─── Provider Exposure Report ────────────────────────────────────────────────
+
+  async generateProviderExposureReport({ format = 'json' }) {
+    const { data, error } = await supabase
+      .from('treasury_provider_balances')
+      .select('provider, currency, available_balance, pending_balance, last_synced_at');
+
+    if (error) throw new Error(`[ReportingService] Provider exposure query failed: ${error.message}`);
+
+    const rows = data || [];
+    const byProvider = {};
+
+    for (const r of rows) {
+      const prov = r.provider;
+      if (!byProvider[prov]) byProvider[prov] = { provider: prov, assets: {} };
+      byProvider[prov].assets[r.currency] = parseFloat(r.available_balance || 0);
+    }
+
+    const summary = Object.values(byProvider);
+    return this._format({ type: 'PROVIDER_EXPOSURE', summary, rows }, format);
+  },
+
+  // ─── AML Report ─────────────────────────────────────────────────────────────
+
+  async generateAMLReport({ from, to, format = 'json' }) {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('id, reference_id, user_id, amount, currency, provider, type, created_at')
+      .gte('created_at', from)
+      .lte('created_at', to)
+      .gte('amount', 5000)
+      .order('amount', { ascending: false });
+
+    if (error) throw new Error(`[ReportingService] AML query failed: ${error.message}`);
+
+    const rows = data || [];
+    const summary = { flagged_count: rows.length, threshold_usd: 5000 };
+    return this._format({ type: 'AML_MONITORING', from, to, summary, rows }, format);
+  },
+
+  // ─── Audit Export ───────────────────────────────────────────────────────────
+
+  async generateAuditExport({ from, to, limit = 500, format = 'json' }) {
+    let q = supabase
+      .from('immutable_audit_log')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (from) q = q.gte('created_at', from);
+    if (to)   q = q.lte('created_at', to);
+
+    const { data, error } = await q;
+    if (error) throw new Error(`[ReportingService] Audit export query failed: ${error.message}`);
+
+    const rows = data || [];
+    return this._format({ type: 'AUDIT_EXPORT', summary: { total_records: rows.length }, rows }, format);
+  },
+
   // ─── Internal Helpers ────────────────────────────────────────────────────────
 
   _summarise(rows, amountField) {

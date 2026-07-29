@@ -106,6 +106,10 @@ server.listen(PORT, async () => {
   CryptoWithdrawalWorker.start();
   DepositAddressPoolRefiller.start();
 
+  // ── Phase 18B: Proof of Treasury Real-Time Audit Worker ────────────────────
+  const ProofOfTreasuryWorker = require("./workers/ProofOfTreasuryWorker");
+  ProofOfTreasuryWorker.start();
+
   // ✅ Workers are launched — mark workers ready
   bootManager.setService("workers", true);
   

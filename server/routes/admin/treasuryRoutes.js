@@ -325,4 +325,18 @@ router.get('/crypto/withdrawals',    ctrl.getCryptoWithdrawals);
 router.get('/crypto/deposit-pool',   ctrl.getCryptoDepositPool);
 router.get('/crypto/reconciliation', ctrl.getCryptoReconciliation);
 
+// ── Phase 18B: Proof of Treasury & Regulatory Security Governance ────────────
+// GET /api/admin/treasury/proof-of-treasury     Real-time audit comparing Assets vs Liabilities
+// GET /api/admin/treasury/security/audit        Webhook, Idempotency, and Audit Log security check
+// GET /api/admin/treasury/reports/aml           AML monitoring report
+// GET /api/admin/treasury/reports/liability     Customer liability summary
+// GET /api/admin/treasury/reports/exposure      Provider exposure concentration summary
+// GET /api/admin/treasury/reports/audit-export  Immutable audit log export
+router.get('/proof-of-treasury',     ctrl.getProofOfTreasury);
+router.get('/security/audit',        ctrl.getSecurityAudit);
+router.get('/reports/aml',           ctrl.getAMLReport);
+router.get('/reports/liability',     ctrl.getCustomerLiabilityReport);
+router.get('/reports/exposure',      ctrl.getProviderExposureReport);
+router.get('/reports/audit-export',  ctrl.getAuditExport);
+
 module.exports = router;
