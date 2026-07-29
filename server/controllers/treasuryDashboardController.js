@@ -826,4 +826,73 @@ exports.getAuditExport = async (req, res) => {
   } catch (e) { err(res, e.message); }
 };
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// PHASE 18C: Multi-Network Capability & Platform Registry Controllers
+// ═══════════════════════════════════════════════════════════════════════════════
+
+exports.getCryptoNetworks = async (req, res) => {
+  try {
+    const CryptoCapabilityService = require('../services/nowpayments/CryptoCapabilityService');
+    const networks = await CryptoCapabilityService.getAvailableAssetsAndNetworks();
+    ok(res, { data: networks });
+  } catch (e) { err(res, e.message); }
+};
+
+exports.updateCryptoNetworkState = async (req, res) => {
+  try {
+    const { currency, network } = req.params;
+    const { operational_state, disabled_reason, wallet_configured } = req.body;
+
+    const updates = { updated_at: new Date().toISOString() };
+    if (operational_state !== undefined) updates.operational_state = operational_state;
+    if (disabled_reason !== undefined)   updates.disabled_reason   = disabled_reason;
+    if (wallet_configured !== undefined) updates.wallet_configured = wallet_configured;
+
+    const { data, error } = await supabase
+      .from('crypto_networks')
+      .update(updates)
+      .eq('currency', String(currency).toUpperCase())
+      .eq('network', String(network).toUpperCase())
+      .select()
+      .single();
+
+    if (error) return err(res, error.message);
+
+    const ImmutableAuditLog = require('../services/treasury/ImmutableAuditLog');
+    await ImmutableAuditLog.record({
+      event_type:   'CRYPTO_NETWORK_STATE_UPDATED',
+      actor_type:   'ADMIN',
+      actor_id:     req.user?.id || 'admin',
+      subject_type: 'CRYPTO_NETWORK',
+      subject_id:   `${currency}_${network}`,
+      reason:       `Operational state set to ${operational_state}`,
+      metadata:     updates,
+    });
+
+    ok(res, { data, message: `Updated network ${currency} ${network} state.` });
+  } catch (e) { err(res, e.message); }
+};
+
+exports.syncCryptoCapabilities = async (req, res) => {
+  try {
+    const CryptoCapabilityService = require('../services/nowpayments/CryptoCapabilityService');
+    const report = await CryptoCapabilityService.syncCapabilities();
+    ok(res, { data: report, message: 'Crypto capability synchronization complete.' });
+  } catch (e) { err(res, e.message); }
+};
+
+exports.getProviderCapabilityReport = async (req, res) => {
+  try {
+    const report = await ReportingService.generateProviderCapabilityReport({ format: req.query.format });
+    ok(res, { data: report });
+  } catch (e) { err(res, e.message); }
+};
+
+exports.getCryptoNetworkReport = async (req, res) => {
+  try {
+    const report = await ReportingService.generateCryptoNetworkReport({ format: req.query.format });
+    ok(res, { data: report });
+  } catch (e) { err(res, e.message); }
+};
+
 

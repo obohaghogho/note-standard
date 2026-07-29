@@ -340,4 +340,16 @@ router.get('/reports/liability',     ctrl.getCustomerLiabilityReport);
 router.get('/reports/exposure',      ctrl.getProviderExposureReport);
 router.get('/reports/audit-export',  ctrl.getAuditExport);
 
+// ── Phase 18C: Multi-Network Capability & Platform Registry Routes ───────────
+// GET   /api/admin/treasury/crypto/networks                List all platform crypto networks & states
+// PATCH /api/admin/treasury/crypto/networks/:currency/:network Toggle operational state or configuration
+// POST  /api/admin/treasury/crypto/capabilities/sync       Trigger manual provider capability sync
+// GET   /api/admin/treasury/reports/capabilities           Provider capability report
+// GET   /api/admin/treasury/reports/networks               Crypto network report
+router.get('/crypto/networks',                  ctrl.getCryptoNetworks);
+router.patch('/crypto/networks/:currency/:network', ctrl.updateCryptoNetworkState);
+router.post('/crypto/capabilities/sync',        ctrl.syncCryptoCapabilities);
+router.get('/reports/capabilities',             ctrl.getProviderCapabilityReport);
+router.get('/reports/networks',                 ctrl.getCryptoNetworkReport);
+
 module.exports = router;

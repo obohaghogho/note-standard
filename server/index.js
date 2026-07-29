@@ -110,6 +110,10 @@ server.listen(PORT, async () => {
   const ProofOfTreasuryWorker = require("./workers/ProofOfTreasuryWorker");
   ProofOfTreasuryWorker.start();
 
+  // ── Phase 18C: Crypto Multi-Network Capability Verification Worker ─────────
+  const CryptoWalletVerificationWorker = require("./workers/CryptoWalletVerificationWorker");
+  CryptoWalletVerificationWorker.start();
+
   // ✅ Workers are launched — mark workers ready
   bootManager.setService("workers", true);
   

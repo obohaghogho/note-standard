@@ -137,6 +137,29 @@ class FinancialOrchestrator {
         };
       }
 
+      // ── Step 5.5: Platform & Provider Capability Validation ──────────────────
+      if (method === 'crypto' || ['BTC', 'ETH', 'USDT', 'USDC'].includes(up)) {
+        const CryptoCapabilityService = require('../nowpayments/CryptoCapabilityService');
+        const capValidation = await CryptoCapabilityService.validateNetworkCapability(
+          up, providerParams.network || 'NATIVE', operationType
+        );
+
+        if (!capValidation.allowed) {
+          logger.warn(`[CFO] Capability validation failed for ${up} (${providerParams.network}): ${capValidation.reason}`);
+          await CorrelationEngine.fail(executionLogId, {
+            errorCode:    capValidation.operationalState || 'CAPABILITY_UNAVAILABLE',
+            errorMessage: capValidation.reason,
+          });
+          return {
+            success:          false,
+            blocked:          true,
+            reason:           capValidation.operationalState || 'CAPABILITY_UNAVAILABLE',
+            error:            capValidation.reason,
+            correlationId,
+          };
+        }
+      }
+
       // ── Step 6: Treasury liquidity check ─────────────────────────────────────
       const reserveData = await MultiProviderReserveEngine.computeForCurrency(up).catch(() => null);
       const treasuryResult = {

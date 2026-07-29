@@ -306,6 +306,43 @@ const ReportingService = {
     return this._format({ type: 'AUDIT_EXPORT', summary: { total_records: rows.length }, rows }, format);
   },
 
+  // ─── Provider Capability Report ─────────────────────────────────────────────
+
+  async generateProviderCapabilityReport({ format = 'json' }) {
+    const { data, error } = await supabase
+      .from('crypto_provider_capabilities')
+      .select('*')
+      .order('provider')
+      .order('currency');
+
+    if (error) throw new Error(`[ReportingService] Provider capability query failed: ${error.message}`);
+
+    const rows = data || [];
+    const summary = { total_capabilities: rows.length };
+    return this._format({ type: 'PROVIDER_CAPABILITIES', summary, rows }, format);
+  },
+
+  // ─── Crypto Network Report ──────────────────────────────────────────────────
+
+  async generateCryptoNetworkReport({ format = 'json' }) {
+    const { data, error } = await supabase
+      .from('crypto_networks')
+      .select('*')
+      .order('currency')
+      .order('network');
+
+    if (error) throw new Error(`[ReportingService] Crypto network query failed: ${error.message}`);
+
+    const rows = data || [];
+    const summary = {
+      total_networks: rows.length,
+      ready:          rows.filter(r => r.operational_state === 'READY').length,
+      disabled:       rows.filter(r => r.operational_state === 'DISABLED').length,
+      wallet_missing: rows.filter(r => r.operational_state === 'WALLET_MISSING').length,
+    };
+    return this._format({ type: 'CRYPTO_NETWORKS', summary, rows }, format);
+  },
+
   // ─── Internal Helpers ────────────────────────────────────────────────────────
 
   _summarise(rows, amountField) {
