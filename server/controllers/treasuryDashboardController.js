@@ -287,6 +287,18 @@ exports.approveTransfer = async (req, res) => {
   }
 };
 
+exports.executeTransfer = async (req, res) => {
+  try {
+    const adminId = req.user?.id || 'admin';
+    const { id }  = req.params;
+    const TreasuryTransferExecutionService = require('../services/treasury/TreasuryTransferExecutionService');
+    const result = await TreasuryTransferExecutionService.executeTransfer(id, adminId);
+    ok(res, { data: result, message: 'Treasury transfer executed successfully.' });
+  } catch (e) {
+    err(res, e.message);
+  }
+};
+
 exports.cancelTransfer = async (req, res) => {
   try {
     const adminId   = req.user?.id;

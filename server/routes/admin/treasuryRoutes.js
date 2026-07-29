@@ -61,6 +61,7 @@ router.get('/settlements/:id',   ctrl.getSettlementDetail);
 router.get('/transfers',                     ctrl.getTransfers);
 router.post('/transfers',                    ctrl.requestTransfer);
 router.post('/transfers/:id/approve',        ctrl.approveTransfer);
+router.post('/transfers/:id/execute',        ctrl.executeTransfer);
 router.post('/transfers/:id/cancel',         ctrl.cancelTransfer);
 
 // ── Liquidity ─────────────────────────────────────────────────────────────────
