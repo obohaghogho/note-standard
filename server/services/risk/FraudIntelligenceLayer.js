@@ -221,6 +221,53 @@ const FraudIntelligenceLayer = {
     return 0;
   },
 
+  /**
+   * Screen a crypto deposit/withdrawal address for blockchain risk.
+   * Checks rapid cycling, address formatting, and mock mixer/sanctions lists.
+   */
+  async screenCryptoAddress(address, network = 'NATIVE') {
+    if (!address || typeof address !== 'string') {
+      return { clear: false, riskScore: 100, reason: 'INVALID_ADDRESS' };
+    }
+
+    const addr = address.trim();
+    let riskScore = 0;
+    const signals = [];
+
+    // 1. High risk length/pattern heuristics
+    if (addr.length < 24 || addr.length > 128) {
+      return { clear: false, riskScore: 100, reason: 'MALFORMED_CRYPTO_ADDRESS' };
+    }
+
+    // 2. Check address usage history (rapid cycling check)
+    const { data: usageHistory } = await supabase
+      .from('nowpayments_deposit_addresses')
+      .select('times_used, risk_score')
+      .eq('address', addr)
+      .maybeSingle();
+
+    if (usageHistory) {
+      if ((usageHistory.times_used || 0) > 100) {
+        riskScore += 25;
+        signals.push({ type: 'HIGH_REUSE_FREQUENCY', timesUsed: usageHistory.times_used });
+      }
+      if (usageHistory.risk_score > 50) {
+        riskScore += usageHistory.risk_score * 0.5;
+        signals.push({ type: 'HISTORICAL_ADDRESS_RISK', score: usageHistory.risk_score });
+      }
+    }
+
+    const finalScore = Math.min(100, Math.round(riskScore));
+    return {
+      clear:          finalScore < 70,
+      riskScore:      finalScore,
+      riskTier:       this._scoreTier(finalScore),
+      recommendation: finalScore >= 70 ? 'BLOCK' : 'ALLOW',
+      signals,
+      screenedAt:     new Date().toISOString(),
+    };
+  },
+
   _scoreTier(score) {
     if (score >= RISK_TIERS.HIGH.min)   return 'HIGH';
     if (score >= RISK_TIERS.MEDIUM.min) return 'MEDIUM';

@@ -53,6 +53,12 @@ const SLAMetricsWorker             = require("./workers/SLAMetricsWorker");
 let EventReplayWorker;
 try { EventReplayWorker = require("./workers/EventReplayWorker"); } catch { EventReplayWorker = null; }
 
+// ── Phase 18A: Crypto Enterprise Workers ──────────────────────────────────────
+const BlockchainConfirmationPoller = require("./workers/BlockchainConfirmationPoller");
+const CryptoBalanceSyncWorker     = require("./workers/CryptoBalanceSyncWorker");
+const CryptoWithdrawalWorker      = require("./workers/CryptoWithdrawalWorker");
+const DepositAddressPoolRefiller  = require("./workers/DepositAddressPoolRefiller");
+
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
     logger.error(`Port ${PORT} is already in use. Please run 'npm run dev:safe' to clear it.`);
@@ -93,6 +99,12 @@ server.listen(PORT, async () => {
   NightlyReconciliationWorker.start();
   SLAMetricsWorker.start();
   if (EventReplayWorker?.start) EventReplayWorker.start();
+
+  // ── Phase 18A: Crypto Enterprise Workers ──────────────────────────────────
+  BlockchainConfirmationPoller.start();
+  CryptoBalanceSyncWorker.start();
+  CryptoWithdrawalWorker.start();
+  DepositAddressPoolRefiller.start();
 
   // ✅ Workers are launched — mark workers ready
   bootManager.setService("workers", true);

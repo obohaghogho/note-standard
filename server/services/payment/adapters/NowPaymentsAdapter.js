@@ -53,23 +53,48 @@ class NowPaymentsAdapter extends BasePaymentAdapter {
   }
 
   verifyWebhookSignature(headers, rawBody) {
-    const secret = this.config('NOWPAYMENTS_WEBHOOK_SECRET');
-    const signature = headers['x-nowpayments-sig'];
+    const secret = process.env.NOWPAYMENTS_IPN_SECRET || this.config('NOWPAYMENTS_WEBHOOK_SECRET') || process.env.NOWPAYMENTS_API_KEY;
+    const signature = headers['x-nowpayments-sig'] || headers['x-nowpayments-signature'];
     if (!signature || !secret) return false;
-    const expected = crypto.createHmac('sha512', secret)
-      .update(typeof rawBody === 'string' ? rawBody : JSON.stringify(rawBody))
-      .digest('hex');
-    return signature === expected;
+
+    try {
+      // NOWPayments IPN signature: HMAC-SHA512 of JSON stringified body with sorted keys
+      let payload = rawBody;
+      if (typeof rawBody === 'object') {
+        const sorted = {};
+        Object.keys(rawBody).sort().forEach(key => {
+          sorted[key] = rawBody[key];
+        });
+        payload = JSON.stringify(sorted);
+      }
+
+      const expected = crypto.createHmac('sha512', secret)
+        .update(payload)
+        .digest('hex');
+
+      return signature.toLowerCase() === expected.toLowerCase();
+    } catch {
+      return false;
+    }
   }
 
   parseWebhookEvent(body) {
+    const paymentStatus = String(body?.payment_status || body?.status || '').toLowerCase();
+    const isFinished    = ['finished', 'confirmed'].includes(paymentStatus);
+    const isFailed      = ['failed', 'expired', 'refunded'].includes(paymentStatus);
+
     return {
-      type:      body?.payment_status || '',
-      reference: body?.order_id       || body?.payment_id || '',
-      status:    body?.payment_status || '',
-      amount:    Number(body?.pay_amount || body?.price_amount || 0),
-      currency:  String(body?.pay_currency || body?.price_currency || 'USDT').toUpperCase(),
-      raw:       body,
+      type:               paymentStatus,
+      reference:          body?.order_id || body?.payment_id || '',
+      providerReference:  String(body?.payment_id || body?.id || ''),
+      status:             isFinished ? 'COMPLETED' : isFailed ? 'FAILED' : 'PENDING',
+      rawStatus:          paymentStatus,
+      amount:             Number(body?.actually_paid || body?.pay_amount || body?.price_amount || 0),
+      currency:           String(body?.pay_currency || body?.price_currency || 'USDT').toUpperCase(),
+      outcomeAmount:      Number(body?.outcome_amount || body?.actually_paid || 0),
+      outcomeCurrency:    String(body?.outcome_currency || body?.pay_currency || 'USDT').toUpperCase(),
+      transactionHash:    body?.txid || body?.hash || null,
+      raw:                body,
     };
   }
 

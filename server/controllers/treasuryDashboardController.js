@@ -691,3 +691,70 @@ exports.getCorrelationTrace = async (req, res) => {
   } catch (e) { err(res, e.message); }
 };
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// PHASE 18A: Crypto Enterprise Treasury Controllers (NOWPayments & Multi-Crypto)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const CryptoWalletInventoryService = require('../services/treasury/CryptoWalletInventoryService');
+const CryptoDepositPoolService     = require('../services/payment/CryptoDepositPoolService');
+const CryptoWithdrawalQueueService = require('../services/payment/CryptoWithdrawalQueueService');
+
+exports.getCryptoOverview = async (req, res) => {
+  try {
+    const proof = await MultiProviderReserveEngine.getBalanceProof();
+    const cryptoCurrencies = ['BTC', 'ETH', 'USDT', 'USDC'];
+    const cryptoProof = {};
+    for (const c of cryptoCurrencies) {
+      if (proof[c]) cryptoProof[c] = proof[c];
+    }
+    ok(res, { data: cryptoProof });
+  } catch (e) { err(res, e.message); }
+};
+
+exports.getCryptoInventory = async (req, res) => {
+  try {
+    const inventory = await CryptoWalletInventoryService.getInventorySummary();
+    ok(res, { data: inventory });
+  } catch (e) { err(res, e.message); }
+};
+
+exports.getCryptoConfirmations = async (req, res) => {
+  try {
+    const { data } = await supabase
+      .from('deposit_confirmations')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    ok(res, { data: data || [] });
+  } catch (e) { err(res, e.message); }
+};
+
+exports.getCryptoWithdrawals = async (req, res) => {
+  try {
+    const [summary, { data: queue }] = await Promise.all([
+      CryptoWithdrawalQueueService.getQueueSummary(),
+      supabase.from('crypto_withdrawal_queue').select('*').order('created_at', { ascending: false }).limit(50),
+    ]);
+    ok(res, { summary, queue: queue || [] });
+  } catch (e) { err(res, e.message); }
+};
+
+exports.getCryptoDepositPool = async (req, res) => {
+  try {
+    const metrics = await CryptoDepositPoolService.getPoolMetrics();
+    ok(res, { data: metrics });
+  } catch (e) { err(res, e.message); }
+};
+
+exports.getCryptoReconciliation = async (req, res) => {
+  try {
+    const { data } = await supabase
+      .from('crypto_reconciliation_reports')
+      .select('*')
+      .order('report_date', { ascending: false })
+      .limit(30);
+    ok(res, { data: data || [] });
+  } catch (e) { err(res, e.message); }
+};
+
+

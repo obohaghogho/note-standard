@@ -57,6 +57,7 @@ const AITreasuryMonitor = {
       this._checkFailoverEvents,
       this._checkForecastAlerts,
       this._checkLatencySpikes,
+      this._checkCryptoHotWallets,
     ];
 
     for (const rule of rules) {
@@ -335,6 +336,46 @@ const AITreasuryMonitor = {
           body:        `${c.provider} P95 latency is now ${c.p95_latency_ms}ms vs. 1-hour baseline of ${avgHistorical.toFixed(0)}ms — a ${multiple.toFixed(1)}× increase. This may indicate provider degradation.`,
           recommendation: `Monitor ${c.provider} closely. If latency persists, consider reducing routing weight until it recovers.`,
           confidence:  0.88,
+        }));
+      }
+    }
+
+    return insights;
+  },
+
+  async _checkCryptoHotWallets() {
+    const { data: thresholds } = await supabase
+      .from('hot_wallet_thresholds')
+      .select('*');
+
+    if (!thresholds || thresholds.length === 0) return [];
+
+    const CryptoWalletInventoryService = require('./CryptoWalletInventoryService');
+    const summary = await CryptoWalletInventoryService.getInventorySummary();
+
+    const insights = [];
+
+    for (const t of thresholds) {
+      const match = summary.find(
+        s => s.currency === t.asset && (t.network === 'NATIVE' || s.network === t.network)
+      );
+
+      const hotBal = match ? match.hot : 0;
+      const minBal = parseFloat(t.min_balance || 0);
+      const targetBal = parseFloat(t.target_balance || 0);
+
+      if (hotBal < minBal) {
+        const topUpNeeded = targetBal - hotBal;
+        insights.push(this._makeInsight({
+          type:           'LIQUIDITY_WARNING',
+          severity:       hotBal < (minBal * 0.5) ? 'CRITICAL' : 'WARNING',
+          provider:       'nowpayments',
+          currency:       t.asset,
+          title:          `${t.asset} Hot Wallet balance (${hotBal}) is below minimum threshold (${minBal})`,
+          body:           `${t.asset} hot wallet balance is currently ${hotBal} ${t.asset}, which is below the minimum threshold of ${minBal} ${t.asset}. Required target is ${targetBal} ${t.asset}.`,
+          recommendation: t.rebalance_action || `Move ${topUpNeeded.toFixed(2)} ${t.asset} from Cold/Warm storage to Hot Wallet.`,
+          amount:         topUpNeeded,
+          confidence:     0.98,
         }));
       }
     }

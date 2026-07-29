@@ -311,4 +311,18 @@ router.post('/lifecycle/expire-stale', async (req, res) => {
   }
 });
 
+// ── Phase 18A: Crypto Enterprise Dashboard ──────────────────────────────────
+// GET /api/admin/treasury/crypto/overview        Crypto liabilities vs assets & proof of reserves
+// GET /api/admin/treasury/crypto/inventory       Hot/Warm/Cold wallet breakdown
+// GET /api/admin/treasury/crypto/confirmations   Blockchain deposit confirmation queue
+// GET /api/admin/treasury/crypto/withdrawals     Crypto payout queue & status
+// GET /api/admin/treasury/crypto/deposit-pool    Address pool metrics & state counts
+// GET /api/admin/treasury/crypto/reconciliation  Nightly crypto reconciliation reports
+router.get('/crypto/overview',       ctrl.getCryptoOverview);
+router.get('/crypto/inventory',      ctrl.getCryptoInventory);
+router.get('/crypto/confirmations',  ctrl.getCryptoConfirmations);
+router.get('/crypto/withdrawals',    ctrl.getCryptoWithdrawals);
+router.get('/crypto/deposit-pool',   ctrl.getCryptoDepositPool);
+router.get('/crypto/reconciliation', ctrl.getCryptoReconciliation);
+
 module.exports = router;

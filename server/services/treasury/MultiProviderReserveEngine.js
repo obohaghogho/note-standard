@@ -20,8 +20,8 @@
 const supabase = require('../../config/database');
 const logger   = require('../../utils/logger');
 
-// Supported fiat currencies
-const FIAT_CURRENCIES = ['NGN', 'USD', 'EUR', 'GBP'];
+// Supported currencies (fiat + crypto)
+const ALL_CURRENCIES = ['NGN', 'USD', 'EUR', 'GBP', 'BTC', 'ETH', 'USDT', 'USDC'];
 
 const MultiProviderReserveEngine = {
   /**
@@ -30,7 +30,7 @@ const MultiProviderReserveEngine = {
    */
   async computeAll() {
     const results = {};
-    for (const currency of FIAT_CURRENCIES) {
+    for (const currency of ALL_CURRENCIES) {
       results[currency] = await this.computeForCurrency(currency);
     }
     return results;
@@ -96,11 +96,15 @@ const MultiProviderReserveEngine = {
     const concentrationRisk = maxConcentration > 80 ? 'HIGH'
       : maxConcentration > 60 ? 'MEDIUM' : 'LOW';
 
-    // ── Health status ─────────────────────────────────────────────────────────
+    // ── Health status & Color ──────────────────────────────────────────────────
     const status = reserveRatio >= 105 ? 'HEALTHY'
       : reserveRatio >= 100 ? 'WARN'
       : reserveRatio >= 95  ? 'CRITICAL'
       : 'EMERGENCY';
+
+    const statusColor = reserveRatio >= 100 ? 'GREEN'
+      : reserveRatio >= 95 ? 'YELLOW'
+      : 'RED';
 
     const result = {
       currency:            up,
@@ -109,6 +113,7 @@ const MultiProviderReserveEngine = {
       total_liability:     parseFloat(totalLiability.toFixed(8)),
       reserve_ratio:       reserveRatio,
       status,
+      status_color:        statusColor,
       concentration_risk:  concentrationRisk,
       max_concentration:   maxConcentration,
       provider_count:      syncedBalances.length,
@@ -162,7 +167,7 @@ const MultiProviderReserveEngine = {
   async getBalanceProof() {
     const proof = {};
 
-    for (const currency of FIAT_CURRENCIES) {
+    for (const currency of ALL_CURRENCIES) {
       const ratio = await this.computeForCurrency(currency);
 
       proof[currency] = {
@@ -172,6 +177,7 @@ const MultiProviderReserveEngine = {
         difference:             parseFloat((ratio.total_assets - ratio.total_liability).toFixed(8)),
         reserve_ratio:          ratio.reserve_ratio,
         status:                 ratio.status,
+        status_color:           ratio.status_color,
         provider_breakdown:     ratio.provider_breakdown,
         timestamp:              ratio.computed_at,
       };

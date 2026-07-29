@@ -155,13 +155,23 @@ const SmartFXRouter = {
       logger.warn(`[SmartFXRouter] Anchor FX quote failed: ${e.message}`);
     }
 
-    // ── Grey FX ───────────────────────────────────────────────────────────────
+    // ── NOWPayments FX ────────────────────────────────────────────────────────
     try {
-      if (process.env.GREY_ENABLED === 'true') {
-        quotes.push({ source: 'grey', rate: null, fee: 0, estimatedOutput: null, status: 'STUB' });
+      if (process.env.NOWPAYMENTS_ENABLED !== 'false') {
+        const NowPaymentsProvider = require('../../providers/NowPaymentsProvider');
+        const rate = await NowPaymentsProvider.getRate(from, to, amount);
+        if (rate && rate > 0) {
+          quotes.push({
+            source:          'nowpayments',
+            rate:            rate,
+            fee:             0,
+            estimatedOutput: parseFloat((amount * rate).toFixed(8)),
+            status:          'ACTIVE',
+          });
+        }
       }
     } catch (e) {
-      logger.warn(`[SmartFXRouter] Grey FX quote failed: ${e.message}`);
+      logger.warn(`[SmartFXRouter] NOWPayments FX quote failed: ${e.message}`);
     }
 
     // Filter out stubs with no real rate for now

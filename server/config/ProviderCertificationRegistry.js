@@ -145,14 +145,17 @@ const ProviderCertificationRegistry = {
     report.score      = Math.min(report.score, 100);
 
     // Update DB record
-    await supabase
-      .from('banking_providers')
-      .update({
-        is_certified:       report.certified,
-        certification_date: report.certified ? new Date().toISOString() : null,
-      })
-      .eq('provider_key', key)
-      .catch(e => logger.warn(`[CertRegistry] DB update failed: ${e.message}`));
+    try {
+      await supabase
+        .from('banking_providers')
+        .update({
+          is_certified:       report.certified,
+          certification_date: report.certified ? new Date().toISOString() : null,
+        })
+        .eq('provider_key', key);
+    } catch (e) {
+      logger.warn(`[CertRegistry] DB update failed: ${e.message}`);
+    }
 
     logger.info(`[CertRegistry] ${key} certification: ${report.certified ? 'PASSED' : 'FAILED'} (score ${report.score})`);
     return report;
