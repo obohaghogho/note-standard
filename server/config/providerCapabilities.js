@@ -3,12 +3,22 @@
  * =======================
  * Registry: what each gateway supports & merchant-level feature flags.
  * Multi-Currency Payment Engine v4 — NoteStandard Global Financial Platform
+ *
+ * Phase 17: Added maintenanceMode field to all providers.
+ * Values: 'ACTIVE' | 'MAINTENANCE' | 'READ_ONLY' | 'DRAIN_ONLY'
+ *   ACTIVE      — Normal routing (default)
+ *   MAINTENANCE — Excluded from all routing
+ *   READ_ONLY   — Health checks only, no transactions
+ *   DRAIN_ONLY  — No new transactions, existing completions continue
+ *
+ * Maintenance mode can also be overridden per-provider via DB (banking_providers.maintenance_mode).
  */
 
 const PAYMENT_PROVIDER_CAPABILITIES = {
   paystack: {
     name: 'paystack',
     capabilityVersion: 1,
+    maintenanceMode: 'ACTIVE',
     supportedCurrencies: ['NGN', 'USD', 'ZAR', 'GHS', 'KES', 'EGP'],
     merchantCurrencies: ['NGN', 'USD'],
     nativeCurrencies: ['NGN', 'USD'],
@@ -38,6 +48,7 @@ const PAYMENT_PROVIDER_CAPABILITIES = {
   fincra: {
     name: 'fincra',
     capabilityVersion: 1,
+    maintenanceMode: 'ACTIVE',
     supportedCurrencies: ['NGN', 'USD', 'EUR', 'GBP'],
     merchantCurrencies: ['NGN', 'USD', 'EUR', 'GBP'],
     nativeCurrencies: ['NGN', 'USD', 'EUR', 'GBP'],
@@ -50,7 +61,7 @@ const PAYMENT_PROVIDER_CAPABILITIES = {
     supportsInternational: true,
     requiresSmallestUnit: false,
     settlementCurrencies: ['NGN', 'USD', 'EUR', 'GBP'],
-    feeEfficiencyScore: 25, // Scores highest for primary fiat collections & payouts
+    feeEfficiencyScore: 25,
     methods: ['card', 'bank_transfer', 'dva', 'subscription'],
     supportedFeatures: {
       checkout: true,
@@ -67,6 +78,7 @@ const PAYMENT_PROVIDER_CAPABILITIES = {
   grey: {
     name: 'grey',
     capabilityVersion: 1,
+    maintenanceMode: 'ACTIVE',
     supportedCurrencies: ['USD', 'EUR', 'GBP'],
     merchantCurrencies: ['USD', 'EUR', 'GBP'],
     nativeCurrencies: ['USD', 'EUR', 'GBP'],
@@ -96,6 +108,7 @@ const PAYMENT_PROVIDER_CAPABILITIES = {
   anchor: {
     name: 'anchor',
     capabilityVersion: 1,
+    maintenanceMode: 'ACTIVE',
     supportedCurrencies: ['NGN', 'USD'],
     merchantCurrencies: ['NGN', 'USD'],
     nativeCurrencies: ['NGN', 'USD'],
@@ -108,7 +121,7 @@ const PAYMENT_PROVIDER_CAPABILITIES = {
     supportsInternational: true,
     requiresSmallestUnit: true,
     settlementCurrencies: ['NGN', 'USD'],
-    feeEfficiencyScore: 20, // Scores high for treasury, stablecoins & USD BaaS
+    feeEfficiencyScore: 20,
     methods: ['dva', 'bank_transfer', 'treasury'],
     supportedFeatures: {
       checkout: false,
@@ -125,6 +138,7 @@ const PAYMENT_PROVIDER_CAPABILITIES = {
   nowpayments: {
     name: 'nowpayments',
     capabilityVersion: 1,
+    maintenanceMode: 'ACTIVE',
     supportedCurrencies: ['BTC', 'ETH', 'USDT', 'USDC', 'MATIC', 'XRP'],
     merchantCurrencies: ['BTC', 'ETH', 'USDT', 'USDC', 'MATIC', 'XRP'],
     nativeCurrencies: ['BTC', 'ETH', 'USDT', 'USDC', 'MATIC', 'XRP'],
@@ -154,7 +168,6 @@ const PAYMENT_PROVIDER_CAPABILITIES = {
 
 /**
  * Checks if a provider's merchant account natively supports a currency.
- * Uses merchantCurrencies (what we're enabled for), not just platform support.
  */
 function supportsCurrency(providerName, currency) {
   const p = PAYMENT_PROVIDER_CAPABILITIES[String(providerName).toLowerCase()];
@@ -162,18 +175,12 @@ function supportsCurrency(providerName, currency) {
   return p.merchantCurrencies.includes(String(currency).toUpperCase());
 }
 
-/**
- * Checks if a provider supports a currency via SmartFallbackEngine.
- */
 function supportsFallbackCurrency(providerName, currency) {
   const p = PAYMENT_PROVIDER_CAPABILITIES[String(providerName).toLowerCase()];
   if (!p || !p.merchantEnabled) return false;
   return (p.fallbackCurrencies || []).includes(String(currency).toUpperCase());
 }
 
-/**
- * Checks if a provider supports a payment method.
- */
 function supportsMethod(providerName, method = 'card') {
   const p = PAYMENT_PROVIDER_CAPABILITIES[String(providerName).toLowerCase()];
   if (!p || !p.merchantEnabled) return false;
@@ -184,23 +191,52 @@ function supportsMethod(providerName, method = 'card') {
   return p.methods.includes(method);
 }
 
-/**
- * Returns full capability record for a provider.
- */
 function getProviderCapabilities(providerName) {
   const p = PAYMENT_PROVIDER_CAPABILITIES[String(providerName).toLowerCase()];
   if (!p) throw new Error(`[ProviderRegistry] Unknown provider: ${providerName}`);
   return p;
 }
 
-/**
- * Returns all enabled providers that can process a given currency + method combination.
- */
 function getCompatibleProviders(currency, method = 'card') {
   const up = String(currency).toUpperCase();
   return Object.values(PAYMENT_PROVIDER_CAPABILITIES).filter(
     (p) => p.merchantEnabled && (p.merchantCurrencies.includes(up) || (p.fallbackCurrencies || []).includes(up)) && p.methods.includes(method)
   );
+}
+
+/**
+ * [Phase 17] Check if a provider is in a non-ACTIVE maintenance state.
+ * @param {string} providerName
+ * @param {boolean} [blockDrainOnly=true]  If true, DRAIN_ONLY is also blocked for new transactions
+ * @returns {boolean} true = blocked from routing
+ */
+function isInMaintenance(providerName, blockDrainOnly = true) {
+  const p = PAYMENT_PROVIDER_CAPABILITIES[String(providerName).toLowerCase()];
+  if (!p) return false;
+  const mode = p.maintenanceMode || 'ACTIVE';
+  if (mode === 'MAINTENANCE' || mode === 'READ_ONLY') return true;
+  if (blockDrainOnly && mode === 'DRAIN_ONLY') return true;
+  return false;
+}
+
+/**
+ * [Phase 17] Get the maintenance mode for a provider.
+ */
+function getMaintenanceMode(providerName) {
+  const p = PAYMENT_PROVIDER_CAPABILITIES[String(providerName).toLowerCase()];
+  return p?.maintenanceMode || 'ACTIVE';
+}
+
+/**
+ * [Phase 17] Set maintenance mode at runtime (does NOT persist to DB).
+ * For DB-backed persistence, update banking_providers.maintenance_mode.
+ */
+function setMaintenanceMode(providerName, mode) {
+  const VALID_MODES = ['ACTIVE', 'MAINTENANCE', 'READ_ONLY', 'DRAIN_ONLY'];
+  if (!VALID_MODES.includes(mode)) throw new Error(`Invalid maintenance mode: ${mode}`);
+  const p = PAYMENT_PROVIDER_CAPABILITIES[String(providerName).toLowerCase()];
+  if (!p) throw new Error(`Unknown provider: ${providerName}`);
+  p.maintenanceMode = mode;
 }
 
 module.exports = {
@@ -210,4 +246,7 @@ module.exports = {
   supportsMethod,
   getProviderCapabilities,
   getCompatibleProviders,
+  isInMaintenance,
+  getMaintenanceMode,
+  setMaintenanceMode,
 };

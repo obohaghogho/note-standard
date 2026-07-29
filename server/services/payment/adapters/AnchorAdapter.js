@@ -88,6 +88,47 @@ class AnchorAdapter extends BasePaymentAdapter {
       return { status: 'DOWN', latencyMs: Date.now() - start };
     }
   }
+
+  // ── Phase 17: Unified payout, reversal, and balance methods ────────────────
+
+  async createTransfer(params) {
+    const AnchorTransferService = require('../../anchor/AnchorTransferService');
+    const result = await AnchorTransferService.createTransfer({
+      amount:        params.amount,
+      currency:      params.currency || 'NGN',
+      accountNumber: params.accountNumber,
+      bankCode:      params.bankCode,
+      accountName:   params.accountName,
+      narration:     params.narration || 'Payout',
+      reference:     params.correlationId,
+      userId:        params.userId,
+    });
+    return {
+      success:           result.success || !!result.data,
+      reference:         params.correlationId,
+      providerReference: result.transferId || result.data?.id || params.correlationId,
+    };
+  }
+
+  async reverseTransfer(reference, reason) {
+    const AnchorTransferService = require('../../anchor/AnchorTransferService');
+    const result = await AnchorTransferService.reverse(reference, reason).catch(() => ({ success: false }));
+    return {
+      success:          result.success || false,
+      reversalReference: result.reversalId || reference,
+    };
+  }
+
+  async balanceInquiry(currency) {
+    const AnchorBalanceFetcher = require('../../treasury/fetchers/AnchorBalanceFetcher');
+    const bal = await AnchorBalanceFetcher.fetchForCurrency(String(currency).toUpperCase());
+    return {
+      available:  bal?.available  || 0,
+      pending:    bal?.pending    || 0,
+      currency:   bal?.currency   || String(currency).toUpperCase(),
+      updatedAt:  bal?.updatedAt  || new Date().toISOString(),
+    };
+  }
 }
 
 module.exports = new AnchorAdapter();

@@ -5,7 +5,10 @@
  * Every provider MUST implement this interface.
  * Direct gateway SDK calls from business logic are prohibited.
  *
- * NoteStandard Financial Platform v4
+ * Phase 17: Added createTransfer(), reverseTransfer(), balanceInquiry()
+ * for unified payout, reversal, and treasury balance operations.
+ *
+ * NoteStandard Financial Platform v4 / Phase 17
  */
 
 const ConfigService = require('../../ConfigService');
@@ -119,6 +122,44 @@ class BasePaymentAdapter {
    */
   async healthCheck() {
     throw new Error(`[${this.providerName}] healthCheck() not implemented`);
+  }
+
+  /**
+   * [Phase 17] Initiate a payout / bank transfer.
+   * Used by the FinancialOrchestrator for PAYOUT operations.
+   * @param {Object} params
+   * @param {number}  params.amount
+   * @param {string}  params.currency
+   * @param {string}  params.userId
+   * @param {string}  params.correlationId
+   * @param {string}  [params.bankCode]
+   * @param {string}  [params.accountNumber]
+   * @param {string}  [params.accountName]
+   * @param {string}  [params.narration]
+   * @returns {Promise<{ success: boolean, reference: string, providerReference: string }>}
+   */
+  async createTransfer(params) {
+    throw new Error(`[${this.providerName}] createTransfer() not implemented`);
+  }
+
+  /**
+   * [Phase 17] Reverse / refund a previously executed transfer or payment.
+   * @param {string} reference      - Original reference to reverse
+   * @param {string} [reason]
+   * @returns {Promise<{ success: boolean, reversalReference: string }>}
+   */
+  async reverseTransfer(reference, reason) {
+    throw new Error(`[${this.providerName}] reverseTransfer() not implemented`);
+  }
+
+  /**
+   * [Phase 17] Retrieve live account balance for a currency.
+   * Used by the treasury balance sync and SmartFXRouter.
+   * @param {string} currency
+   * @returns {Promise<{ available: number, pending: number, currency: string, updatedAt: string }>}
+   */
+  async balanceInquiry(currency) {
+    throw new Error(`[${this.providerName}] balanceInquiry() not implemented`);
   }
 
   // ─── Shared Utilities ──────────────────────────────────────────────────

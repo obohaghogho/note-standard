@@ -16,7 +16,7 @@
  */
 
 const logger = require('../../utils/logger');
-const { PAYMENT_PROVIDER_CAPABILITIES, supportsCurrency, supportsFallbackCurrency, supportsMethod } = require('../../config/providerCapabilities');
+const { PAYMENT_PROVIDER_CAPABILITIES, supportsCurrency, supportsFallbackCurrency, supportsMethod, isInMaintenance, getMaintenanceMode, setMaintenanceMode } = require('../../config/providerCapabilities');
 const { isSupportedCryptoCurrency } = require('../../config/paymentCurrencies');
 const { GatewayUnavailableError } = require('../../utils/PaymentErrors');
 
@@ -64,6 +64,12 @@ class GatewayRouter {
 
       const health = this.getHealth(name);
       if (health === 'DOWN') continue;
+
+      // [Phase 17] Skip providers in maintenance
+      if (isInMaintenance(name)) {
+        logger.info(`[GatewayRouter] Skipping ${name} — maintenanceMode=${getMaintenanceMode(name)}`);
+        continue;
+      }
 
       const nativeSupport = supportsCurrency(name, up);
       const fallbackSupport = supportsFallbackCurrency(name, up);
@@ -135,6 +141,24 @@ class GatewayRouter {
     const result = {};
     for (const [name] of Object.entries(PAYMENT_PROVIDER_CAPABILITIES)) {
       result[name] = this.getHealth(name);
+    }
+    return result;
+  }
+
+  // [Phase 17] Runtime maintenance mode control
+  setMaintenanceMode(providerName, mode) {
+    setMaintenanceMode(providerName, mode);
+    logger.warn(`[GatewayRouter] Maintenance mode: ${providerName} → ${mode}`);
+  }
+
+  getMaintenanceMode(providerName) {
+    return getMaintenanceMode(providerName);
+  }
+
+  getAllMaintenanceModes() {
+    const result = {};
+    for (const [name] of Object.entries(PAYMENT_PROVIDER_CAPABILITIES)) {
+      result[name] = getMaintenanceMode(name);
     }
     return result;
   }

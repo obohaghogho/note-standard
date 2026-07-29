@@ -39,6 +39,20 @@ const notesWorkerManager = require("./workers/notesWorkerManager");
 const nowPaymentsPollingWorker = require("./workers/nowPaymentsPollingWorker");
 const supportInactivityWorker = require("./workers/supportInactivityWorker");
 
+// ── Enterprise Treasury Workers (Phase 1-15) ─────────────────────────────────
+const TreasuryBalanceSyncWorker    = require("./workers/TreasuryBalanceSyncWorker");
+const AggregateReconciliationWorker = require("./workers/AggregateReconciliationWorker");
+const ProviderHealthWorker          = require("./workers/ProviderHealthWorker");
+const LiquidityForecastWorker       = require("./workers/LiquidityForecastWorker");
+
+// ── Enterprise Financial Platform Workers (Phase 16) ──────────────────────────
+const NightlyReconciliationWorker  = require("./workers/NightlyReconciliationWorker");
+const SLAMetricsWorker             = require("./workers/SLAMetricsWorker");
+
+// ── Phase 17: Event replay worker ─────────────────────────────────────────────
+let EventReplayWorker;
+try { EventReplayWorker = require("./workers/EventReplayWorker"); } catch { EventReplayWorker = null; }
+
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
     logger.error(`Port ${PORT} is already in use. Please run 'npm run dev:safe' to clear it.`);
@@ -68,6 +82,18 @@ server.listen(PORT, async () => {
   notesWorkerManager.start();
   nowPaymentsPollingWorker.start();
   supportInactivityWorker.start();
+
+  // ── Enterprise Treasury Workers ────────────────────────────────────────────
+  TreasuryBalanceSyncWorker.start();
+  AggregateReconciliationWorker.start();
+  ProviderHealthWorker.start();
+  LiquidityForecastWorker.start();
+
+  // ── Phase 16: Enterprise Financial Platform Workers ───────────────────────
+  NightlyReconciliationWorker.start();
+  SLAMetricsWorker.start();
+  if (EventReplayWorker?.start) EventReplayWorker.start();
+
   // ✅ Workers are launched — mark workers ready
   bootManager.setService("workers", true);
   
@@ -84,6 +110,24 @@ server.listen(PORT, async () => {
         logger.info("[Boot] DB connectivity verified.");
         bootManager.setService("db", true);
         bootManager.setService("gateway", true); // Fast-path system readiness
+
+        // ── Phase 17: Provider Certification (non-blocking, post-DB) ───────────
+        setImmediate(async () => {
+          try {
+            const ProviderCertificationRegistry = require('./config/ProviderCertificationRegistry');
+            logger.info('[Boot] Running provider certification checks...');
+            const results = await ProviderCertificationRegistry.certifyAll();
+            const passed  = Object.values(results).filter(r => r.certified).length;
+            const total   = Object.keys(results).length;
+            logger.info(`[Boot] Provider certification complete: ${passed}/${total} certified`);
+            if (passed < total) {
+              const failed = Object.entries(results).filter(([, r]) => !r.certified).map(([k]) => k);
+              logger.warn(`[Boot] Providers not certified: ${failed.join(', ')}`);
+            }
+          } catch (certErr) {
+            logger.warn(`[Boot] Provider certification check failed (non-blocking): ${certErr.message}`);
+          }
+        });
       }
 
       // ── B: Seed Market Data (Non-blocking background initialization) ──────

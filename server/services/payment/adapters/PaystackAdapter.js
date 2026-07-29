@@ -111,6 +111,54 @@ class PaystackAdapter extends BasePaymentAdapter {
       return { status: 'DOWN', latencyMs: Date.now() - start };
     }
   }
+
+  // ── Phase 17: Unified payout, reversal, and balance methods ────────────────
+
+  async createTransfer(params) {
+    const payoutService = require('../../payment/payoutService');
+    const result = await payoutService.createPaystackTransfer(
+      params.bankCode,
+      params.accountNumber,
+      params.accountName,
+      params.amount,
+      params.currency || 'NGN',
+      params.correlationId,
+      params.narration || 'Payout'
+    );
+    return {
+      success:           result.success !== false,
+      reference:         params.correlationId,
+      providerReference: result.payoutId || params.correlationId,
+    };
+  }
+
+  async reverseTransfer(reference, reason) {
+    return this.refundPayment(reference, 0, reason).then(r => ({
+      success:           r.success,
+      reversalReference: r.refundReference || reference,
+    })).catch(() => ({ success: false, reversalReference: reference }));
+  }
+
+  async balanceInquiry(currency) {
+    try {
+      const axios      = require('axios');
+      const secretKey  = this.config('PAYSTACK_SECRET_KEY');
+      const { data } = await axios.get('https://api.paystack.co/balance', {
+        headers: { Authorization: `Bearer ${secretKey}` },
+        timeout: 8000,
+      });
+      const up      = String(currency).toUpperCase();
+      const account = (data?.data || []).find(b => b.currency === up) || {};
+      return {
+        available: (account.balance || 0) / 100,  // Paystack returns in kobo
+        pending:   0,
+        currency:  up,
+        updatedAt: new Date().toISOString(),
+      };
+    } catch {
+      return { available: 0, pending: 0, currency: String(currency).toUpperCase(), updatedAt: new Date().toISOString() };
+    }
+  }
 }
 
 module.exports = new PaystackAdapter();

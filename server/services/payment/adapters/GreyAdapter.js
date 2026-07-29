@@ -88,6 +88,53 @@ class GreyAdapter extends BasePaymentAdapter {
       return { status: 'DOWN', latencyMs: Date.now() - start };
     }
   }
+
+  // ── Phase 17: Unified payout, reversal, and balance methods ────────────────
+
+  async createTransfer(params) {
+    const result = await this._provider.initiateTransfer?.({
+      amount:        params.amount,
+      currency:      params.currency,
+      accountNumber: params.accountNumber,
+      bankCode:      params.bankCode,
+      accountName:   params.accountName,
+      narration:     params.narration || 'Payout',
+      reference:     params.correlationId,
+    }) || {};
+    return {
+      success:           result.success !== false,
+      reference:         params.correlationId,
+      providerReference: result.reference || result.transferId || params.correlationId,
+    };
+  }
+
+  async reverseTransfer(reference, reason) {
+    // Grey does not support programmatic reversals
+    const logger = require('../../../utils/logger');
+    logger.warn(`[GreyAdapter] reverseTransfer requested for ${reference} — Grey requires manual reversal`);
+    return { success: false, reversalReference: reference, note: 'Grey requires manual reversal' };
+  }
+
+  async balanceInquiry(currency) {
+    try {
+      const axios    = require('axios');
+      const baseUrl  = this.config('GREY_BASE_URL') || 'https://api.grey.co';
+      const apiKey   = this.config('GREY_API_KEY');
+      const up       = String(currency).toUpperCase();
+      const { data } = await axios.get(`${baseUrl}/v1/wallets/${up}`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        timeout: 8000,
+      });
+      return {
+        available: parseFloat(data?.balance || data?.available || 0),
+        pending:   parseFloat(data?.pending  || 0),
+        currency:  up,
+        updatedAt: new Date().toISOString(),
+      };
+    } catch {
+      return { available: 0, pending: 0, currency: String(currency).toUpperCase(), updatedAt: new Date().toISOString() };
+    }
+  }
 }
 
 module.exports = new GreyAdapter();

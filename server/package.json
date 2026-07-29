@@ -7,7 +7,6 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "echo \"Server build complete\"",
     "start": "node index.js",
-
     "dev": "nodemon index.js",
     "dev:safe": "node scripts/fix_start.js",
     "lint": "eslint ."
@@ -44,6 +43,7 @@
     "json2csv": "^6.0.0-alpha.2",
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
+    "node-cron": "^4.6.0",
     "node-fetch": "^2.7.0",
     "nodemailer": "^8.0.1",
     "openai": "^6.33.0",

@@ -119,4 +119,17 @@ if (process.env.ENABLE_FINCRA === "true") {
   router.use("/fincra", require("./admin/fincraAdmin"));
 }
 
+// ── Enterprise Treasury Dashboard (Phase 1-15) ───────────────────────────────
+// Mounts all treasury routes under /api/admin/treasury/...
+// requireAdmin is already applied to this entire router above.
+router.use('/treasury', require('./admin/treasuryRoutes'));
+
+// ── Phase 17: Reporting + Maintenance Mode + Migration Status ─────────────────
+// POST /api/admin/reports/generate        - Generate compliance/audit reports
+// GET  /api/admin/reports/types           - List available report types
+// GET  /api/admin/reports/providers/maintenance  - View maintenance modes
+// POST /api/admin/reports/providers/maintenance  - Set provider maintenance mode
+// GET  /api/admin/reports/migration-status       - CFO migration flag status
+router.use('/reports', require('./admin/reportingRoutes'));
+
 module.exports = router;

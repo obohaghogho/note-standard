@@ -97,6 +97,56 @@ class FincraAdapter extends BasePaymentAdapter {
       return { status: 'DOWN', latencyMs: Date.now() - start };
     }
   }
+
+  // ── Phase 17: Unified payout, reversal, and balance methods ────────────────
+
+  async createTransfer(params) {
+    const result = await this._provider.initiateWithdrawal?.({
+      amount:        params.amount,
+      currency:      params.currency,
+      accountNumber: params.accountNumber,
+      bankCode:      params.bankCode,
+      accountName:   params.accountName,
+      narration:     params.narration || 'Payout',
+      reference:     params.correlationId,
+      beneficiaryType: 'individual',
+    }) || {};
+    return {
+      success:           result.success !== false,
+      reference:         params.correlationId,
+      providerReference: result.reference || result.data?.reference || params.correlationId,
+    };
+  }
+
+  async reverseTransfer(reference, reason) {
+    // Fincra requires manual reversal — returns pending manual review status
+    logger.warn(`[FincraAdapter] reverseTransfer requested for ${reference} — Fincra requires manual reversal via dashboard`);
+    return { success: false, reversalReference: reference, note: 'Fincra requires manual reversal via dashboard' };
+  }
+
+  async balanceInquiry(currency) {
+    try {
+      const { dispatchFincraRequest } = require('../../fincra/gatewayClient');
+      const baseUrl = this.config('FINCRA_BASE_URL') || 'https://sandboxapi.fincra.com';
+      const apiKey  = this.config('FINCRA_API_KEY');
+      const businessId = this.config('FINCRA_BUSINESS_ID');
+      const resp = await dispatchFincraRequest({
+        method: 'GET',
+        path:   `/wallets?businessId=${businessId}&currency=${String(currency).toUpperCase()}`,
+        headers: { 'api-key': apiKey },
+        targetUrl: baseUrl,
+      });
+      const wallet = resp?.data?.data?.[0] || {};
+      return {
+        available: parseFloat(wallet.availableBalance || wallet.balance || 0),
+        pending:   parseFloat(wallet.pendingBalance   || 0),
+        currency:  String(currency).toUpperCase(),
+        updatedAt: new Date().toISOString(),
+      };
+    } catch {
+      return { available: 0, pending: 0, currency: String(currency).toUpperCase(), updatedAt: new Date().toISOString() };
+    }
+  }
 }
 
 module.exports = new FincraAdapter();
