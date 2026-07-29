@@ -97,6 +97,19 @@ async function dispatchFincraRequest({ method, path, headers = {}, body = null, 
       requestId
     });
 
+    // ── DIAGNOSTIC: Confirm gateway routing variables on every request ──
+    console.log('[GATEWAY_ROUTING_DIAGNOSTIC]', {
+      gatewayUrl,
+      proxyEndpoint,
+      fincraEnv: process.env.FINCRA_ENV,
+      nodeEnv: process.env.NODE_ENV,
+      hasFincraGatewayUrl: !!process.env.FINCRA_GATEWAY_URL,
+      hasGatewayKey: !!process.env.FINCRA_GATEWAY_KEY,
+      usingHardcodedKeyFallback: !process.env.FINCRA_GATEWAY_KEY,
+      usingGateway: !!gatewayUrl,
+      isProd,
+    });
+
     try {
       const response = await axios.post(proxyEndpoint, proxyBody, {
         headers: {
