@@ -19,6 +19,16 @@ function assertFincraEnabled() {
 function createFincraClient() {
   assertFincraEnabled();
 
+  const apiKeySource =
+    process.env.FINCRA_API_KEY          ? 'FINCRA_API_KEY' :
+    process.env.FINCRA_SECRET_KEY       ? 'FINCRA_SECRET_KEY' :
+    process.env.FINCRA_LIVE_SECRET_KEY  ? 'FINCRA_LIVE_SECRET_KEY' :
+    process.env.FINCRA_SANDBOX_SECRET_KEY ? 'FINCRA_SANDBOX_SECRET_KEY' :
+    process.env.FINCRA_KEY              ? 'FINCRA_KEY' :
+    process.env.VITE_FINCRA_PUBLIC_KEY  ? 'VITE_FINCRA_PUBLIC_KEY' :
+    process.env.FINCRA_PUBLIC_KEY       ? 'FINCRA_PUBLIC_KEY' :
+    'HARDCODED_FALLBACK';
+
   const apiKey = (
     process.env.FINCRA_API_KEY ||
     process.env.FINCRA_SECRET_KEY ||
@@ -29,6 +39,17 @@ function createFincraClient() {
     process.env.FINCRA_PUBLIC_KEY ||
     "fincra_api_key_configured"
   ).trim();
+
+  // ── DIAGNOSTIC: Show which env var provided the Fincra API key ──
+  console.log('[FINCRA_KEY_DIAGNOSTIC]', {
+    apiKeySource,
+    apiKeyPrefix: apiKey.substring(0, 8),
+    apiKeySuffix: apiKey.slice(-4),
+    apiKeyLength: apiKey.length,
+    isSuspiciouslyShort: apiKey.length < 20,
+    looksLikePublicKey: apiKey.startsWith('pk_') || apiKey.toLowerCase().includes('pub'),
+    looksLikeSandbox: apiKey.includes('sandbox') || apiKey.includes('test'),
+  });
 
   const isProdEnv = process.env.NODE_ENV === 'production' || process.env.FINCRA_ENV === 'live' || process.env.FINCRA_ENV === 'production';
   const baseURL = (
