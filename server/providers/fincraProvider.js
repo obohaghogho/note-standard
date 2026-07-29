@@ -41,6 +41,7 @@ class FincraProvider extends PayoutProvider {
       sourceCurrency:      currency.toUpperCase(),
       destinationCurrency: currency.toUpperCase(),
       amount:              parseFloat(amount),
+      business:            businessId,                // ← REQUIRED: identifies the Fincra merchant
       description:         narration || `NoteStandard withdrawal ${reference}`,
       customerReference:   reference,
       beneficiary: {
@@ -51,14 +52,24 @@ class FincraProvider extends PayoutProvider {
       },
     };
 
+    logger.info(`[FincraProvider] Initiating payout | ref=${reference} amount=${amount} ${currency} businessId=${businessId || 'MISSING'}`);
+
     let res;
     try {
       res = await instance.post("/disbursements/payouts", payload);
     } catch (err) {
-      const errMsg = err.response?.data?.message || err.message || "";
+      // ALWAYS log the raw Fincra error before any transformation
+      const rawErrData = err.response?.data;
+      const errStatus  = err.response?.status;
+      const errMsg     = rawErrData?.message || rawErrData?.error || err.message || "";
+      logger.error(`[FincraProvider] RAW Fincra payout error | status=${errStatus} message=${errMsg}`, {
+        rawResponse: rawErrData,
+        payloadSent: { ...payload, beneficiary: { ...payload.beneficiary } },
+      });
+      console.error('[FINCRA_PAYOUT_ERROR_RAW]', JSON.stringify({ errStatus, rawErrData, errMsg }, null, 2));
+
       if (errMsg.includes("IP address") || errMsg.includes("not allowed")) {
-        logger.error(`[FincraProvider] IP Whitelist restriction triggered: ${errMsg}`);
-        throw new Error("FINCRA_IP_RESTRICTION: Render egress IP is not whitelisted on Fincra Merchant Portal. Please configure FINCRA_GATEWAY_URL or allowlist server egress IP in Fincra Settings.");
+        throw new Error(`FINCRA_IP_RESTRICTION: Fincra rejected the payout with: "${errMsg}". Render egress IP may not be whitelisted, OR the 'business' ID is missing/invalid. businessId=${businessId || 'MISSING'}`);
       }
       throw err;
     }
