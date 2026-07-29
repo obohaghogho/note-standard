@@ -838,6 +838,14 @@ exports.getCryptoNetworks = async (req, res) => {
   } catch (e) { err(res, e.message); }
 };
 
+exports.getPublicCryptoAssets = async (req, res) => {
+  try {
+    const CryptoCapabilityService = require('../services/nowpayments/CryptoCapabilityService');
+    const assets = await CryptoCapabilityService.getPublicAssetsList();
+    ok(res, { data: assets });
+  } catch (e) { err(res, e.message); }
+};
+
 exports.updateCryptoNetworkState = async (req, res) => {
   try {
     const { currency, network } = req.params;

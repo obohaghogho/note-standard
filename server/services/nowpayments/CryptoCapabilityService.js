@@ -192,8 +192,30 @@ class CryptoCapabilityService {
   }
 
   /**
-   * Validate network capability for Financial Orchestrator or Routing Engine.
+   * Get dynamic list of available assets and networks from DB cache (zero external HTTP calls).
    */
+  async getPublicAssetsList() {
+    const groups = await this.getAvailableAssetsAndNetworks();
+    const list = [];
+
+    for (const g of groups) {
+      for (const net of g.networks) {
+        list.push({
+          currency:        g.currency,
+          network:         net.network,
+          networkLabel:    net.networkLabel,
+          status:          net.status,
+          available:       net.available,
+          displayState:    net.displayState,
+          disabledReason:  net.disabledReason,
+          minConfirmations: net.minConfirmations,
+          explorerUrl:     net.explorerUrl,
+        });
+      }
+    }
+
+    return list;
+  }
   async validateNetworkCapability(currency, network = 'NATIVE', operationType = 'DEPOSIT') {
     const cur = String(currency).toUpperCase();
     const net = String(network).toUpperCase();

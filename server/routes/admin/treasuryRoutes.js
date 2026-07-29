@@ -347,6 +347,7 @@ router.get('/reports/audit-export',  ctrl.getAuditExport);
 // GET   /api/admin/treasury/reports/capabilities           Provider capability report
 // GET   /api/admin/treasury/reports/networks               Crypto network report
 router.get('/crypto/networks',                  ctrl.getCryptoNetworks);
+router.get('/crypto/assets',                    ctrl.getPublicCryptoAssets);
 router.patch('/crypto/networks/:currency/:network', ctrl.updateCryptoNetworkState);
 router.post('/crypto/capabilities/sync',        ctrl.syncCryptoCapabilities);
 router.get('/reports/capabilities',             ctrl.getProviderCapabilityReport);
