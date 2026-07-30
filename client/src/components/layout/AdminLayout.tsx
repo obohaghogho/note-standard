@@ -30,6 +30,7 @@ import {
 
 import { LanguageSelector } from '../common/LanguageSelector';
 import SecureImage from '../common/SecureImage';
+import { preloadRoute, preloadCoreAdminRoutes } from '../../utils/routePreloader';
 import './AdminLayout.css';
 
 interface AdminProfile {
@@ -78,6 +79,7 @@ export const AdminLayout = () => {
 
     useEffect(() => {
         fetchAdminProfile();
+        preloadCoreAdminRoutes();
     }, [session, fetchAdminProfile]);
 
     useEffect(() => {
@@ -149,6 +151,8 @@ export const AdminLayout = () => {
                             key={item.to}
                             to={item.to}
                             end={item.end}
+                            onMouseEnter={() => preloadRoute(item.to)}
+                            onPointerDown={() => preloadRoute(item.to)}
                             className={({ isActive }) =>
                                 `nav-item ${isActive ? 'active' : ''}`
                             }
