@@ -27,8 +27,8 @@ const getBreakpoint = (width: number): Breakpoint => {
 
 export const useBreakpoint = (): BreakpointState => {
   const [state, setState] = useState<BreakpointState>(() => {
-    const width = typeof window !== 'undefined' ? window.innerWidth : 1200;
-    const height = typeof window !== 'undefined' ? window.innerHeight : 800;
+    const width = typeof window !== 'undefined' ? window.innerWidth : 360;
+    const height = typeof window !== 'undefined' ? window.innerHeight : 640;
     const bp = getBreakpoint(width);
     return {
       breakpoint: bp,

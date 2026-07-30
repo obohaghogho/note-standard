@@ -334,7 +334,7 @@
    
    Controlled via data-mobile-panel attribute on .teams-page
    ==================================================== */
-@media (max-width: 768px) {
+@media (max-width: 1023px) {
 
   /* Root: stack all columns absolutely so only one is visible */
   .teams-page {

@@ -375,7 +375,7 @@
     }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1023px) {
     .admin-sidebar {
         position: fixed;
         left: 0;
