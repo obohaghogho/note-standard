@@ -3,7 +3,7 @@ const { getLeaseSnapshot } = require("./leaseSnapshot");
 const { computeRisk, ACC_MODEL_VERSION } = require("./riskEngine");
 const { decide } = require("./decisionTable");
 
-const ACC_BUDGET_MS = 5;
+const ACC_BUDGET_MS = 2000;
 const ACC_FAILURE_MODE = "DELAY";
 
 async function _executeAccGuard(action, supabase, isShadowMode) {

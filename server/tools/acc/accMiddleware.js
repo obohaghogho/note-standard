@@ -66,9 +66,10 @@ async function accMiddleware(req, res, next) {
     next();
   } catch (err) {
       console.error("[ACC Middleware Error]", err);
-      // Because ACC enforces FAIL-CLOSED inside accGuard, this catch block handles
-      // catastrophic infrastructure failures (e.g. out of memory, Express parsing fails).
-      // We still FAIL CLOSED for maximum consistency safety.
+      if (SHADOW_MODE) {
+          console.warn("[ACC SHADOW MODE] Non-fatal middleware notice:", err.message);
+          return next();
+      }
       return res.status(503).json({ ok: false, reason: "ACC_SYSTEM_FAILURE" });
   }
 }
