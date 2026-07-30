@@ -11,7 +11,8 @@ import {
     Check,
     Search,
     Phone,
-    Video
+    Video,
+    ArrowLeft
 } from 'lucide-react';
 import type { Message, Conversation } from '../../context/ChatContext';
 import { useWebRTC } from '../../context/WebRTCContext';
@@ -468,6 +469,14 @@ export const AdminChat = () => {
                 {activeChat ? (
                     <>
                         <div className="chat-window-header">
+                            <button
+                                onClick={() => setActiveChat(null)}
+                                className="mobile-back-btn"
+                                title="Back to Chat List"
+                                aria-label="Back to Chat List"
+                            >
+                                <ArrowLeft size={18} />
+                            </button>
                             <div className="chat-user-info">
                                 {(() => {
                                     const chatMember = getUserFromChat(activeChat);
