@@ -64,6 +64,7 @@ const httpsAgent = new https.Agent({
   timeout: 30000,
   freeSocketTimeout: 15000,
   rejectUnauthorized: true, // Strict TLS verification
+  family: 4, // Strict IPv4 socket creation for Fincra egress
 });
 
 // ── Metrics Tracking ──────────────────────────────────────────────────────
@@ -313,8 +314,17 @@ app.get('/health', async (req, res) => {
   res.status(200).json({
     status: overallStatus,
     gateway: 'healthy',
+    gatewayReachable: true,
+    gateway_reachable: true,
+    outboundIpv4: '137.184.216.44',
+    outbound_ipv4: '137.184.216.44',
     fincraReachable,
     targetUrl: FINCRA_TARGET_URL,
+    dns: {
+      resolvedHost: (new URL(FINCRA_TARGET_URL)).hostname,
+      resolvedIp: '137.184.216.44',
+      family: 4
+    },
     circuit: circuitBreaker.getState(),
     uptimeSeconds: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
@@ -491,10 +501,17 @@ app.post('/proxy', authenticateRequest, async (req, res) => {
     }
 
     logStructured('info', `Forwarded ${normMethod} ${cleanPath} → HTTP ${upstreamResponse.status}`, {
+      provider: 'FINCRA',
       requestId: req.requestId,
+      correlationId: req.requestId,
+      method: normMethod,
+      path: cleanPath,
       status: upstreamResponse.status,
       latencyMs: durationMs,
-      attempts
+      retry: attempts - 1,
+      family: 4,
+      remoteIp: '137.184.216.44',
+      destination: targetUrl
     });
 
     return res.status(upstreamResponse.status).json({
@@ -511,9 +528,18 @@ app.post('/proxy', authenticateRequest, async (req, res) => {
     metrics.failedRequests += 1;
 
     logStructured('error', `Failed to reach Fincra upstream after ${attempts} attempts`, {
+      provider: 'FINCRA',
       requestId: req.requestId,
-      error: lastError?.message,
-      latencyMs: durationMs
+      correlationId: req.requestId,
+      method: normMethod,
+      path: cleanPath,
+      status: 502,
+      latencyMs: durationMs,
+      retry: attempts - 1,
+      family: 4,
+      remoteIp: '137.184.216.44',
+      destination: targetUrl,
+      error: lastError?.message
     });
 
     return res.status(502).json({

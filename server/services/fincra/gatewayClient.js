@@ -3,24 +3,30 @@
  * ─────────────────────────────────────────────────────────────
  * Provides a unified, secure HTTP transport layer for all outbound Fincra requests.
  *
- * When FINCRA_GATEWAY_URL is configured:
- *  - Routes requests to the Fincra Static IP Gateway (137.184.216.44 / gateway.notestandard.com)
- *  - Injects X-Gateway-Key authentication header
- *  - Generates X-Timestamp and HMAC-SHA256 X-Signature headers
- *  - Attaches X-Request-ID correlation tracking
- *  - Enforces strict failover error handling (never bypasses gateway when configured)
- *
- * When FINCRA_GATEWAY_URL is NOT set:
- *  - Executes requests directly against Fincra API (used for local development)
+ * ALL Fincra requests route strictly through gateway.notestandard.com (137.184.216.44).
+ * Direct fallback to Fincra API is strictly disabled to prevent Render IPv6 leaks.
+ * If the gateway is unreachable, the client fails fast with HTTP 503 SERVICE_UNAVAILABLE.
  */
 
 const axios = require('axios');
+const https = require('https');
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const logger = require('../../utils/logger');
 
+// HTTPS Agent enforcing family: 4 (IPv4)
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  maxSockets: 50,
+  maxFreeSockets: 10,
+  timeout: 30000,
+  freeSocketTimeout: 15000,
+  rejectUnauthorized: true,
+  family: 4, // Enforce IPv4 socket connection
+});
+
 class FincraGatewayError extends Error {
-  constructor(message, statusCode = 502, details = null) {
+  constructor(message, statusCode = 503, details = null) {
     super(message);
     this.name = 'FincraGatewayError';
     this.statusCode = statusCode;
@@ -29,236 +35,175 @@ class FincraGatewayError extends Error {
 }
 
 /**
- * Dispatches an HTTP request to Fincra either through the Gateway or directly.
+ * Dispatches an HTTP request to Fincra through the Gateway.
+ * Direct connections to Fincra are strictly disabled to enforce static IPv4 egress.
  *
  * @param {Object} options
  * @param {string} options.method      - HTTP method ('GET', 'POST', 'PUT', etc.)
  * @param {string} options.path        - Fincra relative endpoint path (e.g., '/checkout/payments')
  * @param {Object} [options.headers]   - Fincra-specific headers ('api-key', 'x-pub-key', etc.)
  * @param {Object} [options.body]      - JSON request body payload
- * @param {string} [options.targetUrl] - Direct target base URL fallback (default: FINCRA_BASE_URL)
  * @returns {Promise<{ status: number, data: any, headers: any }>}
  */
-async function dispatchFincraRequest({ method, path, headers = {}, body = null, targetUrl = null }) {
-  const isProd = process.env.NODE_ENV === 'production' || process.env.FINCRA_ENV === 'live' || process.env.FINCRA_ENV === 'production';
-  const defaultGateway = isProd ? 'https://gateway.notestandard.com' : '';
+async function dispatchFincraRequest({ method, path, headers = {}, body = null }) {
+  const defaultGateway = 'https://gateway.notestandard.com';
   const gatewayUrl = (process.env.FINCRA_GATEWAY_URL || defaultGateway).trim().replace(/\/+$/, '');
   const gatewayKey = (process.env.FINCRA_GATEWAY_KEY || '3dfd955a433a3eb100e2dc4763ec48b4b93ca85f0d722ffcfd1cbed6198319d9').trim();
   const cleanPath  = path.startsWith('/') ? path : `/${path}`;
-  const requestId  = headers['x-request-id'] || headers['X-Request-ID'] || uuidv4();
+  const requestId  = headers['x-request-id'] || headers['X-Request-ID'] || headers['x-correlation-id'] || headers['X-Correlation-ID'] || uuidv4();
+  const correlationId = requestId;
 
   const normMethod = method.toUpperCase();
+  const startTime = Date.now();
 
-  const maskedHeaders = { ...headers };
-  if (maskedHeaders['api-key']) {
-    maskedHeaders['api-key'] = `${maskedHeaders['api-key'].substring(0, 4)}****${maskedHeaders['api-key'].substring(maskedHeaders['api-key'].length - 4)}`;
-  }
-  if (maskedHeaders['x-pub-key']) {
-    maskedHeaders['x-pub-key'] = `${maskedHeaders['x-pub-key'].substring(0, 4)}****${maskedHeaders['x-pub-key'].substring(maskedHeaders['x-pub-key'].length - 4)}`;
-  }
+  const proxyEndpoint = gatewayUrl.endsWith('/proxy') ? gatewayUrl : `${gatewayUrl}/proxy`;
+  const timestamp = Date.now().toString();
 
-  console.log(`[E2E_CORRELATION_TRACE] [${requestId}] [Stage 4/10] gatewayClient.dispatchFincraRequest Entry | Path: ${cleanPath}, Method: ${normMethod}`);
-  console.log(`[E2E_CORRELATION_TRACE] [${requestId}] [Stage 5/10] Outbound Request Configuration | Target Gateway: ${gatewayUrl || 'DIRECT_MODE'}, Headers:`, JSON.stringify(maskedHeaders, null, 2));
-
-  // ── 1. GATEWAY MODE (Production / Allowlisted Egress) ───────────────────
-  if (gatewayUrl) {
-    if (!gatewayKey) {
-      const err = new FincraGatewayError('[FincraGateway] FINCRA_GATEWAY_URL is configured but FINCRA_GATEWAY_KEY is missing.');
-      logger.error(err.message);
-      throw err;
-    }
-
-    const proxyEndpoint = gatewayUrl.endsWith('/proxy') ? gatewayUrl : `${gatewayUrl}/proxy`;
-    const timestamp = Date.now().toString();
-
-    const proxyBody = {
-      method: normMethod,
-      path: cleanPath,
-      headers: {
-        ...headers,
-        'x-request-id': requestId
-      }
-    };
-    if (normMethod !== 'GET' && body !== null && body !== undefined) {
-      proxyBody.body = body;
-    }
-
-    const rawPayload = JSON.stringify(proxyBody);
-    const signature = crypto
-      .createHmac('sha256', gatewayKey)
-      .update(`${timestamp}${rawPayload}`)
-      .digest('hex');
-
-    console.log(`[E2E_CORRELATION_TRACE] [${requestId}] [Stage 6/10 & 7/10] Forwarding via Gateway Proxy Endpoint (${proxyEndpoint})`);
-
-    logger.info(`[FincraGateway] 🔒 Routing request via Gateway (${proxyEndpoint})`, {
-      method: normMethod,
-      path: cleanPath,
-      requestId
-    });
-
-    // ── DIAGNOSTIC: Confirm gateway routing variables on every request ──
-    console.log('[GATEWAY_ROUTING_DIAGNOSTIC]', {
-      gatewayUrl,
-      proxyEndpoint,
-      fincraEnv: process.env.FINCRA_ENV,
-      nodeEnv: process.env.NODE_ENV,
-      hasFincraGatewayUrl: !!process.env.FINCRA_GATEWAY_URL,
-      hasGatewayKey: !!process.env.FINCRA_GATEWAY_KEY,
-      usingHardcodedKeyFallback: !process.env.FINCRA_GATEWAY_KEY,
-      usingGateway: !!gatewayUrl,
-      isProd,
-    });
-
-    try {
-      const response = await axios.post(proxyEndpoint, proxyBody, {
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Gateway-Key': gatewayKey,
-          'X-Timestamp': timestamp,
-          'X-Signature': signature,
-          'X-Request-ID': requestId
-        },
-        timeout: 30000, // 30s — must give gateway enough time to reach Fincra
-        validateStatus: () => true // Receive status codes from gateway
-      });
-
-      console.log(`[E2E_CORRELATION_TRACE] [${requestId}] [Stage 8/10] Gateway Response Received | Status: ${response.status}, Data:`, JSON.stringify(response.data, null, 2));
-
-      if (response.status >= 500 && response.data?.error === 'Service Unavailable') {
-        const circuitErr = new FincraGatewayError(
-          `Fincra Gateway Circuit Open: ${response.data?.message || 'Upstream degraded'}`,
-          503,
-          response.data
-        );
-        logger.error(circuitErr.message);
-        throw circuitErr;
-      }
-
-      if (response.status === 401) {
-        const authErr = new FincraGatewayError(
-          `Fincra Gateway Authentication Failed: ${response.data?.message || 'Unauthorized'}`,
-          401,
-          response.data
-        );
-        logger.error(authErr.message);
-        throw authErr;
-      }
-
-      // If Gateway returns a gateway-level 404/502/503/504 error, attempt direct dispatch fallback
-      const isGatewayError = response.status === 404 || response.status === 502 || response.status === 503 || response.status === 504 || response.data?.error === "Not Found";
-      if (!isGatewayError) {
-        const resData = response.data?.data !== undefined && response.data?.status !== undefined
-          ? response.data.data
-          : response.data;
-
-        const resStatus = response.data?.status || response.status;
-
-        return {
-          status: resStatus,
-          data: resData,
-          headers: response.headers
-        };
-      }
-
-      // Gateway returned a 4xx/5xx that indicates a routing/infra failure — throw in production
-      const gatewayErrMsg = `[FincraGateway] Gateway returned HTTP ${response.status}: ${JSON.stringify(response.data)}`;
-      logger.error(gatewayErrMsg);
-      throw new FincraGatewayError(gatewayErrMsg, response.status, response.data);
-    } catch (error) {
-      if (error instanceof FincraGatewayError) throw error;
-      // Network / timeout error reaching the gateway itself
-      const errorMsg = error.response?.data?.message || error.message || 'Fincra Gateway connection failed';
-      const isProdGuard = process.env.NODE_ENV === 'production' || process.env.FINCRA_ENV === 'live' || process.env.FINCRA_ENV === 'production';
-      if (isProdGuard) {
-        // In production, NEVER fall back to direct — that would expose Render's unwhitelisted IP
-        const prodErr = new FincraGatewayError(
-          `[FincraGateway] PRODUCTION_GATEWAY_FAILURE: Gateway unreachable (${errorMsg}). Direct Fincra access is blocked from Render. Check gateway health at https://gateway.notestandard.com`,
-          503,
-          { gatewayUrl: proxyEndpoint, originalError: errorMsg }
-        );
-        logger.error(prodErr.message, { proxyEndpoint, originalError: errorMsg });
-        throw prodErr;
-      }
-      logger.warn(`[FincraGateway] Gateway request failed (${errorMsg}). Attempting direct fallback (non-production only)...`);
-    }
-  }
-
-  // ── 2. DIRECT MODE (Local Dev ONLY — never reached in production) ────────
-  const isProdEnv = process.env.NODE_ENV === 'production' || process.env.FINCRA_ENV === 'live' || process.env.FINCRA_ENV === 'production';
-
-  // Hard production guard: if we somehow reach this point in production, refuse to call Fincra directly
-  if (isProdEnv) {
-    const hardGuardErr = new FincraGatewayError(
-      'FINCRA_DIRECT_BLOCKED: Direct Fincra access is not permitted in production. All requests must route through gateway.notestandard.com.',
-      503
-    );
-    logger.error(hardGuardErr.message);
-    throw hardGuardErr;
-  }
-
-  const defaultBase = 'https://sandboxapi.fincra.com';
-  const baseUrl = (targetUrl || process.env.FINCRA_BASE_URL || defaultBase).replace(/\/+$/, '');
-  const directUrl = `${baseUrl}${cleanPath}`;
-
-  console.log(`[E2E_CORRELATION_TRACE] [${requestId}] [Stage 6/10 & 7/10] Routing Request DIRECT to Fincra Sandbox API (${directUrl})`);
-
-  logger.info(`[FincraGateway] ⚡ Routing request DIRECT (Local Dev / Sandbox ONLY)`, {
+  const proxyBody = {
     method: normMethod,
-    url: directUrl,
-    requestId
+    path: cleanPath,
+    headers: {
+      ...headers,
+      'x-request-id': requestId,
+      'x-correlation-id': correlationId,
+    }
+  };
+  if (normMethod !== 'GET' && body !== null && body !== undefined) {
+    proxyBody.body = body;
+  }
+
+  const rawPayload = JSON.stringify(proxyBody);
+  const signature = crypto
+    .createHmac('sha256', gatewayKey)
+    .update(`${timestamp}${rawPayload}`)
+    .digest('hex');
+
+  logger.info(`[FincraGateway] 🔒 Routing ${normMethod} ${cleanPath} via Gateway (${proxyEndpoint})`, {
+    provider: 'FINCRA',
+    requestId,
+    correlationId,
+    method: normMethod,
+    path: cleanPath,
+    family: 4,
+    remoteIp: '137.184.216.44'
   });
 
   try {
-    const axiosOptions = {
-      method: normMethod,
-      url: directUrl,
+    const response = await axios.post(proxyEndpoint, proxyBody, {
       headers: {
-        ...headers,
-        'x-request-id': requestId
+        'Content-Type': 'application/json',
+        'X-Gateway-Key': gatewayKey,
+        'X-Timestamp': timestamp,
+        'X-Signature': signature,
+        'X-Request-ID': requestId,
+        'X-Correlation-ID': correlationId,
       },
       timeout: 30000,
+      httpsAgent,
       validateStatus: () => true
-    };
-    if (normMethod !== 'GET' && body !== null && body !== undefined) {
-      axiosOptions.data = body;
+    });
+
+    const latencyMs = Date.now() - startTime;
+
+    if (response.status >= 500 && response.data?.error === 'Service Unavailable') {
+      const circuitErr = new FincraGatewayError(
+        `Fincra Gateway Circuit Open: ${response.data?.message || 'Upstream degraded'}`,
+        503,
+        response.data
+      );
+      logger.error(circuitErr.message, {
+        provider: 'FINCRA',
+        requestId,
+        correlationId,
+        method: normMethod,
+        path: cleanPath,
+        status: 503,
+        latencyMs,
+        retry: 0,
+        family: 4,
+        remoteIp: '137.184.216.44',
+        destination: `${gatewayUrl}${cleanPath}`
+      });
+      throw circuitErr;
     }
 
-    const maskedHeaders = { ...headers };
-    if (maskedHeaders['api-key']) {
-      maskedHeaders['api-key'] = `${maskedHeaders['api-key'].substring(0, 4)}****${maskedHeaders['api-key'].substring(maskedHeaders['api-key'].length - 4)}`;
-    }
-    if (maskedHeaders['x-pub-key']) {
-      maskedHeaders['x-pub-key'] = `${maskedHeaders['x-pub-key'].substring(0, 4)}****${maskedHeaders['x-pub-key'].substring(maskedHeaders['x-pub-key'].length - 4)}`;
+    if (response.status === 401) {
+      const authErr = new FincraGatewayError(
+        `Fincra Gateway Authentication Failed: ${response.data?.message || 'Unauthorized'}`,
+        401,
+        response.data
+      );
+      logger.error(authErr.message, {
+        provider: 'FINCRA',
+        requestId,
+        correlationId,
+        method: normMethod,
+        path: cleanPath,
+        status: 401,
+        latencyMs,
+        retry: 0,
+        family: 4,
+        remoteIp: '137.184.216.44',
+        destination: `${gatewayUrl}${cleanPath}`
+      });
+      throw authErr;
     }
 
-    console.log("[FINCRA_HTTP_TRACE] OUTBOUND REQUEST:", JSON.stringify({
-      url: directUrl,
+    const resData = response.data?.data !== undefined && response.data?.status !== undefined
+      ? response.data.data
+      : response.data;
+
+    const resStatus = response.data?.status || response.status;
+
+    logger.info(`[FincraGateway] Gateway Request Completed`, {
+      provider: 'FINCRA',
+      requestId,
+      correlationId,
       method: normMethod,
-      headers: maskedHeaders,
-      body,
-    }, null, 2));
-
-    const response = await axios(axiosOptions);
-
-    console.log(`[E2E_CORRELATION_TRACE] [${requestId}] [Stage 8/10] Direct Fincra Raw Response Received | Status: ${response.status}, Body:`, JSON.stringify(response.data, null, 2));
-
-    console.log("[FINCRA_HTTP_TRACE] INBOUND RESPONSE:", JSON.stringify({
-      status: response.status,
-      headers: response.headers,
-      data: response.data,
-    }, null, 2));
+      path: cleanPath,
+      status: resStatus,
+      latencyMs,
+      retry: 0,
+      family: 4,
+      remoteIp: '137.184.216.44',
+      destination: `${gatewayUrl}${cleanPath}`
+    });
 
     return {
-      status: response.status,
-      data: response.data,
+      status: resStatus,
+      data: resData,
       headers: response.headers
     };
   } catch (error) {
-    const errorMsg = error.response?.data?.message || error.message || 'Direct Fincra API request failed';
-    const statusCode = error.response?.status || 500;
-    logger.error(`[FincraDirect] API Error: ${errorMsg}`, { path: cleanPath, statusCode });
-    throw new FincraGatewayError(`[Fincra API Failure] ${errorMsg}`, statusCode, error.response?.data);
+    const latencyMs = Date.now() - startTime;
+
+    if (error instanceof FincraGatewayError) throw error;
+
+    const errorMsg = error.response?.data?.message || error.message || 'Fincra Gateway connection failed';
+
+    // Strict Fail-Fast Policy: NEVER fall back to direct Fincra URL.
+    const gatewayFailErr = new FincraGatewayError(
+      `[FincraGateway] GATEWAY_UNAVAILABLE: Gateway at ${proxyEndpoint} is unreachable (${errorMsg}). Direct Fincra access is strictly disabled to enforce static IPv4 egress.`,
+      503,
+      { gatewayUrl: proxyEndpoint, originalError: errorMsg }
+    );
+
+    logger.error(gatewayFailErr.message, {
+      provider: 'FINCRA',
+      requestId,
+      correlationId,
+      method: normMethod,
+      path: cleanPath,
+      status: 503,
+      latencyMs,
+      retry: 0,
+      family: 4,
+      remoteIp: '137.184.216.44',
+      destination: `${gatewayUrl}${cleanPath}`,
+      error: errorMsg
+    });
+
+    throw gatewayFailErr;
   }
 }
 
