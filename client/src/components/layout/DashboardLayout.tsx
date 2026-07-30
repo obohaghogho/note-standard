@@ -62,7 +62,7 @@ export function DashboardLayout() {
                 {/* Mobile Menu Toggle */}
                 <button 
                     onClick={() => setIsMobileMenuOpen(true)}
-                    className="p-2 -ml-2 text-gray-400 hover:text-white md:hidden"
+                    className="p-2 -ml-2 text-gray-400 hover:text-white lg:hidden"
                 >
                     <Menu size={24} />
                 </button>
@@ -115,8 +115,8 @@ export function DashboardLayout() {
             <main
                 className={cn(
                     "flex-1 transition-all duration-300 min-w-0 flex flex-col h-full relative",
-                    !isChatActiveOnMobile && "pb-safe md:ml-[16rem]",
-                    isChatActiveOnMobile && "absolute inset-0 z-[60] bg-gray-950 m-0 p-0 md:relative md:inset-auto md:z-0 md:bg-transparent md:ml-[16rem] overflow-hidden"
+                    !isChatActiveOnMobile && "pb-safe lg:ml-[16rem]",
+                    isChatActiveOnMobile && "absolute inset-0 z-[60] bg-gray-950 m-0 p-0 lg:relative lg:inset-auto lg:z-0 lg:bg-transparent lg:ml-[16rem] overflow-hidden"
                 )}
             >
                 {renderHeader()}

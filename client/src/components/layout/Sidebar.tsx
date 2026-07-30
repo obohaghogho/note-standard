@@ -86,14 +86,14 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
             {/* Mobile Overlay */}
             {isOpen && (
                 <div 
-                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[65] md:hidden"
+                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[65] lg:hidden"
                     onClick={onClose}
                 />
             )}
             
             <div className={cn(
                 "w-64 min-w-[16rem] shrink-0 inset-y-0 border-r border-white/10 flex flex-col fixed left-0 z-[70] transition-transform duration-300 bg-gray-900",
-                isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+                isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
             )}>
             {/* Header */}
             <div className="pt-safe shrink-0">

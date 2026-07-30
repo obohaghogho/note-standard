@@ -3,5 +3,5 @@
  * This MUST be updated on every deployment.
  * The service worker + version check system will force users to update.
  */
-export const APP_VERSION = '1.7.0';
-export const APP_BUILD = '20260730_v8_responsive_spacing_fix';
+export const APP_VERSION = '1.7.1';
+export const APP_BUILD = '20260730_v9_mobile_lg_breakpoint_fix';
