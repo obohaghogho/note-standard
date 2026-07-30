@@ -96,10 +96,12 @@ router.post("/fincra", (req, res, next) => require("./fincraWebhook")(req, res, 
 
 /**
  * POST /webhooks/nowpayments
- * POST /webhooks/crypto
+ * POST /api/payments/nowpayments/ipn
  * Crypto payment webhooks
  */
 router.post("/nowpayments", WebhookService.processNowPaymentsWebhook.bind(WebhookService));
+router.post("/nowpayments/ipn", WebhookService.processNowPaymentsWebhook.bind(WebhookService));
+router.post("/ipn", WebhookService.processNowPaymentsWebhook.bind(WebhookService));
 router.post("/crypto", (req, res) => res.status(200).json({ received: true, status: "not_implemented" }));
 
 /**

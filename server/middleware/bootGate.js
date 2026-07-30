@@ -1,10 +1,13 @@
 module.exports = function bootGate(req, res, next) {
-  // Always pass through health + status probes
+  // Always pass through health + status probes + webhook ingestion
   if (
     req.path === "/api/health" ||
     req.path === "/health" ||
     req.path === "/api/boot/status" ||
-    req.path === "/internal/boot-ready"
+    req.path === "/internal/boot-ready" ||
+    req.path.includes("webhook") ||
+    req.path.includes("nowpayments") ||
+    req.path.includes("ipn")
   ) {
     return next();
   }

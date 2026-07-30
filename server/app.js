@@ -301,11 +301,16 @@ app.use("/webhooks/fincra", require("./routes/fincraWebhook"));
 // Paystack, Grey, NowPayments, Flutterwave route through shared webhooks.js
 app.use("/api/webhooks", require("./routes/webhooks"));
 
-// Alias: /api/nowpayments/webhook → /api/webhooks/nowpayments
-app.use("/api/nowpayments/webhook", (req, res, next) => {
-  req.url = "/nowpayments";
-  next();
-}, require("./routes/webhooks"));
+const WebhookService = require("./services/WebhookService");
+
+// Direct NOWPayments IPN Webhook Ingestion Routes (Exact Merchant URL Match)
+app.post([
+  "/api/payments/nowpayments/ipn",
+  "/api/payment/nowpayments/ipn",
+  "/api/nowpayments/ipn",
+  "/api/nowpayments/webhook",
+  "/webhooks/nowpayments",
+], WebhookService.processNowPaymentsWebhook.bind(WebhookService));
 
 // Alias: /api/flutterwave/webhook → /api/webhooks/flutterwave
 app.use("/api/flutterwave/webhook", (req, res, next) => {
