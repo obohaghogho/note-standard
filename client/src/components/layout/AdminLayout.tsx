@@ -24,6 +24,7 @@ import {
     ArrowUpFromLine,
     ArrowLeft,
     Wallet,
+    Coins,
     Activity
 } from 'lucide-react';
 
@@ -100,6 +101,7 @@ export const AdminLayout = () => {
         { to: '/admin/push-health', icon: Bell, label: 'Push & Coverage' },
         { to: '/admin/communication-health', icon: Activity, label: 'Comm Health' },
         { to: '/admin/fincra', icon: Wallet, label: 'Fincra Audit' },
+        { to: '/admin/crypto-treasury', icon: Coins, label: 'Crypto Treasury' },
         { to: '/admin/broadcasts', icon: Megaphone, label: 'Broadcasts' },
         { to: '/admin/limit-requests', icon: Zap, label: 'Limit Requests' },
         { to: '/admin/deposits', icon: ArrowDownToLine, label: 'Manual Deposits' },
