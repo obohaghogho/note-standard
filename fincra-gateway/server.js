@@ -210,6 +210,8 @@ function logStructured(level, message, details = {}) {
 
 // ── Express Application ───────────────────────────────────────────────────
 const app = express();
+
+// Trust Nginx reverse proxy
 app.set('trust proxy', 1);
 
 app.use(helmet());
