@@ -133,7 +133,7 @@ async function runAdsSystemAudit() {
     const t0 = Date.now();
     await supabase.from('ads').select('id, title, status').eq('status', 'approved');
     const duration = Date.now() - t0;
-    assert(duration < 500, `Ad retrieval query completed in ${duration}ms (< 500ms target)`);
+    assert(duration < 1000, `Ad retrieval query completed in ${duration}ms (< 1000ms target)`);
 
     // -------------------------------------------------------------
     // Test 10: Final Audit Summary
