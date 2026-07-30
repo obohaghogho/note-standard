@@ -26,7 +26,13 @@ class SystemStateController {
             feature_new_webhook: true,
             feature_new_deposit: true,
             feature_new_withdrawal: true,
-            feature_new_subscription: true
+            feature_new_subscription: true,
+            FEATURE_CRYPTO_V6_LEDGER_ENABLED: true,
+            FEATURE_PROVIDER_NOWPAYMENTS: true,
+            FEATURE_PROVIDER_FINCRA: true,
+            FEATURE_PROVIDER_ANCHOR: true,
+            FEATURE_SWAP: true,
+            FEATURE_INTERNAL_TRANSFER: true
         };
 
         // Crypto Global Controls (Read from env if available, default to true)

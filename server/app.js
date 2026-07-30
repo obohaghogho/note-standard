@@ -225,6 +225,8 @@ const financialRoutes = require("./routes/financialRoutes");
 // API Mounts
 app.use("/api/auth", authRoutes);
 app.use("/api/wallet", walletRoutes);
+app.use("/api/crypto", require("./routes/cryptoRoutes"));
+app.use("/api/admin/crypto", require("./routes/admin/cryptoAdminRoutes"));
 app.use("/api/deposit", manualDepositRoutes);
 app.use("/api/nfi/connectors", connectorRoutes);
 app.use("/api/nfi/financials", financialRoutes);
@@ -452,5 +454,14 @@ app.use((err, req, res, next) => {
     timestamp: new Date().toISOString()
   });
 });
+
+// Start Crypto Workers
+try {
+  require('./workers/CryptoCustodySyncWorker').start();
+  require('./workers/CryptoOutboxWorker').start();
+  require('./workers/TreasuryRebalancerWorker').start();
+} catch (err) {
+  logger.warn("[App] Workers initialization deferred/failed:", err.message);
+}
 
 module.exports = app;

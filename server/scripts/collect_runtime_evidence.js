@@ -1,86 +1,106 @@
+'use strict';
+
 /**
- * collect_runtime_evidence.js — Fast Forensic Evidence Collector
+ * Phase 10-G: Automated Cryptographic Audit Evidence Bundle Generator
+ * ===================================================================
+ * Compiles a cryptographically signed & hash-chained evidence package:
+ * 1. Invariant Verification History & Status (INV-001..INV-004)
+ * 2. Per-Provider Custody Reserve Proof & Liquidity Ratios
+ * 3. Active Policy Governance Metadata & Versioned Checksums
+ * 4. Transactional Outbox & Dead-Letter Queue Metrics
+ * 5. Background Worker Heartbeat Summaries
+ * 6. Cryptographic Digital Signature & Previous Bundle Hash Chaining
  */
 
-const { createClient } = require('@supabase/supabase-js');
-const crypto = require('crypto');
+const pool = require('../config/pgPool');
+const treasuryService = require('../services/treasury/TreasuryService');
+const cryptoReconciliationEngine = require('../services/reconciliation/CryptoReconciliationEngine');
+const cryptoOutboxWorker = require('../workers/CryptoOutboxWorker');
+const cryptoCustodySyncWorker = require('../workers/CryptoCustodySyncWorker');
+const cryptoHash = require('crypto');
+const fs = require('fs');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../.env') });
-require('dotenv').config({ path: path.join(__dirname, '../../realtime-gateway/.env') });
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const AUDIT_SIGNING_SECRET = process.env.AUDIT_SIGNING_SECRET || 'notestandard-audit-secret-key-2026';
 
-if (!supabaseUrl || !supabaseKey) {
-  console.error('❌ CRITICAL: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing in .env');
-  process.exit(1);
+async function generateAuditEvidenceBundle(previousChecksum = 'sha256:0000000000000000000000000000000000000000000000000000000000000000') {
+  console.log('[AuditEvidenceGenerator] Compiling Phase 10 Cryptographic Operational Evidence Package...');
+
+  const startTime = Date.now();
+
+  // 1. Fetch Latest Integrity Verification Report
+  const integrityReport = await cryptoReconciliationEngine.runIntegrityVerification();
+
+  // 2. Fetch Detailed Reserve Proof with Provider Concentration & Enforced Controls
+  const reserveProof = await treasuryService.calculateDetailedReserveProof();
+
+  // 3. Outbox Metrics
+  const outboxMetrics = await cryptoOutboxWorker.getOutboxMetrics();
+
+  // 4. Worker Heartbeats
+  const workerHeartbeats = {
+    outboxWorker: cryptoOutboxWorker.getHeartbeat(),
+    custodySyncWorker: cryptoCustodySyncWorker.getHeartbeat()
+  };
+
+  // 5. System Config & Feature Flags
+  const systemState = {
+    mode: require('../config/SystemState').mode,
+    features: require('../config/SystemState').features
+  };
+
+  const rawPayload = {
+    bundleId: cryptoHash.randomUUID(),
+    previousBundleChecksum: previousChecksum,
+    generatedAt: new Date().toISOString(),
+    schemaVersion: '1.0.0',
+    systemState,
+    integrityReport,
+    reserveProof,
+    outboxMetrics,
+    workerHeartbeats
+  };
+
+  // Compute evidence package SHA-256 checksum for audit immutability
+  const payloadString = JSON.stringify(rawPayload);
+  const checksumHex = cryptoHash.createHash('sha256').update(payloadString).digest('hex');
+  const checksum = `sha256:${checksumHex}`;
+
+  // Generate Digital Cryptographic HMAC-SHA256 Signature for authenticity
+  const hmac = cryptoHash.createHmac('sha256', AUDIT_SIGNING_SECRET);
+  hmac.update(checksum);
+  const signatureHex = hmac.digest('hex');
+
+  const evidencePackage = {
+    checksum,
+    signature: {
+      algorithm: 'HMAC-SHA256',
+      keyId: 'audit-key-2026-v1',
+      signature: signatureHex
+    },
+    payload: rawPayload,
+    durationMs: Date.now() - startTime
+  };
+
+  console.log(`✓ [AuditEvidenceGenerator] Cryptographic Evidence Bundle Generated in ${evidencePackage.durationMs}ms.`);
+  console.log(`  Package Checksum: ${evidencePackage.checksum}`);
+  console.log(`  Digital Signature: ${evidencePackage.signature.signature.substring(0, 16)}... (Key: ${evidencePackage.signature.keyId})`);
+  console.log(`  Integrity Status:  ${integrityReport.status}`);
+  console.log(`  Overall Status:    ${integrityReport.failed_checks.overallStatus}`);
+
+  return evidencePackage;
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-// Import DeviceRegistry from realtime-gateway
-const DeviceRegistry = require('../../realtime-gateway/services/DeviceRegistry');
-
-async function runAudit() {
-  const timestamp = new Date().toISOString();
-  console.log(`\n=================================================================`);
-  console.log(` 🔬 BANK-GRADE FORENSIC AUDIT REPORT — ${timestamp}`);
-  console.log(`=================================================================\n`);
-
-  // 1. Environment & VAPID Key Fingerprint Verification
-  console.log(`--- 1. ENVIRONMENT & VAPID CREDENTIAL AUDIT ---`);
-  const pubKey = process.env.VAPID_PUBLIC_KEY || '';
-  const privKey = process.env.VAPID_PRIVATE_KEY || '';
-
-  const pubFp = pubKey ? crypto.createHash('sha256').update(pubKey).digest('hex').slice(0, 16) : 'MISSING';
-  const privFp = privKey ? crypto.createHash('sha256').update(privKey).digest('hex').slice(0, 16) : 'MISSING';
-
-  console.log(`Server VAPID Public Key Fingerprint : ${pubFp}`);
-  console.log(`Server VAPID Private Key Fingerprint: ${privFp}`);
-  console.log(`USE_V2_PUSH_ROUTING                  : ${process.env.USE_V2_PUSH_ROUTING || 'NOT_SET'}`);
-  console.log(`PUSH_ENABLED                         : ${process.env.PUSH_ENABLED || 'NOT_SET'}`);
-
-  // 2. Query Database Tables
-  console.log(`\n--- 2. DATABASE INTEGRITY AUDIT ---`);
-  const { data: v1Subs } = await supabase.from('push_subscriptions').select('id, user_id, endpoint, platform, status, last_seen_at');
-  console.log(`Total V1 push_subscriptions rows: ${v1Subs?.length || 0}`);
-
-  const { data: v2Inst } = await supabase.from('device_installations').select('installation_id, device_id, platform, type, push_endpoint, endpoint_status');
-  console.log(`Total V2 device_installations rows: ${v2Inst?.length || 0}`);
-
-  const { data: v2Acc } = await supabase.from('installation_accounts').select('installation_id, user_id, session_state');
-  console.log(`Total V2 installation_accounts rows: ${v2Acc?.length || 0}`);
-
-  // Test raw Supabase V2 query that DeviceRegistry uses
-  const testUserId = v2Acc?.[0]?.user_id;
-  if (testUserId) {
-    console.log(`\nTesting DeviceRegistry Supabase query for user: ${testUserId}`);
-    const { data: v2Data, error: v2Error } = await supabase
-      .from('installation_accounts')
-      .select('session_state, device_installations(installation_id, type, push_endpoint, platform, push_p256dh, push_auth, device_id, endpoint_status, last_seen_at)')
-      .eq('user_id', testUserId);
-
-    if (v2Error) {
-      console.error(`❌ CRITICAL: DeviceRegistry V2 query failed:`, v2Error);
-    } else {
-      console.log(`✅ DeviceRegistry V2 query succeeded! Returned ${v2Data?.length || 0} rows.`);
-    }
-
-    try {
-      const devices = await DeviceRegistry.getActiveDevices(supabase, testUserId);
-      console.log(`✅ DeviceRegistry.getActiveDevices returned ${devices.length} devices:`);
-      console.log(JSON.stringify(devices, null, 2));
-    } catch (err) {
-      console.error(`❌ DeviceRegistry.getActiveDevices threw exception:`, err);
-    }
-  }
-
-  console.log(`\n=================================================================`);
-  console.log(` 🏁 END OF FORENSIC AUDIT REPORT`);
-  console.log(`=================================================================\n`);
+if (require.main === module) {
+  generateAuditEvidenceBundle()
+    .then(bundle => {
+      const outPath = path.join(__dirname, '..', '..', 'artifacts', `audit_evidence_${Date.now()}.json`);
+      fs.mkdirSync(path.dirname(outPath), { recursive: true });
+      fs.writeFileSync(outPath, JSON.stringify(bundle, null, 2));
+      console.log(`Saved signed audit evidence bundle to: ${outPath}`);
+    })
+    .catch(err => console.error('Error generating evidence bundle:', err))
+    .finally(() => pool.end());
 }
 
-runAudit().catch(err => {
-  console.error('🔥 Uncaught error in audit script:', err);
-  process.exit(1);
-});
+module.exports = { generateAuditEvidenceBundle };
